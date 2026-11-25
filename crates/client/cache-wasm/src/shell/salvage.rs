@@ -106,7 +106,9 @@ pub(super) async fn wipe_keeping_queue(
     owner: OpfsOwner,
 ) -> Result<(OpfsOwner, Crossing), JsValue> {
     let started = query_telemetry::now_ms();
-    let sidecar = owner.sidecar();
+    // Once the queue is read from here on, nothing may keep it from the file.
+    let held = owner.sidecar().hold().await;
+    let (owner, sidecar) = or_release(owner, held).await?;
     let (owner, file) = or_release(owner, read_file(&sidecar).await).await?;
     // Either way the file cannot say what else is lost once a queue follows in it.
     let doubted = file
@@ -117,25 +119,19 @@ pub(super) async fn wipe_keeping_queue(
     if doubted {
         read.report.lose();
     }
-    let written = read.write_queue(&sidecar).await;
-    let (owner, ()) = or_release(owner, written).await?;
+    read.write_queue(&sidecar).await;
     let queue = read.queue.take().map(|queue| match doubted {
         true => queue.after_loss(),
         false => queue,
     });
     let mut unwritten = read.unwritten;
-    let owner = if unwritten || read.report.lost() {
+    if unwritten || read.report.lost() {
         let frame = SalvageFile::loss(read.report.loss());
-        let noted = fits(sidecar.write_tail(read.end, &frame).await);
-        let (owner, noted) = or_release(owner, noted).await?;
-        if noted {
+        if sidecar.write_tail(read.end, &frame).await.is_ok() {
             read.end += frame.len() as u64;
             read.report.dropped = 0;
         }
-        owner
-    } else {
-        owner
-    };
+    }
     let wiping = query_telemetry::now_ms();
     let owner = wipe(owner).await?;
     read.report.times = CrossingTimes {
@@ -145,7 +141,7 @@ pub(super) async fn wipe_keeping_queue(
     };
     // A full disk has room again.
     if let (true, Some(queue)) = (unwritten, &queue) {
-        unwritten = !matches!(write_queue(&sidecar, read.end, queue).await, Ok(Some(_)));
+        unwritten = write_queue(&sidecar, read.end, queue).await.is_none();
     }
     Ok((
         owner,
@@ -166,20 +162,10 @@ async fn doubt(sidecar: &Sidecar, end: u64, file: &SalvageFile) -> Result<u64, O
         return Ok(0);
     }
     let frame = SalvageFile::loss(QueueLoss::default());
-    Ok(match fits(sidecar.write_tail(end, &frame).await)? {
-        true => frame.len() as u64,
-        false => 0,
-    })
-}
-
-/// Whether the side file took what was written. Another context that keeps it
-/// open is closing it, so that failure is the caller's: nothing may be wiped
-/// for it.
-fn fits(written: Result<(), OpfsError>) -> Result<bool, OpfsError> {
-    match written {
-        Ok(()) => Ok(true),
+    match sidecar.write_tail(end, &frame).await {
+        Ok(()) => Ok(frame.len() as u64),
         Err(error) if error.kind() == OpfsErrorKind::Busy => Err(error),
-        Err(_) => Ok(false),
+        Err(_) => Ok(0),
     }
 }
 
@@ -240,16 +226,12 @@ async fn or_release<T>(
 
 /// Writes `queue` with room for what a later wipe may have to say after it, or
 /// without. Returns where its frame ends.
-async fn write_queue(
-    sidecar: &Sidecar,
-    end: u64,
-    queue: &SalvagedQueue,
-) -> Result<Option<u64>, OpfsError> {
+async fn write_queue(sidecar: &Sidecar, end: u64, queue: &SalvagedQueue) -> Option<u64> {
     let frame = queue.to_frame();
     let reserved = [&frame[..], &SalvageFile::reserved_for_wipe()].concat();
-    let written = fits(sidecar.write_tail(end, &reserved).await)?
-        || fits(sidecar.write_tail(end, &frame).await)?;
-    Ok(written.then_some(frame.len() as u64))
+    let written = sidecar.write_tail(end, &reserved).await.is_ok()
+        || sidecar.write_tail(end, &frame).await.is_ok();
+    written.then_some(frame.len() as u64)
 }
 
 struct ReadBeforeWipe {
@@ -281,15 +263,14 @@ impl ReadBeforeWipe {
     }
 
     /// Keeps it unwritten when the side file would not take it.
-    async fn write_queue(&mut self, sidecar: &Sidecar) -> Result<(), OpfsError> {
+    async fn write_queue(&mut self, sidecar: &Sidecar) {
         let Some(queue) = self.queue.as_ref().filter(|_| self.unwritten) else {
-            return Ok(());
+            return;
         };
-        if let Some(written) = write_queue(sidecar, self.end, queue).await? {
+        if let Some(written) = write_queue(sidecar, self.end, queue).await {
             self.end += written;
             self.unwritten = false;
         }
-        Ok(())
     }
 }
 
@@ -321,12 +302,9 @@ async fn read_before_wipe(
     };
     let attempt = SalvageFile::read_attempt();
     let reserved = [&attempt[..], &SalvageFile::reserved()].concat();
-    let counted = match fits(sidecar.write_tail(start, &reserved).await) {
-        Ok(false) => fits(sidecar.write_tail(start, &attempt).await),
-        counted => counted,
-    };
-    let (owner, counted) = or_release(owner, counted).await?;
-    if counted {
+    if sidecar.write_tail(start, &reserved).await.is_ok()
+        || sidecar.write_tail(start, &attempt).await.is_ok()
+    {
         read.end += attempt.len() as u64;
     }
     let session = match owner.open().await {
@@ -382,19 +360,16 @@ async fn read_before_wipe(
     } else {
         Ok(())
     };
-    let copied = match forgotten {
-        Ok(()) => {
-            read.carry(found.queue, pending);
-            read.write_queue(sidecar).await
-        }
-        Err(error) => Err(error),
-    };
+    if forgotten.is_ok() {
+        read.carry(found.queue, pending);
+        read.write_queue(sidecar).await;
+    }
     let owner = connected
         .try_close()
         .map_err(err_js)?
         .preserve()
         .map_err(err_js)?;
-    let (owner, ()) = or_release(owner, copied).await?;
+    let (owner, ()) = or_release(owner, forgotten).await?;
     Ok((owner, read))
 }
 

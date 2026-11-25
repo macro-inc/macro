@@ -740,9 +740,9 @@ async fn recover_with_a_busy_side_file(scope: &str, uses: usize) -> bool {
 }
 
 #[wasm_bindgen_test(async)]
-async fn a_database_is_not_wiped_while_its_queue_cannot_be_copied() {
-    for uses in [1, 2] {
-        let scope = format!("cache-wasm-salvage-copy-busy-{uses}");
+async fn a_side_file_that_turns_busy_costs_no_queue() {
+    for uses in [0, 1, 2] {
+        let scope = format!("cache-wasm-salvage-turns-busy-{uses}");
         closed_with_queue(&scope).await;
         assert!(!recover_with_a_busy_side_file(&scope, uses).await);
         let (engine, _, queue) = open(&scope, true).await;

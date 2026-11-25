@@ -689,8 +689,9 @@ that database can still say, is forgotten; one that may have been taken, because
 the database lost what it says or one of its two files, is queued but called
 `partial`. Only a side file that refused the note of its import and could be neither
 removed nor emptied, or one whose database then lost both files, passes for a copy
-nobody took. A wipe waits for a side file that another context keeps open, and
-leaves the database as it is when that takes too long. An open that lost something leaves the side file saying so, and only that;
+nobody took. A wipe holds the side file open from before it reads the queue until
+it is done; one that finds another context at it waits, and leaves the database as
+it is when that takes too long. An open that lost something leaves the side file saying so, and only that;
 the engine removes it (`queueLossTold`) at the first request or heartbeat after
 `engine-ready`, which shows that the coordinator took it and so told its pages, and
 until then every later open tells it again.
