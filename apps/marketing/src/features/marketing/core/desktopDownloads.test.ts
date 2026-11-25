@@ -5,8 +5,13 @@ import {
   DESKTOP_PLATFORMS,
   detectPhonePlatform,
   detectVisitorPlatform,
+  installerLabel,
   installerPlatform,
+  intelMacPublished,
   phonePlatformOrder,
+  publishedInstallers,
+  readMacArchitecture,
+  visitorInstaller,
 } from './desktopDownloads';
 
 describe('DESKTOP_DOWNLOAD_URLS', () => {
@@ -70,5 +75,63 @@ describe('installerPlatform', () => {
   it('has none for other computers', () => {
     for (const visitor of ['windows', undefined] as const)
       expect(installerPlatform(visitor)).toBeUndefined();
+  });
+});
+
+describe('Intel Mac installer', () => {
+  it('is offered only once the edge links to it', () => {
+    // Add /download/mac-intel only after a release has published the Intel
+    // installer, and update this line with it.
+    expect(intelMacPublished(downloadRedirects)).toBe(false);
+    expect(intelMacPublished({ '/download/mac': 'a' })).toBe(false);
+    expect(
+      intelMacPublished({ '/download/mac': 'a', '/download/mac-intel': 'b' })
+    ).toBe(true);
+    expect(publishedInstallers(false)).toEqual(['macos', 'linux']);
+    expect(publishedInstallers(true)).toEqual([
+      'macos',
+      'macos-intel',
+      'linux',
+    ]);
+  });
+
+  it('is the Mac visitor installer only when the browser reports Intel', () => {
+    expect(visitorInstaller('macos', 'x86', true)).toBe('macos-intel');
+    expect(visitorInstaller('macos', 'arm', true)).toBe('macos');
+    expect(visitorInstaller('macos', undefined, true)).toBe('macos');
+    expect(visitorInstaller('macos', 'x86', false)).toBe('macos');
+    expect(visitorInstaller('linux', 'x86', true)).toBe('linux');
+  });
+
+  it('names both Mac installers by chip, and as a Mac off one', () => {
+    expect(installerLabel('macos', false, true)).toBe('macOS');
+    expect(installerLabel('macos', true, true)).toBe('Apple silicon');
+    expect(installerLabel('macos-intel', true, true)).toBe('Intel');
+    expect(installerLabel('macos', true, false)).toBe('Mac (Apple silicon)');
+    expect(installerLabel('macos-intel', true, false)).toBe('Mac (Intel)');
+    expect(installerLabel('linux', true, false)).toBe('Linux');
+  });
+
+  it("reads the architecture only from Chromium's hint", async () => {
+    const answering = (value: Promise<{ architecture?: string }>) => ({
+      getHighEntropyValues: () => value,
+    });
+    expect(
+      await readMacArchitecture(
+        answering(Promise.resolve({ architecture: 'x86' }))
+      )
+    ).toBe('x86');
+    expect(
+      await readMacArchitecture(
+        answering(Promise.resolve({ architecture: 'arm' }))
+      )
+    ).toBe('arm');
+    expect(
+      await readMacArchitecture(answering(Promise.resolve({})))
+    ).toBeUndefined();
+    expect(
+      await readMacArchitecture(answering(Promise.reject(new Error('denied'))))
+    ).toBeUndefined();
+    expect(await readMacArchitecture(undefined)).toBeUndefined();
   });
 });

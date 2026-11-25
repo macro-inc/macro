@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.key, t.name\n                   FROM unnest($2::text[]) AS wanted(key)\n                   CROSS JOIN LATERAL (\n                       SELECT key, name FROM suggestion_topic\n                       WHERE user_id = $1 AND key = wanted.key\n                       LIMIT 1\n                   ) t",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "e452b05de228c95d6eca4ab0387785ef2e28cf72b1b18e16ea647f9b974ff103"
+}

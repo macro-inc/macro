@@ -50,6 +50,8 @@ vi.mock('@queries/soup/items', () => ({
 }));
 
 vi.mock('@app/features/next-soup/filters/filter-store', () => ({
+  NIL_UUID: '00000000-0000-0000-0000-000000000000',
+  bothTargetAsts: () => ({}),
   compileToAst: () => ({}),
   defineQueryFilters: (query: unknown) => query,
   queryStateFrom: (query: unknown) => query,

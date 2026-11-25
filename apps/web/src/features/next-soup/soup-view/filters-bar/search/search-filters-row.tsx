@@ -1,43 +1,8 @@
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
-import { type Accessor, createSignal, For } from 'solid-js';
+import { type Accessor, For } from 'solid-js';
 import type { TagFilter } from '../tag-filter-state';
 import { SearchFacetChip } from './search-facet-chip';
 import { useSearchFacets } from './search-facets';
-import {
-  createSearchFiltersController,
-  type SearchFiltersController,
-} from './search-filters-state';
-
-/**
- * Always-visible filter row for the search view. Renders one chip per facet
- * applicable to the active type.
- */
-export function SearchFiltersRow() {
-  const controller = createSearchFiltersController();
-  const panel = useSplitPanelOrThrow();
-  const [typeMenuOpen, setTypeMenuOpen] = createSignal(false);
-
-  registerHotkey({
-    hotkey: 'f',
-    scopeId: panel.splitHotkeyScope,
-    description: 'Filter by type',
-    hotkeyToken: TOKENS.soup.filter,
-    keyDownHandler: () => {
-      setTypeMenuOpen(true);
-      return true;
-    },
-  });
-
-  return (
-    <SearchFilterControls
-      controller={controller}
-      typeMenuOpen={typeMenuOpen}
-      setTypeMenuOpen={setTypeMenuOpen}
-    />
-  );
-}
+import type { SearchFiltersController } from './search-filters-state';
 
 /** The global Search facet controls, with host-owned state and focus. */
 export function SearchFilterControls(props: {

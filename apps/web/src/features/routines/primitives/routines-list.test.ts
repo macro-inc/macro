@@ -2,6 +2,7 @@ import { createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import type { RoutineListSource } from '../context/routine-sources';
 import type { RoutineSnapshot } from '../core/routine';
+import { createEmptyDraft } from '../core/routine-draft';
 import { createRoutineRows } from './routines-list';
 
 function routine(
@@ -70,6 +71,41 @@ describe('createRoutineRows', () => {
         true,
         false,
       ]);
+      dispose();
+    });
+  });
+
+  it('keeps all trigger descriptions and conditions behind a compact row', () => {
+    createRoot((dispose) => {
+      const rows = createRoutineRows(
+        source(
+          [
+            {
+              ...PARENT,
+              draft: {
+                ...createEmptyDraft('model'),
+                triggers: [
+                  {
+                    id: 'e',
+                    kind: 'event',
+                    events: ['email.message_received'],
+                    condition: '  Invoice from supplier  ',
+                  },
+                  { id: 't', kind: 'event', events: ['task.created'] },
+                ],
+              },
+            },
+          ],
+          []
+        ),
+        () => 'owner'
+      );
+      expect(rows()[0]?.when).toBe(
+        'New email received: Invoice from supplier +1'
+      );
+      expect(rows()[0]?.whenDetails).toBe(
+        'New email received: Invoice from supplier\nTask created'
+      );
       dispose();
     });
   });

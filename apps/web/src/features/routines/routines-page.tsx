@@ -165,7 +165,7 @@ function RoutinesTopBar() {
   return (
     <Show when={scope}>
       {/* Each mobile routine header owns the navigation island. */}
-      <SplitHeaderScope.TopBar leading={<span class="hidden" />} />
+      <SplitHeaderScope.TopBar />
     </Show>
   );
 }

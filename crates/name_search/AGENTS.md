@@ -13,8 +13,10 @@ highlighting.
   a DM is found by the other participant, an unnamed private channel by any
   other member, a persona DM by its bot. The SQL match is
   `channels::outbound::channel_name::match_channel_names`; this crate splits
-  the query into terms, builds the patterns, pages, resolves and highlights.
-- `src/chat.rs` + `src/chat/test.rs`: `search_chat_names`.
+  the query into terms, builds the patterns (and the excluded ones, for the
+  words a minus leaves out, the same way), pages, resolves and highlights.
+- `src/chat.rs` + `src/chat/test.rs`: `search_chat_names`; a chat whose name
+  holds one of `excluded_terms` (a literal substring) is left out.
 - `src/highlight.rs`: `highlight_name` — marks up matched substrings.
 - `fixtures/`: SQL seed fixtures (`channel.sql`, `chat.sql`, `chat_tags.sql`)
   used by the tests.

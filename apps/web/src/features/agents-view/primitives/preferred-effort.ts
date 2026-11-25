@@ -46,6 +46,11 @@ export function createPreferredEffort(userId: string | undefined) {
   return {
     /** The remembered effort for one `target` (a serialized runtime and model). */
     effort: (target: string): EffortChoice | undefined => efforts()[target],
+    forget: (target: string) =>
+      setEfforts((current) => {
+        const { [target]: _removed, ...remaining } = current;
+        return remaining;
+      }),
     remember: (target: string, choice: EffortChoice) =>
       setEfforts((current) => ({
         ...current,

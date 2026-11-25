@@ -12,7 +12,7 @@ pub(super) async fn add_message_labels<R: InboxSyncRepository>(
     message_db_id: Uuid,
     thread_db_id: Uuid,
     provider_label_ids: &[String],
-) -> result::Result<(), ProcessingError> {
+) -> result::Result<Vec<Uuid>, ProcessingError> {
     // transaction as we might be making multiple changes
     let mut tx = db.begin_labels().await.map_err(|e| {
         ProcessingError::Retryable(DetailedError {
@@ -23,7 +23,8 @@ pub(super) async fn add_message_labels<R: InboxSyncRepository>(
 
     let result = async {
         // `label_diff` already left pending labels out of `provider_label_ids`.
-        tx.add_labels(link.id, message_db_id, provider_label_ids)
+        let gained = tx
+            .add_labels(link.id, message_db_id, thread_db_id, provider_label_ids)
             .await
             .map_err(|e| {
                 ProcessingError::Retryable(DetailedError {
@@ -60,7 +61,7 @@ pub(super) async fn add_message_labels<R: InboxSyncRepository>(
             })
         })?;
 
-        Ok::<(), ProcessingError>(())
+        Ok::<Vec<Uuid>, ProcessingError>(gained)
     }
     .await;
 

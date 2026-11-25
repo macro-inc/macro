@@ -65,6 +65,8 @@ tokio = { workspace = true, features = ["signal"] }
 tokio-util = { workspace = true, features = ["rt"] }
 futures = { workspace = true }
 tracing = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace"] }
+tracing-opentelemetry = { workspace = true }
 axum = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client" }
 model = { path = "../model" }
@@ -80,4 +82,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
+opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
 tracing-subscriber = { workspace = true }

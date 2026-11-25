@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT owned.id AS \"id!\"\n               FROM (SELECT id FROM UNNEST($3::uuid[]) AS wanted(id) ORDER BY id) AS wanted\n               JOIN LATERAL (\n                   SELECT entity.id FROM import_entity AS entity\n                   WHERE entity.id = wanted.id AND (SELECT entity.user_id OFFSET 0) = $1\n                     AND entity.review_id = $2 AND entity.source = 'notion'\n                     AND entity.kind = 'data_source' AND entity.status = 'staged'\n                   OFFSET 0 FOR UPDATE OF entity\n               ) AS owned ON true",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d11bf68cc4cb12a59ca87351026603f2a5c338c3ff46b8a50bce211f6684f6db"
+}

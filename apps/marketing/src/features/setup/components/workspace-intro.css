@@ -4,15 +4,3 @@
 @media (prefers-reduced-motion: reduce) {
   .workspace-intro-icon .macro-mark-part { transform: none !important; }
 }
-
-@property --intro-accent {
-  syntax: '<color>';
-  inherits: true;
-  initial-value: #65d8ac;
-}
-[data-workspace-intro] {
-  transition: --intro-accent 220ms ease-out;
-}
-@media (prefers-reduced-motion: reduce) {
-  [data-workspace-intro] { transition: none; }
-}

@@ -345,6 +345,7 @@ where
             .map_err(anyhow::Error::from)?
             .into_iter()
             .map(|l| ParsedLabel {
+                id: Some(l.id),
                 provider_id: l.provider_label_id,
                 name: l.name,
             })
@@ -570,6 +571,7 @@ fn parsed_message_from_row(
         labels: labels
             .into_iter()
             .map(|label| ParsedLabel {
+                id: label.id,
                 provider_id: label.provider_label_id,
                 name: label.name.unwrap_or_default(),
             })

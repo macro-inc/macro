@@ -12,7 +12,6 @@ import {
   type Accessor,
   createEffect,
   createMemo,
-  createSignal,
   Match,
   on,
   type Setter,
@@ -32,6 +31,7 @@ import {
   removeLinkValue,
 } from '../utils/linkValues';
 import { PropertyDataTypeIcon } from '../utils/PropertyDataTypeIcon';
+import { createGuardedHighlight } from './guarded-highlight';
 import { type SavedValueState, SavedValueStatus } from './saved-value-status';
 
 type LinkPropertyRow =
@@ -71,21 +71,9 @@ export function LinkPropertyEditor(props: {
     props.setPlaceholder(`Enter URL for ${props.property.displayName}`);
   });
 
-  // With nothing typed every row removes a link, so none is highlighted until
-  // the user moves to one: Enter on an empty field must not delete a link.
-  const [movedToRow, setMovedToRow] = createSignal(false);
   createEffect(
-    on(
-      props.searchValue,
-      () => {
-        setMovedToRow(false);
-        props.setSelectedIndex(0);
-      },
-      { defer: true }
-    )
+    on(props.searchValue, () => props.setSelectedIndex(0), { defer: true })
   );
-  const highlightedIndex = () =>
-    props.searchValue().trim() || movedToRow() ? props.selectedIndex() : -1;
 
   // Adding to links that haven't been read would save only the new one and
   // drop the rest; a single link is replaced either way.
@@ -137,23 +125,23 @@ export function LinkPropertyEditor(props: {
     setSelectedIndex: props.setSelectedIndex,
   });
 
+  // With nothing typed every row removes a link, so Enter on an empty field
+  // must not delete one.
+  const highlight = createGuardedHighlight({
+    rows,
+    guarded: () => !props.searchValue().trim(),
+    searchValue: props.searchValue,
+    selectedIndex: props.selectedIndex,
+    listController,
+  });
+
   props.setKeybindings({
     select: () => {
-      const row = rows()[highlightedIndex()];
+      const row = rows()[highlight.highlightedIndex()];
       if (row) selectRow(row);
     },
-    next: () => {
-      if (highlightedIndex() === -1) {
-        setMovedToRow(true);
-        props.setSelectedIndex(0);
-        return;
-      }
-      listController.selectNext();
-    },
-    previous: () => {
-      setMovedToRow(true);
-      listController.selectPrevious();
-    },
+    next: highlight.selectNext,
+    previous: highlight.selectPrevious,
   });
 
   const addsToLinks = () => props.property.isMultiSelect && links().length > 0;
@@ -177,15 +165,12 @@ export function LinkPropertyEditor(props: {
     >
       <CommandMenuList
         items={rows()}
-        selectedIndex={highlightedIndex()}
+        selectedIndex={highlight.highlightedIndex()}
         scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
         itemId={(_, index) => `property-value-option-${index}`}
         itemDisabled={(row) => row.type === 'set' && row.next.isErr()}
         onSelect={(row) => selectRow(row)}
-        onItemMouseMove={(index) => {
-          setMovedToRow(true);
-          listController.setSelectedIndexFromPointer(index);
-        }}
+        onItemMouseMove={highlight.selectFromPointer}
       >
         {(row) => (
           <Switch>

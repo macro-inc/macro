@@ -284,7 +284,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
-| `/app/for-you` | For you: the person’s suggestions in lists, Today, To do, Suggestions (work Macro can do) and Done, chosen in its sidebar (`sN.forYou.view`) (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` scrolls to that suggestion |
+| `/app/for-you` | For you: the person’s suggestions in lists, Today, To do, Suggestions (work Macro can do) and Done, chosen in its sidebar (`sN.forYou.view`), or one topic’s rows (`sN.forYou.topic=<key>`, which replaces the list; one that groups nothing shows Today) (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` scrolls to that suggestion |
 | `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/notifications/calendar/<month-or-week-or-day>` | Notifications with a calendar notification's event open in the Calendar beside the list; the event uses `sN.calendar.*` |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -1196,11 +1196,11 @@ Reviews and Scheduling can be moved into the dock when enabled. Scheduling
 opens `/app/scheduling`, highlights while active, and uses header islands for its
 section and Personal/team owner drawers; it does not add a search-scope pill.
 
-Dock navigation, Search, filter pills, and create-menu taps do not trigger
-haptics. Buttons activate on click/release. Holding a button only shows its
-pressed state; cancelling the touch does not navigate. More views also opens on
-release so holding its trigger cannot drag or dismiss the opening sheet. Mouse,
-keyboard, and assistive activation use the normal click behavior.
+No dock, Search, filter pill, or create-menu tap triggers haptics. Buttons
+activate on click/release. Holding a button only shows its pressed state;
+cancelling the touch does not navigate. More views also opens on release so
+holding its trigger cannot drag or dismiss the opening sheet. Mouse, keyboard,
+and assistive activation use the normal click behavior.
 
 The dock's More views menu uses the same rounded glass bottom sheet as filters,
 with a blurred backdrop, drag handle, and an even 8px outer inset. The home
@@ -1299,25 +1299,18 @@ Project opens the native project composer; Folder remains the Files folder actio
 
 ## Mobile glass feedback
 
-In the native iOS app, glass presses animate the enclosing surface over 300ms.
-Round buttons grow by 28%; horizontal and vertical pills and grouped controls
-extend their glass fill and rim by up to 6px per edge, with 18% icon growth around
-each icon's center. The Duo navigation pill keeps this bounded expansion when tall.
-Labels and layout stay fixed; icons remain visually aligned through release.
-Selecting or deselecting a pill updates its fill and text together, including
-during release or a rapid second tap. The fill changes with a radial spotlight
-centered on the touch, brightening the surface in both light and dark themes.
-The spotlight follows the finger while it moves within the surface, updating
-at most once per animation frame.
-These iOS surfaces omit the native tap highlight; the spotlight supplies feedback.
-Release, cancellation, dragging outside, or losing window focus restores the
-surface. Disabled controls stay still; reduced motion keeps only the static
-color feedback. Android and web keep normal tap feedback without this expansion
-or spotlight.
+Glass buttons, inputs, the dock, and header islands look and respond the same
+in the iOS app, the Android app, and a mobile browser. Their edge is an even 1px
+hairline with no bevel or highlight, and a press shows the normal tap feedback:
+surfaces do not grow, spotlight, or trigger haptics. Haptics in the native apps
+confirm only gestures: a long press, a swipe row or pull to refresh crossing its
+threshold, and reordering the dock in Customize dock.
 
 ## Routines
 
-Open **Agents → Routines** for your routines. Opening a routine updates the URL
+Open **Agents → Routines**, or **Go to Routines** in the command menu (no `g`
+letter; always the list, even from an open routine),
+for your routines. Opening a routine updates the URL
 to `/app/routines/<uuid>` while keeping the Agents workspace. Reloading a detail
 URL restores that routine; browser Back and Forward restore the list or detail.
 Existing `/app/automation/<uuid>` links resolve to the canonical routine URL.
@@ -1538,7 +1531,7 @@ Macro activity triggers by surface:
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.
 - **Tasks:** **Task created**, **Status changed**, **Priority changed**, **Assignees changed**, **Due date changed**, **Project changed**, **Effort changed**, and **Any property changed**. Under **Changes to**, choose the values that start the routine, such as **Completed**, or leave **Any status**. A value counts only when the change adds it. Tags aren't properties and have no trigger.
-- **Email:** **New email received** in any of the routine owner's inboxes (their own and each one delegated to them), excluding spam, trash, drafts, and historical imports. Its scope reads **Your inbox**, or **Your inboxes** once the owner reads more than one; **+ Filter** → **Inbox** narrows it (below).
+- **Email:** **New email received** in any of the routine owner's inboxes (their own and each one delegated to them), excluding spam, trash, drafts, and historical imports. Its scope reads **Your inbox**, or **Your inboxes** once the owner reads more than one; **+ Filter** → **Inbox** narrows it (below). **Email labeled** (with the `enable-email-labeled-trigger` flag, on in dev) runs when a thread in those inboxes gets a Gmail label or Outlook category no other message in it had, as mail arrives or later; labels an agent or routine adds don't count. Its panel shows **Labels**: **Any label**, the chosen labels as pills (click one to remove it), and **Choose labels**, which opens a search box and each inbox's labels as checkboxes, nested by name for Gmail and grouped by address when there are several inboxes. The chip reads **with Any label**, the label names, or **N labels**; **+ Filter** → **Inbox** narrows it as it does new email.
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
@@ -1678,6 +1671,17 @@ to save; it also works while paused. A failed save keeps the draft and offers
 loads those settings before further edits. While running, configuration is locked; the routine can be paused
 but cannot resume until the run ends. Completed one-offs remain visible with
 their history and do not repeat.
+
+Plans limit active routines: 10 on Free, 1,000 on Pro, 3,000 on Business, and
+10,000 on Max (enterprise teams count as Max). A routine is active while it is
+enabled and either watches events or has a next run; paused routines and
+completed one-offs don't count. At the limit, creating, duplicating, or
+activating a template with **Start enabled**, enabling a paused routine, or
+giving a completed one-off a new time fails with **You've reached your plan's
+limit of N active routines. Pause or delete a routine to activate another.** On
+Free, Pro, and Business the **Upgrade your plan** paywall opens as well, with
+that advice. Saving a routine paused always works. An owner over the limit after
+a downgrade keeps their active routines but can't activate more until under it.
 
 An `m-document-mention` with `blockName: "routine"`, the returned routine ID,
 and the saved name renders as a clickable mention in an agent reply. Once the
@@ -2115,7 +2119,9 @@ after opening another item, Back returns to that default view.
 Within one tab (or the whole layout when desktop tabs are off), entity content
 can be open in only one split or inline preview/detail view at a time. Desktop
 tabs each hold their own instance. Shell components may have duplicate splits
-when `allowDuplicate` is enabled.
+when `allowDuplicate` is enabled. The split header's Duplicate split copies
+only shells: it is disabled while the split's route claims an entity, including
+one shown inside a shell (a Mail thread, a task, a CRM record).
 An Agents conversation route counts as the same entity as its agent or chat block.
 Following a mention or notification reuses the existing split or inline detail,
 activates its workspace, and navigates to any specified location without a toast.
@@ -2160,7 +2166,9 @@ which open the property editor like their shortcuts. For a property that holds
 several values (assignees, tags), the editor shows "Loading …" and takes no pick
 until that item's own values are read. If the read fails, an assignee list says
 it couldn't be loaded; tags can still be edited, since the server merges tag
-changes. Agent sessions add
+changes. While **Clear all** is the editor's first row, nothing is highlighted
+until the arrow keys or the pointer pick a row, so Enter right after opening
+clears nothing. Agent sessions add
 **Archive** / **Unarchive** for their owner. Calls offer **Share**. Pull
 requests offer **Open in new split**, **Copy GitHub Link**, **Open on GitHub**,
 and **Copy Branch Name** when the head branch is stored. Rows inside a Drive

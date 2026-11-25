@@ -80,3 +80,29 @@ fn conjoined_nil_exclusions_prove_empty_even_with_opt_in_literals() {
     )));
     assert_eq!(check_soup_flat_v3(&ast, request()), Eligibility::Supported);
 }
+
+#[test]
+fn a_label_compiles_to_its_fact_within_the_viewers_inboxes() {
+    // The exclusions Mail's own queries send.
+    let mut ast = excluded_deferred_partitions();
+    ast.document_filter = Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil()))));
+    ast.project_filter = Some(Arc::new(Expr::val(ProjectLiteral::ProjectId(Uuid::nil()))));
+    ast.chat_filter = Some(Arc::new(Expr::val(ChatLiteral::ChatId(Uuid::nil()))));
+    ast.email_filter.tree = Some(Arc::new(Expr::val(EmailLiteral::Label(Uuid::from_u128(7)))));
+    let LocalCompileOutcome::Supported(query) = mail::compile(
+        &ast,
+        request(),
+        "ALL",
+        &[Uuid::from_u128(1)],
+        "macro|viewer@example.com",
+    )
+    .unwrap() else {
+        panic!("a label compiles locally");
+    };
+    let predicate = format!("{:?}", query.as_query().partitions[0].predicate);
+    assert!(predicate.contains("mail-label-id"));
+    assert!(
+        predicate.matches("mail-link-id").count() >= 2,
+        "{predicate}"
+    );
+}

@@ -230,7 +230,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
     }
 
     // No `err`: a missing link and an expired token are expected answers.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     async fn get_user_access_token(
         &self,
         macro_user_id: &MacroUserId<Lowercase<'static>>,
