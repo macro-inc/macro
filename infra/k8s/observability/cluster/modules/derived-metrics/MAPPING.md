@@ -13,8 +13,9 @@ Rules:
 - Durations (`@duration`) are in seconds and end in `_seconds`; a Datadog
   threshold on one is in nanoseconds. Fields that were already in milliseconds
   or bytes stay so.
-- `tool` is a plain name or `other`: some agent harnesses put a
-  whole command in it, which Datadog keeps. `name: arguments` becomes `name`.
+- `tool` is a plain name or `other`: some agent harnesses put a whole
+  command in it. Datadog keeps that; here `other` is every call whose tool
+  name is missing or not plain (ingest removes the ones that aren't).
 - `job="derived-metrics"` and `instance` (which of the two replicas counted) are
   on every series: always aggregate them away.
 

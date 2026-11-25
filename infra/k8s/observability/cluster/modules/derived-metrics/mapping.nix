@@ -34,8 +34,9 @@ in
     or bytes stay so.
   - ${
     lib.concatMapStringsSep ", " code spans.openTags
-  } is a plain name or `other`: some agent harnesses put a
-    whole command in it, which Datadog keeps. `name: arguments` becomes `name`.
+  } is a plain name or `other`: some agent harnesses put a whole
+    command in it. Datadog keeps that; here `other` is every call whose tool
+    name is missing or not plain (ingest removes the ones that aren't).
   - `job="derived-metrics"` and `instance` (which of the two replicas counted) are
     on every series: always aggregate them away.
 
