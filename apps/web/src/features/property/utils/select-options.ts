@@ -14,6 +14,37 @@ export function withProjectStatusOptions(property: Property): Property {
     : property;
 }
 
+/** A select whose labels come from its definition rather than its own copy. */
+export function needsDefinitionOptions(property: Property): boolean {
+  return (
+    (property.valueType === 'SELECT_STRING' ||
+      property.valueType === 'SELECT_NUMBER') &&
+    property.options === undefined &&
+    property.isTag !== true
+  );
+}
+
+/**
+ * An item's copy of a custom select carries only option IDs; Status and
+ * Priority get their options where they are mapped. Give the others their
+ * definition's options so their values show by name. Returns the same array
+ * when nothing changes.
+ */
+export function withDefinitionOptions(
+  properties: Property[],
+  optionsByDefinition: ReadonlyMap<string, PropertyOption[]>
+): Property[] {
+  let changed = false;
+  const resolved = properties.map((property) => {
+    if (!needsDefinitionOptions(property)) return property;
+    const options = optionsByDefinition.get(property.propertyDefinitionId);
+    if (!options) return property;
+    changed = true;
+    return { ...property, options };
+  });
+  return changed ? resolved : properties;
+}
+
 export function selectablePropertyOptions(
   property: Property,
   options: PropertyOption[] = property.options ?? []

@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::{
     domain::{
         models::{ResolvedDraftInput, UpsertedContacts},
@@ -41,7 +42,9 @@ async fn sent_sync_settles_uncertainty_and_fences_a_late_coordinator(db: PgPool)
         .await
         .unwrap()
         .unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     let mut remote = snapshot(link, "a", MailboxState::default(), "v3");
     remote.content.message.is_sent = true;
@@ -480,7 +483,9 @@ async fn remote_ingestion_preserves_an_unsynced_local_edit_and_records_remote_co
         .await
         .unwrap()
         .unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     assert_eq!(work.provider_id.as_str(), "a");
     let mut remote = snapshot(
@@ -717,7 +722,9 @@ async fn sync_before_creation_response_binds_the_existing_macro_message(db: PgPo
         .await
         .unwrap()
         .unwrap();
-    sync.commit_page(&stream, &page()).await.unwrap();
+    sync.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     let mut remote = snapshot(
         link,

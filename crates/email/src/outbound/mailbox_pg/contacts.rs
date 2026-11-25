@@ -17,7 +17,7 @@ impl AddressBookRepository for PgMailboxSync {
                 ORDER BY s.next_run_at,s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
             ) UPDATE email_sync_streams s SET lease_id = $1,lease_until = now() + interval '3 minutes',fence = fence + 1
             FROM candidate c,email_links l WHERE s.id = c.id AND l.id = s.link_id
-            RETURNING s.id,s.link_id,s.generation,l.grant_generation,s.scope_id,s.position,s.initial_complete,s.fence,s.scan_id,s.kind
+            RETURNING s.id,s.link_id,s.generation,l.grant_generation,s.scope_id,s.position,s.initial_complete,s.fence,s.next_run_at,s.scan_id,s.kind
         "#,lease_id).fetch_optional(&self.db).await.map_err(db_error)?;
         row.map(|row| {
             Ok(AddressBookWork {
@@ -40,6 +40,7 @@ impl AddressBookRepository for PgMailboxSync {
                     initial_complete: row.initial_complete,
                     lease_id,
                     fence: row.fence,
+                    due_at: row.next_run_at,
                     notification: None,
                 },
             })

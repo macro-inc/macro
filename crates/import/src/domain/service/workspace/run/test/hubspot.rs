@@ -688,6 +688,10 @@ async fn a_failed_object_is_reported_and_the_next_run_writes_only_it(pool: PgPoo
     let report = import(&pool, inventory.clone(), crm.clone(), &owner).await;
     assert_eq!(report.failures.len(), 1, "{report:?}");
     assert_eq!(
+        report.error.as_deref(),
+        Some("1 objects could not be imported. Plan again to retry them.")
+    );
+    assert_eq!(
         report.failures[0].reason.as_deref(),
         Some("CRM was unavailable")
     );

@@ -4,6 +4,7 @@
 use super::{fixture, snapshot};
 use crate::domain::mailbox::live_pass::StreamKind;
 use crate::domain::mailbox::progress::MailboxProgressRepository;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::domain::mailbox::*;
 use crate::outbound::mailbox_pg::PgMailboxSync;
 use crate::telemetry_capture::Telemetry;
@@ -205,6 +206,7 @@ async fn a_message_refused_outright_stops_after_three_attempts_until_it_changes(
             position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();
@@ -382,6 +384,7 @@ async fn new_mail_on_a_message_an_import_was_reading_waits_for_no_import_delay(d
             position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();
@@ -589,6 +592,7 @@ async fn a_message_whose_claims_keep_ending_unfinished_is_abandoned_unread_until
             position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();
@@ -621,6 +625,7 @@ async fn a_change_during_an_unfinished_claim_is_read_with_a_fresh_count(db: PgPo
             position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();

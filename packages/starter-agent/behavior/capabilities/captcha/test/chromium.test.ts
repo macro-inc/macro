@@ -127,6 +127,23 @@ test.skipIf(!available)(
 );
 
 test.skipIf(!available)(
+  "a dotted data-callback is called as a method of its object, keeping its 'this'",
+  async () => {
+    await open('/recaptcha-method-callback');
+    await solveOnPage(needs, { solveId: 'solve-method', runId: 'run-1' });
+    const seen = await withCurrentPage(endpoint, (page) =>
+      page.evaluate(() => {
+        const { document } = globalThis as unknown as {
+          document: { body: { dataset: Record<string, string> } };
+        };
+        return { ...document.body.dataset };
+      })
+    );
+    expect(seen).toEqual({ calledOn: 'contact-widget', token });
+  }
+);
+
+test.skipIf(!available)(
   'an interstitial and a plain page never reach the harness',
   async () => {
     const before = fixture.seen.length;

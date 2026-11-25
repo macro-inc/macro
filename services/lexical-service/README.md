@@ -30,7 +30,13 @@ Accepts `{ "markdown": "..." }` and returns an `application/octet-stream` Loro s
 Accepts `{ "markdown": "...", "links": { "pages": { "<notion id>": { "documentId", "name" } }, "users": { "<notion id>": { "userId", "email" } } } }`
 with a page in Notion's enhanced markdown and returns `{ "snapshot": "<base64 Loro snapshot>", "markdown": "<Macro markdown>" }`.
 Notion ids are dashless and lowercase. Mapped page and people references become document and user mentions;
-the rest degrade to links or text (`packages/lexical-core/notion/`). Deploy this endpoint before the import backend that calls it.
+the rest degrade to links or text (`packages/lexical-core/notion/`). Optional
+`links.databases` supplies page-local `{containerId, ordinal, target}` placements.
+`containerId` is the dashless lowercase ID from the database URL path; `ordinal`
+is zero-based per container in body order. A target `{databaseId, tableId, viewId?}`
+creates an editable database card at that position. A target `{reason}` (`noAccess`,
+`notFound`, `notImported`, `unresolved`), or a missing map entry, keeps a named
+Notion link with the reason. Deploy this endpoint before the import backend that calls it.
 
 ## POST /image-markdown
 Accepts `{ "staticFileId": "<uuid>", "url": "https://...", "width": 1536, "height": 1024 }`

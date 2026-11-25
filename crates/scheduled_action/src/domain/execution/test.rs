@@ -314,6 +314,8 @@ struct Runner {
     finish: CancellationToken,
     dropped: CancellationToken,
     fail_create: bool,
+    /// Preparation finds an app the routine requires disconnected.
+    app_not_connected: bool,
     fail_run: bool,
     stall_prepare: bool,
     stall_before_resource: bool,
@@ -335,6 +337,9 @@ impl ScheduledAgentRunner for Runner {
             .unwrap()
             .push((handle.session_id, handle.action_id));
         anyhow::ensure!(!self.fail_create, "resource unavailable");
+        if self.app_not_connected {
+            return Err(RoutineSessionError::AppNotConnected.into());
+        }
         if self.stall_before_resource {
             std::future::pending::<()>().await;
         }
@@ -1011,6 +1016,45 @@ async fn failed_and_refused_runs_report_how_they_ended() {
             ends(&observer),
             [(RunTrigger::Scheduled, RunTarget::Model, end)]
         );
+    }
+}
+
+#[tokio::test]
+async fn a_run_refused_for_a_disconnected_app_names_the_routines_apps() {
+    let mut action = action();
+    action.task["mcp_servers"] = json!([
+        {"app_slug": "linear", "server_name": "Linear"},
+        {"app_slug": "slack", "server_name": "Slack"},
+        {"app_slug": "slack_v2", "server_name": "Slack"},
+    ]);
+    let (refused, observer) = observed(executor(
+        Repo::default(),
+        Runner {
+            app_not_connected: true,
+            ..Runner::default()
+        },
+    ));
+    let _ = refused.execute_action(action.clone()).await;
+    drain(&refused).await;
+    {
+        let runs = observer.0.lock().unwrap();
+        assert_eq!(runs[0].end, RunEnd::Failed);
+        assert_eq!(runs[0].apps_to_connect, ["Linear", "Slack"]);
+    }
+
+    // Any other failure, or a success, names no app.
+    for runner in [
+        Runner {
+            fail_run: true,
+            ..Runner::default()
+        },
+        Runner::default(),
+    ] {
+        let (executor, observer) = observed(executor(Repo::default(), runner));
+        executor.runner.finish.cancel();
+        executor.execute_action(action.clone()).await.unwrap();
+        drain(&executor).await;
+        assert!(observer.0.lock().unwrap()[0].apps_to_connect.is_empty());
     }
 }
 

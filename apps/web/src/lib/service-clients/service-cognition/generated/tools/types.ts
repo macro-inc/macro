@@ -3721,15 +3721,9 @@ export type Granularity = 'day' | 'week' | 'month' | 'summary';
  */
 export type NotionImportAction = 'plan' | 'status' | 'cancel';
 /**
- * Lifecycle of a discovery run (one per user × source).
+ * Why an item was left for the user in the reviewed plan.
  */
-export type RunStatus =
-  | 'running'
-  | 'ready'
-  | 'importing'
-  | 'completed'
-  | 'failed'
-  | 'dismissed';
+export type NotionReviewOmissionKind = 'left_out' | 'excluded' | 'by_hand';
 /**
  * What an imported item is in its source system. Each source has its own
  * kinds; a Notion database and a Notion page, or a Linear project and a
@@ -3751,6 +3745,33 @@ export type ImportKind =
   | 'hubspot_company'
   | 'hubspot_contact'
   | 'hubspot_deal';
+/**
+ * The kind and severity of a user-visible change to a saved view.
+ */
+export type NotionViewChangeKind =
+  | 'filter'
+  | 'layout'
+  | 'sort'
+  | 'visibility'
+  | 'display';
+/**
+ * Content-level notes that do not describe a saved view or a reviewed skip.
+ */
+export type NotionReportNoteKind =
+  | 'omitted'
+  | 'snapshot'
+  | 'reference'
+  | 'other';
+/**
+ * Lifecycle of a discovery run (one per user × source).
+ */
+export type RunStatus =
+  | 'running'
+  | 'ready'
+  | 'importing'
+  | 'completed'
+  | 'failed'
+  | 'dismissed';
 /**
  * Something a HubSpot import cannot carry into Macro CRM, counted on the
  * review card and in the final report.
@@ -11233,6 +11254,14 @@ export interface NotionImportReport {
    */
   warnings?: string[];
   /**
+   * Grouped report details for a Notion workspace review.
+   */
+  details?: NotionReportDetails | null;
+  /**
+   * Actual writes from the completed Notion ledger, excluding reused copies.
+   */
+  confirmed?: ConfirmedNotionWrites | null;
+  /**
    * Tracker issues in the plan.
    */
   issues?: number;
@@ -11297,7 +11326,7 @@ export interface NotionImportReport {
    */
   databases: number;
   /**
-   * Rows those databases hold, every one counted while planning.
+   * Estimated database rows while planning, confirmed rows once completed.
    */
   databaseRows: number;
   /**
@@ -11305,7 +11334,7 @@ export interface NotionImportReport {
    */
   taskRows: number;
   /**
-   * Plan objects already imported.
+   * Plan objects finished so far, or confirmed new copies once completed.
    */
   imported: number;
   /**
@@ -11347,9 +11376,231 @@ export interface NotionImportReport {
    */
   failures?: NotionReportItem[];
   /**
+   * Total objects that failed, including those outside the sample.
+   */
+  failureCount?: number;
+  /**
    * A HubSpot plan's counts, owners and losses.
    */
   hubspot?: HubspotReport | null;
+}
+/**
+ * Details alongside the outcome on a Notion import card.
+ */
+export interface NotionReportDetails {
+  /**
+   * A sample of items deliberately left out, with the reviewed reasons.
+   */
+  notImported: NotionReviewOmission[];
+  /**
+   * Totals for each review choice.
+   */
+  omissionCounts?: NotionReviewOmissionCount[];
+  /**
+   * Saved view differences, sampled by impact and grouped by source and view.
+   */
+  viewChanges: NotionDatabaseViewChanges[];
+  /**
+   * Total number of changed views.
+   */
+  viewCount?: number;
+  /**
+   * Total number of displayed and undisplayed change lines.
+   */
+  viewChangeCount?: number;
+  /**
+   * A sample of tab selections caused by an unspecified Notion tab.
+   */
+  tabChoices: NotionTabChoice[];
+  /**
+   * Total number of placements that used a default tab.
+   */
+  tabChoiceCount?: number;
+  /**
+   * A sample of legacy notices and non-view fidelity changes.
+   */
+  notes: NotionReportNote[];
+  /**
+   * Totals for each kind of notice.
+   */
+  noteCounts?: NotionReportNoteCount[];
+}
+/**
+ * A review choice and the item it left out.
+ */
+export interface NotionReviewOmission {
+  kind: NotionReviewOmissionKind;
+  item: NotionReportItem;
+}
+/**
+ * One object a workspace import report calls out.
+ */
+export interface NotionReportItem {
+  /**
+   * The ledger row.
+   */
+  importId: string;
+  /**
+   * The object's title.
+   */
+  title: string;
+  kind: ImportKind;
+  /**
+   * Its Notion URL.
+   */
+  url?: string | null;
+  /**
+   * Why it is called out: the decision model's reason, or the failure.
+   */
+  reason?: string | null;
+}
+/**
+ * Counts for one review choice, including items outside the sample.
+ */
+export interface NotionReviewOmissionCount {
+  kind: NotionReviewOmissionKind;
+  /**
+   * Pages left out.
+   */
+  pages: number;
+  /**
+   * Databases left out.
+   */
+  databases: number;
+  /**
+   * Other objects left out.
+   */
+  other: number;
+}
+/**
+ * Views that changed on one database.
+ */
+export interface NotionDatabaseViewChanges {
+  /**
+   * Stable Notion data source identity.
+   */
+  databaseId: string;
+  /**
+   * Display title.
+   */
+  title: string;
+  /**
+   * Views ordered by their highest impact.
+   */
+  views: NotionChangedView[];
+}
+/**
+ * Changes to one view of an imported database.
+ */
+export interface NotionChangedView {
+  /**
+   * Stable Notion identity, separate from the title.
+   */
+  viewId: string;
+  /**
+   * Display title.
+   */
+  title: string;
+  /**
+   * Changes ordered by impact.
+   */
+  changes: NotionViewChange[];
+}
+/**
+ * A counted, readable difference in an imported view.
+ */
+export interface NotionViewChange {
+  kind: NotionViewChangeKind;
+  /**
+   * Number of changed settings represented in this line.
+   */
+  count: number;
+  /**
+   * Human-readable description.
+   */
+  message: string;
+}
+/**
+ * A first-tab choice when Notion omitted the view from a reference.
+ */
+export interface NotionTabChoice {
+  /**
+   * Container identity. Different linked placements may choose different tabs.
+   */
+  containerId: string;
+  /**
+   * Title of the page or row containing the reference.
+   */
+  containerTitle?: string | null;
+  /**
+   * Database name shown in the reference.
+   */
+  database: string;
+  /**
+   * Name of the returned first tab.
+   */
+  tab: string;
+}
+/**
+ * A counted content or compatibility note.
+ */
+export interface NotionReportNote {
+  kind: NotionReportNoteKind;
+  /**
+   * Number of incidents represented by this notice.
+   */
+  count: number;
+  /**
+   * Human-readable text, with affected source and property titles.
+   */
+  message: string;
+}
+/**
+ * Counts for one kind of content note, including notes outside the sample.
+ */
+export interface NotionReportNoteCount {
+  kind: NotionReportNoteKind;
+  /**
+   * Number of notices.
+   */
+  lines: number;
+  /**
+   * Number of incidents described by the notices.
+   */
+  count: number;
+}
+/**
+ * Objects confirmed in the current Notion write's ledger.
+ */
+export interface ConfirmedNotionWrites {
+  /**
+   * Copied pages.
+   */
+  documents: number;
+  /**
+   * Copied databases.
+   */
+  databases: number;
+  /**
+   * Rows inserted into databases, including writes from unfinished copies.
+   */
+  databaseRows: number;
+  /**
+   * The subset of database rows written before their source stopped.
+   */
+  partialDatabaseRows?: number;
+  /**
+   * Databases copied as task lists.
+   */
+  taskLists: number;
+  /**
+   * Tasks inserted into task lists, including writes from unfinished lists.
+   */
+  tasks: number;
+  /**
+   * The subset of tasks written before their source stopped.
+   */
+  partialTasks?: number;
 }
 /**
  * What a planning run has found in the source so far.
@@ -11376,28 +11627,6 @@ export interface NotionImporter {
    * How many of the plan's objects they imported.
    */
   count: number;
-}
-/**
- * One object a workspace import report calls out.
- */
-export interface NotionReportItem {
-  /**
-   * The ledger row.
-   */
-  importId: string;
-  /**
-   * The object's title.
-   */
-  title: string;
-  kind: ImportKind;
-  /**
-   * Its Notion URL.
-   */
-  url?: string | null;
-  /**
-   * Why it is called out: the decision model's reason, or the failure.
-   */
-  reason?: string | null;
 }
 /**
  * What a HubSpot plan holds, for the review card.
