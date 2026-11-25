@@ -2070,6 +2070,37 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('tells of a settlement while paused, and reports its owner ready once it can be read', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const settled = vi.fn();
+    host.onMutationSettled(settled);
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.unavailable('recovery fails', 'recovery-failed');
+    const ready = vi.fn(() => host.currentRevision());
+    host.onOwnerReady?.(ready);
+    adapter.ignoredKinds.add('init');
+    adapter.replace(2);
+    await vi.waitFor(() => expect(adapter.requests.at(-1)?.kind).toBe('init'));
+
+    const settlement = {
+      mutationUuid: 'create-1',
+      transactionId: 'tx-1',
+      status: 'committed' as const,
+    };
+    adapter.push({ kind: 'mutation-settled', settlement });
+    expect(settled).toHaveBeenCalledExactlyOnceWith(settlement);
+    await expect(host.currentRevision()).rejects.toMatchObject({
+      name: 'CacheUnavailableError',
+    });
+    expect(ready).not.toHaveBeenCalled();
+
+    adapter.respond(adapter.requests.at(-1)?.id ?? -1, null);
+    await vi.waitFor(() => expect(ready).toHaveBeenCalledOnce());
+    await expect(ready.mock.results[0]?.value).resolves.toBeDefined();
+    host.dispose();
+  });
+
   it('tells what an engine that opens after an outage did to the database only once it serves', async () => {
     const onUnavailable = vi.fn();
     const onAvailable = vi.fn();
