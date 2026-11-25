@@ -39,6 +39,30 @@ test("the agent's own mailbox sends only through its capability", () => {
     bash(
       'curl -X POST http://127.0.0.1:4000/email/email/agent-mailbox/messages -d @mail.json'
     ),
+    // The port and the drafts behind the capability.
+    run(
+      'import { sdkMailbox } from "/agent/behavior/capabilities/mailbox/macro.ts";\nexport async function main({ context }) { return sdkMailbox({ macro: context.macro, trace: context.trace }).send({}); }'
+    ),
+    run(
+      'import { draftStore } from "/agent/behavior/capabilities/mailbox/drafts.ts";\nexport async function main() { return draftStore; }'
+    ),
+    run(
+      'export async function main({ context }) { await context.disk.write("/agent/state/run/mailbox/drafts/x.json", "{}"); }'
+    ),
+    call('Write', {
+      file_path:
+        '/agent/state/run/mailbox/drafts/00000000-0000-4000-8000-00000000000a.json',
+      content: '{}',
+    }),
+    call('Edit', {
+      file_path: '/agent/.worktrees/w/state/run/mailbox/drafts/a.json',
+      old_string: 'a',
+      new_string: 'b',
+    }),
+    // Reading the mailbox around the capability, too: it hands out the SDK's handles.
+    run(
+      'export async function main({ context }) { return (await context.macro()).agentMailbox.messages(); }'
+    ),
   ])
     expect(refused).toBe(noEmailReason);
   expect(noEmailReason).toContain('sendMyEmail');
@@ -57,6 +81,16 @@ test("the mailbox capability, and reading the agent's own mail, go through", () 
     run(
       'import { readMyEmail } from "/agent/behavior/capabilities/mailbox/index.ts";\nexport async function main({ context }) { return readMyEmail(context, { messageId: "in-1" }); }'
     ),
+    // A script that reads its mailbox through the capability and also posts
+    // in chat is not a mailbox send.
+    run(
+      'import { listMyEmail } from "/agent/behavior/capabilities/mailbox/index.ts";\nexport async function main({ context }) { const page = await listMyEmail(context); await context.chat.send("c-1", String(page.messages.length) + " new"); }'
+    ),
+    bash('cargo test -p agent_mailbox'),
+    // Reading the capability's code sends nothing.
+    call('Read', {
+      file_path: '/agent/behavior/capabilities/mailbox/macro.ts',
+    }),
   ])
     expect(allowed).toBeUndefined();
 });
