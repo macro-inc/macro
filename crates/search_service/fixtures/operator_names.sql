@@ -40,7 +40,8 @@ VALUES
     ('d4000000-0000-0000-0000-000000000005', NULL, 'direct_message', 'macro|viewer@example.com', '2024-01-01 10:00:00+00', '2024-12-05 10:00:00+00'),
     ('d4000000-0000-0000-0000-000000000006', 'Launch', 'public', 'macro|viewer@example.com', '2024-01-01 10:00:00+00', '2024-12-06 10:00:00+00'),
     ('d4000000-0000-0000-0000-000000000007', NULL, 'private', 'macro|viewer@example.com', '2024-01-01 10:00:00+00', '2024-12-07 10:00:00+00'),
-    ('d4000000-0000-0000-0000-000000000008', NULL, 'private', 'macro|viewer@example.com', '2024-01-01 10:00:00+00', '2024-12-08 10:00:00+00');
+    ('d4000000-0000-0000-0000-000000000008', NULL, 'private', 'macro|viewer@example.com', '2024-01-01 10:00:00+00', '2024-12-08 10:00:00+00'),
+    ('d4000000-0000-0000-0000-000000000009', 'Launch "beta"', 'public', 'macro|viewer@example.com', '2024-01-01 10:00:00+00', '2024-12-09 10:00:00+00');
 
 INSERT INTO comms_channel_participants (channel_id, role, user_id, left_at)
 VALUES
@@ -60,4 +61,6 @@ VALUES
     ('d4000000-0000-0000-0000-000000000007', 'member', 'macro|ben@example.com', NULL),
     -- An unnamed group with Ana Lima alone, named after her.
     ('d4000000-0000-0000-0000-000000000008', 'owner', 'macro|viewer@example.com', NULL),
-    ('d4000000-0000-0000-0000-000000000008', 'member', 'macro|ana@example.com', NULL);
+    ('d4000000-0000-0000-0000-000000000008', 'member', 'macro|ana@example.com', NULL),
+    -- A channel whose name holds double quotes.
+    ('d4000000-0000-0000-0000-000000000009', 'owner', 'macro|viewer@example.com', NULL);

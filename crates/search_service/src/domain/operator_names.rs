@@ -114,8 +114,9 @@ impl NamedIds {
 
 /// `label` as a typed value can hold it: a query's terms drop the phrase
 /// quotes they're typed with, so a tag named `Q3 "Plan"` is typed as
-/// `tag:"Q3 Plan"`.
-fn as_typed(label: &str) -> String {
+/// `tag:"Q3 Plan"`, and a channel named `Launch "beta"` as
+/// `in:#"Launch beta"`.
+pub(crate) fn as_typed(label: &str) -> String {
     label
         .chars()
         .filter(|c| !matches!(c, '"' | '“' | '”' | '„'))

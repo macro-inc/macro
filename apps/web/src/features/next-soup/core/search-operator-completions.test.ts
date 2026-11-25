@@ -51,6 +51,13 @@ describe('searchOperatorCompletions', () => {
     expect(inserts('in:inbox')).toEqual([]);
   });
 
+  it('writes a channel as it can be typed, quotes left out', () => {
+    const values = { ...VALUES, channels: ['Launch "beta"'] };
+    expect(
+      searchOperatorCompletions('in:#launch', values).map((row) => row.insert)
+    ).toEqual(['in:#"Launch beta"']);
+  });
+
   it('writes a tag as it can be typed: quotes left out, an emoji alone', () => {
     const values = { ...VALUES, tags: ['Q3 "Plan"', '🔥'] };
     expect(

@@ -45,7 +45,9 @@ export function createSearchOperatorLookup(
       channels: (name) => {
         const wanted = name.toLowerCase();
         return named
-          .filter((channel) => channel.data.name.toLowerCase() === wanted)
+          .filter(
+            (channel) => nameAsTyped(channel.data.name).toLowerCase() === wanted
+          )
           .map((channel) => channel.id);
       },
     };

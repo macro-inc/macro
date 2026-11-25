@@ -237,8 +237,9 @@ per-entity-type search plus a unified search across them — mounted into
   `MAX_CHANNEL_NAMES` channel names. An unknown name or invalid value stays
   a word. A `tag:` or `in:#` value needs a letter, a digit or another
   non-ASCII character such as an emoji (`tag:🔥`); ASCII punctuation alone
-  (`tag:-`) stays a word. Tag names match the label with its phrase quotes
-  left out (`domain/operator_names.rs`), since a typed term drops them. `search_operators/typed_operators.json` lists typed queries
+  (`tag:-`) stays a word. Tag and channel names match with their phrase
+  quotes left out (`domain/operator_names.rs` `as_typed`, and
+  `outbound/operator_names.rs` for channels), since a typed term drops them. `search_operators/typed_operators.json` lists typed queries
   and how many operators each holds; change it with the parser.
 - A minus before a word or quoted phrase (`-draft`, `-"team lunch"`) leaves
   out what holds it in every kind the unified search reaches, for every
