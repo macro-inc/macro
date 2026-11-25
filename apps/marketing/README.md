@@ -1183,7 +1183,7 @@ and the presenter pill before the next video starts.
 Spreadsheets, Databases, and Canvas use their tutorials in the feature hero. The MacroD tutorial sits in the Agents page’s “Your agent, inside Macro” section.
 Company graph, AI tagging, Automatic permissions, Workspace events, and Unified search use `BenefitVideoPoster` (`preview: 'benefit'`): floating product diagrams on black with a soft neutral glow, faint dot texture, and precise callouts. Keep color in the small product accents rather than a surrounding frame. Keep benefit page backgrounds black, with only a faint, localized neutral glow behind diagrams (4% at the hero glow center). Keep the play control below the focal artwork, with a separate control lane on narrow screens. The decorative poster disappears when playback starts. Routines, Skills, and Forms use the shared app-window preview and their own feature wallpaper. Extract Routines at 8s, and Skills and Forms at 3.8s, using the same 1920×1080 frame and window crop as the other features.
 Pages without an app tutorial keep a text hero until a video is available. Keep the titles and durations in `core/tutorial-videos.ts`
-in sync with the app; the Docs tutorial is the 1:15 version focused on @mentions.
+in sync with the app; the Docs tutorial is the 1:02 version focused on @mentions.
 Videos and posters live in `public/video/tutorials/`; merged docs embed the same
 public assets. The docs compiler resolves tutorial videos and posters on the current
 origin, so previews use their own version rather than an older production video.

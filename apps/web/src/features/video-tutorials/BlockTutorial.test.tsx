@@ -358,7 +358,7 @@ describe('block tutorial sidebar item', () => {
       </>
     ));
     const spreadsheets = screen.getByRole('button', {
-      name: 'Watch tutorial: Learn how to use Macro Spreadsheets, 0:56',
+      name: 'Watch tutorial: Learn how to use Macro Spreadsheets, 1:04',
     });
     expect(spreadsheets.textContent).toContain('Macro Spreadsheets');
     expect(spreadsheets.textContent).not.toContain('Watch tutorial');
