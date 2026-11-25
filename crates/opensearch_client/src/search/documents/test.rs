@@ -889,3 +889,33 @@ async fn a_content_prefix_matches_words_past_the_first_256_that_share_it() {
         .unwrap();
     result.unwrap();
 }
+
+#[test]
+fn a_left_out_term_drops_documents_it_matches_by_the_modes_fields() -> anyhow::Result<()> {
+    let built = |mode: DocumentSearchMode| -> anyhow::Result<serde_json::Value> {
+        let builder = DocumentQueryBuilder::new(vec!["budget".to_string()])
+            .match_type("partial")
+            .user_id("alice")
+            .mode(mode)
+            .excluded_terms(vec!["draft".to_string()]);
+        Ok(builder.build_bool_query()?.build().to_json())
+    };
+    let by_name = serde_json::json!({"match_bool_prefix": {"document_name": {"query": "draft"}}});
+    let by_chunk = serde_json::json!({"has_child": {
+        "type": "chunk",
+        "query": {"match_bool_prefix": {"content": {"query": "draft"}}},
+    }});
+
+    let content = built(DocumentSearchMode::Content)?;
+    assert_eq!(content["bool"]["must_not"], serde_json::json!([by_chunk]));
+
+    let name = built(DocumentSearchMode::Name)?;
+    assert_eq!(name["bool"]["must_not"], serde_json::json!([by_name]));
+
+    let either = built(DocumentSearchMode::NameContent)?;
+    assert_eq!(
+        either["bool"]["must_not"],
+        serde_json::json!([by_name, by_chunk])
+    );
+    Ok(())
+}
