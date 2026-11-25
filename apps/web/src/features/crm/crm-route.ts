@@ -37,6 +37,8 @@ export const crmRecordSearch = {
   defaults: { commentId: '', seek: '' },
 };
 
+export const crmRecordSearchCodec = createSearchParamsCodec(crmRecordSearch);
+
 export const crmPipelineParams = z.object({ pipelineId: z.string().min(1) });
 
 /** A company or contact opened inside Customers; no section is its Overview. */

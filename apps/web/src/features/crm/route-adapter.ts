@@ -27,6 +27,7 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import type {
+  CrmCommentTarget,
   CrmRecordNavigation,
   CrmRoute,
 } from './context/workspace-context';
@@ -38,6 +39,7 @@ import {
   type CrmRecordParams,
   crmItemBlockType,
   crmRecordSearch,
+  crmRecordSearchCodec,
   crmSearch,
   crmSearchCodec,
 } from './crm-route';
@@ -134,7 +136,8 @@ export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
     trail: readonly CrmRecordRef[],
     section: CrmRecordSection | undefined,
     followLink = false,
-    replace = false
+    replace = false,
+    commentTarget?: CrmCommentTarget
   ) => {
     const record = trail.at(-1);
     if (!record) return;
@@ -148,7 +151,11 @@ export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
       allowDuplicate: !followLink,
       replace,
       state: [...trail],
-      search: { [crmRecordSearch.namespace]: undefined },
+      search: {
+        [crmRecordSearch.namespace]: commentTarget
+          ? crmRecordSearchCodec.serialize(commentTarget)
+          : undefined,
+      },
     };
     const pipelineId = params.pipelineId;
     fireAndForget(
@@ -173,13 +180,17 @@ export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
         record.type === survivor.type &&
         record.id.toLowerCase() === survivor.id.toLowerCase()
     );
+    // The merged record's tab and Discussion message are the one that
+    // stays's; a new seek scrolls its Discussion to the message.
+    const commentId = recordSearch.commentId;
     showRecord(
       earlier === -1
         ? [...before, { type: survivor.type, id: survivor.id, name: '' }]
         : before.slice(0, earlier + 1),
-      undefined,
+      params.section,
       true,
-      true
+      true,
+      commentId ? { commentId, seek: crypto.randomUUID() } : undefined
     );
   });
 
