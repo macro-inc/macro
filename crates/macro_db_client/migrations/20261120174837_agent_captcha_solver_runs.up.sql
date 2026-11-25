@@ -3,6 +3,8 @@
 -- rows are the idempotency record and the per-agent solve caps. Both are
 -- counted here, not per process, so replicas and deploys share them. A
 -- deleted agent takes its rows with it.
+-- The foreign keys lock "User" against writes until the file ends.
+SET LOCAL lock_timeout = '5s';
 CREATE TABLE agent_captcha_runs (
     id UUID PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE ON UPDATE CASCADE,
