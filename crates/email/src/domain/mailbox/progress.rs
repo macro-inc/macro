@@ -113,6 +113,19 @@ pub struct MailboxBacklog {
     pub watch_failures: i32,
 }
 
+/// The mail folder claim line across every Outlook mailbox: the folders a
+/// claim could take now and how long the longest-due of them has waited.
+/// Polls of finished folders and import rounds share the line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FolderLine {
+    pub polls_due: i64,
+    /// 0 if none is due.
+    pub oldest_poll_due_seconds: i64,
+    pub import_rounds_due: i64,
+    /// 0 if none is due.
+    pub oldest_import_round_due_seconds: i64,
+}
+
 pub trait MailboxProgressRepository: Send + Sync + 'static {
     /// Add imports counted since the last flush to the current minute.
     fn record_imports(
@@ -123,6 +136,8 @@ pub trait MailboxProgressRepository: Send + Sync + 'static {
     /// ones that still have queued or abandoned work. Also drops import
     /// counts older than a day.
     fn backlogs(&self) -> impl Future<Output = Result<Vec<MailboxBacklog>, MailboxError>> + Send;
+    /// The folders a mail folder claim could take now, by kind.
+    fn folder_line(&self) -> impl Future<Output = Result<FolderLine, MailboxError>> + Send;
 }
 
 pub struct MailboxProgressService<R> {
@@ -149,8 +164,20 @@ impl<R: MailboxProgressRepository> MailboxProgressService<R> {
         result
     }
 
-    /// Log one health snapshot per mailbox. One worker calls this per minute.
+    /// Log one health snapshot per mailbox, and the folder claim line they
+    /// share. One worker calls this per minute. A failed read of the line
+    /// leaves the snapshots, which the sync monitors read, to go out.
     pub async fn report(&self) -> Result<usize, MailboxError> {
+        match self.repo.folder_line().await {
+            Ok(line) => tracing::info!(
+                polls_due = line.polls_due,
+                oldest_poll_due_seconds = line.oldest_poll_due_seconds,
+                import_rounds_due = line.import_rounds_due,
+                oldest_import_round_due_seconds = line.oldest_import_round_due_seconds,
+                "outlook folder line"
+            ),
+            Err(error) => tracing::warn!(error = ?error, "failed to read the Outlook folder line"),
+        }
         let backlogs = self.repo.backlogs().await?;
         for backlog in &backlogs {
             tracing::info!(
