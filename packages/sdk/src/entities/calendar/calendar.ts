@@ -70,7 +70,7 @@ export class Calendar extends MacroEntity<VisibleCalendar> {
    * off. Booking links, team availability and agents all read it. */
   readonly contributesToAvailability = this.field('contributesToAvailability');
 
-  /** Whether the account subscribes to this calendar (holidays, birthdays, or one added by URL or from the web). */
+  /** Whether the account subscribes to this calendar as a feed (Google's holidays and birthdays, or one added by URL or from the web). */
   readonly isSubscription = this.field('isSubscription');
 
   /** Provider color, when set. */

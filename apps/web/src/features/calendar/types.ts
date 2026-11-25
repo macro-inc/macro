@@ -44,7 +44,7 @@ export interface CalendarSource {
   emailLinkId?: string;
   /** Whether this source is its connected inbox's primary calendar. */
   isPrimary?: boolean;
-  /** Whether the account subscribes to this calendar (holidays, birthdays, added by URL). */
+  /** Whether the account subscribes to this calendar as a feed (Google's holidays and birthdays, or one added by URL or from the web). */
   isSubscription?: boolean;
   /** A persistent sync failure isolated to this calendar, for a settings badge. */
   syncError?: string;

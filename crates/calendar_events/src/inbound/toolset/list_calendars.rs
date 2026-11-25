@@ -34,8 +34,9 @@ pub struct ToolCalendar {
     pub is_primary: bool,
     /// Whether events can be created and modified on this calendar.
     pub is_writable: bool,
-    /// Whether the account subscribes to this calendar as a feed: a holidays
-    /// or birthdays calendar, or one added by URL or from the web.
+    /// Whether the account subscribes to this calendar as a feed: Google's
+    /// holidays and birthdays calendars, a calendar added by URL in Google,
+    /// or one subscribed from the web in Outlook.
     pub is_subscription: bool,
     /// Whether this calendar counts toward the user's busy time. Only these
     /// are the user's own schedule; false does not say whose calendar it is.
@@ -66,7 +67,8 @@ colleague's calendar reports the user's own address, and being writable or not p
 nothing either way. `contributesToAvailability` marks the calendars that are the user's \
 schedule. Call any other by its name, say whose it is when the name shows that, and otherwise \
 say you cannot tell. Call a calendar with `isSubscription` a subscription the account follows \
-(holidays, birthdays, or a calendar added by URL); the flag does not say who keeps it.\n\
+(Google's holidays and birthdays, or a calendar added by URL or from the web); the flag does not \
+say who keeps it.\n\
 \n\
 Use this before CreateCalendarEvent when the user wants an event on a specific non-default \
 calendar (e.g. \"add it to my work calendar\") so you can pass the exact `calendarId`. Most \
