@@ -54,6 +54,7 @@ export type MergeSharingChoice = 'keep' | 'stop';
 
 /** Why the server refused a review or a commit. */
 export type MergeRefusal = {
+  /** A server refusal code, or `merge_unconfirmed` when no answer came back. */
   code: string;
   blocked?: MergeBlock | null;
   /** For a company merged since: the company it went into. */

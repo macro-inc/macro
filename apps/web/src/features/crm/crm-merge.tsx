@@ -45,14 +45,18 @@ type MergeRequest = { companies: MergeCandidate[]; onMerged?: () => void };
 // where the app's CRM wiring is available, as the CRM create dialogs do.
 const [mergeRequest, setMergeRequest] = createSignal<MergeRequest>();
 const [mergeOpen, setMergeOpen] = createSignal(false);
-const mergeLock = useFocusLock('crm-merge-companies');
+let mergeLock: ReturnType<typeof useFocusLock> | undefined;
+const lock = () => {
+  mergeLock ??= useFocusLock('crm-merge-companies');
+  return mergeLock;
+};
 
 /** The merge the layout's dialog shows; it stays set while the dialog closes. */
 export const companyMerge = {
   request: mergeRequest,
   open: mergeOpen,
   close() {
-    mergeLock.release();
+    lock().release();
     setMergeOpen(false);
   },
 };
@@ -63,7 +67,7 @@ export function openMergeCompanies(
   onMerged?: () => void
 ) {
   if (!crmAccessAllowed()) return;
-  mergeLock.acquire();
+  lock().acquire();
   setMergeRequest({ companies, onMerged });
   setMergeOpen(true);
 }

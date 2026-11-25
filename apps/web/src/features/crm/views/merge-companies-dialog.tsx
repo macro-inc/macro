@@ -49,7 +49,14 @@ type Step = 'pick' | 'keep' | 'review';
 
 type ReviewState =
   | { t: 'loading' }
-  | { t: 'ready'; review: MergeReview }
+  | {
+      t: 'ready';
+      review: MergeReview;
+      survivor: MergeCompany;
+      sources: MergeCompany[];
+      /** One per review: a retry of its commit sends it again. */
+      requestKey: string;
+    }
   | { t: 'refused'; refusal: MergeRefusal };
 
 function joinNames(names: string[]): string {
@@ -95,7 +102,7 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
   const [sharing, setSharing] = createSignal<MergeSharingChoice>('keep');
   const [notice, setNotice] = createSignal<string>();
   const [pending, setPending] = createSignal(false);
-  let requestKey = crypto.randomUUID();
+  let reviewGeneration = 0;
 
   const survivor = () => picked().find((company) => company.id === keepId());
   const sources = () => picked().filter((company) => company.id !== keepId());
@@ -104,17 +111,25 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
   const load = async () => {
     const kept = survivor();
     if (!kept) return;
+    const merged = sources();
+    // Only the latest review counts: an earlier one may answer last.
+    const generation = ++reviewGeneration;
     setReview({ t: 'loading' });
     const answer = await commands.review({
       survivorId: kept.id,
-      sourceIds: sources().map((source) => source.id),
+      sourceIds: merged.map((source) => source.id),
     });
+    if (generation !== reviewGeneration) return;
     if (!answer.ok) return setReview({ t: 'refused', refusal: answer.refusal });
-    // A new review is a new merge to the server.
-    requestKey = crypto.randomUUID();
     if (answer.value.sharingRules && !answer.value.sharingRules.keepFits)
       setSharing('stop');
-    setReview({ t: 'ready', review: answer.value });
+    setReview({
+      t: 'ready',
+      review: answer.value,
+      survivor: kept,
+      sources: merged,
+      requestKey: crypto.randomUUID(),
+    });
   };
 
   const openReview = () => {
@@ -125,25 +140,31 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
 
   const merge = async () => {
     const current = review();
-    const kept = survivor();
-    if (current.t !== 'ready' || !kept || pending()) return;
+    if (current.t !== 'ready' || pending()) return;
     setPending(true);
+    setNotice(undefined);
     const answer = await commands.commit({
-      survivorId: kept.id,
-      sourceIds: sources().map((source) => source.id),
+      survivorId: current.survivor.id,
+      sourceIds: current.sources.map((source) => source.id),
       revision: current.review.revision,
-      requestKey,
+      requestKey: current.requestKey,
       sharingRules: sharing(),
     });
     setPending(false);
     if (answer.ok) {
       props.onOpenChange(false);
-      props.onMerged({ survivor: kept, merged: sources() });
+      props.onMerged({ survivor: current.survivor, merged: current.sources });
       return;
     }
     if (answer.refusal.code === 'merge_preview_stale') {
       setNotice(t('crm.mergeStale'));
       await load();
+      return;
+    }
+    // The merge may have gone through: merging again sends the same key,
+    // which answers with the first result instead of merging twice.
+    if (answer.refusal.code === 'merge_unconfirmed') {
+      setNotice(t('crm.mergeUnconfirmed'));
       return;
     }
     setReview({ t: 'refused', refusal: answer.refusal });

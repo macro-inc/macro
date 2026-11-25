@@ -30,6 +30,7 @@ export function CompanyMergeModal() {
             companies={request.companies}
             onMerged={({ survivor, merged }) => {
               request.onMerged?.();
+              if (!crmAccessAllowed()) return;
               const names = new Intl.ListFormat(formatLocale(), {
                 style: 'long',
                 type: 'conjunction',

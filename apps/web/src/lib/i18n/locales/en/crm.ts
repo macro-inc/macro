@@ -453,6 +453,8 @@ export default {
   mergeBlockedTitle: 'These companies can’t be merged yet',
   mergeNothingChanged: 'Nothing has changed.',
   mergeStale: 'Something changed since the review. Check it again.',
+  mergeUnconfirmed:
+    'We couldn’t confirm the merge. Merge again to finish it; it won’t run twice.',
   mergeRefusePermission: 'Only team admins and owners can merge companies.',
   mergeRefuseUnavailable:
     'Merging companies isn’t available for your team yet.',

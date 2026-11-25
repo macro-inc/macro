@@ -390,3 +390,78 @@ it('starting from one company, picks the others first', async () => {
     sourceIds: ['old'],
   });
 });
+
+it('commits the review it shows, even when an earlier review answers last', async () => {
+  let answerFirst!: (value: { ok: true; value: MergeReview }) => void;
+  const commit = vi.fn(async () => ({
+    ok: true as const,
+    value: { survivorId: 'old', mergedIds: ['kept'] },
+  }));
+  fixture.commands = {
+    review: vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            answerFirst = resolve;
+          })
+      )
+      .mockResolvedValueOnce({
+        ok: true,
+        value: review({
+          revision: 'rev-old',
+          survivor: { id: 'old', name: 'Old Co' },
+          sources: [{ id: 'kept', name: 'Kept Co' }],
+        }),
+      }),
+    commit,
+  };
+  open();
+
+  fireEvent.click(screen.getByRole('radio', { name: /Kept Co/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review merge' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+  await reviewKeeping('Old Co');
+  answerFirst({ ok: true, value: review({ revision: 'rev-kept' }) });
+  await Promise.resolve();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Merge 2 companies' }));
+  await vi.waitFor(() => expect(commit).toHaveBeenCalled());
+  expect(commit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      survivorId: 'old',
+      sourceIds: ['kept'],
+      revision: 'rev-old',
+    })
+  );
+});
+
+it('keeps the review after an unconfirmed commit and retries it under the same key', async () => {
+  const commit = vi
+    .fn()
+    .mockResolvedValueOnce({
+      ok: false,
+      refusal: { code: 'merge_unconfirmed' },
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      value: { survivorId: 'kept', mergedIds: ['old'] },
+    });
+  fixture.commands = {
+    review: vi.fn(async () => ({ ok: true as const, value: review() })),
+    commit,
+  };
+  open();
+  await reviewKeeping('Kept Co');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Merge 2 companies' }));
+  await screen.findByText(
+    'We couldn’t confirm the merge. Merge again to finish it; it won’t run twice.'
+  );
+  expect(fixture.commands.review).toHaveBeenCalledTimes(1);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Merge 2 companies' }));
+  await vi.waitFor(() => expect(onMerged).toHaveBeenCalled());
+  const [first, second] = commit.mock.calls.map(([input]) => input);
+  expect(second.requestKey).toBe(first.requestKey);
+});

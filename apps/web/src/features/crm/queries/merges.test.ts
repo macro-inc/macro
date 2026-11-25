@@ -165,3 +165,24 @@ it('drops the merged company’s unopened reads, so its next open fetches and mo
   expect(fetchOpen).toHaveBeenCalledTimes(2);
   unsubscribe();
 });
+
+it('reads a commit with no merge code as unconfirmed, since it may have gone through', async () => {
+  const commands = commandsWith({
+    commitCrmMerge: vi.fn(async () =>
+      err([{ code: 'HTTP_ERROR', message: 'HTTP error! status: 502' }])
+    ),
+  });
+
+  const answer = await commands.commit({
+    survivorId: 'kept',
+    sourceIds: ['old'],
+    revision: 'r',
+    requestKey: 'key',
+    sharingRules: 'keep',
+  });
+
+  expect(answer).toMatchObject({
+    ok: false,
+    refusal: { code: 'merge_unconfirmed' },
+  });
+});

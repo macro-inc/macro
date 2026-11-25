@@ -2,7 +2,10 @@ import type { ResultError } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
-import type { CrmMergeError } from '@service-storage/client';
+import {
+  CRM_MERGE_ERROR_CODES,
+  type CrmMergeError,
+} from '@service-storage/client';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import {
   forgetMergedCrmRecords,
@@ -16,7 +19,12 @@ import { crmKeys } from './keys';
 function refusalOf(errors: ResultError<string>[]): MergeRefusal {
   const first = errors[0] as Partial<CrmMergeError> | undefined;
   return {
-    code: first?.code ?? 'unknown',
+    // Without a merge code the server's answer was lost or never came: a
+    // commit may have gone through, and only its request key can tell.
+    code:
+      first?.code && CRM_MERGE_ERROR_CODES.includes(first.code)
+        ? first.code
+        : 'merge_unconfirmed',
     blocked: first?.blocked ?? null,
     currentId: first?.currentId ?? null,
   };

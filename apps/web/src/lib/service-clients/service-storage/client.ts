@@ -274,7 +274,7 @@ export type CrmMergeErrorCode =
   | 'merge_sharing_rules_too_large'
   | 'invalid_request';
 
-const CRM_MERGE_ERROR_CODES: readonly string[] = [
+export const CRM_MERGE_ERROR_CODES: readonly string[] = [
   'merge_permission_required',
   'merge_unavailable',
   'record_unavailable',
