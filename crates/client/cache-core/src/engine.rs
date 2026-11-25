@@ -841,8 +841,8 @@ impl<S: Storage> Engine<S> {
             let arrived = self
                 .yield_to_server(queued.uuid, &mut updates, &bases, admission)
                 .await?;
-            pending_sends::leave_out_unheld(&mut updates, &bases, &layers);
             let composed = effective_records(&bases, &layers, &candidates);
+            pending_sends::leave_out_unheld(&mut updates, &composed);
             let mut effective = present_records(composed);
             merge_updates_into_effective(&mut effective, &updates);
             // Missing query fields after a format wipe are intentionally not

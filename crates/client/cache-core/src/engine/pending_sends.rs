@@ -1,11 +1,10 @@
 //! What a queued write shows of messages the device has, and of those it lacks.
 
 use super::channel_write::ChannelAdmission;
-use super::{Engine, EngineError, OptimisticLayer, Storage};
+use super::{Engine, EngineError, Storage};
 use crate::channel_timeline::{
     ChannelGuardQuery, MESSAGE_TYPENAME, is_channel_entry, project_channel_timeline,
 };
-use crate::identity::DELETED_FIELD;
 use crate::normalize::RecordUpdates;
 use crate::value::{CacheValue, EntityKey, Record};
 use std::collections::{BTreeSet, HashMap};
@@ -17,23 +16,46 @@ pub(super) fn sent_message(uuid: Uuid) -> EntityKey<'static> {
     EntityKey::entity(MESSAGE_TYPENAME, &[&uuid.to_string()])
 }
 
-/// Makes an entry `updates` only name, with nothing under it, read as deleted: a
-/// list that names it leaves it out, instead of not being readable.
+/// Takes out of `updates` the entries they only name that `held`, what is under
+/// them, cannot show: a list naming one would not be readable.
 pub(super) fn leave_out_unheld(
     updates: &mut RecordUpdates,
-    bases: &HashMap<EntityKey<'static>, Record>,
-    earlier: &[OptimisticLayer],
+    held: &HashMap<EntityKey<'static>, Option<Record>>,
 ) {
-    for (key, update) in updates {
+    let shows = |key: &EntityKey<'static>| {
+        let record = held.get(key).and_then(Option::as_ref);
+        record.is_some_and(|record| project_channel_timeline(key, record).is_some())
+    };
+    let unheld = |(key, update): &(&EntityKey<'static>, &Record)| {
         let mut fields = update.fields.keys();
         let only_named = fields.all(|field| field == "id" || field == "__typename");
-        let held =
-            bases.contains_key(key) || earlier.iter().any(|layer| layer.updates.contains_key(key));
-        if only_named && !held && is_channel_entry(key) {
-            update
-                .fields
-                .insert(DELETED_FIELD.into(), CacheValue::Bool(true));
+        only_named && is_channel_entry(key) && !shows(key)
+    };
+    let unheld: BTreeSet<_> = updates
+        .iter()
+        .filter(unheld)
+        .map(|(key, _)| key.clone())
+        .collect();
+    if unheld.is_empty() {
+        return;
+    }
+    updates.retain(|key, _| !unheld.contains(key));
+    for value in updates
+        .values_mut()
+        .flat_map(|update| update.fields.values_mut())
+    {
+        unlist(value, &unheld);
+    }
+}
+
+fn unlist(value: &mut CacheValue, keys: &BTreeSet<EntityKey<'static>>) {
+    match value {
+        CacheValue::List(items) => {
+            items.retain(|item| !matches!(item, CacheValue::Ref(key) if keys.contains(key)));
+            items.iter_mut().for_each(|item| unlist(item, keys));
         }
+        CacheValue::Object(fields) => fields.values_mut().for_each(|field| unlist(field, keys)),
+        _ => {}
     }
 }
 

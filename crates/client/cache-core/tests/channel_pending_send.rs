@@ -665,3 +665,53 @@ fn a_reply_rolled_back_leaves_the_preview_a_later_one_predicted() {
         assert_eq!(thread(&mut engine).await, [REPLY]);
     });
 }
+
+#[test]
+fn a_reset_that_drops_an_edited_previewed_reply_leaves_its_root_readable() {
+    block_on(async {
+        let r2 = reply("r2", "~21", "m1");
+        let mut engine = threaded_channel(std::slice::from_ref(&r2)).await;
+        let edit =
+            json!({ "__typename": "GraphqlChannelMessage", "id": "r2", "content": "edited" });
+        queue(&mut engine, EDIT, "editChannelMessage", None, &edit).await;
+        let own = reply(REPLY, "~91", "m1");
+        queue_reply(&mut engine, &threaded("m1", &[r2, own.clone()]), &own).await;
+
+        let reset = ChannelTimelineCommit {
+            reset: true,
+            ..whole("20")
+        };
+        push(&mut engine, "20", &[replied(&[])], &reset).await;
+        let preview = shown(&mut engine, "m1").await["thread"]["preview"].take();
+        assert_eq!(preview, json!([previewed(own)]));
+    });
+}
+
+#[test]
+fn a_reply_rolled_back_and_sent_again_shows() {
+    block_on(async {
+        let mut engine = threaded_channel(&[]).await;
+        let first = reply(FIRST, "~91", "m1");
+        let one = threaded("m1", std::slice::from_ref(&first));
+        let claim = queue(&mut engine, FIRST, "sendChannelMessage", Some(&one), &first).await;
+        let own = reply(REPLY, "~92", "m1");
+        let both = threaded("m1", &[first.clone(), own.clone()]);
+        queue_reply(&mut engine, &both, &own).await;
+        let (transaction, token) = claim.unwrap();
+        let rolled_back = engine.rollback_optimistic_write(transaction, token).await;
+        rolled_back.unwrap();
+
+        let again = threaded("m1", &[own, first.clone()]);
+        queue(
+            &mut engine,
+            FIRST,
+            "sendChannelMessage",
+            Some(&again),
+            &first,
+        )
+        .await;
+        assert_eq!(thread(&mut engine).await, [REPLY, FIRST]);
+        let preview = shown(&mut engine, "m1").await["thread"]["preview"].take();
+        assert_eq!(preview.as_array().unwrap().len(), 2);
+    });
+}
