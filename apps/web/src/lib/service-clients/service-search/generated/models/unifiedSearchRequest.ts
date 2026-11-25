@@ -39,8 +39,9 @@ task) `me` or an address; `tag:` a tag name; `inbox:` an inbox
 address; `in:#` a channel name; and, beside `type:channel` or
 `type:call`, `from:` a sender or speaker. `OR` between two of the
 same operator joins them (`tag:a OR tag:b`); repeated without it,
-each must hold, except that two `from:` on calls, and tags joined by
-`OR` beside another tag, are refused with a 400. A minus before a
+each must hold (`tag:a OR tag:b tag:c` finds items tagged c and
+either a or b), except that two `from:` on calls are refused with a
+400. A minus before a
 word or quoted phrase (`-draft`, `-"team lunch"`) leaves out every
 item that word would match as a search term, in each kind the search
 reaches (mail holding it in any part); a minus inside a word

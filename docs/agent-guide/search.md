@@ -25,7 +25,8 @@ what each finds, and pressing it (or `All search operators`) opens the docs'
 `#search-operators` section; on touch, the empty bottom field has an info
 button beside the X that opens the same list as a `Search tips` sheet. With words beside them the
 service reads the operators; operators alone (`assignee:me`) list through the
-view's feed with the filters they set. A minus before a word or quoted phrase
+view's feed with the filters they set, each tag group (`tag:a OR tag:b tag:c`)
+joined to the feed's query as its own any-of tag filter. A minus before a word or quoted phrase
 (`budget -draft`) leaves out every result holding it, the name matches below
 included; minus words alone wait for a word, as an operator still being typed
 does, unless the search is of email alone. Opening Search on a tag writes
