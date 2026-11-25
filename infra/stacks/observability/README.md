@@ -1018,13 +1018,27 @@ its input and parsing between the two outputs; this is not complete resource
 isolation. Any future application metric SDK needs its own independent Grafana
 reader/exporter; the Rust entrypoint currently exports traces, not app metrics.
 
-The dev analytics proxy mirrors existing browser and worker OTLP traces/logs in
+The dev and prod analytics proxies mirror existing browser and worker OTLP traces/logs in
 `waitUntil`, using a server-side token and a five-second export timeout. Browsers
 send once. Payloads above 8 MiB skip only the mirror. Each Worker isolate admits
 at most two concurrent copies; additional requests skip mirroring to bound
 aggregate buffering. Datadog's response remains
 the client response. `deploy-analytics-proxy-dev.yml` installs the token from
-Secrets Manager and deploys only the dev Worker.
+Secrets Manager and deploys only the dev Worker. The prod Worker is deployed by
+hand from `services/analytics-proxy`; it mirrors only once it has both the
+endpoint and the token:
+
+```sh
+bun install --frozen-lockfile
+aws secretsmanager get-secret-value --region us-east-1 \
+  --secret-id observability/dev-ingest --query SecretString --output text |
+  bunx wrangler secret put GRAFANA_OTLP_TOKEN --env prod
+bun run deploy-prod
+```
+
+To stop the prod copy, run
+`bunx wrangler secret delete GRAFANA_OTLP_TOKEN --env prod`. Do not rotate the
+shared token for that: ECS tasks, CI and the database collector use it too.
 
 The manually dispatched `export-datadog-observability.yml` reads live dashboard/monitor definitions into a
 seven-day GitHub artifact for the migration inventory. It never modifies Datadog. The current repository credentials return HTTP 403

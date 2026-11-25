@@ -15,7 +15,7 @@ declare global {
   interface Env {
     /** Datadog API key for the OTLP traces intake. Unset in local dev. */
     DD_API_KEY?: string;
-    /** Server-side copy enabled only in the dev proxy. */
+    /** Copies traces and logs to Grafana when both are set; dev and prod only. */
     GRAFANA_OTLP_ENDPOINT?: string;
     GRAFANA_OTLP_TOKEN?: string;
   }
