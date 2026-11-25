@@ -35,6 +35,8 @@ export type UserIconProps = {
   class?: string;
   /** Fallback image (e.g. an email contact photo) shown when the user has no Macro profile picture. */
   photoUrl?: string;
+  /** Shown in place of the initials worked out from the name (an agent's one letter). */
+  initials?: string;
 } & ({ id: string; email?: never } | { email: string; id?: never });
 
 /**
@@ -45,6 +47,7 @@ function ProfileImage(props: {
   id?: string;
   email?: string;
   photoUrl?: string;
+  initials?: string;
 }) {
   const macroId = createMemo(() =>
     props.id ? tryMacroId(props.id) : undefined
@@ -59,6 +62,7 @@ function ProfileImage(props: {
   });
 
   const initials = () => {
+    if (props.initials) return props.initials;
     if (props.name !== undefined)
       return getInitialsFromName(props.name, email());
     const { firstName, lastName } = getDisplayNameParts(macroId());
@@ -111,6 +115,7 @@ function UserIconContent(props: {
   email?: string;
   isDeleted?: boolean;
   photoUrl?: string;
+  initials?: string;
 }) {
   return (
     <Switch>
@@ -119,7 +124,12 @@ function UserIconContent(props: {
       </Match>
       <Match when={props.id} keyed>
         {(id) => (
-          <ProfileImage id={id} name={props.name} photoUrl={props.photoUrl} />
+          <ProfileImage
+            id={id}
+            name={props.name}
+            photoUrl={props.photoUrl}
+            initials={props.initials}
+          />
         )}
       </Match>
       <Match when={!props.id && props.email} keyed>
@@ -128,6 +138,7 @@ function UserIconContent(props: {
             email={email}
             name={props.name}
             photoUrl={props.photoUrl}
+            initials={props.initials}
           />
         )}
       </Match>
@@ -220,6 +231,7 @@ export function UserIcon(props: UserIconProps) {
             email={props.email}
             isDeleted={props.isDeleted}
             photoUrl={props.photoUrl}
+            initials={props.initials}
           />
         </Avatar>
       </Match>
@@ -250,6 +262,7 @@ export function UserIcon(props: UserIconProps) {
                   email={props.email}
                   isDeleted={props.isDeleted}
                   photoUrl={props.photoUrl}
+                  initials={props.initials}
                 />
               </Avatar>
             }
@@ -281,6 +294,7 @@ export function UserIcon(props: UserIconProps) {
                 email={props.email}
                 isDeleted={props.isDeleted}
                 photoUrl={props.photoUrl}
+                initials={props.initials}
               />
             </Avatar>
           }
