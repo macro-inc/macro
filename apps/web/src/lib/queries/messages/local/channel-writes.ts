@@ -1327,8 +1327,14 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       }
       turn.pass();
       const disposition = optimisticMutationDispositionOf(result);
-      if (disposition?.kind === 'queued')
+      if (disposition?.kind === 'queued') {
+        // On the server already; the queue still has to store it.
+        if (disposition.confirmed)
+          return mapChannelMessage(
+            write.written(disposition.confirmed).message
+          );
         return await settled(disposition.transactionId);
+      }
       const { error } = result;
       // On the server, whose answer is the write's: the next frame or catch-up
       // brings it to the device.

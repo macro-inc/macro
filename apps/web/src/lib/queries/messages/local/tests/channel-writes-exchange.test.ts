@@ -229,6 +229,23 @@ it('does not hold a write behind one of an earlier sign-in', async () => {
 });
 
 describe('a write the queue took', () => {
+  it('keeps what the server answered when the commit never did', async () => {
+    vi.useFakeTimers();
+    const fixture = setup(claimed, [root]);
+    vi.spyOn(fixture.host, 'commitOptimisticWrite').mockRejectedValue(
+      new Error('the worker went away')
+    );
+    const editing = outcome(fixture.writes.edit(edit(root)));
+    await settle();
+    fixture.requests[0].answer(
+      json(written('editChannelMessage', { ...root, content: 'edited' }))
+    );
+    await settle();
+    fixture.writes.retire();
+    await settle();
+    expect(await editing).toBe('delivered');
+  });
+
   it('answers what the server did when the device could not store it', async () => {
     vi.useFakeTimers();
     const fixture = setup(claimed, [root]);

@@ -1100,6 +1100,8 @@ export function createMutationQueueRunner(
       | 'permanently-failed' = 'queued';
     let outcome: MutationAttemptOutcome = 'detached';
     let details: MutationAttemptDetails = {};
+    // The server's answer, when only its commit to the device is in doubt.
+    let confirmedData: unknown;
     const response = result.error?.response ?? attempt.response;
     try {
       const httpServerFailure = (response?.status ?? 0) >= 500;
@@ -1312,6 +1314,15 @@ export function createMutationQueueRunner(
         // Preserve optimism and let a fresh durable claim decide.
         disposition = 'queued';
         outcome = 'ack-lost';
+        if (
+          !result.error &&
+          cacheSessionGeneration.isCurrent(
+            typeof op.context.cacheSessionGeneration === 'string'
+              ? op.context.cacheSessionGeneration
+              : UNKNOWN_CACHE_GENERATION
+          )
+        )
+          confirmedData = result.data;
         details = { ...details, retryDelayMs: QUEUE_LEASE_MS };
       }
     } finally {
@@ -1336,6 +1347,7 @@ export function createMutationQueueRunner(
         : {
             kind: disposition,
             transactionId: attempt.transactionId,
+            ...(confirmedData != null && { confirmed: confirmedData }),
           }
     );
   }

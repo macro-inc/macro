@@ -5370,7 +5370,11 @@ describe('normalizedCacheExchange', () => {
             optimisticMutationDispositionOf(
               results.find((result) => result.operation.key === 1)!
             )
-          ).toEqual({ kind: 'queued', transactionId: '1' });
+          ).toEqual({
+            kind: 'queued',
+            transactionId: '1',
+            confirmed: { from: 'network' },
+          });
           // A runnable successor is sent immediately, but an unsettled head's
           // existing lease must never be stolen or its network call duplicated.
           expect(forwarded).toHaveLength(committed ? 2 : 1);
