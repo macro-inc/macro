@@ -1465,6 +1465,22 @@ export type AttachmentChange = {
          */
         remove: Array<string>;
     };
+} | {
+    type: 'delta_once';
+    /**
+     * `Delta` for callers that replay an edit until they hear an answer: an
+     * added entity the message already holds is not attached a second time.
+     */
+    value: {
+        /**
+         * New attachments to append unless already held.
+         */
+        add: Array<NewAttachment>;
+        /**
+         * Existing attachment UUIDs to remove.
+         */
+        remove: Array<string>;
+    };
 };
 
 /**
