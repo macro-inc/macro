@@ -41,15 +41,27 @@ function rowPaint(page: Page): Promise<RowPaint[]> {
 }
 
 /** Every entry shows the sheet through it, with no swipe action showing. */
+/** Each entry of the list (the fixture keeps a deleted one), and whether it rests. */
 async function expectAtRest(page: Page) {
   await expect
     .poll(async () =>
-      (await rowPaint(page)).every(
-        (row) =>
-          row.painted.length === 0 && row.icons.every((icon) => icon === '0')
-      )
+      (await rowPaint(page))
+        .map(
+          (row) =>
+            `${row.name}: ${
+              row.painted.length === 0 &&
+              row.icons.every((icon) => icon === '0')
+                ? 'at rest'
+                : 'painted'
+            }`
+        )
+        .sort()
     )
-    .toBe(true);
+    .toEqual([
+      'Ada Example: at rest',
+      'Ada Example: at rest',
+      'Ben Example: at rest',
+    ]);
 }
 
 /** The fill of the sliding content of the row holding `text`, as a 0–1 alpha. */
@@ -113,12 +125,6 @@ for (const theme of ['light', 'dark'] as const) {
     test('every entry sits on the sheet at rest, with no swipe action showing', async ({
       page,
     }) => {
-      const rows = await rowPaint(page);
-      expect(rows.map((row) => row.name).sort()).toEqual([
-        'Ada Example',
-        'Ada Example',
-        'Ben Example',
-      ]);
       await expectAtRest(page);
     });
 
