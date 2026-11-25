@@ -1116,6 +1116,8 @@ export type ImportSettlement = ImportSettlement_Serialize | ImportSettlement_Des
 
 /**  The final report of an approved workspace import, with no page content. */
 export type ImportSettlement_Deserialize = {
+	/**  Fidelity losses and source snapshot labels retained by the import. */
+	warnings?: string[],
 	/**  The workspace the import read. */
 	source?: ImportWorkspace,
 	/**  How the write ended. */
@@ -1133,8 +1135,10 @@ export type ImportSettlement_Deserialize = {
 	documents: number,
 	/**  Planned databases. */
 	databases: number,
-	/**  Rows those databases hold. */
+	/**  Rows written, including rows from database copies that stopped. */
 	databaseRows: number,
+	/**  The subset of rows from unfinished database copies. */
+	partialDatabaseRows?: number,
 	/**  Planned task lists; issues that become tasks for Linear and Jira. */
 	taskLists: number,
 	/**  Tasks those task lists or issues become. */
@@ -1153,12 +1157,18 @@ export type ImportSettlement_Deserialize = {
 	rootFolderId: string | null,
 	/**  Objects that could not be imported, at most [`MAX_IMPORT_ITEMS`]. */
 	failures: ImportItem_Deserialize[],
+	/**  Exact number of failed objects. Absent on settlements from older writers. */
+	failureCount?: number | null,
+	/**  At least one list was shortened for the settlement. */
+	detailsTruncated?: boolean,
 	/**  Objects left for the owner to handle by hand, at most [`MAX_IMPORT_ITEMS`]. */
 	handItems: ImportItem_Deserialize[],
 };
 
 /**  The final report of an approved workspace import, with no page content. */
 export type ImportSettlement_Serialize = {
+	/**  Fidelity losses and source snapshot labels retained by the import. */
+	warnings?: string[],
 	/**  The workspace the import read. */
 	source: ImportWorkspace,
 	/**  How the write ended. */
@@ -1176,8 +1186,10 @@ export type ImportSettlement_Serialize = {
 	documents: number,
 	/**  Planned databases. */
 	databases: number,
-	/**  Rows those databases hold. */
+	/**  Rows written, including rows from database copies that stopped. */
 	databaseRows: number,
+	/**  The subset of rows from unfinished database copies. */
+	partialDatabaseRows: number,
 	/**  Planned task lists; issues that become tasks for Linear and Jira. */
 	taskLists: number,
 	/**  Tasks those task lists or issues become. */
@@ -1196,6 +1208,10 @@ export type ImportSettlement_Serialize = {
 	rootFolderId?: string | null,
 	/**  Objects that could not be imported, at most [`MAX_IMPORT_ITEMS`]. */
 	failures: ImportItem_Serialize[],
+	/**  Exact number of failed objects. Absent on settlements from older writers. */
+	failureCount?: number | null,
+	/**  At least one list was shortened for the settlement. */
+	detailsTruncated: boolean,
 	/**  Objects left for the owner to handle by hand, at most [`MAX_IMPORT_ITEMS`]. */
 	handItems: ImportItem_Serialize[],
 };
@@ -1210,7 +1226,9 @@ export type ImportWorkspace =
 /**  Linear projects and issues. */
 "linear" |
 /**  Jira projects, epics and issues. */
-"jira";
+"jira" |
+/**  HubSpot deal pipelines, companies, contacts and deals. */
+"hubspot";
 
 /**  Review item state, shared with notification consumers. */
 export type ItemStatus =

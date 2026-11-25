@@ -57,9 +57,12 @@ distribution.
   `attention_feed`, `projects`, `github`, `email`, `properties`,
   `time_tracking`) and `ai_tools`.
   `ai_tools` reads `SubjectActivityPresence` so memory skips days without
-  activity. `connection_gateway` writes seen times through `SeenLog`;
+  activity, and `UserActivity` over 14 days so it skips users who are away.
+  `connection_gateway` writes seen times through `SeenLog`;
   `email_focus_worker` asks `UserActivity` over 7 days before working an
   inbox.
+
+- `record_merged` is written by the CRM merge inside its own transaction (`insert_activities`), with only the values the team can see; GraphQL serves it as `GraphqlActivityRecordMerged` (the merged records' ids and names, and the dropped values), shown in a company's Activity section.
 
 ## Recipes
 

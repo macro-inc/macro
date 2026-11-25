@@ -97,6 +97,10 @@ enforced by the ordinary backend APIs.
   no access request lets someone change another person's entry; a 409
   `timer_over_limit` is `TimerOverLimitError` carrying the timer to resolve
   when the refusal names one; check `timer` before using it.
+  Reports are `macro.time.summary` / `exportCsv` (`scope: 'mine' | 'team'`)
+  and `initiative.timeSummary` / `exportTimeCsv` for a project, over DSS
+  `/time/summary` and `/time/export` (`entities/time/report.ts`); totals come
+  back keyed by `User` and `Task` handles, never ids.
 - `users.search(nameOrEmail)` is one `GET /contacts/search`: the server
   ranks the caller's contacts and current team (teammates first, then, for a
   caller on the list-aware directory, `interacted`/`invited` and then email
@@ -249,6 +253,11 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- `traceContext: true` (off by default) sends the active OpenTelemetry
+  context (`traceparent`, `tracestate`) with every request through the
+  process's registered propagator, so Macro's spans join the caller's trace.
+  It stays off for browsers, where the headers would need CORS allowance.
+
 - The SDK is a root Bun workspace member: its dependencies resolve from the
   root `bun.lock`, and there is no `bun.lock` here.
   Remove obsolete package-local `node_modules` before generation so they cannot
@@ -371,6 +380,8 @@ the existing gateway prefixes.
 
 - Workspace-import report/cancel endpoints remain app-only review plumbing,
   explicitly classified alongside the existing Notion routes in coverage skips.
+  Regenerate cognition types when plan-row metadata changes: `dependencyOf` and
+  `inlineOn` describe linked and inline sources without expanding the import draft.
 
 - `AgentSession.activity()` and invocation handles iterate durable agent-correlated history lazily; session visibility controls the feed.
 

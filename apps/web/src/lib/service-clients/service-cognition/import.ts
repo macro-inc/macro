@@ -130,14 +130,14 @@ export type RunImportOutcome = {
 
 export const importClient = {
   /** Report on the selected reviewed workspace source. */
-  async getWorkspaceReport(source: 'notion' | 'linear' | 'jira') {
+  async getWorkspaceReport(source: 'notion' | 'linear' | 'jira' | 'hubspot') {
     return await importFetch<NotionImportReport>(
       `/import/workspaces/${source}`,
       { method: 'GET' }
     );
   },
   /** Stop this source only, preserving completed entities. */
-  async cancelWorkspace(source: 'notion' | 'linear' | 'jira') {
+  async cancelWorkspace(source: 'notion' | 'linear' | 'jira' | 'hubspot') {
     return await importFetch<NotionImportReport>(
       `/import/workspaces/${source}/cancel`,
       { method: 'POST' }

@@ -77,6 +77,8 @@ fn text<'a>(record: &'a Record, field: &str) -> Option<&'a str> {
 /// name tier then orders each group. Contains-only matches stay below both
 /// groups, and address-only matches below those. The frontend publishes that time from direct-message channels: the
 /// first other participant of each, including group and never-written DMs.
+/// A list order replaces the messaged split, and `tier_order` then lets the
+/// list group decide before exact over word-prefix.
 fn priority(stage: NameStage, messaged: bool) -> u8 {
     match (stage, messaged) {
         // Browse answers only an empty query and Address only a nonempty one,
@@ -95,20 +97,35 @@ fn in_stage(stage: NameStage, priority: u8) -> bool {
     priority == self::priority(stage, false) || priority == self::priority(stage, true)
 }
 const SELF_PRIORITY: u8 = 8;
-/// Window order: tier, then list group, then recency, then identity. Less is earlier.
-fn compare(a: &Winner, b: &Winner) -> std::cmp::Ordering {
-    b.hit
-        .match_rank
-        .cmp(&a.hit.match_rank)
-        .then_with(|| a.group.cmp(&b.group))
+/// Window order: tier and list group, then recency, then identity. Less is earlier.
+fn compare(listed: bool, a: &Winner, b: &Winner) -> std::cmp::Ordering {
+    tier_order(listed, a.hit.match_rank, a.group, b.hit.match_rank, b.group)
         .then_with(|| b.hit.timestamp_ms.cmp(&a.hit.timestamp_ms))
         .then_with(|| a.hit.user_id.as_ref().cmp(b.hit.user_id.as_ref()))
 }
 /// Whether tier and group `(priority, group)` precede `(other_priority, other_group)`.
-fn tier_order(priority: u8, group: u8, other_priority: u8, other_group: u8) -> std::cmp::Ordering {
-    other_priority
-        .cmp(&priority)
+/// Without a list order (`listed`) the tier decides, then the group (there is
+/// only one). With one, exact-name and word-prefix matches share a tier, so
+/// their list group decides before exact over word-prefix; every other tier
+/// comes whole, its groups within it.
+fn tier_order(
+    listed: bool,
+    priority: u8,
+    group: u8,
+    other_priority: u8,
+    other_group: u8,
+) -> std::cmp::Ordering {
+    let word_start = |rank: u8| {
+        if listed && rank == self::priority(NameStage::WordPrefix, false) {
+            self::priority(NameStage::ExactName, false)
+        } else {
+            rank
+        }
+    };
+    word_start(other_priority)
+        .cmp(&word_start(priority))
         .then_with(|| group.cmp(&other_group))
+        .then_with(|| other_priority.cmp(&priority))
 }
 
 /// Caller-owned, query-scoped top-K state. Storage may visit duplicates or run a
@@ -257,19 +274,34 @@ impl<'a> NameSearchRead<'a> {
                 NameStage::Address,
             ],
         };
+        // A stage is still reachable while its weakest rows, unmessaged and in
+        // no group, do not precede the continuation. With a list order an
+        // exact-name stage stays reachable after a word-prefix continuation in
+        // an earlier group.
         stages
             .into_iter()
             .filter(|stage| {
-                self.after
-                    .as_ref()
-                    .is_none_or(|a| priority(*stage, false) <= a.priority)
+                self.after.as_ref().is_none_or(|a| {
+                    !tier_order(
+                        self.listed(),
+                        priority(*stage, false),
+                        self.unlisted_group(),
+                        a.priority,
+                        a.group,
+                    )
+                    .is_lt()
+                })
             })
             .collect()
+    }
+    /// Whether a list order ranks this search.
+    fn listed(&self) -> bool {
+        !self.request.list_priority.is_empty()
     }
     /// A list order supersedes the messaged split: with one, people the viewer
     /// messages rank by their list group like everyone else.
     fn tier(&self, stage: NameStage, messaged: bool) -> u8 {
-        priority(stage, messaged && self.request.list_priority.is_empty())
+        priority(stage, messaged && !self.listed())
     }
     /// Requested list groups, in priority order.
     pub fn list_groups(&self) -> &[Vec<String>] {
@@ -290,8 +322,21 @@ impl<'a> NameSearchRead<'a> {
         let Some(after) = &self.after else {
             return ScanStart::First;
         };
-        let messaged = tier_order(self.tier(stage, true), group, after.priority, after.group);
-        let unmessaged = tier_order(priority(stage, false), group, after.priority, after.group);
+        let listed = self.listed();
+        let messaged = tier_order(
+            listed,
+            self.tier(stage, true),
+            group,
+            after.priority,
+            after.group,
+        );
+        let unmessaged = tier_order(
+            listed,
+            priority(stage, false),
+            group,
+            after.priority,
+            after.group,
+        );
         if messaged.is_gt() {
             return ScanStart::First;
         }
@@ -410,7 +455,7 @@ impl<'a> NameSearchRead<'a> {
     }
     fn after(&self, p: &Evaluated<'_>) -> bool {
         self.after.as_ref().is_none_or(|a| {
-            tier_order(p.priority, p.group, a.priority, a.group)
+            tier_order(self.listed(), p.priority, p.group, a.priority, a.group)
                 .then_with(|| a.timestamp.cmp(&p.timestamp))
                 .then_with(|| p.user.as_ref().cmp(a.user.as_str()))
                 .is_gt()
@@ -434,8 +479,9 @@ impl<'a> NameSearchRead<'a> {
             None
         };
         // Less when the existing winner ranks after the new person.
+        let listed = self.listed();
         let compares = |old: &Winner| {
-            tier_order(p.priority, p.group, old.hit.match_rank, old.group)
+            tier_order(listed, p.priority, p.group, old.hit.match_rank, old.group)
                 .then_with(|| old.hit.timestamp_ms.cmp(&p.timestamp))
                 .then_with(|| p.user.as_ref().cmp(old.hit.user_id.as_ref()))
         };
@@ -477,7 +523,7 @@ impl<'a> NameSearchRead<'a> {
         };
         let index = self
             .best
-            .binary_search_by(|old| compare(old, &winner))
+            .binary_search_by(|old| compare(listed, old, &winner))
             .unwrap_or_else(|i| i);
         self.users.insert(winner.hit.user_id.to_string());
         if self.substitutes_dm()
@@ -501,7 +547,9 @@ impl<'a> NameSearchRead<'a> {
     pub fn full(&self) -> bool {
         self.best.len() > self.request.limit
     }
-    /// A lower tier cannot improve an already-full higher-tier window.
+    /// A lower tier cannot improve an already-full higher-tier window. Stages
+    /// come in the order of their best rows (first group, messaged), so once one
+    /// stage cannot improve the window, no later stage can either.
     pub fn skip_stage(&self, stage: NameStage) -> bool {
         self.skip_group(stage, 0)
     }
@@ -510,6 +558,7 @@ impl<'a> NameSearchRead<'a> {
         self.full()
             && self.best.last().is_some_and(|worst| {
                 tier_order(
+                    self.listed(),
                     worst.hit.match_rank,
                     worst.group,
                     self.tier(stage, true),
@@ -527,13 +576,19 @@ impl<'a> NameSearchRead<'a> {
         let best = self.tier(stage, RecentKey::timestamp(key).is_none_or(|time| time > 0));
         self.full()
             && self.best.last().is_some_and(|worst| {
-                tier_order(worst.hit.match_rank, worst.group, best, group)
-                    .then_with(|| {
-                        RecentKey::new(Some(worst.hit.timestamp_ms), &worst.hit.user_id)
-                            .as_bytes()
-                            .cmp(key)
-                    })
-                    .is_le()
+                tier_order(
+                    self.listed(),
+                    worst.hit.match_rank,
+                    worst.group,
+                    best,
+                    group,
+                )
+                .then_with(|| {
+                    RecentKey::new(Some(worst.hit.timestamp_ms), &worst.hit.user_id)
+                        .as_bytes()
+                        .cmp(key)
+                })
+                .is_le()
             })
     }
     /// At most K+1 conversation identities require prior-alias evidence.

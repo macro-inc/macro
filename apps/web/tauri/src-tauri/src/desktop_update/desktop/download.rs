@@ -181,8 +181,21 @@ impl Store {
         let mut file = options.open(&partial).await?;
 
         // Each chunk is written as it arrives, so a quit keeps what came.
-        while let Some(chunk) = response.chunk().await? {
-            file.write_all(&chunk).await?;
+        loop {
+            match response.chunk().await {
+                Ok(Some(chunk)) => file.write_all(&chunk).await?,
+                Ok(None) => break,
+                Err(error) => {
+                    // A tokio write finishes on the blocking pool after it
+                    // returns; flush so the kept bytes are on disk on return.
+                    // The transfer's error is the cause the caller reports.
+                    file.flush()
+                        .await
+                        .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not flush a failed native update download"))
+                        .ok();
+                    return Err(error.into());
+                }
+            }
         }
         file.sync_all().await?;
         drop(file);

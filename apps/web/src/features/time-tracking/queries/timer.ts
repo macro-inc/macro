@@ -10,8 +10,8 @@ import {
   type TimeTrackingFieldsFragment,
 } from '@service-storage/graphql/generated/graphql';
 import type { Client } from '@urql/core';
+import { err, ok, type Result } from 'neverthrow';
 import type { Accessor } from 'solid-js';
-import { v7 as uuidv7 } from 'uuid';
 import { authoritativeWriteResult, type TimeWriteResult } from './write-result';
 
 /** The viewer's running timer with the task it times, or null when none runs. */
@@ -63,19 +63,36 @@ function deviceTimeZone(): string | undefined {
 export type TimerDependencies = { client: Client };
 
 /**
+ * The viewer's running timer as the server holds it now. Reads past the live
+ * projection and every request in flight, whose promise can settle on a copy
+ * from before the write.
+ */
+export async function readRunningTimer(
+  dependencies: TimerDependencies
+): Promise<Result<RunningTimer | undefined, Error>> {
+  const result = await dependencies.client
+    .query(RunningTimerDocument, {}, { requestPolicy: 'network-only' })
+    .toPromise();
+  if (result.error) return err(result.error);
+  if (!result.data) return err(new Error('time tracking returned no data'));
+  return ok(timeTrackingOf(result.data).runningTimer ?? undefined);
+}
+
+/**
  * Start timing a task. A timer running on another task stops and saves its
  * entry in the same step (`stoppedEntry`). Not queued offline: the server's
  * clock decides the start. `startedAt` restores an earlier start (Undo).
+ * The timer keeps `id`, so a caller can recognize it without the reply.
  */
 export async function startTimer(
-  args: { taskId: string; startedAt?: string },
+  args: { id: string; taskId: string; startedAt?: string },
   dependencies: TimerDependencies
 ): Promise<TimeWriteResult<StartTimerMutation['startTimer']>> {
   const { client } = dependencies;
   const result = await client
     .mutation(StartTimerDocument, {
       input: {
-        id: uuidv7(),
+        id: args.id,
         taskId: args.taskId,
         timeZone: deviceTimeZone(),
         startedAt: args.startedAt,

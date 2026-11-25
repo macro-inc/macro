@@ -12,6 +12,13 @@ export {
   tagEntityType,
 } from './entityTagging';
 export {
+  LabelChip,
+  LabelIcon,
+  LabelPill,
+  LabelsMenuPill,
+  type RowLabel,
+} from './LabelPill';
+export {
   TagPicker,
   TagPickerPopover,
   type TagPickerProps,

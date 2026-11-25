@@ -7,6 +7,7 @@ import {
   ListHeader,
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { t } from '@app/lib/i18n';
 import {
@@ -17,14 +18,33 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button, ComposerSurface, Layer, Tabs } from '@ui';
-import { type Accessor, createSignal, type JSX, Show } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import type { RoutineTemplate } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
-
+import {
+  RoutineCardGrid,
+  RoutineCardSections,
+  RoutinesEmpty,
+} from './routine-cards';
+import { RoutineSurface } from './routine-editor';
 import { RoutineListRow, RoutineRowLayout } from './routine-row';
 import { RoutineRowMenu, type RoutineRowMenuActions } from './routine-row-menu';
 import { RoutineTemplateStrip } from './routine-template-strip';
+
+/** What the suggestions row needs from the routines list. */
+export type RoutinesDiscoverHost = {
+  /** The person has no routines yet, so suggestions are where to start. */
+  empty: boolean;
+};
 
 /**
  * Suggestions on the Routines page: one row above the list, and a Discover
@@ -32,7 +52,7 @@ import { RoutineTemplateStrip } from './routine-template-strip';
  */
 export type RoutinesDiscover = {
   /** The row above the list on All; `openDiscover` switches to Discover. */
-  row(openDiscover: () => void): JSX.Element;
+  row(openDiscover: () => void, host: RoutinesDiscoverHost): JSX.Element;
   /** Discover in place of the list, narrowed by the list's search. */
   page(search: Accessor<string>): JSX.Element;
   /** Discover has something the person hasn't seen there. */
@@ -42,6 +62,12 @@ export type RoutinesDiscover = {
 };
 
 type ListTab = 'all' | 'on' | 'discover';
+
+type Group = {
+  key: 'activity' | 'schedule';
+  title: string;
+  rows: RoutineRow[];
+};
 
 export function RoutinesList(props: {
   rows: RoutineRow[];
@@ -99,18 +125,23 @@ export function RoutinesList(props: {
         ? [...ids.filter((other) => other !== id), id]
         : ids.filter((other) => other !== id)
     );
-  const groups = () =>
-    (
-      [
-        { key: 'activity', title: 'When something happens' },
-        { key: 'schedule', title: 'On a schedule' },
-      ] as const
-    )
-      .map((group) => ({
-        ...group,
-        rows: filtered().filter((row) => row.group === group.key),
+  const groups = (): Group[] =>
+    (['activity', 'schedule'] as const)
+      .map((key) => ({
+        key,
+        title:
+          key === 'activity'
+            ? t('routinesList.activity')
+            : t('routinesList.schedule'),
+        rows: filtered().filter((row) => row.group === key),
       }))
       .filter((group) => group.rows.length > 0);
+  // What the suggestions row asks of the list.
+  const discoverHost: RoutinesDiscoverHost = {
+    get empty() {
+      return props.rows.length === 0 && !props.loading && !props.error;
+    },
+  };
   const tabIds = (): ListTab[] =>
     props.discover ? ['all', 'on', 'discover'] : ['all', 'on'];
   const [tabsElement, setTabsElement] = createSignal<HTMLElement>();
@@ -125,21 +156,25 @@ export function RoutinesList(props: {
       setActiveId: setShow,
       label: (tab) =>
         match(tab)
-          .with('all', () => 'All')
-          .with('on', () => 'On')
+          .with('all', () => t('routinesList.all'))
+          .with('on', () => t('routinesList.on'))
           .with('discover', () => t('routineSuggestions.discover'))
           .exhaustive(),
     });
   }
   const tabs = (): JSX.Element => (
     <Tabs
+      aria-label={t('routinesList.showLabel')}
       ref={setTabsElement}
-      aria-label="Show routines"
       options={[
-        { value: 'all', label: 'All', count: props.rows.length },
+        {
+          value: 'all',
+          label: t('routinesList.all'),
+          count: props.rows.length,
+        },
         {
           value: 'on',
-          label: 'On',
+          label: t('routinesList.on'),
           count: props.rows.filter((row) => row.enabled).length,
         },
         ...(props.discover
@@ -195,8 +230,8 @@ export function RoutinesList(props: {
                     };
                     props.registerSearchFocus?.(focusSearch);
                   }}
-                  label="Search routines"
-                  placeholder="Search routines"
+                  label={t('routinesList.search')}
+                  placeholder={t('routinesList.search')}
                   value={search()}
                   onValueChange={setSearch}
                   onEscape={() => list?.focus()}
@@ -205,7 +240,7 @@ export function RoutinesList(props: {
                 />
                 <Show when={props.showTitle === false}>
                   <Button variant="secondary" onClick={props.onCreate}>
-                    Create Routine
+                    {t('routinesList.create')}
                   </Button>
                 </Show>
               </div>
@@ -216,18 +251,20 @@ export function RoutinesList(props: {
         <ListHeader
           title={
             <div class="flex min-w-0 items-center gap-3">
-              <h1 class="text-sm font-semibold text-ink">Routines</h1>
+              <h1 class="text-sm font-semibold text-ink">
+                {t('routinesList.title')}
+              </h1>
               {tabs()}
             </div>
           }
         >
           <ViewCreateButton
             presentation="toolbar"
-            aria-label="Create Routine"
+            aria-label={t('routinesList.create')}
             onClick={props.onCreate}
           />
           <ListHeaderSearch
-            label="Search routines"
+            label={t('routinesList.search')}
             value={search()}
             onValueChange={setSearch}
             focusResults={() => list?.focus()}
@@ -240,9 +277,9 @@ export function RoutinesList(props: {
           role="alert"
           class="mx-4 mb-3 flex items-center justify-between gap-2 text-sm text-failure"
         >
-          Could not load routines.
+          {t('routinesList.loadFailed')}
           <Button variant="ghost" size="sm" onClick={props.onRetry}>
-            Retry
+            {t('routinesList.retry')}
           </Button>
         </div>
       </Show>
@@ -250,17 +287,35 @@ export function RoutinesList(props: {
         <Show
           when={showing() === 'discover' && props.discover}
           fallback={
-            <RoutinesTable
-              {...props}
-              search={search()}
-              show={showing()}
-              groups={groups()}
-              isExpanded={isExpanded}
-              onExpand={expand}
-              empty={!filtered().length}
-              listRef={(element) => (list = element)}
-              onOpenDiscover={() => setShow('discover')}
-            />
+            // Desktop shows routines as cards; touch keeps the table.
+            <Show
+              when={!isTouchDevice()}
+              fallback={
+                <RoutinesTable
+                  {...props}
+                  search={search()}
+                  show={showing()}
+                  groups={groups()}
+                  isExpanded={isExpanded}
+                  onExpand={expand}
+                  empty={!filtered().length}
+                  listRef={(element) => (list = element)}
+                  onOpenDiscover={() => setShow('discover')}
+                  discoverHost={discoverHost}
+                />
+              }
+            >
+              <RoutineCardsPage
+                {...props}
+                search={search()}
+                show={showing()}
+                groups={groups()}
+                empty={!filtered().length}
+                listRef={(element) => (list = element)}
+                onOpenDiscover={() => setShow('discover')}
+                discoverHost={discoverHost}
+              />
+            </Show>
           }
         >
           {(discover) => discover().page(search)}
@@ -270,17 +325,15 @@ export function RoutinesList(props: {
   );
 }
 
-/** Above the list: the suggestions row, else the templates strip. */
-function RoutinesTable(props: {
+/** What the page and table share of the list's props. */
+type ListBodyProps = {
   rows: RoutineRow[];
   loading: boolean;
   error: boolean;
   pendingId?: string;
   search: string;
   show: ListTab;
-  groups: { key: string; title: string; rows: RoutineRow[] }[];
-  isExpanded(row: RoutineRow): boolean;
-  onExpand(id: string, expanded: boolean): void;
+  groups: Group[];
   empty: boolean;
   listRef(element: HTMLDivElement): void;
   onCreate: () => void;
@@ -290,38 +343,127 @@ function RoutinesTable(props: {
   templates?: RoutineTemplate[];
   onTemplate?: (template: RoutineTemplate) => void;
   discover?: RoutinesDiscover;
+  discoverHost: RoutinesDiscoverHost;
   onOpenDiscover(): void;
-}) {
-  // Both sit above the list, out of the way of a search.
+};
+
+/**
+ * Above the routines: the suggestions row, else the templates strip. Both
+ * stay out of the way of a search and of the On tab.
+ */
+function RoutinesAbove(props: ListBodyProps) {
   const above = () => !props.search.trim() && props.show === 'all';
   return (
-    <>
-      <Show
-        when={props.discover}
+    <Show
+      when={props.discover}
+      fallback={
+        <Show
+          when={
+            above() && (props.templates?.length ?? 0) > 0 && props.onTemplate
+          }
+        >
+          {(onTemplate) => (
+            <RoutineTemplateStrip
+              templates={props.templates ?? []}
+              onUse={onTemplate()}
+              onAll={props.onCreate}
+            />
+          )}
+        </Show>
+      }
+    >
+      {(discover) => (
+        <Show when={above()}>
+          {discover().row(props.onOpenDiscover, props.discoverHost)}
+        </Show>
+      )}
+    </Show>
+  );
+}
+
+/** Where the cards will be while the routines load: a row of each card's shape. */
+function RoutineCardsSkeleton() {
+  return (
+    <ListSkeleton.Root label={t('routinesList.loading')}>
+      <RoutineCardGrid>
+        <For each={[0, 1, 2]}>
+          {() => (
+            <li class="min-w-0">
+              <RoutineSurface class="flex h-16 flex-col justify-center gap-2 px-3.5">
+                <ListSkeleton.Bar class="w-1/2" />
+                <ListSkeleton.Bar class="w-3/4" />
+              </RoutineSurface>
+            </li>
+          )}
+        </For>
+      </RoutineCardGrid>
+    </ListSkeleton.Root>
+  );
+}
+
+/**
+ * The desktop page: suggestions, then the routines as cards by what starts
+ * them, or where to start when there are none.
+ */
+function RoutineCardsPage(props: ListBodyProps) {
+  const searching = () => Boolean(props.search.trim()) || props.show === 'on';
+  return (
+    <div
+      ref={props.listRef}
+      role="region"
+      aria-label={t('routinesList.listLabel')}
+      aria-busy={props.loading}
+      tabIndex={-1}
+      // Discover's padding (px-4 pt-4 pb-6), so switching tabs moves nothing.
+      class="flex min-w-0 flex-col gap-8 px-4 pt-4 pb-6 outline-none"
+    >
+      <RoutinesAbove {...props} />
+      <Switch
         fallback={
-          <Show
-            when={
-              above() && (props.templates?.length ?? 0) > 0 && props.onTemplate
-            }
-          >
-            {(onTemplate) => (
-              <RoutineTemplateStrip
-                templates={props.templates ?? []}
-                onUse={onTemplate()}
-                onAll={props.onCreate}
-              />
-            )}
-          </Show>
+          <p class="px-1 py-10 text-center text-sm text-ink-muted">
+            {props.error
+              ? t('routinesList.unavailable')
+              : t('routinesList.noMatches')}
+          </p>
         }
       >
-        {(discover) => (
-          <Show when={above()}>{discover().row(props.onOpenDiscover)}</Show>
-        )}
-      </Show>
+        <Match when={!props.empty}>
+          <RoutineCardSections
+            groups={props.groups}
+            pendingId={props.pendingId}
+            onOpen={props.onOpen}
+            onToggle={props.onToggle}
+            menu={props.menu}
+          />
+        </Match>
+        <Match when={props.loading}>
+          <RoutineCardsSkeleton />
+        </Match>
+        <Match when={!props.error && !searching()}>
+          <RoutinesEmpty
+            onCreate={props.onCreate}
+            onOpenDiscover={props.discover ? props.onOpenDiscover : undefined}
+          />
+        </Match>
+      </Switch>
+    </div>
+  );
+}
+
+/** The touch list: a table of routines, grouped by what starts them. */
+function RoutinesTable(
+  props: ListBodyProps & {
+    isExpanded(row: RoutineRow): boolean;
+    onExpand(id: string, expanded: boolean): void;
+  }
+) {
+  return (
+    <>
+      <RoutinesAbove {...props} />
       <div
         ref={props.listRef}
         role="table"
-        aria-label="Routines"
+        aria-label={t('routinesList.listLabel')}
         aria-busy={props.loading}
         tabIndex={-1}
         class="min-w-0 outline-none"
@@ -334,12 +476,12 @@ function RoutinesTable(props: {
             role="row"
             class="min-h-8 px-2 text-xs font-medium text-ink-extra-muted"
           >
-            <span role="columnheader">Name</span>
-            <span role="columnheader">Trigger</span>
-            <span role="columnheader">Steps</span>
-            <span role="columnheader">Last run</span>
+            <span role="columnheader">{t('routinesList.columnName')}</span>
+            <span role="columnheader">{t('routinesList.columnTrigger')}</span>
+            <span role="columnheader">{t('routinesList.columnSteps')}</span>
+            <span role="columnheader">{t('routinesList.columnLastRun')}</span>
             <span role="columnheader" class="sr-only">
-              On
+              {t('routinesList.on')}
             </span>
           </RoutineRowLayout>
         </div>
@@ -432,20 +574,17 @@ function RoutinesTable(props: {
               <ClockIcon class="size-6 text-ink-extra-muted" />
               <p>
                 {props.loading
-                  ? 'Loading routines…'
+                  ? t('routinesList.loading')
                   : props.error
-                    ? 'Routines are unavailable'
+                    ? t('routinesList.unavailable')
                     : props.search.trim() || props.show === 'on'
-                      ? 'No matching routines'
-                      : 'No routines yet'}
+                      ? t('routinesList.noMatches')
+                      : t('routinesList.noRoutines')}
               </p>
               <Show
                 when={!props.loading && !props.error && !props.search.trim()}
               >
-                <p>
-                  Create a routine to act on new email, tasks and messages, or
-                  on a schedule.
-                </p>
+                <p>{t('routinesList.createHint')}</p>
               </Show>
             </div>
           </div>

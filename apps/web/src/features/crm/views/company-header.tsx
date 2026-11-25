@@ -117,7 +117,9 @@ export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
             aria-label="Company details"
           >
             <Show when={company().id} keyed>
-              {(_id) => <CompanyDomainField company={company()} />}
+              {(_id) => (
+                <CompanyDomainField company={company()} surface="header" />
+              )}
             </Show>
             {/* `updatedAt` carries `crm_companies.last_interaction`, which
                 the backend keeps fresh from synced workspace emails. */}

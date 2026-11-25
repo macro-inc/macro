@@ -12,6 +12,7 @@ import {
   Model,
   modelsForPlan,
   PAID_MODELS,
+  RETIRED_MODELS,
   type TModel,
 } from './model';
 
@@ -30,12 +31,12 @@ describe('modelsForPlan / defaultModelForPlan', () => {
     const free = modelsForPlan(false);
     expect(free).toEqual([FREE_DEFAULT_MODEL]);
     expect(FREE_DEFAULT_MODEL).toBe(Model.gemini38Flash);
-    expect(free).not.toContain(Model.haiku45);
+    expect(free).not.toContain(Model.haiku55);
     expect(defaultModelForPlan(false)).toBe(FREE_DEFAULT_MODEL);
     // The premium models are *not* in a free user's selectable set.
     expect(free).not.toContain(Model.sonnet55);
     expect(free).not.toContain(Model.opus55);
-    expect(free).not.toContain(Model.gpt56);
+    expect(free).not.toContain(Model.gpt62Sol);
     expect(free).not.toContain(Model.gpt6Astra);
   });
 
@@ -43,9 +44,16 @@ describe('modelsForPlan / defaultModelForPlan', () => {
     const anthropic = Object.values(Model).filter(
       (id) => MODEL_PROVIDER[id] === 'anthropic'
     );
-    expect(anthropic).toEqual([Model.sonnet55, Model.opus55, Model.haiku45]);
+    expect(anthropic).toEqual([Model.sonnet55, Model.opus55, Model.haiku55]);
     expect(MODEL_PRETTYNAME[Model.sonnet55]).toBe('Sonnet 5.5');
     expect(MODEL_PRETTYNAME[Model.opus55]).toBe('Opus 5.5');
+  });
+
+  it('offers only the current OpenAI generation', () => {
+    const openai = Object.values(Model).filter(
+      (id) => MODEL_PROVIDER[id] === 'openai'
+    );
+    expect(openai).toEqual([Model.gpt6Astra, Model.gpt62Sol, Model.gpt6Luna]);
   });
 });
 
@@ -63,6 +71,18 @@ describe('parseModel', () => {
   it('passes through known model ids', () => {
     for (const id of Object.values(Model)) {
       expect(parseModel(id)).toBe(id);
+    }
+  });
+
+  it('opens a retired model on its replacement', () => {
+    expect(parseModel('anthropic/claude-haiku-4-5')).toBe(Model.haiku55);
+    expect(parseModel('openai/gpt-6.1-sol')).toBe(Model.gpt62Sol);
+    expect(parseModel('openai/gpt-5.6')).toBe(Model.gpt62Sol);
+    expect(parseModel('openai/gpt-5.5')).toBe(Model.gpt62Sol);
+    expect(parseModel('openai/gpt-5.6-mini')).toBe(Model.gpt6Luna);
+    expect(parseModel('openai/gpt-5-mini')).toBe(Model.gpt6Luna);
+    for (const replacement of Object.values(RETIRED_MODELS)) {
+      expect(PAID_MODELS).toContain(replacement);
     }
   });
 
@@ -98,7 +118,7 @@ describe('alternateProviderModel', () => {
   it('only ever suggests a model the user has access to (stays within candidates)', () => {
     // Candidates model the user's accessible models. The suggestion must be
     // one of them, never a model outside the accessible set.
-    const candidates: TModel[] = [Model.sonnet55, Model.gpt56Mini];
+    const candidates: TModel[] = [Model.sonnet55, Model.gpt6Luna];
     const alt = alternateProviderModel(Model.opus55, { candidates });
     expect(candidates).toContain(alt);
     expect(PROVIDER_OF(alt!)).toBe('openai'); // the only different-provider candidate
@@ -108,7 +128,7 @@ describe('alternateProviderModel', () => {
     // User is on OpenAI but the only accessible model is also OpenAI — there is
     // no provider to fall back to.
     expect(
-      alternateProviderModel(Model.gpt56, { candidates: [Model.gpt56Mini] })
+      alternateProviderModel(Model.gpt62Sol, { candidates: [Model.gpt6Luna] })
     ).toBeUndefined();
     // Likewise when every candidate shares the current (Anthropic) provider.
     expect(

@@ -5,18 +5,41 @@ import { createEffect, For, on, onCleanup, onMount, Show } from 'solid-js';
 export type SearchTextPart = { text: string; operator: boolean };
 
 /**
- * Splits search text into runs, marking each whitespace-separated token that
- * `isOperator` recognises. Whitespace stays in the runs, so joining them gives
- * the text back unchanged.
+ * The search text's tokens and the whitespace between them, in order. A
+ * double quote opens or closes a phrase anywhere in a token, and whitespace
+ * inside one does not end it (`subject:"team lunch"` is one token), as the
+ * search service splits terms.
+ */
+export function searchTextRuns(text: string): string[] {
+  const runs: string[] = [];
+  let run = '';
+  let inQuotes = false;
+  let inSpace = false;
+  for (const char of text) {
+    const space = !inQuotes && /\s/.test(char);
+    if (run && space !== inSpace) {
+      runs.push(run);
+      run = '';
+    }
+    inSpace = space;
+    if (char === '"') inQuotes = !inQuotes;
+    run += char;
+  }
+  if (run) runs.push(run);
+  return runs;
+}
+
+/**
+ * Splits search text into runs, marking each token ({@link searchTextRuns})
+ * that `isOperator` recognises. Whitespace stays in the runs, so joining them
+ * gives the text back unchanged.
  */
 export function splitSearchOperators(
   text: string,
   isOperator: (token: string) => boolean
 ): SearchTextPart[] {
   const parts: SearchTextPart[] = [];
-  for (const run of text.split(/(\s+)/)) {
-    if (!run) continue;
-
+  for (const run of searchTextRuns(text)) {
     const operator = !/^\s/.test(run) && isOperator(run);
     const last = parts.at(-1);
     if (last && !last.operator && !operator) last.text += run;
@@ -63,17 +86,21 @@ const FOLLOW_EVENTS = [
 /**
  * Draws an input's text, operators marked, behind the input. The input keeps
  * its value, caret, selection and editing; it paints its own text transparent
- * (`text-transparent caret-ink`), and this layer follows its horizontal scroll.
+ * (`text-transparent caret-ink`), and this layer follows its scroll. A
+ * textarea's text wraps here as it does in the textarea (`multiline`).
  */
 export function SearchOperatorOverlay(props: {
   parts: readonly SearchTextPart[];
-  input: () => HTMLInputElement | undefined;
+  input: () => HTMLInputElement | HTMLTextAreaElement | undefined;
+  multiline?: boolean;
   class?: string;
 }) {
   let overlay!: HTMLDivElement;
   const follow = () => {
     const input = props.input();
-    if (input) overlay.scrollLeft = input.scrollLeft;
+    if (!input) return;
+    overlay.scrollLeft = input.scrollLeft;
+    overlay.scrollTop = input.scrollTop;
   };
   const followSoon = () => requestAnimationFrame(follow);
 
@@ -95,7 +122,10 @@ export function SearchOperatorOverlay(props: {
       ref={overlay}
       aria-hidden="true"
       class={cn(
-        'pointer-events-none absolute inset-0 flex items-center overflow-hidden whitespace-pre',
+        'pointer-events-none absolute inset-0 overflow-hidden',
+        props.multiline
+          ? 'whitespace-pre-wrap break-words'
+          : 'flex items-center whitespace-pre',
         props.class
       )}
     >

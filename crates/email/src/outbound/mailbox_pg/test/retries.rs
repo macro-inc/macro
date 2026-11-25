@@ -2,8 +2,9 @@
 //! it back.
 
 use super::{fixture, snapshot};
-use crate::domain::mailbox::live_pass::StreamKind;
+use crate::domain::mailbox::claim::StreamClaim;
 use crate::domain::mailbox::progress::MailboxProgressRepository;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::domain::mailbox::*;
 use crate::outbound::mailbox_pg::PgMailboxSync;
 use crate::telemetry_capture::Telemetry;
@@ -30,6 +31,13 @@ impl Provider {
     pub(super) fn answering(messages: Vec<Result<Option<MailboxMessage>, EmailApiError>>) -> Self {
         Self {
             messages: Mutex::new(messages.into()),
+            ..Self::default()
+        }
+    }
+
+    pub(super) fn paging(pages: Vec<MailboxChangePage>) -> Self {
+        Self {
+            pages: Mutex::new(pages.into()),
             ..Self::default()
         }
     }
@@ -193,7 +201,7 @@ async fn a_message_refused_outright_stops_after_three_attempts_until_it_changes(
 
     // A new change from the provider queues it again with fresh attempts.
     let stream = repo
-        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
@@ -205,6 +213,7 @@ async fn a_message_refused_outright_stops_after_three_attempts_until_it_changes(
             position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();
@@ -370,7 +379,7 @@ async fn new_mail_on_a_message_an_import_was_reading_waits_for_no_import_delay(d
     .await
     .unwrap();
     let stream = repo
-        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
@@ -382,6 +391,7 @@ async fn new_mail_on_a_message_an_import_was_reading_waits_for_no_import_delay(d
             position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();
@@ -487,7 +497,9 @@ async fn an_invitation_waits_for_its_calendar_parts_then_imports_without_them(db
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn sync_claims_skip_a_mailbox_that_needs_reauth_until_it_is_cleared(db: PgPool) {
+async fn sync_claims_but_discovery_skip_a_mailbox_that_needs_reauth_until_it_is_cleared(
+    db: PgPool,
+) {
     let (repo, link) = fixture(&db).await;
     sqlx::query!(
         "INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id) VALUES ($1,$2,1,'folder_catalog','mail')",
@@ -508,9 +520,11 @@ async fn sync_claims_skip_a_mailbox_that_needs_reauth_until_it_is_cleared(db: Pg
     };
 
     set_reauth(true).await.unwrap();
-    assert!(repo.claim_catalog(Uuid::now_v7()).await.unwrap().is_none());
+    // Discovery is the probe that asks for a token again.
+    let probe = repo.claim_catalog(Uuid::now_v7()).await.unwrap().unwrap();
+    repo.release_catalog(&probe, 0).await.unwrap();
     assert!(
-        repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        repo.claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
             .await
             .unwrap()
             .is_none()
@@ -520,7 +534,7 @@ async fn sync_claims_skip_a_mailbox_that_needs_reauth_until_it_is_cleared(db: Pg
     set_reauth(false).await.unwrap();
     assert!(repo.claim_catalog(Uuid::now_v7()).await.unwrap().is_some());
     assert!(
-        repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        repo.claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
             .await
             .unwrap()
             .is_some()
@@ -577,7 +591,7 @@ async fn a_message_whose_claims_keep_ending_unfinished_is_abandoned_unread_until
 
     // A new change from the provider queues it again from scratch.
     let stream = repo
-        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
@@ -589,6 +603,7 @@ async fn a_message_whose_claims_keep_ending_unfinished_is_abandoned_unread_until
             position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();
@@ -609,7 +624,7 @@ async fn a_change_during_an_unfinished_claim_is_read_with_a_fresh_count(db: PgPo
     // arrives while it still holds the lease.
     repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     let stream = repo
-        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
@@ -621,6 +636,7 @@ async fn a_change_during_an_unfinished_claim_is_read_with_a_fresh_count(db: PgPo
             position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();

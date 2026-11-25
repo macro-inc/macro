@@ -23,6 +23,8 @@ use crate::domain::service::{Clock, ComputerError};
 
 mod effects;
 mod hosts;
+mod image_upgrade;
+pub use image_upgrade::start_image_upgrade;
 mod moves;
 mod relief;
 #[cfg(test)]
@@ -73,6 +75,12 @@ pub struct ComputerOperator<Repo, Machines, Registry, Time, SetupNotifier> {
     deployment: std::sync::Arc<dyn crate::domain::enrollment::DeploymentSource>,
     host: tokio::sync::Mutex<HostReadiness>,
     relief: relief::Relief,
+    /// This replica, as the holder of the image upgrade lease.
+    upgrade_holder: uuid::Uuid,
+    /// Hosts this replica asked to stage each upgrade's image.
+    staging_requested: std::sync::Mutex<
+        std::collections::HashSet<(crate::domain::image_upgrade::UpgradeId, HostId)>,
+    >,
 }
 
 #[derive(Default)]
@@ -113,6 +121,8 @@ where
             deployment,
             host: tokio::sync::Mutex::new(HostReadiness::default()),
             relief: relief::Relief::default(),
+            upgrade_holder: uuid::Uuid::now_v7(),
+            staging_requested: std::sync::Mutex::default(),
         };
         // Fleet connectivity is independent of the harness's other routes.
         // Keep the operator so its periodic passes can recover registration.

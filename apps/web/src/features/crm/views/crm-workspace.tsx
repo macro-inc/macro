@@ -772,6 +772,7 @@ export function CrmWorkspaceView(props: {
                 onOpen={view.host.record.open}
                 onSectionChange={view.host.record.setSection}
                 onClose={view.host.record.close}
+                onMerged={view.host.record.openMerged}
                 onOpenPipeline={selectPipeline}
                 navigation={<CrmNavigationControls />}
               />

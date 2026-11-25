@@ -86,7 +86,7 @@ pub struct StopTimerInput {
     pub log_all: Option<bool>,
 }
 
-fn parse_date(value: &str, field: &str) -> async_graphql::Result<NaiveDate> {
+pub(crate) fn parse_date(value: &str, field: &str) -> async_graphql::Result<NaiveDate> {
     value
         .parse::<NaiveDate>()
         .map_err(|_| bad_input(format!("{field} must be a date written YYYY-MM-DD")))

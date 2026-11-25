@@ -2,11 +2,8 @@ import { match } from 'ts-pattern';
 import type { UnifiedNotification } from './types';
 
 /**
- * Notifications on messages outside threads, requests to join shown in the
- * channel's timeline, and invites to the channel, eligible for channel-view
- * read marking. The notifications inbox lists an invite on the channel's
- * top-level row, so it counts toward the Chat badge until it is seen.
- * Mirrors the server's `topLevelMessagesOnly` notification filter.
+ * Notifications on messages outside threads, and requests to join shown in the
+ * channel's timeline, eligible for channel-view read marking.
  */
 export function isTopLevelChannelNotification(
   notification: Pick<UnifiedNotification, 'notification_metadata'>
@@ -15,7 +12,6 @@ export function isTopLevelChannelNotification(
     .with(
       { tag: 'channel_message_send' },
       { tag: 'channel_access_requested' },
-      { tag: 'channel_invite' },
       () => true
     )
     .with(
@@ -28,10 +24,10 @@ export function isTopLevelChannelNotification(
 }
 
 /**
- * An unseen invite to the channel. `notificationIsRead` treats every channel
- * notification but a message one as read, so Chat checks an invite's state
- * itself: an invite has no message to scroll to, and opening the channel is
- * what sees it.
+ * An unseen invite to the channel. It never makes the channel unread, but
+ * opening the channel in Chat is what sees it. `notificationIsRead` treats
+ * every channel notification but a message one as read, so Chat checks an
+ * invite's state itself.
  */
 export function isUnseenChannelInvite(
   notification: Pick<UnifiedNotification, 'state' | 'notification_metadata'>

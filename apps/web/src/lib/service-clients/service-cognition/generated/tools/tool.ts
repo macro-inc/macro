@@ -243,6 +243,10 @@ type ToolParserMap = {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
   };
+  ImportFromHubspot: {
+    call: types.ImportFromHubspot;
+    response: types.HubspotImportResponse;
+  };
   ImportFromJira: {
     call: types.ImportFromJira;
     response: types.TrackerImportResponse;
@@ -350,6 +354,10 @@ type ToolParserMap = {
     call: types.MarkNotificationsSeen;
     response: types.MarkNotificationsResponse;
   };
+  MergeRecords: {
+    call: types.MergeRecords;
+    response: types.MergeRecordsResponse;
+  };
   MoveToProject: {
     call: types.MoveToProject;
     response: types.MoveToProjectResponse;
@@ -363,6 +371,10 @@ type ToolParserMap = {
   OpenDirectMessage: {
     call: types.OpenDirectMessage;
     response: types.OpenDirectMessageResponse;
+  };
+  PreviewMerge: {
+    call: types.PreviewMerge;
+    response: types.PreviewMergeResponse;
   };
   QueryDatabase: {
     call: types.QueryDatabase;
@@ -823,6 +835,10 @@ const toolParserMap = {
     call: schemas.ImportCompaniesCsv,
     response: schemas.ImportCompaniesCsvResponse,
   },
+  ImportFromHubspot: {
+    call: schemas.ImportFromHubspot,
+    response: schemas.HubspotImportResponse,
+  },
   ImportFromJira: {
     call: schemas.ImportFromJira,
     response: schemas.TrackerImportResponse,
@@ -945,6 +961,10 @@ const toolParserMap = {
     call: schemas.MarkNotificationsSeen,
     response: schemas.MarkNotificationsResponse,
   },
+  MergeRecords: {
+    call: schemas.MergeRecords,
+    response: schemas.MergeRecordsResponse,
+  },
   MoveToProject: {
     call: schemas.MoveToProject,
     response: schemas.MoveToProjectResponse,
@@ -964,6 +984,10 @@ const toolParserMap = {
   OpenDirectMessage: {
     call: schemas.OpenDirectMessage,
     response: schemas.OpenDirectMessageResponse,
+  },
+  PreviewMerge: {
+    call: schemas.PreviewMerge,
+    response: schemas.PreviewMergeResponse,
   },
   QueryDatabase: {
     call: schemas.QueryDatabase,
@@ -1447,6 +1471,10 @@ type ToolDataMap = {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
   };
+  ImportFromHubspot: {
+    call: types.ImportFromHubspot;
+    response: types.HubspotImportResponse;
+  };
   ImportFromJira: {
     call: types.ImportFromJira;
     response: types.TrackerImportResponse;
@@ -1554,6 +1582,10 @@ type ToolDataMap = {
     call: types.MarkNotificationsSeen;
     response: types.MarkNotificationsResponse;
   };
+  MergeRecords: {
+    call: types.MergeRecords;
+    response: types.MergeRecordsResponse;
+  };
   MoveToProject: {
     call: types.MoveToProject;
     response: types.MoveToProjectResponse;
@@ -1567,6 +1599,10 @@ type ToolDataMap = {
   OpenDirectMessage: {
     call: types.OpenDirectMessage;
     response: types.OpenDirectMessageResponse;
+  };
+  PreviewMerge: {
+    call: types.PreviewMerge;
+    response: types.PreviewMergeResponse;
   };
   QueryDatabase: {
     call: types.QueryDatabase;

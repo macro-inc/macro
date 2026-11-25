@@ -90,6 +90,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   ImportFromLinear: (whose) =>
     `import a Linear workspace into ${whose} workspace`,
   ImportFromJira: (whose) => `import a Jira workspace into ${whose} workspace`,
+  ImportFromHubspot: (whose) => `import a HubSpot CRM into ${whose} CRM`,
   ImportFromNotion: (whose) =>
     `import a Notion workspace into ${whose} workspace`,
   ImportNotionPage: (whose) => `import a Notion page into ${whose} workspace`,
@@ -124,11 +125,13 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   ManageChannelParticipants: (whose) => `change who is in ${whose} channels`,
   MarkNotificationsDone: (whose) => `mark ${whose} notifications done`,
   MarkNotificationsSeen: (whose) => `mark ${whose} notifications seen`,
+  MergeRecords: (whose) => `merge companies in ${whose} CRM`,
   MoveToProject: (whose) => `reorganize ${whose} projects`,
   MoveToTrash: (whose) => `delete items in ${whose} workspace`,
   MuteNotifications: (whose) => `change ${whose} notifications`,
   NameSearch: (whose) => `search ${whose} workspace`,
   OpenDirectMessage: (whose) => `open a direct message from ${whose} account`,
+  PreviewMerge: (whose) => `review merging companies in ${whose} CRM`,
   QueryDatabase: (whose) => `query ${whose} databases`,
   ReactToChannelMessage: (whose) => `react to messages from ${whose} account`,
   ReadActivity: (whose) => `read ${whose} recent activity`,

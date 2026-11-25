@@ -260,6 +260,12 @@ test-database-browser *ARGS:
 test-calendar-details-browser *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config src/features/calendar-view/browser-test/playwright.config.ts {{ARGS}}
 
+# The agent screen viewer's layouts and the agent DM's top bar, in Chromium
+# over a stand-in transport and stubbed queries. Same LD_LIBRARY_PATH caveat as
+# the sign-up browser tests above.
+test-agent-screen-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/features/agent-screen/browser-test/playwright.config.ts {{ARGS}}
+
 # Optimistic mutations through the real worker/WASM cache in Chromium. Same
 # LD_LIBRARY_PATH caveat as the sign-up browser tests above.
 test-functional *ARGS:

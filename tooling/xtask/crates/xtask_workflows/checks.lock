@@ -24,9 +24,11 @@ check	build_agent_daemon_on_tag.yml	build-daemon-windows-x86-64	Build daemon (wi
 check	build_agent_daemon_on_tag.yml	publish-daemon	Upload Release Artifacts
 check	build_appimage_on_tag.yml	build-appimage	Build AppImage
 check	build_cef_codecs.yml	build-cef	Build CEF with proprietary codecs (macOS arm64)
+check	build_cef_codecs.yml	build-cef-x86_64	Build CEF with proprietary codecs (macOS x86_64)
 check	build_desktop_on_tag.yml	resolve-ref	Resolve build ref
 check	build_desktop_on_tag.yml	build-appimage	Build AppImage
 check	build_desktop_on_tag.yml	build-dmg	Build macOS DMG
+check	build_desktop_on_tag.yml	build-dmg-x86_64	Build macOS DMG (Intel)
 check	build_desktop_on_tag.yml	publish-installers	Publish desktop installers
 check	build_desktop_on_tag.yml	qa-macos	QA macOS release app
 check	build_desktop_on_tag.yml	publish-release	Sign and publish desktop updates
@@ -123,6 +125,9 @@ check	ensure_daytona_snapshot.yml	ensure-snapshot	Ensure macro-agent-harness sna
 check	ensure_daytona_snapshot.yml	publish-image	Publish sandbox image to GHCR
 check	export-ci-telemetry.yml	export	export
 check	export-datadog-observability.yml	export	export
+check	firecracker-image-rollout.yml	validate	Validate the inputs
+check	firecracker-image-rollout.yml	build	Build and publish the image
+check	firecracker-image-rollout.yml	roll-out	Roll out (${{ inputs.environment }})
 check	ios-app-store-publish.yml	publish	Release the approved iOS version on the App Store
 check	ios-app-store-release.yml	release	iOS App Store Release
 check	ios-release-drift.yml	drift	iOS Release Drift

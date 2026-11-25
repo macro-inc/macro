@@ -104,6 +104,10 @@ where
             ));
         }
         self.import_service()?
+            .approve_workspace_dependencies(account_holder, source, record.id.0, &draft.excluded)
+            .await
+            .map_err(|error| CodeModeError::Invalid(error.to_string()))?;
+        self.import_service()?
             .start_workspace_write(
                 account_holder,
                 source,
@@ -117,6 +121,27 @@ where
             .await
             .map_err(|error| CodeModeError::Invalid(error.to_string()))
     }
+    async fn normalize(&self, record: &mut ReviewRecord) -> Result<bool, CodeModeError> {
+        let ReviewItems::Import(items) = &mut record.items else {
+            return Ok(false);
+        };
+        let [item] = &mut **items;
+        let dependencies = self
+            .import_service()?
+            .review_workspace_dependencies(
+                &record.acting_user,
+                item.draft.source.into(),
+                record.id.0,
+                &item.draft.excluded,
+                false,
+            )
+            .await
+            .map_err(|error| CodeModeError::Invalid(error.to_string()))?;
+        let changed = item.draft.excluded != dependencies.excluded || dependencies.needs_receipt;
+        item.draft.excluded = dependencies.excluded;
+        Ok(changed)
+    }
+
     async fn present(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -148,6 +173,19 @@ where
         ).await.map_err(|_| CodeModeError::Invalid(format!("Review {} was saved, but presentation is pending. Read this review to retry presentation without creating another draft.", record.id.0)))
     }
     async fn announce_update(&self, record: &ReviewRecord) -> Result<(), CodeModeError> {
+        if let ReviewItems::Import(items) = &record.items {
+            let [item] = &**items;
+            self.import_service()?
+                .review_workspace_dependencies(
+                    &record.acting_user,
+                    item.draft.source.into(),
+                    record.id.0,
+                    &item.draft.excluded,
+                    true,
+                )
+                .await
+                .map_err(|error| CodeModeError::Invalid(error.to_string()))?;
+        }
         let update = ReviewUpdatedNotification {
             review_id: record.id.0,
             revision: record.revision,

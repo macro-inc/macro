@@ -1044,7 +1044,7 @@ export type Code =
 /**
  * External systems items can be imported from.
  */
-export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack';
+export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack' | 'hubspot';
 /**
  * Status values accepted by [`CreateImportEntity`].
  */
@@ -1128,6 +1128,11 @@ export type RoutineTrigger =
        */
       ids?: string[] | null;
       /**
+       * Only for `email.labeled`, alone in its trigger: label ids from
+       * ListLabels, one of which the thread must gain. Omit for any label.
+       */
+      labels?: string[] | null;
+      /**
        * Optional yes/no question the triggering content must answer with
        * yes, e.g. "Is this email from a customer?". Runs where the answer
        * is no are skipped before any step runs.
@@ -1140,6 +1145,7 @@ export type RoutineTrigger =
  */
 export type RoutineEvent =
   | 'email.message_received'
+  | 'email.labeled'
   | 'task.created'
   | 'task.status_changed'
   | 'task.priority_changed'
@@ -3721,19 +3727,9 @@ export type Granularity = 'day' | 'week' | 'month' | 'summary';
  */
 export type NotionImportAction = 'plan' | 'status' | 'cancel';
 /**
- * Who a Notion workspace import shares what it writes with.
+ * Why an item was left for the user in the reviewed plan.
  */
-export type NotionSharing = 'team' | 'personal' | 'ai';
-/**
- * Lifecycle of a discovery run (one per user × source).
- */
-export type RunStatus =
-  | 'running'
-  | 'ready'
-  | 'importing'
-  | 'completed'
-  | 'failed'
-  | 'dismissed';
+export type NotionReviewOmissionKind = 'left_out' | 'excluded' | 'by_hand';
 /**
  * What an imported item is in its source system. Each source has its own
  * kinds; a Notion database and a Notion page, or a Linear project and a
@@ -3750,7 +3746,58 @@ export type ImportKind =
   | 'jira_issue'
   | 'jira_project'
   | 'jira_epic'
-  | 'channel';
+  | 'channel'
+  | 'hubspot_pipeline'
+  | 'hubspot_company'
+  | 'hubspot_contact'
+  | 'hubspot_deal';
+/**
+ * The kind and severity of a user-visible change to a saved view.
+ */
+export type NotionViewChangeKind =
+  | 'filter'
+  | 'layout'
+  | 'sort'
+  | 'visibility'
+  | 'display';
+/**
+ * Content-level notes that do not describe a saved view or a reviewed skip.
+ */
+export type NotionReportNoteKind =
+  | 'omitted'
+  | 'snapshot'
+  | 'reference'
+  | 'other';
+/**
+ * Lifecycle of a discovery run (one per user × source).
+ */
+export type RunStatus =
+  | 'running'
+  | 'ready'
+  | 'importing'
+  | 'completed'
+  | 'failed'
+  | 'dismissed';
+/**
+ * Something a HubSpot import cannot carry into Macro CRM, counted on the
+ * review card and in the final report.
+ */
+export type HubspotLoss =
+  | 'owner_not_member'
+  | 'deal_without_company'
+  | 'deal_without_pipeline'
+  | 'extra_company_links'
+  | 'domain_rejected'
+  | 'unsupported_currency'
+  | 'additional_domains'
+  | 'company_owner'
+  | 'merged_company'
+  | 'merged_contact'
+  | 'contact_without_company';
+/**
+ * Who a Notion workspace import shares what it writes with.
+ */
+export type NotionSharing = 'team' | 'personal' | 'ai';
 /**
  * A kind of action or inactivity the user should see: `permission` to run a tool, an
  * `elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no
@@ -4119,6 +4166,14 @@ export type BotChannelAccessAction = 'grant' | 'revoke';
  * Membership change to apply.
  */
 export type ParticipantAction = 'add' | 'remove';
+/**
+ * The kind of record merged.
+ */
+export type ToolMergeRecordType = 'company';
+/**
+ * What happens to teammates' email sharing that names a merged record.
+ */
+export type ToolSharingRules = 'keep' | 'stop';
 /**
  * The kind of entity to move.
  */
@@ -8481,7 +8536,7 @@ export interface CreateProjectResponse {
  *
  * A routine is triggers plus steps. Pass `steps` as a JSON array encoded in a string.
  *
- * Triggers: `once` (future RFC3339 time), `cron` (six-field expression and IANA time zone), or `event` (activity such as `email.message_received`, `task.created` or `channel.message_posted`, optionally limited to item `ids` and gated by a yes/no `condition`). Only people's actions trigger routines.
+ * Triggers: `once` (future RFC3339 time), `cron` (six-field expression and IANA time zone), or `event` (activity such as `email.message_received`, `task.created` or `channel.message_posted`, optionally limited to item `ids` and gated by a yes/no `condition`; `email.labeled`, alone in its trigger, runs when a thread gains one of the label ids from ListLabels in `labels`, or any label without them). Only people's actions trigger routines, so labels a routine or an agent adds never start one.
  *
  * Steps run in order and a failed step stops the run:
  * - `code`: TypeScript against Macro's SDK, for anything that acts or decides: labeling or archiving email, setting properties, creating tasks, posting messages, or judging items with `macro.ai.decide`. See Code steps at the end.
@@ -8507,7 +8562,7 @@ export interface CreateProjectResponse {
  *   - `run.at` is when the run counts as happening (ISO 8601) and `run.timezone` the zone to read it in. Use them for "today", "this week" or a cutoff; never `new Date()` or `Date.now()`, so a dry run that replays an earlier trigger gives the same answer.
  *   - `run.lastSucceededAt` (null on the first run) and `run.previous` (`{ at, outcome }`) say when the routine last ran. Work on what is new since then instead of everything each time.
  *   - `trigger` says what started the run: `{ kind: 'schedule', schedule, timezone }`, `{ kind: 'event', event, item }`, or `{ kind: 'manual', by }`. Check `trigger.kind` before reading `item`.
- *   - An event's `item` is JSON. `item.entity_id` is the id of what the event is about (the task, document, channel, email thread or call); there is no `item.id`. A message event adds `item.message_id`. Its other fields depend on the event: `item.item` for a task or document (`name`, `properties`, `content`), `item.channel` (`name`) and `item.message` (`text`, `thread_id`, and `sender`: a person's email, which their handle gives as `email()`, or a bot's name) for a channel event, `item.email` (`subject`, `from`, `to`, `body`, `labels`) for mail, and `item.call` (`title`, `participants`, `summary`, `transcript`) for a call. Read anything else through the SDK by `entity_id`, such as `macro.tasks.byId(trigger.item.entity_id)`, and answer a message in its own channel, `macro.channels.byId(trigger.item.entity_id)`, never one looked up by name.
+ *   - An event's `item` is JSON. `item.entity_id` is the id of what the event is about (the task, document, channel, email thread or call); there is no `item.id`. A message event adds `item.message_id`, the message's own id. Its other fields depend on the event: `item.item` for a task or document (`name`, `properties`, `content`), `item.channel` (`name`) and `item.message` for a channel event: `text`, `sender` (a person's email, which their handle gives as `email()`, or a bot's name), `is_reply` (true for a reply in a thread, false for a top-level post) and `root_id` (the id of the top-level post that started its thread: its own id on a top-level post), and on a reply `item.thread_parent`, that top-level post, unless it was deleted; `item.email` (`subject`, `from`, `to`, `body`, `labels`) for mail, plus `item.labels_added` (the names of the labels the thread just gained) for `email.labeled`, and `item.call` (`title`, `participants`, `summary`, `transcript`) for a call. Read anything else through the SDK by `entity_id`, such as `macro.tasks.byId(trigger.item.entity_id)`, and answer a message in its own channel, `macro.channels.byId(trigger.item.entity_id)`, never one looked up by name.
  *   - `run.dryRun` is true when writes change nothing; `routine` is `{ id, name }`.
  *   - `steps.<id>` is the output of a code step before this one, typed from that step's code. Changing what a step returns can break the steps that read it; every code step is checked with the others.
  *   - `knobs.<name>` is a knob's value, typed from the knob: a `choice` is the union of its options, and an `entity` the SDK handle of each kind it lists, as `macro.channels.byId`, `documents.byId`, `projects.byId`, `users.byId`, `tasks.byId`, `email.byId`, `chats.byId`, `crm.companyById`, `crm.contactById`, `initiatives.byId` or `databases.byId` gives it. With several kinds it is their union: check its `entityType` (`'channel'`, `'email_thread'`, `'crm_company'`, …; a task's is `'document'`) before calling what only one kind has.
@@ -11189,19 +11244,15 @@ export interface ToolAddedOptions {
   labels: string[];
 }
 /**
- * Import Jira Cloud into Macro: issues become tasks, and projects and epics become Macro projects. Plan reads all sites visible through the user's connected Jira account; no source writes are possible. First plan without sharing unless the user already chose. If sharing is required, ask team, personal, or AI; users without a team get a personal import. Present the plan immediately with PresentReview kind import, drafts [{source: jira}], even while it is running. Do not poll status or recreate plan items with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps completed copies.
+ * Import a connected HubSpot portal into the team's Macro CRM: deal pipelines become Sales pipelines with their stages, companies and contacts become CRM records, and deals become pipeline entries with stage, outcome, amount, close date and owner. Plan reads every company, contact and deal through the user's connected HubSpot account; nothing is written to HubSpot. Records belong to the team, so there is no sharing question. Present the plan immediately with PresentReview kind import, drafts [{source: hubspot}], even while it is running. Do not poll status or recreate records with other tools. Nothing is written until approval. Once the plan is ready, ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. While it is still being planned, do not ask or approve: the user approves it on the card once it is ready. Status reports progress; cancel stops this import and keeps records already written.
  */
-export interface ImportFromJira {
+export interface ImportFromHubspot {
   action: NotionImportAction;
-  /**
-   * The user's visibility choice: team, personal or AI. Ask if required.
-   */
-  sharing?: NotionSharing | null;
 }
 /**
- * Where a reviewed tracker import stands and what the agent should do next.
+ * Where a HubSpot import stands and what the agent should do next.
  */
-export interface TrackerImportResponse {
+export interface HubspotImportResponse {
   report: NotionImportReport;
   /**
    * Guidance on presenting or approving the current plan.
@@ -11216,6 +11267,14 @@ export interface NotionImportReport {
    * Provider items skipped because they were unreadable, or optional features unavailable.
    */
   warnings?: string[];
+  /**
+   * Grouped report details for a Notion workspace review.
+   */
+  details?: NotionReportDetails | null;
+  /**
+   * Actual writes from the completed Notion ledger, excluding reused copies.
+   */
+  confirmed?: ConfirmedNotionWrites | null;
   /**
    * Tracker issues in the plan.
    */
@@ -11281,7 +11340,7 @@ export interface NotionImportReport {
    */
   databases: number;
   /**
-   * Rows those databases hold, every one counted while planning.
+   * Estimated database rows while planning, confirmed rows once completed.
    */
   databaseRows: number;
   /**
@@ -11289,7 +11348,7 @@ export interface NotionImportReport {
    */
   taskRows: number;
   /**
-   * Plan objects already imported.
+   * Plan objects finished so far, or confirmed new copies once completed.
    */
   imported: number;
   /**
@@ -11330,6 +11389,232 @@ export interface NotionImportReport {
    * Objects that failed to import, with the failure.
    */
   failures?: NotionReportItem[];
+  /**
+   * Total objects that failed, including those outside the sample.
+   */
+  failureCount?: number;
+  /**
+   * A HubSpot plan's counts, owners and losses.
+   */
+  hubspot?: HubspotReport | null;
+}
+/**
+ * Details alongside the outcome on a Notion import card.
+ */
+export interface NotionReportDetails {
+  /**
+   * A sample of items deliberately left out, with the reviewed reasons.
+   */
+  notImported: NotionReviewOmission[];
+  /**
+   * Totals for each review choice.
+   */
+  omissionCounts?: NotionReviewOmissionCount[];
+  /**
+   * Saved view differences, sampled by impact and grouped by source and view.
+   */
+  viewChanges: NotionDatabaseViewChanges[];
+  /**
+   * Total number of changed views.
+   */
+  viewCount?: number;
+  /**
+   * Total number of displayed and undisplayed change lines.
+   */
+  viewChangeCount?: number;
+  /**
+   * A sample of tab selections caused by an unspecified Notion tab.
+   */
+  tabChoices: NotionTabChoice[];
+  /**
+   * Total number of placements that used a default tab.
+   */
+  tabChoiceCount?: number;
+  /**
+   * A sample of legacy notices and non-view fidelity changes.
+   */
+  notes: NotionReportNote[];
+  /**
+   * Totals for each kind of notice.
+   */
+  noteCounts?: NotionReportNoteCount[];
+}
+/**
+ * A review choice and the item it left out.
+ */
+export interface NotionReviewOmission {
+  kind: NotionReviewOmissionKind;
+  item: NotionReportItem;
+}
+/**
+ * One object a workspace import report calls out.
+ */
+export interface NotionReportItem {
+  /**
+   * The ledger row.
+   */
+  importId: string;
+  /**
+   * The object's title.
+   */
+  title: string;
+  kind: ImportKind;
+  /**
+   * Its Notion URL.
+   */
+  url?: string | null;
+  /**
+   * Why it is called out: the decision model's reason, or the failure.
+   */
+  reason?: string | null;
+}
+/**
+ * Counts for one review choice, including items outside the sample.
+ */
+export interface NotionReviewOmissionCount {
+  kind: NotionReviewOmissionKind;
+  /**
+   * Pages left out.
+   */
+  pages: number;
+  /**
+   * Databases left out.
+   */
+  databases: number;
+  /**
+   * Other objects left out.
+   */
+  other: number;
+}
+/**
+ * Views that changed on one database.
+ */
+export interface NotionDatabaseViewChanges {
+  /**
+   * Stable Notion data source identity.
+   */
+  databaseId: string;
+  /**
+   * Display title.
+   */
+  title: string;
+  /**
+   * Views ordered by their highest impact.
+   */
+  views: NotionChangedView[];
+}
+/**
+ * Changes to one view of an imported database.
+ */
+export interface NotionChangedView {
+  /**
+   * Stable Notion identity, separate from the title.
+   */
+  viewId: string;
+  /**
+   * Display title.
+   */
+  title: string;
+  /**
+   * Changes ordered by impact.
+   */
+  changes: NotionViewChange[];
+}
+/**
+ * A counted, readable difference in an imported view.
+ */
+export interface NotionViewChange {
+  kind: NotionViewChangeKind;
+  /**
+   * Number of changed settings represented in this line.
+   */
+  count: number;
+  /**
+   * Human-readable description.
+   */
+  message: string;
+}
+/**
+ * A first-tab choice when Notion omitted the view from a reference.
+ */
+export interface NotionTabChoice {
+  /**
+   * Container identity. Different linked placements may choose different tabs.
+   */
+  containerId: string;
+  /**
+   * Title of the page or row containing the reference.
+   */
+  containerTitle?: string | null;
+  /**
+   * Database name shown in the reference.
+   */
+  database: string;
+  /**
+   * Name of the returned first tab.
+   */
+  tab: string;
+}
+/**
+ * A counted content or compatibility note.
+ */
+export interface NotionReportNote {
+  kind: NotionReportNoteKind;
+  /**
+   * Number of incidents represented by this notice.
+   */
+  count: number;
+  /**
+   * Human-readable text, with affected source and property titles.
+   */
+  message: string;
+}
+/**
+ * Counts for one kind of content note, including notes outside the sample.
+ */
+export interface NotionReportNoteCount {
+  kind: NotionReportNoteKind;
+  /**
+   * Number of notices.
+   */
+  lines: number;
+  /**
+   * Number of incidents described by the notices.
+   */
+  count: number;
+}
+/**
+ * Objects confirmed in the current Notion write's ledger.
+ */
+export interface ConfirmedNotionWrites {
+  /**
+   * Copied pages.
+   */
+  documents: number;
+  /**
+   * Copied databases.
+   */
+  databases: number;
+  /**
+   * Rows inserted into databases, including writes from unfinished copies.
+   */
+  databaseRows: number;
+  /**
+   * The subset of database rows written before their source stopped.
+   */
+  partialDatabaseRows?: number;
+  /**
+   * Databases copied as task lists.
+   */
+  taskLists: number;
+  /**
+   * Tasks inserted into task lists, including writes from unfinished lists.
+   */
+  tasks: number;
+  /**
+   * The subset of tasks written before their source stopped.
+   */
+  partialTasks?: number;
 }
 /**
  * What a planning run has found in the source so far.
@@ -11358,26 +11643,84 @@ export interface NotionImporter {
   count: number;
 }
 /**
- * One object a workspace import report calls out.
+ * What a HubSpot plan holds, for the review card.
  */
-export interface NotionReportItem {
+export interface HubspotReport {
   /**
-   * The ledger row.
+   * Deal pipelines, each becoming a Macro pipeline.
    */
-  importId: string;
+  pipelines: number;
   /**
-   * The object's title.
+   * Companies.
    */
-  title: string;
-  kind: ImportKind;
+  companies: number;
   /**
-   * Its Notion URL.
+   * Contacts.
    */
-  url?: string | null;
+  contacts: number;
   /**
-   * Why it is called out: the decision model's reason, or the failure.
+   * Deals, each becoming an entry in its pipeline.
    */
-  reason?: string | null;
+  deals: number;
+  /**
+   * HubSpot owners named by the planned records.
+   */
+  owners: number;
+  /**
+   * Of those, owners matched to a team member by email.
+   */
+  ownersMatched: number;
+  /**
+   * Records already in Macro from an earlier import, left as they are.
+   */
+  alreadyImported: number;
+  /**
+   * Records this import created in the CRM.
+   */
+  created?: number;
+  /**
+   * Records this import matched to ones already in the CRM (same domain,
+   * address or deal) or to a teammate's import, instead of creating them.
+   */
+  linked?: number;
+  /**
+   * What cannot be carried over, by kind.
+   */
+  losses: HubspotLossCount[];
+  /**
+   * Portal-defined property names whose values stay in HubSpot.
+   */
+  customProperties: string[];
+}
+/**
+ * How many records lost one thing.
+ */
+export interface HubspotLossCount {
+  loss: HubspotLoss;
+  /**
+   * Records affected.
+   */
+  count: number;
+}
+/**
+ * Import Jira Cloud into Macro: issues become tasks, and projects and epics become Macro projects. Plan reads all sites visible through the user's connected Jira account; no source writes are possible. First plan without sharing unless the user already chose. If sharing is required, ask team, personal, or AI; users without a team get a personal import. Present the plan immediately with PresentReview kind import, drafts [{source: jira}], even while it is running. Do not poll status or recreate plan items with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps completed copies.
+ */
+export interface ImportFromJira {
+  action: NotionImportAction;
+  /**
+   * The user's visibility choice: team, personal or AI. Ask if required.
+   */
+  sharing?: NotionSharing | null;
+}
+/**
+ * Where a reviewed tracker import stands and what the agent should do next.
+ */
+export interface TrackerImportResponse {
+  report: NotionImportReport;
+  /**
+   * Guidance on presenting or approving the current plan.
+   */
+  message: string;
 }
 /**
  * Import a Linear workspace into Macro: issues become tasks, and teams, projects and initiatives become Macro projects. Plan reads only through the user's connected Linear account; no source writes are possible. First plan without sharing unless the user already chose. If sharing is required, ask team, personal, or AI; users without a team get a personal import. Present the plan immediately with PresentReview kind import, drafts [{source: linear}], even while it is running. Do not poll status or recreate plan items with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps completed copies.
@@ -11996,9 +12339,9 @@ export interface CalendarEventCopyItem {
   isReadOnly: boolean;
 }
 /**
- * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, syncing inbox address, provider, capabilities, and whether it is primary, writable and part of the user's busy time.
+ * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, syncing inbox address, provider, capabilities, and whether it is primary, writable, a subscription and part of the user's busy time.
  *
- * Not every calendar here is the user's. `emailAddress` is the account syncing a calendar, so a colleague's calendar reports the user's own address, and being writable or not primary proves nothing either way. `contributesToAvailability` marks the calendars that are the user's schedule. Call any other by its name, say whose it is when the name shows that, and otherwise say you cannot tell.
+ * Not every calendar here is the user's. `emailAddress` is the account syncing a calendar, so a colleague's calendar reports the user's own address, and being writable or not primary proves nothing either way. `contributesToAvailability` marks the calendars that are the user's schedule. Call any other by its name, say whose it is when the name shows that, and otherwise say you cannot tell. Call a calendar with `isSubscription` a subscription the account follows (Google's holidays and birthdays, or a calendar added by URL or from the web); the flag does not say who keeps it.
  *
  * Use this before CreateCalendarEvent when the user wants an event on a specific non-default calendar (e.g. "add it to my work calendar") so you can pass the exact `calendarId`. Most users have a single primary calendar, in which case CreateCalendarEvent targets it by default and you do not need this tool unless choosing conference or other provider-dependent behavior. Check `capabilities` before requesting a conference, removing one, or using custom recurrence. An empty result means no calendar is connected.
  */
@@ -12046,6 +12389,12 @@ export interface ToolCalendar {
    * Whether events can be created and modified on this calendar.
    */
   isWritable: boolean;
+  /**
+   * Whether the account subscribes to this calendar as a feed: Google's
+   * holidays and birthdays calendars, a calendar added by URL in Google,
+   * or one subscribed from the web in Outlook.
+   */
+  isSubscription: boolean;
   /**
    * Whether this calendar counts toward the user's busy time. Only these
    * are the user's own schedule; false does not say whose calendar it is.
@@ -13130,6 +13479,46 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
+ * Merge duplicate CRM companies into the one that stays, exactly as a PreviewMerge review showed: people, domains, pipeline entries, references, discussions, favorites and lists move to it and the merged companies are deleted. It can't be undone; merge only after the user confirmed that review. Old ids keep opening the company that stays. Refused with merge_preview_stale when anything changed since the review: preview again.
+ */
+export interface MergeRecords {
+  recordType: ToolMergeRecordType;
+  /**
+   * The company that stays, as reviewed.
+   */
+  survivorId: string;
+  /**
+   * The companies merged into it, as reviewed.
+   */
+  sourceIds: string[];
+  /**
+   * The revision PreviewMerge returned.
+   */
+  revision: string;
+  /**
+   * A new UUID for this merge. Reuse it only to retry the same call: a retry returns the first result.
+   */
+  requestKey: string;
+  sharingRules?: ToolSharingRules & string;
+}
+/**
+ * A committed merge.
+ */
+export interface MergeRecordsResponse {
+  /**
+   * The merge.
+   */
+  mergeId: string;
+  /**
+   * The record that stays.
+   */
+  survivorId: string;
+  /**
+   * The records merged into it; their ids open the record that stays.
+   */
+  mergedIds: string[];
+}
+/**
  * Move a document, email thread, or project into another project (projects are shown as folders in the app UI), or move it out to the top level. Requires edit access to the destination project. Moving a document or email thread requires edit access to it; moving a project requires owning it.
  */
 export interface MoveToProject {
@@ -13261,6 +13650,36 @@ export interface OpenDirectMessageResponse {
    * Human-readable result summary.
    */
   summary: string;
+}
+/**
+ * Review merging duplicate CRM companies into the one that stays, without changing anything. Returns what moves (people, pipeline entries, references, discussion), the values that differ and which are kept, what email sync does, how many teammates' email sharing names a merged company, anything that blocks the merge, and the revision MergeRecords needs. Only team admins and owners can merge. Show the user the review before merging.
+ */
+export interface PreviewMerge {
+  recordType: ToolMergeRecordType;
+  /**
+   * The company that stays; its name, domains and values win.
+   */
+  survivorId: string;
+  /**
+   * The companies merged into it and deleted, at most ten.
+   */
+  sourceIds: string[];
+}
+/**
+ * A merge's review, as an agent reads it.
+ */
+export interface PreviewMergeResponse {
+  /**
+   * Pass to MergeRecords to merge as reviewed.
+   */
+  revision: string;
+  /**
+   * The review: the record that stays and the ones merged into it, what
+   * moves, differing values, email sync, sharing and blocks.
+   */
+  review: {
+    [k: string]: unknown;
+  };
 }
 /**
  * Run SQL against the current user's Macro databases — the only way to read or change their rows. SELECT to answer a question, INSERT/UPDATE/DELETE to change data, CREATE/ALTER/DROP to edit schema. One statement per call.

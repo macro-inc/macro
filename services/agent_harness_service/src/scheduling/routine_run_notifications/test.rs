@@ -41,6 +41,15 @@ async fn sent(end: RunEnd) -> Vec<serde_json::Value> {
 
 /// The same, for a run of a routine `parent` created.
 async fn sent_for(end: RunEnd, parent: Option<&str>) -> Vec<serde_json::Value> {
+    sent_with(end, parent, Vec::new()).await
+}
+
+/// The same, for a run refused because `apps_to_connect` are needed.
+async fn sent_with(
+    end: RunEnd,
+    parent: Option<&str>,
+    apps_to_connect: Vec<String>,
+) -> Vec<serde_json::Value> {
     let ingress = Arc::new(CapturingIngress::default());
     let tracker = TaskTracker::new();
     let notifications = RoutineRunNotifications::new(Arc::clone(&ingress), tracker.clone());
@@ -54,6 +63,7 @@ async fn sent_for(end: RunEnd, parent: Option<&str>) -> Vec<serde_json::Value> {
         target: RunTarget::Agent,
         end,
         duration: chrono::Duration::seconds(3),
+        apps_to_connect,
     });
     tracker.close();
     tracker.wait().await;
@@ -104,4 +114,26 @@ async fn a_sub_routines_run_names_the_routine_that_created_it() {
         sent[0]["req"]["notification"]["content"]["routineName"],
         "Morning brief · from Weekly planning"
     );
+}
+
+#[tokio::test]
+async fn a_run_its_owner_stopped_sends_nothing() {
+    assert!(sent(RunEnd::Stopped).await.is_empty());
+}
+
+#[tokio::test]
+async fn a_run_refused_for_a_disconnected_app_names_the_apps_to_reconnect() {
+    let sent = sent_with(RunEnd::Failed, None, vec!["Linear".to_string()]).await;
+
+    assert_eq!(sent.len(), 1, "one notification per run, no extra one");
+    assert_eq!(
+        sent[0]["req"]["notification"]["content"],
+        json!({
+            "routineId": uuid::Uuid::nil(),
+            "routineName": "Morning brief",
+            "outcome": "failed",
+            "appsToConnect": ["Linear"],
+        })
+    );
+    assert_eq!(sent[0]["build_apns"], json!(null), "no phone push");
 }
