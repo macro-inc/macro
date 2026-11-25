@@ -1,8 +1,8 @@
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
-import { PillButton } from '@components/app/mobile/PillTabs';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { ConversationFiltersProps } from '../../components/conversation-filters/conversation-filters';
 import { ConversationFiltersDrawer } from './filters/filters';
@@ -30,17 +30,23 @@ export function PhoneListHeader(
             when={searchOpen() || props.search}
             fallback={
               <>
-                <PillButton
-                  active={false}
-                  iconOnly
+                <Button
                   aria-label={t('agentWork.searchConversations')}
+                  variant="ghost"
+                  size="icon-md"
+                  finish="island"
+                  class="shrink-0"
+                  // Keep focus where it is until the search field takes it;
+                  // iOS still fires mousedown after a cancelled pointerdown.
+                  onPointerDown={(event) => event.preventDefault()}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     setSearchOpen(true);
                     triggerFocusInput(() => input);
                   }}
                 >
-                  <SearchIcon class="size-5" />
-                </PillButton>
+                  <SearchIcon class="size-6 shrink-0" />
+                </Button>
                 <ConversationFiltersDrawer
                   filters={props.filters}
                   onFilterChange={props.onFilterChange}

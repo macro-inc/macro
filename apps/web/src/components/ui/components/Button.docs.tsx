@@ -236,6 +236,9 @@ function FinishesDemo() {
       <Button variant="secondary" aria-pressed="true">
         Pressed
       </Button>
+      <Button variant="ghost" size="icon-md" finish="island" aria-label="Add">
+        <PlusIcon class="size-6 shrink-0" />
+      </Button>
     </div>
   );
 }
@@ -259,7 +262,7 @@ export default defineDoc({
     { id: 'themes', title: 'Light and dark', render: ThemesDemo, fill: true },
     {
       id: 'finishes',
-      title: 'Automatic and flat finishes',
+      title: 'Automatic, flat and island finishes',
       render: FinishesDemo,
     },
   ],

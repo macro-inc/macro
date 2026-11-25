@@ -147,13 +147,6 @@ vi.mock('@entity', () => ({
   ),
 }));
 vi.mock('@components/app/mobile/PillTabs', () => ({
-  PillButton: (props: ParentProps<{ onClick?: () => void }>) => (
-    <button
-      type="button"
-      aria-label="Search email"
-      onClick={() => props.onClick?.()}
-    />
-  ),
   PillTabs: (props: {
     items: { value: string; label: string }[];
     value?: string;

@@ -21,6 +21,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
 | One on/off toggle, or an icon-only layout choice | `Button` with `aria-pressed` | A custom active tint |
 | Many options, or header tabs that no longer fit | `Dropdown` / `Select`, `MobileDrawer` on touch, or `Tabs iconOnly` first | Scrolling or wrapping a header tab row |
 | Create, search in a collection header | `ViewCreateButton`, `ListHeaderSearch` | One-off New or search buttons |
+| An action in a mobile chrome row (sidebar toggle, filters, search, clear) | `Button variant="ghost" finish="island"` | `island`, a fill or a size on the Button's `class`, or a tab pill used as a button |
 | Text entry, search fields | `Input`, `InputGroup`, `SearchBar`, `settings-input` | A raw `<input>` with its own border, radius, or focus color |
 | Several short values picked from suggestions or typed (domains, people and companies) | `ChipCombobox`; message recipients use `RecipientSelector` | A comma-separated text `Input` |
 | Menu, popover, floating toolbar or editor panel | `Dropdown`, `Toolbar`, or `menu-surface` on the overlay root | A hand-built fill, border, and shadow, or `bg-menu-glass` |
@@ -64,6 +65,14 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   (`[&_button]:size-8`); use an explicit `icon-*` size for icon actions. Put glyph
   sizing on the rendered icon, not on Button or ancestor SVG selectors. Enforced
   for wrappers by ast-grep `tsx-no-descendant-button-styles`, warning.
+- **FE-75** Every action in a mobile chrome row (the floating row of tabs and
+  actions above a touch list: sidebar toggle, filters, search, clear) is a
+  `Button variant="ghost" finish="island"` with a 24px glyph: the chrome
+  island's fill and hairline edge at 40px, square for `icon-*` sizes, padded
+  for a labelled one (a filter count). The row's tabs stay `PillTabs` pills.
+  ast-grep `tsx-button-island-finish` (CI error) refuses the `island` class on
+  a Button; a fill or size on its `class`, or a tab pill used as an action,
+  is left to review.
 - Use `variant="primary"` for the main create, save, submit, invite, approve, or continue action. Primary is solid neutral: black with white text in light themes, white with black text in dark themes. Keep existing primary consumers on `primary`, including selected-state controls. Use explicit `variant="accent"` only for separately intended theme-color emphasis. Home/AI chat, channel, and email Send actions use the shared primary `SendButton`, which is flat: no raised edge around the circle in either theme. Keep the shared New launcher (`ViewCreateButton`) on `variant="secondary" finish="raised"`, and retain secondary, outline, ghost, and danger variants for their own roles.
 - Quiet Back, Close, Cancel, and unframed inline utility actions use explicit `variant="ghost"`; omitting the variant opts into solid neutral primary emphasis, not accent. Keep intentional framed groups and selected-state actions in their own variants. Size every rendered glyph explicitly, including children passed through action wrappers; Button does not size descendant SVGs.
 - Selected reaction chips are a deliberate local exception: `ReactionChip` uses `appearance="bare"` with accent-tint, accent-text, and overlay classes to preserve its soft selected treatment without a new Button variant. Keep unselected reactions on `secondary`.

@@ -19,7 +19,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { SplitRouter } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
-import { PillButton } from '@components/app/mobile/PillTabs';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -31,6 +30,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { Button } from '@ui';
 import {
   createEffect,
   createSignal,
@@ -396,14 +396,20 @@ export function EmailMobileLayout(props: ParentProps) {
               <Show
                 when={wideSearchFlag().enabled && canSearchEmailTab(state.tab)}
               >
-                <PillButton
-                  active={false}
-                  iconOnly
+                <Button
                   aria-label={t('emailViews.searchEmail')}
+                  variant="ghost"
+                  size="icon-md"
+                  finish="island"
+                  class="shrink-0"
+                  // Keep focus where it is until the search field takes it;
+                  // iOS still fires mousedown after a cancelled pointerdown.
+                  onPointerDown={(event) => event.preventDefault()}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={openSearch}
                 >
-                  <SearchIcon class="size-5" />
-                </PillButton>
+                  <SearchIcon class="size-6 shrink-0" />
+                </Button>
               </Show>
               <EmailFilterDrawer />
             </div>

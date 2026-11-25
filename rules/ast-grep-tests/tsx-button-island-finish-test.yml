@@ -1,0 +1,9 @@
+id: tsx-button-island-finish
+valid:
+  - <Button variant="ghost" finish="island" class="shrink-0" />
+  - <button type="button" class="island h-10 rounded-full" />
+  - <MobileDrawer.Trigger as={Button} finish="island" class="relative z-10" />
+invalid:
+  - <Button variant="ghost" class="island bg-chrome size-10 rounded-full" />
+  - <Button variant="ghost" class={cn('shrink-0', open && 'touch:island')} />
+  - <MobileDrawer.Trigger as={Button} class="island bg-chrome h-10">x</MobileDrawer.Trigger>
