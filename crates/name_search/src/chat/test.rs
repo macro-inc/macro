@@ -24,7 +24,6 @@ async fn test_search_chat_names_empty_term(pool: Pool<Postgres>) -> anyhow::Resu
         &[],
         false,
         &[],
-        false,
         10,
         None,
     )
@@ -58,7 +57,6 @@ async fn test_search_chat_names_ids_only_with_empty_ids(
         &[],
         true,
         &[],
-        false,
         10,
         None,
     )
@@ -97,7 +95,6 @@ async fn test_search_chat_names_ids_only_mode(pool: Pool<Postgres>) -> anyhow::R
         &[],
         true,
         &[],
-        false,
         10,
         None,
     )
@@ -149,7 +146,6 @@ async fn test_search_chat_names_normal_mode_owned_chats(
         &[],
         false,
         &[],
-        false,
         10,
         None,
     )
@@ -188,7 +184,6 @@ async fn test_search_chat_names_normal_mode_owned_chats(
         &["REVIEW".to_string(), "_".to_string()],
         false,
         &[],
-        false,
         10,
         None,
     )
@@ -227,7 +222,6 @@ async fn test_search_chat_names_case_insensitive(pool: Pool<Postgres>) -> anyhow
         &[],
         false,
         &[],
-        false,
         10,
         None,
     )
@@ -244,7 +238,6 @@ async fn test_search_chat_names_case_insensitive(pool: Pool<Postgres>) -> anyhow
         &[],
         false,
         &[],
-        false,
         10,
         None,
     )
@@ -261,7 +254,6 @@ async fn test_search_chat_names_case_insensitive(pool: Pool<Postgres>) -> anyhow
         &[],
         false,
         &[],
-        false,
         10,
         None,
     )
@@ -292,7 +284,6 @@ async fn test_search_chat_names_with_shared_chats(pool: Pool<Postgres>) -> anyho
         &[],
         false,
         &[],
-        false,
         10,
         None,
     )
@@ -334,7 +325,6 @@ async fn test_search_chat_names_pagination_limit(pool: Pool<Postgres>) -> anyhow
         &[],
         false,
         &[],
-        false,
         2,
         None,
     )
@@ -376,7 +366,6 @@ async fn test_search_chat_names_pagination_cursor(pool: Pool<Postgres>) -> anyho
         &[],
         false,
         &[],
-        false,
         2,
         None,
     )
@@ -400,7 +389,6 @@ async fn test_search_chat_names_pagination_cursor(pool: Pool<Postgres>) -> anyho
         &[],
         false,
         &[],
-        false,
         2,
         cursor,
     )
@@ -458,7 +446,6 @@ async fn test_search_chat_names_no_results(pool: Pool<Postgres>) -> anyhow::Resu
         &[],
         false,
         &[],
-        false,
         10,
         None,
     )
@@ -488,7 +475,6 @@ async fn test_search_chat_names_partial_match(pool: Pool<Postgres>) -> anyhow::R
         &[],
         false,
         &[],
-        false,
         10,
         None,
     )
@@ -534,7 +520,6 @@ async fn test_search_chat_names_user_isolation(pool: Pool<Postgres>) -> anyhow::
         &[],
         false,
         &[],
-        false,
         10,
         None,
     )
@@ -564,7 +549,6 @@ async fn test_search_chat_names_excludes_soft_deleted(pool: Pool<Postgres>) -> a
         &[],
         false,
         &[],
-        false,
         10,
         None,
     )
@@ -609,7 +593,6 @@ async fn test_search_chat_names_rejects_thread_cursor(pool: Pool<Postgres>) -> a
         &[],
         false,
         &[],
-        false,
         10,
         Some(cursor),
     )
@@ -641,8 +624,7 @@ async fn test_search_chat_names_tag_filter(pool: Pool<Postgres>) -> anyhow::Resu
         "project".to_string(),
         &[],
         false,
-        &tagged,
-        false,
+        &[tagged],
         10,
         None,
     )
@@ -663,8 +645,7 @@ async fn test_search_chat_names_tag_filter(pool: Pool<Postgres>) -> anyhow::Resu
         "project".to_string(),
         &[],
         false,
-        &unheld,
-        false,
+        &[unheld],
         10,
         None,
     )
@@ -672,6 +653,53 @@ async fn test_search_chat_names_tag_filter(pool: Pool<Postgres>) -> anyhow::Resu
 
     assert!(response.items.is_empty());
 
+    // Tag groups each hold, any one tag of a group being enough.
+    let search = |tag_groups: Vec<Vec<&'static str>>| {
+        let pool = pool.clone();
+        let user_id = user_id.clone();
+        async move {
+            let tag_groups: Vec<Vec<String>> = tag_groups
+                .into_iter()
+                .map(|group| group.into_iter().map(str::to_string).collect())
+                .collect();
+            let response = search_chat_names(
+                &pool,
+                &user_id,
+                &[],
+                "project".to_string(),
+                &[],
+                false,
+                &tag_groups,
+                10,
+                None,
+            )
+            .await?;
+            anyhow::Ok(
+                response
+                    .items
+                    .iter()
+                    .map(|item| item.entity_id.to_string())
+                    .collect::<Vec<_>>(),
+            )
+        }
+    };
+    let one = "cccccccc-0000-0000-0000-000000000001";
+    let four = "cccccccc-0000-0000-0000-000000000004";
+    let three = "cccccccc-0000-0000-0000-000000000003";
+
+    // Either chat holds one of the first group; only one also holds three.
+    assert_eq!(
+        search(vec![vec![one, four]]).await?,
+        [
+            "22222222-2222-2222-2222-222222222222",
+            "11111111-1111-1111-1111-111111111111"
+        ]
+    );
+    assert_eq!(
+        search(vec![vec![one, four], vec![three]]).await?,
+        ["22222222-2222-2222-2222-222222222222"]
+    );
+    assert!(search(vec![vec![four], vec![one, three]]).await?.is_empty());
     Ok(())
 }
 
@@ -701,8 +729,7 @@ async fn test_search_chat_names_tag_filter_ids_only(pool: Pool<Postgres>) -> any
         "project".to_string(),
         &[],
         true,
-        &tagged,
-        false,
+        &[tagged],
         10,
         None,
     )
@@ -739,8 +766,10 @@ async fn test_search_chat_names_tag_filter_match_all(pool: Pool<Postgres>) -> an
         "project".to_string(),
         &[],
         false,
-        &across_rows,
-        true,
+        &across_rows
+            .iter()
+            .map(|id| vec![id.clone()])
+            .collect::<Vec<_>>(),
         10,
         None,
     )
@@ -765,8 +794,10 @@ async fn test_search_chat_names_tag_filter_match_all(pool: Pool<Postgres>) -> an
         "project".to_string(),
         &[],
         false,
-        &with_unheld,
-        true,
+        &with_unheld
+            .iter()
+            .map(|id| vec![id.clone()])
+            .collect::<Vec<_>>(),
         10,
         None,
     )
@@ -830,7 +861,6 @@ async fn the_search_span_leaves_out_the_term() {
         &[],
         false,
         &[],
-        false,
         10,
         Some(SearchMethodCursor::Thread {
             thread_id: Uuid::nil(),

@@ -597,7 +597,6 @@ pub(in crate::api::search) async fn perform_unified_search(
                 error,
                 SearchError::RateLimited { .. }
                     | SearchError::OperatorsNeedAWord
-                    | SearchError::TagConditionsDontCombine
                     | SearchError::SpeakersDontCombine
                     | SearchError::TooManyChannelNames(_)
             ) {
@@ -729,10 +728,10 @@ async fn search_unified_sources(
     // Tags, by contrast, are indexed on every taggable source, each of which
     // applies the tag filter itself (see the per-source gating below).
     let property_filter_args = to_property_filter_args(&req.filters.property_filters);
-    let requested_tags = TagFilter {
-        option_ids: req.filters.tag_option_ids.clone(),
-        match_all: req.filters.tag_filter_mode == item_filters::TagFilterMode::All,
-    };
+    let requested_tags = TagFilter::requested(
+        req.filters.tag_option_ids.clone(),
+        req.filters.tag_filter_mode == item_filters::TagFilterMode::All,
+    );
 
     // CRM is opt-in: it only runs when the caller resolved a team receipt
     // (set only when `include_crm` is true and the user has a qualifying
@@ -807,14 +806,12 @@ async fn search_unified_sources(
             .await
             .map_err(|error| SearchError::InternalError(anyhow::anyhow!("{error}")))?
     };
-    let TagFilter {
-        option_ids: tag_option_ids,
-        match_all: match_all_tags,
-    } = apply_names(&typed, &named, &mut search_filters, requested_tags)?;
+    let TagFilter { groups: tag_groups } =
+        apply_names(&typed, &named, &mut search_filters, requested_tags);
     // A tag filter keeps only the tag-indexed sources; channels and CRM drop
     // out below (see should_include_channels), so response pages contain only
     // rows the filter was actually applied to.
-    let tags_active = !tag_option_ids.is_empty();
+    let tags_active = !tag_groups.is_empty();
 
     // CRM is opt-in: only when the caller asks for it does this resolve a
     // team membership and mint a capability receipt. No membership → empty
@@ -960,13 +957,11 @@ async fn search_unified_sources(
     filter_document_response.terms = search_terms.clone();
     filter_document_response.property_filters = property_filter_args;
     filter_document_response.excluded_sub_types = excluded_sub_types;
-    filter_document_response.tag_option_ids = tag_option_ids.clone();
-    filter_document_response.match_all_tags = match_all_tags;
+    filter_document_response.tag_groups = tag_groups.clone();
     filter_document_response.term_matching = document_term_matching;
     filter_channel_response.terms = search_terms.clone();
     filter_chat_response.terms = search_terms.clone();
-    filter_chat_response.tag_option_ids = tag_option_ids.clone();
-    filter_chat_response.match_all_tags = match_all_tags;
+    filter_chat_response.tag_groups = tag_groups.clone();
     let email_searchable = email.is_some();
     let (mut filter_email_response, email_hit_states) = match email {
         Some(EmailSearch {
@@ -982,17 +977,13 @@ async fn search_unified_sources(
         None => Default::default(),
     };
     filter_email_response.terms = email_terms.clone();
-    filter_email_response.tag_option_ids = tag_option_ids.clone();
-    filter_email_response.match_all_tags = match_all_tags;
+    filter_email_response.tag_groups = tag_groups.clone();
     filter_call_record_response.terms = search_terms.clone();
-    filter_call_record_response.tag_option_ids = tag_option_ids.clone();
-    filter_call_record_response.match_all_tags = match_all_tags;
+    filter_call_record_response.tag_groups = tag_groups.clone();
     filter_project_response.terms = search_terms.clone();
-    filter_project_response.tag_option_ids = tag_option_ids.clone();
-    filter_project_response.match_all_tags = match_all_tags;
+    filter_project_response.tag_groups = tag_groups.clone();
     filter_calendar_event_response.terms = search_terms.clone();
-    filter_calendar_event_response.tag_option_ids = tag_option_ids;
-    filter_calendar_event_response.match_all_tags = match_all_tags;
+    filter_calendar_event_response.tag_groups = tag_groups;
 
     // Extract individual cursors from the combined cursor (SearchCursorOption)
     // Clone for use in async blocks and for cursor regeneration
@@ -1170,8 +1161,7 @@ async fn search_unified_sources(
                             },
                             name_search_term.clone(),
                             &excluded_terms,
-                            &filter_chat_response.tag_option_ids,
-                            filter_chat_response.match_all_tags,
+                            &filter_chat_response.tag_groups,
                             page_size,
                             chat_cursor_for_search,
                         )
