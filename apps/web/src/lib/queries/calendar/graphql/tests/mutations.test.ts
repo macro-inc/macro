@@ -1352,6 +1352,57 @@ describe('executeGraphqlCreate', () => {
       }
     );
 
+    /** A client whose answer waits for `answer`. */
+    function heldClient({ client }: ReturnType<typeof fakeClient>) {
+      let answer = () => {};
+      const answered = new Promise<void>((resolve) => {
+        answer = resolve;
+      });
+      const held = {
+        ...client,
+        mutation: (...args: Parameters<Client['mutation']>) => {
+          const source = client.mutation(...args);
+          return {
+            toPromise: async () => {
+              await answered;
+              return source.toPromise();
+            },
+          };
+        },
+      } as unknown as Client;
+      return { client: held, answer: () => answer() };
+    }
+
+    it('is forgotten when its own call fails after it', async () => {
+      const { host, untrack } = trackedHost();
+      const fake = fakeClient('failed');
+      const held = heldClient(fake);
+      const created = executeGraphqlCreate(
+        {
+          title: 'Offsite',
+          time: {
+            kind: 'allDay',
+            startDate: '2026-11-28',
+            endDate: '2026-11-29',
+          },
+        },
+        held.client
+      );
+      await vi.waitFor(() => expect(fake.calls).toHaveLength(1));
+      host.settle({
+        mutationUuid: fake.calls[0]?.optimistic.uuid ?? '',
+        transactionId: 'tx-1',
+        status: 'committed',
+      });
+      held.answer();
+      await expect(created).rejects.toBeInstanceOf(CalendarMutationError);
+
+      host.readRecordsByKeys.mockClear();
+      host.ownerReady();
+      expect(host.readRecordsByKeys).not.toHaveBeenCalled();
+      untrack();
+    });
+
     it('is asked for once', async () => {
       const { host, untrack } = trackedHost();
       const localId = await settledWhilePaused(host.settle);

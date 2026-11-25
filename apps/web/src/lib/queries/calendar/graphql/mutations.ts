@@ -157,13 +157,17 @@ export function onCalendarEventCreated(
   return () => landedListeners.delete(listener);
 }
 
+function forgetCreate(localId: string) {
+  pendingCreates.delete(localId);
+  unreadCreates.delete(localId);
+}
+
 function landCreate(
   localId: string,
   serverId: string | undefined,
   answered?: OccurrenceRecord
 ) {
-  pendingCreates.delete(localId);
-  unreadCreates.delete(localId);
+  forgetCreate(localId);
   if (!serverId || serverId === localId) return;
   landedCreates.set(localId, serverId);
   if (answered) {
@@ -253,8 +257,7 @@ export function trackCalendarCreateSettlements(
     const localId = settlement.mutationUuid;
     if (!localId || !pendingCreates.has(localId)) return;
     if (settlement.status !== 'committed') {
-      pendingCreates.delete(localId);
-      unreadCreates.delete(localId);
+      forgetCreate(localId);
       return;
     }
     unreadCreates.add(localId);
@@ -951,7 +954,7 @@ async function createThroughQueue(
   try {
     outcome = await settleCreate(result);
   } catch (error) {
-    pendingCreates.delete(clientId);
+    forgetCreate(clientId);
     throw error;
   }
   if (outcome.kind === 'queued') {
