@@ -50,7 +50,8 @@ function preview(
   id: string,
   type: 'crm_company' | 'document',
   requests: string[],
-  offline = false
+  offline = false,
+  errors?: unknown[]
 ) {
   const client = new QueryClient();
   cleanups.push(() => client.clear());
@@ -63,6 +64,7 @@ function preview(
       if (offline) throw new TypeError('Failed to fetch');
       return Response.json({
         data: { user: { id: 'viewer', soup: { items: [] } } },
+        ...(errors ? { errors } : {}),
       });
     },
   });
@@ -152,4 +154,27 @@ it("keeps a company chip's cached title when the read fails offline", async () =
   await vi.advanceTimersByTimeAsync(30);
   expect(fixture.load).not.toHaveBeenCalled();
   expect(shown()).toMatchObject({ name: 'Old Co' });
+});
+
+it("drops a merged company's cached title when the answer carries another item's error", async () => {
+  vi.useFakeTimers();
+  cachedOldCompany();
+  fixture.load.mockResolvedValue({
+    id: MERGED,
+    type: 'crm_company',
+    access: 'access',
+    loading: false,
+    rawName: 'Kept Co',
+    name: 'Kept Co',
+  });
+  const shown = preview(MERGED, 'crm_company', [], false, [
+    { message: 'another item failed', path: ['user', 'soup', 'items', 0] },
+  ]);
+
+  await vi.advanceTimersByTimeAsync(30);
+  expect(fixture.load).toHaveBeenCalledWith({
+    id: MERGED,
+    type: 'crm_company',
+  });
+  expect(shown()).toMatchObject({ name: 'Kept Co' });
 });
