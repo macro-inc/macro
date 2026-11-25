@@ -27,6 +27,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createSearchOperatorLookup } from '../search-operator-lookup';
+import { searchOperatorHighlights } from './search-operator-highlight';
 
 type SearchbarVariant = 'filled' | 'secondary';
 interface SoupSearchbarProps {
@@ -169,6 +170,7 @@ export function SearchbarInput(
     // Declining the key leaves Tab to focus order; having a handler at all
     // keeps the editor's tab indentation out of this single-line field.
     .onTab(() => false)
+    .use(searchOperatorHighlights)
     .use((lex) =>
       lex.registerCommand(
         KEY_ARROW_DOWN_COMMAND,

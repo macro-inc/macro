@@ -491,3 +491,38 @@ export function searchQueryParts(text: string): SearchQueryParts {
     read,
   };
 }
+
+/** Where an operator sits in a query, as offsets into its text. */
+export type SearchOperatorSpan = { start: number; end: number };
+
+/**
+ * Where the query's operators are, to draw them: every whole token the
+ * search reads as an operator, its own or Mail's. One still being typed stays
+ * plain, as Mail draws it.
+ */
+export function searchOperatorSpans(text: string): SearchOperatorSpan[] {
+  const spans: SearchOperatorSpan[] = [];
+  let start = -1;
+  let inQuotes = false;
+  const close = (end: number) => {
+    if (start < 0) return;
+    const token = text.slice(start, end);
+    const term = splitSearchTerms(token)[0] ?? token;
+    if (
+      (readsAsSearchOperator(token) || readsAsEmailSearchOperator(token)) &&
+      !isUnfinishedSearchOperator(term) &&
+      !isUnfinishedEmailSearchOperator(token)
+    ) {
+      spans.push({ start, end });
+    }
+    start = -1;
+  };
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index] ?? '';
+    if (PHRASE_QUOTES.test(char)) inQuotes = !inQuotes;
+    if (/\s/.test(char) && !inQuotes) close(index);
+    else if (start < 0) start = index;
+  }
+  close(text.length);
+  return spans;
+}

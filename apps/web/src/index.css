@@ -2143,3 +2143,9 @@ input[type="number"] {
     animation: none;
   }
 }
+
+/* The Search field's typed operators (search-operator-highlight.ts), in Mail's operator colours. */
+::highlight(search-operator) {
+  color: var(--color-accent-ink);
+  background-color: var(--color-accent-bg);
+}

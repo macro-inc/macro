@@ -6,6 +6,7 @@ import {
   isUnfinishedSearchOperator,
   readSearchOperators,
   searchOperatorIndexes,
+  searchOperatorSpans,
   searchQueryParts,
   splitSearchTerms,
 } from './search-operators';
@@ -143,5 +144,22 @@ describe('isUnfinishedSearchOperator', () => {
     ['launch', false],
   ])('%s: %s', (term, unfinished) => {
     expect(isUnfinishedSearchOperator(term)).toBe(unfinished);
+  });
+});
+
+describe('searchOperatorSpans', () => {
+  const drawn = (text: string) =>
+    searchOperatorSpans(text).map(({ start, end }) => text.slice(start, end));
+
+  it('marks whole operators, the service’s and Mail’s', () => {
+    expect(drawn('launch type:task tag:"q3 plan" is:unread')).toEqual([
+      'type:task',
+      'tag:"q3 plan"',
+      'is:unread',
+    ]);
+  });
+
+  it('leaves words, invalid values and half-typed operators plain', () => {
+    expect(drawn('type:tasks status: assignee:ana@ launch')).toEqual([]);
   });
 });
