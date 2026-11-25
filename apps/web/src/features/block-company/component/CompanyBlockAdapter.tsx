@@ -5,7 +5,7 @@ import {
   CompanyVisibilityButton,
 } from '@app/features/crm/crm-company';
 import { CrmCopyLinkButton } from '@app/features/crm/crm-link';
-import { useOpenMergedCompany } from '@app/features/crm/crm-merged-company';
+import { useOpenMergedRecord } from '@app/features/crm/crm-merged-record';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
@@ -44,9 +44,9 @@ export function CompanyBlockAdapter() {
     // entry, which is when entry state is otherwise captured.
     panel.handle.captureEntryState();
   };
-  const openMerged = useOpenMergedCompany((survivorId) =>
+  const openMerged = useOpenMergedRecord((survivor) =>
     panel.handle.replace({
-      next: { type: 'company', id: survivorId },
+      next: { type: survivor.type, id: survivor.id },
       mergeHistory: true,
     })
   );
@@ -92,7 +92,7 @@ export function CompanyBlockAdapter() {
         <Company
           companyId={companyId}
           section={section()}
-          onMerged={openMerged}
+          onMerged={(id) => openMerged({ type: 'company', id })}
         />
       </ParamsProvider>
     </>

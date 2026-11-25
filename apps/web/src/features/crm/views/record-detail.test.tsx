@@ -34,6 +34,8 @@ const taskContext = vi.hoisted(() => ({
     return this.records.at(-1);
   },
   contactCompanyId: undefined as string | undefined,
+  /** The id a contact read answers with, when it is another contact's. */
+  contactAnswerId: undefined as string | undefined,
   companyLoaded: false,
   recordError: (): boolean => false,
 }));
@@ -115,7 +117,10 @@ vi.mock('./use-crm', () => ({
       return taskContext.recordError();
     },
     data: taskContext.contactCompanyId
-      ? { id: contactId(), companyId: taskContext.contactCompanyId }
+      ? {
+          id: taskContext.contactAnswerId ?? contactId(),
+          companyId: taskContext.contactCompanyId,
+        }
       : undefined,
   }),
   useCrmPermissions: () => ({ canEditCrm: () => true }),
@@ -175,6 +180,7 @@ vi.mock('./contact-detail', () => ({
   Contact: (props: {
     contactId: string;
     onOpenCompany(companyId: string): boolean;
+    onMerged?: (survivorId: string) => void;
   }) => {
     onCleanup(
       useCrmContext().registerTaskComposerRecord(() => ({
@@ -189,6 +195,7 @@ vi.mock('./contact-detail', () => ({
         <button onClick={() => props.onOpenCompany('company-1')}>
           Open contact company
         </button>
+        <button onClick={() => props.onMerged?.('contact-9')}>Merged</button>
       </div>
     );
   },
@@ -248,6 +255,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   taskContext.records.length = 0;
   taskContext.contactCompanyId = undefined;
+  taskContext.contactAnswerId = undefined;
   taskContext.companyLoaded = false;
   taskContext.recordError = () => false;
   createOpenTracker.mockReset();
@@ -380,7 +388,23 @@ it('hands its host the company a shown company was merged into', () => {
     'Pipeline'
   );
   fireEvent.click(screen.getByRole('button', { name: 'Merged' }));
-  expect(merged).toHaveBeenCalledExactlyOnceWith('company-9');
+  expect(merged).toHaveBeenCalledExactlyOnceWith({
+    type: 'company',
+    id: 'company-9',
+  });
+  expect(opened).not.toHaveBeenCalled();
+});
+
+it('hands its host the contact a shown contact was merged into', () => {
+  const { merged, opened } = renderDetail(
+    { type: 'contact', id: 'contact-1', name: 'Maya' },
+    'People'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Merged' }));
+  expect(merged).toHaveBeenCalledExactlyOnceWith({
+    type: 'contact',
+    id: 'contact-9',
+  });
   expect(opened).not.toHaveBeenCalled();
 });
 
@@ -398,6 +422,23 @@ it('hands a company read answering another id to its host, once', async () => {
     </>
   ));
   expect(merged).toHaveBeenCalledExactlyOnceWith('company-1');
+});
+
+it('hands a contact read answering another id to its host, once', async () => {
+  const { Contact } =
+    await vi.importActual<typeof import('./contact-detail')>(
+      './contact-detail'
+    );
+  taskContext.contactCompanyId = 'company-1';
+  taskContext.contactAnswerId = 'contact-1';
+  const merged = vi.fn();
+  render(() => (
+    <>
+      <Contact contactId="contact-0" section="files" onMerged={merged} />
+      <Contact contactId="CONTACT-1" section="files" onMerged={merged} />
+    </>
+  ));
+  expect(merged).toHaveBeenCalledExactlyOnceWith('contact-1');
 });
 
 it('registers the actual company detail while mounted and clears it on unmount', async () => {

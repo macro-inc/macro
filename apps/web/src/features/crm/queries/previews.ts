@@ -1,6 +1,7 @@
 import type { ResultError } from '@core/util/result';
 import type { PreviewItem } from '@queries/preview/types';
 import type { storageServiceClient } from '@service-storage/client';
+import type { MergedCrmRecords } from '@service-storage/crm-record-merge';
 import type { CrmCompanyPreview } from '@service-storage/generated/schemas/crmCompanyPreview';
 import type { CrmContactPreview } from '@service-storage/generated/schemas/crmContactPreview';
 import type { CrmPreviewsRequest } from '@service-storage/generated/schemas/crmPreviewsRequest';
@@ -54,8 +55,8 @@ export function canonicalRecordId(id: string): string | undefined {
 export type CrmRecordPreviews = {
   previews: PreviewItem[];
   failed: Map<string, ResultError<string>[]>;
-  /** Requested companies merged into another, whose preview names that one. */
-  merged: string[];
+  /** Requested records merged into another, whose preview names that one. */
+  merged: MergedCrmRecords;
 };
 
 /** The canonical ids of `ids` that the server would read, each once. */
@@ -156,7 +157,7 @@ export async function fetchCrmRecordPreviews(
   );
   const previews: PreviewItem[] = [];
   const failed = new Map<string, ResultError<string>[]>();
-  const merged = new Set<string>();
+  const merged = { companies: new Set<string>(), contacts: new Set<string>() };
 
   for (const id of companyIds) {
     const base = { id, type: 'crm_company', loading: false } as const;
@@ -171,7 +172,7 @@ export async function fetchCrmRecordPreviews(
       previews.push({ ...base, access: 'no_access' });
       continue;
     }
-    if (company.mergedInto && canonical) merged.add(canonical);
+    if (company.mergedInto && canonical) merged.companies.add(canonical);
     const name = company.name ?? company.primaryDomain ?? 'Unknown Company';
     previews.push({
       ...base,
@@ -195,6 +196,7 @@ export async function fetchCrmRecordPreviews(
       previews.push({ ...base, access: 'no_access' });
       continue;
     }
+    if (contact.mergedInto && canonical) merged.contacts.add(canonical);
     const name = contact.name?.trim() || contact.email || '';
     previews.push({
       ...base,
@@ -205,7 +207,14 @@ export async function fetchCrmRecordPreviews(
     });
   }
 
-  return { previews, failed, merged: [...merged] };
+  return {
+    previews,
+    failed,
+    merged: {
+      companies: [...merged.companies],
+      contacts: [...merged.contacts],
+    },
+  };
 }
 
 /** A pipeline previews from its own read; one gone or trashed reads as deleted. */

@@ -45,8 +45,10 @@ vi.mock('@app/features/crm/crm-company', () => ({
   ),
   CompanyVisibilityButton: () => null,
 }));
-vi.mock('@app/features/crm/crm-merged-company', () => ({
-  useOpenMergedCompany: (open: (survivorId: string) => void) => open,
+vi.mock('@app/features/crm/crm-merged-record', () => ({
+  useOpenMergedRecord: (
+    open: (survivor: { type: string; id: string }) => void
+  ) => open,
 }));
 vi.mock('@app/features/crm/crm-link', () => ({
   CrmCopyLinkButton: () => null,

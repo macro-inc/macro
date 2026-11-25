@@ -32,7 +32,7 @@ import type {
 } from './context/workspace-context';
 import { pipelineIdOfTab, pipelineTab } from './core/navigation';
 import type { CrmRecordRef, CrmRecordSection } from './core/record';
-import { useOpenMergedCompany } from './crm-merged-company';
+import { useOpenMergedRecord } from './crm-merged-record';
 import {
   type CrmItemParams,
   type CrmRecordParams,
@@ -165,17 +165,17 @@ export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
     );
   };
 
-  const openMerged = useOpenMergedCompany((survivorId) => {
+  const openMerged = useOpenMergedRecord((survivor) => {
     const before = records().slice(0, -1);
-    // A trail that passed the company that stays goes back to it.
+    // A trail that passed the record that stays goes back to it.
     const earlier = before.findIndex(
       (record) =>
-        record.type === 'company' &&
-        record.id.toLowerCase() === survivorId.toLowerCase()
+        record.type === survivor.type &&
+        record.id.toLowerCase() === survivor.id.toLowerCase()
     );
     showRecord(
       earlier === -1
-        ? [...before, { type: 'company', id: survivorId, name: '' }]
+        ? [...before, { type: survivor.type, id: survivor.id, name: '' }]
         : before.slice(0, earlier + 1),
       undefined,
       true,
