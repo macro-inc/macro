@@ -37,4 +37,4 @@ in production imports it, and it solves nothing but its own fixture. Design:
 - The planner gets a PNG and the visible prompt only, and answers a visible
   label. Never widen it to coordinates, DOM or generic actions.
 - A non-loopback `--kimi-base-url` is a paid call: it needs
-  `--allow-remote-provider` and Wolf's authorization for that run.
+  `--allow-remote-provider` and explicit owner authorization for that run.
