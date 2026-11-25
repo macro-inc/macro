@@ -8,8 +8,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startBrowserHost } from '../src/browser.ts';
 import { hostEnvironment } from '../src/browser-options.ts';
+import type { FamilyName } from '../src/families.ts';
 import type { HostReply } from '../src/host-protocol.ts';
-import { LAB_URL } from '../src/registry.ts';
+import {
+  LAB_SUBMIT_PATH,
+  LAB_URL,
+  TEXT_INPUT_ID,
+  TEXT_SUBMIT_ID,
+} from '../src/registry.ts';
 import { createLab, type Lab, serveLab } from '../src/server.ts';
 
 const HOST = join(import.meta.dir, '..', 'src', 'browser-host.ts');
@@ -110,11 +116,14 @@ describe('a host with an open page', () => {
   });
 
   /** A host that has opened a fresh challenge, and its profile. */
-  const openedHost = async () => {
+  const openedHost = async (
+    family: FamilyName = 'relation',
+    wrap?: (lab: Lab) => typeof handler
+  ) => {
     lab = createLab();
-    handler = lab.fetch;
+    handler = wrap?.(lab) ?? lab.fetch;
     const sessionNonce = crypto.randomUUID();
-    const issued = lab.issue('relation', sessionNonce);
+    const issued = lab.issue(family, sessionNonce);
     const profile = await mkdtemp(join(tmpdir(), 'captcha-vision-lab-test-'));
     const host = startBrowserHost();
     if (typeof host === 'string') throw new Error(host);
@@ -137,6 +146,40 @@ describe('a host with an open page', () => {
   };
 
   const ordinal = (reply: HostReply) => reply.type;
+
+  test('an invalid transcription can be corrected and scored only once', async () => {
+    let posts = 0;
+    const { cleanup } = await openedHost(
+      'transcription',
+      (lab) => async (request) => {
+        const response = await lab.fetch(request);
+        if (new URL(request.url).pathname === LAB_SUBMIT_PATH) posts++;
+        if (request.url !== LAB_URL || response.status !== 200) return response;
+
+        const script = `<script>{
+        const input = document.getElementById('${TEXT_INPUT_ID}');
+        const submit = document.getElementById('${TEXT_SUBMIT_ID}');
+        input.value = '1234';
+        submit.click();
+        input.value = '12345';
+        submit.click();
+        submit.click();
+      }</script>`;
+        const html = (await response.text()).replace(
+          '</body>',
+          `${script}</body>`
+        );
+        return new Response(html, { headers: response.headers });
+      }
+    );
+
+    try {
+      expect(lab.stats().submissions).toBe(1);
+      expect(posts).toBe(1);
+    } finally {
+      await cleanup();
+    }
+  }, 30_000);
 
   test('a continuously streaming response exceeds the absolute request deadline', async () => {
     handler = async () => {

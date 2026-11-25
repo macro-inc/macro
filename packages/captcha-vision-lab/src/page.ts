@@ -4,7 +4,7 @@
  * which response is right: option ids are opaque, every control has the same shape, and
  * the server's status is all it shows back.
  */
-import { type Challenge, TEXT_LENGTH } from './families.ts';
+import { type Challenge, TEXT_LENGTH, TEXT_PATTERN } from './families.ts';
 import { LAB_SUBMIT_PATH, TEXT_INPUT_ID, TEXT_SUBMIT_ID } from './registry.ts';
 
 export type PageOption = {
@@ -65,7 +65,7 @@ const controls = (content: PageContent): string => {
 /**
  * One script for every kind. A choice submits its option; an order
  * collects every option once, then submits them in click order; text
- * submits the input's value. Each submits at most once.
+ * submits the input's value after validation. Each submits at most once.
  */
 const script = (content: PageContent): string => `
 const challengeId = ${JSON.stringify(content.challengeId)};
@@ -97,6 +97,7 @@ for (const button of buttons) {
 const submit = document.getElementById(${JSON.stringify(TEXT_SUBMIT_ID)});
 submit?.addEventListener('click', () => {
   const text = document.getElementById(${JSON.stringify(TEXT_INPUT_ID)}).value;
+  if (!${TEXT_PATTERN}.test(text)) return;
   return send({ kind, text });
 });
 `;
