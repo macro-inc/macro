@@ -1,4 +1,4 @@
-import { type Accessor, createSignal, For } from 'solid-js';
+import { type Accessor, For } from 'solid-js';
 import type { TagFilter } from '../tag-filter-state';
 import { SearchFacetChip } from './search-facet-chip';
 import { useSearchFacets } from './search-facets';
