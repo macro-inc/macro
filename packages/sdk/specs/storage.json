@@ -27692,6 +27692,56 @@
         }
       }
     },
+    "/passwords/teams/{team}/vault": {
+      "get": {
+        "tags": ["passwords"],
+        "summary": "How far automatic setup of the team's vault has come. Read-only: it never\nstarts a setup; the team's first save does.",
+        "operationId": "passwords_vault_readiness",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordVaultReadiness"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pins": {
       "get": {
         "tags": ["pins::get_pins"],
@@ -58642,7 +58692,10 @@
           "vault_busy",
           "rate_limited",
           "vault_unavailable",
-          "vault_not_provisioned"
+          "vault_not_provisioned",
+          "vault_setting_up",
+          "vault_setup_failed",
+          "vault_needs_recovery"
         ]
       },
       "PasswordAgentFailure": {
@@ -59098,7 +59151,10 @@
           "vault_busy",
           "folder_missing",
           "vault_unavailable",
-          "vault_not_provisioned"
+          "vault_not_provisioned",
+          "vault_setting_up",
+          "vault_setup_failed",
+          "vault_needs_recovery"
         ]
       },
       "PasswordFailure": {
@@ -59244,7 +59300,10 @@
           "folder_missing",
           "busy",
           "vault_unavailable",
-          "vault_not_provisioned"
+          "vault_not_provisioned",
+          "vault_setting_up",
+          "vault_setup_failed",
+          "vault_needs_recovery"
         ]
       },
       "PasswordImportFolder": {
@@ -59821,6 +59880,38 @@
             "description": "Committed version used to resolve this identifier."
           }
         }
+      },
+      "PasswordVaultFailureReason": {
+        "type": "string",
+        "description": "Why a team's vault setup failed.",
+        "enum": ["incompatible", "needs_recovery"]
+      },
+      "PasswordVaultReadiness": {
+        "type": "object",
+        "description": "A team's vault readiness, as the API reports it.",
+        "required": ["state"],
+        "properties": {
+          "reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordVaultFailureReason",
+                "description": "Why setup failed; present only when `state` is `failed`."
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/PasswordVaultReadinessState",
+            "description": "Setup progress."
+          }
+        }
+      },
+      "PasswordVaultReadinessState": {
+        "type": "string",
+        "description": "Setup progress of a team's vault.",
+        "enum": ["not_started", "setting_up", "ready", "failed"]
       },
       "PasswordVersion": {
         "type": "object",
