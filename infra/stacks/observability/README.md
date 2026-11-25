@@ -1012,8 +1012,8 @@ can't start a replacement task of the Alloy revision without it.
 
 The earlier `image-proxy-service` canary verified Ohio ingestion; it used the
 superseded collector-in-front-of-Datadog design. The current design keeps
-applications exporting directly to the Datadog agent. Dev and prod execution
-roles can read the ingestion-only `observability/dev-ingest` secret in Virginia.
+applications exporting directly to the Datadog agent. Their execution roles
+can read the ingestion-only `observability/dev-ingest` secret in Virginia.
 The application task role does not receive access to the Grafana OAuth bundle.
 
 Applications keep their original Datadog trace exporter at loopback 4317. In ECS
