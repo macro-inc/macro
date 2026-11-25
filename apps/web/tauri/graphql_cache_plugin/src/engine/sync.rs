@@ -287,6 +287,14 @@ impl super::EngineHandle {
         }
     }
 
+    /// Keeps a sync run begun before now from writing these records back: the
+    /// app changed them outside the cache's writes. Nothing without a run.
+    pub async fn sync_fence(&self, keys: Vec<String>) {
+        let keys: Vec<EntityKey<'static>> =
+            keys.into_iter().map(|key| EntityKey(key.into())).collect();
+        self.inner.lock().await.engine.fence_sync_records(&keys);
+    }
+
     /// Saved state of every lane that has run against this database.
     pub async fn sync_lane_states(&self) -> Result<Vec<SyncLaneState>, String> {
         self.inner

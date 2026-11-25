@@ -269,6 +269,7 @@ const CACHE_REQUEST_KINDS: Readonly<Record<CacheRequest['kind'], true>> = {
   'sync-start': true,
   'sync-stop': true,
   'sync-state': true,
+  'sync-fence': true,
 };
 
 export type CacheTelemetryObservation = {
@@ -688,7 +689,12 @@ export function operationCategoryForRequest(
       'inspect-query-variants',
       () => 'inspection' as const
     )
-    .with('invalidate', 'delete-records', () => 'invalidation' as const)
+    .with(
+      'invalidate',
+      'delete-records',
+      'sync-fence',
+      () => 'invalidation' as const
+    )
     .with(
       'teardown',
       'clear',

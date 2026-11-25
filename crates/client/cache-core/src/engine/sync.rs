@@ -34,6 +34,10 @@ use maybe_send::MaybeSend;
 use serde_json::{Map, Value as Json};
 use std::collections::{BTreeSet, HashMap};
 use std::convert::Infallible;
+use std::sync::Arc;
+
+#[cfg(test)]
+mod test;
 use thiserror::Error;
 
 /// Stale members deleted per storage transaction, bounding each write.
@@ -46,15 +50,26 @@ const DELETE_CHUNK: usize = 1_000;
 /// fence it was written under; a run begun under an earlier fence may hold
 /// pages the server read before the edit, so its pages leave the record as
 /// it is. The next run reads after the edit and writes it again.
+///
+/// Records are kept only while a run exists: with no run (the streamed sync
+/// off, or between runs) an edit fences nothing, and the map stays empty.
 #[derive(Debug, Default)]
 pub(super) struct SyncFence {
     current: u64,
     records: HashMap<EntityKey<'static>, u64>,
+    /// Held by every live [`SyncRun`] (its `fence_token`): more than one
+    /// owner means a run exists.
+    runs: Arc<()>,
 }
 
 impl SyncFence {
-    /// Fences `keys` against every run begun before now.
+    /// Fences `keys` against every run begun before now; nothing while no
+    /// run exists.
     pub(super) fn fence(&mut self, keys: impl IntoIterator<Item = EntityKey<'static>>) {
+        if Arc::strong_count(&self.runs) == 1 {
+            self.records.clear();
+            return;
+        }
         let mut keys = keys.into_iter().peekable();
         if keys.peek().is_none() {
             return;
@@ -79,6 +94,12 @@ impl SyncFence {
     /// Forgets every record: the cache they were written to is gone.
     pub(super) fn forget_all(&mut self) {
         self.records.clear();
+    }
+
+    /// A run's fence and the token that keeps the fence recording while the
+    /// run lives.
+    fn begin(&self) -> (u64, Arc<()>) {
+        (self.current, Arc::clone(&self.runs))
     }
 }
 
@@ -225,12 +246,25 @@ impl<S: SyncStorage + CalendarRangeStorage> Engine<S> {
         };
         let mut run = SyncRun::new(args, &saved, &coverage, started_at_ms)?;
         run.reset_epoch = reset_epoch;
-        run.fence = self.sync_fence.current;
+        let (fence, token) = self.sync_fence.begin();
+        run.fence = fence;
+        run.fence_token = Some(token);
         Ok(run)
     }
 }
 
 impl<S: SyncStorage> Engine<S> {
+    /// Keeps a sync run begun before now from writing these records back: the
+    /// host changed them outside the cache's writes (an edit made through
+    /// REST). Unlike [`Engine::invalidate_keys`] it touches nothing else, and
+    /// with no run in progress it does nothing at all.
+    pub fn fence_sync_records<'k>(
+        &mut self,
+        keys: impl IntoIterator<Item = &'k EntityKey<'static>>,
+    ) {
+        self.sync_fence.fence(keys.into_iter().cloned());
+    }
+
     /// Saved state of every lane that has run against this database.
     pub async fn sync_lane_states(
         &self,

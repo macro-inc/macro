@@ -978,6 +978,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
       return hasOnlyKeys(value, ['id', 'kind', 'opId']) && isString(value.opId);
     case 'invalidate':
     case 'delete-records':
+    case 'sync-fence':
       return (
         hasOnlyKeys(value, ['id', 'kind', 'keys']) && isStringArray(value.keys)
       );

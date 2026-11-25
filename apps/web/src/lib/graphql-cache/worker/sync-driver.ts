@@ -43,6 +43,8 @@ export interface SyncEngine {
   syncFinish(): Promise<SyncFinishWire>;
   syncAbort(): Promise<SyncRunResult | null>;
   syncState(): Promise<SyncLaneState[]>;
+  /** Keeps the run in progress, if any, from writing these records back. */
+  syncFence(keys: string[]): Promise<void>;
 }
 
 /**

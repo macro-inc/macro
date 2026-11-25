@@ -1060,6 +1060,7 @@ export type CacheRequest = {
   | { kind: 'sync-start'; args: SyncStartArgs }
   /** Stops the run in progress, if any, after its current write. */
   | { kind: 'sync-stop' }
+  | { kind: 'sync-fence'; keys: string[] }
   /** Saved lane state (`SyncLaneState[]`). */
   | { kind: 'sync-state' }
 );

@@ -1,4 +1,5 @@
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { emailClient } from '@service-email/client';
 import { EmailThreadPageDocument } from '@service-storage/graphql/generated/graphql';
@@ -29,20 +30,18 @@ export async function refreshEmailThreadCache(threadId: string): Promise<void> {
 }
 
 /**
- * A REST edit changed the thread outside the cache's writes. Invalidating its
- * record keeps a background sync run that began before from writing back the
- * state the server read before the edit.
+ * A REST edit changed the thread outside the cache's writes. Fencing its
+ * record keeps a sync run that began before from writing back the state the
+ * server read before the edit. Without a run the cache does nothing, and the
+ * edit never waits for it.
  */
-async function invalidateEditedThread(threadId: string): Promise<void> {
+function fenceEditedThread(threadId: string): void {
   const host = getGraphqlCacheHost();
-  if (!host) return;
-  try {
-    await host.invalidate([`GraphqlSoupEmailThread:${threadId}`]);
-  } catch (error) {
-    // The edit itself succeeded; a cache that cannot take this is reset or
-    // closed, and holds no run to fence.
-    Telemetry.error(error);
-  }
+  if (!host?.syncFence) return;
+  fireAndForget(
+    host.syncFence([`GraphqlSoupEmailThread:${threadId}`]),
+    'email-thread-sync-fence'
+  );
 }
 
 /** A label 404 may mean a missing label; confirm the thread's state separately. */
@@ -50,7 +49,7 @@ export async function updateEmailThreadLabel(
   args: Parameters<typeof emailClient.updateThreadLabel>[0]
 ) {
   const result = await emailClient.updateThreadLabel(args);
-  if (!result.isErr()) await invalidateEditedThread(args.thread_id);
+  if (result.isOk()) fenceEditedThread(args.thread_id);
   if (
     result.isErr() &&
     result.error.some((error) => error.code === 'NOT_FOUND')
@@ -65,7 +64,7 @@ export async function updateEmailThreadState(
   args: Parameters<typeof emailClient.updateThreadState>[0]
 ) {
   const result = await emailClient.updateThreadState(args);
-  if (!result.isErr()) await invalidateEditedThread(args.thread_id);
+  if (result.isOk()) fenceEditedThread(args.thread_id);
   if (
     result.isErr() &&
     result.error.some((error) => error.code === 'NOT_FOUND')

@@ -241,3 +241,49 @@ fn records_the_host_invalidates_keep_their_state_against_the_run_begun_before() 
         assert_eq!(in_inbox(&engine, 1).await, Some(true));
     });
 }
+
+#[test]
+fn records_a_rest_edit_fences_keep_their_state_against_the_run_begun_before() {
+    block_on(async {
+        let mut engine = seeded().await;
+        let mut run = start(&mut engine, &mail_plan()).await;
+        engine
+            .write_query(
+                None,
+                MAIL,
+                Some("SoupMailBackfill"),
+                &json!({"input": {"initial": {"limit": 1}}})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                &json!({"user": {"id": "viewer", "soup": {"items": [{
+                    "__typename": "GraphqlSoupEmailThread", "id": id(1),
+                    "inboxVisible": false, "isRead": false,
+                }], "nextCursor": null}}}),
+                None,
+            )
+            .await
+            .unwrap();
+        engine.fence_sync_records([&thread_key(1)]);
+
+        run_stream(&mut engine, &mut run, &ndjson(&[mail_page(0, &[1, 2])]))
+            .await
+            .unwrap();
+        assert_eq!(in_inbox(&engine, 1).await, Some(false));
+    });
+}
+
+#[test]
+fn an_edit_with_no_run_in_progress_fences_nothing() {
+    block_on(async {
+        let mut engine = seeded().await;
+        // No run exists: the fence keeps nothing for a later run to skip.
+        engine.fence_sync_records([&thread_key(1)]);
+        let mut run = start(&mut engine, &mail_plan()).await;
+        run_stream(&mut engine, &mut run, &ndjson(&[mail_page(0, &[1])]))
+            .await
+            .unwrap();
+
+        assert_eq!(in_inbox(&engine, 1).await, Some(true));
+    });
+}

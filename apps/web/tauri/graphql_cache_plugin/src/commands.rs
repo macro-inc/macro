@@ -1239,6 +1239,18 @@ pub async fn graphql_cache_sync_stop(state: State<'_, CacheState>) -> Result<(),
     Ok(())
 }
 
+/// Keeps a streamed sync run begun before now from writing these records
+/// back: the app changed them outside the cache's writes (an edit made
+/// through REST). Does nothing when no run is in progress.
+#[tauri::command]
+pub async fn graphql_cache_sync_fence(
+    state: State<'_, CacheState>,
+    keys: Vec<String>,
+) -> Result<(), String> {
+    engine_handle(&state)?.sync_fence(keys).await;
+    Ok(())
+}
+
 /// Saved state of every sync lane that has run against this database.
 #[tauri::command]
 pub async fn graphql_cache_sync_state(

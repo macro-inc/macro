@@ -482,6 +482,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             graphql_cache_plugin::commands::graphql_cache_clear,
             graphql_cache_plugin::commands::graphql_cache_sync_start,
             graphql_cache_plugin::commands::graphql_cache_sync_stop,
+            graphql_cache_plugin::commands::graphql_cache_sync_fence,
             graphql_cache_plugin::commands::graphql_cache_sync_state,
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,

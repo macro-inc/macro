@@ -149,6 +149,22 @@ impl CacheEngine {
 
     /// Decodes response bytes into pending frames and resolves to how many
     /// are pending. Never writes.
+    /// Keeps a sync run begun before now from writing these records back:
+    /// the app changed them outside the cache's writes (an edit made through
+    /// REST). Does nothing when no run is in progress.
+    #[wasm_bindgen(js_name = syncFence)]
+    pub fn sync_fence(&self, keys: Vec<String>) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let keys: Vec<EntityKey<'static>> =
+                keys.into_iter().map(|key| EntityKey(key.into())).collect();
+            state.engine_mut()?.fence_sync_records(&keys);
+            Ok(JsValue::UNDEFINED)
+        })
+    }
+
     #[wasm_bindgen(js_name = syncFeed)]
     pub fn sync_feed(&self, bytes: Vec<u8>) -> js_sys::Promise {
         let state = self.state.clone();

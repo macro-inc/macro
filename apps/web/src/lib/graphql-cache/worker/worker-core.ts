@@ -1546,6 +1546,10 @@ export class CacheWorkerCore {
         { kind: 'sync-state' },
         async () => await this.requireEngine().syncState()
       )
+      .with({ kind: 'sync-fence' }, async (request) => {
+        await this.requireEngine().syncFence(request.keys);
+        return undefined;
+      })
       .with({ kind: 'sync-start' }, { kind: 'sync-stop' }, () =>
         Promise.reject(new Error('sync runs are not queued requests'))
       )

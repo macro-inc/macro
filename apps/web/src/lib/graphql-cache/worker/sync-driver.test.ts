@@ -72,6 +72,7 @@ function fakeEngine(pendingPerChunk: number[]): SyncEngine & {
     syncFinish: vi.fn().mockResolvedValue({ ok: true, result: RESULT }),
     syncAbort: vi.fn().mockResolvedValue({ ...RESULT, reason: 'maxPages' }),
     syncState: vi.fn().mockResolvedValue([]),
+    syncFence: vi.fn().mockResolvedValue(undefined),
   };
 }
 

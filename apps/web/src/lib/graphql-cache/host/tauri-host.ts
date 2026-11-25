@@ -138,6 +138,7 @@ const CALENDAR_COMMIT_COMMAND = 'graphql_cache_calendar_commit';
 const INSPECT_MUTATIONS_COMMAND = 'graphql_cache_inspect_mutations';
 const SYNC_START_COMMAND = 'graphql_cache_sync_start';
 const SYNC_STOP_COMMAND = 'graphql_cache_sync_stop';
+const SYNC_FENCE_COMMAND = 'graphql_cache_sync_fence';
 const SYNC_STATE_COMMAND = 'graphql_cache_sync_state';
 
 const INIT_COMMAND = 'graphql_cache_init_with_schema';
@@ -1221,6 +1222,16 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         // No initialized cache, or the IPC call failed. A native run that did
         // start keeps writing; its saved state resumes the next start.
         return { ok: false, failure: { kind: 'aborted' } };
+      }
+    },
+
+    async syncFence(keys: string[]): Promise<void> {
+      try {
+        await ready;
+        await request<void>(SYNC_FENCE_COMMAND, { keys });
+      } catch {
+        // No native cache, or an older build without the command: either
+        // way no run can write the records back.
       }
     },
 

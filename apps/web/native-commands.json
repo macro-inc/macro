@@ -46,6 +46,7 @@
     "graphql_cache_read_records_by_keys",
     "graphql_cache_rollback_optimistic_write",
     "graphql_cache_search",
+    "graphql_cache_sync_fence",
     "graphql_cache_sync_start",
     "graphql_cache_sync_state",
     "graphql_cache_sync_stop",

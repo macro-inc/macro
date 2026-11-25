@@ -420,6 +420,8 @@ pub struct SyncRun {
     /// The engine's sync fence when the run began: records a server-confirmed
     /// edit wrote under a later fence keep their cached state.
     pub(crate) fence: u64,
+    /// Keeps the engine's fence recording edits while this run lives.
+    pub(crate) fence_token: Option<std::sync::Arc<()>>,
 }
 
 impl SyncRun {
@@ -460,6 +462,7 @@ impl SyncRun {
             queries: args.queries.clone(),
             reset_epoch: uuid::Uuid::nil(),
             fence: 0,
+            fence_token: None,
         })
     }
 

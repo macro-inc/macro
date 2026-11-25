@@ -135,6 +135,8 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
             }),
           syncStop: () => current.syncStop?.() ?? Promise.resolve(),
           syncState: () => current.syncState?.() ?? Promise.resolve([]),
+          syncFence: (keys: string[]) =>
+            current.syncFence?.(keys) ?? Promise.resolve(),
         }
       : {}),
     onOpsAffected: (cb) =>

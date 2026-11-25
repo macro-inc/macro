@@ -2134,6 +2134,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       }
     },
 
+    async syncFence(keys: string[]): Promise<void> {
+      try {
+        await initializedRequest({ kind: 'sync-fence', keys });
+      } catch {
+        // No reachable engine means no run to fence.
+      }
+    },
+
     async syncState(): Promise<SyncLaneState[]> {
       return (await initializedRequest({
         kind: 'sync-state',

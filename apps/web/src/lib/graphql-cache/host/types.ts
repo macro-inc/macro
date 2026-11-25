@@ -252,6 +252,12 @@ export interface CacheHost {
   syncStop?: SyncHost['syncStop'];
   /** Saved lane state from the cache database. */
   syncState?: SyncHost['syncState'];
+  /**
+   * Keeps a sync run in progress from writing these records back: the app
+   * changed them outside the cache's writes (an edit made through REST).
+   * Resolves whether or not a run exists; never rejects.
+   */
+  syncFence?: (keys: string[]) => Promise<void>;
 
   /**
    * Subscribes to "these urql operation keys must re-execute" pushes
