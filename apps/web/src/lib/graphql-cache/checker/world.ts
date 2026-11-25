@@ -107,6 +107,8 @@ class Coordinator {
   router: CoordinatorRouter;
   /** Page-side ports of every connected page, for a restart. */
   readonly pagePorts: SimPort[] = [];
+  /** Hangs so far: an earlier one does not end a later one. */
+  private hangs = 0;
 
   constructor(
     private readonly world: World,
@@ -166,9 +168,10 @@ class Coordinator {
   /** It runs no code for a while, and keeps its locks. */
   hang(): void {
     const { context } = this;
+    const hang = ++this.hangs;
     context.frozen = true;
     this.world.sim.setTimeout(() => {
-      context.frozen = false;
+      if (hang === this.hangs) context.frozen = false;
     }, HANG_MS);
   }
 
