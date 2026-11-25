@@ -1478,11 +1478,10 @@ pub async fn remove_stale_cache_database(
 pub async fn destroy_cache(scope: String) -> Result<(), JsValue> {
     let owner = OpfsOwner::acquire(&database_identity(&scope))
         .await
-        .map_err(err_js)?
-        .recovery_wipe()
-        .await
         .map_err(err_js)?;
+    // First, or a death in between would leave what the database had settled.
     let forgotten = salvage::forget(&owner.sidecar()).await;
+    let owner = owner.recovery_wipe().await.map_err(err_js)?;
     owner.release().await.map_err(err_js)?;
     forgotten
 }
@@ -1812,13 +1811,15 @@ async fn close_storage(
 }
 
 /// Closes `storage`, then wipes it and everything it queued.
-async fn discard_storage(storage: BrowserStorage) -> Result<OpfsOwner, JsValue> {
+async fn discard_storage(storage: BrowserStorage, sidecar: &Sidecar) -> Result<OpfsOwner, JsValue> {
+    // First, as in `destroy_cache`.
+    let forgotten = salvage::forget(sidecar).await;
     let owner = match unwrap_storage(storage).try_close().map_err(err_js)? {
         TursoStorageCloseOutcome::Healthy(closed) => closed.reset().await,
         TursoStorageCloseOutcome::ResetRequired(closed) => closed.reset().await,
     }
     .map_err(err_js)?;
-    if let Err(error) = salvage::forget(&owner.sidecar()).await {
+    if let Err(error) = forgotten {
         owner.release().await.map_err(err_js)?;
         return Err(error);
     }
@@ -3051,8 +3052,8 @@ impl CacheEngine {
             state.ensure_callable()?;
             if state.loss_to_tell {
                 salvage::told(&state.sidecar).await?;
-            }
                 state.loss_to_tell = false;
+            }
             Ok(JsValue::UNDEFINED)
         })
     }
@@ -3094,7 +3095,7 @@ impl CacheEngine {
             })?;
             let scope = state.scope.clone();
             let hot_capacity = state.hot_capacity;
-            let owner = match discard_storage(engine.into_storage()).await {
+            let owner = match discard_storage(engine.into_storage(), &state.sidecar).await {
                 Ok(owner) => owner,
                 Err(error) => {
                     state.reset_required = true;

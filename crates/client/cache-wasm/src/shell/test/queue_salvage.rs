@@ -824,6 +824,50 @@ async fn a_queue_the_database_holds_is_not_given_up_for_the_deaths_that_followed
 }
 
 #[wasm_bindgen_test(async)]
+async fn a_copy_is_forgotten_before_its_database() {
+    const SCOPE: &str = "cache-wasm-salvage-forgotten-first";
+    for reset in [false, true] {
+        closed_with_queue(SCOPE).await;
+        wipe_and_die(SCOPE).await;
+        let copy = read_side_file(SCOPE).await;
+        let (engine, _, _) = open(SCOPE, false).await;
+        if !reset {
+            resolved(engine.close()).await;
+        }
+        leave_side_file(SCOPE, &copy).await;
+        run_js(
+            "const directory = FileSystemDirectoryHandle.prototype;
+             const original = directory.removeEntry;
+             self.removedFiles = [];
+             self.restoreFiles = () => { directory.removeEntry = original; };
+             directory.removeEntry = function (file, options) {
+               self.removedFiles.push(file);
+               return original.call(this, file, options);
+             };
+             return Promise.resolve();",
+            "",
+        )
+        .await;
+        match reset {
+            true => {
+                resolved(engine.physical_reset()).await;
+            }
+            false => destroy_cache(SCOPE.into()).await.expect("destroy"),
+        }
+        let first = run_js(
+            "self.restoreFiles(); return Promise.resolve(self.removedFiles[0]);",
+            "",
+        )
+        .await;
+        assert_eq!(first.as_string(), Some(side_file(SCOPE)), "{reset}");
+        if reset {
+            resolved(engine.close()).await;
+        }
+    }
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+}
+
+#[wasm_bindgen_test(async)]
 async fn an_import_from_memory_leaves_the_copy_that_could_not_be_read() {
     const SCOPE: &str = "cache-wasm-salvage-import-unread";
     closed_with_queue(SCOPE).await;
