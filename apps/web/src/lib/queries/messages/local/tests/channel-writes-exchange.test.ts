@@ -316,6 +316,18 @@ describe('a write asked for while no engine is there', () => {
     expect(await refused).toBe('CACHE_RETIRED');
     expect(signedOut.fixture.sent()).toEqual([]);
   });
+
+  it('goes nowhere when its sign-in ended and the database is away', async () => {
+    vi.useFakeTimers();
+    const { fixture } = betweenEngines();
+    const refused = outcome(fixture.writes.send(send(root.id)));
+    await settle();
+    fixture.availability.paused = true;
+    fixture.signInAgain();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(await refused).toBe('CACHE_RETIRED');
+    expect(fixture.sent()).toEqual([]);
+  });
 });
 
 it('does not hold a write behind one of an earlier sign-in', async () => {

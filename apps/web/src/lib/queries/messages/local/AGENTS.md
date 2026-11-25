@@ -166,6 +166,8 @@ lost; of those the server refused, only sends and deletes answered
   returns. A failed page waits for a scroll, the
   connection, or the same wait (`olderFailed`), so the call panel, which pages
   whenever paging is idle, asks at a bounded rate.
+- A queued write covers every field it predicts, newer copies included: predict
+  only what the write changes (a reply, its root's thread: `threadOnly`).
 - The server's copy of a page or thread lacks what this device has queued: once
   the device holds it, read it from there again, change notice or not.
 - A window is replaced only once all of it is read again

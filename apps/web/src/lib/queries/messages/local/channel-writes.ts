@@ -631,6 +631,25 @@ export function predictedRoot(
   };
 }
 
+/**
+ * What a write of a reply changes of its root: the thread, which names the
+ * replies of its preview. What else is known of the messages stays the
+ * server's while the write is queued.
+ */
+function threadOnly(root: ChannelMessageFieldsFragment) {
+  return {
+    __typename: CHANNEL_MESSAGE_TYPENAME,
+    id: root.id,
+    thread: root.thread && {
+      ...root.thread,
+      preview: root.thread.preview.map(({ id }) => ({
+        __typename: CHANNEL_MESSAGE_TYPENAME,
+        id,
+      })),
+    },
+  };
+}
+
 /** The root as it will read once its live `reply` is deleted. */
 export function predictedRootWithout(
   root: ChannelMessageFieldsFragment,
@@ -1250,6 +1269,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     const { trace } = handOff;
     let nextEngineWaitMs = NEXT_ENGINE_WAIT_MS;
     for (;;) {
+      if (!handOff.stands()) throw cacheRetired();
       await trace.run(() => untilServed(write));
       const root = await trace.run(() => write.root?.(handOff.key));
       if (!handOff.stands()) throw cacheRetired();
@@ -1454,7 +1474,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
                   sendChannelMessage: {
                     __typename: WRITE_TYPENAME,
                     message: predicted,
-                    root: root ?? null,
+                    root: root ? threadOnly(root) : null,
                   },
                 }
               : {}) as OptimisticResponse<SendChannelMessageMutation>,
@@ -1557,7 +1577,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
                   deletedAt,
                   updatedAt: deletedAt,
                 },
-                ...(root && { root }),
+                ...(root && { root: threadOnly(root) }),
               },
             } as OptimisticResponse<DeleteChannelMessageMutation>,
             options

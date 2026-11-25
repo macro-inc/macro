@@ -210,18 +210,29 @@ describe('createChannelWrites', () => {
     await writes.send(send(reply.id, { content: 'reply', thread_id: root.id }));
     await writes.send(send(reply.id, { content: 'reply', thread_id: full.id }));
 
-    const previewOf = (call: (typeof calls)[number]) =>
+    // The rest of the root and of its other replies stays the server's.
+    const named = (id: string) => ({
+      __typename: 'GraphqlChannelMessage',
+      id,
+    });
+    const rootOf = (call: (typeof calls)[number]) =>
       (
         call.context.optimisticResponse as {
           sendChannelMessage: {
             root: { thread: { preview: { id: string }[] } };
           };
         }
-      ).sendChannelMessage.root.thread.preview.map((message) => message.id);
-    expect(previewOf(calls[0])).toEqual([reply.id]);
-    expect(previewOf(calls[1])).toEqual(
-      full.thread!.preview.map((message) => message.id)
-    );
+      ).sendChannelMessage.root;
+    expect(rootOf(calls[0])).toEqual({
+      ...named(root.id),
+      thread: expect.objectContaining({ preview: [named(reply.id)] }),
+    });
+    expect(rootOf(calls[1])).toEqual({
+      ...named(full.id),
+      thread: expect.objectContaining({
+        preview: full.thread!.preview.map(({ id }) => named(id)),
+      }),
+    });
   });
 
   it("takes a deleted reply out of its root's preview and count", async () => {
@@ -261,10 +272,14 @@ describe('createChannelWrites', () => {
           };
         }
       ).deleteChannelMessage.root;
-    expect(rootOf(calls[0])?.thread.replyCount).toBe(1);
-    expect(rootOf(calls[0])?.thread.preview.map((m) => m.id)).toEqual([
-      replies[1]!.id,
-    ]);
+    expect(rootOf(calls[0])).toEqual({
+      __typename: 'GraphqlChannelMessage',
+      id: root.id,
+      thread: expect.objectContaining({
+        replyCount: 1,
+        preview: [{ __typename: 'GraphqlChannelMessage', id: replies[1]!.id }],
+      }),
+    });
     // Already deleted, it is in neither; a top-level message has no root.
     expect(rootOf(calls[1])).toBeUndefined();
     expect(rootOf(calls[2])).toBeUndefined();
