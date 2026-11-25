@@ -98,12 +98,36 @@ impl<Databases: Send + Sync + 'static> CrmMemberAccess for PgRecordMergeReposito
 struct PipelineCell {
     pipeline_id: Uuid,
     pipeline_name: String,
+    /// In the trash: moved with the rest, never shown in a review.
+    trashed: bool,
     database_id: Uuid,
     table_id: Uuid,
     row_id: Uuid,
     column_id: Uuid,
     primary: bool,
     values: Value,
+}
+
+/// A database cell naming one of the merged records, in a pipeline or not.
+#[derive(Debug, Clone)]
+struct StoredCell {
+    database_id: Uuid,
+    table_id: Uuid,
+    row_id: Uuid,
+    column_id: Uuid,
+    values: Value,
+}
+
+impl From<&PipelineCell> for StoredCell {
+    fn from(cell: &PipelineCell) -> Self {
+        Self {
+            database_id: cell.database_id,
+            table_id: cell.table_id,
+            row_id: cell.row_id,
+            column_id: cell.column_id,
+            values: cell.values.clone(),
+        }
+    }
 }
 
 /// Everything a company merge's review is built from.
@@ -222,7 +246,11 @@ fn company_review(targets: &MergeTargets, facts: &CompanyFacts) -> CompanyReview
     // Entries are rows whose primary cell names one of the records; a row
     // counts once, as a source's when any of its cells names a source.
     let mut entries: BTreeMap<Uuid, (String, HashMap<Uuid, bool>)> = BTreeMap::new();
-    for cell in facts.cells.iter().filter(|cell| cell.primary) {
+    for cell in facts
+        .cells
+        .iter()
+        .filter(|cell| cell.primary && !cell.trashed)
+    {
         let from_source = names_any(&cell.values, EntityKind::Company, targets.sources());
         let rows = &mut entries
             .entry(cell.pipeline_id)
@@ -386,9 +414,9 @@ fn retargeted(
     refs
 }
 
-/// The cells of the team's live pipelines that reference one of `records`,
-/// in any column. Starts from the records' references through
-/// `idx_ep_database_row_references_gin`, as `referencing_rows` does.
+/// The cells of the team's pipelines, trashed ones included, that reference
+/// one of `records`, in any column. Starts from the records' references
+/// through `idx_ep_database_row_references_gin`, as `referencing_rows` does.
 async fn pipeline_cells(
     conn: &mut PgConnection,
     team: Uuid,
@@ -408,7 +436,8 @@ async fn pipeline_cells(
                      THEN ep.entity_id
                  END)::uuid
            )
-           SELECT p.id AS "pipeline_id!", p.name AS "pipeline_name!", p.database_id AS "database_id!",
+           SELECT p.id AS "pipeline_id!", p.name AS "pipeline_name!",
+                  p.trashed_at IS NOT NULL AS "trashed!", p.database_id AS "database_id!",
                   reference.table_id AS "table_id!", reference.row_id AS "row_id!", c.id AS "column_id!",
                   c.id = p.primary_column_id AS "primary!", reference.values AS "values!"
            FROM reference
@@ -416,7 +445,7 @@ async fn pipeline_cells(
            JOIN database_columns c
              ON c.table_id = reference.table_id
             AND c.property_definition_id = reference.property_definition_id
-           WHERE p.team_id = $1 AND p.trashed_at IS NULL
+           WHERE p.team_id = $1
            ORDER BY p.id, reference.row_id, c.id"#,
         team,
         records,
@@ -429,11 +458,59 @@ async fn pipeline_cells(
         .map(|row| PipelineCell {
             pipeline_id: row.pipeline_id,
             pipeline_name: row.pipeline_name,
+            trashed: row.trashed,
             database_id: row.database_id,
             table_id: row.table_id,
             row_id: row.row_id,
             column_id: row.column_id,
             primary: row.primary,
+            values: row.values,
+        })
+        .collect())
+}
+
+/// The cells outside any pipeline that reference one of `records`: company
+/// columns of ordinary Macro databases. Their writers serialize on the
+/// table row the database write path locks, so no lock is taken here.
+async fn database_cells(
+    conn: &mut PgConnection,
+    records: &[Uuid],
+) -> Result<Vec<StoredCell>, MergeError> {
+    let rows = sqlx::query!(
+        r#"WITH reference AS MATERIALIZED (
+               SELECT DISTINCT r.id AS row_id, r.table_id, ep.property_definition_id, ep.values
+               FROM UNNEST($1::uuid[]) AS record(id)
+               JOIN entity_properties ep
+                 ON ep.entity_type = 'DATABASE_ROW'
+                AND ep.values ->> 'type' = 'EntityReference'
+                AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object('entity_id', record.id::text))
+               JOIN database_rows r
+                 ON r.id = (CASE
+                     WHEN ep.entity_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                     THEN ep.entity_id
+                 END)::uuid
+           )
+           SELECT t.database_id AS "database_id!", reference.table_id AS "table_id!",
+                  reference.row_id AS "row_id!", c.id AS "column_id!", reference.values AS "values!"
+           FROM reference
+           JOIN database_tables t ON t.id = reference.table_id
+           JOIN database_columns c
+             ON c.table_id = reference.table_id
+            AND c.property_definition_id = reference.property_definition_id
+           WHERE NOT EXISTS (SELECT 1 FROM crm_pipeline_entities p WHERE p.table_id = reference.table_id)
+           ORDER BY t.database_id, reference.row_id, c.id"#,
+        records,
+    )
+    .fetch_all(conn)
+    .await
+    .map_err(db)?;
+    Ok(rows
+        .into_iter()
+        .map(|row| StoredCell {
+            database_id: row.database_id,
+            table_id: row.table_id,
+            row_id: row.row_id,
+            column_id: row.column_id,
             values: row.values,
         })
         .collect())
@@ -559,12 +636,12 @@ where
 {
     /// Rewrite the pipeline cells naming a merged company, one batch per
     /// database, through the databases write path in the merge's transaction.
-    async fn retarget_pipeline_cells(
+    async fn retarget_database_cells(
         &self,
         tx: &mut Transaction<'static, Postgres>,
         scope: &MergeScope,
         targets: &MergeTargets,
-        cells: &[PipelineCell],
+        cells: &[StoredCell],
     ) -> Result<Vec<MergeChange>, MergeError> {
         let mut by_database: BTreeMap<Uuid, BTreeMap<Uuid, BTreeMap<Uuid, Vec<CellWrite>>>> =
             BTreeMap::new();
@@ -766,8 +843,12 @@ where
             updated_at: row.updated_at,
         }));
 
+        // Pipelines, trashed ones too so a restore names the survivor, and
+        // company columns of ordinary databases, through one write path.
+        let mut cells: Vec<StoredCell> = facts.cells.iter().map(StoredCell::from).collect();
+        cells.extend(database_cells(&mut *tx, &targets.all_sorted()).await?);
         changes.extend(
-            self.retarget_pipeline_cells(tx, scope, targets, &facts.cells)
+            self.retarget_database_cells(tx, scope, targets, &cells)
                 .await?,
         );
 

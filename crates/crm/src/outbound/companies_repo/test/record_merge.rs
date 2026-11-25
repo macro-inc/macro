@@ -1107,3 +1107,163 @@ async fn a_merged_value_fills_a_property_the_survivor_left_empty(pool: PgPool) {
     .unwrap();
     assert_eq!(kept, text("Gold"));
 }
+
+/// A team company pipeline holding an entry for each of `companies`.
+async fn company_pipeline(
+    world: &World,
+    name: &str,
+    companies: &[Uuid],
+) -> crate::domain::pipelines::Pipeline {
+    let owner = Viewer {
+        user_id: user(OWNER),
+        acting_bot: None,
+    };
+    let pipeline = world
+        .workflows
+        .create(
+            &owner,
+            NewPipeline {
+                name: name.into(),
+                record_type: Some(PipelineRecordType::Company),
+                sharing: PipelineSharing::Team,
+                stages: Vec::new(),
+                fields: Vec::new(),
+            },
+        )
+        .await
+        .unwrap()
+        .pipeline
+        .pipeline;
+    for company in companies {
+        world
+            .workflows
+            .add(
+                &owner,
+                pipeline.id,
+                vec![EntryAddition {
+                    record: Some(RecordTarget::Id(*company)),
+                    set: Vec::new(),
+                }],
+                false,
+            )
+            .await
+            .unwrap();
+    }
+    pipeline
+}
+
+/// The companies each row's primary cell names, in row order.
+async fn named_in(
+    pool: &PgPool,
+    pipeline: &crate::domain::pipelines::Pipeline,
+) -> Vec<Vec<String>> {
+    let cells: Vec<Value> = sqlx::query_scalar(
+        "SELECT ep.values FROM entity_properties ep JOIN database_rows r ON r.id::text = ep.entity_id
+         JOIN database_columns c ON c.table_id = r.table_id AND c.property_definition_id = ep.property_definition_id
+         WHERE r.table_id = $1 AND c.id = $2 ORDER BY r.position",
+    )
+    .bind(pipeline.table_id.into_uuid())
+    .bind(pipeline.primary_column_id.into_uuid())
+    .fetch_all(pool)
+    .await
+    .unwrap();
+    cells
+        .iter()
+        .map(|cell| {
+            cell["value"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|reference| reference["entity_id"].as_str().unwrap().to_string())
+                .collect()
+        })
+        .collect()
+}
+
+async fn logged_cells(pool: &PgPool, merge_id: Uuid) -> i64 {
+    sqlx::query_scalar(
+        "SELECT count(*) FROM crm_merge_changes
+         WHERE merge_id = $1 AND owner = 'databases' AND table_name = 'entity_properties'",
+    )
+    .bind(merge_id)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_trashed_pipeline_restored_later_names_the_company_that_stays(pool: PgPool) {
+    let world = World::new(pool.clone()).await;
+    let stays = world.company("Stays", true, &["stays.example.com"]).await;
+    let merged = world.company("Merged", true, &["merged.example.com"]).await;
+    let pipeline = company_pipeline(&world, "Old deals", &[merged]).await;
+    sqlx::query("UPDATE crm_pipeline_entities SET trashed_at = now() WHERE id = $1")
+        .bind(pipeline.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let merge = targets(stays, &[merged]);
+    let preview = world.merges.preview(&world.scope(), &merge).await.unwrap();
+    assert_eq!(preview.moves.pipeline_entries, 0, "the trash isn't shown");
+    let outcome = world.merge(&merge, SharingRulesChoice::Keep).await.unwrap();
+
+    sqlx::query("UPDATE crm_pipeline_entities SET trashed_at = NULL WHERE id = $1")
+        .bind(pipeline.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        named_in(&pool, &pipeline).await,
+        vec![vec![stays.to_string()]]
+    );
+    assert_eq!(logged_cells(&pool, outcome.merge_id).await, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_company_column_of_an_ordinary_database_names_the_company_that_stays(pool: PgPool) {
+    let world = World::new(pool.clone()).await;
+    let stays = world.company("Stays", true, &["stays.example.com"]).await;
+    let merged = world.company("Merged", true, &["merged.example.com"]).await;
+    let other = world.company("Other", true, &["other.example.com"]).await;
+    // A database with a company column that no pipeline owns: a pipeline's
+    // database, kept when its pipeline row goes (with its cleanup trigger off).
+    let database = company_pipeline(&world, "Accounts", &[merged, other]).await;
+    let mut detach = pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL session_replication_role = replica")
+        .execute(&mut *detach)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM crm_pipeline_entities WHERE id = $1")
+        .bind(database.id)
+        .execute(&mut *detach)
+        .await
+        .unwrap();
+    detach.commit().await.unwrap();
+    assert_eq!(
+        named_in(&pool, &database).await,
+        vec![vec![merged.to_string()], vec![other.to_string()]]
+    );
+
+    let outcome = world
+        .merge(&targets(stays, &[merged]), SharingRulesChoice::Keep)
+        .await
+        .unwrap();
+
+    // Grouped by that column, the row now falls under the company that stays.
+    assert_eq!(
+        named_in(&pool, &database).await,
+        vec![vec![stays.to_string()], vec![other.to_string()]]
+    );
+    assert_eq!(logged_cells(&pool, outcome.merge_id).await, 1);
+    let journaled: i64 = world
+        .scalar(
+            "SELECT count(*) FROM database_changes WHERE table_id = $1",
+            database.table_id.into_uuid(),
+        )
+        .await;
+    assert!(
+        journaled >= 1,
+        "the write went through the database write path"
+    );
+}
