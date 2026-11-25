@@ -61,5 +61,6 @@ CREATE TABLE image_upgrade_computer (
     PRIMARY KEY (upgrade_id, computer_id)
 );
 
-CREATE INDEX image_upgrade_computer_held_idx ON image_upgrade_computer (computer_id)
-    WHERE state IN ('replacing', 'verifying', 'rolling_back');
+-- Full, not partial: the computer delete's cascade finds rows by computer_id
+-- alone, and the held checks filter the few rows of one computer by state.
+CREATE INDEX image_upgrade_computer_computer_idx ON image_upgrade_computer (computer_id);
