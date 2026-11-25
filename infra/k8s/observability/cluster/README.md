@@ -215,7 +215,7 @@ alloy-ingest ── tap: spans some metric reads, before sampling ──▶ deri
   A distribution is one native histogram series.
 - Cardinality: each replica writes its own series, so a metric has at most twice
   its label combinations. `tool` is the widest label. Mimir caps any one metric at
-  50k series (`max_global_series_per_metric`).
+  20k series (`max_global_series_per_metric`).
 
 ## Grafana, the edge and ingest
 

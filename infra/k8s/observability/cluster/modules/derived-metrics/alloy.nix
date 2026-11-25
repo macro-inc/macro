@@ -151,7 +151,7 @@ in
       }
       trace_statements {
         context    = "span"
-        statements = [${keep}, ${truncate}, `set(status.message, "")`, `set(trace_state, "")`]
+        statements = [${keep}, ${truncate}, `set(status.message, "")`, `set(trace_state, "")`, `set(links, nil)`]
       }
       output { traces = [otelcol.exporter.otlp.derived.input] }
     }

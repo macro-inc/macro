@@ -14,7 +14,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 3f2b5257abc8411e646a39d58868dba3d49101edf15dd616916ec8b88deafd8d
+        checksum/config: a7f030e1fe691d42929cd6f36bcf3951498f27f57eab94e794e3eda4a77b0897
       labels:
         app.kubernetes.io/instance: mimir
         app.kubernetes.io/name: mimir
