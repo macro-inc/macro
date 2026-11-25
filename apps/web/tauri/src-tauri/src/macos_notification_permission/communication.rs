@@ -12,7 +12,7 @@ use std::{sync::LazyLock, time::Duration};
 use block2::RcBlock;
 use objc2::rc::Retained;
 use objc2::{AllocAnyThread, available, msg_send};
-use objc2_foundation::{NSData, NSError, NSString, ns_string};
+use objc2_foundation::{NSArray, NSData, NSError, NSString, ns_string};
 use objc2_intents::{
     INImage, INInteraction, INInteractionDirection, INOutgoingMessageType, INPerson,
     INPersonHandle, INPersonHandleType, INSendMessageIntent, INSpeakableString,
@@ -20,6 +20,9 @@ use objc2_intents::{
 use objc2_user_notifications::{UNMutableNotificationContent, UNNotificationContent};
 use serde::Deserialize;
 use url::Url;
+
+#[cfg(test)]
+mod test;
 
 const AVATAR_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_AVATAR_BYTES: usize = 5 * 1024 * 1024;
@@ -114,30 +117,27 @@ fn message_intent(
     group_name: Option<&str>,
     conversation_id: Option<&str>,
 ) -> Retained<INSendMessageIntent> {
-    let id = NSString::from_str(&sender.id);
     let image = avatar.map(|bytes| {
         // SAFETY: INImage copies arbitrary image data; undecodable data only
         // leaves the avatar blank.
         unsafe { INImage::imageWithImageData(&NSData::with_bytes(bytes)) }
     });
+    let from = person(&sender.id, Some(&sender.name), image.as_deref());
+
+    // macOS shows the group name only for a message with more than one
+    // recipient; with fewer it presents a direct message, titled with the
+    // sender alone. The members are never shown when the group has a name, so
+    // opaque stand-ins are enough.
+    let recipients = group_name.map(|_| {
+        NSArray::from_retained_slice(&[
+            person("group-member-1", None, None),
+            person("group-member-2", None, None),
+        ])
+    });
+
     // SAFETY: every argument is a valid object or nil, as the initializers
     // allow; the objects are retained for as long as they are used.
     unsafe {
-        let handle = INPersonHandle::initWithValue_type(
-            INPersonHandle::alloc(),
-            Some(&id),
-            INPersonHandleType::Unknown,
-        );
-        let person =
-            INPerson::initWithPersonHandle_nameComponents_displayName_image_contactIdentifier_customIdentifier(
-                INPerson::alloc(),
-                &handle,
-                None,
-                Some(&NSString::from_str(&sender.name)),
-                image.as_deref(),
-                None,
-                Some(&id),
-            );
         let group_name = group_name.map(|name| {
             INSpeakableString::initWithSpokenPhrase(
                 INSpeakableString::alloc(),
@@ -147,17 +147,41 @@ fn message_intent(
         let intent =
             INSendMessageIntent::initWithRecipients_outgoingMessageType_content_speakableGroupName_conversationIdentifier_serviceName_sender_attachments(
                 INSendMessageIntent::alloc(),
-                None,
+                recipients.as_deref(),
                 INOutgoingMessageType::OutgoingMessageText,
                 Some(&content.body()),
                 group_name.as_deref(),
                 conversation_id.map(NSString::from_str).as_deref(),
                 None,
-                Some(&person),
+                Some(&from),
                 None,
             );
         intent.setImage_forParameterNamed(image.as_deref(), ns_string!("sender"));
         intent
+    }
+}
+
+/// A conversation participant identified by `id`, which never changes for
+/// the same person.
+fn person(id: &str, name: Option<&str>, image: Option<&INImage>) -> Retained<INPerson> {
+    let id = NSString::from_str(id);
+    // SAFETY: every argument is a valid object or nil, as the initializers
+    // allow; the objects are retained for as long as they are used.
+    unsafe {
+        let handle = INPersonHandle::initWithValue_type(
+            INPersonHandle::alloc(),
+            Some(&id),
+            INPersonHandleType::Unknown,
+        );
+        INPerson::initWithPersonHandle_nameComponents_displayName_image_contactIdentifier_customIdentifier(
+            INPerson::alloc(),
+            &handle,
+            None,
+            name.map(NSString::from_str).as_deref(),
+            image,
+            None,
+            Some(&id),
+        )
     }
 }
 
