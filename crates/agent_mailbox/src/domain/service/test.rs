@@ -1234,6 +1234,40 @@ async fn a_taken_address_falls_back_to_a_suffixed_one() {
 }
 
 #[tokio::test]
+async fn a_suffixed_address_someone_else_took_is_retried_with_a_fresh_suffix() {
+    let world = world();
+    // The requested address and the mailbox's own suffixed one are both taken,
+    // as when two agents asking for one name draw the same suffix.
+    world
+        .vendor
+        .fail_next("create", ProviderError::AddressTaken);
+    world
+        .vendor
+        .fail_next("create", ProviderError::AddressTaken);
+
+    let view = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+
+    assert_eq!(view.state, MailboxState::Active, "{view:?}");
+    let address = view.address.unwrap();
+    assert!(address.starts_with("ada-"), "{address}");
+    let own_suffix = LocalPart::parse("ada").unwrap().with_suffix(view.id);
+    assert_ne!(
+        address,
+        format!("{}@fake-vendor.invalid", own_suffix.as_str()),
+        "the retry takes a fresh suffix"
+    );
+    assert_eq!(
+        world.vendor.live_mailbox_count(),
+        1,
+        "one mailbox, never two"
+    );
+}
+
+#[tokio::test]
 async fn a_lost_create_response_is_recovered_without_a_second_mailbox() {
     let world = world();
     world.vendor.0.lock().unwrap().lose_next_create_response = true;
@@ -2835,13 +2869,12 @@ async fn a_conflict_from_a_create_still_in_flight_never_makes_a_second_mailbox()
 #[tokio::test]
 async fn a_new_request_recovers_a_mailbox_whose_addresses_were_all_taken() {
     let world = world();
-    // The requested address and the mailbox's own suffixed one are both taken.
-    world
-        .vendor
-        .fail_next("create", ProviderError::AddressTaken);
-    world
-        .vendor
-        .fail_next("create", ProviderError::AddressTaken);
+    // The requested address and every suffixed one the mailbox tries are taken.
+    for _ in 0..=SUFFIXED_CREATE_ATTEMPTS {
+        world
+            .vendor
+            .fail_next("create", ProviderError::AddressTaken);
+    }
 
     let failed = world
         .service

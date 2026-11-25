@@ -14,9 +14,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    AgentMailbox, AgentMailboxError, AgentMailboxId, AgentMailboxView, CreateMailbox, MailMessage,
-    MailboxState, MessageDirection, MessageList, MessagePage, OutgoingMessage, OwnerApproval,
-    ProviderMailboxId, ProviderMessageId, ProvisionRequest, ProvisionedMailbox,
+    AgentMailbox, AgentMailboxError, AgentMailboxId, AgentMailboxView, CreateMailbox, LocalPart,
+    MailMessage, MailboxState, MessageDirection, MessageList, MessagePage, OutgoingMessage,
+    OwnerApproval, ProviderMailboxId, ProviderMessageId, ProvisionRequest, ProvisionedMailbox,
     ProvisioningFailure, ReplyMessage, Reservation, SendAttempt, SendKind, SendLimits,
     SendReservation, SentMessage, StoredGrant, SweepJob, VendorMode,
 };
@@ -43,12 +43,18 @@ pub const MAX_SUBJECT_CHARS: usize = 998;
 /// Most messages on one page.
 pub const MAX_PAGE_SIZE: u8 = 50;
 
+/// Suffixed addresses provisioning tries after the requested one is taken:
+/// two agents asking for one name can draw the same four-character suffix,
+/// so one taken suffix is retried with another rather than failing.
+pub const SUFFIXED_CREATE_ATTEMPTS: u32 = 4;
+
 /// How long one attempt holds a mailbox's lease, never renewed. One step is
-/// bounded inside it: provisioning makes at most six provider calls (find,
-/// create, find, suffixed create, guardrails, grant) at 20 seconds each plus
-/// one KMS encrypt at 10, 130 seconds in all; a release makes four plus one
-/// revoke per extra credential scoped to the mailbox (normally none).
-pub const LEASE_TTL: Duration = Duration::minutes(3);
+/// bounded inside it: provisioning makes at most twelve provider calls (find,
+/// create, a find and a suffixed create per [`SUFFIXED_CREATE_ATTEMPTS`],
+/// guardrails, grant) at 20 seconds each plus one KMS encrypt at 10, 250
+/// seconds in all; a release makes four plus one revoke per extra credential
+/// scoped to the mailbox (normally none).
+pub const LEASE_TTL: Duration = Duration::minutes(5);
 
 /// How long the sweep leaves a mailbox alone after one of its steps failed.
 pub const SWEEP_RETRY_DELAY: Duration = Duration::minutes(5);
@@ -439,7 +445,8 @@ where
     }
 
     /// Create the mailbox at the provider, first looking for one an earlier
-    /// attempt made, and falling back once to a suffixed address when taken.
+    /// attempt made, and falling back to suffixed addresses when taken, up
+    /// to [`SUFFIXED_CREATE_ATTEMPTS`] of them.
     async fn create(&self, mailbox: &AgentMailbox) -> Result<ProvisionedMailbox, ProviderError> {
         if let Some(existing) = self.vendor.find_mailbox(mailbox.id).await? {
             return Ok(existing);
@@ -459,34 +466,31 @@ where
             local_part,
             display_name: mailbox.display_name.clone(),
         };
-        match self.vendor.create_mailbox(&request).await {
-            Err(ProviderError::AddressTaken) => {
-                // The address may be taken by this very request's create,
-                // made but unanswered: never make a second mailbox for one
-                // owner tag.
-                if let Some(found) = self.vendor.find_mailbox(mailbox.id).await? {
-                    return Ok(found);
-                }
-                let Some(local_part) = &mailbox.requested_local_part else {
-                    return Err(ProviderError::AddressTaken);
-                };
-                // A reserved name already tried the mailbox's own suffix, so
-                // its retry takes a fresh one.
-                let retry = if local_part.is_reserved() {
-                    local_part.with_suffix(AgentMailboxId(provider_key(mailbox.id, b"suffix")))
-                } else {
-                    local_part.with_suffix(mailbox.id)
-                };
-                // A different idempotency key: the first one is bound to the taken address.
-                let suffixed = CreateMailbox {
-                    idempotency_key: provider_key(mailbox.id, b"create-suffixed"),
-                    local_part: Some(retry),
-                    ..request
-                };
-                self.vendor.create_mailbox(&suffixed).await
+        let mut result = self.vendor.create_mailbox(&request).await;
+        for attempt in 1..=SUFFIXED_CREATE_ATTEMPTS {
+            if !matches!(result, Err(ProviderError::AddressTaken)) {
+                break;
             }
-            result => result,
+            // The address may be taken by this very request's create, made
+            // but unanswered: never make a second mailbox for one owner tag.
+            if let Some(found) = self.vendor.find_mailbox(mailbox.id).await? {
+                return Ok(found);
+            }
+            let Some(local_part) = &mailbox.requested_local_part else {
+                return Err(ProviderError::AddressTaken);
+            };
+            let (suffix, idempotency_key) = suffixed_attempt(mailbox, local_part, attempt);
+            tracing::info!(agent_mailbox.id = %mailbox.id, attempt, "agent mailbox address taken; trying a suffixed one");
+            result = self
+                .vendor
+                .create_mailbox(&CreateMailbox {
+                    idempotency_key,
+                    local_part: Some(local_part.with_suffix(suffix)),
+                    ..request.clone()
+                })
+                .await;
         }
+        result
     }
 
     /// Record why provisioning stopped. Transient failures stay
@@ -1132,6 +1136,32 @@ where
             }
         }
     }
+}
+
+/// The suffix and provider idempotency key of the `attempt`th suffixed
+/// create (from 1). Each is derived from the mailbox, so a retry of the whole
+/// provisioning repeats the same addresses under the same keys. The first
+/// is the mailbox's own suffix, except for a role name, which already tried
+/// that one.
+fn suffixed_attempt(
+    mailbox: &AgentMailbox,
+    local_part: &LocalPart,
+    attempt: u32,
+) -> (AgentMailboxId, Uuid) {
+    let suffix = match (attempt, local_part.is_reserved()) {
+        (1, false) => mailbox.id,
+        (1, true) => AgentMailboxId(provider_key(mailbox.id, b"suffix")),
+        (attempt, _) => AgentMailboxId(provider_key(
+            mailbox.id,
+            format!("suffix-{attempt}").as_bytes(),
+        )),
+    };
+    let key = if attempt == 1 {
+        provider_key(mailbox.id, b"create-suffixed")
+    } else {
+        provider_key(mailbox.id, format!("create-suffixed-{attempt}").as_bytes())
+    };
+    (suffix, key)
 }
 
 /// Record how a provisioning or release step ended on its span: `done`,

@@ -100,10 +100,10 @@ flowchart LR
   its code is exactly `address_taken`; any other conflict (an idempotent
   create still in flight) is retried under the same key. The provider
   documents no `409` codes for creating an inbox, so the list is confirmed
-  with the live check. A taken address is first checked
-  against the tag, and a taken address is first checked
-  against the tag, so one request never makes two provider mailboxes. A taken
-  address retries once with a short suffix. A new request replaces a failed
+  with the live check. A taken address is first checked against the tag, so
+  one request never makes two provider mailboxes, then retried with a short
+  suffix, up to four different ones (two agents asking for one name can draw
+  the same suffix). A new request replaces a failed
   mailbox that recorded no provider mailbox and that the provider has nothing
   under the owner tag for, so a mailbox whose addresses were all taken gets a
   new suffix and nothing the provider made is left behind.
