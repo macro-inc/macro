@@ -478,6 +478,7 @@ export class Sim {
   now = 1_000_000;
   private seq = 0;
   private ids = 0;
+  private ticks = 0;
   private uuid = 0;
   private readonly deliveries: Delivery[] = [];
   private readonly tasks: {
@@ -492,6 +493,12 @@ export class Sim {
 
   current(): SimContext | undefined {
     return RUNNING_CONTEXT.getStore();
+  }
+
+  /** Orders events the clock gives the same time. */
+  nextTick(): number {
+    this.ticks += 1;
+    return this.ticks;
   }
 
   nextId(prefix: string): string {

@@ -261,6 +261,8 @@ export type RoutineEvent =
   /** The event does not record which property changed. */
   | { event: 'task_property_changed'; task: TaskSnapshot }
   | { event: 'email_received'; email: EmailSnapshot }
+  /** The labels are the ones the thread gained, by name. */
+  | { event: 'email_labeled'; email: EmailSnapshot; labels: string[] }
   | { event: 'channel_created'; id: string; name?: string }
   | { event: 'channel_message_posted'; discussion: DiscussionContext }
   | { event: 'channel_mentioned'; discussion: DiscussionContext }
@@ -1101,6 +1103,16 @@ function discussionNode(
   ]);
 }
 
+function emailNode(email: EmailSnapshot): FxpNode {
+  return el('email', [el('body', [text(email.body)])], {
+    thread: email.thread_id,
+    subject: email.subject,
+    from: email.from,
+    to: email.to.join(', '),
+    received_at: email.received_at,
+  });
+}
+
 function taskNode(task: TaskSnapshot): FxpNode {
   const assignees = task.assignees ?? [];
   const description = readable(task.markdown);
@@ -1406,14 +1418,13 @@ function routineEventChildren(event: RoutineEvent): FxpNode[] {
       ]),
       taskNode(task),
     ])
-    .with({ event: 'email_received' }, ({ email }) => [
-      el('email', [el('body', [text(email.body)])], {
-        thread: email.thread_id,
-        subject: email.subject,
-        from: email.from,
-        to: email.to.join(', '),
-        received_at: email.received_at,
-      }),
+    .with({ event: 'email_received' }, ({ email }) => [emailNode(email)])
+    .with({ event: 'email_labeled' }, ({ email, labels }) => [
+      el(
+        'labels',
+        labels.map((label) => el('label', [text(label)]))
+      ),
+      emailNode(email),
     ])
     .with({ event: 'channel_created' }, ({ id, name }) => [
       el('channel', [], present({ id, name })),

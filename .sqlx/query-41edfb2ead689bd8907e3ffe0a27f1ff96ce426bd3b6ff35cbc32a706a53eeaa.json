@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_merge_changes (merge_id, seq, owner, table_name, row_key, previous)\n           SELECT $1, seq, owner, table_name, row_key, previous\n           FROM UNNEST($2::int[], $3::text[], $4::text[], $5::jsonb[], $6::jsonb[])\n                AS change(seq, owner, table_name, row_key, previous)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4Array",
+        "TextArray",
+        "TextArray",
+        "JsonbArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "41edfb2ead689bd8907e3ffe0a27f1ff96ce426bd3b6ff35cbc32a706a53eeaa"
+}

@@ -1,5 +1,6 @@
 import type { ListSearchSuggestions } from '@app/components/view-shell/list-search-keys';
 import { searchTextRuns } from '@app/components/view-shell/search-operator-text';
+import { foldName } from '@core/util/name-match-score';
 import {
   type Accessor,
   createEffect,
@@ -18,6 +19,7 @@ import {
   matchEmailSearchLabels,
   type TypedEmailSearchValue,
   typedEmailSearchValue,
+  wordFilterAtEnd,
 } from './email-search-operators';
 import {
   completeEmailSearch,
@@ -67,6 +69,23 @@ export function emailSearchValueBeingTyped(
   return token ? typedEmailSearchValue(token) : undefined;
 }
 
+/**
+ * Fewest letters of a plain word before the people it names are offered:
+ * each word typed looks people up, so a short one would on almost every
+ * search.
+ */
+const MIN_NAME_LETTERS = 3;
+
+/**
+ * A plain word typed at the end of the field that could start someone's
+ * name (`ana`), so the rows can offer mail from or to them.
+ */
+export function emailSearchNameBeingTyped(text: string): string | undefined {
+  const token = typedToken(text)?.token;
+  if (!token || token.length < MIN_NAME_LETTERS) return undefined;
+  return /^\p{L}[\p{L}\p{M}'’.-]*$/u.test(token) ? token : undefined;
+}
+
 /** What a row names, which stays the same as rows load around it. */
 function suggestionKey(row: EmailSearchSuggestion | undefined) {
   if (!row) return undefined;
@@ -81,6 +100,7 @@ function suggestionKey(row: EmailSearchSuggestion | undefined) {
       { kind: 'value' },
       { kind: 'person' },
       { kind: 'label' },
+      { kind: 'word' },
       (completion) =>
         `${completion.kind}:${emailSearchCompletionText(completion)}`
     )
@@ -206,15 +226,14 @@ export function createEmailSearchSuggestions(options: {
   };
 
   // Remembered as it searched, without an operator still being typed.
-  const remember = () => {
-    if (parseEmailSearch(options.search()).query)
-      recent.add(completeEmailSearch(options.search()));
+  const remember = (search = options.search()) => {
+    if (parseEmailSearch(search).query) recent.add(completeEmailSearch(search));
   };
 
   // A last word the rows offer to finish as an operator's name (`bef` for
   // `before:`) is most likely on its way to one, not the word searched for.
-  const typesOperatorName = () => {
-    const token = typedToken(options.search())?.token;
+  const typesOperatorName = (search: string) => {
+    const token = typedToken(search)?.token;
     return (
       token !== undefined &&
       completeEmailSearchOperator(token).some((row) => row.kind === 'operator')
@@ -223,8 +242,18 @@ export function createEmailSearchSuggestions(options: {
 
   // Another window or app taking the focus blurs the field too, but the
   // page then has no focus: the person comes back to the field as it was.
-  const leftWithResults = () =>
-    document.hasFocus() && options.hasResults() && !typesOperatorName();
+  // The field also says it was left as it unmounts, while the view whose
+  // list holds the results is being torn down. Reading the list then runs
+  // its computations again as they are disposed, which fails the navigation
+  // that is leaving the view, so the list is read once the teardown is over.
+  const leave = () => {
+    if (!document.hasFocus()) return;
+
+    const search = options.search();
+    queueMicrotask(() => {
+      if (options.hasResults() && !typesOperatorName(search)) remember(search);
+    });
+  };
 
   // A thread opened from the search's results settles it, whether or not the
   // field saw a blur first (iOS keeps focus in it for a tap on a row).
@@ -237,6 +266,27 @@ export function createEmailSearchSuggestions(options: {
       { defer: true }
     )
   );
+
+  // A plain word that starts a word of someone's name offers the mail from
+  // them and to them, the best match among the people found for it.
+  const namedPersonRows = (): EmailSearchSuggestion[] => {
+    const name = emailSearchNameBeingTyped(options.search());
+    if (!name) return [];
+    const typed = foldName(name);
+    const person = (options.people?.() ?? []).find((candidate) =>
+      foldName(candidate.name ?? '')
+        .split(/\s+/)
+        .some((part) => part.startsWith(typed))
+    );
+    if (!person) return [];
+    return (['from', 'to'] as const).map((key) => ({
+      kind: 'person',
+      key,
+      exclude: false,
+      person,
+      byName: true,
+    }));
+  };
 
   const listed = createMemo((): EmailSearchSuggestion[] => {
     if (!focused()) return [];
@@ -261,9 +311,22 @@ export function createEmailSearchSuggestions(options: {
       return [...views, ...labels];
     }
 
-    // Operators whose names or values finish what is typed come first.
+    // The filter a plain word stands for comes first, then the operators
+    // whose names or values finish what is typed, then people it names.
     const token = typedToken(options.search())?.token;
-    const completions = token ? completeTypedToken(token) : [];
+    const word = wordFilterAtEnd(options.search());
+    // A view alone (`sent` gives `in:sent`) runs no search of its own, so it
+    // is offered only beside other words.
+    const searchesWithWord =
+      word !== undefined &&
+      parseEmailSearch(
+        `${options.search().slice(0, -word.typed.length)}${word.filter}`
+      ).query !== '';
+    const wordRows: EmailSearchSuggestion[] =
+      word && searchesWithWord ? [{ kind: 'word', ...word }] : [];
+    const completions = token
+      ? [...wordRows, ...completeTypedToken(token), ...namedPersonRows()]
+      : [];
     const recentRows = matchRecentSearches(
       recent.recent(),
       options.search()
@@ -275,13 +338,19 @@ export function createEmailSearchSuggestions(options: {
     listed,
     focused,
     setFocused: (next) => {
-      if (next) setAwaitsPickedResults(false);
-      else if (leftWithResults()) remember();
+      // A field without the focus has nothing to leave: one unmounted
+      // unused, or one already left.
+      if (!next && !focused()) return;
 
-      setActive(-1);
+      if (next) setAwaitsPickedResults(false);
+      else leave();
+
+      // No row stays active. Set without reading the rows, which this also
+      // does while the view is torn down.
+      setActiveRow({ key: undefined, edit: searchEdit() });
       setFocusedState(next);
     },
-    commit: remember,
+    commit: () => remember(),
     listId: SEARCH_SUGGESTIONS_LIST_ID,
     activeId: () => {
       const index = active();
@@ -309,6 +378,14 @@ export function createEmailSearchSuggestions(options: {
           const before = typedFilter()?.before ?? '';
           const minus = exclude ? '-' : '';
           options.setSearch(`${before}${minus}in:${scope} `);
+          setActive(-1);
+        })
+        // A filter replaces the plain words it stands for.
+        .with({ kind: 'word' }, (row) => {
+          const text = options.search();
+          options.setSearch(
+            `${text.slice(0, text.length - row.typed.length)}${emailSearchCompletionText(row)}`
+          );
           setActive(-1);
         })
         // An operator, a person or a label replaces the token it finishes.

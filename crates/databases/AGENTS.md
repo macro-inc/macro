@@ -69,6 +69,11 @@ service with Axum, agent-tool and Postgres adapters.
 
 ## Gotchas
 
+- `DatabaseStorageTransactions::apply_storage_ops_in` plans a storage batch
+  from committed state and writes it in a consumer's own transaction, with the
+  usual locks, versions and journal (the CRM merge moves pipeline cells this
+  way). Any error may leave part of the batch in that transaction, so the
+  caller rolls back; only a moved schema, checked before any write, replans.
 - `POST /databases` and `POST /databases/{id}/duplicate` attribute the
   creation to the SDK token's `agent_id` (code mode, `agent_attribution`), like
   the native tool, so channel delivery shares a database an agent makes; access

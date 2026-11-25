@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, image, files, sources, batch_size, idle_deadline_at,\n                   reconnect_timeout_seconds, state AS \"state: UpgradeState\", error,\n                   created_by, created_at\n            FROM image_upgrade WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "image",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "files",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "sources",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "batch_size",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 5,
+        "name": "idle_deadline_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "reconnect_timeout_seconds",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "state: UpgradeState",
+        "type_info": {
+          "Custom": {
+            "name": "image_upgrade_state",
+            "kind": {
+              "Enum": [
+                "staging",
+                "rolling",
+                "paused",
+                "done",
+                "failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "824622bf5563ee76187ad8139375948a394fac7a7675d67e5cafe4cde4a5c183"
+}

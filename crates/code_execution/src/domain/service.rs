@@ -430,8 +430,10 @@ fn type_errors(diagnostics: &[Diagnostic]) -> ExecutionFailure {
         message.push('\n');
         message.push_str(&diagnostic.message);
         message.push('\n');
-        if let Some(members) = missing_member_hint(&diagnostic.message) {
-            message.push_str(&members);
+        let hint = missing_member_hint(&diagnostic.message)
+            .or_else(|| string_union_hint(&diagnostic.message));
+        if let Some(hint) = hint {
+            message.push_str(&hint);
             message.push('\n');
         }
     }
@@ -472,6 +474,39 @@ fn missing_member_hint(message: &str) -> Option<String> {
         return None;
     }
     Some(format!("  {type_name} has: {}.", members.join(", ")))
+}
+
+/// For a string an SDK union type doesn't take (TS2322 on an assignment,
+/// TS2345 on an argument), the values it does: the checker names only the
+/// type, so a model guesses `'channelMessage'` for `SearchType` again.
+fn string_union_hint(message: &str) -> Option<String> {
+    use nom::Parser as _;
+    use nom::branch::alt;
+    use nom::bytes::complete::{tag, take_until, take_while1};
+    let (rest, _) = alt((
+        take_until::<_, _, ()>("TS2322 [ERROR]: Type '\""),
+        take_until("TS2345 [ERROR]: Argument of type '\""),
+    ))
+    .parse(message)
+    .ok()?;
+    let (_, (_, _, _, type_name, _)) = (
+        alt((
+            tag::<_, _, ()>("TS2322 [ERROR]: Type '\""),
+            tag("TS2345 [ERROR]: Argument of type '\""),
+        )),
+        take_until("\"'"),
+        alt((
+            tag("\"' is not assignable to type '"),
+            tag("\"' is not assignable to parameter of type '"),
+        )),
+        take_while1(|c: char| c.is_ascii_alphanumeric() || c == '_'),
+        tag("'."),
+    )
+        .parse(rest)
+        .ok()?;
+    let values = sdk_string_literals(type_name)?;
+    let values: Vec<String> = values.iter().map(|value| format!("'{value}'")).collect();
+    Some(format!("  {type_name} is one of: {}.", values.join(", ")))
 }
 
 #[cfg(test)]

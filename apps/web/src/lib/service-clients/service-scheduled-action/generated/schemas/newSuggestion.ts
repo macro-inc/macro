@@ -13,6 +13,7 @@ import type { NewSuggestionPrompt } from './newSuggestionPrompt';
 import type { NewSuggestionReason } from './newSuggestionReason';
 import type { NewSuggestionRunMode } from './newSuggestionRunMode';
 import type { NewSuggestionSends } from './newSuggestionSends';
+import type { NewSuggestionTopic } from './newSuggestionTopic';
 import type { Target } from './target';
 
 /**
@@ -46,4 +47,8 @@ dismissed. */
   summary: string;
   /** What to do, in a few words. */
   title: string;
+  /** The key of the topic it belongs to, named with
+`macro.suggestions.nameTopic` first, or null for none; left out, a
+suggestion that exists keeps the one it has. */
+  topic?: NewSuggestionTopic;
 }

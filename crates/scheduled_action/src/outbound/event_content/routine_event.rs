@@ -60,7 +60,11 @@ pub(super) fn routine_event(
             (EventName::EmailMessageReceived, Some(message)) => Ok(RoutineEvent::EmailReceived {
                 email: email_snapshot(entity_id()?, &message),
             }),
-            (EventName::EmailMessageReceived, None) => {
+            (EventName::EmailLabeled, Some(message)) => Ok(RoutineEvent::EmailLabeled {
+                labels: super::gained_label_names(event, &message),
+                email: email_snapshot(entity_id()?, &message),
+            }),
+            (EventName::EmailMessageReceived | EventName::EmailLabeled, None) => {
                 Err(rootcause::report!("the email is no longer available"))
             }
             (name, _) => Err(mismatch(name)),

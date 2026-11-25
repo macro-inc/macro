@@ -1,5 +1,5 @@
 import { formatCallDuration } from '@block-call/utils';
-import { EntityRowTags } from '@property/tags';
+import { EntityRowTags, type RowLabel } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui';
@@ -51,6 +51,7 @@ function RowTags(props: {
   entityId: string;
   entityType: EntityType;
   properties: SoupProperty[] | undefined;
+  labels?: readonly RowLabel[];
   onFilterByTag?: (optionId: string) => void;
 }) {
   return (
@@ -58,6 +59,7 @@ function RowTags(props: {
       entityId={props.entityId}
       entityType={props.entityType}
       properties={props.properties}
+      labels={props.labels}
       onFilterByTag={props.onFilterByTag}
     />
   );
@@ -268,6 +270,7 @@ export function WideLayout(props: LayoutProps) {
               entityId={entity().id}
               entityType={EntityType.THREAD}
               properties={entity().properties}
+              labels={props.labels}
               onFilterByTag={props.onFilterByTag}
             />
           )}

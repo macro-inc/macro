@@ -252,29 +252,49 @@ behind `enable-agent-teammates` (on in dev) and the Macro computers rollout,
 narrow page the two invite buttons wrap, together, onto their own line. The
 desktop settings sidebar lists **Invite agents** under **Invite your team** for
 the same viewers. Members, and everyone while a flag is off or still loading,
-see only the people invite. **Invite Agent** opens **Invite an agent**, which asks only for a name and the
-agent's computer size; picture, voice and role come later, and the agent asks
-what to take on once it is online. While the name is empty, **Try** offers
-**Ada**, **Bo**, **Kim** and **Nova**, and the avatar shows the name's first
-letter. Sizes come from the same catalog and prices as Buy a computer
-(sold-out sizes are disabled and marked **Sold out**). The agent's seat is
-included, so the button reads **Add <name> · $X/month** (or **Add <name>**
-when included); while it is disabled, the line under it says why ("Give your
-agent a name to continue.", a name too long, no size for sale). Adding calls
+see only the people invite. Each entry opens its own form: **Invite Human** and
+**Invite your team** the people invite, **Invite Agent** and **Invite agents**
+the agent form, and neither has a People/Agent switch. **Invite an agent**
+asks only for a name and the agent's computer size: the field headed **Name
+it**, with the agent's avatar beside it, then **Give it a computer**. The
+avatar is the name's first character, upper-cased (`agentInitial`: one
+grapheme, after any invisible marks or punctuation, so "Ada Lovelace" is
+**A** and an emoji or CJK character stays whole; the example name's **M** while the field is
+cleared), redrawn as it is typed. A new invite starts named **Macronaught**,
+a real value the admin can keep (Add then adds Macronaught) or change; a
+cleared field still needs a name. The agent's Members row draws the same letter;
+people keep their two initials. Agents have no picture editor. Under the sizes, one line says
+what Add charges for: "Its own computer, always on. $X/month is added to your
+team subscription, prorated for the rest of this billing period. The agent's
+seat costs nothing extra." (for an included size, "Nothing is added to your
+team subscription…"). Voice and role come later, and the agent asks what to take
+on once it is online.
+
+Sizes come from the same catalog and prices as Buy a computer
+(sold-out sizes are disabled and marked **Sold out**; Add with every size sold
+out says so under the sizes and sends nothing). The submit button reads
+**Add agent · $X/month** when it will buy a paid size and
+**Add agent** when there is no price to show. The price updates when the size
+changes. The agent name stays in the name field.
+Pressing **Add agent** with no name marks the name field invalid, says
+"Give your agent a name to continue.", and moves the caret there; a name too
+long is marked the same way; either sends nothing. Adding calls
 `POST /team_agents` with `jobDescription` and `personality` empty, then waits
-in the dialog (**Adding <name>…**, "Starting <name>…") reading
+in the dialog (**Add agent** with a spinner) reading
 `GET /team_agents` every 500 ms until the agent reports itself online, and
 closes into the agent's DM, where it has said hi; no toast. Past five seconds
 it closes into the DM anyway, where the banner says it is still being set up
 and its Members row shows the setup step. Every failure stays in the dialog
 with the name and size kept: a declined card (402 `payment_declined`;
-nothing was bought) with **Update card** (Settings → Billing) and **Try again ·
+nothing was bought) with **Update card** (Settings → Billing; the name and size are kept in
+the tab's sessionStorage, so the next Invite an agent for that team starts
+from them until the agent is added or Cancel is pressed) and **Add agent ·
 $X/month**, which sends a new purchase key; no room for the size (409
 `no_room`, checked before any charge), which marks the size sold out and picks
-the next one on sale; a computer that didn't start, whose **Retry** is the
+the next one on sale; a computer that didn't start, whose **Add agent** is the
 computer's own retry (`POST /team/computers/{id}/retry`, no new charge); and a
 second failed start, which the server undoes (computer released, charge
-refunded, agent taken back), with **Retry** buying afresh. Other refusals
+refunded, agent taken back), with **Add agent** buying afresh. Other refusals
 (a trial, an invite already in flight, a failed workspace) show in place.
 The new agent appears in **Team → Members** as its own row (name, **Agent**
 tag) with a status on the summary line where a person's role and plan are: **Setting up** with a spinner while its
@@ -452,7 +472,11 @@ there instead.
 On desktop release builds, **Desktop App → Updates → Desktop app update** shows native update
 progress, with **Restart to update** once an update is ready. While preparing to restart, the popover can't be dismissed and its
 action is disabled. Restart waits for pending canvas/PDF saves and
-local persistence; active calls, uploads, and imports must finish first. A ready
+local persistence; active calls, uploads, and imports must finish first. It also
+waits up to 10 seconds for the deployed web bundle to download, so the new
+version can open on it instead of asking for another restart; if the download
+takes longer or a check is already queued, it restarts without it and the new
+version may still offer **Update ready**. A ready
 update also installs on normal app quit. Closing a window only triggers
 installation if it exits the app. Browser, mobile, and development builds do not
 show this native updater row.

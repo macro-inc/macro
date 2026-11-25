@@ -562,3 +562,154 @@ async fn rejected_or_unconfigured_conditions_skip_immediately() {
         assert_eq!(skipped_condition(&repo), json!({"status": "unavailable"}));
     }
 }
+
+#[tokio::test]
+async fn email_label_runs_wait_for_their_own_rollout() {
+    let (repo, access, executor, pending) = setup();
+    let service = EventDispatchService::new(
+        repo.clone(),
+        access.clone(),
+        executor.clone(),
+        EmailLabelsOff,
+    );
+    assert_ne!(
+        dispatch(&service, pending).await.unwrap(),
+        DispatchResult::Cancelled(CancellationReason::NotEnabled)
+    );
+
+    let mut config = configuration();
+    config.filters = serde_json::from_value(json!([{ "events": ["email.labeled"] }])).unwrap();
+    let labeled: EventReference = serde_json::from_value(json!({
+        "event_id": generate_uuid_v7(), "event_name": "email.labeled",
+        "entity_id": generate_uuid_v7(), "message_id": null,
+        "labels_gained": [generate_uuid_v7()],
+    }))
+    .unwrap();
+    let pending = PendingEventRun {
+        action_id: config.action_id,
+        revision: config.revision,
+        event: labeled,
+        admitted_at: Utc::now(),
+        traceparent: None,
+    };
+    repo.0.lock().unwrap().configurations.push(config);
+    repo.0.lock().unwrap().pending.push(pending.clone());
+    assert_eq!(
+        dispatch(&service, pending).await.unwrap(),
+        DispatchResult::Cancelled(CancellationReason::NotEnabled)
+    );
+}
+
+#[tokio::test]
+async fn without_their_rollout_label_filters_leave_a_receipt_condition_in_place() {
+    let mut config = configuration();
+    config.filters = serde_json::from_value(json!([
+        { "events": ["email.message_received"], "condition": "Is this an invoice?" },
+        { "events": ["email.labeled"] },
+    ]))
+    .unwrap();
+    let received: EventReference = serde_json::from_value(json!({
+        "event_id": generate_uuid_v7(), "event_name": "email.message_received",
+        "entity_id": generate_uuid_v7(), "message_id": generate_uuid_v7(),
+        "labels_gained": [generate_uuid_v7()],
+    }))
+    .unwrap();
+    for (labels_on, asked) in [(false, true), (true, false)] {
+        let (repo, access, executor, _) = setup();
+        let pending = PendingEventRun {
+            action_id: config.action_id,
+            revision: config.revision,
+            event: received.clone(),
+            admitted_at: Utc::now(),
+            traceparent: None,
+        };
+        repo.0.lock().unwrap().configurations = vec![config.clone()];
+        repo.0.lock().unwrap().pending = vec![pending.clone()];
+        let conditions = Arc::new(Conditions::default());
+        conditions
+            .verdicts
+            .lock()
+            .unwrap()
+            .push_back(Ok(ConditionVerdict::NotMet(probability(0.25))));
+        let result = if labels_on {
+            let service = EventDispatchService::new(repo, access, executor, ROLLED_OUT)
+                .with_conditions(conditions.clone());
+            dispatch(&service, pending).await.unwrap()
+        } else {
+            let service = EventDispatchService::new(repo, access, executor, EmailLabelsOff)
+                .with_conditions(conditions.clone());
+            dispatch(&service, pending).await.unwrap()
+        };
+        assert_eq!(
+            !conditions.calls.lock().unwrap().is_empty(),
+            asked,
+            "labels on: {labels_on}"
+        );
+        assert_eq!(
+            result == DispatchResult::Cancelled(CancellationReason::ConditionNotMet),
+            asked,
+            "labels on: {labels_on}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn without_their_rollout_label_runs_keep_their_inbox_for_receipt_filters() {
+    const INBOX: &str = "01900000-0000-7000-8000-0000000000a1";
+    const ELSEWHERE: &str = "01900000-0000-7000-8000-0000000000a2";
+    let received = |inbox: &str| -> EventReference {
+        serde_json::from_value(json!({
+            "event_id": generate_uuid_v7(), "event_name": "email.message_received",
+            "entity_id": generate_uuid_v7(), "message_id": generate_uuid_v7(),
+            "labels_gained": [generate_uuid_v7()], "inbox": inbox,
+        }))
+        .unwrap()
+    };
+    let filters = json!([
+        { "events": ["email.message_received"], "inboxes": [INBOX], "condition": "Is this an invoice?" },
+        { "events": ["email.message_received"], "inboxes": [ELSEWHERE] },
+        { "events": ["email.labeled"] },
+    ]);
+    // Into the inbox with a condition: the other inbox's filter adds nothing.
+    let (repo, access, executor, _) = setup();
+    let mut config = configuration();
+    config.filters = serde_json::from_value(filters.clone()).unwrap();
+    let pending = PendingEventRun {
+        action_id: config.action_id,
+        revision: config.revision,
+        event: received(INBOX),
+        admitted_at: Utc::now(),
+        traceparent: None,
+    };
+    repo.0.lock().unwrap().configurations = vec![config.clone()];
+    repo.0.lock().unwrap().pending = vec![pending.clone()];
+    let conditions = Arc::new(Conditions::default());
+    conditions
+        .verdicts
+        .lock()
+        .unwrap()
+        .push_back(Ok(ConditionVerdict::NotMet(probability(0.25))));
+    let service = EventDispatchService::new(repo, access, executor, EmailLabelsOff)
+        .with_conditions(conditions.clone());
+    assert_eq!(
+        dispatch(&service, pending).await.unwrap(),
+        DispatchResult::Cancelled(CancellationReason::ConditionNotMet)
+    );
+
+    // Into an inbox no receipt filter picks: only the label filter took it.
+    let (repo, access, executor, _) = setup();
+    let pending = PendingEventRun {
+        action_id: config.action_id,
+        revision: config.revision,
+        event: received("01900000-0000-7000-8000-0000000000a3"),
+        admitted_at: Utc::now(),
+        traceparent: None,
+    };
+    repo.0.lock().unwrap().configurations = vec![config];
+    repo.0.lock().unwrap().pending = vec![pending.clone()];
+    let service = EventDispatchService::new(repo, access, executor, EmailLabelsOff);
+    assert_eq!(
+        dispatch(&service, pending).await.unwrap(),
+        DispatchResult::Cancelled(CancellationReason::NotEnabled)
+    );
+}

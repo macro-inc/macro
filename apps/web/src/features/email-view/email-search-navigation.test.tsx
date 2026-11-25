@@ -5,7 +5,15 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { For, type JSX, type ParentProps } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import {
   afterAll,
   afterEach,
@@ -190,6 +198,8 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
   useRouteParams: () => ({}),
   useMatches: () => () => [],
   createSearchParams: () => [{ tab: 'important' }],
+  usePane: () => () => 'mail-pane',
+  useSplitRouter: () => ({ entry: () => undefined }),
 }));
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
@@ -230,12 +240,19 @@ vi.mock('@property/tags/tag-sets-context', () => ({
   useTagSets: () => () => [],
   useTagSetsReady: () => () => true,
 }));
+vi.mock('@queries/email/label-names', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/email/label-names')>()),
+  useEmailInboxLabels: () => () => [],
+}));
 vi.mock('@queries/email/link', () => ({
   useEmailLinksQuery: () => ({ isSuccess: false, data: { links: [] } }),
 }));
 vi.mock('./persistence', () => ({ createEmailViewPersistence: () => ({}) }));
 vi.mock('./queries/use-email-query', () => ({
   useEmailDataSource: () => ({ items: () => [] }),
+}));
+vi.mock('./queries/use-email-search-values', () => ({
+  useEmailSearchValues: () => ({ people: () => [], labels: () => [] }),
 }));
 vi.mock('./email-route', () => ({
   emailTabSearch: { namespace: 'mail' },
@@ -341,6 +358,24 @@ describe('desktop header and sidebar', () => {
       fireEvent.click(screen.getByRole('radio', { name: 'Noise' }));
       openSearch();
     };
+
+    it('offers search tips beside the title only while the wide field is open', () => {
+      desktop(wide);
+      const tips = () =>
+        screen.queryByRole('button', { name: 'All search operators' });
+      expect(tips()).toBeNull();
+
+      openSearch();
+      expect(tips() !== null).toBe(wide);
+      const button = tips();
+      if (button) {
+        // A press keeps the focus in the empty field, which closes on blur.
+        expect(fireEvent.pointerDown(button)).toBe(false);
+        expect(fireEvent.mouseDown(button)).toBe(false);
+      }
+      press('Close search');
+      expect(tips()).toBeNull();
+    });
 
     it('hides the Inbox tabs as it opens, and says Search while it is empty', () => {
       openEmptyFromNoise();
@@ -509,5 +544,66 @@ describe('phone tab strip', () => {
     view.setTab('sent');
     expect(searchField()).toBeNull();
     expect(stripTitle()).toBe('Sent');
+  });
+});
+
+describe('leaving Mail', () => {
+  /**
+   * Reads what the sidebar shows (a memo over a memo of the view's search
+   * state, like a `Show` condition and the content it renders) from a
+   * cleanup, as parts of the view still do while Mail is torn down.
+   */
+  function ReadsWhileLeaving(props: { shown: () => unknown }) {
+    onCleanup(() => {});
+    onCleanup(() => {});
+    onCleanup(() => props.shown());
+    return null;
+  }
+
+  function Mail() {
+    const view = useEmailView();
+    const shownTab = createMemo(() => view.shownTab());
+    const shown = createMemo(() => shownTab());
+    return (
+      <>
+        <Show when={true}>
+          <ReadsWhileLeaving shown={shown} />
+        </Show>
+        <Show when={true}>
+          <EmailHeader tabOnly />
+        </Show>
+      </>
+    );
+  }
+
+  it('leaves for another page while the header holds the search field', () => {
+    const [onMail, setOnMail] = createSignal(true);
+    render(() => (
+      <Show when={onMail()} fallback={<p>Elsewhere</p>}>
+        <EmailViewProvider initialState={{}}>
+          <Mail />
+        </EmailViewProvider>
+      </Show>
+    ));
+    expect(screen.getByRole('banner')).toBeTruthy();
+
+    expect(() => setOnMail(false)).not.toThrow();
+    expect(screen.getByText('Elsewhere')).toBeTruthy();
+  });
+
+  it('leaves for another page with the search field open', () => {
+    const [onMail, setOnMail] = createSignal(true);
+    render(() => (
+      <Show when={onMail()} fallback={<p>Elsewhere</p>}>
+        <EmailViewProvider initialState={{}}>
+          <Mail />
+        </EmailViewProvider>
+      </Show>
+    ));
+    openSearch();
+    expect(searchField()).toBeTruthy();
+
+    expect(() => setOnMail(false)).not.toThrow();
+    expect(screen.getByText('Elsewhere')).toBeTruthy();
   });
 });

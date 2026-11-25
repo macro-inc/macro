@@ -143,4 +143,7 @@ pub enum EmailPolicyAuditAction {
     MailboxRevoked,
     /// A referenced contact/company changed the effective live selection.
     LiveTargetsChanged,
+    /// An admin merged records the rules named, so the rules were rewritten
+    /// to share the same mail (or, at the admin's choice, to stop sharing it).
+    RecordsMerged,
 }

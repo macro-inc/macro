@@ -95,6 +95,8 @@ const attach = async (
   });
 };
 
+const TEST_ENGINE_CLIENT_ID = 'engine-client';
+
 const ready = (
   enginePort: FakePort,
   tabId: string,
@@ -131,8 +133,10 @@ const ready = (
     ownerEpoch,
     ownerLockName: databaseOwnerLockName('scope'),
     ownerLockHeld: true,
+    ownerLockClientId: TEST_ENGINE_CLIENT_ID,
     databaseActionProof: proof,
     openOutcome,
+    queue: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
   });
 };
 
@@ -2131,7 +2135,10 @@ describe('CoordinatorRouter', () => {
     expect(messagesOfKind(tab, 'terminate-engine')).toHaveLength(0);
     expect(messagesOfKind(tab, 'cache-unavailable')).toHaveLength(0);
     expect(messagesOfKind(tab, 'cache-message')).toHaveLength(0);
-    expect(verifyLockHeld).toHaveBeenCalledWith(databaseOwnerLockName('scope'));
+    expect(verifyLockHeld).toHaveBeenCalledWith(
+      databaseOwnerLockName('scope'),
+      TEST_ENGINE_CLIENT_ID
+    );
     expect(messagesOfKind(engine, 'heartbeat').length).toBeGreaterThan(5);
 
     const heartbeat = messagesOfKind(engine, 'heartbeat').at(-1)!;
@@ -2158,6 +2165,113 @@ describe('CoordinatorRouter', () => {
       }),
     ]);
     expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it.each([
+    {
+      holder: 'another build',
+      clientId: 'other-build',
+      action: 'open-existing',
+    },
+    {
+      holder: 'another build, for a moment,',
+      clientId: 'other-build',
+      leaves: true,
+      action: 'open-existing',
+    },
+    { holder: 'nobody', clientId: undefined, action: 'wipe-before-open' },
+  ])(
+    'replaces a dead engine whose lock $holder holds and then would $action',
+    async ({ clientId, leaves, action }) => {
+      vi.useFakeTimers();
+      let holder: string | undefined = TEST_ENGINE_CLIENT_ID;
+      const lockName = databaseOwnerLockName('scope');
+      vi.stubGlobal('navigator', {
+        locks: {
+          query: async () => ({
+            held:
+              holder === undefined
+                ? []
+                : [{ name: lockName, clientId: holder }],
+          }),
+          request: async (
+            _name: string,
+            _options: LockOptions,
+            callback: (lock: Lock | null) => boolean
+          ) =>
+            callback(
+              holder === undefined ? ({ name: lockName } as Lock) : null
+            ),
+        },
+      });
+      const router = new CoordinatorRouter({
+        heartbeatIntervalMs: 5,
+        heartbeatTimeoutMs: 7,
+        verifyTabLockHeld: async () => true,
+        watchTabLock: () => () => {},
+        queryHeldLockNames: async () => [],
+        holdCoordinatorLock: async () => {},
+      });
+      const tab = new FakePort();
+      await register(router, tab, 'tab-a');
+      const engine = new FakePort();
+      await attach(router, tab, 'tab-a', 1, engine);
+      ready(engine, 'tab-a', 1, 'opened-existing');
+      await vi.advanceTimersByTimeAsync(60);
+      expect(messagesOfKind(tab, 'terminate-engine')).toEqual([]);
+
+      holder = clientId;
+      await vi.advanceTimersByTimeAsync(5 + 7);
+      if (leaves) holder = undefined;
+      await vi.advanceTimersByTimeAsync(5 + 100);
+
+      expect(messagesOfKind(tab, 'terminate-engine')).toEqual([
+        expect.objectContaining({
+          ownerEpoch: 1,
+          reason: 'engine owner lock was released',
+        }),
+      ]);
+      expect(messagesOfKind(tab, 'become-owner').at(-1)).toMatchObject({
+        ownerEpoch: 2,
+        databaseAction: action,
+      });
+      vi.unstubAllGlobals();
+    }
+  );
+
+  it('ends a drain whose engine died when another build holds its lock', async () => {
+    vi.useFakeTimers();
+    const held = { clientId: TEST_ENGINE_CLIENT_ID };
+    const router = new CoordinatorRouter({
+      heartbeatIntervalMs: 5,
+      heartbeatTimeoutMs: 7,
+      verifyTabLockHeld: async () => true,
+      verifyOwnerLockHeld: async (_lockName, clientId) =>
+        clientId === undefined || clientId === held.clientId,
+      watchTabLock: () => () => {},
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a');
+    await register(router, new FakePort(), 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tab, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    await router.handleTabMessage(tab, {
+      ...version,
+      kind: 'graceful-departure',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    expect(router.snapshot()?.state.kind).toBe('draining');
+
+    held.clientId = 'other-build';
+    await vi.advanceTimersByTimeAsync(7 + 5);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      tabId: 'tab-b',
+      ownerEpoch: 2,
+      databaseAction: 'open-existing',
+    });
   });
 
   it.each(['ack', 'drain', 'replacement'] as const)(

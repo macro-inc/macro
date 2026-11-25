@@ -133,6 +133,7 @@ export const TOKENS = {
       calendar: 'sidebar.goTo.calendar',
       search: 'sidebar.goTo.search',
       agents: 'sidebar.goTo.agents',
+      routines: 'sidebar.goTo.routines',
       mail: 'sidebar.goTo.mail',
       sent: 'sidebar.goTo.sent',
       documents: 'sidebar.goTo.documents',

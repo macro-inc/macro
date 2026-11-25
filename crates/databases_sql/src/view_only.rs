@@ -162,6 +162,13 @@ impl<Access: EntityAccessService> EntityAccessService for ViewOnlyAccess<Access>
         self.0.merged_crm_company_ids(company_ids).await
     }
 
+    async fn merged_crm_contact_ids(
+        &self,
+        contact_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Uuid>, AccessError> {
+        self.0.merged_crm_contact_ids(contact_ids).await
+    }
+
     async fn get_users_by_entity(
         &self,
         entity_id: &str,

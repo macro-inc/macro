@@ -88,6 +88,13 @@ export function EmailParticipants() {
           </div>
         )}
       </Show>
+      <Show when={viewContext.rendering.renderLabels}>
+        {(renderLabels) => (
+          <div role="listitem" class="inline-flex empty:hidden">
+            {renderLabels()()}
+          </div>
+        )}
+      </Show>
       <Key each={visibleParticipants()} by="email">
         {(participant) => (
           <EmailUserTooltip

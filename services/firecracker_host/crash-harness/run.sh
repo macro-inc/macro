@@ -152,10 +152,47 @@ case_golden_booted() {
   check_invariants
 }
 
+# The image a computer boots, from its record.
+image_of() { client get "$1" | jq -r .image; }
+
+# Killed inside a system disk replacement of a running computer; $3 is the
+# image the restarted agent must leave it on (stopped: the replacement
+# stopped it), and a repeated replacement must end running on the new one.
+case_system_disk() {
+  local id=$1 point=$2 settled_image=$3
+  start_agent ""
+  create "$id"
+  client exec --root "$id" -- sh -c 'echo kept > /home/marker' >/dev/null
+  stop_agent
+  start_agent "$point"
+  interrupted client replace-system-disk "$id" --image "$NEXT_IMAGE"
+  start_agent ""
+  expect_state "$id" stopped
+  [ "$(image_of "$id")" = "$settled_image" ] || fail "computer $id boots $(image_of "$id"), expected $settled_image"
+  # Only the disks the record names are left.
+  local disks
+  disks=$(sudo find "$ROOT/zfs/computers/$id" -maxdepth 1 -name 'rootfs*' | wc -l)
+  case "$point" in
+    system-disk-saved) [ "$disks" -eq 2 ] || fail "$disks system disks left, expected 2" ;;
+    *) [ "$disks" -eq 1 ] || fail "$disks system disks left, expected 1" ;;
+  esac
+  client replace-system-disk "$id" --image "$NEXT_IMAGE" >/dev/null
+  client start "$id" >/dev/null
+  expect_state "$id" running
+  [ "$(image_of "$id")" = "$NEXT_IMAGE" ] || fail "computer $id boots $(image_of "$id") after the retry"
+  client exec --root "$id" -- grep -q kept /home/marker || fail "/home of $id lost its marker"
+  # And back: the previous disk itself.
+  client replace-system-disk "$id" --image "$IMAGE" >/dev/null
+  expect_state "$id" running
+  [ "$(image_of "$id")" = "$IMAGE" ] || fail "computer $id did not go back to $IMAGE"
+  client exec --root "$id" -- grep -q kept /home/marker || fail "/home of $id lost its marker on the way back"
+}
+
 all=(
   create-disks-prepared create-record-saved launch-spawned launch-returned launch-saved
   hibernate-flag-saved hibernate-snapshot-created hibernate-published hibernate-ended
   wake-saved destroy-disks-deleted golden-booted
+  system-disk-previous-dropped system-disk-cloned system-disk-saved
 )
 cases=("${all[@]}")
 if [ "$#" -gt 0 ]; then cases=("$@"); fi
@@ -180,6 +217,8 @@ for point in "${cases[@]}"; do
     wake-saved) case_wake_saved "$id" ;;
     destroy-disks-deleted) case_destroy_disks_deleted "$id" ;;
     golden-booted) case_golden_booted; log "PASS $point"; continue ;;
+    system-disk-previous-dropped | system-disk-cloned) case_system_disk "$id" "$point" "$IMAGE" ;;
+    system-disk-saved) case_system_disk "$id" "$point" "$NEXT_IMAGE" ;;
     *) fail "no case for $point" ;;
   esac
   check_invariants

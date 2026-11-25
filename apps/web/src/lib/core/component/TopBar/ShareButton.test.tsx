@@ -321,6 +321,8 @@ vi.mock('@kobalte/core/dialog', () => {
       Content: Container,
       Title: Container,
     }),
+    // Read by `DialogClosesOnNavigation` in the Share dialog's frame.
+    useDialogContext: () => ({ isOpen: () => true, close: () => {} }),
   };
 });
 vi.mock('@components/app/mobile/MobileDrawer', () => {

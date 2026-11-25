@@ -12,6 +12,7 @@ mod provider_deletion;
 mod provider_draft_trash;
 mod reply_draft_identity;
 mod retention;
+mod stopped_draft;
 mod trash;
 
 fn actor() -> MacroUserIdStr<'static> {

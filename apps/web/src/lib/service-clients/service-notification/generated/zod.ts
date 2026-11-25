@@ -1468,6 +1468,29 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          reason: zod
+                            .enum(['companies_merged'])
+                            .describe(
+                              "Why someone's CRM email sharing rules changed without them."
+                            ),
+                          teamId: zod
+                            .uuid()
+                            .describe(
+                              'The team whose CRM the rules share mail with.'
+                            ),
+                        })
+                        .describe(
+                          "Metadata for a notice that the recipient's CRM email sharing rules\nchanged because of a teammate's action. It names no company, count or\nperson: the recipient may not be able to see them, and their rules show\nwhat changed."
+                        ),
+                      tag: zod.enum(['crm_email_sharing_changed']),
+                    })
+                    .describe(
+                      "A teammate's action changed the user's CRM email sharing rules."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
@@ -3852,6 +3875,29 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          reason: zod
+                            .enum(['companies_merged'])
+                            .describe(
+                              "Why someone's CRM email sharing rules changed without them."
+                            ),
+                          teamId: zod
+                            .uuid()
+                            .describe(
+                              'The team whose CRM the rules share mail with.'
+                            ),
+                        })
+                        .describe(
+                          "Metadata for a notice that the recipient's CRM email sharing rules\nchanged because of a teammate's action. It names no company, count or\nperson: the recipient may not be able to see them, and their rules show\nwhat changed."
+                        ),
+                      tag: zod.enum(['crm_email_sharing_changed']),
+                    })
+                    .describe(
+                      "A teammate's action changed the user's CRM email sharing rules."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
@@ -6181,6 +6227,29 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     })
                     .describe(
                       "A linked inbox's grant died and must be reconnected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          reason: zod
+                            .enum(['companies_merged'])
+                            .describe(
+                              "Why someone's CRM email sharing rules changed without them."
+                            ),
+                          teamId: zod
+                            .uuid()
+                            .describe(
+                              'The team whose CRM the rules share mail with.'
+                            ),
+                        })
+                        .describe(
+                          "Metadata for a notice that the recipient's CRM email sharing rules\nchanged because of a teammate's action. It names no company, count or\nperson: the recipient may not be able to see them, and their rules show\nwhat changed."
+                        ),
+                      tag: zod.enum(['crm_email_sharing_changed']),
+                    })
+                    .describe(
+                      "A teammate's action changed the user's CRM email sharing rules."
                     ),
                   zod
                     .object({
@@ -8540,6 +8609,27 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['inbox_reauth_required']),
             })
             .describe("A linked inbox's grant died and must be reconnected."),
+          zod
+            .object({
+              content: zod
+                .object({
+                  reason: zod
+                    .enum(['companies_merged'])
+                    .describe(
+                      "Why someone's CRM email sharing rules changed without them."
+                    ),
+                  teamId: zod
+                    .uuid()
+                    .describe('The team whose CRM the rules share mail with.'),
+                })
+                .describe(
+                  "Metadata for a notice that the recipient's CRM email sharing rules\nchanged because of a teammate's action. It names no company, count or\nperson: the recipient may not be able to see them, and their rules show\nwhat changed."
+                ),
+              tag: zod.enum(['crm_email_sharing_changed']),
+            })
+            .describe(
+              "A teammate's action changed the user's CRM email sharing rules."
+            ),
           zod
             .object({
               content: zod

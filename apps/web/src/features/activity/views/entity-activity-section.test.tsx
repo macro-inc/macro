@@ -1,3 +1,4 @@
+import type { PropertyDefinitionDomain } from '@property/types';
 import type { ActivityEventFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
@@ -9,6 +10,7 @@ import {
   editedEvent,
   openedEvent,
   propertyChangedEvent,
+  recordMergedEvent,
 } from '../queries/fixtures';
 import { createMockActivityContext } from '../tests/mock-context';
 import { soupPage } from '../tests/wire';
@@ -214,5 +216,38 @@ describe('EntityActivitySection', () => {
     expect(rows()).toHaveLength(1);
     expect(rows()[0]?.getAttribute('data-activity-action')).toBe('created');
     expect(rows()[0]?.textContent).toContain('created this');
+  });
+});
+
+describe('EntityActivitySection merges', () => {
+  it("lists a merge's dropped values under its line, named and from their company", () => {
+    const context = createMockActivityContext({
+      propertyDefinition: (id) => () =>
+        id() === 'tier'
+          ? ({ displayName: 'Tier' } as PropertyDefinitionDomain)
+          : undefined,
+    });
+    render(() => (
+      <ActivityContextProvider value={context}>
+        <EntityActivitySection entityId="company-kept" entityType="COMPANY" />
+      </ActivityContextProvider>
+    ));
+    context.graphqlMock.latest('EntityActivity').resolve(
+      soupPage([
+        {
+          __typename: 'GraphqlSoupCrmCompany',
+          id: 'company-kept',
+          activity: [recordMergedEvent],
+        },
+      ])
+    );
+
+    expect(rows()[0]?.textContent).toContain(
+      'merged Old Co and a company into this'
+    );
+    const dropped = document.querySelector('[data-activity-merge-dropped]');
+    expect(dropped?.textContent).toContain('Tier: Silver');
+    expect(dropped?.textContent).toContain('dropped from Old Co');
+    expect(dropped?.querySelector('s')?.textContent).toBe('Silver');
   });
 });

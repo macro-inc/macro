@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   describeTrigger,
+  describeTriggers,
   newScheduleTrigger,
   triggerKind,
 } from './routine-triggers';
@@ -16,6 +17,19 @@ const cron = (expression: string) => ({
 });
 
 describe('describeTrigger', () => {
+  it('summarizes multiple trigger labels without a dot join', () => {
+    const email = {
+      id: 'e',
+      kind: 'event' as const,
+      events: ['email.message_received' as const],
+    };
+    expect(describeTriggers([])).toBe('');
+    expect(describeTriggers([email])).toBe('New email received');
+    expect(describeTriggers([email, weekly(['2'])])).toBe(
+      'New email received +1'
+    );
+  });
+
   it('reads weekly days the way people say them', () => {
     expect(describeTrigger(weekly(['2', '3', '4', '5', '6']))).toBe(
       'Weekdays at 9:00 AM'
