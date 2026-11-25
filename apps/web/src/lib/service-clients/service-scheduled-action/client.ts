@@ -77,6 +77,11 @@ import type {
   UnusableKnob,
 } from './generated/schemas';
 
+import {
+  type ROUTINE_LIMIT_ERROR,
+  routineLimitErrorResponseHandler,
+} from './routine-limit';
+
 /** How `POST /suggestions/regenerate` answered. */
 export type RegenerateAnswer =
   | { kind: 'started' }
@@ -156,33 +161,39 @@ export const scheduledActionClient = {
     body: ActionConfiguration,
     options: { suggestionId?: string } = {}
   ) =>
-    scheduledActionFetch<ScheduledAction>(
+    fetchWithToken<ScheduledAction, typeof ROUTINE_LIMIT_ERROR>(
       options.suggestionId
-        ? `/scheduled-actions?${new URLSearchParams({ suggestion_id: options.suggestionId })}`
-        : '/scheduled-actions',
-      { method: 'POST', body: JSON.stringify(body) }
+        ? `${scheduledActionHost}/scheduled-actions?${new URLSearchParams({ suggestion_id: options.suggestionId })}`
+        : `${scheduledActionHost}/scheduled-actions`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: routineLimitErrorResponseHandler,
+      }
     ),
 
   updateSchedule: async (args: {
     scheduleId: string;
     body: ActionConfigurationUpdate;
   }) =>
-    scheduledActionFetch<ScheduledAction>(
-      `/scheduled-actions/${args.scheduleId}`,
+    fetchWithToken<ScheduledAction, typeof ROUTINE_LIMIT_ERROR>(
+      `${scheduledActionHost}/scheduled-actions/${args.scheduleId}`,
       {
         method: 'PUT',
         body: JSON.stringify(args.body),
+        errorResponseHandler: routineLimitErrorResponseHandler,
       }
     ),
 
   setEnabled: async (args: { scheduleId: string; enabled: boolean }) =>
-    scheduledActionFetch<ScheduledAction>(
-      `/scheduled-actions/${args.scheduleId}/enabled`,
+    fetchWithToken<ScheduledAction, typeof ROUTINE_LIMIT_ERROR>(
+      `${scheduledActionHost}/scheduled-actions/${args.scheduleId}/enabled`,
       {
         method: 'PUT',
         body: JSON.stringify({
           enabled: args.enabled,
         } satisfies SetScheduledActionEnabled),
+        errorResponseHandler: routineLimitErrorResponseHandler,
       }
     ),
 
@@ -307,9 +318,13 @@ export const scheduledActionClient = {
     }),
 
   activateTemplate: (args: { templateId: string; body: ActionConfiguration }) =>
-    scheduledActionFetch<ScheduledAction>(
-      `/scheduled-actions/${args.templateId}/template/activate`,
-      { method: 'POST', body: JSON.stringify(args.body) }
+    fetchWithToken<ScheduledAction, typeof ROUTINE_LIMIT_ERROR>(
+      `${scheduledActionHost}/scheduled-actions/${args.templateId}/template/activate`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+        errorResponseHandler: routineLimitErrorResponseHandler,
+      }
     ),
 
   /**

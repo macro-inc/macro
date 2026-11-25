@@ -55,26 +55,26 @@ async fn the_cap_counts_active_sub_routines_and_not_finished_one_time_ones(pool:
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let parent = repo
-        .create_action(sample_action(user_owner(USER_A), "parent"))
+        .create_action(sample_action(user_owner(USER_A), "parent"), None)
         .await
         .unwrap();
     for index in 0..49 {
-        repo.create_action(child_of(&parent, &format!("child {index}"), None))
+        repo.create_action(child_of(&parent, &format!("child {index}"), None), None)
             .await
             .unwrap();
     }
     // Finished one-time sub-routines take no room.
     for index in 0..3 {
-        repo.create_action(finished_once(&parent, &format!("done {index}")))
+        repo.create_action(finished_once(&parent, &format!("done {index}")), None)
             .await
             .unwrap();
     }
 
-    repo.create_action(child_of(&parent, "the fiftieth", None))
+    repo.create_action(child_of(&parent, "the fiftieth", None), None)
         .await
         .unwrap();
     let refused = repo
-        .create_action(child_of(&parent, "one too many", None))
+        .create_action(child_of(&parent, "one too many", None), None)
         .await
         .unwrap_err();
 
@@ -90,24 +90,24 @@ async fn a_parent_has_one_sub_routine_per_key(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let parent = repo
-        .create_action(sample_action(user_owner(USER_A), "parent"))
+        .create_action(sample_action(user_owner(USER_A), "parent"), None)
         .await
         .unwrap();
     let other = repo
-        .create_action(sample_action(user_owner(USER_A), "other parent"))
+        .create_action(sample_action(user_owner(USER_A), "other parent"), None)
         .await
         .unwrap();
     let first = repo
-        .create_action(child_of(&parent, "first", Some("task-1")))
+        .create_action(child_of(&parent, "first", Some("task-1")), None)
         .await
         .unwrap();
 
     let taken = repo
-        .create_action(child_of(&parent, "second", Some("task-1")))
+        .create_action(child_of(&parent, "second", Some("task-1")), None)
         .await
         .unwrap_err();
     // The same key under another parent names another routine.
-    repo.create_action(child_of(&other, "elsewhere", Some("task-1")))
+    repo.create_action(child_of(&other, "elsewhere", Some("task-1")), None)
         .await
         .unwrap();
 
@@ -130,11 +130,11 @@ async fn deleting_a_parent_removes_its_sub_routines_and_their_registrations(pool
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let parent = repo
-        .create_action(sample_action(user_owner(USER_A), "parent"))
+        .create_action(sample_action(user_owner(USER_A), "parent"), None)
         .await
         .unwrap();
     let child = repo
-        .create_action(child_of(&parent, "child", None))
+        .create_action(child_of(&parent, "child", None), None)
         .await
         .unwrap();
     let appearance = EntityAppearance {
@@ -144,10 +144,13 @@ async fn deleting_a_parent_removes_its_sub_routines_and_their_registrations(pool
         color: None,
     };
     let kept = repo
-        .create_action(ScheduledAction {
-            appearance: appearance.clone(),
-            ..child_of(&parent, "kept", Some("kept"))
-        })
+        .create_action(
+            ScheduledAction {
+                appearance: appearance.clone(),
+                ..child_of(&parent, "kept", Some("kept"))
+            },
+            None,
+        )
         .await
         .unwrap();
     let key = SubRoutineKey::new("kept").unwrap();
@@ -213,7 +216,7 @@ async fn a_run_in_progress_is_found_by_its_routine_and_by_its_session(pool: PgPo
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let parent = repo
-        .create_action(sample_action(user_owner(USER_A), "parent"))
+        .create_action(sample_action(user_owner(USER_A), "parent"), None)
         .await
         .unwrap();
     let id = parent.id.unwrap();
@@ -238,15 +241,18 @@ async fn a_run_in_progress_is_found_by_its_routine_and_by_its_session(pool: PgPo
     // The run's history record takes the run's id, so what it created
     // points at it.
     let child = repo
-        .create_action(ScheduledAction {
-            sub_routine: Some(SubRoutine {
-                parent_id: id,
-                created_by_run_id: token.as_uuid(),
-                key: None,
-                paused_by_parent: false,
-            }),
-            ..sample_action(user_owner(USER_A), "child")
-        })
+        .create_action(
+            ScheduledAction {
+                sub_routine: Some(SubRoutine {
+                    parent_id: id,
+                    created_by_run_id: token.as_uuid(),
+                    key: None,
+                    paused_by_parent: false,
+                }),
+                ..sample_action(user_owner(USER_A), "child")
+            },
+            None,
+        )
         .await
         .unwrap();
     let now = Utc::now();
@@ -290,14 +296,14 @@ async fn a_sub_routine_created_off_with_its_parent_keeps_that_mark(pool: PgPool)
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let parent = repo
-        .create_action(sample_action(user_owner(USER_A), "parent"))
+        .create_action(sample_action(user_owner(USER_A), "parent"), None)
         .await
         .unwrap();
     let mut waiting = child_of(&parent, "waits for its parent", None);
     waiting.enabled = false;
     waiting.sub_routine.as_mut().unwrap().paused_by_parent = true;
 
-    let created = repo.create_action(waiting).await.unwrap();
+    let created = repo.create_action(waiting, None).await.unwrap();
 
     assert!(created.sub_routine.as_ref().unwrap().paused_by_parent);
     let stored = repo
