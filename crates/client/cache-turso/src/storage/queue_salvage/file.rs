@@ -14,6 +14,20 @@ const READ_ATTEMPT: u8 = 2;
 const IMPORT_ATTEMPT: u8 = 3;
 const LOSS: u8 = 4;
 
+/// Room a read attempt takes after it, so that a disk with no more of it still
+/// takes the loss that the attempt may have to end with.
+const RESERVED: usize = FRAME_HEADER + LOSS_BODY;
+const LOSS_BODY: usize = 1 + 8;
+
+/// What a wipe took that is not in the side file.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct QueueLoss {
+    /// Whether the queue was given up rather than unreadable.
+    pub abandoned: bool,
+    /// How many queued writes are known to be lost.
+    pub dropped: u64,
+}
+
 /// What a side file says: the last queue written to it, how often reading a
 /// database's queue was started, and how often importing that queue was.
 ///
@@ -24,6 +38,8 @@ pub struct SalvageFile {
     queue: Option<SalvagedQueue>,
     /// What was queued after that queue may be lost.
     lost: bool,
+    abandoned: bool,
+    dropped: u64,
     end: u64,
     reads: u32,
     imports: u32,
@@ -44,12 +60,18 @@ impl SalvageFile {
                     file = Self {
                         queue: Some(queue),
                         reads: file.reads,
+                        dropped: file.dropped,
                         ..Self::default()
                     };
                 }
                 READ_ATTEMPT => file.reads += 1,
                 LOSS => {
+                    let Some(loss) = Reader(body).loss() else {
+                        break;
+                    };
                     file.lost = true;
+                    file.abandoned |= loss.abandoned;
+                    file.dropped = file.dropped.saturating_add(loss.dropped);
                     // The read before it ended.
                     file.reads = 0;
                 }
@@ -92,6 +114,16 @@ impl SalvageFile {
         self.lost
     }
 
+    /// Returns whether a queue was given up after the file's queue.
+    pub fn abandoned(&self) -> bool {
+        self.abandoned
+    }
+
+    /// Returns how many queued writes the wipes that wrote here dropped.
+    pub fn dropped(&self) -> u64 {
+        self.dropped
+    }
+
     /// Consumes the file's queue, which is not all there was once something
     /// queued after it may be lost.
     pub fn into_queue(self) -> Option<SalvagedQueue> {
@@ -106,9 +138,16 @@ impl SalvageFile {
         frame(READ_ATTEMPT, &[])
     }
 
-    /// The frame that says a database is wiped whose queue is not here.
-    pub fn loss() -> Vec<u8> {
-        frame(LOSS, &[])
+    /// Blank bytes to write after a read attempt, then overwritten.
+    pub fn reserved() -> [u8; RESERVED] {
+        [0; RESERVED]
+    }
+
+    /// The frame that says a database is wiped whose queue is not all here.
+    pub fn loss(loss: QueueLoss) -> Vec<u8> {
+        let mut body = vec![u8::from(loss.abandoned)];
+        body.extend(loss.dropped.to_le_bytes());
+        frame(LOSS, &body)
     }
 
     /// The frame that says importing the queue has started.
@@ -242,6 +281,22 @@ impl<'a> Reader<'a> {
         Some(i64::from_le_bytes(self.array()?))
     }
 
+    fn loss(mut self) -> Option<QueueLoss> {
+        let abandoned = self.flag()?;
+        let dropped = u64::from_le_bytes(self.array()?);
+        self.0
+            .is_empty()
+            .then_some(QueueLoss { abandoned, dropped })
+    }
+
+    fn flag(&mut self) -> Option<bool> {
+        match self.array()? {
+            [0] => Some(false),
+            [1] => Some(true),
+            _ => None,
+        }
+    }
+
     fn bytes(&mut self) -> Option<&'a [u8]> {
         let len = self.len()?;
         self.take(len)
@@ -277,16 +332,11 @@ impl<'a> Reader<'a> {
         }
         let id = Uuid::from_bytes(self.array()?);
         let rounds = u32::from_le_bytes(self.array()?);
-        let complete = match self.array()? {
-            [0] => false,
-            [1] => true,
-            _ => return None,
-        };
+        let complete = self.flag()?;
         let sequence = self.i64()?;
-        let source = match self.array()? {
-            [0] => None,
-            [1] => Some(self.bytes()?.to_vec()),
-            _ => return None,
+        let source = match self.flag()? {
+            false => None,
+            true => Some(self.bytes()?.to_vec()),
         };
         let rows = self.many(|reader| reader.row().filter(|row| row.len() == QUEUE_ROW_COLUMNS))?;
         let shadows = self.many(|reader| {

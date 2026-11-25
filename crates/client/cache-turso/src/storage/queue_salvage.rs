@@ -24,7 +24,7 @@ mod read;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
 
-pub use file::SalvageFile;
+pub use file::{QueueLoss, SalvageFile};
 #[cfg(target_arch = "wasm32")]
 pub use read::read_queue;
 

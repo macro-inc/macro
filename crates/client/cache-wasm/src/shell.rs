@@ -1128,7 +1128,7 @@ async fn open_or_wipe(
                 .await
                 .map_err(|failure| storage_err_js(failure.error()))?,
             CacheOpenOutcome::ResetStorageUncertain,
-            crossing,
+            crossing.torn(),
         ),
     };
 
@@ -1472,8 +1472,9 @@ pub async fn destroy_cache(scope: String) -> Result<(), JsValue> {
         .recovery_wipe()
         .await
         .map_err(err_js)?;
-    salvage::forget(&owner.sidecar()).await?;
-    owner.release().await.map_err(err_js)
+    let forgotten = salvage::forget(&owner.sidecar()).await;
+    owner.release().await.map_err(err_js)?;
+    forgotten
 }
 
 #[cfg(feature = "browser-test-hooks")]
@@ -1807,7 +1808,10 @@ async fn discard_storage(storage: BrowserStorage) -> Result<OpfsOwner, JsValue> 
         TursoStorageCloseOutcome::ResetRequired(closed) => closed.reset().await,
     }
     .map_err(err_js)?;
-    salvage::forget(&owner.sidecar()).await?;
+    if let Err(error) = salvage::forget(&owner.sidecar()).await {
+        owner.release().await.map_err(err_js)?;
+        return Err(error);
+    }
     Ok(owner)
 }
 

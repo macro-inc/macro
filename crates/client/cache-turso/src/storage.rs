@@ -58,7 +58,7 @@ use turso_opfs::{
 
 #[cfg(target_arch = "wasm32")]
 pub use queue_salvage::read_queue;
-pub use queue_salvage::{QueueImport, QueueRead, SalvageFile, SalvagedQueue};
+pub use queue_salvage::{QueueImport, QueueLoss, QueueRead, SalvageFile, SalvagedQueue};
 
 /// Frozen storage schema version, independent of cache postcard versions.
 pub const STORAGE_SCHEMA_VERSION: u32 = 12;

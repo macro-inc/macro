@@ -19,7 +19,7 @@ mod storage;
 pub use driver::{WalCheckpoint, WalPosition};
 pub use error::{PhysicalResetReason, TursoStorageError};
 pub use storage::{
-    QueueImport, QueueRead, QueuedMutationCount, STORAGE_SCHEMA_VERSION, SalvageFile,
+    QueueImport, QueueLoss, QueueRead, QueuedMutationCount, STORAGE_SCHEMA_VERSION, SalvageFile,
     SalvagedQueue, TursoStorage, TursoStorageCloseOutcome, TursoStorageOpenOutcome,
 };
 

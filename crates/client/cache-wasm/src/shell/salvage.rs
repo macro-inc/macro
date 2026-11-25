@@ -7,7 +7,7 @@
 use super::{err_js, reset_required_js_error, storage_err_js};
 use crate::query_telemetry;
 use cache_turso::{
-    QueueRead, SalvageFile, SalvagedQueue, TursoStorage, TursoStorageError, read_queue,
+    QueueLoss, QueueRead, SalvageFile, SalvagedQueue, TursoStorage, TursoStorageError, read_queue,
 };
 use turso_opfs::{OpenResult, OpfsError, OpfsErrorKind, OpfsOwner, Sidecar};
 use wasm_bindgen::JsValue;
@@ -15,6 +15,8 @@ use wasm_bindgen::JsValue;
 /// Reading a damaged database can end its worker, importing from one can fail
 /// again and again. After this many tries the cache goes on without the queue.
 const MAX_ATTEMPTS: u32 = 3;
+/// Tries to read a side file that fails, which nothing else explains.
+const FILE_READS: u32 = 3;
 
 /// What became of the mutations a wiped database queued.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -83,9 +85,15 @@ impl CrossingTimes {
 /// A wiped database's queue, until the next database holds it.
 #[derive(Default)]
 pub(super) struct Crossing {
-    /// The queue itself only when the side file would not take it.
-    unwritten: Option<SalvagedQueue>,
+    /// The queue itself, for when the side file does not give it back.
+    queue: Option<SalvagedQueue>,
+    /// Whether the side file would not take it.
+    unwritten: bool,
+    /// Less what the side file tells.
     report: QueueReport,
+    /// Whether one file of the database was gone, and with it whether that
+    /// database had taken the queue.
+    torn: bool,
 }
 
 fn now_ms() -> i64 {
@@ -99,17 +107,30 @@ pub(super) async fn wipe_keeping_queue(
 ) -> Result<(OpfsOwner, Crossing), JsValue> {
     let started = query_telemetry::now_ms();
     let sidecar = owner.sidecar();
-    let (owner, bytes) = or_busy(owner, sidecar.read().await).await?;
-    let file = SalvageFile::decode(&bytes.unwrap_or_default());
-    let (owner, mut read) = read_before_wipe(scope, owner, &sidecar, file).await?;
-    let unwritten = match read.frame {
-        Some(queue) => write_queue(&sidecar, read.end, queue).await,
-        None => None,
-    };
-    let end = match unwritten {
-        Some(_) => note_loss(&sidecar, read.end).await,
-        None => read.end,
-    };
+    let (owner, file) = or_release(owner, read_file(&sidecar).await).await?;
+    let unread = file.is_none();
+    let (owner, mut read) =
+        read_before_wipe(scope, owner, &sidecar, file.unwrap_or_default()).await?;
+    if unread {
+        read.report.lose();
+    }
+    read.write_queue(&sidecar).await;
+    let queue = read.queue.take().map(|queue| match unread {
+        true => queue.after_loss(),
+        false => queue,
+    });
+    let mut unwritten = read.unwritten;
+    if unwritten || read.report.lost() {
+        let loss = QueueLoss {
+            abandoned: read.report.outcome == QueueOutcome::Abandoned,
+            dropped: read.report.dropped,
+        };
+        let frame = SalvageFile::loss(loss);
+        if sidecar.write_tail(read.end, &frame).await.is_ok() {
+            read.end += frame.len() as u64;
+            read.report.dropped = 0;
+        }
+    }
     let wiping = query_telemetry::now_ms();
     let owner = wipe(owner).await?;
     read.report.times = CrossingTimes {
@@ -118,33 +139,32 @@ pub(super) async fn wipe_keeping_queue(
         import_ms: None,
     };
     // A full disk has room again.
-    let unwritten = match unwritten {
-        Some(queue) => write_queue(&sidecar, end, queue).await,
-        None => None,
-    };
+    if let (true, Some(queue)) = (unwritten, &queue) {
+        let written = sidecar.write_tail(read.end, &queue.to_frame()).await;
+        unwritten = written.is_err();
+    }
     Ok((
         owner,
         Crossing {
+            queue,
             unwritten,
             report: read.report,
+            torn: read.torn,
         },
     ))
 }
 
-/// Returns the queue when the side file would not take it.
-async fn write_queue(sidecar: &Sidecar, end: u64, queue: SalvagedQueue) -> Option<SalvagedQueue> {
-    let written = sidecar.write_tail(end, &queue.to_frame()).await;
-    written.is_err().then_some(queue)
-}
-
-/// Says that the database is wiped without a copy, for whoever comes next if
-/// this worker dies before it is written. Returns where the next frame goes.
-async fn note_loss(sidecar: &Sidecar, end: u64) -> u64 {
-    let loss = SalvageFile::loss();
-    match sidecar.write_tail(end, &loss).await {
-        Ok(()) => end + loss.len() as u64,
-        Err(_) => end,
+/// The side file, or nothing when it cannot be read. A failure that passes
+/// must not cost the queue in it.
+async fn read_file(sidecar: &Sidecar) -> Result<Option<SalvageFile>, OpfsError> {
+    for _ in 0..FILE_READS {
+        match sidecar.read().await {
+            Ok(bytes) => return Ok(Some(SalvageFile::decode(&bytes))),
+            Err(error) if error.kind() == OpfsErrorKind::Busy => return Err(error),
+            Err(_) => {}
+        }
     }
+    Ok(None)
 }
 
 async fn wipe(owner: OpfsOwner) -> Result<OpfsOwner, JsValue> {
@@ -154,41 +174,59 @@ async fn wipe(owner: OpfsOwner) -> Result<OpfsOwner, JsValue> {
         .map_err(|failure| storage_err_js(failure.error()))
 }
 
-/// Rejects, releasing the lock, when another context keeps the side file open:
-/// it is closing it, and the next attempt reads it.
-async fn or_busy<T>(
+/// Rejects, releasing the lock, when the side file failed the caller. Another
+/// context that keeps it open is closing it, and the next attempt goes on.
+async fn or_release<T>(
     owner: OpfsOwner,
     result: Result<T, OpfsError>,
-) -> Result<(OpfsOwner, Option<T>), JsValue> {
+) -> Result<(OpfsOwner, T), JsValue> {
     match result {
-        Ok(value) => Ok((owner, Some(value))),
-        Err(error) if error.kind() == OpfsErrorKind::Busy => {
+        Ok(value) => Ok((owner, value)),
+        Err(error) => {
             owner.release().await.map_err(err_js)?;
             Err(storage_err_js(&error))
         }
-        // Whatever else is wrong with the side file never stops the cache.
-        Err(_) => Ok((owner, None)),
     }
 }
 
 struct ReadBeforeWipe {
-    /// A queue the side file does not hold yet, and where it goes.
-    frame: Option<SalvagedQueue>,
+    /// A queue that is new to the side file.
+    queue: Option<SalvagedQueue>,
+    /// Whether the side file does not hold it yet.
+    unwritten: bool,
+    /// Where the side file goes on.
     end: u64,
     report: QueueReport,
+    torn: bool,
 }
 
 impl ReadBeforeWipe {
     /// Nothing of the database could be read. A queue the side file holds from
     /// before is not all there was, and says so to whoever imports it.
     fn unreadable(mut self, file: SalvageFile) -> Self {
-        self.report.outcome = QueueOutcome::Unreadable;
+        self.report.lose();
         let pending = file.into_queue();
-        self.frame = pending
-            .clone()
-            .map(SalvagedQueue::after_loss)
-            .filter(|queue| Some(queue) != pending.as_ref());
+        let doubted = pending.clone().map(SalvagedQueue::after_loss);
+        self.carry(doubted, pending);
         self
+    }
+
+    /// Carries `queue`, when it is not the one the side file holds.
+    fn carry(&mut self, queue: Option<SalvagedQueue>, held: Option<SalvagedQueue>) {
+        self.queue = queue.filter(|queue| Some(queue) != held.as_ref());
+        self.unwritten = self.queue.is_some();
+    }
+
+    /// Keeps it unwritten when the side file would not take it.
+    async fn write_queue(&mut self, sidecar: &Sidecar) {
+        let Some(queue) = self.queue.as_ref().filter(|_| self.unwritten) else {
+            return;
+        };
+        let frame = queue.to_frame();
+        if sidecar.write_tail(self.end, &frame).await.is_ok() {
+            self.end += frame.len() as u64;
+            self.unwritten = false;
+        }
     }
 }
 
@@ -199,16 +237,21 @@ async fn read_before_wipe(
     file: SalvageFile,
 ) -> Result<(OpfsOwner, ReadBeforeWipe), JsValue> {
     let mut read = ReadBeforeWipe {
-        frame: None,
+        queue: None,
+        unwritten: false,
         end: file.end(),
         report: QueueReport::default(),
+        torn: false,
     };
     if file.reads() >= MAX_ATTEMPTS {
         return Ok((owner, read.unreadable(file)));
     }
     let attempt = SalvageFile::read_attempt();
     let start = file.end();
-    if sidecar.write_tail(start, &attempt).await.is_ok() {
+    let reserved = [&attempt[..], &SalvageFile::reserved()].concat();
+    if sidecar.write_tail(start, &reserved).await.is_ok()
+        || sidecar.write_tail(start, &attempt).await.is_ok()
+    {
         read.end += attempt.len() as u64;
     }
     let session = match owner.open().await {
@@ -219,6 +262,7 @@ async fn read_before_wipe(
                 .reset()
                 .await
                 .map_err(|failure| storage_err_js(failure.error()))?;
+            read.torn = true;
             return Ok((owner, read));
         }
         Err(failure) => {
@@ -249,27 +293,30 @@ async fn read_before_wipe(
     let pending = file.into_queue();
     let found = read_queue(&connected, scope, pending.clone(), now_ms());
     read.report = report_of(&found);
-    if found.forget_pending {
+    let forgotten = if found.forget_pending {
         let attempts = attempt.repeat(reads);
         read.end = attempts.len() as u64;
         // What the database holds and may have settled must not come back.
-        if sidecar.write_tail(0, &attempts).await.is_err() {
-            sidecar.remove().await.map_err(err_js)?;
-            read.end = 0;
+        match sidecar.write_tail(0, &attempts).await {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                read.end = 0;
+                sidecar.remove().await
+            }
         }
-    }
-    read.frame = found.queue.filter(|queue| Some(queue) != pending.as_ref());
-    if let Some(queue) = &read.frame {
-        let frame = queue.to_frame();
-        if sidecar.write_tail(read.end, &frame).await.is_ok() {
-            read.frame = None;
-        }
+    } else {
+        Ok(())
+    };
+    if forgotten.is_ok() {
+        read.carry(found.queue, pending);
+        read.write_queue(sidecar).await;
     }
     let owner = connected
         .try_close()
         .map_err(err_js)?
         .preserve()
         .map_err(err_js)?;
+    let (owner, ()) = or_release(owner, forgotten).await?;
     Ok((owner, read))
 }
 
@@ -295,11 +342,34 @@ fn report_of(found: &QueueRead) -> QueueReport {
     }
 }
 
+impl QueueReport {
+    fn lost(&self) -> bool {
+        self.outcome != QueueOutcome::None || self.dropped > 0
+    }
+
+    /// Writes were lost, nobody knows how many.
+    fn lose(&mut self) {
+        if self.outcome == QueueOutcome::None {
+            self.outcome = QueueOutcome::Unreadable;
+        }
+    }
+}
+
 impl Crossing {
+    /// This crossing, to a database whose other half was gone.
+    pub(super) fn torn(self) -> Self {
+        Self { torn: true, ..self }
+    }
+
     /// What this wipe and a later one found.
     pub(super) fn then(self, later: Self) -> Self {
         Self {
-            unwritten: later.unwritten.or(self.unwritten),
+            torn: self.torn || later.torn,
+            unwritten: match later.queue {
+                Some(_) => later.unwritten,
+                None => self.unwritten,
+            },
+            queue: later.queue.or(self.queue),
             report: QueueReport {
                 outcome: match later.report.outcome {
                     QueueOutcome::None => self.report.outcome,
@@ -320,26 +390,31 @@ impl Crossing {
     ) -> Result<QueueReport, JsValue> {
         let started = query_telemetry::now_ms();
         let mut report = self.report;
-        let bytes = match sidecar.read().await {
-            Ok(bytes) => bytes,
-            // Serving first would let newer writes overtake the ones in it.
-            Err(error) if error.kind() == OpfsErrorKind::Busy => {
-                return Err(storage_err_js(&error));
-            }
-            Err(_) => Vec::new(),
-        };
-        if bytes.is_empty() && self.unwritten.is_none() {
+        // Serving first would let newer writes overtake the ones in it.
+        let read = read_file(sidecar)
+            .await
+            .map_err(|error| storage_err_js(&error))?;
+        let unread = read.is_none();
+        let file = read.unwrap_or_default();
+        if !unread && file.is_blank() && !self.unwritten {
             return Ok(report);
         }
-        let file = SalvageFile::decode(&bytes);
-        let (end, lost) = (file.end(), file.lost());
-        let imports = match self.unwritten {
+        if unread || (self.torn && file.imports() > 0) {
+            report.lose();
+        }
+        report.dropped += file.dropped();
+        let (end, lost, abandoned) = (file.end(), file.lost(), file.abandoned());
+        let own = self.queue.filter(|_| self.unwritten || unread);
+        let imports = match own {
             Some(_) => 0,
             None => file.imports(),
         };
-        let Some(queue) = self.unwritten.or(file.into_queue()) else {
-            if lost && report.outcome == QueueOutcome::None {
-                report.outcome = QueueOutcome::Unreadable;
+        let Some(queue) = own.or(file.into_queue()) else {
+            if abandoned && report.outcome == QueueOutcome::None {
+                report.outcome = QueueOutcome::Abandoned;
+            }
+            if lost {
+                report.lose();
             }
             remove(sidecar).await?;
             return Ok(report);

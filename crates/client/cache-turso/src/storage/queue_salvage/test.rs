@@ -15,6 +15,10 @@ use predicate_index::{
 use proptest::prelude::*;
 
 const SCOPE: &str = "salvage";
+const LOSS: QueueLoss = QueueLoss {
+    abandoned: true,
+    dropped: 2,
+};
 
 fn fresh() -> TursoStorage {
     TursoStorage::open_in_memory(SCOPE).unwrap()
@@ -295,7 +299,7 @@ fn a_loss_leaves_the_queue_before_it_in_doubt() {
         let mut storage = fresh();
         enqueue(&mut storage, "First").await;
         let queue = carried(&storage);
-        let (frame, loss) = (queue.to_frame(), SalvageFile::loss());
+        let (frame, loss) = (queue.to_frame(), SalvageFile::loss(LOSS));
         let decoded = |frames: &[&[u8]]| SalvageFile::decode(&frames.concat()).into_queue();
         let doubted = Some(queue.clone().after_loss());
         assert_eq!(decoded(&[&loss, &frame]), Some(queue.clone()));
@@ -307,6 +311,37 @@ fn a_loss_leaves_the_queue_before_it_in_doubt() {
         assert_eq!(reads(&[&attempt, &attempt]), 2);
         assert_eq!(reads(&[&attempt, &attempt, &loss]), 0);
     });
+}
+
+#[test]
+fn what_a_wipe_lost_outlives_the_queue_that_follows_it() {
+    block_on(async {
+        let mut storage = fresh();
+        enqueue(&mut storage, "First").await;
+        let frame = carried(&storage).to_frame();
+        let loss = SalvageFile::loss(LOSS);
+        let told = |frames: &[&[u8]]| {
+            let file = SalvageFile::decode(&frames.concat());
+            (file.lost(), file.abandoned(), file.dropped())
+        };
+        assert_eq!(told(&[&frame]), (false, false, 0));
+        assert_eq!(told(&[&frame, &loss, &loss]), (true, true, 4));
+        // A newer queue ends the doubt, not the count.
+        assert_eq!(told(&[&loss, &frame]), (false, false, 2));
+        let unknown = [loss[..4].to_vec(), vec![0; loss.len() - 4]].concat();
+        assert_eq!(told(&[&frame, &unknown]), (false, false, 0));
+    });
+}
+
+#[test]
+fn a_loss_fits_in_what_a_read_attempt_reserves() {
+    let attempt = SalvageFile::read_attempt();
+    let reserved = [&attempt[..], &SalvageFile::reserved()].concat();
+    let file = SalvageFile::decode(&reserved);
+    assert_eq!((file.reads(), file.end()), (1, attempt.len() as u64));
+    let mut told = reserved;
+    told[attempt.len()..].copy_from_slice(&SalvageFile::loss(LOSS));
+    assert!(SalvageFile::decode(&told).lost());
 }
 
 #[test]
@@ -653,15 +688,10 @@ fn a_queue_not_imported_yet_survives_another_wipe() {
         let mut storage = fresh();
         enqueue(&mut storage, "First").await;
         let queue = carried(&storage);
-        for next in [TursoMemoryDatabase::new("again.db").open(SCOPE).unwrap(), {
-            let broken = fresh();
-            execute(&broken, "DROP TABLE mutation_queue");
-            broken
-        }] {
-            let read = next.salvage_queue(SCOPE, Some(queue.clone()), 0);
-            assert_eq!(read.queue, Some(queue.clone()));
-            assert_eq!(read.dropped, 0);
-        }
+        let next = TursoMemoryDatabase::new("again.db").open(SCOPE).unwrap();
+        let read = next.salvage_queue(SCOPE, Some(queue.clone()), 0);
+        assert_eq!(read.queue, Some(queue));
+        assert_eq!(read.dropped, 0);
     });
 }
 
@@ -821,6 +851,57 @@ fn a_queue_this_build_cannot_read_is_not_carried() {
         );
         assert_eq!(salvage(&storage).queue.unwrap().len(), 1);
     });
+}
+
+/// The copy stayed after its import, its writes settled, then `damage`.
+#[track_caller]
+fn assert_settled_stays_settled(damage: &str) {
+    let mut first = fresh();
+    block_on(enqueue(&mut first, "one"));
+    let queue = carried(&first);
+    let mut second = fresh();
+    assert!(second.import_queue(&queue, 0).unwrap().complete);
+    execute(&second, "DELETE FROM mutation_queue");
+    execute(&second, damage);
+    let read = second.salvage_queue(SCOPE, Some(queue), 0);
+    assert_eq!(read.queue, None);
+    assert!(read.forget_pending);
+}
+
+#[test]
+fn a_damaged_database_that_imported_its_copy_forgets_it() {
+    assert_settled_stays_settled("DELETE FROM meta WHERE key = 'namespace'");
+    assert_settled_stays_settled("UPDATE meta SET value = 'other' WHERE key = 'namespace'");
+}
+
+#[test]
+fn a_copy_behind_a_database_that_cannot_say_whether_it_imported_it_is_in_doubt() {
+    let mut first = fresh();
+    block_on(enqueue(&mut first, "one"));
+    let queue = carried(&first);
+    for damage in [
+        "DROP TABLE mutation_queue",
+        "DROP TABLE meta",
+        "DELETE FROM meta",
+    ] {
+        let second = fresh();
+        execute(&second, damage);
+        let read = second.salvage_queue(SCOPE, Some(queue.clone()), 0);
+        assert_eq!(read.queue, Some(queue.clone().after_loss()), "{damage}");
+    }
+}
+
+#[test]
+fn a_damaged_database_of_another_account_drops_the_copy() {
+    let mut first = fresh();
+    block_on(enqueue(&mut first, "one"));
+    let queue = carried(&first);
+    let mut second = fresh();
+    block_on(second.put_batch(vec![metadata(IDENTITY_META_KEY, "somebody-else")])).unwrap();
+    execute(&second, "DELETE FROM meta WHERE key = 'namespace'");
+    let read = second.salvage_queue(SCOPE, Some(queue), 0);
+    assert_eq!((read.queue, read.dropped), (None, 1));
+    assert!(read.forget_pending);
 }
 
 #[test]
