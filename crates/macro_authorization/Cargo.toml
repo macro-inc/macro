@@ -11,6 +11,8 @@ axum = [
   "dep:model-error-response",
   "dep:serde",
   "dep:serde_json",
+  "dep:sha2",
+  "dep:tracing-opentelemetry",
 ]
 default = ["axum", "outbound"]
 local_auth = ["dep:macro_env_var"]
@@ -36,10 +38,14 @@ sha2 = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+agent_credentials = { path = "../agent_credentials" }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }

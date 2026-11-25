@@ -8,6 +8,7 @@ import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isDesktopPlatform } from '@core/util/platform';
 import GearFillIcon from '@icon/system/fill/gear-fill.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import GearIcon from '@icon/system/regular/gear.svg';
@@ -39,9 +40,10 @@ const isSettingsActive = () => {
 /**
  * Opens the Downloads settings page (desktop installers and the phone app's
  * QR codes). Drawn like the update button's glyph, without its comet, and
- * hidden wherever the page is unavailable.
+ * hidden wherever the page is unavailable. The desktop app is already
+ * installed, so it keeps the page in Settings but not on the rail.
  */
-const DownloadsButton = () => {
+export const DownloadsButton = () => {
   const analytics = useAnalytics();
   const { openSettings, openSettingsInSplit, activeTabId } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
@@ -56,7 +58,7 @@ const DownloadsButton = () => {
   };
 
   return (
-    <Show when={isTabAvailable('Downloads')}>
+    <Show when={!isDesktopPlatform() && isTabAvailable('Downloads')}>
       <Button
         aria-label={t('nav.downloads')}
         variant="ghost"
@@ -81,10 +83,10 @@ const DownloadsButton = () => {
 };
 
 /**
- * The rail's bottom actions: a ready app update, Downloads, help,
- * then Settings, opened like any other rail view. The gear carries the account
- * photo as a badge, so people with several accounts can tell which one they
- * are in.
+ * The rail's bottom actions: a ready app update, Downloads (in a browser),
+ * help, then Settings, opened like any other rail view. The gear carries the
+ * account photo as a badge, so people with several accounts can tell which one
+ * they are in.
  */
 export const FooterActions = (props: {
   onMenuOpenChange?: (open: boolean) => void;

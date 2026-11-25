@@ -236,7 +236,6 @@ ignores:
   - apps/web/src/features/tasks-view/components/TasksSidebar.tsx
   - apps/web/src/features/tasks-view/components/task-list/TaskList.tsx
   - apps/web/src/features/tasks-view/components/task-list/TaskListEntity.tsx
-  - apps/web/src/features/tutorial/InteractiveOnboardingModal.tsx
   - apps/web/src/features/universal-input/views/universal-composer.tsx
   - apps/web/src/features/whatsapp-linked/components/chat-list.tsx
   - apps/web/src/features/whatsapp-linked/views/whatsapp-page.tsx

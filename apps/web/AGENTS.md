@@ -861,6 +861,14 @@ row keeps its toggle in place as Hide (beside the Hide under its last
 notification), hovering a row swaps its time for Mark done without moving
 anything, and an open stack leaves the other rows undimmed, on phones too.
 
+Notification preview text is a picture of the message: every `StaticMarkdown`
+that renders it (inbox rows and stack items, `NotificationContent` under list
+rows, and touch Home's `InboxCardLayout` cards) is `inert`, so pressing a link
+or mention in it presses the row and opens nothing. The same suite's
+`preview-links.browser.e2e.ts` clicks, Cmd-clicks, middle-clicks and taps a
+link in a row and in an unfolded stack; the Signal suite's
+(`next-soup/soup-view/views/inbox/browser-test`) taps one in a Home card.
+
 A swipe row folds only what is inside it: draw a row's divider inside its
 `SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line
 behind. A list that can keep a row after a done unfolds it through
@@ -1272,7 +1280,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   first item" command, so a list on `useListInteractions` lands on its first
   row with no code in the view; when that command finds no row (a search with
   no results), the keys stay in the field. `wide` lets the open field take the rest of
-  the header (the view hides its other actions from `onOpenChange`), and
+  the header (the view hides its other actions from `onOpenChange`), `open`
+  lets the view keep the open state and close the field itself, and
   `suggestions` lists rows under the field that the arrows walk before the
   results (a row that `editsQuery`, such as Email's `in:` views, keeps the
   keyboard in the field); `operators` marks search operators (`in:sent`) in
@@ -1395,7 +1404,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep send reservations, leases, and cancellation in the email journal; the general GraphQL queue handles draft autosaves only.
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
 - Retain sender ownership, draft signal settings, and primary-inbox selection in the same viewer-scoped inbox snapshot used by the composer; pending catalog refreshes must not block saves or sends, and account changes must clear that snapshot.
-- Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable. Never retry a superseded build (`cache-superseded`), stop after `MAX_RECOVERY_RELAPSES` restarts in a row whose cache failed again before staying up (restarts that fail outright keep retrying), and reset the count and backoff only after a restarted cache stays up for `RECOVERY_HEALTHY_MS`.
+- Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched or the coordinator restarted under it (`CoordinatorRestartedError`); retain the same scope and block draft sync until the replacement queue is readable. Never retry a superseded build (`cache-superseded`), stop after `MAX_RECOVERY_RELAPSES` restarts in a row whose cache failed again before staying up (restarts that fail outright keep retrying), and reset the count and backoff only after a restarted cache stays up for `RECOVERY_HEALTHY_MS`.
 - Touch email replies and forwards use the full-screen composer with the shared new-email header actions; preserve thread state underneath and flush local edits before closing.
 - Include unsynced email working copies in Drafts and mobile name search even
   before a GraphQL save, and warm sending accounts alongside backfill. Preserve

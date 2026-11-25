@@ -26,6 +26,7 @@ import { mergeRegister } from '@lexical/utils';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
+import { useQueryClient } from '@tanstack/solid-query';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -40,6 +41,7 @@ import {
   KEY_TAB_COMMAND,
   type LexicalEditor,
 } from 'lexical';
+import { ResultAsync } from 'neverthrow';
 import {
   type Accessor,
   createEffect,
@@ -53,6 +55,20 @@ import {
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useMarkdownName } from './MarkdownNameProvider';
 import { shouldAutofocusDocument } from './should-autofocus-document';
+
+type TitleRename = {
+  newName: string;
+  oldName: string;
+};
+
+/** What a title rename mutation is called with. */
+type TitleRenameVariables = {
+  entity: { name: string };
+  newName: string;
+};
+
+/** What a title rename mutation returns. */
+type TitleRenameResult = { success: boolean };
 
 /**
  * Use the plugin architecture to set up command handlers on both the
@@ -159,7 +175,6 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const panel = useSplitPanel();
   const canEdit = permissions.canEdit;
   const { md: mdData, setMd: setMdData } = documentState.editor;
-  const renameDocumentMutation = createRenameDssEntityMutation();
   const {
     persistedName: persistedDocumentName,
     editorName: mdDocumentName,
@@ -168,9 +183,35 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const [showFallback, setShowFallback] = createSignal(true);
   const [titlePlaceholder] = createSignal<string>();
-  const [titleFocused, setTitleFocused] = createSignal(false);
 
   const blockId = documentId();
+  const renameScope = `document-title:${blockId}`;
+  // Renames of this document from every editor of it, including one closed
+  // with a save still running, reach the server in the order they were made.
+  const renameDocumentMutation = createRenameDssEntityMutation(
+    undefined,
+    renameScope
+  );
+  const mutationCache = useQueryClient().getMutationCache();
+  /** This document's title renames still in the mutation cache, from every
+   * editor of it, oldest first. */
+  const titleRenames = () =>
+    mutationCache
+      .findAll({
+        predicate: (mutation) => mutation.options.scope?.id === renameScope,
+      })
+      .flatMap((mutation) => {
+        // The scope holds only renames made by the mutation above.
+        const { status } = mutation.state;
+        const variables = mutation.state.variables as
+          | TitleRenameVariables
+          | undefined;
+        const data = mutation.state.data as TitleRenameResult | undefined;
+        if (!variables) return [];
+        const failed =
+          status === 'error' || (status === 'success' && !data?.success);
+        return [{ pending: status === 'pending', failed, variables }];
+      });
   const documentKind = kind();
   const entityBlockName = documentKind === 'document' ? 'md' : documentKind;
   const documentTags = useDocTags(
@@ -179,40 +220,75 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   );
   const titlePlaceholderFallback = blockNameToDefaultFile(entityBlockName);
 
-  let pendingRename:
-    | {
-        newName: string;
-        oldName: string;
-      }
-    | undefined;
+  let pendingRename: TitleRename | undefined;
+  // Renames this title sent that have not settled. Until they settle, the
+  // saved name can lag behind the title, so it must not replace the title.
+  let renamesInFlight = 0;
+
+  /**
+   * The rename the title's text needs, or none when the document is sure to
+   * end with that name. Renames already sent from any editor of the document
+   * count: the last one that has not failed is the last the server applies.
+   */
+  const renameTo = (newName: string): TitleRename | undefined => {
+    const last = titleRenames().findLast((rename) => !rename.failed);
+    if (last?.pending) {
+      const sentName = last.variables.newName;
+      return newName === sentName ? undefined : { newName, oldName: sentName };
+    }
+    const savedName = untrack(persistedDocumentName) ?? '';
+    if (newName !== savedName) return { newName, oldName: savedName };
+    // A rename that has returned can still be queued, with the saved name not
+    // showing it yet: the document is sure to keep the saved name only when
+    // that rename agrees with it.
+    const sentName = last?.variables.newName ?? savedName;
+    return newName === sentName ? undefined : { newName, oldName: sentName };
+  };
+
+  /** Whether a title rename sent or replaced `name`. A saved name outside
+   * them can only come from a rename made elsewhere; one inside them can be a
+   * late copy of an earlier save. */
+  const isTitleRenameName = (name: string) =>
+    titleRenames().some(
+      ({ variables }) =>
+        variables.newName === name || variables.entity.name === name
+    );
+
+  const saveTitle = async (next: TitleRename) => {
+    const saved = await ResultAsync.fromPromise(
+      renameDocumentMutation.mutateAsync({
+        entity: {
+          type: 'document',
+          id: blockId,
+          name: next.oldName,
+        },
+        newName: next.newName,
+      }),
+      (error) => error
+    );
+    renamesInFlight -= 1;
+    // A failed rename leaves the title as typed; the mutation reports it.
+    if (saved.isErr() || !saved.value.success) return;
+    // A rename made elsewhere while this one was in flight was held back.
+    const name = untrack(savedName);
+    if (name !== undefined && !isTitleRenameName(name)) showSavedName();
+  };
 
   const flushPendingRename = () => {
     const next = pendingRename;
     pendingRename = undefined;
     if (!next || !canEdit()) return;
-    renameDocumentMutation.mutate({
-      entity: {
-        type: 'document',
-        id: blockId,
-        name: next.oldName,
-      },
-      newName: next.newName,
-    });
+    renamesInFlight += 1;
+    fireAndForget(saveTitle(next), 'block-md-title');
   };
 
-  const scheduleRename = (newName: string, oldName: string) => {
-    if (newName === oldName) {
-      pendingRename = undefined;
-      debouncedFlushRename.clear();
-      return;
-    }
-    pendingRename = { newName, oldName };
-    debouncedFlushRename();
+  const scheduleRename = (next: TitleRename | undefined) => {
+    pendingRename = next;
+    if (next) debouncedFlushRename();
+    else debouncedFlushRename.clear();
   };
 
   const debouncedFlushRename = debounce(flushPendingRename, 400);
-  // Unmount cancels the debounce timer, so save a pending rename now.
-  onCleanup(flushPendingRename);
 
   const [state, setState] = createSignal('');
   const [initialized, setInitialized] = createSignal(false);
@@ -267,8 +343,6 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     setShowFallback(isEmpty);
   });
 
-  let selfChangedTitle = false;
-
   // Wait for the main editor to be mounted, then register the navigate plugin.
   createEffect(() => {
     const mainDocumentEditor = mdData.editor;
@@ -277,7 +351,6 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   });
 
   function onBlur() {
-    setTitleFocused(false);
     trimWhitespace(editor, { trailing: true });
   }
 
@@ -285,12 +358,9 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const onConnect = (el: HTMLDivElement) => {
     editor.setRootElement(el);
-    const onFocus = () => setTitleFocused(true);
-    el.addEventListener('focus', onFocus);
     el.addEventListener('blur', onBlur);
     setRootConnected(true);
     onCleanup(() => {
-      el.removeEventListener('focus', onFocus);
       el.removeEventListener('blur', onBlur);
     });
   };
@@ -301,50 +371,68 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const dataReady = () => documentSource().type !== 'loading';
 
-  const hasLocalTitleEdit = createMemo(() => {
-    if (!titleFocused()) return false;
-    return state().trim() !== (mdDocumentName() ?? '');
-  });
-
-  createEffect(
-    on(
-      () => ({ docName: persistedDocumentName(), ready: dataReady() }),
-      ({ docName, ready }) => {
-        const currentState = untrack(state);
-        if (
-          ready &&
-          docName !== undefined &&
-          docName !== currentState.trim() &&
-          !selfChangedTitle &&
-          !untrack(hasLocalTitleEdit)
-        ) {
-          forceSetTextContent(editor, docName);
-        }
-        selfChangedTitle = false;
-      }
-    )
+  // The document's preview republishes whenever anything in its batch
+  // changes, so compare the saved name by value: an unchanged name is not a
+  // rename.
+  const savedName = createMemo(() =>
+    dataReady() ? persistedDocumentName() : undefined
   );
+
+  /** Whether the title holds edits that are not saved yet: text typed into an
+   * open emoji or tag menu, which is not saved while the menu is open, a rename
+   * waiting for its debounce, or one in flight. */
+  const hasUnsavedEdits = () =>
+    untrack(inlineMenuOpen) ||
+    pendingRename !== undefined ||
+    renamesInFlight > 0;
+
+  // The saved name the title was last set to, until the title is edited. That
+  // text is not an edit: a reopened title can show a name another editor of
+  // the document is still renaming, and saving it back would undo that rename.
+  let shownName: string | undefined;
+
+  /** Puts the saved name in the title unless the title has edits of its own. */
+  function showSavedName() {
+    const name = untrack(savedName);
+    if (name === undefined || name === untrack(state).trim()) return;
+    if (hasUnsavedEdits()) return;
+    shownName = name;
+    // The label follows the title: drop a typed name that was never saved.
+    setOptimisticName(undefined);
+    forceSetTextContent(editor, name);
+  }
+
+  createEffect(on(savedName, showSavedName));
+
+  const saveTitleText = (text: string) => {
+    const nextName = text.trim();
+    if (nextName === shownName) return;
+    shownName = undefined;
+    if (nextName !== untrack(mdDocumentName)) {
+      setOptimisticName(nextName);
+    }
+    const next = renameTo(nextName);
+    if (!next || canEdit()) scheduleRename(next);
+  };
 
   createEffect(() => {
     const currentState = state();
-    if (untrack(inlineMenuOpen)) return;
+    // Text typed into an open emoji or tag menu is saved once it closes.
+    if (inlineMenuOpen()) return;
     if (!untrack(initialized)) {
       setInitialized(true);
       return;
     }
-    const nextName = currentState.trim();
-    if (nextName !== untrack(mdDocumentName)) {
-      setOptimisticName(nextName);
+    saveTitleText(currentState);
+  });
+
+  // Unmount cancels the debounce timer, so save a pending rename now, with
+  // any text still in an open emoji or tag menu.
+  onCleanup(() => {
+    if (untrack(inlineMenuOpen) && untrack(initialized)) {
+      saveTitleText(untrack(state));
     }
-    const persistedName = untrack(persistedDocumentName) ?? '';
-    if (nextName !== persistedName) {
-      selfChangedTitle = true;
-      if (canEdit()) {
-        scheduleRename(nextName, persistedName);
-      }
-    } else {
-      scheduleRename(nextName, persistedName);
-    }
+    flushPendingRename();
   });
 
   createEffect(() => {

@@ -46,8 +46,10 @@ Notification-only invocations use `AgentAction::notification`; public control mu
 reject caller-supplied notification metadata. Payloads contain facts, not drafts.
 The fold reuses this tagged event enum for its generated TypeScript union;
 retain Specta derives on event payloads and preserve the producer wire shape.
-Allow exact `<noop/>` only before any tool call in a notification turn; prompt
-instructions must match the fold's conservative treatment of all tool activity.
+Allow `<noop/>`, and nothing else, only before any tool call in a notification
+turn; prompt instructions must match the fold's conservative treatment of all
+tool activity. The fold drops a `<noop/>` that ends prose, but asks for the bare
+tag.
 
 UUID prompt actions append their action ID in hidden invocation context for
 ExecuteCode stale-turn fencing; mark that block with `INVOCATION_CONTEXT_META`

@@ -428,6 +428,7 @@ export const base = (
                 auth: { type: 'user', apiKey },
                 hosts,
                 ...(webApp === undefined ? {} : { webAppUrl: webApp }),
+                traceContext: true,
               })
           )
         : Promise.resolve(
@@ -437,6 +438,7 @@ export const base = (
               ...(given.webApp === undefined
                 ? {}
                 : { webAppUrl: given.webApp }),
+              traceContext: true,
             })
           );
     return macro;

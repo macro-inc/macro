@@ -96,6 +96,11 @@ pub struct MailboxBacklog {
     pub parked_until_max_seconds: i64,
     /// Folder and catalog streams whose initial enumeration is unfinished.
     pub streams_incomplete: i64,
+    /// How long the mailbox's longest-due import round has waited for a
+    /// claim, in seconds; 0 if none is due. Rounds wait in one line with every
+    /// mailbox's folder polls, so this is how long each page of the import
+    /// waits once the polls ahead of it run late.
+    pub import_round_wait_seconds: i64,
     pub imported_5m: i64,
     /// `None` when nothing was imported in the last day.
     pub seconds_since_last_import: Option<i64>,
@@ -158,6 +163,7 @@ impl<R: MailboxProgressRepository> MailboxProgressService<R> {
                 oldest_waiting_seconds = backlog.oldest_waiting_seconds,
                 parked_until_max_seconds = backlog.parked_until_max_seconds,
                 streams_incomplete = backlog.streams_incomplete,
+                import_round_wait_seconds = backlog.import_round_wait_seconds,
                 imported_5m = backlog.imported_5m,
                 seconds_since_last_import = backlog.seconds_since_last_import,
                 sync_active = backlog.sync_active,
