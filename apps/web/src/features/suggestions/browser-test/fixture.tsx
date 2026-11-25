@@ -20,7 +20,7 @@ import type {
 import { layoutDay } from '../core/day';
 import type { Generation } from '../core/generation';
 import { FOR_YOU_LISTS, type ForYouList } from '../core/lists';
-import type { Suggestion, SuggestionFeed } from '../core/suggestion';
+import type { Suggestion, SuggestionFeed, Topic } from '../core/suggestion';
 import { createSuggestionsFeed } from '../primitives/feed';
 import { createRefresh } from '../primitives/refresh';
 import {
@@ -71,6 +71,32 @@ const ALL: Suggestion[] = [
   doneSuggestion,
 ];
 
+const TOPICS: Topic[] = [
+  { key: 'event:offsite', name: 'Spring offsite' },
+  {
+    key: 'customer:acme',
+    name: 'Acme renewal',
+    reason: 'Renews December 1',
+  },
+  { key: 'project:launch', name: 'Launch page', reason: 'Due November 20' },
+];
+const TOPIC_OF: Record<string, string> = {
+  'suggestion-drafted-reply': 'customer:acme',
+  'suggestion-composer': 'event:offsite',
+  'suggestion-reply': 'customer:acme',
+  'suggestion-review': 'project:launch',
+  'suggestion-quiet': 'event:offsite',
+  'suggestion-running': 'customer:acme',
+};
+/** `ALL`, some of it in topics: two with several rows, one with a single row. */
+const IN_TOPICS: Suggestion[] = ALL.map((suggestion) => {
+  const topic = TOPICS.find(({ key }) => key === TOPIC_OF[suggestion.id]);
+
+  return topic
+    ? { ...suggestion, topic: { key: topic.key, name: topic.name } }
+    : suggestion;
+});
+
 /** Items by their ids, where the app would read their names and text. */
 const PARTS: SuggestionItemParts = {
   Source: (props) => (
@@ -92,6 +118,9 @@ function served(list: Suggestion[]): SuggestionFeed {
       ...list.filter((suggestion) => suggestion.status === 'done'),
     ],
     counts,
+    topics: TOPICS.filter(({ key }) =>
+      list.some(({ status, topic }) => status !== 'done' && topic?.key === key)
+    ),
   };
 }
 
@@ -104,13 +133,13 @@ const RUN_REPORT = 'Posted the summary in #ops with six confirmed deliveries.';
 function Fixture() {
   const scenario = PARAMS.get('scenario');
   const [suggestions, setSuggestions] = createSignal<Suggestion[] | undefined>(
-    scenario === 'loading' || scenario === 'error'
-      ? undefined
-      : scenario === 'empty'
-        ? []
-        : scenario === 'done'
-          ? [doneSuggestion]
-          : ALL
+    match(scenario)
+      .returnType<Suggestion[] | undefined>()
+      .with('loading', 'error', () => undefined)
+      .with('empty', () => [])
+      .with('done', () => [doneSuggestion])
+      .with('topics', () => IN_TOPICS)
+      .otherwise(() => ALL)
   );
   const [failed, setFailed] = createSignal(scenario === 'error');
   const [log, setLog] = createSignal<string[]>([]);
@@ -318,21 +347,27 @@ function Fixture() {
     openRoutines: (routineId) =>
       record(routineId ? `routines ${routineId}` : 'routines'),
   };
-  // As the app's route: the list is in the URL, so Back changes it too.
-  const listIn = (search: string) =>
-    FOR_YOU_LISTS.find(
-      (name) => name === new URLSearchParams(search).get('list')
-    ) ?? 'today';
-  const [list, setShownList] = createSignal<ForYouList>(
-    listIn(location.search)
-  );
-  const setList = (next: ForYouList) => {
+  // As the app's route: the list or the topic is in the URL, so Back changes
+  // it too.
+  const [search, setSearch] = createSignal(location.search);
+  const params = () => new URLSearchParams(search());
+  const list = () =>
+    FOR_YOU_LISTS.find((name) => name === params().get('list')) ?? 'today';
+  const at = (shown: { list?: ForYouList; topic?: string }) => {
     const url = new URL(location.href);
-    url.searchParams.set('list', next);
-    history.pushState(null, '', url);
-    setShownList(next);
+    url.searchParams.delete('list');
+    url.searchParams.delete('topic');
+    for (const [name, value] of Object.entries(shown)) {
+      url.searchParams.set(name, value);
+    }
+    return url;
   };
-  const followHistory = () => setShownList(listIn(location.search));
+  const go = (shown: { list?: ForYouList; topic?: string }) => {
+    const url = at(shown);
+    history.pushState(null, '', url);
+    setSearch(url.search);
+  };
+  const followHistory = () => setSearch(location.search);
   window.addEventListener('popstate', followHistory);
   onCleanup(() => window.removeEventListener('popstate', followHistory));
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('for-you');
@@ -342,6 +377,10 @@ function Fixture() {
     splitHotkeyScope: hotkeyScope,
   } as unknown as SplitPanelContextType;
 
+  /** Answer with the feed as it is now, topics included. */
+  const readFeed = () => {
+    setSuggestions(IN_TOPICS.map((suggestion) => ({ ...suggestion })));
+  };
   /** Reply on the opened reply suggestions' threads, as the server's next answer would show. */
   const sendReplies = () =>
     setSuggestions((list) =>
@@ -360,8 +399,10 @@ function Fixture() {
           <div ref={attachHotkeys} class="flex min-h-0 flex-1">
             <ForYouView
               feed={feed}
-              list={list()}
-              onSelectList={setList}
+              list={params().has('topic') ? 'today' : list()}
+              onSelectList={(next) => go({ list: next })}
+              topicKey={params().get('topic') ?? undefined}
+              onSelectTopic={(topic) => go({ topic })}
               routines={routines}
               parts={PARTS}
               refresh={refresh}
@@ -373,6 +414,12 @@ function Fixture() {
         <footer class="flex shrink-0 items-center gap-3 border-t border-edge-muted px-4 py-2 text-xs text-ink-muted">
           <button type="button" onClick={finishRuns}>
             Finish runs
+          </button>
+          <button type="button" onClick={readFeed}>
+            Read feed
+          </button>
+          <button type="button" onClick={() => setSuggestions(ALL)}>
+            Lose topic
           </button>
           <button type="button" onClick={sendReplies}>
             Send replies

@@ -1154,7 +1154,10 @@ function mountCachedDirectory(
       (async (ids: readonly string[]) => {
         for (const id of ids) cache.records.delete(`GraphqlSoupChannel:${id}`);
         for (const listener of [...generationListeners])
-          listener({ storage: 'preserved' } as CacheGenerationChange);
+          listener({
+            storage: 'preserved',
+            queue: 'preserved',
+          } as CacheGenerationChange);
         return { removed: [...ids], unconfirmed: [] };
       })
   );
@@ -1215,12 +1218,15 @@ function mountCachedDirectory(
     resetStorage(next: string) {
       generation = next;
       for (const listener of [...generationListeners])
-        listener({ storage: 'reset' } as CacheGenerationChange);
+        listener({ storage: 'reset', queue: 'reset' } as CacheGenerationChange);
     },
     /** A new cache engine over the same storage, which reads again. */
     reopen() {
       for (const listener of [...generationListeners])
-        listener({ storage: 'preserved' } as CacheGenerationChange);
+        listener({
+          storage: 'preserved',
+          queue: 'preserved',
+        } as CacheGenerationChange);
     },
   };
 }

@@ -663,7 +663,6 @@ it('records an open of a block that tracks history', async () => {
   expect(trackBlockOpened).toHaveBeenCalledWith({
     itemId: '01a1460f-3198-7650-9b32-a43b49108e47',
     blockName: 'md',
-    client: expect.any(Function),
   });
 });
 

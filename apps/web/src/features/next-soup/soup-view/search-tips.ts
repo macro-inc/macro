@@ -19,4 +19,8 @@ export const searchViewTips = (): SearchTip[] => [
     operator: '"q3 plan"',
     finds: t('searchOperators.tipPhrase', { words: 'q3 plan' }),
   },
+  {
+    operator: '-draft',
+    finds: t('searchOperators.tipLeaveOut', { words: 'draft' }),
+  },
 ];

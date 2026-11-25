@@ -188,6 +188,8 @@
           || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
           || (rel == "vendor/chrono-tz")
           || (pkgs.lib.hasPrefix "vendor/chrono-tz/" rel)
+          || (rel == "vendor/sqlx-postgres")
+          || (pkgs.lib.hasPrefix "vendor/sqlx-postgres/" rel)
           || (
             type == "regular"
             && !(pkgs.lib.hasInfix "/" rel)
@@ -1248,6 +1250,8 @@
             ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
           grep -q "IANA_TZDB_VERSION" \
             ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/chrono-tz/src/prebuilt/directory.rs
+          grep -q "Claim the depth before the round trip" \
+            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/sqlx-postgres/src/transaction.rs
           touch $out
         '';
         pruned-deploy-src-starter-agent =

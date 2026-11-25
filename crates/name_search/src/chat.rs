@@ -12,13 +12,16 @@ use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::{NameSearchError, NameSearchResult, PaginatedResult, SearchEntityType, escape_regex};
+use crate::{
+    NameSearchError, NameSearchResult, PaginatedResult, SearchEntityType, escape_like, escape_regex,
+};
 
 /// Searches chats by IDs only
 async fn ids_search(
     db: &Pool<Postgres>,
     chat_ids: &[Uuid],
     search_pattern: String,
+    excluded_patterns: &[String],
     highlight_pattern: String,
     tag_option_ids: &[String],
     match_all_tags: bool,
@@ -54,6 +57,7 @@ async fn ids_search(
             WHERE c.id = ANY($1)
                 AND c."deletedAt" IS NULL
                 AND c.name ILIKE $2
+                AND NOT (c.name ILIKE ANY($9::text[]))
                 AND (
                     $4::timestamptz IS NULL
                     OR (c."updatedAt", c.id) < ($4, $5)
@@ -96,6 +100,7 @@ async fn ids_search(
         highlight_pattern,
         tag_option_ids,
         match_all_tags,
+        excluded_patterns,
     )
     .fetch_all(db)
     .await
@@ -120,6 +125,7 @@ async fn owner_search<'a>(
     macro_user_id: &MacroUserId<Lowercase<'a>>,
     chat_ids: &[Uuid],
     search_pattern: String,
+    excluded_patterns: &[String],
     highlight_pattern: String,
     tag_option_ids: &[String],
     match_all_tags: bool,
@@ -151,6 +157,7 @@ async fn owner_search<'a>(
             WHERE (c."userId" = $1 OR c.id = ANY($2))
                 AND c."deletedAt" IS NULL
                 AND c.name ILIKE $3
+                AND NOT (c.name ILIKE ANY($10::text[]))
                 AND (
                     $5::timestamptz IS NULL
                     OR (c."updatedAt", c.id) < ($5, $6)
@@ -194,6 +201,7 @@ async fn owner_search<'a>(
         highlight_pattern,
         tag_option_ids,
         match_all_tags,
+        excluded_patterns,
     )
     .fetch_all(db)
     .await
@@ -212,17 +220,22 @@ async fn owner_search<'a>(
     Ok(SearchCursorOption::paginate(results, limit as usize))
 }
 
-/// Searches over the user's chats by name. A non-empty `tag_option_ids`
-/// restricts results to chats holding any of those property option ids, or
-/// every one of them when `match_all_tags` is set.
-#[tracing::instrument(skip(db, term), fields(term_len = term.len()), err)]
+/// Searches over the user's chats by name. A chat whose name holds one of
+/// `excluded_terms` is left out. A non-empty `tag_option_ids` restricts
+/// results to chats holding any of those property option ids, or every one
+/// of them when `match_all_tags` is set.
+#[tracing::instrument(
+    skip(db, macro_user_id, term, excluded_terms),
+    fields(term_len = term.len(), excluded_terms = excluded_terms.len()),
+    err
+)]
 #[cfg_attr(
     not(test),
     cached(
         time = 30,
         result = true,
         key = "String",
-        convert = r#"{ format!("{}-{:?}-{}-{}-{:?}-{}-{}-{}", macro_user_id.as_ref(), chat_ids, term, ids_only, tag_option_ids, match_all_tags, limit, cursor.as_ref().and_then(|c| c.as_updated_at()).map(|(id, ts)| format!("{}-{}", id, ts)).unwrap_or_default()) }"#
+        convert = r#"{ format!("{}-{:?}-{}-{:?}-{}-{:?}-{}-{}-{}", macro_user_id.as_ref(), chat_ids, term, excluded_terms, ids_only, tag_option_ids, match_all_tags, limit, cursor.as_ref().and_then(|c| c.as_updated_at()).map(|(id, ts)| format!("{}-{}", id, ts)).unwrap_or_default()) }"#
     )
 )]
 pub async fn search_chat_names<'a>(
@@ -230,6 +243,7 @@ pub async fn search_chat_names<'a>(
     macro_user_id: &MacroUserId<Lowercase<'a>>,
     chat_ids: &[Uuid],
     term: String,
+    excluded_terms: &[String],
     ids_only: bool,
     tag_option_ids: &[String],
     match_all_tags: bool,
@@ -245,12 +259,17 @@ pub async fn search_chat_names<'a>(
 
     let search_pattern = format!("%{term}%");
     let highlight_pattern = format!("({})", escape_regex(&term));
+    let excluded_patterns: Vec<String> = excluded_terms
+        .iter()
+        .map(|excluded| format!("%{}%", escape_like(excluded)))
+        .collect();
 
     if ids_only {
         ids_search(
             db,
             chat_ids,
             search_pattern,
+            &excluded_patterns,
             highlight_pattern,
             tag_option_ids,
             match_all_tags,
@@ -264,6 +283,7 @@ pub async fn search_chat_names<'a>(
             macro_user_id,
             chat_ids,
             search_pattern,
+            &excluded_patterns,
             highlight_pattern,
             tag_option_ids,
             match_all_tags,

@@ -97,6 +97,172 @@ test('the sidebar lists Today, To do, Suggestions and Done with their counts, an
   await expect(requests(page)).toContainText('open');
 });
 
+for (const theme of ['dark', 'light']) {
+  test(`Today groups rows by topic, with the rest last, in ${theme}`, async ({
+    page,
+  }, testInfo) => {
+    await page.goto(`/?scenario=topics&theme=${theme}`);
+
+    const groups = page.locator('[data-suggestion-group]');
+    // In the order of their first rows; a topic with a single row has no group.
+    await expect(groups.locator('h2')).toHaveText([
+      'Acme renewal',
+      'Spring offsite',
+      'Everything else',
+    ]);
+    await expect(
+      page
+        .getByRole('group', { name: 'Acme renewal' })
+        .locator('[data-suggestion]')
+    ).toHaveCount(3);
+    await expect(
+      page
+        .getByRole('group', { name: 'Spring offsite' })
+        .locator('[data-suggestion]')
+    ).toHaveCount(2);
+    const rest = page.getByRole('group', { name: 'Everything else' });
+    await expect(rest.locator('[data-suggestion]')).toHaveCount(4);
+    await expect(
+      rest.locator('[data-suggestion="suggestion-review"]')
+    ).toBeVisible();
+    // Only a topic that has a reason says one.
+    await expect(page.locator('[data-topic-reason]')).toHaveText([
+      'Renews December 1',
+    ]);
+    await expectEqualHeights(page);
+    await page.screenshot({
+      path: testInfo.outputPath(`for-you-topics-${theme}.png`),
+    });
+  });
+}
+
+test('the sidebar lists topics with their counts, and choosing one shows its rows alone', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=topics');
+  const topics = page.locator('[data-for-you-topic]');
+  await expect(topics).toHaveText(['Acme renewal3', 'Spring offsite2']);
+
+  await topics.first().click();
+  await expect(title(page)).toHaveText('Acme renewal');
+  await expect(page.locator('[data-suggestions-date]')).toHaveText(
+    'Renews December 1'
+  );
+  await expect(rows(page)).toHaveCount(3);
+  await expect(page.locator('[data-suggestion-group] h2')).toHaveCount(0);
+  await expect(topics.first()).toHaveAttribute('aria-current', 'page');
+  await expect(sidebarList(page, 'today')).not.toHaveAttribute(
+    'aria-current',
+    'page'
+  );
+
+  // A topic without a reason says nothing under its name.
+  await topics.last().click();
+  await expect(title(page)).toHaveText('Spring offsite');
+  await expect(page.locator('[data-suggestions-date]')).toHaveCount(0);
+
+  await topics.first().click();
+  await expect(title(page)).toHaveText('Acme renewal');
+  await page.reload();
+  await expect(title(page)).toHaveText('Acme renewal');
+  await expect(rows(page)).toHaveCount(3);
+
+  await sidebarList(page, 'toDo').click();
+  await expect(title(page)).toHaveText('To do');
+  await expect(page.locator('[data-suggestion-group] h2')).toHaveCount(0);
+});
+
+test('a topic stays together while its rows settle, and its count follows', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=topics&topic=event:offsite');
+  await expect(rows(page)).toHaveCount(2);
+  const composer = row(page, 'suggestion-composer');
+  await composer.hover();
+  await button(composer, 'Dismiss “Prepare the budget review”').click();
+  await expect(composer).toHaveAttribute('data-suggestion-state', 'dismissed');
+  await expect(page.locator('[data-for-you-topic="event:offsite"]')).toHaveText(
+    'Spring offsite1'
+  );
+  await expect(rows(page)).toHaveCount(2);
+
+  await sidebarList(page, 'today').click();
+  await expect(
+    page
+      .getByRole('group', { name: 'Spring offsite' })
+      .locator('[data-suggestion]')
+  ).toHaveCount(2);
+});
+
+test('a link to a topic that groups nothing shows Today', async ({ page }) => {
+  await page.goto('/?scenario=topics&topic=project:launch');
+  await expect(title(page)).toHaveText('Today');
+  await expect(rows(page)).toHaveCount(9);
+});
+
+test('a topic asked for is shown while it groups rows', async ({ page }) => {
+  await page.goto('/?scenario=topics&list=done&topic=event:offsite');
+  await expect(title(page)).toHaveText('Spring offsite');
+  await page.getByRole('button', { name: 'Lose topic' }).click();
+  await expect(title(page)).toHaveText('Today');
+  await page.getByRole('button', { name: 'Read feed' }).click();
+  await expect(title(page)).toHaveText('Spring offsite');
+});
+
+test('a topic missing from a cached feed is still asked for once it is read again', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=cached&topic=customer:acme');
+  await expect(title(page)).toHaveText('Today');
+  await expect(page).toHaveURL(/topic=customer/);
+
+  await page.getByRole('button', { name: 'Read feed' }).click();
+  await expect(title(page)).toHaveText('Acme renewal');
+  await expect(rows(page)).toHaveCount(3);
+  await expect(page).toHaveURL(/topic=customer/);
+});
+
+test('a linked row that a feed read moves under a topic is not scrolled to again', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 260 });
+  await page.goto('/?scenario=cached&suggestion=suggestion-quiet');
+  const scroller = page.locator('section[aria-label="Today"]');
+  const top = () => scroller.evaluate((element) => element.scrollTop);
+  await expect.poll(top).toBeGreaterThan(0);
+  await scroller.evaluate((element) => element.scrollTo({ top: 0 }));
+
+  await page.getByRole('button', { name: 'Read feed' }).click();
+  await expect(
+    page.locator(
+      '[data-suggestion-group]:not([data-suggestion-group=""]) [data-suggestion="suggestion-quiet"]'
+    )
+  ).toBeVisible();
+  expect(await top()).toBe(0);
+});
+
+test('reading the feed again leaves a topic where it was scrolled to', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 260 });
+  await page.goto('/?scenario=topics&topic=customer:acme');
+  await expect(rows(page)).toHaveCount(3);
+  const scroller = page.locator('section[aria-label="Acme renewal"]');
+  await scroller.evaluate((element) => element.scrollTo({ top: 60 }));
+  await page.getByRole('button', { name: 'Read feed' }).click();
+  await expect(rows(page)).toHaveCount(3);
+  expect(await scroller.evaluate((element) => element.scrollTop)).toBe(60);
+
+  // Choosing another topic still starts it at its top.
+  await page.locator('[data-for-you-topic="event:offsite"]').click();
+  await expect(title(page)).toHaveText('Spring offsite');
+  expect(
+    await page
+      .locator('section[aria-label="Spring offsite"]')
+      .evaluate((element) => element.scrollTop)
+  ).toBe(0);
+});
+
 test('the Routines section links to ideas and saved routines', async ({
   page,
 }) => {

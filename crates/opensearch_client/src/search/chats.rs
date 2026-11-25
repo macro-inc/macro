@@ -71,6 +71,7 @@ impl ChatQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn excluded_terms(excluded_terms: Vec<String>) -> Self;
     }
 
     pub fn role(mut self, role: Vec<String>) -> Self {
@@ -142,16 +143,7 @@ impl ChatQueryBuilder {
         let budget = split_inner_hits_budget(self.inner.terms.len());
 
         for (idx, term) in self.inner.terms.iter().enumerate() {
-            let term_query = child_content_query(term, &self.inner.match_type);
-            let inner_query = if self.role.is_empty() {
-                term_query
-            } else {
-                let mut combined = BoolQueryBuilder::new();
-                combined.must(term_query);
-                combined.must(should_wildcard_field_query_builder("role", &self.role));
-                combined.build().into()
-            };
-            let has_child = HasChildQuery::new(CHILD_RELATION, inner_query);
+            let has_child = HasChildQuery::new(CHILD_RELATION, self.message_query(term));
             let Some(size) = budget.size_for_clause(idx) else {
                 bool_query.must(has_child.into());
                 continue;
@@ -165,7 +157,27 @@ impl ChatQueryBuilder {
             bool_query.must(has_child.inner_hits(inner_hits).into());
         }
 
+        // A term a minus left out drops every chat with a message it would
+        // match.
+        for term in &self.inner.excluded_terms {
+            let has_child = HasChildQuery::new(CHILD_RELATION, self.message_query(term));
+            bool_query.must_not(has_child.into());
+        }
+
         Ok(bool_query)
+    }
+
+    /// A message matching `term`, from one of the requested roles when any
+    /// are.
+    fn message_query<'a>(&'a self, term: &str) -> QueryType<'a> {
+        let term_query = child_content_query(term, &self.inner.match_type);
+        if self.role.is_empty() {
+            return term_query;
+        }
+        let mut combined = BoolQueryBuilder::new();
+        combined.must(term_query);
+        combined.must(should_wildcard_field_query_builder("role", &self.role));
+        combined.build().into()
     }
 
     fn build_parent_filter<'a>(&'a self) -> Result<QueryType<'a>> {

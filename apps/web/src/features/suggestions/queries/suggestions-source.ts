@@ -190,6 +190,7 @@ export function useSuggestionsSource(): SuggestionsSource {
 
     return {
       counts: next.counts,
+      topics: next.topics,
       suggestions: next.suggestions.map((suggestion) => {
         const before = previous?.suggestions.find(
           (other) => other.id === suggestion.id

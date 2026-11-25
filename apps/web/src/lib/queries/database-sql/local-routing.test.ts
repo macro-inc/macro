@@ -135,7 +135,8 @@ function fixture() {
           entry.callback(value, { searchChangedBuckets: buckets });
     },
     reset: () => {
-      for (const callback of generations) callback({ storage: 'reset' });
+      for (const callback of generations)
+        callback({ storage: 'reset', queue: 'reset' });
     },
   };
 }
