@@ -2167,58 +2167,68 @@ describe('CoordinatorRouter', () => {
   });
 
   it.each([
-    { holder: 'another build', clientId: 'other-build', action: 'open-existing' },
+    {
+      holder: 'another build',
+      clientId: 'other-build',
+      action: 'open-existing',
+    },
     { holder: 'nobody', clientId: undefined, action: 'wipe-before-open' },
-  ])('replaces a dead engine whose lock $holder holds and then would $action', async ({
-    clientId,
-    action,
-  }) => {
-    vi.useFakeTimers();
-    let holder: string | undefined = TEST_ENGINE_CLIENT_ID;
-    const lockName = databaseOwnerLockName('scope');
-    vi.stubGlobal('navigator', {
-      locks: {
-        query: async () => ({
-          held: holder === undefined ? [] : [{ name: lockName, clientId: holder }],
+  ])(
+    'replaces a dead engine whose lock $holder holds and then would $action',
+    async ({ clientId, action }) => {
+      vi.useFakeTimers();
+      let holder: string | undefined = TEST_ENGINE_CLIENT_ID;
+      const lockName = databaseOwnerLockName('scope');
+      vi.stubGlobal('navigator', {
+        locks: {
+          query: async () => ({
+            held:
+              holder === undefined
+                ? []
+                : [{ name: lockName, clientId: holder }],
+          }),
+          request: async (
+            _name: string,
+            _options: LockOptions,
+            callback: (lock: Lock | null) => boolean
+          ) =>
+            callback(
+              holder === undefined ? ({ name: lockName } as Lock) : null
+            ),
+        },
+      });
+      const router = new CoordinatorRouter({
+        heartbeatIntervalMs: 5,
+        heartbeatTimeoutMs: 7,
+        verifyTabLockHeld: async () => true,
+        watchTabLock: () => () => {},
+        queryHeldLockNames: async () => [],
+        holdCoordinatorLock: async () => {},
+      });
+      const tab = new FakePort();
+      await register(router, tab, 'tab-a');
+      const engine = new FakePort();
+      await attach(router, tab, 'tab-a', 1, engine);
+      ready(engine, 'tab-a', 1, 'opened-existing');
+      await vi.advanceTimersByTimeAsync(60);
+      expect(messagesOfKind(tab, 'terminate-engine')).toEqual([]);
+
+      holder = clientId;
+      await vi.advanceTimersByTimeAsync(5 + 7 + 5 + 100);
+
+      expect(messagesOfKind(tab, 'terminate-engine')).toEqual([
+        expect.objectContaining({
+          ownerEpoch: 1,
+          reason: 'engine owner lock was released',
         }),
-        request: async (
-          _name: string,
-          _options: LockOptions,
-          callback: (lock: Lock | null) => boolean
-        ) => callback(holder === undefined ? ({ name: lockName } as Lock) : null),
-      },
-    });
-    const router = new CoordinatorRouter({
-      heartbeatIntervalMs: 5,
-      heartbeatTimeoutMs: 7,
-      verifyTabLockHeld: async () => true,
-      watchTabLock: () => () => {},
-      queryHeldLockNames: async () => [],
-      holdCoordinatorLock: async () => {},
-    });
-    const tab = new FakePort();
-    await register(router, tab, 'tab-a');
-    const engine = new FakePort();
-    await attach(router, tab, 'tab-a', 1, engine);
-    ready(engine, 'tab-a', 1, 'opened-existing');
-    await vi.advanceTimersByTimeAsync(60);
-    expect(messagesOfKind(tab, 'terminate-engine')).toEqual([]);
-
-    holder = clientId;
-    await vi.advanceTimersByTimeAsync(5 + 7 + 5 + 100);
-
-    expect(messagesOfKind(tab, 'terminate-engine')).toEqual([
-      expect.objectContaining({
-        ownerEpoch: 1,
-        reason: 'engine owner lock was released',
-      }),
-    ]);
-    expect(messagesOfKind(tab, 'become-owner').at(-1)).toMatchObject({
-      ownerEpoch: 2,
-      databaseAction: action,
-    });
-    vi.unstubAllGlobals();
-  });
+      ]);
+      expect(messagesOfKind(tab, 'become-owner').at(-1)).toMatchObject({
+        ownerEpoch: 2,
+        databaseAction: action,
+      });
+      vi.unstubAllGlobals();
+    }
+  );
 
   it('ends a drain whose engine died when another build holds its lock', async () => {
     vi.useFakeTimers();
