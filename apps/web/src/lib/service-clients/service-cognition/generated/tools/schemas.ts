@@ -13438,6 +13438,7 @@ export const ListCalendarsToolResponse = z.object({
       emailAddress: z.string(),
       isPrimary: z.boolean(),
       isWritable: z.boolean(),
+      isSubscription: z.boolean(),
       contributesToAvailability: z.boolean(),
     })
   ),

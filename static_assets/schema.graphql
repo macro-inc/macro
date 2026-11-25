@@ -2517,7 +2517,9 @@ type GraphqlCalendar {
 	"""
 	isWritable: Boolean!
 	"""
-	Whether this is a shared system calendar (holidays, birthdays).
+	Whether the account subscribes to this calendar rather than a person
+	maintaining it: a system calendar (holidays, birthdays) or one added by
+	URL or from the web.
 	"""
 	isSubscription: Boolean!
 	"""
