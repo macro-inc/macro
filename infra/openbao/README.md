@@ -85,9 +85,16 @@ to its replacement in the OpenBao account. It is one step of the move in the
   up after a run that stopped partway.
 - **It checks its work.** After copying, it compares each team's items, current
   versions and values.
+- **All-team runs require matching root team namespace inventories.** Before
+  any writes, both vaults must successfully return a well-formed root namespace
+  list. A verified empty list is valid. A listing error, including HTTP 404,
+  or an invalid response aborts the run. The script checks both inventories
+  again after copy and verification. Every destination-only team blocks the
+  run, even an empty one. Comparing names alone catches teams that might still
+  have Passwords or TOTP data, without inspecting or deleting their contents.
 - **It refuses** one vault on both tunnels, and teams the destination hasn't
   provisioned yet.
-- **It prints** counts and item ids only.
+- **It prints** counts and ids only.
 - **It can't copy TOTP seeds,** because OpenBao never returns one. It reports
   how many keys each team has.
 
@@ -100,9 +107,11 @@ doppler run -p openbao -c dev --only-secrets OPENBAO_ROOT_TOKEN OPENBAO_ACCOUNT_
       --source-connect 127.0.0.1:18443 --destination-connect 127.0.0.1:28443 --dry-run'
 ```
 
-Drop `--dry-run` to copy. The run exits 2 if any item diverged or failed the
-check. `--team-id` limits a run to named teams. For the final copy, include
-all teams and follow the stack README's write fence and verification steps.
+Drop `--dry-run` to copy. The run exits 2 on a namespace mismatch or change,
+item divergence, or item verification failure. An inventory request or response
+error exits 1. `--team-id` limits a run to named teams and skips the root
+inventory comparison. For the final copy, omit `--team-id` and follow the
+stack README's write fence and verification steps.
 Any divergence blocks cutover until it is independently reconciled and the
 fenced verification passes. A reverse copy for a separately approved
 rollback swaps both tunnels and tokens and uses the same checks.

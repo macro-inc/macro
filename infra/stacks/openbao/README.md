@@ -128,11 +128,14 @@ Every step needs explicit permission.
    after the fence. Keep destination writes blocked for all clients except the
    copy operator. Stop the procedure if any part of the fence cannot be verified.
 7. **Reconcile under the fence.** Run a dry run, then the final copy and its
-   built-in verification for all teams. Any reported divergence, verification
-   failure, nonzero exit, destination-ahead item, or destination-only item
-   blocks cutover. Keep writes fenced and resolve discrepancies under a
-   separately approved procedure. Rerun the final copy and require exit 0,
-   no mismatches, and zero ahead or destination-only items before continuing.
+   built-in verification for all teams without `--team-id`. A failed or
+   invalid root namespace listing or any namespace mismatch blocks cutover,
+   even for an empty destination-only team. Any reported divergence,
+   verification failure, nonzero exit, destination-ahead item, or
+   destination-only item also blocks cutover. Keep writes fenced and resolve
+   discrepancies under a separately approved procedure. Rerun the final copy
+   and require matching namespace inventories, exit 0, no mismatches, and zero
+   ahead or destination-only items before continuing.
 8. **Switch traffic with explicit approval.** In a follow-up change, make
    `openbao-dev.macro-internal.com` an alias of `consumerEndpointDnsName`.
    Keep DSS stopped while verifying from its network that the name resolves

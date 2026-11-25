@@ -20,8 +20,9 @@ role, and never deletes or replaces secret values.
   hosted vault to its replacement in the OpenBao account. It only moves the
   destination forward, keeps version numbers, and prints counts and ids only.
   It can change the state of an existing version only when its value is the
-  exact synthetic placeholder. Follow the stack README's write fence and stop
-  the cutover on any divergence.
+  exact synthetic placeholder. An all-team run requires verified matching
+  root team namespace inventories. Follow the stack README's write fence and
+  stop the cutover on any divergence.
 
 ## Checks
 

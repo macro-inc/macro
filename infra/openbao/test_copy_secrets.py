@@ -271,6 +271,86 @@ class Main(unittest.TestCase):
         self.assertIn(f"{TEAM}: 1 items, copied 1 versions", output)
         self.assertNotIn(SECRET, output)
 
+    def test_all_team_copy_refuses_destination_only_namespaces_before_writing(self):
+        extra = "team-0190b0e4-0000-7000-8000-000000000002"
+        for state in ("passwords", "totp", "empty"):
+            for arguments in (("--dry-run",), ()):
+                with self.subTest(state=state, arguments=arguments):
+                    source, destination = vaults()
+                    source.put(TEAM, "item-a", {"password": SECRET})
+                    destination.provision(extra, totp_keys=["key-a"] if state == "totp" else [])
+                    if state == "passwords":
+                        destination.put(extra, "item-only-in-destination", {"password": SECRET})
+
+                    with mock.patch.object(destination, "request", wraps=destination.request) as request:
+                        code, output = self.run_main(source, destination, *arguments)
+
+                    self.assertEqual(code, 2)
+                    self.assertIn(f"destination only [{extra}]", output)
+                    self.assertNotIn(SECRET, output)
+                    self.assertEqual(destination.writes, 0)
+                    self.assertFalse(destination.namespaces[TEAM]["items"])
+                    self.assertIn(extra, destination.namespaces)
+                    self.assertFalse(any(call.kwargs.get("namespace") == extra or extra in call.args
+                                         for call in request.call_args_list))
+
+    def test_selected_team_copy_ignores_other_destination_namespaces(self):
+        source, destination = vaults()
+        source.put(TEAM, "item-a", {"password": SECRET})
+        extra = "team-0190b0e4-0000-7000-8000-000000000002"
+        destination.provision(extra)
+        destination.put(extra, "item-b", {"password": SECRET})
+
+        with mock.patch.object(destination, "request", wraps=destination.request) as request:
+            code, _ = self.run_main(source, destination, "--team-id", TEAM.removeprefix("team-"))
+
+        self.assertEqual(code, 0)
+        self.assertEqual(destination.writes, 1)
+        self.assertFalse(any(call.args[:2] == ("LIST", "sys/namespaces") for call in request.call_args_list))
+
+    def test_all_team_copy_rejects_unverified_root_inventories(self):
+        for inventory in (OpenBaoRequestError("LIST", "sys/namespaces", 404), {"data": {"keys": "team-a"}}):
+            with self.subTest(inventory=inventory):
+                source, destination = vaults()
+                source.put(TEAM, "item-a", {"password": SECRET})
+
+                def request(method, path, *args, **kwargs):
+                    if (method, path) == ("LIST", "sys/namespaces"):
+                        self.assertFalse(kwargs.get("missing"))
+                        if isinstance(inventory, Exception):
+                            raise inventory
+                        return inventory
+                    return original_request(method, path, *args, **kwargs)
+
+                original_request = destination.request
+                with mock.patch.object(destination, "request", side_effect=request), \
+                        self.assertRaisesRegex((OpenBaoRequestError, copy_secrets.CopyError), "namespace"):
+                    self.run_main(source, destination)
+                self.assertEqual(destination.writes, 0)
+
+    def test_all_team_copy_accepts_verified_empty_inventories(self):
+        code, _ = self.run_main(FakeVault("legacy"), FakeVault("account"))
+
+        self.assertEqual(code, 0)
+
+    def test_all_team_copy_fails_verification_if_the_inventory_changes(self):
+        source, destination = vaults()
+        source.put(TEAM, "item-a", {"password": SECRET})
+        extra = "team-0190b0e4-0000-7000-8000-000000000002"
+        original_request = destination.request
+
+        def request(method, path, *args, **kwargs):
+            if (method, path) == ("POST", "passwords/data/item-a"):
+                destination.provision(extra, totp_keys=["key-a"])
+            return original_request(method, path, *args, **kwargs)
+
+        with mock.patch.object(destination, "request", side_effect=request):
+            code, output = self.run_main(source, destination)
+
+        self.assertEqual(code, 2)
+        self.assertIn("team namespace inventories changed during copy", output)
+        self.assertEqual(destination.namespaces[extra]["totp"], {"key-a"})
+
     def test_divergence_fails_the_run(self):
         source, destination = vaults()
         source.put(TEAM, "item-a", {"password": SECRET})

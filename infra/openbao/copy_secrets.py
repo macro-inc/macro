@@ -11,9 +11,10 @@ It only moves the destination forward. A version it already has is checked
 against the source. For an unreadable source version, only an exact copy
 placeholder can be automatically deleted or destroyed in the destination.
 A destination that is ahead is accepted if its shared versions match.
-Diverged items are reported and left alone. An identical repeat run changes
-nothing. `--dry-run` writes nothing and reports what a run would do. Output is
-limited to counts and item ids.
+Diverged items are reported and left alone. An all-team run requires matching
+root team namespace inventories, including before any writes.
+An identical repeat run changes nothing. `--dry-run` writes nothing and reports
+what a run would do. Output is limited to counts and ids.
 
 TOTP seeds are write-only in OpenBao, so they can't be copied; the report counts
 them per team.
@@ -56,9 +57,17 @@ def item_paths(client, namespace, prefix=""):
 
 
 def team_namespaces(client):
+    response = client.request("LIST", "sys/namespaces")
+    try:
+        keys = response["data"]["keys"]
+    except (KeyError, TypeError):
+        raise CopyError("invalid root namespace inventory") from None
+    if not isinstance(keys, list) or any(not isinstance(key, str) or not key for key in keys):
+        raise CopyError("invalid root namespace inventory")
+
     return sorted(
         key.rstrip("/")
-        for key in list_keys(client, "sys/namespaces", None)
+        for key in keys
         if key.startswith("team-")
     )
 
@@ -210,9 +219,19 @@ def main():
 
     source = HostedOpenBao(source_token, arguments.source_connect)
     destination = HostedOpenBao(destination_token, arguments.destination_connect)
-    namespaces = (
-        [f"team-{team}" for team in arguments.team_id] if arguments.team_id else team_namespaces(source)
-    )
+    if arguments.team_id:
+        namespaces = [f"team-{team}" for team in arguments.team_id]
+    else:
+        namespaces = team_namespaces(source)
+        destination_namespaces = team_namespaces(destination)
+        if namespaces != destination_namespaces:
+            source_only = sorted(set(namespaces).difference(destination_namespaces))
+            destination_only = sorted(set(destination_namespaces).difference(namespaces))
+            parser.exit(
+                2,
+                f"team namespace inventories differ, source only [{', '.join(source_only)}], "
+                f"destination only [{', '.join(destination_only)}]\n",
+            )
     check_vaults(source, destination, namespaces)
 
     failed = False
@@ -234,6 +253,11 @@ def main():
             if path not in report["diverged"]:
                 print(f"  verify failed: {path}")
         failed = failed or bool(report["diverged"] or mismatched)
+
+    if not arguments.team_id and not arguments.dry_run and (
+        team_namespaces(source) != namespaces or team_namespaces(destination) != namespaces
+    ):
+        parser.exit(2, "team namespace inventories changed during copy\n")
     if failed:
         sys.exit(2)
 
