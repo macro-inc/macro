@@ -1147,9 +1147,10 @@ Attach's touch icon size. The Back control returns to the thread; when a reply
 has content, choose Save Draft or Delete Draft. Escape
 and Android Back follow the same close flow, including Escape with a header
 button focused. Closing an empty reply discards its local/server draft and
-removes its Draft preview from the thread. Saving must finish before leaving;
-a failed local save keeps the composer and draft options open. The message list
-stays mounted underneath so closing a reply preserves its scroll position.
+removes its Draft preview from the thread. A background thread refresh keeps
+the draft options open. Saving must finish before leaving, and a failed local
+save keeps the composer and draft options open. The message list stays mounted
+underneath so closing a reply preserves its scroll position.
 On touch, a saved reply shows as a **Draft** row with its opening words under the
 message it answers (which stays expanded); tapping it reopens the draft.
 Opening a thread whose last message has a reply draft opens the composer once;

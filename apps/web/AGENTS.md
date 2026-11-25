@@ -1430,7 +1430,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
 - Retain sender ownership, draft signal settings, and primary-inbox selection in the same viewer-scoped inbox snapshot used by the composer; pending catalog refreshes must not block saves or sends, and account changes must clear that snapshot.
 - Retry a failed browser cache on reconnect/foreground or draft Retry (`canRetryCacheFailure`); retain the same scope and block draft sync until the replacement queue is readable. Never retry a superseded build (`cache-superseded`) or an untyped native failure, and reset the count and backoff only after a restarted cache stays up for `RECOVERY_HEALTHY_MS`. A host that ends its outage is proved at once (`available()`), also offline or hidden.
-- Touch email replies and forwards use the full-screen composer with the shared new-email header actions; preserve thread state underneath and flush local edits before closing.
+- Touch email replies and forwards use the full-screen composer with the shared new-email header actions; preserve thread state underneath and flush local edits before closing. Treat Back as engaging the reply composer so a refreshed draft snapshot cannot replace an open draft options menu.
 - Include unsynced email working copies in Drafts and mobile name search even
   before a GraphQL save, and warm sending accounts alongside backfill. Preserve
   inbox, alias, and facet scope.
