@@ -4,7 +4,11 @@ import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-qu
 import { soupKeys } from '@queries/soup/keys';
 import type { CrmMergeError } from '@service-storage/client';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
-import { forgetMergedCrmRecords } from '@service-storage/crm-record-merge';
+import {
+  forgetMergedCrmRecords,
+  type MergedCrmRecords,
+} from '@service-storage/crm-record-merge';
+import type { QueryClient } from '@tanstack/solid-query';
 import type { MergeCommands, MergeRefusal } from '../core/merge';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
@@ -20,21 +24,45 @@ function refusalOf(errors: ResultError<string>[]): MergeRefusal {
 
 /**
  * Everything a merge moved is read again: CRM lists, records and pipelines,
- * Soup lists, and contacts' company summaries. The merged companies' cached
- * records go, so their chips read the company that stays.
+ * Soup lists, and contacts' company summaries. The merged records' cached
+ * copies go, so their chips read the record that stays, and so do their
+ * unopened reads: kept, the next open would show a merged record as it was,
+ * under its old id, until the read went stale. An open read refetches and
+ * moves to the record that stays.
  */
-async function refreshAfterMerge(
-  deps: CrmRecordDependencies,
-  mergedIds: string[]
+export async function refreshAfterMerge(
+  client: QueryClient,
+  merged: MergedCrmRecords
 ) {
+  const ids = (list: readonly string[]) => [
+    ...new Set(list.flatMap((id) => [id, id.toLowerCase()])),
+  ];
+  const companies = ids(merged.companies);
+  const contacts = ids(merged.contacts);
+  for (const id of companies) {
+    client.removeQueries({
+      queryKey: crmKeys.company(id).queryKey,
+      type: 'inactive',
+    });
+    client.removeQueries({
+      queryKey: crmKeys.companyContacts(id).queryKey,
+      type: 'inactive',
+    });
+  }
+  for (const id of contacts) {
+    client.removeQueries({
+      queryKey: crmKeys.contact(id).queryKey,
+      type: 'inactive',
+    });
+  }
   await forgetMergedCrmRecords({
-    companies: mergedIds.map((id) => id.toLowerCase()),
-    contacts: [],
+    companies: merged.companies.map((id) => id.toLowerCase()),
+    contacts: merged.contacts.map((id) => id.toLowerCase()),
   });
   await invalidateCachedCrmContacts();
   await Promise.all([
-    deps.client.invalidateQueries({ queryKey: crmKeys._def }),
-    deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+    client.invalidateQueries({ queryKey: crmKeys._def }),
+    client.invalidateQueries({ queryKey: soupKeys._def }),
   ]);
   await refreshActiveGraphqlSoupQueries();
 }
@@ -78,7 +106,10 @@ export function createMergeCommands(
         }
         span.setAttr('crm.merge.id', result.value.mergeId);
         await span.span('crm.merge.commit.refresh', () =>
-          refreshAfterMerge(deps, result.value.mergedIds)
+          refreshAfterMerge(deps.client, {
+            companies: result.value.mergedIds,
+            contacts: [],
+          })
         );
         return {
           ok: true,

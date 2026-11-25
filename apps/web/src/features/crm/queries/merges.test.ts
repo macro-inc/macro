@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/solid-query';
+import { QueryClient, QueryObserver } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { crmKeys } from './keys';
@@ -127,4 +127,41 @@ it('changes nothing locally when a commit is refused', async () => {
   });
   expect(effects.forget).not.toHaveBeenCalled();
   expect(effects.refresh).not.toHaveBeenCalled();
+});
+
+it('drops the merged company’s unopened reads, so its next open fetches and moves', async () => {
+  const merged = crmKeys.company('old-1').queryKey;
+  const mergedPeople = crmKeys.companyContacts('old-1').queryKey;
+  const kept = crmKeys.company('kept').queryKey;
+  client.setQueryData(merged, { id: 'old-1', name: 'Old Co' });
+  client.setQueryData(mergedPeople, { contacts: [] });
+  client.setQueryData(kept, { id: 'kept', name: 'Kept Co' });
+  const open = crmKeys.company('old-2').queryKey;
+  const fetchOpen = vi.fn(async () => ({ id: 'kept', name: 'Kept Co' }));
+  const observer = new QueryObserver(client, {
+    queryKey: open,
+    queryFn: fetchOpen,
+    staleTime: 60_000,
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  await vi.waitFor(() => expect(fetchOpen).toHaveBeenCalledTimes(1));
+  const commands = commandsWith({
+    commitCrmMerge: vi.fn(async () =>
+      ok({ survivorId: 'kept', mergedIds: ['old-1', 'old-2'], mergeId: 'm' })
+    ),
+  });
+
+  await commands.commit({
+    survivorId: 'kept',
+    sourceIds: ['old-1', 'old-2'],
+    revision: 'r',
+    requestKey: 'key',
+    sharingRules: 'keep',
+  });
+
+  expect(client.getQueryState(merged)).toBeUndefined();
+  expect(client.getQueryState(mergedPeople)).toBeUndefined();
+  expect(client.getQueryData(kept)).toEqual({ id: 'kept', name: 'Kept Co' });
+  expect(fetchOpen).toHaveBeenCalledTimes(2);
+  unsubscribe();
 });
