@@ -50,6 +50,11 @@ Set `max_locks_per_transaction = 8192` on that dedicated server, as in
 and restart PostgreSQL before testing; replacing a pre-migrated schema can exceed
 the default lock capacity.
 
+Give dedicated PostgreSQL test containers enough shared memory (for example,
+`--shm-size=2g`) when parallel migrations or SQLx schema checks exhaust
+`/dev/shm`, and keep test threads low. Move the tests to that dedicated server;
+never restart, resize, or reset a shared server to recover test resources.
+
 Tests that build their own schema (`#[sqlx::test(migrations = false)]`, or a
 crate's test-only schema fixture) must first run
 `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`, since their database may
@@ -126,7 +131,9 @@ compatible with the service code currently deployed, not just the code in its PR
    `SQLX_OFFLINE` unset. Test between batches of query changes, not just at the end.
 
 5. **Refresh the workspace SQLx cache** when non-test queries or schema
-   change, or when required metadata is missing. From the repository root:
+   change, or when required metadata is missing. Before any preparation, copy
+   `.sqlx` to a separate snapshot outside the checkout, whether using the default
+   database or a dedicated test database. From the repository root:
 
    ```bash
    nix develop --command just prepare_db
@@ -134,11 +141,18 @@ compatible with the service code currently deployed, not just the code in its PR
 
    The root recipe uses Just's `DATABASE_URL` variable, which defaults to the
    database on localhost:5432; exporting the environment variable does not
-   override it. For a dedicated test database, set the Just variable explicitly:
+   override it. For a dedicated test database, verify the container and port
+   with `docker ps`. Set the Just variable explicitly and
+   inspect the resolved command before executing it:
 
    ```bash
+   nix develop --command just --dry-run --set DATABASE_URL "$DATABASE_URL" prepare_db
    nix develop --command just --set DATABASE_URL "$DATABASE_URL" prepare_db
    ```
+
+   A failed prepare can delete most cached entries. For either target, restore
+   only `.sqlx` from the snapshot made before that preparation, then check the
+   resolved target again before retrying. This recovers the cache, not the database.
 
    Inspect `git status` after preparation and restore unrelated `.sqlx`
    deletions before committing; workspace preparation can omit entries for

@@ -249,6 +249,66 @@ it('saves deadline moves through the shared DATE mutation and rejects mismatched
     ],
   });
 });
+it('keeps a due time on the new day and saves a start left after it first, to the same moment', async () => {
+  fixture.definitions = {
+    isSuccess: true,
+    data: [
+      boardProperty(SYSTEM_PROPERTY_IDS.DUE_DATE, null, 'DATE').definition,
+      boardProperty(SYSTEM_PROPERTY_IDS.START_DATE, null, 'DATE').definition,
+    ],
+  };
+  const calendar = createDateBucketBoundaries(
+    new Date('2026-10-21T18:00:00Z'),
+    'America/New_York'
+  );
+  const task = boardEntity('one', [
+    boardProperty(
+      SYSTEM_PROPERTY_IDS.START_DATE,
+      { type: 'Date', value: '2026-10-22T19:00:00Z', has_time: true },
+      'DATE'
+    ),
+    boardProperty(
+      SYSTEM_PROPERTY_IDS.DUE_DATE,
+      { type: 'Date', value: '2026-10-28T21:00:00Z', has_time: true },
+      'DATE'
+    ),
+  ]);
+  const source = setup({
+    rows: () => [createSoupEntityRow(task)],
+    grouping: () => 'due_date',
+    calendar: () => calendar,
+  });
+  await source.actions.save(
+    {
+      id: 'one',
+      fromLane: 'next_7_days',
+      toLane: 'today',
+      dueDate: calendar.boundaries.today,
+    },
+    'due_date'
+  );
+  // 5 PM on Oct 28 moved to Oct 21 is 5 PM there; the 3 PM start on Oct 22 follows it.
+  const moved = {
+    valueType: 'DATE',
+    value: new Date('2026-10-21T21:00:00Z'),
+    hasTime: true,
+  };
+  expect(fixture.save).toHaveBeenLastCalledWith({
+    properties: [
+      expect.objectContaining({
+        property: expect.objectContaining({
+          id: SYSTEM_PROPERTY_IDS.START_DATE,
+        }),
+        apiValues: moved,
+      }),
+      expect.objectContaining({
+        property: expect.objectContaining({ id: SYSTEM_PROPERTY_IDS.DUE_DATE }),
+        apiValues: moved,
+      }),
+    ],
+  });
+});
+
 it('orders project columns by name with No Project last, even from search results', () => {
   fixture.projectQueries = [
     { isSuccess: true, data: { id: 'zeta', name: 'Zeta', access: 'view' } },

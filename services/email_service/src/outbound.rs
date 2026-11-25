@@ -64,6 +64,7 @@ pub(crate) mod link_lock;
 pub mod sfs_deletion;
 /// URL-backed contact photos and self-contact refresh effects.
 pub mod sfs_upload;
+pub(crate) mod thread_reindex;
 pub mod user_deletion;
 
 /// Link-maintenance persistence, notifications, and temporary physical deletion.

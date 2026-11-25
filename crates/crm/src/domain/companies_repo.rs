@@ -570,6 +570,26 @@ pub trait CompaniesRepository:
         include_hidden: bool,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
+    /// Add or remove one of a company's domains, as
+    /// [`super::company_domains::CompanyDomainUpdate::resolve`] decides against
+    /// the company read under the edit's locks. Takes the exclusive team privacy
+    /// lock, checks a domain added to a company whose sync is off against
+    /// members' connected mailboxes, then takes the domain's lock and the
+    /// company row. An added domain is dated after every domain the company
+    /// holds, so its primary domain and name stay. Marks the company manually
+    /// created so sync orphan cleanup keeps the team's edit, records a matching
+    /// change for selected contribution rules, and schedules contribution
+    /// history when a removal lets the domain's mail sync again. Never deletes
+    /// contacts or mail and never writes the domain directory. Returns the
+    /// company as [`Self::get_company_for_team`] reads it, without contacts.
+    fn update_company_domains(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        update: &super::company_domains::CompanyDomainUpdate,
+        editor: super::company_domains::CompanyDomainEditor,
+    ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send;
+
     /// Batched authorization probe for a CRM-scoped email query. Returns
     /// per-input status the email service maps into typed `EmailErr`
     /// variants (`CrmDomainNotFound`, `CrmDomainNotPermitted`,

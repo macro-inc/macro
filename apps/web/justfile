@@ -266,6 +266,12 @@ test-calendar-details-browser *ARGS:
 test-mobile-insets-browser *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts insets.browser.e2e.ts {{ARGS}}
 
+# The agent screen viewer's layouts and the agent DM's top bar, in Chromium
+# over a stand-in transport and stubbed queries. Same LD_LIBRARY_PATH caveat as
+# the sign-up browser tests above.
+test-agent-screen-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/features/agent-screen/browser-test/playwright.config.ts {{ARGS}}
+
 # Optimistic mutations through the real worker/WASM cache in Chromium. Same
 # LD_LIBRARY_PATH caveat as the sign-up browser tests above.
 test-functional *ARGS:
@@ -361,6 +367,7 @@ test-email-fixtures-browser *ARGS:
     done <<'SUITES'
     src/features/email-compose/browser-test/playwright.config.ts -g alias.does.not.make|already-sent.background.save|sends.its.newest.text.once|sends.the.newest.text.once
     src/features/email-compose/browser-test/playwright.app.config.ts recipient-commit.app
+    src/features/block-email/browser-test/playwright.config.ts
     src/features/calendar/browser-test/playwright.config.ts
     src/features/calendar-view/browser-test/playwright.config.ts
     src/features/settings/browser-test/signatures/playwright.config.ts

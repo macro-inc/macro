@@ -256,13 +256,15 @@ pub trait ComputerMoves: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Computers on `host` (as source or target) that an open move holds
-    /// ([`MoveStage::holds_computer`]).
+    /// ([`MoveStage::holds_computer`]), or an image upgrade has under way
+    /// ([`crate::domain::image_upgrade::ComputerUpgradeState::holds_computer`]).
     fn held_on(
         &self,
         host: HostId,
     ) -> impl Future<Output = Result<std::collections::HashSet<ComputerId>, Self::Err>> + Send;
 
-    /// Whether an open move holds the computer.
+    /// Whether an open move, or an image upgrade under way, holds the
+    /// computer.
     fn held(&self, computer_id: ComputerId)
     -> impl Future<Output = Result<bool, Self::Err>> + Send;
 

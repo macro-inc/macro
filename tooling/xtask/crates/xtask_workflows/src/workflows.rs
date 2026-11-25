@@ -30,6 +30,7 @@ mod build_dmg_on_tag;
 mod build_rust_ci_image;
 mod build_web_app;
 mod cancel_stuck_cloud_storage_deploys;
+mod captcha_vision_lab;
 mod cargo_deny;
 mod cargo_deny_advisories;
 mod cargo_workspace_dependency_check;
@@ -62,7 +63,9 @@ mod deploy_service_generic;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
+mod desktop_check;
 mod desktop_qa_macos;
+mod desktop_release_watch;
 mod email_e2e;
 mod email_e2e_alert;
 mod email_e2e_browser;
@@ -70,6 +73,7 @@ mod email_e2e_full_stack;
 mod ensure_daytona_snapshot;
 mod export_ci_telemetry;
 mod export_datadog_observability;
+mod firecracker_image_rollout;
 mod ios_app_store_publish;
 mod ios_app_store_release;
 mod ios_preview;
@@ -173,6 +177,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(connectors_e2e::connectors_e2e)(),
     },
     WorkflowFile {
+        slug: "captcha_vision_lab",
+        file_name: "captcha_vision_lab.yml",
+        render_yaml: || render_gh_workflow(captcha_vision_lab::captcha_vision_lab)(),
+    },
+    WorkflowFile {
         slug: "channels_e2e",
         file_name: "channels_e2e.yml",
         render_yaml: || render_gh_workflow(channels_e2e::channels_e2e)(),
@@ -196,6 +205,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "desktop_qa_macos",
         file_name: "desktop_qa_macos.yml",
         render_yaml: || render_gh_workflow(desktop_qa_macos::desktop_qa_macos)(),
+    },
+    WorkflowFile {
+        slug: "desktop_release_watch",
+        file_name: "desktop-release-watch.yml",
+        render_yaml: || render_gh_workflow(desktop_release_watch::desktop_release_watch)(),
     },
     WorkflowFile {
         slug: "build_desktop_on_tag",
@@ -474,6 +488,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(check_tauri_lockfiles::check_tauri_lockfiles)(),
     },
     WorkflowFile {
+        slug: "desktop_check",
+        file_name: "desktop_check.yml",
+        render_yaml: || render_gh_workflow(desktop_check::desktop_check)(),
+    },
+    WorkflowFile {
         slug: "check_generated",
         file_name: "check_generated.yml",
         render_yaml: || render_gh_workflow(check_generated::check_generated_workflows)(),
@@ -518,6 +537,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || {
             render_gh_workflow(export_datadog_observability::export_datadog_observability)()
         },
+    },
+    WorkflowFile {
+        slug: "firecracker_image_rollout",
+        file_name: "firecracker-image-rollout.yml",
+        render_yaml: || render_gh_workflow(firecracker_image_rollout::firecracker_image_rollout)(),
     },
     WorkflowFile {
         slug: "migrate_macro_db",

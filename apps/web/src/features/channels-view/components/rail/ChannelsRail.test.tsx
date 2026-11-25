@@ -435,6 +435,17 @@ vi.mock('./hooks/useChannelRailActivity', () => ({
             )
             .map((channel) => channel.id)
         ),
+      unreadOrMentionedChannelIds: () =>
+        new Set(
+          channels()
+            .filter(
+              (channel) =>
+                channel.unreadNotifications?.some(
+                  (notification) => notification.state === 'unseen'
+                ) || (channel.unreadMentions?.length ?? 0) > 0
+            )
+            .map((channel) => channel.id)
+        ),
     };
   },
 }));
@@ -812,6 +823,37 @@ it.each(['team_channels', 'channels', 'direct_messages'] as const)(
     expect(offPageIds).toEqual([`outside-${collapsedGroup}`]);
   }
 );
+
+it('keeps a channel whose only unread is a thread mention in a collapsed section', () => {
+  mocks.closedGroups = ['team_channels'];
+  mocks.unreadRows = [
+    {
+      ...channel,
+      id: 'outside-mentioned',
+      channelType: 'team',
+      unreadNotifications: [],
+      unreadMentions: [{ id: 'mention', state: 'unseen' }],
+    },
+    {
+      ...channel,
+      id: 'outside-replied',
+      channelType: 'team',
+      unreadNotifications: [],
+      unreadMentions: [],
+    },
+  ];
+
+  mount();
+
+  const offPageIds = mocks
+    .actualRows()
+    .flatMap((row) =>
+      row.kind === 'conversation' && row.channel.id.startsWith('outside-')
+        ? [row.channel.id]
+        : []
+    );
+  expect(offPageIds).toEqual(['outside-mentioned']);
+});
 
 it('omits unread rows when the collapsed group disables them', () => {
   mocks.closedGroups = ['team_channels', 'channels'];

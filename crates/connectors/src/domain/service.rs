@@ -6,8 +6,8 @@
 use crate::domain::catalog::{ConnectSupport, Overlays};
 use crate::domain::models::{
     AddedBy, ApiHandle, ApiRequest, ApiResponse, ConnectStep, Connector, ConnectorId, ConnectorKey,
-    ConnectorsError, McpConnections, McpHandle, Permitted, Result, ServerUrl, Status, Surfaces,
-    Upstream, UserMcpTools,
+    ConnectorsError, McpConnections, McpHandle, Permitted, Result, ServerUrl, Sought, Status,
+    Surfaces, Upstream, UserMcpTools,
 };
 use crate::domain::ports::{
     MacroConnectEnabledFlagReader, OverlayCatalog, ServerDirectory, Source, SourceConnection,
@@ -28,6 +28,16 @@ pub trait McpConnectionsService: Send + Sync + 'static {
     fn connections(
         &self,
         user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<McpConnections>> + Send;
+
+    /// [`Self::connections`] for a caller that wants one app or server and
+    /// asks on every request: reads only the sources whose connections can
+    /// count for `sought`. The answer holds everything `sought` names, and
+    /// may leave out anything else.
+    fn connections_to(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        sought: Sought<'_>,
     ) -> impl Future<Output = Result<McpConnections>> + Send;
 
     /// Tools for in-process agents. A connection that fails to dial is left
@@ -260,10 +270,21 @@ impl Connectors {
         user: &MacroUserIdStr<'static>,
         outage: SourceOutage<'_>,
     ) -> Result<Snapshot> {
+        self.snapshot_of(user, None, outage).await
+    }
+
+    /// [`Self::snapshot`] of only the sources that can count for `sought`;
+    /// every source for `None`.
+    async fn snapshot_of(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        sought: Option<Sought<'_>>,
+        outage: SourceOutage<'_>,
+    ) -> Result<Snapshot> {
         let (macro_connect_enabled, overlays, connections) = futures::join!(
             self.inner.macro_connect_enabled.read(user),
             self.inner.overlays.read(),
-            self.held(user, outage),
+            self.held(user, sought, outage),
         );
         let macro_connect_enabled = match (macro_connect_enabled, outage) {
             (Err(error), SourceOutage::Candidate(_)) => return Err(error.into()),
@@ -293,16 +314,21 @@ impl Connectors {
         })
     }
 
-    /// Every connection the user holds in every source.
+    /// Every connection the user holds in the sources that can count for
+    /// `sought`; in every source for `None`.
     async fn held(
         &self,
         user: &MacroUserIdStr<'static>,
+        sought: Option<Sought<'_>>,
         outage: SourceOutage<'_>,
     ) -> Result<Vec<SourceConnection>> {
         let listings = futures::future::join_all(
             self.inner
                 .sources
                 .iter()
+                .filter(|source| {
+                    sought.is_none_or(|sought| resolve::can_count(source.kind(), sought))
+                })
                 .map(|source| async move { (source.kind(), source.connections(user).await) }),
         )
         .await;
@@ -419,7 +445,7 @@ impl Connectors {
     ) -> Result<Vec<(&Arc<dyn Source>, ConnectorKey)>> {
         let (overlays, connections) = futures::join!(
             self.inner.overlays.read(),
-            self.held(user, SourceOutage::Fail)
+            self.held(user, None, SourceOutage::Fail)
         );
         let overlays = overlays?;
 
@@ -543,6 +569,21 @@ impl McpConnectionsService for Connectors {
     #[tracing::instrument(name = "connectors.mcp_connections", skip_all, err, fields(connections = tracing::field::Empty, connect_catalog_down = tracing::field::Empty))]
     async fn connections(&self, user: &MacroUserIdStr<'static>) -> Result<McpConnections> {
         let snapshot = self.snapshot(user, SourceOutage::Skip).await?;
+        let connections = snapshot.resolve(user).mcp;
+        tracing::Span::current().record("connections", connections.handles().count());
+
+        Ok(connections)
+    }
+
+    #[tracing::instrument(name = "connectors.mcp_connections_to", skip_all, err, fields(?sought, connections = tracing::field::Empty, connect_catalog_down = tracing::field::Empty))]
+    async fn connections_to(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        sought: Sought<'_>,
+    ) -> Result<McpConnections> {
+        let snapshot = self
+            .snapshot_of(user, Some(sought), SourceOutage::Skip)
+            .await?;
         let connections = snapshot.resolve(user).mcp;
         tracing::Span::current().record("connections", connections.handles().count());
 

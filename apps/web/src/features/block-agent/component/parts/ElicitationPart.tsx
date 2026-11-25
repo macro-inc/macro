@@ -6,16 +6,22 @@
  * connection, reads as "not answered" rather than offering a form the agent
  * is no longer waiting on. Resolved parts read back what was chosen.
  *
- * Editors can answer; viewers see the same live card with inert controls.
+ * A live question is a card (`ElicitationCard`), like the session's tool
+ * approvals; a resolved one folds back into a transcript row. Editors can
+ * answer; viewers see the same live card with inert controls.
  *
  * The form, URL consent, and unrecognized-request controls are the
- * `LiveElicitation` ones the channel's Magic Chip shares; a Macro user tool
- * under review opens the tool's own composer here.
+ * `LiveElicitation` ones a channel reply's live tail shares; a Macro user
+ * tool under review opens the tool's own composer in the card.
  */
 
 import {
-  LiveQuestionCard,
-  parseDraftedTool,
+  ElicitationCard,
+  type ElicitationSummary,
+} from '@app/features/agent-interactions/components/ElicitationCard';
+import {
+  composableDraft,
+  QuestionCard,
   type RespondToElicitation,
   UserToolComposer,
   type UserToolRequest,
@@ -42,7 +48,7 @@ function outcomeLabel(part: ElicitationPartData): string {
         .with('user_tool', () => 'Confirmed')
         .otherwise(() => 'Answered')
     )
-    .with({ kind: 'declined' }, () => 'Declined')
+    .with({ kind: 'declined' }, () => 'Skipped')
     .with({ kind: 'cancelled' }, () => 'Cancelled')
     .with({ kind: 'completed' }, () => 'Finished')
     .with({ kind: 'errored' }, () => 'Refused')
@@ -81,43 +87,36 @@ export function ElicitationPart(props: {
   const waitingFor = () =>
     interactions.canAnswer() ? 'Waiting for you' : 'Waiting for an editor';
 
+  const summary = (): ElicitationSummary => ({
+    title: `${agentName()} is asking`,
+    status: waitingFor(),
+    message: props.part.message,
+    notice: interactions.canAnswer()
+      ? undefined
+      : 'Only people who can edit this session can answer.',
+  });
+
   return (
     <Show when={live()} fallback={<ResolvedElicitation part={props.part} />}>
-      <ToolCard
-        title={`${agentName()} is asking`}
-        status="running"
-        defaultOpen
-        trailing={<span class="text-ink-muted">{waitingFor()}</span>}
-      >
-        <div class="flex flex-col gap-3 py-1">
-          <div class="text-sm text-ink">{props.part.message}</div>
-          <Show when={!interactions.canAnswer()}>
-            <div class="text-xs text-ink-extra-muted">
-              Only people who can edit this session can answer.
-            </div>
-          </Show>
-          {match(props.part.request)
-            .with({ kind: 'user_tool' }, (request) => (
-              <LiveUserTool
-                request={request}
-                toolCall={props.part.toolCall ?? String(props.part.requestId)}
-                locked={locked()}
-                onRespond={respond}
-              />
-            ))
-            .with(
-              { kind: P.union('form', 'url', 'unrecognized') },
-              (request) => (
-                <LiveQuestionCard
-                  request={request}
-                  locked={locked()}
-                  onRespond={respond}
-                />
-              )
-            )
-            .exhaustive()}
-        </div>
-      </ToolCard>
+      {match(props.part.request)
+        .with({ kind: 'user_tool' }, (request) => (
+          <LiveUserTool
+            summary={summary()}
+            request={request}
+            toolCall={props.part.toolCall ?? String(props.part.requestId)}
+            locked={locked()}
+            onRespond={respond}
+          />
+        ))
+        .with({ kind: P.union('form', 'url', 'unrecognized') }, (request) => (
+          <QuestionCard
+            summary={summary()}
+            request={request}
+            locked={locked()}
+            onRespond={respond}
+          />
+        ))
+        .exhaustive()}
     </Show>
   );
 }
@@ -130,6 +129,7 @@ export function ElicitationPart(props: {
  * chip, or by stopping it.
  */
 function LiveUserTool(props: {
+  summary: ElicitationSummary;
   request: UserToolRequest;
   toolCall: string;
   locked: boolean;
@@ -137,10 +137,11 @@ function LiveUserTool(props: {
 }) {
   const { interactions } = useAgentSession();
   const drafted = createMemo(() =>
-    parseDraftedTool(props.request, props.toolCall)
+    composableDraft(props.request, props.toolCall)
   );
   const fallback = (
-    <LiveQuestionCard
+    <QuestionCard
+      summary={props.summary}
       request={{ kind: 'form', schema: props.request.schema }}
       locked={props.locked}
       onRespond={props.onRespond}
@@ -149,16 +150,17 @@ function LiveUserTool(props: {
   return (
     <Show when={drafted()} fallback={fallback}>
       {(tool) => (
-        <UserToolComposer
-          tool={tool()}
-          toolCall={props.toolCall}
-          cancel
-          fallback={fallback}
-          review={{
-            canAnswer: () => interactions.canAnswer() && !props.locked,
-            respond: props.onRespond,
-          }}
-        />
+        <ElicitationCard summary={props.summary}>
+          <UserToolComposer
+            tool={tool()}
+            toolCall={props.toolCall}
+            cancel
+            review={{
+              canAnswer: () => interactions.canAnswer() && !props.locked,
+              respond: props.onRespond,
+            }}
+          />
+        </ElicitationCard>
       )}
     </Show>
   );
@@ -191,7 +193,7 @@ function ResolvedElicitation(props: { part: ElicitationPartData }) {
             label: reviewed().request.tool,
             status:
               reviewed().toolOutcome.kind === 'failed' ? 'failed' : 'completed',
-            muted: reviewed().toolOutcome.kind === 'failed',
+            unsuccessful: reviewed().toolOutcome.kind === 'failed',
             stopped: false,
             trailing: undefined,
           }}
@@ -237,6 +239,7 @@ function ResolvedQuestion(props: { part: ElicitationPartData }) {
   return (
     <ToolCard
       title="Question"
+      fixedTitle
       subtitle={props.part.message}
       status={props.part.outcome.kind === 'errored' ? 'failed' : 'completed'}
       muted={props.part.outcome.kind === 'errored'}

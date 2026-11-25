@@ -1,11 +1,19 @@
 import { useCrmContactDiscovery } from '@app/features/crm/record-adapter';
+import type { SearchOperatorLookup } from '@app/features/next-soup/core/search-operator-filters';
+import {
+  SEARCH_OPERATOR_TYPES,
+  type SearchQueryParts,
+  searchOperatorIndexes,
+  searchQueryParts,
+} from '@app/features/next-soup/core/search-operators';
+import { createTagOptions } from '@app/features/next-soup/soup-view/filters-bar/tag-filter-state';
+import { createSearchOperatorLookup } from '@app/features/next-soup/soup-view/search-operator-lookup';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { projectRouteId } from '@app/features/projects/core/route';
 import { createSoupRowStore } from '@app/features/soup/collection/row-store';
 import { t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
-import { MobileViewsRow } from '@components/app/mobile/MobileViewsRow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -28,6 +36,7 @@ import { Telemetry } from '@macro-inc/observability';
 import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import { Button, CommandMenuListItem } from '@ui';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -39,24 +48,61 @@ import {
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useUniversalInputEnabled } from '../../universal-input/use-universal-input';
 import { ItemDisplay } from '../CommandItem';
+import { searchIndexCategory } from '../category-search-filters';
 import { commandSearchResultKey } from '../contact-items';
-import { useEntitySearch } from '../queries/entity-search';
+import {
+  type EntitySearchCategory,
+  useEntitySearch,
+} from '../queries/entity-search';
 import { createMobileFullTextSearch } from '../queries/mobile-full-text-search';
 import { createMobileSearchEntry } from './create-mobile-search-entry';
 import { createSearchPagination } from './create-search-pagination';
 import { createSearchResultWindow } from './create-search-result-window';
 import { createSearchScrollRestoration } from './create-search-scroll-restoration';
+import {
+  createMobileSearchSuggestions,
+  MobileSearchStarters,
+  MobileSearchSuggestionRows,
+} from './MobileSearchStarters';
 import type { MobileSearchSession } from './mobileSearchState';
+
+/**
+ * The name results a query's operators leave: `type:` alone narrows them to
+ * its category, words or not; any other operator, Mail's among them, narrows
+ * past what a name match can be checked against, so the search lists full
+ * text instead, as the Search view hides its name matches. Operators still
+ * being typed stay out of the name search.
+ */
+export function nameSearch(
+  parts: SearchQueryParts
+): { query: string; category: EntitySearchCategory } | undefined {
+  if (parts.read.groups.some((group) => group.name !== 'type'))
+    return undefined;
+  // The words leave no name to match when Mail's operators took them.
+  if (parts.read.terms.length > 0 && parts.nameText === '') return undefined;
+  const indexes = searchOperatorIndexes(parts.read);
+  const only = indexes.length === 1 ? indexes[0] : undefined;
+  const category =
+    indexes.length === SEARCH_OPERATOR_TYPES.length
+      ? 'all'
+      : only && searchIndexCategory(only);
+  if (!category) return undefined;
+  // Typed words keep their quotes, which rank exact names first.
+  const query = parts.read.operators === 0 ? parts.serviceText : parts.nameText;
+  return { query, category };
+}
 
 function MobileNameResults(props: {
   session: MobileSearchSession;
   accountId: string;
+  query: Accessor<string>;
+  category: Accessor<EntitySearchCategory>;
 }) {
   const state = props.session;
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const [container, setContainer] = createSignal<HTMLDivElement>();
-  const category = state.category;
-  const source = useEntitySearch(state.query, category, {
+  const category = props.category;
+  const source = useEntitySearch(props.query, category, {
     enabled: () => true,
     contactDiscovery: useCrmContactDiscovery,
   });
@@ -73,24 +119,24 @@ function MobileNameResults(props: {
         if (
           previousWindow !== undefined &&
           key !== previousWindow &&
-          previousWindowQuery === state.query()
+          previousWindowQuery === props.query()
         )
           virtualizer()?.scrollTo(0);
         previousWindow = key;
-        previousWindowQuery = state.query();
+        previousWindowQuery = props.query();
       }
     )
   );
   useDatabaseDiscoverySync(() => true);
   const incoming = createMemo(() =>
-    source.rankItems(source.items(), state.query())
+    source.rankItems(source.items(), props.query())
   );
   const itemKey = (item: QuickAccessItem) =>
     commandSearchResultKey(item, props.accountId);
   const results = createSearchResultWindow({
     key: 'mobileSearch.nameOrder',
     accountId: () => props.accountId,
-    query: state.query,
+    query: props.query,
     category,
     items: incoming,
     itemKey,
@@ -100,7 +146,7 @@ function MobileNameResults(props: {
   const restoration = createSearchScrollRestoration({
     key: 'mobileSearch.nameScroll',
     accountId: () => props.accountId,
-    query: state.query,
+    query: props.query,
     category,
     items,
     ready: () => !!virtualizer() || items().length === 0,
@@ -191,7 +237,7 @@ function MobileNameResults(props: {
       onPointerDown={restoration.cancel}
       class="flex h-full min-h-0 flex-col px-3 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
     >
-      <Show when={state.query().trim() && category() !== 'projects'}>
+      <Show when={state.query().trim() && props.query().trim()}>
         <div
           data-keep-keyboard
           onPointerDown={(event) => event.preventDefault()}
@@ -245,10 +291,11 @@ function MobileNameResults(props: {
 function MobileFullTextResults(props: {
   session: MobileSearchSession;
   accountId: string;
+  operatorLookup: Accessor<SearchOperatorLookup>;
 }) {
   const state = props.session;
-  const category = state.category;
-  const search = createMobileFullTextSearch(state.query, category);
+  const category = () => 'all' as const;
+  const search = createMobileFullTextSearch(state.query, props.operatorLookup);
   usePending('search.full-text', search.isSettling);
   const hasAuthoritativeError = () =>
     !!search.error() && !isTransientRequestError(search.error());
@@ -414,6 +461,13 @@ function MobileFullTextResults(props: {
  */
 export function MobileSearchResults() {
   const session = createMobileSearchEntry();
+  const parts = createMemo(() => searchQueryParts(session.query()));
+  const names = createMemo(() => nameSearch(parts()));
+  const operatorLookup = createSearchOperatorLookup(createTagOptions());
+  const suggestions = createMobileSearchSuggestions(
+    session.query,
+    session.setQuery
+  );
   const universalInputEnabled = useUniversalInputEnabled();
   const accountId = useUserId();
   const authenticated = useIsAuthenticated();
@@ -426,7 +480,10 @@ export function MobileSearchResults() {
       }}
     >
       <Show when={!universalInputEnabled() || !session.universalInputActive()}>
-        <MobileViewsRow session={session} />
+        <MobileSearchStarters
+          query={session.query}
+          setQuery={session.setQuery}
+        />
         <Show when={authenticated() === true ? accountId() : undefined} keyed>
           {(id) => (
             <Suspense
@@ -440,12 +497,30 @@ export function MobileSearchResults() {
               }
             >
               <Show
-                when={session.mode() === 'full-text'}
+                when={!suggestions.showing()}
                 fallback={
-                  <MobileNameResults session={session} accountId={id} />
+                  <MobileSearchSuggestionRows suggestions={suggestions} />
                 }
               >
-                <MobileFullTextResults session={session} accountId={id} />
+                <Show
+                  when={session.mode() !== 'full-text' && names()}
+                  fallback={
+                    <MobileFullTextResults
+                      session={session}
+                      accountId={id}
+                      operatorLookup={operatorLookup}
+                    />
+                  }
+                >
+                  {(search) => (
+                    <MobileNameResults
+                      session={session}
+                      accountId={id}
+                      query={() => search().query}
+                      category={() => search().category}
+                    />
+                  )}
+                </Show>
               </Show>
             </Suspense>
           )}

@@ -1,6 +1,6 @@
 import type { CacheHost } from '@graphql-cache/index';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { calendarKeys } from '../../keys';
 import {
@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   fetchPage: vi.fn(),
   invalidateQueries: vi.fn(async () => {}),
   markStale: vi.fn(),
+  trackCreates: vi.fn(),
+  untrackCreates: vi.fn(),
   activeController: undefined as unknown,
 }));
 
@@ -25,10 +27,7 @@ vi.mock('../range', async (importOriginal) => ({
 vi.mock('@queries/client', () => ({
   queryClient: { invalidateQueries: mocks.invalidateQueries },
 }));
-vi.mock('../flag', () => ({
-  useGraphqlCalendarHost: () => () =>
-    ({ onCacheGenerationChanged: () => () => {} }) as unknown as CacheHost,
-}));
+vi.mock('../flag', () => ({ useGraphqlCalendarHost: () => host }));
 vi.mock('../sync-controller', () => ({
   CalendarSyncController: class {
     markStale = mocks.markStale;
@@ -40,7 +39,7 @@ vi.mock('../sync-controller', () => ({
   },
 }));
 vi.mock('../mutations', () => ({
-  trackCalendarCreateSettlements: () => () => {},
+  trackCalendarCreateSettlements: mocks.trackCreates,
 }));
 vi.mock('../backfill', () => ({ runCalendarBackfill: vi.fn() }));
 vi.mock('@core/cross-tab/tab-leader', () => ({
@@ -52,6 +51,9 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 
 const POLL_MS = 60_000;
+const cacheHost = (): CacheHost =>
+  ({ onCacheGenerationChanged: () => () => {} }) as unknown as CacheHost;
+const [host, setHost] = createSignal<CacheHost | undefined>(cacheHost());
 
 const page = (
   syncStatus: CalendarOccurrencePage['syncStatus']
@@ -73,6 +75,8 @@ const mount = () => {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  mocks.trackCreates.mockReturnValue(mocks.untrackCreates);
+  setHost(cacheHost());
   // The status is module state: every test starts from the default.
   recordCalendarSyncStatus(
     CalendarSyncStatus.ready,
@@ -159,4 +163,21 @@ describe('useCalendarCache sync status', () => {
     expect(mocks.markStale).toHaveBeenCalledWith('online');
     expect(latestCalendarSyncStatus()).toBe(CalendarSyncStatus.syncing);
   });
+});
+
+it('keeps hearing creates settle while the cache is paused', () => {
+  mocks.fetchPage.mockResolvedValue(page('READY'));
+  const paused = host();
+  mount();
+  expect(mocks.trackCreates).toHaveBeenCalledExactlyOnceWith(paused);
+
+  setHost(undefined);
+  expect(mocks.untrackCreates).not.toHaveBeenCalled();
+  setHost(paused);
+  expect(mocks.trackCreates).toHaveBeenCalledOnce();
+
+  const next = cacheHost();
+  setHost(next);
+  expect(mocks.untrackCreates).toHaveBeenCalledOnce();
+  expect(mocks.trackCreates).toHaveBeenLastCalledWith(next);
 });

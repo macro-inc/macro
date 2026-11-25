@@ -355,6 +355,7 @@ dependencies = [
  "email",
  "entity_access",
  "futures",
+ "genai_telemetry",
  "import",
  "jev",
  "lazy-regex",
@@ -684,6 +685,7 @@ dependencies = [
  "bots",
  "calendar_events",
  "call",
+ "capsolver_emulator",
  "channels",
  "chat",
  "chrono",
@@ -695,6 +697,7 @@ dependencies = [
  "codex_connection",
  "cognition",
  "computer_id",
+ "computer_screen",
  "connection_gateway",
  "connection_gateway_client",
  "connectors",
@@ -733,6 +736,7 @@ dependencies = [
  "http-body-util",
  "image_generation",
  "import",
+ "import_hubspot",
  "import_jira",
  "import_linear",
  "import_notion",
@@ -772,6 +776,7 @@ dependencies = [
  "model_notifications",
  "model_owner",
  "models_dcs",
+ "models_email",
  "models_permissions",
  "models_search",
  "nom 8.0.0",
@@ -1291,6 +1296,7 @@ dependencies = [
  "hosted_runtimes",
  "image_generation",
  "import",
+ "import_hubspot",
  "import_jira",
  "import_linear",
  "import_notion",
@@ -1347,6 +1353,7 @@ dependencies = [
  "system_properties",
  "teams",
  "thiserror 2.0.18",
+ "time_tracking",
  "tokio",
  "tokio-util",
  "tracing",
@@ -4285,6 +4292,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "capsolver_emulator"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clap",
+ "macro_entrypoint",
+ "macro_env",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "cargo-platform"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5108,6 +5134,7 @@ dependencies = [
  "graphql_registered_work",
  "graphql_scheduled_action",
  "graphql_soup",
+ "graphql_time_tracking",
  "graphql_work_feed",
  "item_filters",
  "macro_authorization",
@@ -5134,6 +5161,7 @@ dependencies = [
  "soup-filter-projection",
  "soup_realtime",
  "sqlx",
+ "time_tracking",
  "tokio",
  "tokio-util",
  "tracing",
@@ -5167,6 +5195,31 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "computer_screen"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "computer_id",
+ "harness_id",
+ "macro_db_migrator",
+ "macro_user_id",
+ "rand 0.9.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]
@@ -5500,6 +5553,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "model-entity",
+ "models_pagination",
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -5781,6 +5835,7 @@ checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 name = "crm"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent_correlation",
  "ai_toolset",
  "anyhow",
@@ -5793,6 +5848,7 @@ dependencies = [
  "databases",
  "entity_access",
  "entity_access_db_utils",
+ "favorites",
  "feature_flags",
  "filter_ast",
  "futures",
@@ -5805,18 +5861,22 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "messages",
+ "model-entity",
  "model-error-response",
+ "model_notifications",
  "model_user",
  "models_databases",
  "models_pagination",
  "models_permissions",
  "models_properties",
+ "notification",
  "opentelemetry",
  "properties",
  "psl",
  "rdkafka",
  "readonly_pool",
  "rootcause",
+ "saved_views",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -7023,6 +7083,7 @@ dependencies = [
  "graphql_initiative",
  "graphql_scheduled_action",
  "graphql_soup",
+ "graphql_time_tracking",
  "harnesses",
  "hex",
  "hosted_runtimes",
@@ -8774,11 +8835,13 @@ dependencies = [
  "memchr",
  "opentelemetry",
  "pinned_tls",
+ "reqwest 0.13.4",
  "rootcause",
  "rustix 1.1.6",
  "rustls",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "strum 0.27.2",
  "tempfile",
  "thiserror 2.0.18",
@@ -8792,6 +8855,7 @@ dependencies = [
  "utoipa",
  "uuid",
  "workspace-hack",
+ "zstd",
 ]
 
 [[package]]
@@ -9274,6 +9338,7 @@ dependencies = [
  "opentelemetry_sdk",
  "serde_json",
  "strum 0.27.2",
+ "tokio",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -10103,6 +10168,27 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "uuid",
+]
+
+[[package]]
+name = "graphql_time_tracking"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "entity_access",
+ "futures",
+ "graphql_common",
+ "graphql_permission",
+ "graphql_soup",
+ "macro_user_id",
+ "model-entity",
+ "serde_json",
+ "time_tracking",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11443,6 +11529,7 @@ dependencies = [
  "connectors",
  "dateparser",
  "futures",
+ "import_hubspot",
  "import_notion",
  "import_tracker",
  "macro_authorization",
@@ -11469,6 +11556,26 @@ dependencies = [
  "tracing-subscriber",
  "utoipa",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "import_hubspot"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "connectors",
+ "http 1.4.0",
+ "import_tracker",
+ "macro_user_id",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
  "workspace-hack",
 ]
 
@@ -11517,6 +11624,7 @@ dependencies = [
  "lazy-regex",
  "macro_user_id",
  "models_databases",
+ "nom 8.0.0",
  "rand 0.9.4",
  "rootcause",
  "serde",
@@ -11524,6 +11632,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "urlencoding",
  "uuid",
  "workspace-hack",
 ]
@@ -12981,6 +13090,7 @@ dependencies = [
 name = "macro_authorization"
 version = "0.1.0"
 dependencies = [
+ "agent_credentials",
  "axum",
  "bot_id",
  "bot_token",
@@ -12995,6 +13105,8 @@ dependencies = [
  "macro_user_id",
  "model-error-response",
  "model_user",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "rootcause",
  "serde",
  "serde_json",
@@ -13004,6 +13116,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "uuid",
  "workspace-hack",
@@ -18445,6 +18558,7 @@ dependencies = [
  "entity_registry_db_utils",
  "feature_flags",
  "futures",
+ "genai_telemetry",
  "github",
  "glob",
  "jev",
@@ -18462,6 +18576,8 @@ dependencies = [
  "model-entity",
  "model_owner",
  "models_properties",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "properties",
  "rdkafka",
  "reqwest 0.13.4",
@@ -18480,6 +18596,8 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "trigger_context",
  "utoipa",
  "workspace-hack",
@@ -18724,19 +18842,23 @@ dependencies = [
  "calendar_events",
  "channels",
  "chrono",
+ "chrono-tz",
  "comms_db_client",
  "crm",
  "document_sub_type",
  "email_db_client",
  "entity_access",
+ "favorites",
  "feature_flags",
  "indexmap 2.14.0",
  "item_filters",
  "macro_auth",
  "macro_authorization",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_user_id",
  "model",
+ "model-entity",
  "models_email",
  "models_opensearch",
  "models_properties",
@@ -18744,6 +18866,7 @@ dependencies = [
  "models_search_cursor",
  "models_soup",
  "name_search",
+ "nom 8.0.0",
  "opensearch_client",
  "properties",
  "rate_limit",
@@ -18755,6 +18878,7 @@ dependencies = [
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
  "utoipa",
@@ -19956,6 +20080,7 @@ dependencies = [
  "serde",
  "serde_json",
  "system_properties",
+ "time_tracking",
  "tokio",
  "tokio-retry",
  "tracing",
@@ -21049,6 +21174,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -21452,11 +21578,15 @@ dependencies = [
 name = "time_tracking"
 version = "0.1.0"
 dependencies = [
+ "activity",
+ "ai_toolset",
  "anyhow",
  "async-trait",
  "axum",
  "chrono",
  "chrono-tz",
+ "connection_gateway_client",
+ "csv",
  "entity_access",
  "feature_flags",
  "http-body-util",
@@ -21465,9 +21595,11 @@ dependencies = [
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",
+ "model-entity",
  "model-error-response",
  "model_user",
  "rootcause",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "serde_with",
@@ -21475,10 +21607,12 @@ dependencies = [
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -24450,6 +24584,9 @@ dependencies = [
  "zerocopy",
  "zeroize",
  "zip",
+ "zstd",
+ "zstd-safe",
+ "zstd-sys",
 ]
 
 [[package]]
@@ -24715,6 +24852,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "tempfile",
+ "toml 0.8.23",
  "xtask_paths",
 ]
 

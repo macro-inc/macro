@@ -90,6 +90,7 @@ pub(crate) fn target_entity_type(entity_type: PropertyTargetEntityType) -> Acces
         PropertyTargetEntityType::Channel => AccessEntityType::Channel,
         PropertyTargetEntityType::Chat => AccessEntityType::Chat,
         PropertyTargetEntityType::Company => AccessEntityType::CrmCompany,
+        PropertyTargetEntityType::Contact => AccessEntityType::CrmContact,
         PropertyTargetEntityType::DatabaseRow => AccessEntityType::DatabaseRow,
         PropertyTargetEntityType::Document => AccessEntityType::Document,
         PropertyTargetEntityType::Project => AccessEntityType::Project,
@@ -153,6 +154,21 @@ where
     Ok(receipt)
 }
 
+/// The id of the entity the path names now, which for a merged company's or
+/// contact's old id is the record it was merged into. Grants nothing.
+async fn current_entity_id<A>(
+    entity_access_service: &A,
+    params: &EntityPathParams,
+) -> Result<String, PropertiesErr>
+where
+    A: EntityAccessService,
+{
+    entity_access_service
+        .current_entity_id(&params.entity_id, target_entity_type(params.entity_type))
+        .await
+        .map_err(|_| PropertiesErr::PermissionDenied)
+}
+
 async fn entity_path_params(parts: &mut Parts) -> Result<EntityPathParams, ReceiptRejection> {
     let Path(params): Path<EntityPathParams> = parts.extract().await.map_err(|_| {
         ReceiptRejection::BadRequest("Missing or invalid entity_type / entity_id in path")
@@ -192,10 +208,11 @@ where
             .and_then(|authorization| authorization.acting_user())
             .map(|user| user.macro_user_id.clone());
 
+        let entity_id = current_entity_id(state.entity_access_service.as_ref(), &params).await?;
         let receipt = mint_view_receipt(
             state.entity_access_service.as_ref(),
             user.as_ref(),
-            &params.entity_id,
+            &entity_id,
             target_entity_type(params.entity_type),
         )
         .await?;
@@ -229,6 +246,7 @@ where
             .map_err(ReceiptRejection::from)?;
 
         let user = authorization.authorization.user;
+        let entity_id = current_entity_id(state.entity_access_service.as_ref(), &params).await?;
         let entity_type = target_entity_type(params.entity_type);
         // A token signed for an agent writes as that agent on its user's
         // behalf, the way the agent's MCP tools do.
@@ -238,7 +256,7 @@ where
                 .generate_bot_entity_access_receipt::<EditAccessLevel>(
                     agent,
                     BotAccessScope::user(user.macro_user_id),
-                    &params.entity_id,
+                    &entity_id,
                     entity_type,
                 )
                 .await
@@ -247,7 +265,7 @@ where
                 mint_authenticated_receipt::<EditAccessLevel, A>(
                     state.entity_access_service.as_ref(),
                     &user.macro_user_id,
-                    &params.entity_id,
+                    &entity_id,
                     entity_type,
                 )
                 .await?

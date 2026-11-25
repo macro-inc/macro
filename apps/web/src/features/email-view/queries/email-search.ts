@@ -9,9 +9,8 @@ import type {
   EntityFilters,
 } from '@service-search/generated/models';
 import { match } from 'ts-pattern';
-import { isExcludedEmailFolder } from '../constants';
 import { EMAIL_ATTACHMENT_KINDS } from '../filters/email-facets';
-import type { EmailTab } from '../types';
+import type { EmailSearchScope } from '../search/email-search-scope';
 import type { EmailQueryContext } from './email-query';
 
 const nonEmailFilters: EntityFilters = {
@@ -26,31 +25,49 @@ const nonEmailFilters: EntityFilters = {
   project_filters: { project_ids: [NIL_UUID] },
 };
 
-// Each tab searches the threads its list shows. Favorites narrows by thread id
-// in `buildEmailSearchRequest`; Scheduled and Reminders have no search.
-function tabFilters(tab: EmailTab): EmailFilters {
-  // Focus filters its own list on the client; this search stays dormant there.
+/**
+ * What a search reaches. With no `in:` filter it is all mail, as the All tab
+ * lists it; a view narrows it to what that view lists, its inbox views to
+ * threads still in the inbox. Favorites and Focus narrow by thread id in
+ * `buildEmailSearchRequest`; Focus's ids are already the threads still in the
+ * inbox, so it sends no Done state for the service to check page by page.
+ */
+function scopeFilters(scope: EmailSearchScope): EmailFilters {
   return (
-    match(tab)
-      .with('important', 'focus', () => ({
+    match(scope)
+      .with('inbox', () => ({ done: false }))
+      .with('signal', () => ({
         importance: true,
         shared: 'exclude' as const,
+        done: false,
       }))
-      .with('noise', () => ({ importance: false, shared: 'exclude' as const }))
+      .with('noise', () => ({
+        importance: false,
+        shared: 'exclude' as const,
+        done: false,
+      }))
       .with('calendar', () => ({
         calendar_only: true,
         shared: 'exclude' as const,
       }))
       .with('shared', () => ({ shared: 'only' as const }))
-      // These views disable service search; fail closed if called independently.
-      .with('spam', 'trash', () => ({ email_thread_ids: [NIL_UUID] }))
       .with('archived', () => ({ shared: 'exclude' as const, done: true }))
       .with('sent', () => ({ view: 'sent' as const }))
       .with('drafts', () => ({ view: 'drafts' as const }))
-      .with('favorites', 'scheduled', 'reminders', 'all', () => ({}))
+      .with('focus', 'favorites', 'all', () => ({}))
+      // A view this build doesn't know searches all mail.
       .exhaustive(() => ({}))
   );
 }
+
+/** Where a search runs: the list's own filters, and the mail it reaches. */
+export type EmailSearchContext = Omit<EmailQueryContext, 'tab'> & {
+  scope: EmailSearchScope;
+  /** The threads a Favorites or Focus search is held to. */
+  scopeThreadIds?: readonly string[];
+  /** Each label's stored name ("Customers/Larkspur"), which search matches. */
+  labelNames?: ReadonlyMap<string, string>;
+};
 
 const soleSelection = (selection: string[] | undefined) =>
   selection?.length === 1 ? selection[0] : undefined;
@@ -102,41 +119,68 @@ const SERVICE_FACET_GROUPS = [
   'calendar',
   'attachments',
   'tags',
+  'labels',
 ] as const;
 
-/** The part of `facets` that service search leaves to the client. */
-export function facetsLeftToClient(facets: FacetSelection): FacetSelection {
+/** The stored names of the ticked labels that `labelNames` knows. */
+function searchedLabelNames(
+  facets: FacetSelection,
+  labelNames: ReadonlyMap<string, string> | undefined
+): string[] {
+  return [
+    ...new Set(
+      (facets.labels ?? []).flatMap((id) => {
+        const name = labelNames?.get(id);
+        return name ? [name] : [];
+      })
+    ),
+  ];
+}
+
+/**
+ * The part of `facets` that service search leaves to the client. Ticked
+ * labels none of which can be named stay, so they match no hit, as their ids
+ * match no row of the list.
+ */
+export function facetsLeftToClient(
+  facets: FacetSelection,
+  labelNames?: ReadonlyMap<string, string>
+): FacetSelection {
   const left: FacetSelection = { ...facets };
   for (const group of SERVICE_FACET_GROUPS) delete left[group];
+  if (
+    (facets.labels ?? []).length > 0 &&
+    searchedLabelNames(facets, labelNames).length === 0
+  )
+    left.labels = facets.labels;
   return left;
 }
 
-/** Mirrors the Email view's tab, inbox, and facet scoping for service-backed search. */
+/** The service search for `context`, scoped as the list scopes the same filters. */
 export function buildEmailSearchRequest(
-  context: EmailQueryContext,
+  context: EmailSearchContext,
   search: SoupSearchRequest,
   admittedIds?: readonly string[]
 ): SearchSoupQueryArgs {
-  // Both discovery and retained unread results must stay within favorites.
-  const threadIds = isExcludedEmailFolder(context.tab)
-    ? [NIL_UUID]
-    : context.tab === 'favorites'
-      ? (context.favoriteThreadIds ?? []).filter(
+  // Both discovery and retained unread results stay within the view's threads.
+  const threadIds =
+    context.scope === 'favorites' || context.scope === 'focus'
+      ? (context.scopeThreadIds ?? []).filter(
           (id) => admittedIds === undefined || admittedIds.includes(id)
         )
       : admittedIds;
-  const tab = tabFilters(context.tab);
+  const scope = scopeFilters(context.scope);
   const facets = facetFilters(
     admittedIds ? { ...context.facets, read: [] } : context.facets
   );
-  // The tab and a facet are ANDed, as in the list: Archived with Not done
+  // The view and a facet are ANDed, as in the list: Archived with Not done
   // matches nothing.
   const contradicts =
-    tab.done !== undefined &&
+    scope.done !== undefined &&
     facets.done !== undefined &&
-    tab.done !== facets.done;
+    scope.done !== facets.done;
   const emailFilters: EmailFilters = {
-    ...tab,
+    ...scope,
     ...facets,
     ...(contradicts
       ? { email_thread_ids: [NIL_UUID] }
@@ -158,6 +202,12 @@ export function buildEmailSearchRequest(
   const tagOptionIds = [...new Set(context.facets.tags ?? [])].filter((id) =>
     context.facetContext.tagPropertyDefinitionByOptionId.has(id)
   );
+  // Search hits carry no labels, so a label narrows by its stored name, as
+  // `label:` does, among the viewer's own inboxes. A label it cannot name
+  // matches nothing, so it leaves the any-of; when none can be named,
+  // `facetsLeftToClient` drops every hit.
+  const labelNames = searchedLabelNames(context.facets, context.labelNames);
+  if (labelNames.length > 0) emailFilters.include_labels = labelNames;
 
   return {
     params: { cursor: null, page_size: 100 },

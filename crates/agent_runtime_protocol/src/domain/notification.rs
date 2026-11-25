@@ -85,6 +85,9 @@ pub enum ReviewSettlement {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportSettlement {
+    /// Fidelity losses and source snapshot labels retained by the import.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
     /// The workspace the import read.
     #[serde(default)]
     pub source: ImportWorkspace,
@@ -102,8 +105,11 @@ pub struct ImportSettlement {
     pub documents: u32,
     /// Planned databases.
     pub databases: u32,
-    /// Rows those databases hold.
+    /// Rows written, including rows from database copies that stopped.
     pub database_rows: u32,
+    /// The subset of rows from unfinished database copies.
+    #[serde(default)]
+    pub partial_database_rows: u32,
     /// Planned task lists; issues that become tasks for Linear and Jira.
     pub task_lists: u32,
     /// Tasks those task lists or issues become.
@@ -124,6 +130,12 @@ pub struct ImportSettlement {
     pub root_folder_id: Option<Uuid>,
     /// Objects that could not be imported, at most [`MAX_IMPORT_ITEMS`].
     pub failures: Vec<ImportItem>,
+    /// Exact number of failed objects. Absent on settlements from older writers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_count: Option<u32>,
+    /// At least one list was shortened for the settlement.
+    #[serde(default)]
+    pub details_truncated: bool,
     /// Objects left for the owner to handle by hand, at most [`MAX_IMPORT_ITEMS`].
     pub hand_items: Vec<ImportItem>,
 }
@@ -143,6 +155,8 @@ pub enum ImportWorkspace {
     Linear,
     /// Jira projects, epics and issues.
     Jira,
+    /// HubSpot deal pipelines, companies, contacts and deals.
+    Hubspot,
 }
 
 /// How an approved import's write ended.
@@ -261,7 +275,7 @@ pub fn notification_context(notifications: &[Notification]) -> Result<String, se
             escape(&payload),
         ));
     }
-    xml.push_str("</m-notifications>\nThese are system events, not user requests. Do not repeat completed actions or retry uncertain outcomes. Read final drafts through GetReview. If nothing needs saying and you have not called any tool in this turn, reply exactly <noop/>. After any tool call, summarize the result instead of replying with <noop/>.");
+    xml.push_str("</m-notifications>\nThese are system events, not user requests. Do not repeat completed actions or retry uncertain outcomes. Read final drafts through GetReview. If nothing needs saying and you have not called any tool in this turn, reply with <noop/> and nothing else: no text before or after it. After any tool call, summarize the result instead of replying with <noop/>.");
     Ok(xml)
 }
 

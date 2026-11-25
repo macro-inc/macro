@@ -15,3 +15,20 @@ fn serializes_field_and_query() {
         })
     );
 }
+
+#[test]
+fn serializes_the_operator_when_set() {
+    let query = MatchBoolPrefixQuery::new("content", "ann d").operator("and");
+
+    assert_eq!(
+        query.to_owned().to_json(),
+        serde_json::json!({
+            "match_bool_prefix": {
+                "content": {
+                    "query": "ann d",
+                    "operator": "and"
+                }
+            }
+        })
+    );
+}

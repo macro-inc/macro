@@ -9,18 +9,12 @@ export function TerminalToolCall(props: {
   detail: Extract<ToolDetail, { kind: 'terminal' }>;
   common: ToolCallCommon;
 }) {
-  const failed = () =>
-    props.detail.exitCode != null && props.detail.exitCode !== 0;
   return (
     <ToolCard
       title={props.common.label}
       subtitle={props.detail.command ?? undefined}
       status={props.common.status}
-      muted={props.common.muted || failed()}
-      trailing={
-        props.common.trailing ??
-        (failed() ? `Failed · exit ${props.detail.exitCode}` : undefined)
-      }
+      trailing={props.common.trailing}
       hasContent={props.detail.output != null || props.detail.exitCode != null}
     >
       <Show when={props.detail.output != null || props.detail.exitCode != null}>

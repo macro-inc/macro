@@ -22,6 +22,21 @@ function handler(event) {
     };
   }
 
+  // Stable desktop installer links. Temporary, so the target can move; the
+  // same manifest drives local serving and static redirect fallbacks.
+  var downloadRedirects = __DOWNLOAD_REDIRECTS__;
+  var download = downloadRedirects[request.uri.replace(/\/$/, '')];
+  if (download) {
+    return {
+      statusCode: 302,
+      statusDescription: 'Found',
+      headers: {
+        location: { value: download },
+        'cache-control': { value: 'no-store' },
+      },
+    };
+  }
+
   // One manifest also drives local serving and static redirect fallbacks.
   var pageRedirects = __PAGE_REDIRECTS__;
   var source = request.uri.replace(/\/index\.html$/, '').replace(/\/$/, '');

@@ -10,6 +10,7 @@ use agent_client_protocol::RawJsonRpcMessage;
 use agent_fold::domain::log::Message;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams};
 use agent_session::domain::ports::{AgentSessionLogRepo as _, NoOpRealtime};
@@ -192,6 +193,50 @@ fn facts(id: AgentSessionId) -> SessionFacts {
         instructions: None,
         acp_session_id: None,
     }
+}
+
+/// A session last run on a retired model keeps the effort and speed it chose,
+/// as far as the replacement it resumes on offers them.
+#[test]
+fn a_retired_models_settings_carry_over_to_its_replacement() {
+    let options = crate::domain::model_options::session_config_options(
+        "openai/gpt-6.2-sol",
+        &["openai/gpt-6.2-sol"],
+        agent::ReasoningEffort::Max,
+        agent::ModelSpeed::Ultrafast,
+    );
+    let set: RawJsonRpcMessage = serde_json::from_value(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "session/set_config_option",
+        "params": {"sessionId": "acp-1", "configId": "speed", "value": "ultrafast"},
+    }))
+    .expect("a request frame should deserialize");
+    let reported: RawJsonRpcMessage = serde_json::from_value(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {"configOptions": options},
+    }))
+    .expect("a response frame should deserialize");
+    let frames = vec![
+        Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(set))),
+        Message::ToServer(ToServerMessage::Acp(AcpMessage(reported))),
+    ];
+    let rebuilt = |model: &str| {
+        rebuilt_state(
+            &SessionFacts {
+                model: model.to_owned(),
+                ..facts(AgentSessionId::new())
+            },
+            frames.clone(),
+        )
+    };
+
+    let sol = rebuilt("openai/gpt-6.1-sol");
+    assert_eq!(sol.reasoning_effort, agent::ReasoningEffort::Max);
+    assert_eq!(sol.speed, agent::ModelSpeed::Ultrafast);
+    let luna = rebuilt("openai/gpt-5-mini");
+    assert_eq!(luna.speed, agent::ModelSpeed::Standard);
 }
 
 /// The same facts, with the session's row carrying `instructions`.

@@ -93,26 +93,40 @@ export async function verifyHomepage(
             `Homepage SSR root height is ${rootHeight}, expected viewport height ${viewport.height} (${label})`
           );
 
-        await expect(page.locator('.homepage-feature')).toHaveCount(5);
+        await expect(page.locator('.feature-page-section')).toHaveCount(11);
+        if (viewport.width < 768) {
+          await expect(page.locator('#pricing')).toBeVisible();
+          await expect(page.locator('.homepage-modules a[href]')).toHaveCount(
+            12
+          );
+        } else {
+          await expect(page.locator('#pricing')).toBeHidden();
+        }
+        await expect(page.locator('#homepage-testimonial')).toBeVisible();
+        await expect(page.locator('.homepage-blog')).toBeVisible();
         await expect(page.locator('#app-scroll-root')).toHaveCSS(
           'background-color',
           'rgb(0, 0, 0)'
         );
 
-        // Lazy chapter styles must also be linked before hydration.
-        await expect(page.locator('#email .homepage-feature-title')).toHaveCSS(
-          'display',
-          'flex'
+        // Lazy section styles must also be linked before hydration.
+        await expect(page.locator('#email .homepage-screen')).toHaveCSS(
+          'overflow',
+          'hidden'
         );
         await expect(page.locator('#email-title')).toHaveCSS(
           'font-family',
           /Roboto Slab Variable/
         );
 
-        // The welcome graphic must retain its dimensions before scripts run.
-        const mark = page.locator('.homepage-feature-links .ob-welcome-logo');
-        await expect(mark).toHaveCSS('width', '96px');
-        await expect(mark.locator('svg')).toHaveCSS('width', '48px');
+        // The product tour must keep the app window's shape before scripts run.
+        await expect(page.locator('.homepage-tour-screen')).toHaveCSS(
+          'aspect-ratio',
+          '1700 / 916'
+        );
+        await expect(
+          page.locator('.homepage-tour-screen img[data-active="true"]')
+        ).toHaveCount(1);
         await expect(headingLocator).toHaveCSS(
           'font-family',
           /Roboto Slab Variable/
@@ -125,7 +139,7 @@ export async function verifyHomepage(
             `Homepage hydration failed (${label}): ${errors.join('; ')}`
           );
         await page.waitForSelector(
-          '#root[data-public-ready="true"] .homepage-feature',
+          '#root[data-public-ready="true"] .feature-page-section',
           {
             state: 'attached',
             timeout: 10000,
@@ -159,6 +173,12 @@ export async function verifyHomepage(
         await expect(page.locator('.homepage-hero-cta')).toBeVisible();
         await heading.dispose();
 
+        // The tour responds once hydrated: Next selects the following module.
+        await page.getByRole('button', { name: 'Next module' }).click();
+        await expect(
+          page.getByRole('tab', { name: 'Mail', exact: true })
+        ).toHaveAttribute('aria-selected', 'true');
+
         if (viewport.width < 768)
           await page
             .getByRole('button', { name: 'Open navigation', exact: true })
@@ -172,28 +192,24 @@ export async function verifyHomepage(
             .getByRole('button', { name: 'Close navigation', exact: true })
             .tap();
         await page.locator('#email').scrollIntoViewIfNeeded();
-        // Native previews stay dark across live system theme changes.
-        await page.emulateMedia({ reducedMotion: 'reduce' });
-        const previewBody = page
-          .locator('#email .homepage-email-body p')
-          .first();
-        await expect(previewBody).toHaveCSS('opacity', '1');
-        await expect(previewBody).toHaveText(/\S+/);
-        await expect(previewBody).toHaveCSS('color', 'rgb(255, 255, 255)');
+        // The page stays dark across live system theme changes.
+        const emailTitle = page.locator('#email-title');
+        await expect(page.locator('#email .homepage-screen img')).toBeVisible();
+        const titleColor = await emailTitle.evaluate(
+          (element) => getComputedStyle(element).color
+        );
         await page.emulateMedia({
           colorScheme: colorScheme === 'light' ? 'dark' : 'light',
         });
-        await expect(previewBody).toHaveCSS('color', 'rgb(255, 255, 255)');
+        await expect(emailTitle).toHaveCSS('color', titleColor);
         await page.emulateMedia({ colorScheme });
         const overflow = await page
           .locator('[data-onboarding-scroll]')
           .evaluate((scroller) => scroller.scrollWidth > scroller.clientWidth);
         expect(overflow).toBe(false);
-        const graphic = await page
-          .locator('.homepage-feature-links [data-context-scene]')
-          .boundingBox();
+        const graphic = await page.locator('.homepage-tour').boundingBox();
         if (!graphic)
-          throw new Error(`Homepage has no feature diagram (${label})`);
+          throw new Error(`Homepage has no product tour (${label})`);
         expect(graphic.x).toBeGreaterThanOrEqual(0);
         expect(graphic.x + graphic.width).toBeLessThanOrEqual(viewport.width);
         await page
@@ -201,13 +217,13 @@ export async function verifyHomepage(
           .getByRole('link', { name: 'Learn about email', exact: true })
           .click();
         await expect(page).toHaveURL(`${origin}/email`);
-        await verifySignupNavigation(page, origin, viewport.width < 640);
+        await verifySignupNavigation(page, origin);
         if (errors.length)
           throw new Error(
             `Homepage demo failed (${label}): ${errors.join('; ')}`
           );
         console.log(
-          `[prerender] Homepage ${label}: SSR content, responsive hydration, navigation, feature links, animation, and signup routing verified`
+          `[prerender] Homepage ${label}: SSR content, responsive hydration, navigation, product tour, section links, and signup routing verified`
         );
       } finally {
         releaseScripts();
@@ -223,8 +239,7 @@ export async function verifyHomepage(
 
 async function verifySignupNavigation(
   page: Page,
-  origin: string,
-  phone: boolean
+  origin: string
 ): Promise<void> {
   // App signup belongs to a separate application. A URL change alone
   // can pass while the website router renders an empty shell.
@@ -234,7 +249,7 @@ async function verifySignupNavigation(
       body: '<h1>Signup application</h1>',
     })
   );
-  const signupUrl = `${origin}${phone ? '/mobile-signup' : '/app/signup'}`;
+  const signupUrl = `${origin}/app/signup`;
   for (const selector of [
     '.homepage-hero-cta',
     '.site-header-actions .site-nav-start',
@@ -250,9 +265,8 @@ async function verifySignupNavigation(
     ]);
     expect(response.ok()).toBe(true);
     await expect(page).toHaveURL(signupUrl);
-    if (!phone)
-      await expect(
-        page.getByRole('heading', { name: 'Signup application' })
-      ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Signup application' })
+    ).toBeVisible();
   }
 }

@@ -2,18 +2,15 @@ import { createAmplitudeFromStream } from '@solid-primitives/stream';
 import { createRoot } from 'solid-js';
 import {
   type AudioRecorderCallbacks,
+  DICTATION_FORMATS,
   MAX_RECORDING_BYTES,
   MAX_RECORDING_MS,
   RECORDING_CHUNK_MS,
   type RecorderHandle,
+  type RecordingFormats,
 } from '../core/recording';
 import { VOLUME_INTERVAL_MS } from '../core/volume';
 
-const MIME_TYPES = [
-  'audio/webm;codecs=opus',
-  'audio/mp4',
-  'audio/ogg;codecs=opus',
-];
 const AUDIO_BITS_PER_SECOND = 64_000;
 /** Stop early enough that the final chunk still fits under the server limit. */
 const SIZE_HEADROOM_BYTES = 64 * 1024;
@@ -59,16 +56,17 @@ export class AudioRecorder implements RecorderHandle {
   constructor(
     private readonly callbacks: AudioRecorderCallbacks,
     private readonly owner: AudioRecorderManager = audioRecorder,
-    private readonly clock: RecordingClock = browserClock
+    private readonly clock: RecordingClock = browserClock,
+    private readonly formats: RecordingFormats = DICTATION_FORMATS
   ) {}
 
-  static isSupported(): boolean {
+  static isSupported(formats: RecordingFormats = DICTATION_FORMATS): boolean {
     return !!(
       typeof window !== 'undefined' &&
       window.isSecureContext &&
       typeof navigator.mediaDevices?.getUserMedia === 'function' &&
       typeof MediaRecorder !== 'undefined' &&
-      MIME_TYPES.some((type) => MediaRecorder.isTypeSupported(type))
+      formats.some((type) => MediaRecorder.isTypeSupported(type))
     );
   }
 
@@ -95,7 +93,7 @@ export class AudioRecorder implements RecorderHandle {
     }
     this.stream = stream;
     try {
-      const mimeType = MIME_TYPES.find((type) =>
+      const mimeType = this.formats.find((type) =>
         MediaRecorder.isTypeSupported(type)
       );
       if (!mimeType) throw new Error('No supported recording format');
@@ -228,8 +226,11 @@ export class AudioRecorderManager {
 
   constructor(private readonly clock: RecordingClock = browserClock) {}
 
-  createSession(callbacks: AudioRecorderCallbacks): AudioRecorder {
-    return new AudioRecorder(callbacks, this, this.clock);
+  createSession(
+    callbacks: AudioRecorderCallbacks,
+    formats: RecordingFormats = DICTATION_FORMATS
+  ): AudioRecorder {
+    return new AudioRecorder(callbacks, this, this.clock, formats);
   }
 
   claim(session: AudioRecorder) {

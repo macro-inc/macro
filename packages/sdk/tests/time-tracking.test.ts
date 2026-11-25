@@ -512,3 +512,161 @@ describe('timer', () => {
     ]);
   });
 });
+
+const projectId = '01a1fa5b-0000-7000-8000-0000000000b1';
+
+function summaryRecord(overrides: Record<string, unknown> = {}) {
+  return {
+    from: '2026-11-23',
+    to: '2026-11-29',
+    totalMinutes: 150,
+    taskCount: 2,
+    scopeTaskCount: null,
+    complete: true,
+    groups: [
+      {
+        key: { by: 'task', taskId },
+        minutes: 90,
+        taskCount: 1,
+        rows: [{ key: { by: 'day', date: '2026-11-24' }, minutes: 90 }],
+      },
+      {
+        key: { by: 'person', userId },
+        minutes: 60,
+        taskCount: 1,
+        rows: [],
+      },
+    ],
+    thenTotals: [{ key: { by: 'day', date: '2026-11-24' }, minutes: 90 }],
+    ...overrides,
+  };
+}
+
+describe('time summaries', () => {
+  test('macro.time.summary reads your week and returns handles for people and tasks', async () => {
+    const requests = serve(() => Response.json(summaryRecord()));
+
+    const week = await macro().time.summary({
+      scope: 'mine',
+      from: '2026-11-23',
+      to: '2026-11-29',
+      groupBy: 'task',
+      thenBy: 'day',
+    });
+
+    expect(requests).toEqual([
+      {
+        method: 'GET',
+        path: '/time/summary',
+        query: {
+          scope: 'mine',
+          from: '2026-11-23',
+          to: '2026-11-29',
+          groupBy: 'task',
+          thenBy: 'day',
+        },
+        body: undefined,
+      },
+    ]);
+    expect(week.totalMinutes).toBe(150);
+    expect(week.projectTaskCount).toBeUndefined();
+    const [first, second] = week.groups;
+    expect(first.key.by === 'task' && first.key.task.id).toBe(taskId);
+    expect(first.rows).toEqual([
+      { key: { by: 'day', date: '2026-11-24' }, minutes: 90 },
+    ]);
+    expect(second.key.by === 'person' && second.key.person.id).toBe(userId);
+    expect(week.thenTotals[0].minutes).toBe(90);
+  });
+
+  test("initiative.timeSummary reads the project's time by its handle", async () => {
+    const requests = serve(() =>
+      Response.json(summaryRecord({ scopeTaskCount: 14, complete: false })),
+    );
+
+    const month = await macro()
+      .initiatives.byId(projectId)
+      .timeSummary({ from: '2026-11-01', to: '2026-11-30', groupBy: 'person' });
+
+    expect(requests[0].query).toEqual({
+      scope: 'project',
+      projectId,
+      from: '2026-11-01',
+      to: '2026-11-30',
+      groupBy: 'person',
+    });
+    expect(month.projectTaskCount).toBe(14);
+    expect(month.complete).toBe(false);
+  });
+
+  test('exports return the CSV text and say whether it is complete', async () => {
+    const requests = serve(() =>
+      Response.json({ csv: 'Date,Person\n', rows: 0, complete: true }),
+    );
+
+    const team = await macro().time.exportCsv({
+      scope: 'team',
+      from: '2026-11-01',
+      to: '2026-11-30',
+    });
+    const project = await macro()
+      .initiatives.byId(projectId)
+      .exportTimeCsv({ from: '2026-11-01', to: '2026-11-30' });
+
+    expect(team).toEqual({ csv: 'Date,Person\n', rows: 0, complete: true });
+    expect(project.complete).toBe(true);
+    expect(requests.map((seen) => [seen.path, seen.query])).toEqual([
+      ['/time/export', { scope: 'team', from: '2026-11-01', to: '2026-11-30' }],
+      [
+        '/time/export',
+        { scope: 'project', projectId, from: '2026-11-01', to: '2026-11-30' },
+      ],
+    ]);
+  });
+
+  test('refuses a bad scope, day, grouping or option before any request', async () => {
+    const requests = serve(() => Response.json(summaryRecord()));
+    const time = macro().time;
+    const week = { from: '2026-11-23', to: '2026-11-29' };
+
+    for (const call of [
+      () =>
+        time.summary({
+          ...week,
+          scope: 'project' as 'mine',
+          groupBy: 'task',
+        }),
+      () => time.summary({ ...week, scope: 'mine', groupBy: 'week' as 'day' }),
+      () =>
+        time.summary({
+          ...week,
+          scope: 'mine',
+          groupBy: 'day',
+          thenBy: 'hour' as 'task',
+        }),
+      () =>
+        time.summary({
+          from: '2026-02-30',
+          to: '2026-11-29',
+          scope: 'mine',
+          groupBy: 'day',
+        }),
+      () =>
+        time.exportCsv({
+          ...week,
+          scope: 'team',
+          format: 'xlsx',
+        } as Parameters<typeof time.exportCsv>[0]),
+      () =>
+        macro()
+          .initiatives.byId(projectId)
+          .timeSummary({
+            ...week,
+            groupBy: 'task',
+            scope: 'team',
+          } as Parameters<typeof time.summary>[0]),
+    ])
+      await expect(call()).rejects.toBeInstanceOf(MacroError);
+    expect(requests).toEqual([]);
+  });
+});

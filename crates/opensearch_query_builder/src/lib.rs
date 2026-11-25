@@ -16,7 +16,8 @@ pub use query::{
     FunctionScoreQueryBuilder, HasChildQuery, InnerHits, MatchBoolPrefixQuery,
     MatchPhrasePrefixQuery, MatchPhraseQuery, MatchQuery, NestedQuery, QueryType, RandomScore,
     RangeQuery, RangeQueryBuilder, RegexpQuery, RegexpQueryFlags, ScoreFunction, ScoreFunctionType,
-    ScoreMode, ScriptScore, SimpleQueryStringQuery, TermQuery, TermsQuery, WildcardQuery,
+    ScoreMode, ScriptQuery, ScriptScore, SimpleQueryStringQuery, TermQuery, TermsQuery,
+    WildcardQuery,
 };
 pub use request::{
     AggregationType, CardinalityAggregation, Collapse, FieldSort, Highlight, HighlightField, Lang,

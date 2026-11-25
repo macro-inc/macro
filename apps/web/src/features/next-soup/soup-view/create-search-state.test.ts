@@ -117,3 +117,51 @@ it('keeps local results in views whose tab presets carry those filters', () => {
     )
   ).toBe(false);
 });
+
+function featuredIdsForQuery(options: {
+  nameText: string;
+  operatorIndexes?: string[];
+}) {
+  vi.useFakeTimers();
+  pool.mockReturnValue([
+    {
+      data: {
+        id: 'task-1',
+        type: 'document',
+        name: 'budget review',
+        fileType: 'md',
+        subType: { type: 'task', is_completed: false },
+      },
+    },
+  ]);
+  const [text, setText] = createSignal('');
+  const { search, dispose } = createRoot((dispose) => ({
+    dispose,
+    search: createSearchState({
+      surface: () => 'search',
+      soup: createSoupState(),
+      filters: () => ({ include: {}, exclude: {} }),
+      assignees: () => [],
+      searchText: text,
+      setSearchText: setText,
+      nameText: () => options.nameText,
+      operatorIndexes: () => options.operatorIndexes,
+    }),
+  }));
+  setText(`type:task ${options.nameText}`);
+  vi.advanceTimersByTime(20);
+  const ids = search.featuredIds();
+  dispose();
+  return ids;
+}
+
+it('matches names with the words beside the operators', () => {
+  expect(featuredIdsForQuery({ nameText: 'budget' })).toEqual(['task-1']);
+  expect(featuredIdsForQuery({ nameText: '' })).toEqual([]);
+});
+
+it('narrows name matches to the types the operators leave', () => {
+  expect(
+    featuredIdsForQuery({ nameText: 'budget', operatorIndexes: ['email'] })
+  ).toEqual([]);
+});

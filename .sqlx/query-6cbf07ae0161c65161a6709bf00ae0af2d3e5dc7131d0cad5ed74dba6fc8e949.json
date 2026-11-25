@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT lower(d.domain) AS \"domain!\", c.id AS company_id FROM crm_companies c\n               JOIN crm_domains d ON d.company_id = c.id\n               WHERE c.team_id = $1 AND c.hidden",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "domain!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "6cbf07ae0161c65161a6709bf00ae0af2d3e5dc7131d0cad5ed74dba6fc8e949"
+}

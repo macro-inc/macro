@@ -2,7 +2,7 @@ import type { Message } from '@service-email/generated/schemas';
 import { createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EmailViewState } from '../types';
+import type { EmailDataSourceInput } from './use-email-query';
 import { useScheduledEmailSource } from './use-scheduled-email-source';
 
 const mocks = vi.hoisted(() => ({
@@ -71,13 +71,13 @@ let dispose: (() => void) | undefined;
 function mount() {
   return createRoot((cleanup) => {
     dispose = cleanup;
-    const [state] = createStore<EmailViewState>({
+    const [state] = createStore<EmailDataSourceInput>({
       tab: 'scheduled',
       search: '',
+      searchScope: 'all',
       inboxIds: undefined,
       facets: {},
       focusSort: 'importance',
-      collapsedSidebarSectionIds: [],
     });
     return useScheduledEmailSource(state);
   });

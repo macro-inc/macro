@@ -21,7 +21,7 @@ mod outbound;
 pub use domain::models::{
     AddedBy, ApiHandle, ApiRequest, ApiResponse, ConnectStep, Connector, ConnectorId, ConnectorKey,
     ConnectorsError, InvalidConnectorId, InvalidServerUrl, McpConnections, McpHandle,
-    PermitRefused, Permitted, Result, Selection, ServerUrl, Status, Upstream, UserMcpTools,
+    PermitRefused, Permitted, Result, Selection, ServerUrl, Sought, Status, Upstream, UserMcpTools,
 };
 /// The crate's exported service: the three traits and [`Connectors`], their
 /// one implementation. Also re-exported at the crate root.

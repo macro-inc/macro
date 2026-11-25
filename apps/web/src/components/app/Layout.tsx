@@ -1,5 +1,4 @@
 import { ViewSwitcherContext } from '@app/components/view-shell';
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
 import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
@@ -16,6 +15,7 @@ import {
   companyCreation,
   contactCreation,
 } from '@app/features/crm/creation-adapter';
+import { companyMerge } from '@app/features/crm/crm-merge';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
@@ -23,7 +23,6 @@ import {
   isAddInboxDialogOpen,
 } from '@app/features/inbox/AddInboxDialog';
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
-import { onboardingRedirectPath } from '@app/features/onboarding/core/next-target';
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
@@ -45,11 +44,13 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import { enableWhatsappLinked } from '@core/constant/featureFlags';
+import {
+  enableTimeTracking,
+  enableWhatsappLinked,
+} from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useNativeNavigationEdge } from '@core/mobile/nativeNavigationEdge';
 import { followViewportHeight } from '@core/mobile/viewport-insets';
@@ -59,9 +60,8 @@ import { lazy } from '@core/util/lazy';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { isDesktopPlatform, isPlatform } from '@core/util/platform';
 import { useDesktopZoom } from '@macro/tauri/zoom';
-import { useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
-import { useLocation, useNavigate } from '@solidjs/router';
+import { useLocation } from '@solidjs/router';
 import { type as osType } from '@tauri-apps/plugin-os';
 import { cn } from '@ui';
 import {
@@ -75,13 +75,14 @@ import {
 } from 'solid-js';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
+import { useFirstRunSetup } from './FirstRunSetup';
 import GlobalShortcuts from './GlobalHotkeys';
-import { InitialInteractiveOnboardingModal } from './InitialInteractiveOnboardingModal';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
 import { installGlassPress } from './mobile/glassPress';
 import { MobileDockRow } from './mobile/MobileDockRow';
+import { installRowPress } from './mobile/rowPress';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { SessionExpiredRedirect } from './SessionExpiredRedirect';
 import { useCloseTabShortcut } from './tab-layout/close-tab-shortcut';
@@ -126,6 +127,10 @@ const CreateContactModal = lazyNamed(
   () => import('@app/features/crm/crm-create'),
   'CreateContactModal'
 );
+const CompanyMergeModal = lazyNamed(
+  () => import('@app/features/crm/crm-merge-dialog'),
+  'CompanyMergeModal'
+);
 
 /** True from the first time `opened` is, so a dialog loads on first open and can animate closed. */
 function hasOpened(opened: () => boolean) {
@@ -169,6 +174,7 @@ export function RootFrame(props: ParentProps) {
 
   onMount(() => {
     onCleanup(installGlassPress());
+    onCleanup(installRowPress());
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');
@@ -222,37 +228,6 @@ export function PageContent(props: ParentProps) {
 }
 
 /**
- * Sends first-time desktop users into the onboarding flow at /onboarding, and
- * new agents on any platform to their setup page.
- * App chrome runs it, so it fires on any app destination (marketing SSO lands
- * on /app, not /login) and never on the onboarding pages themselves.
- */
-function useNewOnboardingRedirect() {
-  const userInfoQuery = useUserInfoQuery();
-  const navigate = useNavigate();
-  const location = useLocation();
-  createEffect(() => {
-    // A pending read would suspend the chrome; wait for the user instead.
-    const data = userInfoQuery.isSuccess ? userInfoQuery.data : undefined;
-    if (data?.authenticated !== true || data.tutorialComplete !== false) {
-      return;
-    }
-    // Agents skip onboarding: their setup page shows their SDK token.
-    if (data.isAgent) {
-      navigate('/agent-setup', { replace: true });
-      return;
-    }
-    if (isMobile() || isNativeMobilePlatform()) return;
-    // Preserve the deep link the user arrived on (a shared doc, an invite)
-    // as ?next, and a lifecycle-email ?step, so finish() and the flow can
-    // resume. Base-relative so navigate() can resolve it against the router.
-    const target =
-      location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
-    navigate(onboardingRedirectPath(target), { replace: true });
-  });
-}
-
-/**
  * The app's chrome — rail, hotkeys, command menu, launcher, global modals,
  * and the mobile dock — around a page. Route shells supply the providers and
  * content; auth, booking, and meeting pages render without this chrome.
@@ -260,6 +235,10 @@ function useNewOnboardingRedirect() {
 const MobileCallIsland = lazyNamed(
   () => import('../../features/channel/Call/views/MobileCallIsland'),
   'MobileCallIsland'
+);
+const RunningTimerBanner = lazyNamed(
+  () => import('../../features/time-tracking/running-timer-indicator'),
+  'RunningTimerBanner'
 );
 
 export function AppChrome(props: ParentProps) {
@@ -280,7 +259,7 @@ export function AppChrome(props: ParentProps) {
 
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
-  useNewOnboardingRedirect();
+  useFirstRunSetup();
   const { status: systemStatus, dismiss: dismissSystemStatus } =
     useBannerStatus();
 
@@ -288,6 +267,7 @@ export function AppChrome(props: ParentProps) {
   const contactDialogUsed = hasOpened(
     () => contactCreation.target() !== undefined
   );
+  const mergeDialogUsed = hasOpened(companyMerge.open);
 
   return (
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
@@ -332,6 +312,11 @@ export function AppChrome(props: ParentProps) {
           <Show when={contactDialogUsed()}>
             <Suspense>
               <CreateContactModal />
+            </Suspense>
+          </Show>
+          <Show when={mergeDialogUsed()}>
+            <Suspense>
+              <CompanyMergeModal />
             </Suspense>
           </Show>
           <Show when={isAddInboxDialogOpen()}>
@@ -379,6 +364,11 @@ export function AppChrome(props: ParentProps) {
         <Suspense>
           <MobileCallIsland />
         </Suspense>
+        <ShowFeatureFlag flag={enableTimeTracking}>
+          <Suspense>
+            <RunningTimerBanner />
+          </Suspense>
+        </ShowFeatureFlag>
         <Suspense>
           <UserCardDrawer />
         </Suspense>
@@ -400,7 +390,6 @@ export function AppChrome(props: ParentProps) {
           <MobileDockRow vertical={dockEdge() !== 'bottom'} />
         </FloatRegion>
       </Show>
-      <InitialInteractiveOnboardingModal />
       <Suspense>
         <Show when={isAuthenticated()}>
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />

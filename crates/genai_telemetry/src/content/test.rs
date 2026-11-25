@@ -231,3 +231,27 @@ fn an_overlong_tool_list_drops_definitions_but_stays_valid_json() {
     assert!(!parsed.is_empty());
     assert_eq!(parsed[0]["name"], "tool_0");
 }
+
+/// Inside `withhold_content` the current policy records structure only; a
+/// task the work spawns is outside the scope again unless it carries it.
+#[tokio::test]
+async fn withhold_content_disables_capture_for_its_own_work() {
+    assert_eq!(ContentPolicy::current(), ContentPolicy::from_env());
+    let (inside, spawned, carried) = withhold_content(async {
+        let spawned = tokio::spawn(async { ContentPolicy::current() })
+            .await
+            .expect("the task runs");
+        let carried = tokio::spawn(withhold_content_if(content_withheld(), async {
+            ContentPolicy::current()
+        }))
+        .await
+        .expect("the task runs");
+        (ContentPolicy::current(), spawned, carried)
+    })
+    .await;
+    assert_eq!(inside, ContentPolicy::disabled());
+    assert_eq!(spawned, ContentPolicy::from_env());
+    assert_eq!(carried, ContentPolicy::disabled());
+    assert!(!content_withheld());
+    assert_eq!(ContentPolicy::current(), ContentPolicy::from_env());
+}

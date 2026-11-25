@@ -35,6 +35,7 @@ afterEach(() => {
   setVisibility('visible');
 });
 
+import { registerActivityRevalidator } from '../../queries/activity/push-registry';
 import { registerActiveGraphqlSoupQuery } from '../../queries/soup/graphql/active-queries';
 import {
   ActivityUpdatesDocument,
@@ -298,6 +299,44 @@ describe('GraphQL Soup subscription lifecycle', () => {
     unregister();
   });
 
+  it('refetches mounted attachment-filtered Mail lists after a reconnect, not on the first connection', async () => {
+    const client = {
+      query: vi.fn(),
+      subscription: vi.fn(() => ({
+        subscribe: () => ({ unsubscribe: vi.fn() }),
+      })),
+    };
+    const attachmentList = vi.fn(async () => {});
+    const otherList = vi.fn(async () => {});
+    const unregisterAttachments = registerActiveGraphqlSoupQuery({
+      isEnabled: () => true,
+      refresh: attachmentList,
+      body: () => ({ ef: { l: { Attachment: 'pdf' } } }),
+    });
+    const unregisterOther = registerActiveGraphqlSoupQuery({
+      isEnabled: () => true,
+      refresh: otherList,
+      body: () => ({ ef: { l: { Importance: true } } }),
+    });
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(
+      client as never,
+      { disabled: false, onCacheGenerationChanged: () => () => {} } as never
+    );
+
+    lifecycle.connected();
+    await Promise.resolve();
+    expect(attachmentList).not.toHaveBeenCalled();
+
+    lifecycle.connected();
+    await vi.waitFor(() => expect(attachmentList).toHaveBeenCalledOnce());
+    expect(otherList).not.toHaveBeenCalled();
+
+    lifecycle.dispose();
+    unregisterAttachments();
+    unregisterOther();
+  });
+
   it('pauses subscriptions for navigation and reconnects in place exactly once per restore', () => {
     const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
     const client = {
@@ -434,6 +473,31 @@ describe('GraphQL Soup subscription lifecycle', () => {
     lifecycle.dispose();
     dispatchEvent(new Event('online'));
     expect(client.subscription).toHaveBeenCalledTimes(4);
+  });
+
+  it('refreshes activity when it subscribes the same client again', async () => {
+    vi.useFakeTimers();
+    const client = {
+      subscription: vi.fn(() => ({
+        subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
+      })),
+    };
+    const refresh = vi.fn();
+    const unregister = registerActivityRevalidator({
+      client: () => client as never,
+      refresh,
+    });
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never);
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(refresh).not.toHaveBeenCalled();
+
+    // A push between the two sets, or one whose refresh was not due yet.
+    lifecycle.replace(client as never, { disabled: true } as never);
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(refresh).toHaveBeenCalledExactlyOnceWith(null);
+    lifecycle.dispose();
+    unregister();
   });
 
   it('signals a new outage after a successful reconnection', () => {

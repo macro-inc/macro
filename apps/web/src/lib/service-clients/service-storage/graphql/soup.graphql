@@ -322,6 +322,11 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		}
 	}
 	...GraphqlCrmContactFields
+	... on GraphqlSoupCrmContact {
+		properties {
+			...SoupPropertyFields
+		}
+	}
 	... on GraphqlSoupCrmCompany {
 		crmTeamId: teamId
 		crmCompanyName: name
@@ -668,6 +673,10 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	}
 	... on GraphqlInboxReauthRequiredMetadata {
 		inboxReauthRequiredEmailAddress: emailAddress
+	}
+	... on GraphqlCrmEmailSharingChangedMetadata {
+		crmEmailSharingChangedTeamId: teamId
+		crmEmailSharingChangedReason: reason
 	}
 	... on GraphqlRoutineRunFinishedMetadata {
 		routineRunFinishedRoutineId: routineId

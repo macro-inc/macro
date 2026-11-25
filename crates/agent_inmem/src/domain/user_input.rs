@@ -18,7 +18,7 @@ pub struct UserInputRequest {
 pub enum UserInputOutcome {
     /// The user supplied an answer.
     Answered(String),
-    /// The user explicitly declined to answer.
+    /// The user explicitly declined to answer (the card's Skip).
     Declined,
     /// The question was dismissed or the turn was stopped.
     Cancelled,

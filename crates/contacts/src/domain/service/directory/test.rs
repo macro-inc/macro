@@ -116,6 +116,18 @@ impl ContactListReader for Lists {
             "the directory service never reads inbox contacts"
         ))
     }
+
+    async fn list_members(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+        _list: ContactList,
+        _after: Option<&ContactCursor>,
+        _limit: ContactPageSize,
+    ) -> Result<ContactIdPage, Report> {
+        Err(rootcause::report!(
+            "the directory service never reads list members"
+        ))
+    }
 }
 
 #[derive(Default)]

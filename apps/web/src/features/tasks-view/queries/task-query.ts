@@ -11,7 +11,11 @@ import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { GroupByField } from '@queries/soup/grouped/types';
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
 import { match } from 'ts-pattern';
-import { taskPropertySort, taskSortDirection } from '../constants';
+import {
+  isTaskDateSort,
+  taskPropertySort,
+  taskSortDirection,
+} from '../constants';
 import type {
   DateBucketBoundaries,
   TaskDatePredicate,
@@ -55,22 +59,25 @@ const propertyScope = (
   userId: string | undefined,
   compiledFacets: TaskAst | undefined,
   reference: TaskReferenceScope | undefined,
-  dueDate?: TaskDatePredicate
+  dates: { dueDate?: TaskDatePredicate; startDate?: TaskDatePredicate }
 ): TaskAst | undefined => {
   const groups: TaskAst[] = [];
   if (compiledFacets) groups.push(compiledFacets);
-  if (dueDate) {
+  const dateScope = (definitionId: string, predicate?: TaskDatePredicate) => {
+    if (!predicate) return;
     const value: TaskAst = {
       l: {
-        pd: SYSTEM_PROPERTY_IDS.DUE_DATE,
+        pd: definitionId,
         et: 'TASK',
-        v: { dr: 'dateRange' in dueDate ? dueDate.dateRange : {} },
+        v: { dr: 'dateRange' in predicate ? predicate.dateRange : {} },
       },
     };
     groups.push(
-      'hasDate' in dueDate && !dueDate.hasDate ? { '!': value } : value
+      'hasDate' in predicate && !predicate.hasDate ? { '!': value } : value
     );
-  }
+  };
+  dateScope(SYSTEM_PROPERTY_IDS.DUE_DATE, dates.dueDate);
+  dateScope(SYSTEM_PROPERTY_IDS.START_DATE, dates.startDate);
 
   if (tab === 'my-tasks' && userId) {
     groups.push(entityPropertyLiteral(SYSTEM_PROPERTY_IDS.ASSIGNEES, userId));
@@ -106,15 +113,23 @@ export const taskGroupByField = (
     case 'date':
       return { type: 'date' };
     case 'due_date':
+    case 'start_date': {
       if (!calendar)
-        throw new Error('Due-date grouping requires date-bucket boundaries');
+        throw new Error('Date grouping requires date-bucket boundaries');
+      const start = groupBy === 'start_date';
       return {
         type: 'property',
-        propertyDefinitionId: SYSTEM_PROPERTY_IDS.DUE_DATE,
+        propertyDefinitionId: start
+          ? SYSTEM_PROPERTY_IDS.START_DATE
+          : SYSTEM_PROPERTY_IDS.DUE_DATE,
         bucketing: {
           type: 'date_ranges',
           ranges: [
-            { key: 'overdue', start: null, end: calendar.boundaries.today },
+            {
+              key: start ? 'started' : 'overdue',
+              start: null,
+              end: calendar.boundaries.today,
+            },
             {
               key: 'today',
               start: calendar.boundaries.today,
@@ -132,9 +147,10 @@ export const taskGroupByField = (
             },
             { key: 'later', start: calendar.boundaries.day_eight, end: null },
           ],
-          missingValueBucketKey: 'no_due_date',
+          missingValueBucketKey: start ? 'no_start_date' : 'no_due_date',
         },
       };
+    }
     case 'project':
       return { type: 'project' };
     case 'status':
@@ -163,6 +179,7 @@ export type BuildTaskQueryOptions = {
   groupBy: TaskGroupBy;
   sort: SortSelection<TaskSortId>[];
   dueDate?: TaskDatePredicate;
+  startDate?: TaskDatePredicate;
   calendar?: DateBucketBoundaries;
   searching?: boolean;
   /** Only tasks whose property references this entity. */
@@ -192,13 +209,12 @@ export function buildTaskQuery(
   const primarySort = options.sort[0];
   const requestedSort = primarySort?.id ?? 'updated_at';
   const featureSort =
-    (options.searching || options.nameContains) &&
-    requestedSort.startsWith('due_date_')
+    (options.searching || options.nameContains) && isTaskDateSort(requestedSort)
       ? 'updated_at'
       : requestedSort;
   const propertySort = taskPropertySort(featureSort);
   let sortDirection = taskSortDirection(featureSort);
-  if (primarySort?.reversed && !featureSort.startsWith('due_date_')) {
+  if (primarySort?.reversed && !isTaskDateSort(featureSort)) {
     sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
   }
   const sortMethod = match(featureSort)
@@ -215,7 +231,7 @@ export function buildTaskQuery(
     options.userId,
     compiledFacets.propf,
     options.reference,
-    options.dueDate
+    { dueDate: options.dueDate, startDate: options.startDate }
   );
 
   const taskDocuments = documentScope(options.tab, options.userId);

@@ -8,7 +8,15 @@ import { type JSX, type ParentProps, Suspense } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EmailSidePanelSections } from './EmailSidePanelSections';
 
-const mocks = vi.hoisted(() => ({ references: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  references: vi.fn(),
+  labels: vi.fn(
+    (): { id: string; linkId: string; name: string; fullName: string }[] => []
+  ),
+}));
+vi.mock('@queries/email/thread-labels', () => ({
+  useShownThreadLabels: () => () => mocks.labels(),
+}));
 vi.mock('@queries/storage/attachment-references', () => ({
   useAttachmentReferencesQuery: () => mocks.references(),
 }));
@@ -52,6 +60,8 @@ vi.mock('@components/app/side-panel', () => ({
 const clients: QueryClient[] = [];
 afterEach(() => {
   cleanup();
+  mocks.labels.mockReset();
+  mocks.labels.mockReturnValue([]);
   for (const client of clients.splice(0)) client.clear();
 });
 
@@ -90,5 +100,34 @@ describe('email optional references', () => {
     expect(screen.getByText('Reference details')).toBeTruthy();
     expect(screen.getByRole('textbox')).toBe(editor);
     expect(screen.queryByTestId('loading')).toBeNull();
+  });
+});
+
+describe('email labels', () => {
+  const renderPanel = () => {
+    mocks.references.mockReturnValue({ isSuccess: true, data: [] });
+    render(() => <EmailSidePanelSections threadId="thread" title="Subject" />);
+  };
+
+  it('lists the thread labels by their whole names', () => {
+    mocks.labels.mockReturnValue([
+      {
+        id: 'larkspur',
+        linkId: 'inbox',
+        name: 'Larkspur',
+        fullName: 'Customers / Larkspur',
+      },
+      { id: 'orders', linkId: 'inbox', name: 'Orders', fullName: 'Orders' },
+    ]);
+    renderPanel();
+    expect(screen.getByText('Labels')).toBeTruthy();
+    expect(screen.getByText('Customers / Larkspur')).toBeTruthy();
+    expect(screen.getByText('Orders')).toBeTruthy();
+    expect(screen.queryByText('Larkspur')).toBeNull();
+  });
+
+  it('leaves the section out when the thread has none', () => {
+    renderPanel();
+    expect(screen.queryByText('Labels')).toBeNull();
   });
 });

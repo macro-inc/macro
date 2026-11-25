@@ -20,6 +20,10 @@ import {
   on,
   Show,
 } from 'solid-js';
+import {
+  type BookingAccount,
+  bookingAccountLabel,
+} from '../core/booking-account';
 import { MINUTE_UNITS } from '../core/booking-units';
 import {
   EVENT_EDITOR_STEPS,
@@ -33,6 +37,7 @@ import type {
   EventValidationIssue,
   SchedulingMember,
 } from '../core/types';
+import { BookingAccountField } from './booking-account-field';
 import { BookingDurationInput } from './booking-duration-input';
 import { BookingFieldInfo } from './booking-field-info';
 import { BookingHostSelector } from './booking-host-selector';
@@ -57,6 +62,8 @@ export type EventEditorProps = {
   draft: EventType;
   schedules: AvailabilitySchedule[];
   members: SchedulingMember[];
+  /** Connected accounts a personal link can book on; empty for a team. */
+  accounts: BookingAccount[];
   team: boolean;
   saving: boolean;
   isNew: boolean;
@@ -196,6 +203,8 @@ export function EventEditor(props: EventEditorProps) {
     EVENT_EDITOR_STEPS.findIndex((entry) => entry.id === props.step);
   const schedule = () =>
     props.schedules.find((item) => item.id === props.draft.scheduleId);
+  const accountLabel = () =>
+    props.team ? undefined : bookingAccountLabel(props.draft, props.accounts);
   const missingHosts = () =>
     props.draft.hosts.filter(
       (id) => !props.members.some((member) => member.id === id)
@@ -572,6 +581,17 @@ export function EventEditor(props: EventEditorProps) {
                   {(hours) => <WeeklyHoursSummary schedule={hours()} />}
                 </Show>
               </section>
+              <Show when={accountLabel()}>
+                <BookingAccountField
+                  accounts={props.accounts}
+                  emailLinkId={props.draft.emailLinkId ?? null}
+                  disabled={props.saving || props.step !== 'location'}
+                  error={error('emailLinkId')}
+                  onChange={(emailLinkId) =>
+                    props.onUpdate('emailLinkId', emailLinkId)
+                  }
+                />
+              </Show>
               <Show when={props.team}>
                 <section class="flex min-w-0 flex-col gap-2">
                   <div class="flex items-center justify-between gap-2">
@@ -732,6 +752,7 @@ export function EventEditor(props: EventEditorProps) {
                   draft={props.draft}
                   link={props.savedLink ?? props.link ?? `/${props.draft.slug}`}
                   schedule={schedule()}
+                  account={accountLabel()}
                   members={props.members}
                   team={props.team}
                   active={

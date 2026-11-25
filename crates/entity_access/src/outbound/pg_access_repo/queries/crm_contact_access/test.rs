@@ -129,3 +129,5 @@ async fn team_crm_contact_access_denies_other_team(pool: PgPool) -> anyhow::Resu
     assert_eq!(access, None);
     Ok(())
 }
+
+mod merged;
