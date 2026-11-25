@@ -32,8 +32,9 @@ edge.
   `GraphqlTagPromotionConflict` result, not an error. Deletes answer
   `GraphqlCacheDeletion`, also when the target is already gone, so a queued
   delete sent again after a lost reply settles; an option that lives on under
-  another definition (a promoted tag keeps its id) is refused `NOT_FOUND`
-  instead. A conflict names what it collided with in `extensions.reason`
+  another definition the caller can read (its own, its team's or a built-in
+  one; a promoted tag keeps its id) is refused `NOT_FOUND` instead, and one
+  under a definition it cannot read answers as gone. A conflict names what it collided with in `extensions.reason`
   (`RESERVED_NAME`, `NAME_TAKEN`, `OPTION_VALUE_TAKEN`); `addPropertyOption`
   sent again with its id answers with the option it made.
 - `src/loaders.rs`: `EntityPropertiesLoader` batching.

@@ -415,10 +415,11 @@ where
 
     /// Why an option delete found nothing under the definition it named:
     /// [`PropertiesErr::OptionInAnotherDefinition`] when `found` lives on
-    /// under another definition the caller can see (a promoted tag keeps its
-    /// id), which a delete sent again after a lost reply must not take for its
-    /// own deletion; otherwise `gone`, so a caller learns nothing of options
-    /// it cannot see.
+    /// under another definition the caller can read (its own, its team's or a
+    /// built-in one, as `get_property_options` decides;
+    /// a promoted tag keeps its id), which a delete sent again after a lost
+    /// reply must not take for its own deletion; otherwise `gone`, so a
+    /// caller learns nothing of options it cannot see.
     async fn elsewhere_or(
         &self,
         found: Option<PropertyOption>,
@@ -432,12 +433,20 @@ where
         let Some(option) = found else {
             return Ok(gone);
         };
-        let visible = self
+        let owned = self
             .repository
             .get_property_definition_with_owner(option.property_definition_id, user_id, team_id)
             .await
             .map_err(anyhow::Error::from)?
             .is_some();
+        // The owner lookup leaves out built-in definitions, which every caller reads.
+        let visible = owned
+            || self
+                .repository
+                .get_property_definition(option.property_definition_id)
+                .await
+                .map_err(anyhow::Error::from)?
+                .is_some_and(|definition| definition.is_system);
         Ok(if visible {
             PropertiesErr::OptionInAnotherDefinition
         } else {

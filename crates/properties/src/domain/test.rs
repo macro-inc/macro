@@ -1175,8 +1175,10 @@ async fn delete_after_a_move(owns_new_home: bool) -> Result<(), PropertiesErr> {
 
     let mut repo = MockPropertiesRepo::new();
     let named = definition.clone();
-    repo.expect_get_property_definition()
-        .return_once(move |_| Box::pin(async move { Ok(Some(named)) }));
+    repo.expect_get_property_definition().returning(move |id| {
+        let found = (id == property_definition_id).then(|| named.clone());
+        Box::pin(async move { Ok(found) })
+    });
     repo.expect_get_property_definition_with_owner()
         .returning(move |id, _, _| {
             let owned = (id == property_definition_id || owns_new_home).then(|| definition.clone());

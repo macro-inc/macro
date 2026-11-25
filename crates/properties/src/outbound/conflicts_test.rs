@@ -299,3 +299,28 @@ async fn a_delete_of_someone_elses_option_is_told_it_is_gone(pool: Pool<Postgres
         .unwrap_err();
     assert!(matches!(err, PropertiesErr::NotFound), "{err:?}");
 }
+
+/// Every account reads the built-in options, so a delete that names one under
+/// another definition is told it lives on: an answer of gone would have a
+/// client drop a live built-in option from its catalog.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn a_delete_of_a_built_in_option_is_told_it_lives_on(pool: Pool<Postgres>) {
+    let service = service(pool);
+    // The built-in Status property's first option, seeded by the migrations.
+    let built_in: Uuid = "00000001-0000-0000-0002-000000000001".parse().unwrap();
+    let mine = service
+        .create_property_definition(&user_1(), None, &select("Phase", &["Lead"]))
+        .await
+        .unwrap();
+    let err = service
+        .delete_property_option(&user_1(), None, mine.id, built_in)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, PropertiesErr::OptionInAnotherDefinition),
+        "{err:?}"
+    );
+}
