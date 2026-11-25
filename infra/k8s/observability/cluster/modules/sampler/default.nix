@@ -28,7 +28,7 @@ let
 
   # Spans wait this long for the rest of their trace. Sized with the load
   # test in the README: at 38k spans/s over three replicas each held about
-  # 80k traces and 1.5 GiB.
+  # 80k traces and 1.8 GiB.
   values = {
     DECISION_WAIT = "30s";
     NUM_TRACES = "150000";

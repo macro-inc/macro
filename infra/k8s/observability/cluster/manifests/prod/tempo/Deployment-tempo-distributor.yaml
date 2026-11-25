@@ -27,13 +27,7 @@ spec:
   template:
     metadata:
       annotations:
-<<<<<<< HEAD
-        checksum/config: 374336de0b98c02e5327ff9a8cec293c9538816ccd381a4453ce012c82844dd0
-||||||| parent of c4e4c29d465 (feat(observability): sample whole traces before storage)
-        checksum/config: b5bfa48a1ab486932332ed1003cdfea0125d3f2a5aadd7a7bbc682ee07403fe2
-=======
-        checksum/config: 04b7620f03cd123e7230860f948ab74184854b5b38e81e9cda9c3a615bc16d4e
->>>>>>> c4e4c29d465 (feat(observability): sample whole traces before storage)
+        checksum/config: f8d30d4a6ad662445fb70017a55bed6ee7589414d696b799757eaf212334052c
       labels:
         app.kubernetes.io/component: distributor
         app.kubernetes.io/instance: tempo

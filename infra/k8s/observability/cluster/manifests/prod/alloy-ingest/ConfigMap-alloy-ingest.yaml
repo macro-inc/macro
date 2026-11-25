@@ -87,13 +87,7 @@ data:
       send_batch_max_size = 1024
       output {
         logs = [otelcol.exporter.otlphttp.loki.input]
-<<<<<<< HEAD
-        traces = [otelcol.exporter.otlp.tempo.input, otelcol.processor.filter.derived.input]
-||||||| parent of c4e4c29d465 (feat(observability): sample whole traces before storage)
-        traces = [otelcol.exporter.otlp.tempo.input]
-=======
-        traces = [otelcol.exporter.loadbalancing.sampler.input]
->>>>>>> c4e4c29d465 (feat(observability): sample whole traces before storage)
+        traces = [otelcol.exporter.loadbalancing.sampler.input, otelcol.processor.filter.derived.input]
         metrics = [otelcol.exporter.prometheus.metrics.input]
       }
     }

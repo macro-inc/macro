@@ -28,6 +28,7 @@ data:
           protocols:
             grpc:
               endpoint: 0.0.0.0:4317
+              max_recv_msg_size_mib: 16
             http:
               endpoint: 0.0.0.0:4318
       ring:
@@ -65,7 +66,7 @@ data:
       retransmit_factor: 2
       stream_timeout: 10s
     metrics_generator:
-      metrics_ingestion_time_range_slack: 30s
+      metrics_ingestion_time_range_slack: 5m
       processor:
         local_blocks:
           concurrent_blocks: 2
