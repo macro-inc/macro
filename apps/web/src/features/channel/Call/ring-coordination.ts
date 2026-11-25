@@ -310,11 +310,11 @@ function maybeClaim(participation: Participation, now: number) {
 
 function tick(participation: Participation) {
   const now = Date.now();
-  if (
-    now >= participation.deadline ||
-    silencedCallIds.has(participation.callId) ||
-    participation.options.shouldStop()
-  ) {
+  if (now >= participation.deadline || participation.options.shouldStop()) {
+    silenceIncomingCallRing(participation.callId);
+    return;
+  }
+  if (silencedCallIds.has(participation.callId)) {
     endParticipation(participation);
     return;
   }
@@ -455,7 +455,7 @@ export function participateInRing(
     );
     // Keep the original deadline across promotion/demotion, including between ticks.
     const timeout = window.setTimeout(
-      () => endParticipation(participation),
+      () => silenceIncomingCallRing(participation.callId),
       Math.max(0, deadline - Date.now())
     );
     return () => {

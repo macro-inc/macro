@@ -219,7 +219,16 @@ impl<A: EntityAccessService> ImportTargets for ChannelImportSink<A> {
         let pair =
             DmPair::new(pair[0].clone(), pair[1].clone()).map_err(|_| ImportError::InvalidInput)?;
         let mut tx = self.pool.begin().await.map_err(retry)?;
-        let Some(id) = channels_pg::find_dm(&mut tx, &pair).await.map_err(retry)? else {
+        // Imports keep the rule they chose channels by before live lookups
+        // skipped departed third members of DMs both people are in and
+        // ranked DMs by who left (`DmRoster::Stored`). Discovery does not
+        // read the reservation, so only the same rule picks the same channel
+        // on a replay; inspection then never meets a removed bot's row
+        // either.
+        let Some(id) = channels_pg::find_dm(&mut tx, &pair, channels_pg::DmRoster::Stored)
+            .await
+            .map_err(retry)?
+        else {
             return Ok(None);
         };
         Ok(inspect(&mut tx, id, None).await?.map(|(facts, _)| facts))

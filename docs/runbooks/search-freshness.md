@@ -79,8 +79,8 @@ throughput; it runs only SQS backfill and replay work.
 
 ## Retention
 
-The oldest unindexed event is within about a day of the topic's retention: 10
-days for `macro.email` in prod, 7 days for the other topics. Past retention,
+The oldest unindexed event is within about a day of the topic's retention: 7
+days for every topic. Past retention,
 Kafka deletes the events the consumer has not read. The consumer then resets to
 the newest event and fires [the offset reset monitor](#offset-reset).
 

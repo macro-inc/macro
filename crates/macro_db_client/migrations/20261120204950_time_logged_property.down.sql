@@ -1,0 +1,5 @@
+DELETE FROM entity_properties
+WHERE property_definition_id = '00000001-0000-0000-0000-000000000016';
+
+DELETE FROM property_definitions
+WHERE id = '00000001-0000-0000-0000-000000000016';

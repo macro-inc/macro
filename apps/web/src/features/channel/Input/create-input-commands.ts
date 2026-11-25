@@ -50,6 +50,10 @@ export function createInputCommands(
       if (!hasSendableInputContent(current)) return false;
       return Telemetry.span('message.composer_send', async (span) => {
         span.setAttr('composer.mode', deps.view().mode);
+        span.setAttr(
+          'composer.voice_memos',
+          current.attachments.filter((item) => item.kind === 'audio').length
+        );
         hapticImpact('light');
         deps.setIsSending(true);
         // Clear before delivery. The optimistic message paints as soon as

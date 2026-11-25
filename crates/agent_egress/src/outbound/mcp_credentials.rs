@@ -1,88 +1,161 @@
-//! Resolving a slug to one of the owner's Pipedream-connected apps.
+//! Resolving a connected app or custom server through the connectors
+//! service.
 //!
-//! There is no OAuth here to manage. Pipedream owns every user grant - the
-//! consent flow, the stored tokens, the refresh - and its remote MCP server
-//! injects the account's credentials server-side. What a request needs from
-//! us is our own project-level API token and the `x-pd-*` headers that say
-//! which user and app to act as, and *that* pair is exactly why this traffic
-//! must flow through the proxy: the bearer is project-wide, so whoever holds
-//! it picks the user. The sandbox never does; the user id is stamped from the
-//! session's grant.
+//! What a sandbox may reach is decided in one place, the connectors crate:
+//! which connection counts for each app, whether it is usable, and whether
+//! the session's agent was given it. This adapter asks that service for the
+//! owner's connections, narrows them to the agent's selection, and turns the
+//! proof it gets back into an upstream call. It never decides a source, a
+//! flag or an enabled filter itself, and it cannot address an app it has no
+//! proof for: the upstream comes only from a [`Permitted`] connection.
 //!
-//! Both halves come from `pipedream_mcp`'s own ports - the same rows the chat
-//! tool path reads, the same client that dials Pipedream for it - so an app
-//! connected in Macro is an app the sandbox can reach, with nothing to keep
-//! in sync.
+//! The bearer and scoping headers it stamps are the owner's, which is why
+//! this traffic flows through the proxy: the sandbox never holds them.
 
+use connectors::{
+    ConnectorId, ConnectorKey, ConnectorsError, McpConnections, McpConnectionsService,
+    PermitRefused, Permitted, Selection, Upstream,
+};
 use macro_user_id::user_id::MacroUserIdStr;
-use pipedream_mcp::domain::models::PipedreamConnection;
-use pipedream_mcp::domain::ports::ConnectionStore;
-use pipedream_mcp::outbound::api::McpUpstream;
 use std::sync::Arc;
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{
-    BearerToken, McpDestination, McpResolution, McpServerSlug, UpstreamCall,
+    BearerToken, CustomMcpServerKey, McpDestination, McpResolution, UpstreamCall,
 };
 use crate::domain::ports::McpCredentials;
 
 #[cfg(test)]
 mod test;
 
-/// Resolves MCP slugs against an owner's Pipedream connections.
-pub struct PipedreamMcpCredentials<Connections, Upstream> {
+/// Resolves connected apps and custom servers against the owner's
+/// connections, within what the session's agent was given.
+pub struct ConnectorsMcpCredentials<Connections> {
     connections: Arc<Connections>,
-    upstream: Upstream,
 }
 
-impl<Connections, Upstream> PipedreamMcpCredentials<Connections, Upstream>
+impl<Connections> ConnectorsMcpCredentials<Connections>
 where
-    Connections: ConnectionStore,
-    Upstream: McpUpstream,
+    Connections: McpConnectionsService,
 {
-    /// Build the adapter over the store holding the owner's connections and
-    /// the client that addresses Pipedream's MCP server.
-    pub fn new(connections: Arc<Connections>, upstream: Upstream) -> Self {
-        Self {
-            connections,
-            upstream,
+    /// Build the adapter over the connectors service.
+    pub fn new(connections: Arc<Connections>) -> Self {
+        Self { connections }
+    }
+
+    /// The key `destination` names among the owner's connections.
+    ///
+    /// A custom server is known here only by the hash of its address, so it
+    /// is looked up among every usable connection the owner holds, in scope
+    /// or not: whether the agent may reach it is [`McpConnections::permit`]'s
+    /// to say.
+    fn key(
+        connections: &McpConnections,
+        destination: &McpDestination,
+    ) -> Result<ConnectorKey, EgressError> {
+        match destination {
+            McpDestination::Connected(slug) => ConnectorId::parse(slug.as_str())
+                .map(ConnectorKey::App)
+                .map_err(|_| EgressError::UnknownServer(slug.clone())),
+            McpDestination::Custom(wanted) => connections
+                .handles()
+                .map(|handle| handle.key())
+                .find(|key| match key {
+                    ConnectorKey::Server(url) => {
+                        CustomMcpServerKey::for_url(url.as_str()) == *wanted
+                    }
+                    ConnectorKey::App(_) => false,
+                })
+                .cloned()
+                .ok_or_else(|| EgressError::UnknownCustomServer(wanted.clone())),
+            McpDestination::Macro | McpDestination::Preview => {
+                Err(EgressError::Internal(rootcause::report!(
+                    "the connectors resolver was asked for Macro's own or a preview MCP server; \
+                     the composition root did not layer WithMacroMcp"
+                )))
+            }
         }
     }
 
-    /// The owner's enabled connection whose `app_slug` is exactly `slug`, if
-    /// they hold one.
-    ///
-    /// Scoped to the owner by the store call itself, and filtered to `enabled`
-    /// here because the store does not: a disabled connector is one the owner
-    /// turned off, and turning it off has to take the sandbox's access with it.
-    async fn connection(
+    /// The owner's display name for a usable connection.
+    fn name(connections: &McpConnections, key: &ConnectorKey) -> String {
+        connections
+            .handles()
+            .find(|handle| handle.key() == key)
+            .map_or_else(|| key.to_string(), |handle| handle.name().to_owned())
+    }
+
+    /// The upstream a permitted connection is reached through.
+    async fn upstream(
         &self,
-        owner: &MacroUserIdStr<'static>,
-        slug: &McpServerSlug,
-    ) -> Result<Option<PipedreamConnection>, EgressError> {
-        Ok(self
-            .connections
-            .list(owner)
-            .await
-            .map_err(|error| {
-                EgressError::Internal(rootcause::report!(
-                    "could not list Pipedream connections: {error:?}"
-                ))
-            })?
-            .into_iter()
-            .filter(|record| record.enabled)
-            // `app_slug`, not `server_name`: the app slug is Pipedream's
-            // stable identifier, and the display name is the user's to
-            // rename. The provisioner advertises the same value, and equality
-            // is the whole match - nothing is derived at either end.
-            .find(|record| record.app_slug == slug.as_str()))
+        permitted: Permitted<'_>,
+        connections: &McpConnections,
+    ) -> Result<McpResolution, EgressError> {
+        let key = permitted.key().clone();
+        let key = &key;
+        match self.connections.upstream(permitted).await {
+            Ok(upstream) => upstream_call(upstream).map(McpResolution::Connected),
+            // The grant died between listing and reaching for it.
+            Err(ConnectorsError::NeedsReauth(_)) => Ok(match key {
+                ConnectorKey::App(_) => McpResolution::NotConnected,
+                ConnectorKey::Server(_) => McpResolution::Disconnected {
+                    name: Self::name(connections, key),
+                },
+            }),
+            Err(error) => Err(EgressError::Upstream(rootcause::report!(
+                "could not address {key}: {error}"
+            ))),
+        }
+    }
+
+    /// An app in scope the owner cannot use yet: addressed for them anyway
+    /// where its counted source can, so the session lists its real tools;
+    /// otherwise answered with the connect prompt.
+    async fn unconnected(
+        &self,
+        scoped: &McpConnections,
+        key: &ConnectorKey,
+    ) -> Result<McpResolution, EgressError> {
+        let permitted = scoped
+            .permit_unconnected(key)
+            .map_err(|refused| match refused {
+                PermitRefused::OutOfScope => EgressError::OutOfScope,
+                PermitRefused::NotUsable(status) => EgressError::Internal(rootcause::report!(
+                    "an app in scope was refused as {status:?}"
+                )),
+            })?;
+        match self.connections.upstream(permitted).await {
+            Ok(upstream) => upstream_call(upstream).map(McpResolution::Unconnected),
+            // Its source reaches it only through the owner's own connection.
+            Err(
+                ConnectorsError::NotFound(_)
+                | ConnectorsError::UnknownApp(_)
+                | ConnectorsError::NeedsReauth(_),
+            ) => Ok(McpResolution::NotConnected),
+            Err(error) => Err(EgressError::Upstream(rootcause::report!(
+                "could not address {key} for an owner who has not connected it: {error}"
+            ))),
+        }
     }
 }
 
-impl<Connections, Upstream> McpCredentials for PipedreamMcpCredentials<Connections, Upstream>
+/// The upstream as the proxy stamps it. Its constructors are what refuse a
+/// non-https endpoint, and they are the only way to pair a URL with a
+/// credential.
+fn upstream_call(upstream: Upstream) -> Result<UpstreamCall, EgressError> {
+    let call = match upstream.bearer() {
+        Some(bearer) => {
+            UpstreamCall::bearer(upstream.url().clone(), BearerToken::new(bearer.to_owned()))?
+        }
+        None => UpstreamCall::anonymous(upstream.url().clone())?,
+    };
+
+    Ok(call.scoped_by(upstream.headers().clone()))
+}
+
+impl<Connections> McpCredentials for ConnectorsMcpCredentials<Connections>
 where
-    Connections: ConnectionStore,
-    Upstream: McpUpstream,
+    Connections: McpConnectionsService,
 {
     #[tracing::instrument(skip_all, err, fields(%owner, ?destination))]
     async fn resolve(
@@ -90,56 +163,34 @@ where
         owner: &MacroUserIdStr<'static>,
         _agent: bot_id::BotId,
         _session: uuid::Uuid,
+        selection: &Selection,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
-        // Macro's own server is the composition root's to layer on with
-        // [`crate::outbound::macro_mcp::WithMacroMcp`]; these rows can never
-        // answer for it.
-        let McpDestination::Connected(slug) = destination else {
-            return Err(EgressError::Internal(rootcause::report!(
-                "the Pipedream resolver was asked for Macro's own MCP server; \
-                 the composition root did not layer WithMacroMcp"
-            )));
-        };
-        // Pipedream addresses a call by user id and app slug alone (see
-        // `McpUpstream::upstream`), so an app the owner never connected is
-        // still addressable for them: the handshake and tool listing work,
-        // and only a call needs the grant. Reported as such, and the service
-        // decides what the session's policy makes of it.
-        let (record, connected) = match self.connection(owner, slug).await? {
-            Some(record) => (record, true),
-            None => (
-                PipedreamConnection {
-                    user_id: owner.clone(),
-                    app_slug: slug.as_str().to_owned(),
-                    server_name: slug.as_str().to_owned(),
-                    account_id: String::new(),
-                    enabled: false,
-                    provider: pipedream_mcp::domain::models::ConnectionProvider::Pipedream,
-                },
-                false,
-            ),
-        };
-
-        // A dead grant is Pipedream's to notice, not ours: we hold no
-        // refresh token to fail on. If the account behind this connection has
-        // gone unhealthy, Pipedream answers the forwarded call with its own
-        // error and the status passes through to the agent.
-        let call = self.upstream.upstream(&record).await.map_err(|error| {
-            EgressError::Upstream(rootcause::report!(
-                "could not address Pipedream for {slug}: {error:?}"
+        let connections = self.connections.connections(owner).await.map_err(|error| {
+            EgressError::Internal(rootcause::report!(
+                "could not read the owner's MCP connections: {error}"
             ))
         })?;
+        let key = Self::key(&connections, destination)?;
 
-        // Typed at the source, but not yet vetted: `UpstreamCall`'s
-        // constructor is what refuses a non-https endpoint, and it is the
-        // only way to pair this URL with a credential.
-        let call = UpstreamCall::bearer(call.url, BearerToken::new(call.bearer_token))?
-            .scoped_by(call.headers);
-        Ok(if connected {
-            McpResolution::Connected(call)
-        } else {
-            McpResolution::Unconnected(call)
-        })
+        let scoped = connections.scoped(selection);
+        match scoped.permit(&key) {
+            Ok(permitted) => self.upstream(permitted, &connections).await,
+            Err(PermitRefused::OutOfScope) => Err(EgressError::OutOfScope),
+            Err(PermitRefused::NotUsable(status)) => match key {
+                ConnectorKey::App(_) => {
+                    tracing::debug!(?status, "the owner cannot use this app yet");
+                    self.unconnected(&scoped, &key).await
+                }
+                // Found among the usable connections above, so not reached;
+                // answered as a server with nowhere to go all the same.
+                ConnectorKey::Server(_) => match destination {
+                    McpDestination::Custom(wanted) => {
+                        Err(EgressError::UnknownCustomServer(wanted.clone()))
+                    }
+                    _ => Err(EgressError::OutOfScope),
+                },
+            },
+        }
     }
 }

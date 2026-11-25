@@ -242,6 +242,17 @@ fn written_on(message: &FocusMessage, time_zone: Option<Tz>) -> NaiveDate {
     day.unwrap_or_else(|| message.at.date_naive())
 }
 
+/// The latest day the thread's messages were written on, each by the calendar
+/// the due date read counts it by (`written_on`), messages with no text of their
+/// own included.
+pub(super) fn last_written_on(thread: &FocusThread, time_zone: Option<Tz>) -> Option<NaiveDate> {
+    thread
+        .messages
+        .iter()
+        .map(|message| written_on(message, time_zone))
+        .max()
+}
+
 /// A message's own words: never its quoted history, whose relative dates belong
 /// to an older message. Unlike Jev's text, a short reply doesn't fall back to the
 /// whole body. A message with no body has only its snippet to go on.

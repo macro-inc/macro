@@ -79,7 +79,7 @@
 // for both its warning and its alert, as the other monitors in this stack do:
 // the live backlog warns at 30 s over the alert's five minutes. The retention
 // monitors repeat each topic's retention from
-// infra/stacks/kafka-cluster/topics.ts (email 10 days in prod, the others 7);
+// infra/stacks/kafka-cluster/topics.ts (7 days for every topic);
 // change them together.
 import * as datadog from '@pulumi/datadog';
 import { graphGroup, prodMonitor, thresholdGraph } from '../prod-monitor';
@@ -229,8 +229,8 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
         thresholdGraph({
           title: TITLES.emailRetention,
           query: EMAIL_RETENTION,
-          critical: '9',
-          warning: '8',
+          critical: '6',
+          warning: '5',
         }),
         thresholdGraph({
           title: TITLES.liveRetention,
@@ -393,11 +393,11 @@ prodMonitor('search-email-backlog', {
 prodMonitor('search-email-near-retention', {
   title: TITLES.emailRetention,
   service: SERVICE,
-  query: `max(last_5m):${EMAIL_RETENTION} > 9`,
-  monitorThresholds: { critical: '9', warning: '8' },
+  query: `max(last_5m):${EMAIL_RETENTION} > 6`,
+  monitorThresholds: { critical: '6', warning: '5' },
   pages: false,
   description:
-    "The oldest email event not yet indexed, on macro.email's worst partition, is older than the threshold, in days. The topic keeps events for 10 days; past that the indexer skips straight to the newest and the events between are lost.",
+    "The oldest email event not yet indexed, on macro.email's worst partition, is older than the threshold, in days. The topic keeps events for 7 days; past that the indexer skips straight to the newest and the events between are lost.",
   dashboard,
   runbook: `${RUNBOOK}#retention`,
 });

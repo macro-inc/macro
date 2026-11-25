@@ -1,5 +1,5 @@
-use activity::{Action, CallStart, PropertyChange, RecordedAction};
-use chrono::Utc;
+use activity::{Action, CallStart, PropertyChange, RecordedAction, TimeLog, TimeLogSource};
+use chrono::{NaiveDate, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::json;
 use uuid::Uuid;
@@ -68,6 +68,26 @@ fn payload_actions_carry_their_payload_fields() {
 }
 
 #[test]
+fn logged_time_carries_its_length_day_and_source() {
+    let event =
+        GraphqlActivityEvent::from(record(RecordedAction::Known(Action::TimeLogged(TimeLog {
+            minutes: 90,
+            entry_date: NaiveDate::from_ymd_opt(2026, 11, 20).expect("valid date"),
+            source: TimeLogSource::Timer,
+        }))));
+
+    assert_eq!(event.action_tag, "time_logged");
+    match event.action {
+        GraphqlActivityAction::TimeLogged(logged) => {
+            assert_eq!(logged.minutes, 90);
+            assert_eq!(logged.entry_date, "2026-11-20");
+            assert_eq!(logged.source, GraphqlActivityTimeLogSource::Timer);
+        }
+        other => panic!("expected TimeLogged, got {}", type_name(&other)),
+    }
+}
+
+#[test]
 fn a_form_response_reads_as_responded() {
     let event = GraphqlActivityEvent::from(ActivityRecord {
         entity_type: activity::EntityType::Form,
@@ -115,6 +135,7 @@ fn type_name(action: &GraphqlActivityAction) -> &'static str {
         GraphqlActivityAction::CallStarted(_) => "CallStarted",
         GraphqlActivityAction::TaskAdded(_) => "TaskAdded",
         GraphqlActivityAction::TaskRemoved(_) => "TaskRemoved",
+        GraphqlActivityAction::TimeLogged(_) => "TimeLogged",
         GraphqlActivityAction::Unknown(_) => "Unknown",
     }
 }

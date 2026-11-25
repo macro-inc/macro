@@ -61,6 +61,7 @@ async fn run_server() -> anyhow::Result<()> {
     let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
     let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
     let link_manager_queue = macro_queues::LinkManagerQueue::new();
+    let link_maintenance_queue = macro_queues::LinkMaintenanceQueue::new();
     let sqs_client = sqs_client::SQS::new(macro_aws_config::sqs_client().await)
         .gmail_inbox_sync_queue(&gmail_inbox_sync_queue)
         .gmail_inbox_sync_retry_queue(&gmail_inbox_sync_retry_queue)
@@ -69,7 +70,8 @@ async fn run_server() -> anyhow::Result<()> {
         .email_backfill_queue(&backfill_queue)
         .email_scheduled_queue(&email_scheduled_queue)
         .sfs_uploader_queue(&sfs_uploader_queue)
-        .email_link_manager_queue(&link_manager_queue);
+        .email_link_manager_queue(&link_manager_queue)
+        .email_link_maintenance_queue(&link_maintenance_queue);
 
     let auth_service_client = authentication_service_client::AuthServiceClient::new(
         config

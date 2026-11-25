@@ -7,10 +7,12 @@
 
 import type { UnifiedSearchResponseItem } from './unifiedSearchResponseItem';
 import type { UnifiedSearchResponseNextCursor } from './unifiedSearchResponseNextCursor';
+import type { UnifiedSearchResponseQueryFilters } from './unifiedSearchResponseQueryFilters';
 
 export interface UnifiedSearchResponse {
   /** The next cursor to use for paginating results */
   next_cursor?: UnifiedSearchResponseNextCursor;
+  query_filters?: UnifiedSearchResponseQueryFilters;
   /** The search results */
   results: UnifiedSearchResponseItem[];
 }

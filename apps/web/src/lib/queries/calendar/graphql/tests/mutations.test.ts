@@ -3,6 +3,7 @@ import {
   type CalendarRangeCacheArgs,
   validateRecordSelectionKeys,
 } from '@graphql-cache/index';
+import type { MutationSettlement } from '@graphql-cache/protocol';
 import type {
   CalendarEventFieldsFragment,
   CalendarMutationPayloadFieldsFragment,
@@ -14,11 +15,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CalendarMutationError,
   committedEvent,
+  createdCalendarEventId,
+  createdCalendarOccurrence,
   executeGraphqlCreate,
   executeGraphqlDelete,
   executeGraphqlInviteGuests,
   executeGraphqlRsvp,
   executeGraphqlUpdate,
+  isCalendarEventCreating,
+  onCalendarEventCreated,
   trackCalendarCreateSettlements,
 } from '../mutations';
 import { attendee, graphqlEvent, graphqlOccurrence } from './fixtures';
@@ -393,6 +398,50 @@ describe('executeGraphqlUpdate', () => {
     expect(call?.optimistic.uncertainCalendarEventKeys).toBeUndefined();
   });
 
+  it.each([
+    ['a standalone event', { eventId: 'event-1' }, []],
+    [
+      'one occurrence of a series',
+      {
+        eventId: 'event-1',
+        scope: 'this_event' as const,
+        recurrenceId: 'r6',
+        occurrenceKey: '2026-10-06T09:00:00+00:00',
+      },
+      ['RRULE:FREQ=DAILY'],
+    ],
+  ])(
+    'gives a moved occurrence of %s no time zone, as the server’s carry none',
+    async (_, target, recurrenceLines) => {
+      const host = fakeHost(graphqlEvent({ recurrenceLines }), [instance(6)]);
+      const { calls, client } = fakeClient('committed');
+      const time = {
+        kind: 'timed' as const,
+        startsAt: '2026-10-07T10:00:00Z',
+        endsAt: '2026-10-07T10:30:00Z',
+        timeZone: 'America/New_York',
+      };
+
+      await executeGraphqlUpdate(host, { ...target, patch: { time } }, client);
+
+      const [call] = calls;
+      expect(response(call!).occurrences).toEqual([
+        expect.objectContaining({
+          id: 'event-1:2026-10-06T09:00:00+00:00',
+          time: {
+            __typename: 'GraphqlTimedEventTime',
+            startsAt: '2026-10-07T10:00:00+00:00',
+            endsAt: '2026-10-07T10:30:00+00:00',
+            timeZone: null,
+          },
+        }),
+      ]);
+      expect(call?.variables.input).toMatchObject({
+        time: { timed: { timeZone: 'America/New_York' } },
+      });
+    }
+  );
+
   it('leaves recurring instances in place and marks the series uncertain', async () => {
     const host = fakeHost(graphqlEvent(), [instance(6)]);
     const { calls, client } = fakeClient('committed');
@@ -720,12 +769,16 @@ describe('executeGraphqlCreate', () => {
   });
 
   it('holds writes to a queued event until its create settles', async () => {
-    let settle: ((settlement: { mutationUuid?: string }) => void) | undefined;
+    let settle: ((settlement: MutationSettlement) => void) | undefined;
     const untrack = trackCalendarCreateSettlements({
       onMutationSettled: (callback) => {
-        settle = callback as typeof settle;
+        settle = callback;
         return () => {};
       },
+      readRecordsByKeys: vi.fn(async () => ({
+        revision: '1' as never,
+        records: [],
+      })),
     });
     const { client } = fakeClient('queued');
     const { outcome, event } = await executeGraphqlCreate(
@@ -751,7 +804,12 @@ describe('executeGraphqlCreate', () => {
       )
     ).rejects.toMatchObject({ code: 'not_found' });
 
-    settle?.({ mutationUuid: event?.id });
+    settle?.({
+      mutationUuid: event?.id,
+      transactionId: 'tx-1',
+      status: 'permanently-failed',
+      error: 'refused',
+    });
     await expect(
       executeGraphqlUpdate(
         host,
@@ -763,17 +821,26 @@ describe('executeGraphqlCreate', () => {
   });
 
   it('releases a queued create the queue settled before the call returned', async () => {
-    let settle: ((settlement: { mutationUuid?: string }) => void) | undefined;
+    let settle: ((settlement: MutationSettlement) => void) | undefined;
     const untrack = trackCalendarCreateSettlements({
       onMutationSettled: (callback) => {
-        settle = callback as typeof settle;
+        settle = callback;
         return () => {};
       },
+      readRecordsByKeys: vi.fn(async () => ({
+        revision: '1' as never,
+        records: [],
+      })),
     });
     let clientId: string | undefined;
     const { calls, client } = fakeClient('queued', undefined, () => {
       clientId = calls[0]?.optimistic.uuid;
-      settle?.({ mutationUuid: clientId });
+      settle?.({
+        mutationUuid: clientId,
+        transactionId: 'tx-1',
+        status: 'permanently-failed',
+        error: 'refused',
+      });
     });
 
     const { event } = await executeGraphqlCreate(
@@ -797,6 +864,364 @@ describe('executeGraphqlCreate', () => {
         fakeClient('committed').client
       )
     ).resolves.toMatchObject({ kind: 'committed' });
+    untrack();
+  });
+
+  it('hands over the local event once the queue holds the create, before the server answers', async () => {
+    let answer = () => {};
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-1', title: 'Offsite' }),
+    });
+    const held = {
+      ...client,
+      mutation: (...args: Parameters<Client['mutation']>) => {
+        const source = client.mutation(...args);
+        return {
+          toPromise: async () => {
+            await answered;
+            return source.toPromise();
+          },
+        };
+      },
+    } as unknown as Client;
+    const accepted = vi.fn();
+    let settled = false;
+
+    const created = (async () => {
+      const result = await executeGraphqlCreate(
+        {
+          title: 'Offsite',
+          time: {
+            kind: 'allDay',
+            startDate: '2026-11-28',
+            endDate: '2026-11-29',
+          },
+          onAccepted: accepted,
+        },
+        held
+      );
+      settled = true;
+      return result;
+    })();
+    await vi.waitFor(() => expect(accepted).toHaveBeenCalledTimes(1));
+
+    const clientId = calls[0]?.optimistic.uuid ?? '';
+    expect(accepted).toHaveBeenCalledWith(
+      expect.objectContaining({ id: clientId, title: 'Offsite' })
+    );
+    expect(calls[0]?.variables.input).not.toHaveProperty('onAccepted');
+    expect(isCalendarEventCreating(clientId)).toBe(true);
+    expect(settled).toBe(false);
+
+    answer();
+    await expect(created).resolves.toMatchObject({
+      event: { id: 'server-1' },
+    });
+    expect(isCalendarEventCreating(clientId)).toBe(false);
+  });
+
+  it('queues a create on a calendar the caller holds without reading the calendar list', async () => {
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-5', title: 'Away' }),
+    });
+    const query = vi.spyOn(client, 'query');
+
+    await executeGraphqlCreate(
+      {
+        title: 'Away',
+        calendarId: 'calendar-2',
+        calendar: {
+          id: 'calendar-2',
+          emailLinkId: 'link-2',
+          emailAddress: 'work@example.com',
+          capabilities: {
+            autoDecline: true,
+            customRecurrence: true,
+            emailReminders: true,
+            removeConference: true,
+            resetRsvp: true,
+            guestPolicy: true,
+          },
+        },
+        outOfOffice: { autoDeclineMode: 'decline_none' },
+        time: {
+          kind: 'timed',
+          startsAt: '2026-11-28T09:00:00Z',
+          endsAt: '2026-11-28T17:00:00Z',
+          timeZone: 'America/New_York',
+        },
+      },
+      client
+    );
+
+    expect(query).not.toHaveBeenCalled();
+    const call = calls[0]!;
+    expect(call.variables.input).not.toHaveProperty('calendar');
+    expect(call.variables.input).not.toHaveProperty('emailLinkId');
+    expect(response(call).event).toMatchObject({
+      calendarId: 'calendar-2',
+      linkId: 'link-2',
+      organizerEmail: 'work@example.com',
+      eventType: 'OUT_OF_OFFICE',
+      viewerCan: expect.objectContaining({ setGuestPolicy: true }),
+    });
+  });
+
+  it('reads the calendar list for a create on a calendar the caller does not hold', async () => {
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-6' }),
+    });
+    const query = vi.spyOn(client, 'query');
+
+    await executeGraphqlCreate(
+      {
+        title: 'Lunch',
+        calendarId: 'calendar-1',
+        calendar: {
+          id: 'calendar-2',
+          emailLinkId: 'link-2',
+          emailAddress: 'work@example.com',
+          capabilities: {
+            autoDecline: true,
+            customRecurrence: true,
+            emailReminders: true,
+            removeConference: true,
+            resetRsvp: true,
+            guestPolicy: false,
+          },
+        },
+        time: {
+          kind: 'allDay',
+          startDate: '2026-11-28',
+          endDate: '2026-11-29',
+        },
+      },
+      client
+    );
+
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(response(calls[0]!).event).toMatchObject({
+      calendarId: 'calendar-1',
+      linkId: 'link-1',
+    });
+  });
+
+  it('gives the local occurrence no time zone, as the server’s carry none', async () => {
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-7' }),
+    });
+
+    await executeGraphqlCreate(
+      {
+        title: 'Standup',
+        time: {
+          kind: 'timed',
+          startsAt: '2026-11-28T15:00:00Z',
+          endsAt: '2026-11-28T15:30:00Z',
+          timeZone: 'America/New_York',
+        },
+      },
+      client
+    );
+
+    const optimistic = response(calls[0]!);
+    expect(optimistic.event?.time).toMatchObject({
+      timeZone: 'America/New_York',
+    });
+    expect(optimistic.occurrences[0]?.time).toEqual({
+      __typename: 'GraphqlTimedEventTime',
+      startsAt: '2026-11-28T15:00:00+00:00',
+      endsAt: '2026-11-28T15:30:00+00:00',
+      timeZone: null,
+    });
+  });
+
+  it('keeps the server’s copy of the occurrence drawn locally from the create’s answer', async () => {
+    const event = graphqlEvent({
+      id: 'server-8',
+      title: 'Offsite',
+      recurrenceLines: ['RRULE:FREQ=DAILY'],
+    });
+    const occurrence = (day: string) =>
+      graphqlOccurrence({
+        id: `server-8:${day}`,
+        eventId: 'server-8',
+        occurrenceKey: day,
+        event,
+      });
+    const landed = vi.fn();
+    const stop = onCalendarEventCreated(landed);
+    const { calls, client } = fakeClient('committed', {
+      event,
+      occurrences: [occurrence('2026-11-28'), occurrence('2026-11-29')],
+    });
+
+    await executeGraphqlCreate(
+      {
+        title: 'Offsite',
+        recurrenceLines: ['RRULE:FREQ=DAILY'],
+        time: {
+          kind: 'allDay',
+          startDate: '2026-11-28',
+          endDate: '2026-11-29',
+        },
+      },
+      client
+    );
+
+    const clientId = calls[0]?.optimistic.uuid ?? '';
+    expect(landed).toHaveBeenCalledWith(clientId, 'server-8');
+    expect(createdCalendarOccurrence(clientId)).toEqual(
+      expect.objectContaining({
+        event: expect.objectContaining({ id: 'server-8', title: 'Offsite' }),
+        occurrence: expect.objectContaining({
+          eventId: 'server-8',
+          occurrenceKey: '2026-11-28',
+        }),
+      })
+    );
+    stop();
+  });
+
+  it('leaves a create its own call still answers to that call when the alias is not readable yet', async () => {
+    let settle: ((settlement: MutationSettlement) => void) | undefined;
+    const untrack = trackCalendarCreateSettlements({
+      onMutationSettled: (callback) => {
+        settle = callback;
+        return () => {};
+      },
+      readRecordsByKeys: vi.fn(async () => ({
+        revision: '1' as never,
+        records: [],
+      })),
+    });
+    let answer = () => {};
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-4', title: 'Offsite' }),
+    });
+    const held = {
+      ...client,
+      mutation: (...args: Parameters<Client['mutation']>) => {
+        const source = client.mutation(...args);
+        return {
+          toPromise: async () => {
+            await answered;
+            return source.toPromise();
+          },
+        };
+      },
+    } as unknown as Client;
+
+    const created = executeGraphqlCreate(
+      {
+        title: 'Offsite',
+        time: {
+          kind: 'allDay',
+          startDate: '2026-11-28',
+          endDate: '2026-11-29',
+        },
+      },
+      held
+    );
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    const clientId = calls[0]?.optimistic.uuid ?? '';
+    settle?.({
+      mutationUuid: clientId,
+      transactionId: 'tx-1',
+      status: 'committed',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(isCalendarEventCreating(clientId)).toBe(true);
+
+    answer();
+    await created;
+    expect(isCalendarEventCreating(clientId)).toBe(false);
+    expect(createdCalendarEventId(clientId)).toBe('server-4');
+    untrack();
+  });
+
+  it('sends a write addressed to a created event’s local id to the id it landed under', async () => {
+    const landed = vi.fn();
+    const stop = onCalendarEventCreated(landed);
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-2', title: 'Offsite' }),
+    });
+
+    await executeGraphqlCreate(
+      {
+        title: 'Offsite',
+        time: {
+          kind: 'allDay',
+          startDate: '2026-11-28',
+          endDate: '2026-11-29',
+        },
+      },
+      client
+    );
+    const clientId = calls[0]?.optimistic.uuid ?? '';
+    const update = fakeClient('committed');
+    await executeGraphqlUpdate(
+      fakeHost(undefined, []),
+      { eventId: clientId, patch: { title: 'Renamed' } },
+      update.client
+    );
+
+    expect(createdCalendarEventId(clientId)).toBe('server-2');
+    expect(landed).toHaveBeenCalledWith(clientId, 'server-2');
+    expect(update.calls[0]?.variables.input.eventId).toBe('server-2');
+    stop();
+  });
+
+  it('learns where a queued create landed from the cache’s alias', async () => {
+    let settle: ((settlement: MutationSettlement) => void) | undefined;
+    let clientId = '';
+    const untrack = trackCalendarCreateSettlements({
+      onMutationSettled: (callback) => {
+        settle = callback;
+        return () => {};
+      },
+      readRecordsByKeys: vi.fn(async () => ({
+        revision: '1' as never,
+        records: [
+          {
+            recordKey: `GraphqlCalendarEvent:${clientId}`,
+            record: { __typename: 'GraphqlCalendarEvent', id: 'server-3' },
+            identity: { mutationUuid: clientId, pending: false },
+          },
+        ],
+      })),
+    });
+    const { calls, client } = fakeClient('queued');
+    await executeGraphqlCreate(
+      {
+        title: 'Offline',
+        time: {
+          kind: 'allDay',
+          startDate: '2026-11-28',
+          endDate: '2026-11-29',
+        },
+      },
+      client
+    );
+    clientId = calls[0]?.optimistic.uuid ?? '';
+    expect(isCalendarEventCreating(clientId)).toBe(true);
+
+    settle?.({
+      mutationUuid: clientId,
+      transactionId: 'tx-1',
+      status: 'committed',
+    });
+
+    await vi.waitFor(() =>
+      expect(createdCalendarEventId(clientId)).toBe('server-3')
+    );
+    expect(isCalendarEventCreating(clientId)).toBe(false);
     untrack();
   });
 

@@ -35,6 +35,20 @@ Moving the start date or time moves the end with it, keeping the event's length
 after that the end stays put, and a start past it shows the end-before-start
 error.
 
+With the calendar cache, `Create event` and `Save` close the composer as soon as
+the write is saved locally and queued (as property saves do), before the provider
+answers; the event is already on the grid under a local id. The composer hands
+the create the calendar it shows, so the create reads no calendar list first.
+Its details open while the reply is on its way and move to the server's copy
+the create's answer carries as soon as it arrives, before the grid's own reads
+draw it; only then does the URL name the event, and the new chip stays selected
+until the grid replaces it. A local copy, new or moved, shows no
+`Original time` line: the server keeps a time zone on the event, never on its
+occurrences. A refused save shows
+`Failed to create event` or `Failed to update event` afterwards, and a refused
+create leaves the grid. An edit that adds a new Macro call still waits for the
+call to be linked. Over REST the composer closes when the provider answers.
+
 If a permission change retires a successful create response, the composer uses
 the preserved server identity. If that identity cannot be read yet, it closes
 and refreshes the calendar without opening the event or offering a duplicate
@@ -164,8 +178,10 @@ Span `calendar.occurrences.read` records which path answered
 `calendar.occurrences.cache_fallback`. A failed GraphQL fetch of an uncovered
 week also reads REST, as `fetch-error`, without that log.
 A week the cache covered is only as current as its last delta, while a REST
-answer shows the server as it is, so once REST has answered a viewport the
-cache answers only after a delta that read the server since: the read waits
+answer shows the server as it is, and a change notice (a `refresh_calendar`
+poke, a write settling) says the server holds something the cache may not. So
+once REST has answered a viewport, or a notice has arrived, the cache answers
+only after a delta that read the server since: the read waits
 for one (`calendar.read.catch_up` `held`, or `retried` when it retries a failed
 one whose backoff has passed; `waiting` when REST answered at the deadline
 first). A failed delta also retries on its own, after 2, 4 and 8 seconds, then
@@ -175,10 +191,21 @@ database. A cache that cannot be brought forward (`behind`) reads REST
 from its older copy of a covered week only if REST fails too
 (`calendar.read.older_cache`). While a failed delta backs off or has used its
 retries, a change in the cache does not refetch the viewports, since they
-would only read REST again. A cache that no REST read has overtaken reads
-no REST and runs no extra delta, even after a failed one. Without this, an
-event REST had shown, such as one just created, would drop off the grid until
-a later delta.
+would only read REST again. A cache that neither a REST read nor a notice has
+overtaken reads no REST and runs no extra delta, even after a failed one.
+Without this, an event REST had shown, such as one just created, would drop
+off the grid until a later delta. A notice refetches the viewports once its
+delta finishes, or after three seconds while it is still running, and those
+reads wait for it or read REST; viewports not on screen refetch when they
+mount. Without this, an event deleted elsewhere (a booking its guest
+cancelled) stayed in the grid and in Upcoming events, which reads the same
+occurrence viewports, until a reload whenever the poke's delta failed or was
+held behind another tab's database handoff. A week a pending write shaped
+(an edit, RSVP or create still in flight or queued) answers from the cache
+without catching up (`calendar.read.pending_write`), since REST cannot show the
+write; the write's settle refreshes it. Span `calendar.occurrences_refresh`
+records how the refresh's delta went (`calendar.delta.outcome`: `synced`,
+`failed`, `deadline`, `cache_starting`).
 
 A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
 accumulate against the requested date and interrupt unfinished slides, without
@@ -437,6 +464,12 @@ desktop controls are 32px tall and use the shared button surface: Today and the
 previous/next arrows share a navigation group, the period selector has its own
 view group, and Booking links and New have separate outlined buttons. Adjacent
 controls and groups have a uniform 8px gap, with matching text-button padding.
+In a header 600px or narrower New shows only its icon, as in other headers; when
+the controls still don't fit their row, Today shows its icon, and then Search
+wraps onto its own row below the other controls; in a still narrower pane the
+other controls wrap too, so no control leaves the pane. Collapsed Search never
+sits on another control; opened on its own row, it leaves the controls above it
+in view.
 Click Search or press Cmd/Ctrl+F to expand and focus the wider inline search field.
 The field slides out with a short width transition and focuses immediately.
 The results popup stays hidden until the field contains non-whitespace text,
@@ -566,7 +599,7 @@ The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting li
 for new events, defaulting to `Macro call` when quick calls are enabled. Keeping
 that selection creates the Macro call together with the event in one save, so the
 invitation attendees receive already carries the link; if the call cannot be
-created, nothing is saved and Save retries the whole create. Selecting
+created, nothing is saved and `Failed to create event` shows. Selecting
 `Google Meet` or `No meeting link` skips the Macro call. Out-of-office entries do
 not create calls. There is no separate call toggle or Scheduled Call menu option.
 All-day events get an untimed call link, so setup does not display a misleading midnight time.
@@ -1305,7 +1338,20 @@ schedule picker without an extra Availability schedule heading. The selected sch
 weekly hours and timezone appear directly beneath the picker. This summary does not show
 live calendar free/busy or date overrides. First-time links use the default draft schedule
 until saved. Calendar busy-time exclusions appear in the help popover beside
-Availability. Team links group Scheduling type and Team hosts under Team scheduling
+Availability. A personal link whose owner has more than one connected account
+shows a Calendar account select below Availability, listing each inbox whose
+primary calendar they can write by its address (the primary first). Bookings
+land on that account's calendar and their invitations come from its address;
+choosing the primary account stores none, so the link follows the primary
+inbox ("Primary account" when that inbox lists no calendar to book on). In the
+editor, a link whose account is no longer connected shows "Disconnected account"
+and asks for another before that link is saved, as it does for former team
+hosts; saving the profile's other links is not blocked. Google Meet on an
+account that cannot add video meetings (an Outlook inbox without Teams) blocks
+saving too.
+A chosen account that needs reconnecting shows a note that the link offers no
+times until it is reconnected. Review and the link's details list the account.
+Team links group Scheduling type and Team hosts under Team scheduling
 in Location & availability. Collective and Round robin use pill selectors above
 Team hosts. The header's icon-only Reset team
 settings action restores the default mode and hosts, and is disabled at those defaults.

@@ -40,11 +40,7 @@ pub(crate) fn config_values() -> serde_json::Value {
         "HARNESS_BOT_ID": "00000000-0000-0000-0000-000000000001",
         "INTERNAL_API_KEY": "test-key",
         "DOCUMENT_STORAGE_SERVICE_AUTH_KEY": "test-key",
-        "PIPEDREAM_CLIENT_ID": "pipedream-client-id",
-        "PIPEDREAM_CLIENT_SECRET": "pipedream-client-secret",
-        "PIPEDREAM_PROJECT_ID": "pipedream-project-id",
         "MACRO_API_TOKEN_PRIVATE_SECRET_KEY": "signing-secret-name",
-        "MCP_CREDENTIALS_KEY_SECRET_NAME": "mcp-secret-name",
         "MACRO_API_TOKEN_ISSUER": "test-issuer",
         "AGENT_SESSION_CHANGES_BUCKET": "test-bucket",
         "GITHUB_PULL_REQUEST_PATCH_BUCKET": "test-bucket",
@@ -54,7 +50,8 @@ pub(crate) fn config_values() -> serde_json::Value {
         "MAX_REPO_SIZE_BYTES": 524288000,
         "PUSHES_PER_MINUTE": 30,
         "LIVEKIT_API_KEY": "livekit-key",
-        "LIVEKIT_API_SECRET": "livekit-secret"
+        "LIVEKIT_API_SECRET": "livekit-secret",
+        "FIREWORK_API_KEY": "firework-key"
     })
 }
 
@@ -82,7 +79,7 @@ fn authentication_key_is_required_with_billing_disabled_or_enabled() {
 }
 
 #[tokio::test]
-async fn authentication_key_resolves_before_linked_github_client_is_built() {
+async fn authentication_key_resolves_before_the_auth_client_is_built() {
     let config: Config = serde_json::from_value(config_values()).unwrap();
     let config = config
         .resolve_remote_secrets(Environment::Develop, &TestSecretManager)
@@ -92,7 +89,7 @@ async fn authentication_key_resolves_before_linked_github_client_is_built() {
         config.authentication_service_secret_key.as_ref(),
         "resolved-auth-key"
     );
-    config.linked_github_tokens().unwrap();
+    config.auth_service_client().unwrap();
 }
 
 #[test]
@@ -137,7 +134,8 @@ fn values() -> serde_json::Value {
         "MAX_REPO_SIZE_BYTES": 524288000,
         "PUSHES_PER_MINUTE": 30,
         "LIVEKIT_API_KEY": "livekit-key",
-        "LIVEKIT_API_SECRET": "livekit-secret"
+        "LIVEKIT_API_SECRET": "livekit-secret",
+        "FIREWORK_API_KEY": "firework-key"
     });
     for key in [
         "FUSIONAUTH_BASE_URL",
@@ -333,7 +331,7 @@ fn computer_retention_and_past_due_grace_default_to_two_weeks_and_a_week_and_ref
 }
 
 #[test]
-fn agent_repo_storage_limits_and_speech_credentials_are_required() {
+fn agent_repo_storage_limits_and_provider_credentials_are_required() {
     for key in [
         "REPO_STORAGE_ROOT",
         "MAX_REPO_SIZE_BYTES",
@@ -346,4 +344,26 @@ fn agent_repo_storage_limits_and_speech_credentials_are_required() {
         let error = serde_json::from_value::<Config>(incomplete).err().unwrap();
         assert!(error.to_string().contains(key), "{error}");
     }
+}
+
+#[test]
+fn the_fireworks_key_is_optional() {
+    let mut unkeyed = config_values();
+    unkeyed.as_object_mut().unwrap().remove("FIREWORK_API_KEY");
+    let config: Config = serde_json::from_value(unkeyed).unwrap();
+    assert_eq!(config.firework_api_key.value(), None);
+
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert_eq!(config.firework_api_key.value(), Some("firework-key"));
+}
+
+#[test]
+fn the_capsolver_key_is_optional() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert_eq!(config.capsolver_api_key.value(), None);
+
+    let mut keyed = config_values();
+    keyed["CAPSOLVER_API_KEY"] = serde_json::json!("capsolver-key");
+    let config: Config = serde_json::from_value(keyed).unwrap();
+    assert_eq!(config.capsolver_api_key.value(), Some("capsolver-key"));
 }

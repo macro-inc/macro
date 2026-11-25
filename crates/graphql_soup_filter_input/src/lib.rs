@@ -1109,7 +1109,8 @@ enum GraphqlChannelLiteral {
     Importance(bool),
     /// The is participant option. Filters by whether the requesting user is an
     /// active participant; its presence widens the candidate set to team channels
-    /// of the user's teams they have not joined.
+    /// of the user's teams they have not joined, and, when the filter admits only
+    /// channels it names by id, to public channels too.
     IsParticipant(bool),
     /// Exact notification state for the requester.
     NotificationState(GraphqlNotificationState),

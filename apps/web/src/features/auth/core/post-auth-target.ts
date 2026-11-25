@@ -25,7 +25,7 @@ function isInvitePath(path: string): boolean {
 export function postAuthTarget(input: {
   tutorialComplete: boolean;
   isAgent: boolean;
-  /** Mobile and native apps skip desktop onboarding. */
+  /** The native apps skip onboarding; desktop and phone browsers take it. */
   onboardsOnThisDevice: boolean;
   redirect: unknown;
 }): PostAuthTarget {

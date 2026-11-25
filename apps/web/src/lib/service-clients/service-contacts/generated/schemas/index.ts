@@ -6,7 +6,11 @@
  */
 
 export * from './addContactRequest';
+export * from './contactList';
 export * from './getContactsResponse';
+export * from './listContactListMembersParams';
+export * from './listMembersResponse';
+export * from './listMembersResponseNextCursor';
 export * from './searchedPerson';
 export * from './searchedPersonName';
 export * from './searchPeopleParams';

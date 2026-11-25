@@ -1,7 +1,6 @@
 import {
   CollapsibleSection,
   SearchBar,
-  useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
 import { ViewCreateMenu } from '@app/features/command/view-create-menu';
@@ -17,7 +16,6 @@ import {
   prForeignEntityQueryOptions,
 } from '@block-pr/data/queries';
 import { prDisplayName } from '@block-pr/util/prKey';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   canOpenInNewTab,
   openInNewTab,
@@ -321,15 +319,6 @@ export function ReviewsSidebar(props: {
   onOpenReview: (id: string, newSplit: boolean) => void;
   activeForeignEntityId?: string;
 }) {
-  const panel = useSplitPanelOrThrow();
-  useViewTabHotkeys({
-    scopeId: panel.splitHotkeyScope,
-    enabled: panel.isPanelActive,
-    ids: () => [...REVIEWS_SCOPES],
-    activeId: () => props.scope,
-    setActiveId: props.onScopeChange,
-  });
-
   return (
     <ViewSidebar.Root reorderId="reviews" aria-label="Reviews navigation">
       <ViewSidebar.Header>

@@ -6,13 +6,14 @@ import { MobileSettingsProvider } from '@app/features/settings/context/mobile-se
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EntityProvider } from '@entity';
 import type { UnifiedNotification } from '@notifications/types';
 import { authKeys } from '@queries/auth/keys';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { MemoryRouter, Route } from '@solidjs/router';
@@ -225,7 +226,9 @@ render(
           <PosthogProvider>
             <EntityProvider>
               <UserContextProvider>
-                <ChannelsContextProvider>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
                   <EmailLinksContextProvider>
                     <MobileSettingsProvider>
                       <StaticMarkdownContext>
@@ -235,7 +238,7 @@ render(
                       </StaticMarkdownContext>
                     </MobileSettingsProvider>
                   </EmailLinksContextProvider>
-                </ChannelsContextProvider>
+                </ChannelDirectoryProvider>
               </UserContextProvider>
             </EntityProvider>
           </PosthogProvider>

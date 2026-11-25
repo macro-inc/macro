@@ -35,6 +35,12 @@ attachment storage, and Redis. Runtime code lives in `services/email_service`.
   alarm (6 h) can fire for one mailbox stuck that long, not only for a
   backlog nobody receives. Deploy the queue before any `pubsub_workers`
   release that sends to it.
+- `email-service-refresh` is the link manager's interactive queue and
+  `email-service-link-maintenance` its maintenance queue, both 300 s visibility
+  and one consumer per task. The refresh handler sends only to the maintenance
+  queue but keeps send rights on both, so a handler released before the split
+  still works mid-rollout. Both are created in the same stack update that
+  ships their consumers, so neither waits on a separate deploy.
 
 ## Checks
 

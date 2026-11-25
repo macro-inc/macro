@@ -9,6 +9,7 @@ import {
   rescheduledGanttDays,
 } from './gantt-interaction';
 import {
+  type GanttTimedEnd,
   type GanttTimeSnap,
   ganttTimeSnap,
   rescheduledGanttTimes,
@@ -29,11 +30,12 @@ function rescheduled(
   edge: GanttRescheduleEdge,
   from: number,
   to: number,
-  snap: GanttTimeSnap
+  snap: GanttTimeSnap,
+  wholeDay: GanttTimedEnd | undefined
 ): GanttCreation {
   if (!range.allDay)
     return {
-      ...rescheduledGanttTimes(range, edge, from, to, snap),
+      ...rescheduledGanttTimes(range, edge, from, to, snap, wholeDay),
       allDay: false,
     };
   const start = toGanttDay(range.start);
@@ -62,6 +64,8 @@ export function createGanttReschedule(options: {
   onReschedule: Accessor<
     ((dates: GanttCreation) => Promise<unknown> | void) | undefined
   >;
+  /** On a timed range, the end saved without a time, which moves by whole days. */
+  wholeDay?: Accessor<GanttTimedEnd | undefined>;
   /**
    * Offered a mouse drag that starts mostly up or down, from where the press
    * began; returning true hands the gesture over, as to a move between
@@ -100,6 +104,7 @@ export function createGanttReschedule(options: {
     let finished = false;
     let shown = range;
     const snap = ganttTimeSnap(gantt.scale());
+    const wholeDay = options.wholeDay?.();
     const holdTimeout = touch
       ? setTimeout(() => activate(), TOUCH_HOLD_MS)
       : undefined;
@@ -147,7 +152,7 @@ export function createGanttReschedule(options: {
       }
       const day = gantt.pointToDay(next.clientX, undefined, false)?.day;
       if (day === undefined) return;
-      shown = rescheduled(range, edge, first, day, snap);
+      shown = rescheduled(range, edge, first, day, snap, wholeDay);
       setPreview(shown);
     };
     // A held touch owns the gesture: the page does not scroll under it.

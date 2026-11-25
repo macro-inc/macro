@@ -8,24 +8,26 @@ import type {
   ActivityErrorBody,
   ActivityReports,
   AddServerRequest,
-  BrowsePipedreamMcpCatalogParams,
+  BrowseConnectorCatalogParams,
   CallToolRequest,
   CallToolResponse,
+  CatalogPage,
   ChatHistory,
   ChatHistoryBatchMessagesRequest,
   ChatMessageError,
   CompleteOnboardingRequest,
+  Connector,
+  ConnectorKind,
+  ConnectorOauthCallbackParams,
+  ConnectStep,
   CreateChatRequest,
   CreateConfirmedCalendarEvent200,
   CreateConfirmedCalendarEventBody,
-  CreatePipedreamMcpTokenBody,
   DatabaseQueryAnswer,
   DatabaseQueryRequest,
   DecisionErrorBody,
   DecisionRequest,
   DecisionResponse,
-  DeleteMcpServerParams,
-  DeletePipedreamMcpConnectionParams,
   DismissedPrompts,
   DocumentTextPart,
   ErrorBody,
@@ -48,21 +50,12 @@ import type {
   ImportSource,
   ListImportEntitiesParams,
   ListSkillsParams,
-  McpAuthCallbackParams,
   MemoryErrorBody,
   MemoryResponse,
   NotionImportReport,
   OnboardingRow,
   OnboardingState,
   PatchChatRequest,
-  PipedreamCatalogResponse,
-  PipedreamCompleteRequest,
-  PipedreamConnectCompleteRequest,
-  PipedreamConnectionResponse,
-  PipedreamOverlayResponse,
-  PipedreamRecoverRequest,
-  PipedreamTokenResponse,
-  PipedreamUpdateRequest,
   ReadActivityResponse,
   ReadMyActivityParams,
   RejectToolCallRequest,
@@ -71,13 +64,10 @@ import type {
   SendChatMessageResponse,
   SendConfirmedEmail200,
   SendConfirmedEmailBody,
-  ServerResponse,
   SetPricingRequest,
   SkillContentResponse,
   SkillErrorBody,
   SkillsResponse,
-  StartAuthRequest,
-  StartAuthResponse,
   StopChatStreamError,
   StopChatStreamRequest,
   StopChatStreamResponse,
@@ -87,8 +77,8 @@ import type {
   StructuredCompletionResponse,
   TrackImportEntityRequest,
   TrackImportEntityResponse,
+  UpdateConnectorRequest,
   UpdateExplicitMemoryRequest,
-  UpdateServerRequest,
   UpdateToolCallRequest,
   UpdateToolResponseRequest,
   UsageRequest,
@@ -1293,6 +1283,491 @@ export const getCitationHandler = async (
   } as getCitationHandlerResponse;
 };
 
+/**
+ * @summary Every app and server the user holds, with where they stand with it. A
+connection that no longer counts shows as `notConnected`.
+ */
+export type listConnectorsResponse200 = {
+  data: Connector[];
+  status: 200;
+};
+
+export type listConnectorsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listConnectorsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listConnectorsResponseSuccess = listConnectorsResponse200 & {
+  headers: Headers;
+};
+export type listConnectorsResponseError = (
+  | listConnectorsResponse401
+  | listConnectorsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listConnectorsResponse =
+  | listConnectorsResponseSuccess
+  | listConnectorsResponseError;
+
+export const getListConnectorsUrl = () => {
+  return `/connectors`;
+};
+
+export const listConnectors = async (
+  options?: RequestInit
+): Promise<listConnectorsResponse> => {
+  const res = await fetch(getListConnectorsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listConnectorsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listConnectorsResponse;
+};
+
+/**
+ * @summary Add a server by URL, enabled and not yet signed in to. A URL the user
+already has is answered as it stands. A server at an app's address is
+that app.
+ */
+export type addConnectorServerResponse201 = {
+  data: Connector;
+  status: 201;
+};
+
+export type addConnectorServerResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type addConnectorServerResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type addConnectorServerResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type addConnectorServerResponseSuccess =
+  addConnectorServerResponse201 & {
+    headers: Headers;
+  };
+export type addConnectorServerResponseError = (
+  | addConnectorServerResponse400
+  | addConnectorServerResponse401
+  | addConnectorServerResponse500
+) & {
+  headers: Headers;
+};
+
+export type addConnectorServerResponse =
+  | addConnectorServerResponseSuccess
+  | addConnectorServerResponseError;
+
+export const getAddConnectorServerUrl = () => {
+  return `/connectors`;
+};
+
+export const addConnectorServer = async (
+  addServerRequest: AddServerRequest,
+  options?: RequestInit
+): Promise<addConnectorServerResponse> => {
+  const res = await fetch(getAddConnectorServerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(addServerRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addConnectorServerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addConnectorServerResponse;
+};
+
+/**
+ * @summary Browse or search the apps the user can connect, most popular first.
+ */
+export type browseConnectorCatalogResponse200 = {
+  data: CatalogPage;
+  status: 200;
+};
+
+export type browseConnectorCatalogResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type browseConnectorCatalogResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type browseConnectorCatalogResponseSuccess =
+  browseConnectorCatalogResponse200 & {
+    headers: Headers;
+  };
+export type browseConnectorCatalogResponseError = (
+  | browseConnectorCatalogResponse401
+  | browseConnectorCatalogResponse500
+) & {
+  headers: Headers;
+};
+
+export type browseConnectorCatalogResponse =
+  | browseConnectorCatalogResponseSuccess
+  | browseConnectorCatalogResponseError;
+
+export const getBrowseConnectorCatalogUrl = (
+  params?: BrowseConnectorCatalogParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/connectors/catalog?${stringifiedParams}`
+    : `/connectors/catalog`;
+};
+
+export const browseConnectorCatalog = async (
+  params?: BrowseConnectorCatalogParams,
+  options?: RequestInit
+): Promise<browseConnectorCatalogResponse> => {
+  const res = await fetch(getBrowseConnectorCatalogUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: browseConnectorCatalogResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as browseConnectorCatalogResponse;
+};
+
+/**
+ * @summary Remove a connection, revoking it where its provider can. Removing GitHub
+unlinks the account.
+ */
+export type removeConnectorResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type removeConnectorResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type removeConnectorResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type removeConnectorResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type removeConnectorResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type removeConnectorResponseSuccess = removeConnectorResponse204 & {
+  headers: Headers;
+};
+export type removeConnectorResponseError = (
+  | removeConnectorResponse400
+  | removeConnectorResponse401
+  | removeConnectorResponse404
+  | removeConnectorResponse500
+) & {
+  headers: Headers;
+};
+
+export type removeConnectorResponse =
+  | removeConnectorResponseSuccess
+  | removeConnectorResponseError;
+
+export const getRemoveConnectorUrl = (kind: ConnectorKind, id: string) => {
+  return `/connectors/${kind}/${id}`;
+};
+
+export const removeConnector = async (
+  kind: ConnectorKind,
+  id: string,
+  options?: RequestInit
+): Promise<removeConnectorResponse> => {
+  const res = await fetch(getRemoveConnectorUrl(kind, id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeConnectorResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as removeConnectorResponse;
+};
+
+/**
+ * @summary Turn a connection on or off, or rename it.
+ */
+export type updateConnectorResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type updateConnectorResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type updateConnectorResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type updateConnectorResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type updateConnectorResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type updateConnectorResponseSuccess = updateConnectorResponse204 & {
+  headers: Headers;
+};
+export type updateConnectorResponseError = (
+  | updateConnectorResponse400
+  | updateConnectorResponse401
+  | updateConnectorResponse404
+  | updateConnectorResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateConnectorResponse =
+  | updateConnectorResponseSuccess
+  | updateConnectorResponseError;
+
+export const getUpdateConnectorUrl = (kind: ConnectorKind, id: string) => {
+  return `/connectors/${kind}/${id}`;
+};
+
+export const updateConnector = async (
+  kind: ConnectorKind,
+  id: string,
+  updateConnectorRequest: UpdateConnectorRequest,
+  options?: RequestInit
+): Promise<updateConnectorResponse> => {
+  const res = await fetch(getUpdateConnectorUrl(kind, id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateConnectorRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateConnectorResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateConnectorResponse;
+};
+
+/**
+ * @summary Record the connection the user just finished making, once the connect
+page or dialog is done. Answers 404 until it exists, so it can be polled.
+A server added by URL finishes on its OAuth callback; this answers it as
+it stands.
+ */
+export type completeConnectorConnectResponse200 = {
+  data: Connector;
+  status: 200;
+};
+
+export type completeConnectorConnectResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type completeConnectorConnectResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type completeConnectorConnectResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type completeConnectorConnectResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type completeConnectorConnectResponseSuccess =
+  completeConnectorConnectResponse200 & {
+    headers: Headers;
+  };
+export type completeConnectorConnectResponseError = (
+  | completeConnectorConnectResponse400
+  | completeConnectorConnectResponse401
+  | completeConnectorConnectResponse404
+  | completeConnectorConnectResponse500
+) & {
+  headers: Headers;
+};
+
+export type completeConnectorConnectResponse =
+  | completeConnectorConnectResponseSuccess
+  | completeConnectorConnectResponseError;
+
+export const getCompleteConnectorConnectUrl = (
+  kind: ConnectorKind,
+  id: string
+) => {
+  return `/connectors/${kind}/${id}/complete`;
+};
+
+export const completeConnectorConnect = async (
+  kind: ConnectorKind,
+  id: string,
+  options?: RequestInit
+): Promise<completeConnectorConnectResponse> => {
+  const res = await fetch(getCompleteConnectorConnectUrl(kind, id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: completeConnectorConnectResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as completeConnectorConnectResponse;
+};
+
+/**
+ * @summary Begin connecting an app, or signing in to a server added by URL. Answers
+the step the user takes next.
+ */
+export type startConnectorConnectResponse200 = {
+  data: ConnectStep;
+  status: 200;
+};
+
+export type startConnectorConnectResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type startConnectorConnectResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type startConnectorConnectResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type startConnectorConnectResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type startConnectorConnectResponseSuccess =
+  startConnectorConnectResponse200 & {
+    headers: Headers;
+  };
+export type startConnectorConnectResponseError = (
+  | startConnectorConnectResponse400
+  | startConnectorConnectResponse401
+  | startConnectorConnectResponse404
+  | startConnectorConnectResponse500
+) & {
+  headers: Headers;
+};
+
+export type startConnectorConnectResponse =
+  | startConnectorConnectResponseSuccess
+  | startConnectorConnectResponseError;
+
+export const getStartConnectorConnectUrl = (
+  kind: ConnectorKind,
+  id: string
+) => {
+  return `/connectors/${kind}/${id}/connect`;
+};
+
+export const startConnectorConnect = async (
+  kind: ConnectorKind,
+  id: string,
+  options?: RequestInit
+): Promise<startConnectorConnectResponse> => {
+  const res = await fetch(getStartConnectorConnectUrl(kind, id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startConnectorConnectResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as startConnectorConnectResponse;
+};
+
 export type generateDatabaseQueryResponse200 = {
   data: DatabaseQueryAnswer;
   status: 200;
@@ -2248,287 +2723,42 @@ export const cancelWorkspaceHandler = async (
 };
 
 /**
- * @summary List all MCP servers configured for the authenticated user.
+ * @summary Finish signing in to a server by URL: the authorization server redirects
+the browser here with a code or an error.
  */
-export type listMcpServersResponse200 = {
-  data: ServerResponse[];
-  status: 200;
-};
-
-export type listMcpServersResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type listMcpServersResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type listMcpServersResponseSuccess = listMcpServersResponse200 & {
-  headers: Headers;
-};
-export type listMcpServersResponseError = (
-  | listMcpServersResponse401
-  | listMcpServersResponse500
-) & {
-  headers: Headers;
-};
-
-export type listMcpServersResponse =
-  | listMcpServersResponseSuccess
-  | listMcpServersResponseError;
-
-export const getListMcpServersUrl = () => {
-  return `/mcp/servers`;
-};
-
-export const listMcpServers = async (
-  options?: RequestInit
-): Promise<listMcpServersResponse> => {
-  const res = await fetch(getListMcpServersUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listMcpServersResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as listMcpServersResponse;
-};
-
-/**
- * @summary Update an existing MCP server's name or enabled status.
- */
-export type updateMcpServerResponse200 = {
-  data: ServerResponse;
-  status: 200;
-};
-
-export type updateMcpServerResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type updateMcpServerResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type updateMcpServerResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type updateMcpServerResponseSuccess = updateMcpServerResponse200 & {
-  headers: Headers;
-};
-export type updateMcpServerResponseError = (
-  | updateMcpServerResponse401
-  | updateMcpServerResponse404
-  | updateMcpServerResponse500
-) & {
-  headers: Headers;
-};
-
-export type updateMcpServerResponse =
-  | updateMcpServerResponseSuccess
-  | updateMcpServerResponseError;
-
-export const getUpdateMcpServerUrl = () => {
-  return `/mcp/servers`;
-};
-
-export const updateMcpServer = async (
-  updateServerRequest: UpdateServerRequest,
-  options?: RequestInit
-): Promise<updateMcpServerResponse> => {
-  const res = await fetch(getUpdateMcpServerUrl(), {
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(updateServerRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: updateMcpServerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as updateMcpServerResponse;
-};
-
-/**
- * @summary Add a new MCP server for the authenticated user. A URL the user already
-has is returned as stored, keeping its credentials.
- */
-export type addMcpServerResponse201 = {
-  data: ServerResponse;
-  status: 201;
-};
-
-export type addMcpServerResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type addMcpServerResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type addMcpServerResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type addMcpServerResponseSuccess = addMcpServerResponse201 & {
-  headers: Headers;
-};
-export type addMcpServerResponseError = (
-  | addMcpServerResponse400
-  | addMcpServerResponse401
-  | addMcpServerResponse500
-) & {
-  headers: Headers;
-};
-
-export type addMcpServerResponse =
-  | addMcpServerResponseSuccess
-  | addMcpServerResponseError;
-
-export const getAddMcpServerUrl = () => {
-  return `/mcp/servers`;
-};
-
-export const addMcpServer = async (
-  addServerRequest: AddServerRequest,
-  options?: RequestInit
-): Promise<addMcpServerResponse> => {
-  const res = await fetch(getAddMcpServerUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(addServerRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: addMcpServerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as addMcpServerResponse;
-};
-
-/**
- * @summary Delete an MCP server by URL.
- */
-export type deleteMcpServerResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type deleteMcpServerResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type deleteMcpServerResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type deleteMcpServerResponseSuccess = deleteMcpServerResponse204 & {
-  headers: Headers;
-};
-export type deleteMcpServerResponseError = (
-  | deleteMcpServerResponse401
-  | deleteMcpServerResponse500
-) & {
-  headers: Headers;
-};
-
-export type deleteMcpServerResponse =
-  | deleteMcpServerResponseSuccess
-  | deleteMcpServerResponseError;
-
-export const getDeleteMcpServerUrl = (params: DeleteMcpServerParams) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/mcp/servers?${stringifiedParams}`
-    : `/mcp/servers`;
-};
-
-export const deleteMcpServer = async (
-  params: DeleteMcpServerParams,
-  options?: RequestInit
-): Promise<deleteMcpServerResponse> => {
-  const res = await fetch(getDeleteMcpServerUrl(params), {
-    ...options,
-    method: 'DELETE',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteMcpServerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deleteMcpServerResponse;
-};
-
-/**
- * @summary OAuth callback endpoint — receives code and state, or an error, from the
-authorization server.
- */
-export type mcpAuthCallbackResponse200 = {
+export type connectorOauthCallbackResponse200 = {
   data: void;
   status: 200;
 };
 
-export type mcpAuthCallbackResponse400 = {
+export type connectorOauthCallbackResponse400 = {
   data: ErrorResponse;
   status: 400;
 };
 
-export type mcpAuthCallbackResponse500 = {
+export type connectorOauthCallbackResponse500 = {
   data: ErrorResponse;
   status: 500;
 };
 
-export type mcpAuthCallbackResponseSuccess = mcpAuthCallbackResponse200 & {
-  headers: Headers;
-};
-export type mcpAuthCallbackResponseError = (
-  | mcpAuthCallbackResponse400
-  | mcpAuthCallbackResponse500
+export type connectorOauthCallbackResponseSuccess =
+  connectorOauthCallbackResponse200 & {
+    headers: Headers;
+  };
+export type connectorOauthCallbackResponseError = (
+  | connectorOauthCallbackResponse400
+  | connectorOauthCallbackResponse500
 ) & {
   headers: Headers;
 };
 
-export type mcpAuthCallbackResponse =
-  | mcpAuthCallbackResponseSuccess
-  | mcpAuthCallbackResponseError;
+export type connectorOauthCallbackResponse =
+  | connectorOauthCallbackResponseSuccess
+  | connectorOauthCallbackResponseError;
 
-export const getMcpAuthCallbackUrl = (params?: McpAuthCallbackParams) => {
+export const getConnectorOauthCallbackUrl = (
+  params?: ConnectorOauthCallbackParams
+) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -2544,120 +2774,65 @@ export const getMcpAuthCallbackUrl = (params?: McpAuthCallbackParams) => {
     : `/mcp/servers/auth/callback`;
 };
 
-export const mcpAuthCallback = async (
-  params?: McpAuthCallbackParams,
+export const connectorOauthCallback = async (
+  params?: ConnectorOauthCallbackParams,
   options?: RequestInit
-): Promise<mcpAuthCallbackResponse> => {
-  const res = await fetch(getMcpAuthCallbackUrl(params), {
+): Promise<connectorOauthCallbackResponse> => {
+  const res = await fetch(getConnectorOauthCallbackUrl(params), {
     ...options,
     method: 'GET',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: mcpAuthCallbackResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as mcpAuthCallbackResponse;
-};
-
-/**
- * @summary Return Macro's public OAuth Client ID Metadata Document.
- */
-export type mcpOauthClientMetadataResponse200 = {
-  data: void;
-  status: 200;
-};
-
-export type mcpOauthClientMetadataResponseSuccess =
-  mcpOauthClientMetadataResponse200 & {
-    headers: Headers;
-  };
-
-export type mcpOauthClientMetadataResponse =
-  mcpOauthClientMetadataResponseSuccess;
-
-export const getMcpOauthClientMetadataUrl = () => {
-  return `/mcp/servers/auth/client-metadata`;
-};
-
-export const mcpOauthClientMetadata = async (
-  options?: RequestInit
-): Promise<mcpOauthClientMetadataResponse> => {
-  const res = await fetch(getMcpOauthClientMetadataUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: mcpOauthClientMetadataResponse['data'] = body
+  const data: connectorOauthCallbackResponse['data'] = body
     ? JSON.parse(body)
     : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as mcpOauthClientMetadataResponse;
+  } as connectorOauthCallbackResponse;
 };
 
 /**
- * @summary Start the OAuth authorization flow for an MCP server.
+ * @summary Macro's public OAuth Client ID Metadata Document.
  */
-export type startMcpAuthResponse200 = {
-  data: StartAuthResponse;
+export type connectorOauthClientMetadataResponse200 = {
+  data: void;
   status: 200;
 };
 
-export type startMcpAuthResponse401 = {
-  data: string;
-  status: 401;
+export type connectorOauthClientMetadataResponseSuccess =
+  connectorOauthClientMetadataResponse200 & {
+    headers: Headers;
+  };
+
+export type connectorOauthClientMetadataResponse =
+  connectorOauthClientMetadataResponseSuccess;
+
+export const getConnectorOauthClientMetadataUrl = () => {
+  return `/mcp/servers/auth/client-metadata`;
 };
 
-export type startMcpAuthResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type startMcpAuthResponseSuccess = startMcpAuthResponse200 & {
-  headers: Headers;
-};
-export type startMcpAuthResponseError = (
-  | startMcpAuthResponse401
-  | startMcpAuthResponse500
-) & {
-  headers: Headers;
-};
-
-export type startMcpAuthResponse =
-  | startMcpAuthResponseSuccess
-  | startMcpAuthResponseError;
-
-export const getStartMcpAuthUrl = () => {
-  return `/mcp/servers/auth/start`;
-};
-
-export const startMcpAuth = async (
-  startAuthRequest: StartAuthRequest,
+export const connectorOauthClientMetadata = async (
   options?: RequestInit
-): Promise<startMcpAuthResponse> => {
-  const res = await fetch(getStartMcpAuthUrl(), {
+): Promise<connectorOauthClientMetadataResponse> => {
+  const res = await fetch(getConnectorOauthClientMetadataUrl(), {
     ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(startAuthRequest),
+    method: 'GET',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: startMcpAuthResponse['data'] = body ? JSON.parse(body) : {};
+  const data: connectorOauthClientMetadataResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as startMcpAuthResponse;
+  } as connectorOauthClientMetadataResponse;
 };
 
 /**
@@ -3074,647 +3249,6 @@ export const dismissPromptHandler = async (
     status: res.status,
     headers: res.headers,
   } as dismissPromptHandlerResponse;
-};
-
-/**
- * Results come from Pipedream's app directory, most popular first.
- * @summary Browse or search the catalog of connectable apps.
- */
-export type browsePipedreamMcpCatalogResponse200 = {
-  data: PipedreamCatalogResponse;
-  status: 200;
-};
-
-export type browsePipedreamMcpCatalogResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type browsePipedreamMcpCatalogResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type browsePipedreamMcpCatalogResponse501 = {
-  data: ErrorResponse;
-  status: 501;
-};
-
-export type browsePipedreamMcpCatalogResponseSuccess =
-  browsePipedreamMcpCatalogResponse200 & {
-    headers: Headers;
-  };
-export type browsePipedreamMcpCatalogResponseError = (
-  | browsePipedreamMcpCatalogResponse401
-  | browsePipedreamMcpCatalogResponse500
-  | browsePipedreamMcpCatalogResponse501
-) & {
-  headers: Headers;
-};
-
-export type browsePipedreamMcpCatalogResponse =
-  | browsePipedreamMcpCatalogResponseSuccess
-  | browsePipedreamMcpCatalogResponseError;
-
-export const getBrowsePipedreamMcpCatalogUrl = (
-  params?: BrowsePipedreamMcpCatalogParams
-) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/pipedream/mcp/catalog?${stringifiedParams}`
-    : `/pipedream/mcp/catalog`;
-};
-
-export const browsePipedreamMcpCatalog = async (
-  params?: BrowsePipedreamMcpCatalogParams,
-  options?: RequestInit
-): Promise<browsePipedreamMcpCatalogResponse> => {
-  const res = await fetch(getBrowsePipedreamMcpCatalogUrl(params), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: browsePipedreamMcpCatalogResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as browsePipedreamMcpCatalogResponse;
-};
-
-/**
- * Verifies with Pipedream that the account exists and was connected for
-the authenticated user before persisting anything. An overlaid app is
-refused with 409: it connects through its own MCP server instead.
- * @summary Register a connected account reported by the Pipedream Connect UI.
- */
-export type completePipedreamMcpConnectionResponse200 = {
-  data: PipedreamConnectionResponse;
-  status: 200;
-};
-
-export type completePipedreamMcpConnectionResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type completePipedreamMcpConnectionResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type completePipedreamMcpConnectionResponse409 = {
-  data: ErrorResponse;
-  status: 409;
-};
-
-export type completePipedreamMcpConnectionResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type completePipedreamMcpConnectionResponse501 = {
-  data: ErrorResponse;
-  status: 501;
-};
-
-export type completePipedreamMcpConnectionResponseSuccess =
-  completePipedreamMcpConnectionResponse200 & {
-    headers: Headers;
-  };
-export type completePipedreamMcpConnectionResponseError = (
-  | completePipedreamMcpConnectionResponse401
-  | completePipedreamMcpConnectionResponse404
-  | completePipedreamMcpConnectionResponse409
-  | completePipedreamMcpConnectionResponse500
-  | completePipedreamMcpConnectionResponse501
-) & {
-  headers: Headers;
-};
-
-export type completePipedreamMcpConnectionResponse =
-  | completePipedreamMcpConnectionResponseSuccess
-  | completePipedreamMcpConnectionResponseError;
-
-export const getCompletePipedreamMcpConnectionUrl = () => {
-  return `/pipedream/mcp/complete`;
-};
-
-export const completePipedreamMcpConnection = async (
-  pipedreamCompleteRequest: PipedreamCompleteRequest,
-  options?: RequestInit
-): Promise<completePipedreamMcpConnectionResponse> => {
-  const res = await fetch(getCompletePipedreamMcpConnectionUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(pipedreamCompleteRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: completePipedreamMcpConnectionResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as completePipedreamMcpConnectionResponse;
-};
-
-/**
- * Answers 404 until Connect lists an active connection for this user and
-app, so the frontend can poll it while the consent window is open.
- * @summary Record an app the user connected through Macro Connect.
- */
-export type completePipedreamMcpConnectResponse200 = {
-  data: PipedreamConnectionResponse;
-  status: 200;
-};
-
-export type completePipedreamMcpConnectResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type completePipedreamMcpConnectResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type completePipedreamMcpConnectResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type completePipedreamMcpConnectResponse501 = {
-  data: ErrorResponse;
-  status: 501;
-};
-
-export type completePipedreamMcpConnectResponseSuccess =
-  completePipedreamMcpConnectResponse200 & {
-    headers: Headers;
-  };
-export type completePipedreamMcpConnectResponseError = (
-  | completePipedreamMcpConnectResponse401
-  | completePipedreamMcpConnectResponse404
-  | completePipedreamMcpConnectResponse500
-  | completePipedreamMcpConnectResponse501
-) & {
-  headers: Headers;
-};
-
-export type completePipedreamMcpConnectResponse =
-  | completePipedreamMcpConnectResponseSuccess
-  | completePipedreamMcpConnectResponseError;
-
-export const getCompletePipedreamMcpConnectUrl = () => {
-  return `/pipedream/mcp/connect/complete`;
-};
-
-export const completePipedreamMcpConnect = async (
-  pipedreamConnectCompleteRequest: PipedreamConnectCompleteRequest,
-  options?: RequestInit
-): Promise<completePipedreamMcpConnectResponse> => {
-  const res = await fetch(getCompletePipedreamMcpConnectUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(pipedreamConnectCompleteRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: completePipedreamMcpConnectResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as completePipedreamMcpConnectResponse;
-};
-
-/**
- * @summary List the MCP apps connected by the authenticated user.
- */
-export type listPipedreamMcpConnectionsResponse200 = {
-  data: PipedreamConnectionResponse[];
-  status: 200;
-};
-
-export type listPipedreamMcpConnectionsResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type listPipedreamMcpConnectionsResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type listPipedreamMcpConnectionsResponseSuccess =
-  listPipedreamMcpConnectionsResponse200 & {
-    headers: Headers;
-  };
-export type listPipedreamMcpConnectionsResponseError = (
-  | listPipedreamMcpConnectionsResponse401
-  | listPipedreamMcpConnectionsResponse500
-) & {
-  headers: Headers;
-};
-
-export type listPipedreamMcpConnectionsResponse =
-  | listPipedreamMcpConnectionsResponseSuccess
-  | listPipedreamMcpConnectionsResponseError;
-
-export const getListPipedreamMcpConnectionsUrl = () => {
-  return `/pipedream/mcp/connections`;
-};
-
-export const listPipedreamMcpConnections = async (
-  options?: RequestInit
-): Promise<listPipedreamMcpConnectionsResponse> => {
-  const res = await fetch(getListPipedreamMcpConnectionsUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listPipedreamMcpConnectionsResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as listPipedreamMcpConnectionsResponse;
-};
-
-/**
- * @summary Rename or enable/disable a connected app.
- */
-export type updatePipedreamMcpConnectionResponse200 = {
-  data: PipedreamConnectionResponse;
-  status: 200;
-};
-
-export type updatePipedreamMcpConnectionResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type updatePipedreamMcpConnectionResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type updatePipedreamMcpConnectionResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type updatePipedreamMcpConnectionResponseSuccess =
-  updatePipedreamMcpConnectionResponse200 & {
-    headers: Headers;
-  };
-export type updatePipedreamMcpConnectionResponseError = (
-  | updatePipedreamMcpConnectionResponse401
-  | updatePipedreamMcpConnectionResponse404
-  | updatePipedreamMcpConnectionResponse500
-) & {
-  headers: Headers;
-};
-
-export type updatePipedreamMcpConnectionResponse =
-  | updatePipedreamMcpConnectionResponseSuccess
-  | updatePipedreamMcpConnectionResponseError;
-
-export const getUpdatePipedreamMcpConnectionUrl = () => {
-  return `/pipedream/mcp/connections`;
-};
-
-export const updatePipedreamMcpConnection = async (
-  pipedreamUpdateRequest: PipedreamUpdateRequest,
-  options?: RequestInit
-): Promise<updatePipedreamMcpConnectionResponse> => {
-  const res = await fetch(getUpdatePipedreamMcpConnectionUrl(), {
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(pipedreamUpdateRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: updatePipedreamMcpConnectionResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as updatePipedreamMcpConnectionResponse;
-};
-
-/**
- * @summary Disconnect an app, revoking its Pipedream account.
- */
-export type deletePipedreamMcpConnectionResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type deletePipedreamMcpConnectionResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type deletePipedreamMcpConnectionResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type deletePipedreamMcpConnectionResponseSuccess =
-  deletePipedreamMcpConnectionResponse204 & {
-    headers: Headers;
-  };
-export type deletePipedreamMcpConnectionResponseError = (
-  | deletePipedreamMcpConnectionResponse401
-  | deletePipedreamMcpConnectionResponse500
-) & {
-  headers: Headers;
-};
-
-export type deletePipedreamMcpConnectionResponse =
-  | deletePipedreamMcpConnectionResponseSuccess
-  | deletePipedreamMcpConnectionResponseError;
-
-export const getDeletePipedreamMcpConnectionUrl = (
-  params: DeletePipedreamMcpConnectionParams
-) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/pipedream/mcp/connections?${stringifiedParams}`
-    : `/pipedream/mcp/connections`;
-};
-
-export const deletePipedreamMcpConnection = async (
-  params: DeletePipedreamMcpConnectionParams,
-  options?: RequestInit
-): Promise<deletePipedreamMcpConnectionResponse> => {
-  const res = await fetch(getDeletePipedreamMcpConnectionUrl(params), {
-    ...options,
-    method: 'DELETE',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deletePipedreamMcpConnectionResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deletePipedreamMcpConnectionResponse;
-};
-
-/**
- * Clients connect these with the native MCP OAuth flow against
-`server_url`; Pipedream refuses to complete a connection for them.
- * @summary List the catalog apps that connect through their own MCP server.
- */
-export type listPipedreamMcpOverlaysResponse200 = {
-  data: PipedreamOverlayResponse[];
-  status: 200;
-};
-
-export type listPipedreamMcpOverlaysResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type listPipedreamMcpOverlaysResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type listPipedreamMcpOverlaysResponseSuccess =
-  listPipedreamMcpOverlaysResponse200 & {
-    headers: Headers;
-  };
-export type listPipedreamMcpOverlaysResponseError = (
-  | listPipedreamMcpOverlaysResponse401
-  | listPipedreamMcpOverlaysResponse500
-) & {
-  headers: Headers;
-};
-
-export type listPipedreamMcpOverlaysResponse =
-  | listPipedreamMcpOverlaysResponseSuccess
-  | listPipedreamMcpOverlaysResponseError;
-
-export const getListPipedreamMcpOverlaysUrl = () => {
-  return `/pipedream/mcp/overlays`;
-};
-
-export const listPipedreamMcpOverlays = async (
-  options?: RequestInit
-): Promise<listPipedreamMcpOverlaysResponse> => {
-  const res = await fetch(getListPipedreamMcpOverlaysUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listPipedreamMcpOverlaysResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as listPipedreamMcpOverlaysResponse;
-};
-
-/**
- * Called after the Connect UI closes without a success event. Answers 404
-when Pipedream has no new account for this user and app.
-An overlaid app is refused with 409, as in [`complete_connection`].
- * @summary Register an account a Connect flow created but the Connect UI never
-reported.
- */
-export type recoverPipedreamMcpConnectionResponse200 = {
-  data: PipedreamConnectionResponse;
-  status: 200;
-};
-
-export type recoverPipedreamMcpConnectionResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type recoverPipedreamMcpConnectionResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type recoverPipedreamMcpConnectionResponse409 = {
-  data: ErrorResponse;
-  status: 409;
-};
-
-export type recoverPipedreamMcpConnectionResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type recoverPipedreamMcpConnectionResponse501 = {
-  data: ErrorResponse;
-  status: 501;
-};
-
-export type recoverPipedreamMcpConnectionResponseSuccess =
-  recoverPipedreamMcpConnectionResponse200 & {
-    headers: Headers;
-  };
-export type recoverPipedreamMcpConnectionResponseError = (
-  | recoverPipedreamMcpConnectionResponse401
-  | recoverPipedreamMcpConnectionResponse404
-  | recoverPipedreamMcpConnectionResponse409
-  | recoverPipedreamMcpConnectionResponse500
-  | recoverPipedreamMcpConnectionResponse501
-) & {
-  headers: Headers;
-};
-
-export type recoverPipedreamMcpConnectionResponse =
-  | recoverPipedreamMcpConnectionResponseSuccess
-  | recoverPipedreamMcpConnectionResponseError;
-
-export const getRecoverPipedreamMcpConnectionUrl = () => {
-  return `/pipedream/mcp/recover`;
-};
-
-export const recoverPipedreamMcpConnection = async (
-  pipedreamRecoverRequest: PipedreamRecoverRequest,
-  options?: RequestInit
-): Promise<recoverPipedreamMcpConnectionResponse> => {
-  const res = await fetch(getRecoverPipedreamMcpConnectionUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(pipedreamRecoverRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: recoverPipedreamMcpConnectionResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as recoverPipedreamMcpConnectionResponse;
-};
-
-/**
- * By default, a short-lived Pipedream Connect token: the frontend opens
-Pipedream's hosted Connect UI with it, and the user picks (or is
-deep-linked into) an app and authorizes it there. When the body names an
-app Macro Connect serves and the `macro-connect` rollout is on for the
-user, a Connect URL instead.
- * @summary Start a connect flow for the authenticated user.
- */
-export type createPipedreamMcpTokenResponse200 = {
-  data: PipedreamTokenResponse;
-  status: 200;
-};
-
-export type createPipedreamMcpTokenResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type createPipedreamMcpTokenResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type createPipedreamMcpTokenResponse501 = {
-  data: ErrorResponse;
-  status: 501;
-};
-
-export type createPipedreamMcpTokenResponseSuccess =
-  createPipedreamMcpTokenResponse200 & {
-    headers: Headers;
-  };
-export type createPipedreamMcpTokenResponseError = (
-  | createPipedreamMcpTokenResponse401
-  | createPipedreamMcpTokenResponse500
-  | createPipedreamMcpTokenResponse501
-) & {
-  headers: Headers;
-};
-
-export type createPipedreamMcpTokenResponse =
-  | createPipedreamMcpTokenResponseSuccess
-  | createPipedreamMcpTokenResponseError;
-
-export const getCreatePipedreamMcpTokenUrl = () => {
-  return `/pipedream/mcp/token`;
-};
-
-export const createPipedreamMcpToken = async (
-  createPipedreamMcpTokenBody: CreatePipedreamMcpTokenBody,
-  options?: RequestInit
-): Promise<createPipedreamMcpTokenResponse> => {
-  const res = await fetch(getCreatePipedreamMcpTokenUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createPipedreamMcpTokenBody),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createPipedreamMcpTokenResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createPipedreamMcpTokenResponse;
 };
 
 export type getBatchPreviewResponse200 = {

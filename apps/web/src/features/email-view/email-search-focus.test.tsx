@@ -15,10 +15,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { fireEvent, render } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, expect, it } from 'vitest';
-import {
-  focusEmailSearchResults,
-  switchesEmailTabs,
-} from './email-search-focus';
+import { focusEmailSearchResults } from './email-search-focus';
 
 afterEach(() => setActiveScope('global'));
 
@@ -29,14 +26,24 @@ function press(key: string, init: KeyboardEventInit = {}) {
   fireEvent.keyUp(target, { key, ...init });
 }
 
+/** jsdom lays nothing out, so the tabs report a box to count as on screen. */
+function onScreen(element: HTMLElement) {
+  Object.defineProperty(element, 'getClientRects', {
+    configurable: true,
+    value: () => [element.getBoundingClientRect()],
+  });
+}
+
 /**
- * Email's search field, list and tab keys over the real hotkey engine: the
- * search hands the keyboard to Email's split panel, and Tab is Email's own.
+ * Email's search field, list and header tabs over the real hotkey engine:
+ * the search hands the keyboard to Email's split panel, and Tab moves along
+ * the header's tabs while the keyboard is on the pane.
  */
 function setup(options: { list?: boolean } = {}) {
   const withList = options.list ?? true;
   const [tab, setTab] = createSignal('noise');
   const [search, setSearch] = createSignal('macro');
+  const [tabs, setTabs] = createSignal<HTMLElement>();
   let split!: HTMLDivElement;
   let list: HTMLDivElement | undefined;
 
@@ -51,10 +58,11 @@ function setup(options: { list?: boolean } = {}) {
 
     useViewTabHotkeys({
       scopeId: splitScope,
+      tabs,
       ids: () => ['focus', 'important', 'noise'],
       activeId: tab,
       setActiveId: setTab,
-      shouldHandleSequentialKeyEvent: switchesEmailTabs,
+      label: (id) => id,
     });
     // The list's own jump to its first row, as use-list-interactions has it.
     if (withList) {
@@ -76,6 +84,15 @@ function setup(options: { list?: boolean } = {}) {
           }}
           tabIndex={-1}
         >
+          <div
+            ref={(element) => {
+              onScreen(element);
+              setTabs(element);
+            }}
+            role="radiogroup"
+            aria-label="Inbox view"
+          />
+          <button type="button">Filter email</button>
           <SplitPanelContext.Provider value={panel}>
             <ListHeaderSearch
               label="Search email"
@@ -137,6 +154,15 @@ it('switches tabs with Tab while the list itself has focus', () => {
   expect(tab()).toBe('noise');
 });
 
+it('switches tabs with Tab while nothing has focus', () => {
+  const { tab, split } = setup();
+  split().focus();
+  (document.activeElement as HTMLElement).blur();
+
+  press('Tab');
+  expect(tab()).toBe('focus');
+});
+
 it('keeps Tab for the browser on a control inside a row', () => {
   const { tab, list } = setup();
   list().querySelector('button')!.focus();
@@ -153,4 +179,26 @@ it('keeps ArrowDown with the field while no list is on screen', () => {
 
   press('ArrowDown');
   expect(document.activeElement).toBe(field());
+});
+
+it('keeps Tab for the browser on a header control', () => {
+  const { tab, split } = setup();
+  split().querySelector<HTMLButtonElement>('button')!.focus();
+
+  press('Tab');
+  expect(tab()).toBe('noise');
+  press('Tab', { shiftKey: true });
+  expect(tab()).toBe('noise');
+});
+
+it('keeps Tab for the browser while the tabs are off screen', () => {
+  const { tab, list } = setup();
+  const tabs = document.querySelector<HTMLElement>(
+    '[aria-label="Inbox view"]'
+  )!;
+  Object.defineProperty(tabs, 'getClientRects', { value: () => [] });
+  list().focus();
+
+  press('Tab');
+  expect(tab()).toBe('noise');
 });

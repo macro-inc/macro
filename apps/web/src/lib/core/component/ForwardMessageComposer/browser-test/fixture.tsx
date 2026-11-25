@@ -2,11 +2,12 @@ import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import type { UploadResult } from '@channel/Input/utils/file-helpers';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { EntityProvider } from '@entity';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { Button } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
@@ -83,7 +84,9 @@ function Fixture() {
         <PosthogProvider>
           <EntityProvider>
             <UserContextProvider>
-              <ChannelsContextProvider>
+              <ChannelDirectoryProvider
+                directory={staticChannelDirectory(() => [])}
+              >
                 <QuickAccessProvider>
                   <main class="min-h-screen bg-page p-4 text-ink">
                     <Button onClick={() => setOpen(!open())}>
@@ -94,7 +97,7 @@ function Fixture() {
                     </Show>
                   </main>
                 </QuickAccessProvider>
-              </ChannelsContextProvider>
+              </ChannelDirectoryProvider>
             </UserContextProvider>
           </EntityProvider>
         </PosthogProvider>

@@ -20,8 +20,10 @@ import './product-page-preview.css';
 import './demo-glass.css';
 import { PageOutline } from '../../documentation/components/PageOutline';
 import { BENEFIT_PAGES } from '../core/benefit-pages';
+import type { FeatureScreen } from '../core/feature-screens';
 import type { TutorialVideoId } from '../core/tutorial-videos';
 import { FeatureDemoArt, type FeatureDemoComposition } from './FeatureDemoArt';
+import { FeatureScreenshot } from './FeatureScreenshot';
 import { ProductCopy } from './ProductMention';
 import { isEmbeddedProductPage } from './productPagePreview';
 import { wallpapers } from './TutorialWallpaper';
@@ -100,13 +102,53 @@ export function FeaturePageCta(props: { name: string; label?: string }) {
   );
 }
 
+const FEATURE_SCREEN_WALLPAPERS: Record<string, TutorialVideoId> = {
+  email: 'mail',
+  tasks: 'tasks',
+  channels: 'chat',
+  documents: 'docs',
+  calls: 'calls',
+  crm: 'crm',
+  agents: 'agents',
+  github: 'github',
+  forms: 'forms',
+  spreadsheets: 'spreadsheets',
+  databases: 'databases',
+  canvas: 'canvas',
+  calendar: 'calendar',
+  'booking-links': 'scheduling',
+  drive: 'drive',
+  routines: 'routines',
+  skills: 'skills',
+};
+
+function wallpaperVariantForId(id: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) % 4;
+}
+
 export function FeaturePageSection(props: {
   id: string;
+  aura?: TutorialVideoId;
   title: string | readonly string[];
   description: string;
+  /** A real app screen; product pages use these instead of drawn demos. Children follow it. */
+  screen?: FeatureScreen;
   demo?: FeatureDemoComposition;
+  /** Shown under the description, before the demo. */
+  more?: JSX.Element;
   children?: JSX.Element;
 }) {
+  const location = useLocation();
+  const screenWallpaper = (): TutorialVideoId | undefined => {
+    if (props.aura) return props.aura;
+    const slug = location.pathname.split('/').filter(Boolean)[0] ?? '';
+    return FEATURE_SCREEN_WALLPAPERS[slug];
+  };
   let heading: HTMLHeadingElement | undefined;
   let headingText: HTMLSpanElement | undefined;
   const title = () =>
@@ -135,6 +177,11 @@ export function FeaturePageSection(props: {
     <section
       class="feature-page-section"
       id={props.id}
+      style={
+        props.aura && {
+          '--page-aura-primary': wallpapers[props.aura].colors[1],
+        }
+      }
       aria-labelledby={`${props.id}-title`}
     >
       <header class="product-feature-intro">
@@ -146,12 +193,29 @@ export function FeaturePageSection(props: {
         <p>
           <ProductCopy text={props.description} />
         </p>
+        {props.more}
       </header>
-      <Show when={props.demo} fallback={props.children}>
-        {(composition) => (
-          <FeatureDemoArt composition={composition()}>
+      <Show
+        when={props.screen}
+        fallback={
+          <Show when={props.demo} fallback={props.children}>
+            {(composition) => (
+              <FeatureDemoArt composition={composition()}>
+                {props.children}
+              </FeatureDemoArt>
+            )}
+          </Show>
+        }
+      >
+        {(screen) => (
+          <>
+            <FeatureScreenshot
+              screen={screen()}
+              wallpaper={screenWallpaper()}
+              variant={wallpaperVariantForId(props.id)}
+            />
             {props.children}
-          </FeatureDemoArt>
+          </>
         )}
       </Show>
     </section>

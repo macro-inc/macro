@@ -2,7 +2,7 @@
 # (infra/stacks/observability/nixos/proxy.nix before it served only GoAlert):
 #
 # - `edge`: the only target of the existing ALB (TargetGroupBinding, IP
-#   targets). Grafana by hostname, POST-only OTLP to Alloy ingest, and
+#   targets). Grafana and Argo CD by hostname, POST-only OTLP to Alloy ingest, and
 #   basic-auth Prometheus remote write and Loki push, rate limited. The
 #   ALB is enabled in only two zones and sends nothing to a target outside
 #   them, so the edge runs only there.
@@ -31,6 +31,13 @@ let
   ingestPods = {
     "app.kubernetes.io/name" = "alloy";
     "app.kubernetes.io/instance" = "alloy-ingest";
+  };
+  argocdServer = {
+    namespaceSelector.matchLabels."kubernetes.io/metadata.name" = "argocd";
+    podSelector.matchLabels = {
+      "app.kubernetes.io/instance" = "argocd";
+      "app.kubernetes.io/name" = "argocd-server";
+    };
   };
   edgePods."app.kubernetes.io/name" = "edge";
   gatewayPods."app.kubernetes.io/name" = "query-gateway";
@@ -98,6 +105,25 @@ let
         ${ingest endpoints.loki.push true}
       }
     }
+    ${lib.optionalString (cfg.argocdHosts != [ ]) ''
+      # Argo CD, which checks sign-in itself (Google through its Dex). Its UI
+      # streams application changes, so responses aren't buffered.
+      server {
+        listen ${toString cfg.port};
+        server_name ${lib.concatStringsSep " " cfg.argocdHosts};
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        location / {
+          set $upstream http://argocd-server.argocd.svc.cluster.local:80;
+          proxy_pass $upstream;
+          proxy_set_header Host $host;
+          proxy_set_header X-Forwarded-Proto https;
+          proxy_set_header X-Forwarded-For $remote_addr;
+          proxy_buffering off;
+          proxy_read_timeout 300s;
+          ${websocketHeaders}
+        }
+      }
+    ''}
   '';
 
   # Proxy to `base` with the first path segment (the datasource prefix)
@@ -164,6 +190,11 @@ in
     otlpHosts = mkOption {
       type = types.listOf types.str;
       description = "Hostnames the edge takes OTLP, remote write and Loki push on.";
+    };
+    argocdHosts = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = "Hostnames the edge serves Argo CD's UI and API on.";
     };
     targetGroups = mkOption {
       type = types.attrsOf types.str;
@@ -277,6 +308,10 @@ in
               {
                 to = [ (workload.pods ingestPods) ];
                 ports = workload.tcpPorts [ 4318 ];
+              }
+              {
+                to = [ argocdServer ];
+                ports = workload.tcpPorts [ 8080 ];
               }
               # Loki push, Mimir remote write.
               (backendPorts [

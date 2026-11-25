@@ -11,7 +11,7 @@ soup-filter-cache-adapter = { path = "../../../../crates/soup_filter_cache_adapt
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1"
 tauri = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["macros", "sync", "time"] }
 tracing = { workspace = true }
 uuid = { workspace = true, features = ["serde"] }
 

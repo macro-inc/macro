@@ -10,6 +10,9 @@ AI billing hooks, inbox-grant management), one module per endpoint group.
 
 - `src/lib.rs`: `AuthServiceClient` (base URL + internal-auth header) and the
   `INTERNAL_AUTH_HEADER_KEY` every endpoint call authenticates with.
+- `src/github_access_token.rs`: the GitHub account link's state and token,
+  and unlinking it on the user's behalf (`DELETE /link/github` with the
+  acting-user header).
 - `src/users.rs`, `src/google_access_token.rs`, `src/ai_billing.rs`,
   `src/unlink.rs`, `src/relocate_inbox_grant.rs`, `src/delete_inbox_grant_user.rs`:
   one file per endpoint group, each adding methods to `AuthServiceClient`.

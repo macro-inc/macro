@@ -21,6 +21,38 @@ export function stoppedAgentsText(
   return `${first} and ${rest.length + 1} others have stopped.`;
 }
 
+/**
+ * What a reaction did, as Slack's Activity words it: "Reacted 👍 to: …".
+ * The reaction leads, so it is never cut off behind the message. A message
+ * with no text (only attachments) is "your message".
+ */
+export function reactionText(content: {
+  emoji: string;
+  messageContent: string;
+}): string {
+  if (!content.messageContent.trim()) {
+    return `Reacted ${content.emoji} to your message`;
+  }
+  return `Reacted ${content.emoji} to: ${content.messageContent}`;
+}
+
+/**
+ * A finished routine run's body, as the notification service words it. A run
+ * refused for a disconnected app names the apps to reconnect.
+ */
+export function routineRunText(content: {
+  outcome: 'succeeded' | 'failed';
+  appsToConnect?: readonly string[];
+}): string {
+  if (content.outcome !== 'failed') return 'Its run finished.';
+  const apps = content.appsToConnect ?? [];
+  const last = apps.at(-1);
+  if (!last) return 'Its run failed.';
+  const rest = apps.slice(0, -1);
+  const names = rest.length ? `${rest.join(', ')} and ${last}` : last;
+  return `It needs ${names} connected to run. Reconnect ${rest.length ? 'them' : 'it'}.`;
+}
+
 export function getNotificationAction(n: UnifiedNotification): string {
   return (
     match(n.notification_metadata.tag)
@@ -225,10 +257,7 @@ export function getNotificationContent(
     match(m)
       .with({ tag: 'channel_mention' }, (m) => m.content.messageContent)
       .with({ tag: 'channel_message_send' }, (m) => m.content.messageContent)
-      .with(
-        { tag: 'channel_message_reaction' },
-        (m) => `${m.content.emoji} · ${m.content.messageContent}`
-      )
+      .with({ tag: 'channel_message_reaction' }, (m) => reactionText(m.content))
       .with({ tag: 'ai_response' }, (m) => m.content.summary)
       .with({ tag: 'channel_message_reply' }, (m) => m.content.messageContent)
       .with({ tag: 'call_started' }, () => undefined)
@@ -293,9 +322,7 @@ export function getNotificationContent(
         (m) => m.content.question
       )
       .with({ tag: 'agent_session_mentioned' }, () => undefined)
-      .with({ tag: 'routine_run_finished' }, (m) =>
-        m.content.outcome === 'failed' ? 'Its run failed.' : 'Its run finished.'
-      )
+      .with({ tag: 'routine_run_finished' }, (m) => routineRunText(m.content))
       .with({ tag: 'agent_sign_in_expiry' }, (m) => {
         const agent = agentDisplayName(m.content.agent);
         const when = match(m.content.stage)

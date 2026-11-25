@@ -98,6 +98,8 @@ type OpenableTask = { id: string; optimisticSnapshot?: Uint8Array };
 export type TaskComposerHost = {
   userId: Accessor<string | undefined>;
   templatesEnabled: Accessor<boolean>;
+  /** Whether the Due date pill sets a start too; see `enable-task-start-date`. */
+  startDatesEnabled: Accessor<boolean>;
   resolveAppLink: MentionLinkResolver | undefined;
   createTemplate(
     viewerId: string,
@@ -341,7 +343,9 @@ export function createTaskComposer(
   const {
     propertyValues,
     setPropertyValues,
+    setPropertyValue,
     properties,
+    draftProperty,
     draftProperties,
     selectedPropertyIds: visiblePropertyIds,
     setVisiblePropertyIds,
@@ -1008,6 +1012,7 @@ export function createTaskComposer(
     props,
     draftOwner,
     templatesEnabled: host.templatesEnabled,
+    startDatesEnabled: host.startDatesEnabled,
     submissions,
     recovered,
     initialState,
@@ -1051,9 +1056,11 @@ export function createTaskComposer(
     applyTitleTag,
     deleteTitleTagsAtStart,
     properties,
+    draftProperty,
     draftProperties,
     propertyValues,
     setPropertyValues,
+    setPropertyValue,
     templateSelection,
     selectNoTemplate,
     detachTemplate,

@@ -2,9 +2,10 @@ use contacts::domain::{
     models::{
         contact::{Contact, ContactPage},
         page::{ContactCursor, ContactPageSize},
+        people::{NamedPeopleQuery, PeopleSearchLimit},
         query::{ContactLookup, ContactSearch},
     },
-    ports::ContactDirectory,
+    ports::{ContactDirectory, PeopleNamingService},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -31,6 +32,12 @@ pub(crate) trait ContactsGraphqlReads: Send + Sync {
         viewer: MacroUserIdStr<'static>,
         lookup: ContactLookup,
     ) -> ReadFuture<'_, Vec<Contact>>;
+    fn named(
+        &self,
+        viewer: MacroUserIdStr<'static>,
+        query: NamedPeopleQuery,
+        limit: PeopleSearchLimit,
+    ) -> ReadFuture<'_, Vec<Contact>>;
 }
 
 /// Request-scoped, type-erased access to the directory domain service.
@@ -40,23 +47,33 @@ pub struct ContactsGraphqlContext {
 }
 
 impl ContactsGraphqlContext {
-    /// Compose the domain reader without adding schema type parameters.
-    pub fn new<S: ContactDirectory>(service: Arc<S>) -> Self {
+    /// Compose the domain readers without adding schema type parameters.
+    pub fn new<S: ContactDirectory, P: PeopleNamingService>(
+        directory: Arc<S>,
+        people: Arc<P>,
+    ) -> Self {
         Self {
-            reads: Arc::new(ServiceReads(service)),
+            reads: Arc::new(ServiceReads { directory, people }),
         }
     }
 }
 
-struct ServiceReads<S>(Arc<S>);
-impl<S: ContactDirectory> ContactsGraphqlReads for ServiceReads<S> {
+struct ServiceReads<S, P> {
+    directory: Arc<S>,
+    people: Arc<P>,
+}
+impl<S: ContactDirectory, P: PeopleNamingService> ContactsGraphqlReads for ServiceReads<S, P> {
     fn page(
         &self,
         viewer: MacroUserIdStr<'static>,
         after: Option<ContactCursor>,
         limit: ContactPageSize,
     ) -> ReadFuture<'_, ContactPage> {
-        Box::pin(async move { self.0.contact_page(viewer, after.as_ref(), limit).await })
+        Box::pin(async move {
+            self.directory
+                .contact_page(viewer, after.as_ref(), limit)
+                .await
+        })
     }
     fn search(
         &self,
@@ -66,7 +83,7 @@ impl<S: ContactDirectory> ContactsGraphqlReads for ServiceReads<S> {
         limit: ContactPageSize,
     ) -> ReadFuture<'_, ContactPage> {
         Box::pin(async move {
-            self.0
+            self.directory
                 .search_contacts(viewer, &search, after.as_ref(), limit)
                 .await
         })
@@ -76,6 +93,17 @@ impl<S: ContactDirectory> ContactsGraphqlReads for ServiceReads<S> {
         viewer: MacroUserIdStr<'static>,
         lookup: ContactLookup,
     ) -> ReadFuture<'_, Vec<Contact>> {
-        Box::pin(async move { self.0.lookup_contacts(viewer, &lookup).await })
+        Box::pin(async move { self.directory.lookup_contacts(viewer, &lookup).await })
+    }
+    fn named(
+        &self,
+        viewer: MacroUserIdStr<'static>,
+        query: NamedPeopleQuery,
+        limit: PeopleSearchLimit,
+    ) -> ReadFuture<'_, Vec<Contact>> {
+        Box::pin(async move {
+            let people = self.people.people_named(viewer, &query, limit).await?;
+            Ok(people.into_iter().map(|person| person.contact).collect())
+        })
     }
 }

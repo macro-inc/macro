@@ -15,9 +15,7 @@ import type { DiscoveryResultOneOfThreeOperation } from './discoveryResultOneOfT
 export type DiscoveryResultOneOfThree = {
   /** App from the directory. */
   app: DiscoveredApp;
-  /** Whether this caller has an enabled connection. For an app that
-connects through its own MCP server, that connection is checked
-there, not in Pipedream. */
+  /** Whether this caller's connection to the app is usable now. */
   connected: boolean;
   operation: DiscoveryResultOneOfThreeOperation;
   /** Advertised tools. Use SearchTools after connecting to load them. */

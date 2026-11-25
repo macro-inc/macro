@@ -12,7 +12,7 @@ import {
 } from '@queries/auth/account-scope';
 import { useQueryAccount } from '@queries/auth/use-query-account';
 import { callKeys } from '@queries/call/keys';
-import { channelKeys } from '@queries/channel/keys';
+import { refreshChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { setHistoryItemName } from '@queries/history/history';
 import { historyKeys } from '@queries/history/keys';
@@ -239,12 +239,11 @@ function observeRenameSettlement(
       queryClient.invalidateQueries({ queryKey: historyKeys.list.queryKey }),
       queryClient.invalidateQueries({ queryKey: soupKeys._def }),
     ];
-    if (operations.some(({ entity }) => entity.type === 'channel'))
-      requests.push(
-        queryClient.invalidateQueries({
-          queryKey: channelKeys.listChannels(account.userId).queryKey,
-        })
-      );
+    const channelIds = operations.flatMap(({ entity }) =>
+      entity.type === 'channel' ? [entity.id] : []
+    );
+    if (channelIds.length > 0)
+      requests.push(refreshChannelDirectory(channelIds));
     for (const { entity } of operations) {
       if (entity.type === 'call')
         requests.push(
@@ -504,14 +503,19 @@ const bulkRenameOnSettled = (
   }
 };
 
-/** Supports channel/document/chat/project/call/agent-session/database rename. */
+/**
+ * Supports channel/document/chat/project/call/agent-session/database rename.
+ * Renames made with the same `scope`, from any caller, are sent one at a
+ * time in the order they were made.
+ */
 export function createRenameDssEntityMutation(
   callbacks?: MutationCallbacks<
     RenameDssEntityMutationData,
     Error,
     RenameDssEntityMutationVariables,
     RenameOnMutateResult
-  >
+  >,
+  scope?: string
 ) {
   const account = useQueryAccount();
   return useMutation<
@@ -521,6 +525,7 @@ export function createRenameDssEntityMutation(
     RenameOnMutateResult
   >(() => ({
     meta: { queryAccount: account() },
+    scope: scope === undefined ? undefined : { id: scope },
     mutationFn: async (params, context) =>
       (await bulkRenameMutationFn([params], context))[0],
     ...withCallbacks<

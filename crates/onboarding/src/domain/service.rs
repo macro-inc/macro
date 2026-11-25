@@ -3,10 +3,10 @@
 
 use super::models::{ConnectedServer, DismissedPrompts, OnboardingRow, OnboardingState, PromptId};
 use super::ports::{OnboardingError, OnboardingRepo, Result};
+use connectors::{ConnectionManagementService, Status};
 use generic_email_domains::is_generic_email_domain;
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::domain::ports::McpServerStore;
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -51,39 +51,43 @@ pub trait OnboardingService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 }
 
-/// Concrete orchestrator wiring the repo and the user's MCP servers together.
+/// Concrete orchestrator wiring the repo and the user's connections
+/// together.
 pub struct OnboardingServiceImpl<R, S> {
     repo: R,
-    mcp_store: Arc<S>,
+    connectors: Arc<S>,
 }
 
 impl<R, S> OnboardingServiceImpl<R, S> {
-    /// Build the orchestrator.
-    pub fn new(repo: R, mcp_store: Arc<S>) -> Self {
-        Self { repo, mcp_store }
+    /// Build the orchestrator over the connectors service.
+    pub fn new(repo: R, connectors: Arc<S>) -> Self {
+        Self { repo, connectors }
     }
 }
 
 impl<R, S> OnboardingServiceImpl<R, S>
 where
     R: OnboardingRepo,
-    S: McpServerStore,
+    S: ConnectionManagementService,
 {
+    /// The apps and servers the user has connected and can use, as the
+    /// connectors services decide it.
     async fn connected_servers(
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> Result<Vec<ConnectedServer>> {
-        let servers = self
-            .mcp_store
+        let connectors = self
+            .connectors
             .list(user)
             .await
-            .map_err(|e| OnboardingError::Other(anyhow::anyhow!("mcp store: {e:?}")))?;
-        Ok(servers
+            .map_err(|e| OnboardingError::Other(anyhow::anyhow!("connectors: {e}")))?;
+        Ok(connectors
             .into_iter()
-            .map(|record| ConnectedServer {
-                name: record.server_name,
-                url: record.url,
-                authenticated: record.credentials.is_some(),
+            .filter(|connector| connector.status() == Status::Connected)
+            .map(|connector| ConnectedServer {
+                name: connector.name().to_owned(),
+                url: connector.key().to_string(),
+                authenticated: true,
             })
             .collect())
     }
@@ -92,7 +96,7 @@ where
 impl<R, S> OnboardingService for OnboardingServiceImpl<R, S>
 where
     R: OnboardingRepo,
-    S: McpServerStore,
+    S: ConnectionManagementService,
 {
     #[tracing::instrument(skip(self, user), err)]
     async fn get_state(&self, user: MacroUserIdStr<'static>) -> Result<OnboardingState> {

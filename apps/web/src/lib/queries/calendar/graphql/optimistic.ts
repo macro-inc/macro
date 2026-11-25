@@ -42,6 +42,19 @@ export function graphqlTimeRecord(
       };
 }
 
+/**
+ * An occurrence's time as the server sends it: the server keeps an event's
+ * time zone on the event alone, so its details show no "Original time".
+ */
+export function graphqlOccurrenceTimeRecord(
+  time: EventTime
+): CalendarEventTimeFieldsFragment {
+  const record = graphqlTimeRecord(time);
+  return record.__typename === 'GraphqlTimedEventTime'
+    ? { ...record, timeZone: null }
+    : record;
+}
+
 export function graphqlTimeInput(time: EventTime): CalendarEventTimeInput {
   return time.kind === 'timed'
     ? {
@@ -206,7 +219,7 @@ export function patchedOccurrence(
     ...(patch.location !== undefined
       ? { overrideLocation: patch.location }
       : {}),
-    ...(patch.time ? { time: graphqlTimeRecord(patch.time) } : {}),
+    ...(patch.time ? { time: graphqlOccurrenceTimeRecord(patch.time) } : {}),
   };
 }
 

@@ -219,7 +219,12 @@ where
     #[tracing::instrument(
         name = "attention_feed.current",
         skip_all,
-        fields(user = %request.viewer.user, keying = ?request.keying, keys = keys.len()),
+        fields(
+            user = %request.viewer.user,
+            keying = ?request.keying,
+            read = ?request.read,
+            keys = keys.len(),
+        ),
         err
     )]
     pub async fn current(

@@ -97,8 +97,7 @@ describe('connected apps', () => {
         return Response.json({
           url: 'https://mcp.linear.app/mcp',
           serverName: 'Linear',
-          alreadyConnected: false,
-          authenticated: false,
+          status: 'notConnected',
           enabled: true,
           summary: 'Added Linear.',
         });

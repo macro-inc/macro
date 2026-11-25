@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        SELECT started_at FROM computer_screen_driver_leases\n                        WHERE computer_id = $1 AND user_id = $2\n                        FOR UPDATE\n                        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fd2bc5ba935e6ab2591acb5b7ae2554978f8370ed92f488dbbb6ac9e40803877"
+}

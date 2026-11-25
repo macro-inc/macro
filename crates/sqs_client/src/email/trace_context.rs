@@ -20,8 +20,9 @@ pub fn current() -> Option<String> {
     carrier.remove(ATTRIBUTE)
 }
 
-/// Adopt persisted context before polling a publisher or consumer span.
-/// Missing or malformed context leaves legacy jobs unaffected.
+/// Parents `span` on persisted context. Call it before `span` is first
+/// entered: an entered span keeps the parent it started with. Missing or
+/// malformed context leaves legacy jobs unaffected.
 pub fn adopt(span: &tracing::Span, traceparent: Option<&str>) {
     let Some(traceparent) = traceparent else {
         return;

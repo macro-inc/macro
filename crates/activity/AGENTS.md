@@ -23,11 +23,20 @@ distribution.
   (`axum`, mounted by cognition): `GET /activity`, the acting user's own
   activity through `ReadActivityResponse::read`, which the SDK's
   `macro.activity.mine()` reads. There is no direct AI tool for it.
+- `UserActivity::is_active(user, since)` (`src/outbound/pg_activity_repo/user_activity.rs`):
+  the check a per-user background job asks before spending work on someone.
+  Active means seen (a signed-in client open, in `user_last_seen`, which the
+  connection gateway writes through `SeenLog` on connect and hourly) or acted
+  (an activity the user made themselves, not through a code-mode run; views
+  and appearance changes don't count), read from `idx_activity_events_own`.
+  Agent and bot work for the user doesn't count. The check repeats that
+  index's predicate; change both together.
 
 ## Scope
 
 - Owns: the `Action` vocabulary, the `Activity`/`ActivityRecord` row shape,
   feeds/timeline/overview queries, and realtime distribution of new activity.
+  It also owns `user_last_seen`, the seen time the activity check reads.
 - Not here: deciding what counts as activity in a given domain — each domain
   crate depends on this with `default-features = false` (models only) and
   implements its own event → `DomainActivity` mapping; the hosting service
@@ -45,9 +54,13 @@ distribution.
   `EntityAccessService::get_users_by_entity`; change both together.
 - Used by: most domain crates with activity surfaces (`documents`, `forms`,
   `databases`, `initiative`, `messages`, `channels`, `soup`, `call`, `chat`,
-  `attention_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
+  `attention_feed`, `projects`, `github`, `email`, `properties`,
+  `time_tracking`) and `ai_tools`.
   `ai_tools` reads `SubjectActivityPresence` so memory skips days without
-  activity.
+  activity, and `UserActivity` over 14 days so it skips users who are away.
+  `connection_gateway` writes seen times through `SeenLog`;
+  `email_focus_worker` asks `UserActivity` over 7 days before working an
+  inbox.
 
 ## Recipes
 

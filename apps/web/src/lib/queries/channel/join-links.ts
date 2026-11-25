@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
@@ -13,7 +14,7 @@ import {
 import { useQueryAccount } from '../auth/use-query-account';
 import { queryClient } from '../client';
 import { soupKeys } from '../soup/keys';
-import { channelKeys } from './keys';
+import { refreshChannelDirectory } from './directory';
 
 export type GetChannelJoinLinkArgs = {
   channelId: string;
@@ -91,9 +92,7 @@ export function joinChannelByCodeMutationOptions(
         onSuccess(_data, _variables, _result, context) {
           const owner = mutationQueryAccount(context);
           if (!isCurrentQueryAccount(owner)) return;
-          queryClient.invalidateQueries({
-            queryKey: channelKeys.listChannels(owner.userId).queryKey,
-          });
+          fireAndForget(refreshChannelDirectory(), 'channel-list');
         },
         onError(error) {
           console.error('failed to join channel by code', error);
@@ -144,12 +143,13 @@ export function joinChannelMutationOptions(
     },
     ...withCallbacks<void, Error, JoinChannelArgs, undefined>(
       {
-        onSuccess(_data, _variables, _result, context) {
+        onSuccess(_data, variables, _result, context) {
           const owner = mutationQueryAccount(context);
           if (!isCurrentQueryAccount(owner)) return;
-          queryClient.invalidateQueries({
-            queryKey: channelKeys.listChannels(owner.userId).queryKey,
-          });
+          fireAndForget(
+            refreshChannelDirectory([variables.channelId]),
+            'channel-list'
+          );
           // Refetch soup so the joined channel's is_participant flips and its
           // Join affordance disappears.
           queryClient.invalidateQueries({

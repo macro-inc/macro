@@ -23,6 +23,21 @@ export function isTopLevelChannelNotification(
     .otherwise(() => false);
 }
 
+/**
+ * An unseen invite to the channel. It never makes the channel unread, but
+ * opening the channel in Chat is what sees it. `notificationIsRead` treats
+ * every channel notification but a message one as read, so Chat checks an
+ * invite's state itself.
+ */
+export function isUnseenChannelInvite(
+  notification: Pick<UnifiedNotification, 'state' | 'notification_metadata'>
+): boolean {
+  return (
+    notification.state === 'unseen' &&
+    notification.notification_metadata.tag === 'channel_invite'
+  );
+}
+
 /** Reactions never contribute to the channel-view unread badge. */
 export function isUnreadChannelMessageNotification(
   notification: Pick<UnifiedNotification, 'notification_metadata'>

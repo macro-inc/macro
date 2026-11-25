@@ -402,3 +402,73 @@ async fn saving_a_draft_replaces_its_message_and_sending_it_keeps_the_thread() {
     );
     assert_eq!(emulator.messages(BOB).unwrap()[0].snippet, "second");
 }
+
+#[tokio::test]
+async fn dated_lists_keep_inbox_and_sent_mail_in_their_folders() {
+    let emulator = two_mailboxes().await;
+    let client = client(&emulator);
+    emulator
+        .deliver(ADA, &mail("grace@example.com", "Last month", "o"))
+        .unwrap();
+    emulator
+        .deliver(
+            ADA,
+            &NewMessage {
+                labels: Some(vec!["SENT".to_owned()]),
+                ..mail(ADA, "Sent last month", "o")
+            },
+        )
+        .unwrap();
+    emulator.advance_clock(std::time::Duration::from_secs(40 * 24 * 60 * 60));
+    let since = emulator.now() - chrono::Duration::days(30);
+    let new = emulator
+        .deliver(ADA, &mail("grace@example.com", "This week", "n"))
+        .unwrap();
+    let sent = emulator
+        .deliver(
+            ADA,
+            &NewMessage {
+                labels: Some(vec!["SENT".to_owned()]),
+                ..mail(ADA, "Sent this week", "n")
+            },
+        )
+        .unwrap();
+    let ada = token(&emulator, ADA);
+
+    let page = client
+        .list_messages_since(
+            ada.expose_secret(),
+            500,
+            &["INBOX"],
+            since.timestamp(),
+            None,
+        )
+        .await
+        .unwrap();
+    let ids: Vec<String> = page
+        .messages
+        .unwrap_or_default()
+        .into_iter()
+        .map(|message| message.id)
+        .collect();
+    assert_eq!(ids, vec![new.id]);
+    let sent_page = client
+        .list_messages_since(ada.expose_secret(), 500, &["SENT"], since.timestamp(), None)
+        .await
+        .unwrap();
+    let sent_ids: Vec<_> = sent_page
+        .messages
+        .unwrap_or_default()
+        .into_iter()
+        .map(|message| message.id)
+        .collect();
+    assert_eq!(sent_ids, [sent.id]);
+    assert_eq!(
+        client
+            .list_messages(ada.expose_secret(), 10, &["INBOX"])
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
+}

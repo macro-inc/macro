@@ -1,8 +1,9 @@
 apiVersion: v1
 data:
-  admin.enabled: "true"
+  admin.enabled: "false"
   application.instanceLabelKey: argocd.argoproj.io/instance
   application.sync.impersonation.enabled: "false"
+  dex.config: '{"connectors":[{"config":{"clientID":"$argocd-google:google_client_id","clientSecret":"$argocd-google:google_client_secret","hostedDomains":["macro.com"]},"id":"google","name":"Google","type":"google"}]}'
   exec.enabled: "false"
   helm.enable: "false"
   kustomize.enable: "false"
@@ -105,7 +106,7 @@ data:
   timeout.hard.reconciliation: 0s
   timeout.reconciliation: 120s
   timeout.reconciliation.jitter: 60s
-  url: https://localhost:8080
+  url: https://argo.macro-internal.com
 kind: ConfigMap
 metadata:
   labels:

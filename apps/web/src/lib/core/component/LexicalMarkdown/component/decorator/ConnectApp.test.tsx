@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   openSettings: vi.fn(),
   openAgentsPage: vi.fn(),
   requestConnectApp: vi.fn(),
-  pipedreamSlugs: new Set<string>(),
+  connectedApps: new Set<string>(),
   cursor: {
     isSuccess: true,
     isLoading: false,
@@ -35,16 +35,16 @@ vi.mock('@queries/auth/codex', () => ({
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettings: mocks.openSettings }),
 }));
-vi.mock('@core/pipedream/pendingConnect', () => ({
+vi.mock('@core/connectors/pendingConnect', () => ({
   requestConnectApp: mocks.requestConnectApp,
 }));
-vi.mock('@core/pipedream/ConnectorIcon', () => ({
-  PipedreamConnectorIcon: () => <span data-pipedream-icon />,
+vi.mock('@core/connectors/ConnectorIcon', () => ({
+  ConnectorIcon: () => <span data-connector-icon />,
 }));
-vi.mock('@queries/pipedream-connectors', () => ({
-  usePipedreamConnectedSlugs: () => ({
+vi.mock('@queries/connectors', () => ({
+  useConnectors: () => ({
     ready: () => true,
-    slugs: () => mocks.pipedreamSlugs,
+    connectedApps: () => mocks.connectedApps,
   }),
 }));
 vi.mock('@queries/auth/cursor-api-key', () => ({
@@ -54,12 +54,12 @@ vi.mock('@queries/auth/cursor-api-key', () => ({
 // than the context object this chip reads its selection from.
 vi.mock('../../plugins', () => ({}));
 
-import { AppConnectionContext } from '@core/pipedream/connection-context';
+import { AppConnectionContext } from '@core/connectors/connection-context';
 import { ConnectApp } from './ConnectApp';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.pipedreamSlugs.clear();
+  mocks.connectedApps.clear();
   mocks.cursor.isLoading = false;
   mocks.codex.isLoading = false;
   mocks.codex.data = { connected: false, environmentId: null };
@@ -110,7 +110,7 @@ describe('connect-app chip', () => {
     expect(connect).not.toHaveBeenCalled();
   });
 
-  it('sends a Pipedream chip to Connections with the app queued', () => {
+  it('sends an app chip to Integrations with the app queued', () => {
     render(() => (
       <ConnectApp
         appSlug="linear"
@@ -126,7 +126,7 @@ describe('connect-app chip', () => {
     expect(mocks.openSettings).not.toHaveBeenCalled();
   });
 
-  it('sends a harness chip to the Harness page without touching Pipedream', () => {
+  it('sends a harness chip to the Harness page without touching app connections', () => {
     render(() => (
       <ConnectApp
         appSlug="cursor"
@@ -246,7 +246,7 @@ describe('connect-app chip', () => {
     expect(mocks.openSettings).toHaveBeenCalledWith('Harness');
   });
 
-  it('does not let a Cursor key satisfy a Pipedream chip for an app of the same name', () => {
+  it('does not let a Cursor key satisfy an app chip for an app of the same name', () => {
     mocks.cursor.data = { registered: true };
     render(() => (
       <ConnectApp

@@ -40,7 +40,7 @@ it('does not subscribe a computation that writes a query to CRM access changes',
     // The persistence policy is consulted inside this computation.
     createMemo(() => {
       runs += 1;
-      queryClient.setQueryData(['channel', 'listChannels', 'viewer'], {
+      queryClient.setQueryData(['channel', 'directory', 'viewer'], {
         rows: [],
       });
     });

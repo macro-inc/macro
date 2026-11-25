@@ -6,6 +6,27 @@ import {
   registerResponseObserver,
 } from './response-observers';
 
+/**
+ * A response shaped like `@tauri-apps/plugin-http`'s: `url`, `headers` and a
+ * per-instance `clone` are own, non-configurable properties.
+ */
+function nativeResponse(body: string) {
+  const url = 'http://127.0.0.1:1/health';
+  const headers = () => new Headers({ 'set-cookie': 'session=1' });
+  const response = new Response(body, { status: 200 });
+  Object.defineProperty(response, 'url', { value: url, writable: false });
+  Object.defineProperty(response, 'headers', { value: headers() });
+  Object.defineProperty(response, 'clone', {
+    value: function (this: Response) {
+      const cloned = Response.prototype.clone.call(this);
+      Object.defineProperty(cloned, 'url', { value: url, writable: false });
+      Object.defineProperty(cloned, 'headers', { value: headers() });
+      return cloned;
+    },
+  });
+  return response;
+}
+
 describe('response permission guards', () => {
   it('captures a generation synchronously before the caller dispatches', () => {
     let captured = false;
@@ -140,6 +161,35 @@ describe('response permission guards', () => {
       body.enqueue(new Uint8Array([1]));
       body.close();
       await expect(bytes).rejects.toThrow('revoked');
+    }
+  );
+
+  it.each([
+    ['decoders', guardResponseDecoders],
+    ['body', guardResponseBody],
+  ])(
+    'guards the %s of a native HTTP response, whose own properties cannot be redefined',
+    async (_, guardResponse) => {
+      let current = true;
+      const stop = registerResponseObserver(
+        () => (response) =>
+          guardResponse(response, () => {
+            if (!current) throw new Error('revoked');
+          })
+      );
+      const response = prepareResponseObservers('http://127.0.0.1:1/health')(
+        nativeResponse('{"ok":true}')
+      );
+      stop();
+      expect(response.ok).toBe(true);
+      expect(response.url).toBe('http://127.0.0.1:1/health');
+      expect(response.headers.get('set-cookie')).toBe('session=1');
+      const clone = response.clone();
+      expect(clone.url).toBe('http://127.0.0.1:1/health');
+      expect(clone.headers.get('set-cookie')).toBe('session=1');
+      await expect(response.json()).resolves.toEqual({ ok: true });
+      current = false;
+      await expect(clone.text()).rejects.toThrow('revoked');
     }
   );
 });

@@ -7,12 +7,13 @@ use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use futures::StreamExt;
+use models_email::email::service::pubsub::{LinkManagerLane, LinkManagerMessage};
 use sqlx::PgPool;
 use sqs_client::SQS;
 use std::convert::Infallible;
 use std::future::Future;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tokio::time::{Instant, MissedTickBehavior, interval_at};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
@@ -45,41 +46,6 @@ const VISIBILITY_EXTENSION_SECONDS: i32 = 300;
 /// How often a message being processed renews its visibility. Several renewals fit in one
 /// extension, so a failed renewal doesn't expose the message.
 const VISIBILITY_RENEWAL_INTERVAL: Duration = Duration::from_secs(60);
-
-/// method that ingests sqs messages and calls the process function for each
-#[expect(
-    clippy::too_many_arguments,
-    reason = "preserves the worker composition inputs"
-)]
-pub async fn run_worker(
-    worker: sqs_worker::SQSWorker,
-    db: PgPool,
-    email_api: GmailApi,
-    auth_service_client: AuthServiceClient,
-    redis_client: RedisClient,
-    sqs_client: SQS,
-    crm_service: CrmServiceType,
-    connection_gateway_client: ConnectionGatewayClient,
-    notification_ingress_service: Arc<NotificationIngressType>,
-    macro_event_broker: PubSubEventBroker,
-    contacts_ingress: Arc<crate::composition::ContactsProducer>,
-) {
-    run_worker_with_cancellation(
-        worker,
-        db,
-        email_api,
-        auth_service_client,
-        redis_client,
-        sqs_client,
-        crm_service,
-        connection_gateway_client,
-        notification_ingress_service,
-        macro_event_broker,
-        contacts_ingress,
-        CancellationToken::new(),
-    )
-    .await;
-}
 
 /// Builds the production context after the existing cancellable provider initialization.
 #[expect(
@@ -183,7 +149,7 @@ pub(crate) async fn context(
     Some(ctx)
 }
 
-/// Ingests SQS messages until cancellation is requested.
+/// Ingests one lane's SQS messages until cancellation is requested.
 ///
 /// A batch already returned by SQS is fully processed before shutdown.
 #[expect(
@@ -191,6 +157,7 @@ pub(crate) async fn context(
     reason = "preserves the worker composition inputs"
 )]
 pub async fn run_worker_with_cancellation(
+    lane: LinkManagerLane,
     worker: sqs_worker::SQSWorker,
     db: PgPool,
     email_api: GmailApi,
@@ -247,10 +214,8 @@ pub async fn run_worker_with_cancellation(
                                 .then(|message| {
                                     let ctx = ctx.clone();
                                     let worker = &worker;
-                                    let span = tracing::info_span!(
-                                        "email.link_manager.message",
-                                        message_id = message.message_id.as_deref(),
-                                    );
+                                    let (span, decoded) =
+                                        delivery_span(lane, message, SystemTime::now());
                                     async move {
                                         let result = while_renewing_visibility(
                                             || {
@@ -259,7 +224,7 @@ pub async fn run_worker_with_cancellation(
                                                     VISIBILITY_EXTENSION_SECONDS,
                                                 )
                                             },
-                                            process::process_message(ctx, message),
+                                            process::process_message(ctx, message, decoded),
                                         )
                                         .instrument(span)
                                         .await;
@@ -325,6 +290,37 @@ pub async fn run_worker_with_cancellation(
             return;
         }
     }
+}
+
+/// Opens the consume span of one delivery on `lane` and decodes it inside it.
+///
+/// The span records the lane, the message's kind (its `operation`) and how long
+/// it waited in the queue, counted from when SQS first accepted it, so a removal's
+/// wait behind other work reads straight off its span.
+fn delivery_span(
+    lane: LinkManagerLane,
+    message: &aws_sdk_sqs::types::Message,
+    now: SystemTime,
+) -> (tracing::Span, anyhow::Result<LinkManagerMessage>) {
+    let span = tracing::info_span!(
+        "email.link_manager.message",
+        message_id = message.message_id.as_deref(),
+        lane = %lane,
+        kind = tracing::field::Empty,
+        queue_wait_ms = tracing::field::Empty,
+    );
+    // Numeric, so the wait aggregates as a measure.
+    if let Some(wait) = sqs_worker::queue_wait(message, now) {
+        span.record(
+            "queue_wait_ms",
+            i64::try_from(wait.as_millis()).unwrap_or(i64::MAX),
+        );
+    }
+    let decoded = span.in_scope(|| process::extract_message(message));
+    if let Ok(decoded) = &decoded {
+        span.record("kind", <&'static str>::from(decoded));
+    }
+    (span, decoded)
 }
 
 /// Runs `work` while calling `renew` every [`VISIBILITY_RENEWAL_INTERVAL`], so a message

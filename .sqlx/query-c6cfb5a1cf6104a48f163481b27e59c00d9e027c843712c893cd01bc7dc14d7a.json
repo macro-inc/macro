@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT object FROM import_entity_written\n               WHERE import_id = $1 AND kind = 'database_reservation_failure' AND starts_with(object, $2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "object",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c6cfb5a1cf6104a48f163481b27e59c00d9e027c843712c893cd01bc7dc14d7a"
+}

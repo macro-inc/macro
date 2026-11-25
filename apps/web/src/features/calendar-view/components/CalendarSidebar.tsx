@@ -361,7 +361,8 @@ export function CalendarSidebar() {
         </CalendarCreateMenu>
       </ViewSidebar.Primary>
       <ViewSidebar.Content class="pt-2">
-        <SidebarRoutineSuggestions surface="calendar" />
+        {/* This content starts 0.5rem under New, half the usual inset. */}
+        <SidebarRoutineSuggestions surface="calendar" class="pt-2" />
         <ViewSidebar.Nav
           aria-label={t('tutorials.watchTutorial')}
           class="empty:hidden"

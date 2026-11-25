@@ -45,6 +45,13 @@ const dashboard = new datadog.Dashboard('queue-alerts', {
         warning: '1800',
       }),
       thresholdGraph({
+        title: 'Link maintenance queue falling behind',
+        query:
+          'max:aws.sqs.approximate_age_of_oldest_message{queuename:email-service-link-maintenance-queue-prod}',
+        critical: '21600',
+        warning: '10800',
+      }),
+      thresholdGraph({
         title: 'Email backfill backlog growing abnormally',
         query:
           "anomalies(max:aws.sqs.approximate_number_of_messages_visible{queuename:email-service-backfill-queue-prod}, 'agile', 3)",
@@ -112,6 +119,21 @@ prodMonitor('sqs-work-queue-age', {
   pages: false,
   description:
     'The oldest message in {{queuename.name}} is {{value}} seconds old. These queues normally drain within minutes.',
+  dashboard: dashboard.url,
+  runbook: 'docs/runbooks/queues.md#backlog',
+});
+
+// Datadog only, and not a work queue: the daily removal sweep backs it up for
+// hours, which the work-queue thresholds would page on every morning.
+prodMonitor('sqs-link-maintenance-age', {
+  title: 'Link maintenance queue falling behind',
+  service: 'email-service',
+  query:
+    'avg(last_15m):max:aws.sqs.approximate_age_of_oldest_message{queuename:email-service-link-maintenance-queue-prod} > 21600',
+  monitorThresholds: { critical: '21600', warning: '10800' },
+  pages: false,
+  description:
+    'The oldest message in email-service-link-maintenance-queue-prod is {{value}} seconds old. The daily sweep of unused and inactive inboxes backs it up for a few hours; this long, its consumers are likely not running, and watch refreshes and health polls are late.',
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/queues.md#backlog',
 });

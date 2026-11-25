@@ -1,4 +1,4 @@
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
@@ -38,11 +38,11 @@ export function ChannelMultiSelect(props: {
   onChange: (channelIds: string[]) => void;
   disabled?: boolean;
 }) {
-  const channelsContext = useChannelsContext();
+  const channelDirectory = useChannelDirectory();
   const options = createMemo<BotChannelOption[]>(() =>
     mergeChannelOptions(
       props.assignedChannels ?? [],
-      botAssignableChannelOptions(channelsContext.channels())
+      botAssignableChannelOptions(channelDirectory.channels())
     )
   );
   const selectedOptions = createMemo(() => {

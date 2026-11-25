@@ -23,6 +23,7 @@ fn is_property_target(entity_type: model_entity::EntityType) -> bool {
         EntityType::Document
             | EntityType::EmailThread
             | EntityType::CrmCompany
+            | EntityType::CrmContact
             | EntityType::Call
             | EntityType::Chat
             | EntityType::Channel

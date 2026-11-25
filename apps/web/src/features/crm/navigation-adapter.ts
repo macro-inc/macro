@@ -60,17 +60,21 @@ export function createAppCrmNavigation(): ReturnType<
   CrmContext['createNavigation']
 > {
   const layout = useSplitLayout();
+  const panel = useSplitPanel();
   return {
-    splitId: useSplitPanel()?.handle.id,
+    splitId: panel?.handle.id,
     openWithSplit: (target, options) => {
       layout.openWithSplit(target, options);
     },
     showCompanies: () => {
       layout.replaceOrInsertSplit({ type: 'component', id: 'companies' });
     },
-    openEntity: (entity) => {
+    openEntity: (entity, options) => {
       fireAndForget(
-        openEntityInSplitFromUnifiedList(entity, {}),
+        openEntityInSplitFromUnifiedList(entity, {
+          openInNewSplit: options?.newSplit,
+          splitHandle: panel?.handle,
+        }),
         'open-entity-in-split'
       );
     },

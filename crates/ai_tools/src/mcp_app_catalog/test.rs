@@ -1,72 +1,54 @@
 use super::*;
-use pipedream_mcp::domain::models::ConnectorOverlay;
+use connectors::fake::FakeConnectors;
 
-/// Overlays held in memory; `None` stands for a table that cannot be read.
-struct Overlays(Option<Vec<&'static str>>);
-
-impl ConnectorOverlays for Overlays {
-    async fn overlays(&self) -> anyhow::Result<Vec<ConnectorOverlay>> {
-        unreachable!("the catalog asks for one slug at a time")
-    }
-
-    async fn overlay(&self, app_slug: &str) -> anyhow::Result<Option<ConnectorOverlay>> {
-        let Some(slugs) = &self.0 else {
-            anyhow::bail!("overlay table unreachable");
-        };
-        Ok(slugs
-            .iter()
-            .find(|slug| **slug == app_slug)
-            .map(|slug| ConnectorOverlay {
-                app_slug: (*slug).to_owned(),
-                server_url: "https://api.githubcopilot.com/mcp".to_owned(),
-            }))
-    }
+fn catalog(fake: &FakeConnectors) -> ConnectorsAppCatalog<connectors::Connectors> {
+    ConnectorsAppCatalog::new(Some(fake.build()))
 }
 
 #[tokio::test]
-async fn an_unconfigured_catalog_refuses_a_pipedream_app() {
-    let catalog = PipedreamMcpAppCatalog::new(None, Overlays(Some(vec!["github"])));
+async fn a_catalog_app_can_be_pinned_and_an_unknown_one_cannot() {
+    let catalog = catalog(&FakeConnectors::new().with_catalog_app("linear"));
+
+    assert!(catalog.is_connectable_app("linear").await.unwrap());
+    assert!(!catalog.is_connectable_app("not-an-app").await.unwrap());
+}
+
+#[tokio::test]
+async fn an_overlaid_app_can_be_pinned_without_a_hosted_directory_listing_it() {
+    let catalog =
+        catalog(&FakeConnectors::new().with_overlay("figma", "https://mcp.figma.com/mcp"));
+
+    assert!(catalog.is_connectable_app("figma").await.unwrap());
+}
+
+#[tokio::test]
+async fn github_can_be_pinned_through_the_account_link() {
+    let catalog = catalog(&FakeConnectors::new());
+
+    assert!(catalog.is_connectable_app("github").await.unwrap());
+}
+
+#[tokio::test]
+async fn an_alias_pins_the_app_it_names() {
+    let catalog = catalog(&FakeConnectors::new().with_catalog_app("slack"));
+
+    assert!(catalog.is_connectable_app("slack_v2").await.unwrap());
+}
+
+#[tokio::test]
+async fn a_malformed_slug_is_not_an_app() {
+    let catalog = catalog(&FakeConnectors::new().with_catalog_app("linear"));
+
+    assert!(!catalog.is_connectable_app("Linear!").await.unwrap());
+}
+
+#[tokio::test]
+async fn a_host_without_connectors_refuses_every_slug() {
+    let catalog = ConnectorsAppCatalog::<connectors::Connectors>::new(None);
+
     let error = catalog
         .is_connectable_app("linear")
         .await
-        .expect_err("no directory");
+        .expect_err("nothing to verify against");
     assert!(matches!(error, BotError::Unavailable(message) if message.contains("not configured")));
-}
-
-#[tokio::test]
-async fn an_overlaid_app_is_connectable_without_pipedream() {
-    let catalog = PipedreamMcpAppCatalog::new(None, Overlays(Some(vec!["github"])));
-    assert!(
-        catalog
-            .is_connectable_app("github")
-            .await
-            .expect("an overlay needs no directory")
-    );
-}
-
-#[tokio::test]
-async fn an_unreadable_overlay_table_refuses_the_slug() {
-    let catalog = PipedreamMcpAppCatalog::new(None, Overlays(None));
-    let error = catalog
-        .is_connectable_app("github")
-        .await
-        .expect_err("cannot tell whether it is overlaid");
-    assert!(
-        matches!(error, BotError::Unavailable(message) if message.contains("could not verify"))
-    );
-}
-
-#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
-async fn the_seeded_github_overlay_needs_no_pipedream(pool: sqlx::PgPool) {
-    let catalog = PipedreamMcpAppCatalog::new(None, PgConnectionRepo::new(pool));
-    assert!(
-        catalog
-            .is_connectable_app("github")
-            .await
-            .expect("github is an overlay")
-    );
-    assert!(matches!(
-        catalog.is_connectable_app("linear").await,
-        Err(BotError::Unavailable(_))
-    ));
 }

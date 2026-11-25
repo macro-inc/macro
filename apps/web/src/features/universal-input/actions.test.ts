@@ -118,13 +118,16 @@ vi.mock('@core/context/quickAccess', () => ({
     }),
   }),
 }));
-vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({
-    channels: () => [
-      { id: 'team-channel', name: 'engineering', participants: [{}, {}, {}] },
-    ],
-  }),
-}));
+vi.mock('@core/context/channels', async () => {
+  const { directoryChannel, directoryParticipant } = await import(
+    '@queries/channel/tests/directory-channel'
+  );
+  const channel = directoryChannel('team-channel', {
+    name: 'engineering',
+    participants: ['a', 'b', 'c'].map((id) => directoryParticipant(id)),
+  });
+  return { useChannelDirectory: () => ({ channels: () => [channel] }) };
+});
 vi.mock('@queries/contacts/use-references', () => ({
   useContactReferences: () => ({
     lookup: (label: string) =>

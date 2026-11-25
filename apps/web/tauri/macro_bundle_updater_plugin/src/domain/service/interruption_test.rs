@@ -33,6 +33,7 @@ async fn torn_completion_record_and_evicted_entrypoint_fall_back_to_embedded() {
         read_error: Some("NotFound".to_string()),
         bundle_dirs_found: 1,
         bundle_dirs_removed: 0,
+        saved_bundle_check_ms: None,
     };
     let torn_completion_record = BundleStartup {
         selection: StartupSelection::Embedded,
@@ -41,6 +42,7 @@ async fn torn_completion_record_and_evicted_entrypoint_fall_back_to_embedded() {
         read_error: None,
         bundle_dirs_found: 1,
         bundle_dirs_removed: 1,
+        saved_bundle_check_ms: None,
     };
     for (missing_entrypoint, expected) in
         [(false, torn_completion_record), (true, evicted_entrypoint)]
@@ -55,7 +57,11 @@ async fn torn_completion_record_and_evicted_entrypoint_fall_back_to_embedded() {
             fs.write_file(dir.with_extension("complete"), "2");
         }
         let (mut service, _rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
-        assert_eq!(service.load_bundle_root(&cache, 0).await, expected);
+        let mut startup = service.load_bundle_root(&cache, 0).await;
+        // Only a saved selection that names a readable bundle gets checked.
+        assert_eq!(startup.saved_bundle_check_ms.is_some(), !missing_entrypoint);
+        startup.saved_bundle_check_ms = None;
+        assert_eq!(startup, expected);
         assert!(service.bundle_root_path().is_none());
     }
 }

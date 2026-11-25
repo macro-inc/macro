@@ -117,7 +117,7 @@ async fn turning_auto_join_on_tells_contacts_which_team_members_it_added() {
 }
 
 #[tokio::test]
-async fn turning_auto_join_on_when_every_team_member_is_in_dispatches_nothing() {
+async fn turning_auto_join_on_when_every_team_member_is_in_dispatches_no_auto_join() {
     let channel_id = Uuid::now_v7();
     let team_id = Uuid::now_v7();
     let repo = channel_repo(channel_id);
@@ -141,5 +141,11 @@ async fn turning_auto_join_on_when_every_team_member_is_in_dispatches_nothing() 
     .await
     .unwrap();
 
-    assert!(events.events.lock().unwrap().is_empty());
+    // Nobody joined; the patch itself is still announced to members' caches.
+    let events = events.events.lock().unwrap();
+    assert!(auto_joined(&events).is_empty());
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ChannelUpdated { .. }]
+    ));
 }

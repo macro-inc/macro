@@ -314,6 +314,8 @@ struct Runner {
     finish: CancellationToken,
     dropped: CancellationToken,
     fail_create: bool,
+    /// Preparation finds an app the routine requires disconnected.
+    app_not_connected: bool,
     fail_run: bool,
     stall_prepare: bool,
     stall_before_resource: bool,
@@ -335,6 +337,9 @@ impl ScheduledAgentRunner for Runner {
             .unwrap()
             .push((handle.session_id, handle.action_id));
         anyhow::ensure!(!self.fail_create, "resource unavailable");
+        if self.app_not_connected {
+            return Err(RoutineSessionError::AppNotConnected.into());
+        }
         if self.stall_before_resource {
             std::future::pending::<()>().await;
         }
@@ -1015,6 +1020,45 @@ async fn failed_and_refused_runs_report_how_they_ended() {
 }
 
 #[tokio::test]
+async fn a_run_refused_for_a_disconnected_app_names_the_routines_apps() {
+    let mut action = action();
+    action.task["mcp_servers"] = json!([
+        {"app_slug": "linear", "server_name": "Linear"},
+        {"app_slug": "slack", "server_name": "Slack"},
+        {"app_slug": "slack_v2", "server_name": "Slack"},
+    ]);
+    let (refused, observer) = observed(executor(
+        Repo::default(),
+        Runner {
+            app_not_connected: true,
+            ..Runner::default()
+        },
+    ));
+    let _ = refused.execute_action(action.clone()).await;
+    drain(&refused).await;
+    {
+        let runs = observer.0.lock().unwrap();
+        assert_eq!(runs[0].end, RunEnd::Failed);
+        assert_eq!(runs[0].apps_to_connect, ["Linear", "Slack"]);
+    }
+
+    // Any other failure, or a success, names no app.
+    for runner in [
+        Runner {
+            fail_run: true,
+            ..Runner::default()
+        },
+        Runner::default(),
+    ] {
+        let (executor, observer) = observed(executor(Repo::default(), runner));
+        executor.runner.finish.cancel();
+        executor.execute_action(action.clone()).await.unwrap();
+        drain(&executor).await;
+        assert!(observer.0.lock().unwrap()[0].apps_to_connect.is_empty());
+    }
+}
+
+#[tokio::test]
 async fn interrupted_runs_are_reported_as_interrupted() {
     let (executor, observer) = observed(executor(Repo::default(), Runner::default()));
     executor.execute_action(action()).await.unwrap();
@@ -1099,4 +1143,62 @@ async fn runs_without_a_transcript_still_announce_start_and_stop_and_keep_their_
         records[0].result["configuration_revision"],
         json!(action().configuration_revision)
     );
+}
+
+#[tokio::test]
+async fn a_stopped_run_ends_as_stopped_and_gives_its_claim_back() {
+    let executor = executor(Repo::default(), Runner::default());
+    executor.execute_action(action()).await.unwrap();
+    let token = executor.repo.claim.lock().unwrap().unwrap();
+    // Another run's stop leaves this one running.
+    executor.stops.request(generate_uuid_v7()).await.unwrap();
+    executor.stops.request(token.as_uuid()).await.unwrap();
+    drain(&executor).await;
+    assert!(executor.runner.dropped.is_cancelled());
+    assert_eq!(executor.runner.cancellations.lock().unwrap().len(), 1);
+    assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 1);
+    let records = executor.repo.records.lock().unwrap();
+    let [record] = records.as_slice() else {
+        panic!("one record expected, got {records:?}");
+    };
+    assert!(!record.is_success);
+    let result: ExecutionResult = serde_json::from_value(record.result.clone()).unwrap();
+    assert!(result.stopped);
+    assert_eq!(result.error.as_deref(), Some("Stopped"));
+    // What ran before the stop stays on the record.
+    assert_eq!(result.steps.len(), 1);
+}
+
+#[tokio::test]
+async fn a_stopped_event_run_ends_for_good_and_says_it_was_stopped() {
+    let executor = executor(Repo::default(), Runner::default());
+    let run = event_run();
+    let mut execution = Box::pin(executor.execute(&run, std::future::pending()));
+    assert!(futures::poll!(&mut execution).is_pending());
+    executor.stops.request(run.token.as_uuid()).await.unwrap();
+    let result = execution.await;
+    assert_eq!(result.outcome, EventRunOutcome::Interrupted);
+    assert!(executor.runner.dropped.is_cancelled());
+    let record = result.record.unwrap();
+    let result: ExecutionResult = serde_json::from_value(record.result).unwrap();
+    assert!(result.stopped);
+}
+
+#[tokio::test]
+async fn a_failed_run_is_not_marked_stopped() {
+    let executor = executor(
+        Repo::default(),
+        Runner {
+            fail_run: true,
+            ..Runner::default()
+        },
+    );
+    executor.runner.finish.cancel();
+    executor.execute_action(action()).await.unwrap();
+    drain(&executor).await;
+    let records = executor.repo.records.lock().unwrap();
+    let result: ExecutionResult = serde_json::from_value(records[0].result.clone()).unwrap();
+    assert!(!result.stopped);
+    // An unstopped record leaves the field out, as older records do.
+    assert!(records[0].result.get("stopped").is_none());
 }

@@ -3,12 +3,12 @@ import {
   type ConversationState,
   conversationState,
 } from './conversation-state';
-import { type AgentsMode, agentsModeLabel } from './mode';
+import type { AgentsMode } from './mode';
 import type { AgentConversationEntity } from './recent-conversations';
 
 export type StatusFilter = 'waiting' | 'working' | 'unread' | 'idle';
 export type PullRequestFilter = 'open' | 'draft' | 'merged' | 'closed' | 'none';
-export type ConversationGrouping = 'none' | 'status' | 'type';
+export type ConversationGrouping = 'none' | 'status';
 
 /** Values are ORed inside a category and categories are ANDed. */
 export type ConversationFilters = {
@@ -100,12 +100,19 @@ export type ConversationGroup<Item> = {
   id: string;
   /** Undefined when the list is not grouped and needs no heading. */
   label: string | undefined;
+  /**
+   * Whether the heading shows how many rows the group holds. Counts cover the
+   * loaded pages only: active sessions are recent, so their groups are whole on
+   * the first page, but the catch-all grows with every page, so it has none.
+   */
+  counted: boolean;
   items: Item[];
 };
 
 type GroupDefinition = {
   id: string;
   label: string;
+  counted: boolean;
   contains: (facts: ConversationFacts) => boolean;
 };
 
@@ -113,43 +120,44 @@ const STATUS_GROUPS: GroupDefinition[] = [
   {
     id: 'waiting',
     label: 'Needs you',
+    counted: true,
     contains: (facts) => facts.state === 'waiting',
   },
   {
     id: 'working',
     label: 'Working',
+    counted: true,
     contains: (facts) =>
       facts.state === 'working' || facts.state === 'starting',
   },
   {
     id: 'recent',
     label: 'Recent',
+    counted: false,
     contains: (facts) => facts.state === 'dormant',
   },
 ];
 
-const TYPE_GROUPS: GroupDefinition[] = (['chat', 'code'] as const).map(
-  (mode) => ({
-    id: mode,
-    label: agentsModeLabel(mode),
-    contains: (facts) => facts.mode === mode,
-  })
-);
+function ungrouped<Item>(items: readonly Item[]): ConversationGroup<Item>[] {
+  return [{ id: 'all', label: undefined, counted: false, items: [...items] }];
+}
 
-/** Splits an ordered list into headed sections, dropping empty ones. */
+/**
+ * Splits an ordered list into headed sections, dropping empty ones. A list
+ * that is all Recent needs no heading, so it stays ungrouped.
+ */
 export function groupConversations<Item>(
   items: readonly Item[],
   factsOf: (item: Item) => ConversationFacts,
   grouping: ConversationGrouping
 ): ConversationGroup<Item>[] {
-  if (grouping === 'none')
-    return [{ id: 'all', label: undefined, items: [...items] }];
-  const definitions = grouping === 'status' ? STATUS_GROUPS : TYPE_GROUPS;
-  return definitions
-    .map((definition) => ({
-      id: definition.id,
-      label: definition.label,
-      items: items.filter((item) => definition.contains(factsOf(item))),
-    }))
-    .filter((group) => group.items.length > 0);
+  if (grouping === 'none') return ungrouped(items);
+  const groups = STATUS_GROUPS.map((definition) => ({
+    id: definition.id,
+    label: definition.label,
+    counted: definition.counted,
+    items: items.filter((item) => definition.contains(factsOf(item))),
+  })).filter((group) => group.items.length > 0);
+  const onlyRecent = groups.length === 1 && !groups[0]?.counted;
+  return onlyRecent ? ungrouped(items) : groups;
 }

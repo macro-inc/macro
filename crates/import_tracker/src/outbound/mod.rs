@@ -1,2 +1,2 @@
-/// Pipedream transport.
-pub mod pipedream;
+/// Paced, retried reads through a user's connected app.
+pub mod connection;

@@ -166,8 +166,13 @@ pub(super) struct ToolPath {
 pub(super) struct Turn {
     pub(super) id: TurnId,
     pub(super) notification: bool,
+    /// Agent text not yet shown because it could still end the reply as
+    /// `<noop/>`: the whole reply so far, or the tail after shown prose.
     pub(super) noop_buffer: String,
+    /// Reasoning held with a reply that may still turn out silent.
     pub(super) pending_thought: String,
+    /// A notification turn with no tool activity, which may still end in
+    /// `<noop/>`.
     pub(super) can_noop: bool,
     /// The prompt that opened this turn is speculative: on the wire, not yet
     /// in the log. Reads as [`TurnState::Starting`] until the agent answers.
@@ -191,6 +196,13 @@ pub(super) struct Turn {
     /// Where this turn's plan sits in the agent message's parts, so later
     /// plan updates can replace it.
     pub(super) plan_position: Option<usize>,
+}
+
+impl Turn {
+    /// The agent's whole reply so far is the noop signal: a silent turn.
+    pub(super) fn answered_with_noop(&self) -> bool {
+        self.can_noop && self.agent.is_none() && super::content::is_noop_signal(&self.noop_buffer)
+    }
 }
 
 impl FoldState {

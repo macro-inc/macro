@@ -22,6 +22,9 @@ const view = await vi.hoisted(async () => {
   };
 });
 
+vi.mock('@property/hooks/useStartDateEnabled', () => ({
+  useStartDateEnabled: () => () => false,
+}));
 vi.mock('../../tasks-view-context', () => ({
   useTasksView: () => ({
     state: view.state,

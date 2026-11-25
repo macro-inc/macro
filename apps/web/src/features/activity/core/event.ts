@@ -15,6 +15,13 @@ export type ActivityAction =
   | { kind: 'participant-removed'; participant: string }
   | { kind: 'task-added'; taskId?: string }
   | { kind: 'task-removed'; taskId?: string }
+  /** Time logged on a task, in whole minutes, for the day the person chose. */
+  | {
+      kind: 'time-logged';
+      minutes: number;
+      entryDate: string;
+      source: 'manual' | 'timer';
+    }
   | { kind: 'unknown'; tag: string };
 
 /**

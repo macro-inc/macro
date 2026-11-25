@@ -94,6 +94,27 @@ data:
 
       }
     }
+    # Argo CD, which checks sign-in itself (Google through its Dex). Its UI
+    # streams application changes, so responses aren't buffered.
+    server {
+      listen 8080;
+      server_name argo.macro-internal.com;
+      add_header Strict-Transport-Security "max-age=31536000" always;
+      location / {
+        set $upstream http://argocd-server.argocd.svc.cluster.local:80;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+
+      }
+    }
+
 
     }
 kind: ConfigMap

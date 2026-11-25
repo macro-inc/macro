@@ -61,6 +61,10 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   Search reads attachment kinds per page from `email_attachments` with the
   same prefixes (`threads::search_filters`), since the kind flags are not
   backfilled everywhere.
+- A backfill over every mailbox walks the source table in heap-block batches,
+  one short transaction each (`backfill_attachment_kind_flags_in_blocks`): a
+  statement per mailbox reads the whole table again for each large one and
+  holds its row locks until the mailbox is done.
 - Undated provider drafts use creation time for All Mail eligibility; spam/junk
   and trash remain excluded, including the timestamp override for synced Macro
   drafts. Keep ingestion, recomputation, and cached projections aligned.

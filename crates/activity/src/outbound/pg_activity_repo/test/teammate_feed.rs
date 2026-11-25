@@ -7,7 +7,7 @@ const BOB: &str = "macro|bob@example.com";
 const OUTSIDER: &str = "macro|outsider@example.com";
 const LONER: &str = "macro|loner@example.com";
 
-async fn insert_user(pool: &PgPool, id: &str) {
+pub(super) async fn insert_user(pool: &PgPool, id: &str) {
     let macro_user_id = Uuid::now_v7();
     sqlx::query!(
         r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)"#,

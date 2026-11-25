@@ -1,6 +1,6 @@
 import { type Browser, expect } from '@playwright/test';
 
-/** Exercise touch entry and exit for every product demo in the built site. */
+/** Check each product page's first paint and real app screens in the built site. */
 export async function verifyProductPages(browser: Browser, origin: string) {
   for (const route of [
     '/email',
@@ -11,6 +11,16 @@ export async function verifyProductPages(browser: Browser, origin: string) {
     '/crm',
     '/agents',
     '/github',
+    '/forms',
+    '/spreadsheets',
+    '/databases',
+    '/drive',
+    '/calendar',
+    '/booking-links',
+    '/canvas',
+    '/snippets',
+    '/routines',
+    '/skills',
   ]) {
     const page = await browser.newPage({
       viewport: { width: 390, height: 844 },
@@ -60,35 +70,33 @@ export async function verifyProductPages(browser: Browser, origin: string) {
       await page.waitForLoadState('load');
       await expect(brand).toHaveAttribute('width', '20');
       await expect(brand).toHaveAttribute('height', '20');
-      const demos = page.locator('.demo-interaction-boundary').filter({
-        has: page.locator(':scope > .demo-interaction-activate'),
-      });
-      const count = await demos.count();
-      expect(count, `${route}: product demos are present`).toBeGreaterThan(0);
-      // All boundaries return to preview mode after tapping the heading, so
-      // their order stays stable while the deferred demo content loads.
+      // Each feature section shows a real app screen, sized before it loads.
+      const screens = page.locator('.feature-screenshot img:visible');
+      const count = await screens.count();
+      expect(count, `${route}: app screens are present`).toBeGreaterThan(0);
       for (let index = 0; index < count; index++) {
-        const demo = demos.nth(index);
-        const boundary = await demo.elementHandle();
-        if (!boundary) throw new Error(`${route}: demo ${index} disappeared`);
-        await demo.locator(':scope > .demo-interaction-activate').tap();
-        // Hold the clicked boundary: activation removes its entry button.
-        expect(await boundary.getAttribute('data-demo-active')).toBe('true');
+        const box = await screens.nth(index).boundingBox();
         expect(
-          await boundary.evaluate((element) =>
-            element
-              .querySelector(':scope > .demo-interaction-content')
-              ?.hasAttribute('inert')
-          )
-        ).toBe(false);
-        await heading.tap();
-        await expect(
-          page.locator(
-            '.demo-interaction-boundary[data-demo-interacted="true"][data-demo-active="true"]'
-          )
-        ).toHaveCount(0);
-        await boundary.dispose();
+          box?.height,
+          `${route}: screen ${index} keeps its height`
+        ).toBeGreaterThan(100);
       }
+      // The outlined part of each screen starts fully in view on a phone.
+      const clipped = await page.evaluate(() =>
+        [...document.querySelectorAll('.feature-screenshot-focus')]
+          .filter((focus) => focus.getClientRects().length > 0)
+          .filter((focus) => {
+            const frame = focus
+              .closest('.feature-screenshot-viewport')
+              ?.getBoundingClientRect();
+            const box = focus.getBoundingClientRect();
+            return (
+              !frame || box.left < frame.left - 1 || box.right > frame.right + 1
+            );
+          })
+          .map((focus) => focus.closest('section')?.id ?? '?')
+      );
+      expect(clipped, `${route}: outlines fit on a phone`).toEqual([]);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > window.innerWidth + 1
       );
@@ -114,7 +122,7 @@ export async function verifyProductPages(browser: Browser, origin: string) {
         expect(await appLink.boundingBox()).toEqual(headerBounds);
       }
       console.log(
-        `[prerender] ${route}: ${count} mobile demos accept touch entry and return to page scrolling`
+        `[prerender] ${route}: ${count} app screens render on a phone`
       );
     } finally {
       releaseScripts();

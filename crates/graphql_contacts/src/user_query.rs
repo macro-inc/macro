@@ -2,6 +2,7 @@ use async_graphql::{Context, Enum, ErrorExtensions, ID, Object, SimpleObject};
 use contacts::domain::models::{
     contact::Contact,
     page::{ContactCursor, ContactPageSize, MAX_CONTACT_PAGE_SIZE},
+    people::{NamedPeopleQuery, PeopleSearchLimit},
     query::{ContactLookup, ContactSearch},
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -152,6 +153,40 @@ impl GraphqlContactsQuery {
             .collect::<Result<Vec<_>, _>>()?;
         self.lookup(ctx, ContactLookup::new(ids).ok_or_else(bad_input)?)
             .await
+    }
+
+    /// The viewer's contacts whom the text names, across the whole directory:
+    /// their whole name, or for one word their first name, equals it, or each
+    /// typed word starts a word of the name they are shown with (their Macro
+    /// profile name, else the viewer's address-book label, else their
+    /// address's local part). Ranked by contact list (interacted or invited,
+    /// then teammates, then connected inboxes, then anyone else; teammates,
+    /// then anyone else, for a directory without lists), then exact names,
+    /// then user ID. There is no continuation. An address or user ID names
+    /// nobody: look it up with `contactsByEmails` or `contactsByUserIds`.
+    #[tracing::instrument(name = "contacts.graphql.named", skip_all, fields(limit), err(Debug))]
+    async fn contacts_named_by(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "Typed text, at most 512 UTF-8 bytes and 32 words.")] search: String,
+        #[graphql(desc = "Maximum contacts, at least 1; defaults to 20 and is capped at 50.")]
+        limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<GraphqlContact>> {
+        let limit = match limit {
+            None => PeopleSearchLimit::DEFAULT,
+            Some(limit) => u32::try_from(limit)
+                .ok()
+                .and_then(PeopleSearchLimit::new)
+                .ok_or_else(bad_input)?,
+        };
+        tracing::Span::current().record("limit", i64::from(limit.get()));
+        let query = NamedPeopleQuery::new(&search).ok_or_else(bad_input)?;
+        ctx.data::<ContactsGraphqlContext>()?
+            .reads
+            .named(self.viewer.clone(), query, limit)
+            .await
+            .map(|contacts| contacts.into_iter().map(Into::into).collect())
+            .map_err(unavailable)
     }
 
     /// Read one page of the viewer's personal contacts with resolved names.

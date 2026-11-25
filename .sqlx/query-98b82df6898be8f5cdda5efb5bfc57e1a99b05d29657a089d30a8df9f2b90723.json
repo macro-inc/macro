@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT attempt_id FROM email_send_attempts WHERE message_id = $1 AND link_id = $2 AND NOT cancelled AND NOT sent ORDER BY attempt_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attempt_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "98b82df6898be8f5cdda5efb5bfc57e1a99b05d29657a089d30a8df9f2b90723"
+}

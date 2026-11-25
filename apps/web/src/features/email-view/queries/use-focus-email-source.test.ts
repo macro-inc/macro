@@ -108,6 +108,7 @@ function select(
     {
       tab: 'focus',
       search: '',
+      searchScope: 'all',
       inboxIds: undefined,
       facets: {},
       focusSort: 'recent',
@@ -171,12 +172,6 @@ describe('selectFocusEmails', () => {
   it('scopes to the selected inboxes', () => {
     expect(select({ inboxIds: ['inbox-b'] })).toEqual(['report']);
     expect(select({ inboxIds: [] })).toEqual([]);
-  });
-
-  it('searches subject, snippet and sender', () => {
-    expect(select({ search: 'casey' })).toEqual(['invoice']);
-    expect(select({ search: 'rollout' })).toEqual(['plan']);
-    expect(select({ search: 'subject report' })).toEqual(['report']);
   });
 
   it('does not reorder the input list', () => {
