@@ -1,0 +1,1388 @@
+apiVersion: v1
+data:
+  config.alloy: |-
+    // The second tier of trace ingest. Alloy ingest routes every span of a trace
+    // here by its trace id, so one replica sees the whole trace: it counts span
+    // metrics and service graphs from all of it, waits for the trace to settle,
+    // and sends Tempo the traces ./default.nix's policies keep.
+
+    otelcol.receiver.otlp "spans" {
+      grpc {
+        endpoint = "0.0.0.0:4317"
+        max_recv_msg_size = "16MiB"
+      }
+      output { traces = [otelcol.processor.memory_limiter.spans.input] }
+    }
+
+    // Over the limit, ingest is refused and retries; what is held is decided and
+    // released within the wait.
+    otelcol.processor.memory_limiter "spans" {
+      check_interval = "1s"
+      limit = "3GiB"
+      spike_limit = "512MiB"
+      output {
+        traces = [
+          otelcol.connector.spanmetrics.all.input,
+          otelcol.connector.servicegraph.all.input,
+          otelcol.processor.tail_sampling.traces.input,
+        ]
+      }
+    }
+
+    // The series Tempo's metrics generator wrote, now from every span instead of
+    // the sampled ones.
+    otelcol.connector.spanmetrics "all" {
+      namespace = "traces.spanmetrics"
+      // Span names are unbounded.
+      exclude_dimensions = ["span.name"]
+      dimension { name = "deployment.environment" }
+      // Every instance of a service is one series.
+      resource_metrics_key_attributes = ["service.name"]
+      aggregation_cardinality_limit = 5000
+      metrics_flush_interval = "30s"
+      metrics_expiration = "15m"
+      histogram {
+        unit = "s"
+        explicit { buckets = ["2ms", "4ms", "8ms", "16ms", "32ms", "64ms", "128ms", "256ms", "512ms", "1024ms", "2048ms", "4096ms", "8192ms", "16384ms"] }
+      }
+      exemplars { enabled = true }
+      output { metrics = [otelcol.processor.transform.series.input] }
+    }
+
+    otelcol.connector.servicegraph "all" {
+      dimensions = ["deployment.environment"]
+      virtual_node_peer_attributes = ["peer.service", "db.name", "db.system", "db.system.name"]
+      latency_histogram_buckets = ["100ms", "200ms", "400ms", "800ms", "1600ms", "3200ms", "6400ms", "12800ms"]
+      metrics_flush_interval = "30s"
+      store {
+        max_items = 10000
+        ttl = "10s"
+      }
+      output { metrics = [otelcol.processor.filter.unknown_peers.input] }
+    }
+
+    // A call whose other end sent no span and has no peer attribute would be an
+    // edge to "unknown".
+    otelcol.processor.filter "unknown_peers" {
+      error_mode = "ignore"
+      metrics {
+        datapoint = [`attributes["connection_type"] == "virtual_node" and attributes["server"] == "unknown"`]
+      }
+      output { metrics = [otelcol.processor.transform.series.input] }
+    }
+
+    // The generator's names and labels. Resource attributes would become a `job`
+    // and `instance` the generator's series never had.
+    otelcol.processor.transform "series" {
+      error_mode = "ignore"
+      metric_statements {
+        context = "metric"
+        statements = [
+          `set(unit, "") where name == "traces.spanmetrics.duration"`,
+          `set(name, "traces.spanmetrics.latency") where name == "traces.spanmetrics.duration"`,
+        ]
+      }
+      metric_statements {
+        context = "datapoint"
+        statements = [
+          `set(attributes["service"], attributes["service.name"]) where attributes["service.name"] != nil`,
+          `delete_key(attributes, "service.name")`,
+          `set(attributes["deployment.environment"], attributes["client_deployment.environment"]) where attributes["client_deployment.environment"] != nil`,
+          `set(attributes["deployment.environment"], attributes["server_deployment.environment"]) where attributes["server_deployment.environment"] != nil`,
+          `delete_matching_keys(attributes, "^(client|server)_deployment.environment$")`,
+        ]
+      }
+      metric_statements {
+        context = "resource"
+        statements = [`delete_matching_keys(attributes, ".*")`]
+      }
+      output { metrics = [otelcol.exporter.prometheus.series.input] }
+    }
+
+    otelcol.exporter.prometheus "series" {
+      include_target_info = false
+      include_scope_info = false
+      include_scope_labels = false
+      forward_to = [prometheus.remote_write.mimir.receiver]
+    }
+
+    // Every replica counts its own share of the traces, so each needs a label of
+    // its own; the StatefulSet's pod name stays across restarts.
+    prometheus.remote_write "mimir" {
+      external_labels = { sampler = sys.env("HOSTNAME") }
+      endpoint { url = "http://mimir.observability.svc.cluster.local:8080/api/v1/push" }
+    }
+
+    otelcol.processor.tail_sampling "traces" {
+      decision_wait = "30s"
+      num_traces = 150000
+      // One shard: each has its own rate limiters, so more would multiply every
+      // budget. Late spans follow a trace that was kept. One that was dropped is
+      // forgotten once another is dropped, so its late spans are judged again and
+      // an error after the wait is still kept; a cache of one is what makes the
+      // processor forget it rather than remember it until `num_traces` is reached.
+      decision_cache = {
+        sampled_cache_size = 500000,
+        non_sampled_cache_size = 1,
+      }
+
+    policy {
+      name = "important-agent-harness-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "agent-harness-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-authentication-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "authentication-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-calendar-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "calendar-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-ci-telemetry"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "ci-telemetry" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-cloud-storage-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "cloud-storage-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 500
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-connection-gateway"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "connection-gateway" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-contacts-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "contacts-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-convert-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "convert-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-email-focus-worker"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "email-focus-worker" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-email-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "email-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 666
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-notification-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "notification-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-search-processing-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "search-processing-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-static-file-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "static-file-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-sync-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "sync-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-web-app"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "web-app" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "important-other"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`not IsMatch(resource.attributes["service.name"], "^(agent-harness-service|authentication-service|calendar-service|ci-telemetry|cloud-storage-service|connection-gateway|contacts-service|convert-service|email-focus-worker|email-service|notification-service|search-processing-service|static-file-service|sync-service|web-app)$") and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$") and (status.code == STATUS_CODE_ERROR or (kind == SPAN_KIND_SERVER and end_time_unix_nano - start_time_unix_nano >= 1000000000))`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 200
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "perf"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`attributes["macro.sampling.class"] == "perf"`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 333
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "outlook"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`(IsMatch(name, "^outlook\\.") or attributes["outlook.throttle_origin"] != nil or attributes["outlook.token_cache"] != nil)`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 1000
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-agent-harness-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "agent-harness-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-authentication-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "authentication-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-calendar-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "calendar-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-ci-telemetry"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "ci-telemetry" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-cloud-storage-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "cloud-storage-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 333
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-connection-gateway"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "connection-gateway" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-contacts-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "contacts-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-convert-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "convert-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-email-focus-worker"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "email-focus-worker" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-email-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "email-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 1000
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-notification-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "notification-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-search-processing-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "search-processing-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-static-file-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "static-file-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-sync-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "sync-service" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-web-app"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "web-app" and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "tenth-other"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`not IsMatch(resource.attributes["service.name"], "^(agent-harness-service|authentication-service|calendar-service|ci-telemetry|cloud-storage-service|connection-gateway|contacts-service|convert-service|email-focus-worker|email-service|notification-service|search-processing-service|static-file-service|sync-service|web-app)$") and not IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "tenth"
+      type = "probabilistic"
+      probabilistic { sampling_percentage = 10 }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-agent-harness-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "agent-harness-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-authentication-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "authentication-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-calendar-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "calendar-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-ci-telemetry"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "ci-telemetry" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-cloud-storage-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "cloud-storage-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 666
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-connection-gateway"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "connection-gateway" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 666
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-contacts-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "contacts-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-convert-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "convert-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-email-focus-worker"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "email-focus-worker" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-email-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "email-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-notification-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "notification-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-search-processing-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "search-processing-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-static-file-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "static-file-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-sync-service"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "sync-service" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-web-app"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`resource.attributes["service.name"] == "web-app" and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+    policy {
+      name = "nonProd-other"
+      type = "and"
+      and {
+    and_sub_policy {
+      name = "match"
+      type = "ottl_condition"
+    ottl_condition {
+      error_mode = "ignore"
+      span = [`not IsMatch(resource.attributes["service.name"], "^(agent-harness-service|authentication-service|calendar-service|ci-telemetry|cloud-storage-service|connection-gateway|contacts-service|convert-service|email-focus-worker|email-service|notification-service|search-processing-service|static-file-service|sync-service|web-app)$") and IsMatch(resource.attributes["deployment.environment"], "^(dev|development|ci|local)$")`]
+    }
+    }
+    and_sub_policy {
+      name = "budget"
+      type = "rate_limiting"
+    rate_limiting {
+      spans_per_second = 166
+      burst_capacity = 20000
+    }
+    }
+
+      }
+    }
+
+      output { traces = [otelcol.processor.batch.kept.input] }
+    }
+
+    otelcol.processor.batch "kept" {
+      timeout = "1s"
+      send_batch_size = 2048
+      send_batch_max_size = 4096
+      output { traces = [otelcol.exporter.otlp.tempo.input] }
+    }
+
+    otelcol.exporter.otlp "tempo" {
+      client {
+        endpoint = "tempo-distributor.observability.svc.cluster.local:4317"
+        tls { insecure = true }
+      }
+      sending_queue { queue_size = 512 }
+    }
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/component: config
+    app.kubernetes.io/instance: alloy-sampler
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: alloy
+    app.kubernetes.io/part-of: alloy
+    app.kubernetes.io/version: v1.22.0
+    helm.sh/chart: alloy-1.16.0
+  name: alloy-sampler
+  namespace: observability

@@ -74,6 +74,9 @@
     };
     compactor.compaction.block_retention = "168h";
     metrics_generator = {
+      # The sampler holds a trace 30s before sending it, and the generator drops
+      # spans that ended longer ago than this (30s by default).
+      metrics_ingestion_time_range_slack = "5m";
       ring.instance_addr = "127.0.0.1";
       processor = {
         service_graphs.dimensions = [ "deployment.environment" ];

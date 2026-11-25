@@ -11,6 +11,7 @@
     ./grafana.nix
     ./ingest.nix
     ./derived-metrics
+    ./sampler
     ./edge.nix
   ];
 }

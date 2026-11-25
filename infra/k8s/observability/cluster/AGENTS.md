@@ -19,6 +19,8 @@ The [README](README.md) has the application list, bootstrap and contract with
   (README, "Grafana, the edge and ingest").
 - `modules/derived-metrics/`: Datadog's derived metrics, computed here; `MAPPING.md`
   there is how to translate a Datadog query.
+- `modules/sampler/`: the tier behind ingest that samples traces and counts span
+  metrics (README, "Trace sampling"); what is kept is `policies.nix`.
 
 ## Scope
 

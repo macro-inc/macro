@@ -27,7 +27,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 374336de0b98c02e5327ff9a8cec293c9538816ccd381a4453ce012c82844dd0
+        checksum/config: b5bfa48a1ab486932332ed1003cdfea0125d3f2a5aadd7a7bbc682ee07403fe2
       labels:
         app.kubernetes.io/component: compactor
         app.kubernetes.io/instance: tempo

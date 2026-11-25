@@ -65,7 +65,7 @@ data:
       retransmit_factor: 2
       stream_timeout: 10s
     metrics_generator:
-      metrics_ingestion_time_range_slack: 30s
+      metrics_ingestion_time_range_slack: 5m
       processor:
         local_blocks:
           concurrent_blocks: 2
