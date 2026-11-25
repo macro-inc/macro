@@ -132,6 +132,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   and `GET /internal/computers/{id}/moves` (internal API key only): start and
   watch moving a computer to another host; the operator's move pass (every
   5 s) does the work.
+- The operator's image upgrade pass (every 10 s, development only:
+  `image_upgrades_allowed` in `src/computers.rs`) advances the one unfinished
+  image upgrade (`hosted_runtimes::domain::image_upgrade`), which the
+  Firecracker image rollout workflow records with the `image-upgrade` binary.
 - `src/computers/agent_enrollment.rs`: the operator's `AgentEnrollmentSource`;
   every computer creation asks the auth service's internal
   `/internal/team_agent_enrollment` route, so an agent computer never enrolls
@@ -152,8 +156,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   from: a Firecracker image such as `macro-box/2026-11-10`, or a Docker tag;
   `COMPUTERS_AGENT_IMAGE` the agent-mode one agent teammates' computers get
   (`macro-box-agent/2026-11-10`, `macro-box-agent:latest`). Each
-  computer records its own image; updates go through hosted_runtimes' image
-  update routes, never by changing this value for existing computers.
+  computer records its own image; existing computers move only through an
+  image upgrade (the pass above), never by changing this value.
   HostedHarnesses pairing records the buyer as the harness owner, but the
   harness belongs to the computer's team: its owner and admins manage it
   (Claude sign-in included) and every member can run agents on it.
