@@ -92,10 +92,10 @@ The server plans a stream's lanes from the pass's lane catalog
 - Membership lanes and lanes listed whole every run (`channels`,
   `email-shared`) start fresh; anything else does too.
 - Calendar windows are the months the pass covers, nearest first, in the
-  client's time zone, clamped to whole local days of the range the calendar
-  service materializes (`OccurrenceRange::historical_sync`, which the handler
-  passes to the planner), without
-  what `calendar.coverage` holds. They take what the 32-lane cap leaves; the
+  client's time zone, clamped to whole local days a day inside the range the
+  calendar service materializes (`OccurrenceRange::historical_sync`, which the
+  handler passes to the planner; the service rejects a read outside it when
+  the page runs), without what `calendar.coverage` holds. They take what the 32-lane cap leaves; the
   farthest are dropped first and come back next run. A window is fetched whole
   each stream. A time zone the server does not know plans no windows.
 

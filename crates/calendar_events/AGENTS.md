@@ -72,12 +72,12 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   occurrence projections, not separate events — don't model them as new entities.
 - Imported point (non-recurring) events must survive sync and cache round-trips
   unchanged (#7762) — a regression here silently drops user events.
-- Occurrence reads (`list_occurrences`, team out-of-office) clamp their window
-  to the materialized range (now − 365 to now + 730 days) instead of rejecting
-  it; a window wholly outside it reads empty. The streamed sync plans its
-  calendar windows inside `OccurrenceRange::historical_sync`, which the
-  document storage service passes to `soup_sync_stream`, so change the range
-  there.
+- Occurrence reads (`list_occurrences`, team out-of-office) reject a window
+  outside the materialized range (now − 365 to now + 730 days). The streamed
+  sync plans its calendar windows a day inside
+  `OccurrenceRange::historical_sync`, which the document storage service
+  passes to `soup_sync_stream`, so its pages stay inside the range when they
+  run later; change the range there.
 - Normalize imported Google all-day events with matching start/end dates to one
   day in the adapter, including recurring instances and overrides; preserve the
   raw provider payload and keep reversed dates invalid.

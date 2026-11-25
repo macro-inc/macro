@@ -29,6 +29,9 @@ pub struct MaterializedRange {
     pub ends_at: DateTime<Utc>,
 }
 
+/// How far inside the materialized range windows stay.
+const WINDOW_MARGIN: TimeDelta = TimeDelta::days(1);
+
 /// Units of a [`CalendarSpan`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -116,9 +119,15 @@ fn backfill_months(
     months: u32,
 ) -> Vec<(DateTime<Utc>, DateTime<Utc>)> {
     let today = local_date(zone, now);
-    // Whole local days inside the materialized range.
-    let supported_start = local_midnight(zone, local_date_ceil(zone, materialized.starts_at));
-    let supported_end = local_midnight(zone, local_date(zone, materialized.ends_at));
+    // Whole local days inside the materialized range, a margin in from each
+    // end: the calendar service rejects a read outside the range it holds
+    // when the page runs, which can be minutes after this plan.
+    let supported_start = local_midnight(
+        zone,
+        local_date_ceil(zone, materialized.starts_at + WINDOW_MARGIN),
+    );
+    let supported_end =
+        local_midnight(zone, local_date(zone, materialized.ends_at - WINDOW_MARGIN));
     let mut offsets = vec![0_i32];
     for offset in 1..=i32::try_from(months).unwrap_or(i32::MAX) {
         offsets.extend([offset, -offset]);

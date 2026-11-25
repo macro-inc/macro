@@ -70,9 +70,10 @@ fn months_stay_inside_the_materialized_range() {
         100,
     );
     assert_eq!(windows.len(), 25);
-    // 364 days back is 2025-11-03; the materialized range ends 729 days ahead.
+    // The range starts 365 days back (2025-11-02 12:00); a day's margin and
+    // whole days make the earliest window start on 2025-11-04.
     let earliest = windows.last().unwrap();
-    assert_eq!(earliest.input["startDate"], "2025-11-03");
+    assert_eq!(earliest.input["startDate"], "2025-11-04");
     assert_eq!(earliest.input["endDate"], "2025-12-01");
 }
 
