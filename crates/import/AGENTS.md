@@ -36,11 +36,16 @@ ready, holds it (`import_run.review_id`); any other is refused
 the run and its staged rows). Writing starts only through
 `start_reviewed_write`: one statement moves the run from `ready` to
 `importing` while that review holds it (or, for plans presented before the
-run recorded reviews, its staged rows do), and otherwise refuses typed
+run recorded reviews, its staged rows do). It records the review it admitted
+(`import_run.write_review_id`, cleared when a new plan starts), so a write
+that failed may be started again from `failed` by that same review once the
+earlier writer's lease has expired, with its adoptions reset; any other
+review of a failed run must replan. Otherwise it refuses typed
 (`StillPlanning`, `PresentedElsewhere`, `NothingLeft`, failed, finished)
-before anything about the plan changes; the owner's sharing choices are
-written only once it has started. A failure before the write is held (or
-after `reopen_plan` put it back) is `ImportError::NotStarted`, safe to
+before anything about the plan changes, and returns the status it started
+from; the owner's sharing choices are written only once it has started. A
+failure before the write is held (or after `reopen_plan` put it back to that
+status) is `ImportError::NotStarted`, safe to
 approve again; once the write is spawned, the returned report is read
 without failing the call. `SETTLED` only
 says which runs a new plan may replace. A failed plan or write records its
