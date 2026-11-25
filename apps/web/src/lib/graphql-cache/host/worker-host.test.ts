@@ -1285,6 +1285,98 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('connects again when a lost connection leaves an authority read unanswered', async () => {
+    vi.useFakeTimers();
+    const adapters: FakePageAdapter[] = [];
+    configureAdapter = (fake) => adapters.push(fake);
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    await host.currentRevision();
+    const [lost] = adapters;
+    lost.ignoredKinds.add('current-authority');
+    lost.ping.mockImplementation(() => true);
+    await vi.advanceTimersByTimeAsync(1);
+    const authority = host.authority?.current();
+
+    await vi.advanceTimersByTimeAsync(
+      COORDINATOR_CONNECT_TIMEOUT_MS + PING_TIMEOUT_MS
+    );
+
+    expect(lost.ping).toHaveBeenCalledOnce();
+    expect(lost.dispose).toHaveBeenCalledOnce();
+    expect(adapters).toHaveLength(2);
+    await expect(authority).resolves.toMatchObject({
+      generation: TEST_AUTHORITY_GENERATION,
+    });
+    expect(onInitializationError).not.toHaveBeenCalled();
+    host.dispose();
+  });
+
+  it('keeps a hidden page waiting on a lost connection until it can connect again', async () => {
+    vi.useFakeTimers();
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    const adapters: FakePageAdapter[] = [];
+    configureAdapter = (fake) => adapters.push(fake);
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    await host.currentRevision();
+    const [lost] = adapters;
+    lost.ignoredKinds.add('current-authority');
+    lost.ping.mockImplementation(() => true);
+    visibility.mockReturnValue('hidden');
+    await vi.advanceTimersByTimeAsync(1);
+    const settled = vi.fn();
+    const authority = host.authority?.current().finally(settled);
+
+    await vi.advanceTimersByTimeAsync(60 * 60_000);
+    expect(settled).not.toHaveBeenCalled();
+    expect(adapters).toHaveLength(1);
+
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(PING_TIMEOUT_MS);
+    await expect(authority).resolves.toMatchObject({
+      generation: TEST_AUTHORITY_GENERATION,
+    });
+    expect(adapters).toHaveLength(2);
+    expect(onInitializationError).not.toHaveBeenCalled();
+    visibility.mockRestore();
+    host.dispose();
+  });
+
+  it('ends an authority read whose host is disposed while hidden', async () => {
+    vi.useFakeTimers();
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    const adapters: FakePageAdapter[] = [];
+    configureAdapter = (fake) => adapters.push(fake);
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    const [lost] = adapters;
+    lost.ignoredKinds.add('current-authority');
+    lost.ping.mockImplementation(() => true);
+    visibility.mockReturnValue('hidden');
+    await vi.advanceTimersByTimeAsync(1);
+    const failed = vi.fn();
+    const authority = host.authority?.current().catch(failed);
+    await vi.advanceTimersByTimeAsync(
+      COORDINATOR_CONNECT_TIMEOUT_MS + PING_TIMEOUT_MS
+    );
+    expect(lost.ping).toHaveBeenCalledOnce();
+    expect(failed).not.toHaveBeenCalled();
+
+    host.dispose();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(failed).toHaveBeenCalledOnce();
+    await authority;
+    visibility.mockRestore();
+  });
+
   it('ends an authority read a ready owner never answers', async () => {
     vi.useFakeTimers();
     const host = createWorkerCacheHost({

@@ -324,6 +324,8 @@ export type EngineToCoordinatorEnvelope =
       ownerEpoch: OwnerEpoch;
       ownerLockName: string;
       ownerLockHeld: true;
+      /** The engine's own client in the browser's list of locks. */
+      ownerLockClientId?: string;
       databaseActionProof: DatabaseActionProof;
       openOutcome: EngineOpenOutcome;
     }
@@ -1457,6 +1459,7 @@ export function validateEngineToCoordinatorEnvelope(
           'ownerEpoch',
           'ownerLockName',
           'ownerLockHeld',
+          'ownerLockClientId',
           'databaseActionProof',
           'openOutcome',
         ]) &&
@@ -1464,6 +1467,8 @@ export function validateEngineToCoordinatorEnvelope(
         isPositiveInteger(value.ownerEpoch) &&
         isNonEmptyString(value.ownerLockName) &&
         value.ownerLockHeld === true &&
+        (value.ownerLockClientId === undefined ||
+          isNonEmptyString(value.ownerLockClientId)) &&
         isDatabaseActionProof(value.databaseActionProof) &&
         isEngineOpenOutcome(value.openOutcome)
       ) {
