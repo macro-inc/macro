@@ -666,12 +666,14 @@ paths remain behind the same `CacheHost` interface.
 Normalized records are serialized with `postcard` into `records.value`, behind a
 one-byte encoding tag: records of 256 bytes or more are stored deflated when that
 is smaller, and everything else stays raw. Other persisted payloads (queued
-mutations, optimistic layers, projections) remain plain postcard. A format bump
-that only changes the record encoding carries the previous database forward by
-dropping records, search projections, index facts, and calendar ranges — all
-refetchable — while keeping queued mutations, optimistic layers, and their
-projections. Native storage then compacts the migrated file with `VACUUM INTO`, so
-the upgrade reclaims the space instead of leaving freed pages behind.
+mutations, optimistic layers, projections) remain plain postcard. On native, a
+format bump that only changes the record encoding carries the previous file
+forward by dropping records, search projections, index facts, and calendar
+ranges — all refetchable — while keeping queued mutations, optimistic layers,
+and their projections; a browser opens a new database name instead, as above.
+Native storage then compacts the migrated file with `VACUUM INTO`, so the
+upgrade reclaims the space instead of leaving freed pages behind; a compaction
+that fails tries to keep the migrated file as it is.
 Both hosts use the same `Storage` implementation and compound entity keys.
 Wasm futures are not `Send`, so the `Storage` trait's futures are bound by
 `MaybeSend` (`crates/maybe_send`): `Send` on native targets, where Tauri drives
@@ -1720,8 +1722,8 @@ matching compact projections into a Rust heap of at most `limit + 1` documents.
 It no longer retains per-bucket text catalogs. Matching and ranking semantics,
 optimistic overlays, and indexed empty-query browsing are preserved; leading
 wildcards still scan selected buckets. Storage schema 12 makes the browse index
-covering by appending search text and source hashes. This is an incompatible
-cutover, not a migration: native caches reset, including queued mutations;
+covering by appending search text and source hashes. Native caches upgrade in
+place through the registered 11 to 12 storage step, keeping queued mutations;
 browsers open a fresh `s4.v4.t12` file and do not replay older files' queues.
 Existing cleanup safeguards for those older files remain. That streaming-search
 cutover did not change the record format or schema epoch. See
