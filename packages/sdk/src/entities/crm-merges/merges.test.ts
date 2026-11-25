@@ -11,19 +11,38 @@ const REVISION =
 
 function recording() {
   const bodies: Array<Record<string, unknown>> = [];
+  const contactReads: string[] = [];
+  let merged = false;
   const client = {
     storage: {
+      getContact: async ({ path }: { path: { contact_id: string } }) => {
+        contactReads.push(path.contact_id);
+        return {
+          data: {
+            id: path.contact_id,
+            emails: merged
+              ? ['pat@acme.example.com', 'pat@home.example.com']
+              : ['pat@acme.example.com'],
+          },
+        };
+      },
       previewCrmMerge: async ({ body }: { body: Record<string, unknown> }) => {
         bodies.push(body);
         return { data: { revision: REVISION } };
       },
       commitCrmMerge: async ({ body }: { body: Record<string, unknown> }) => {
         bodies.push(body);
+        merged = true;
         return { data: { mergeId: 'merge-1' } };
       },
     },
   } as unknown as MacroClient;
-  return { bodies, client, merges: new CrmMergeNamespace(client) };
+  return {
+    bodies,
+    client,
+    contactReads,
+    merges: new CrmMergeNamespace(client),
+  };
 }
 
 describe('crm merges', () => {
@@ -76,9 +95,29 @@ describe('crm merges', () => {
     });
     expect(bodies[1]).toMatchObject({
       recordType: 'contact',
+      survivorId: SURVIVOR,
+      sourceIds: [SOURCE],
       revision: REVISION,
       requestKey: '9f86d081-884c-7d65-9a2f-eaa0c55ad015',
       sharingRules: 'stop',
     });
+  });
+
+  test('a merge drops what the merged handles loaded, so they read the merged contact', async () => {
+    const { client, contactReads, merges } = recording();
+    const survivor = Contact.byId(client, SURVIVOR);
+
+    expect(await survivor.emails()).toEqual(['pat@acme.example.com']);
+    await merges.mergeContacts({
+      survivor,
+      sources: [Contact.byId(client, SOURCE)],
+      revision: REVISION,
+    });
+
+    expect(await survivor.emails()).toEqual([
+      'pat@acme.example.com',
+      'pat@home.example.com',
+    ]);
+    expect(contactReads).toEqual([SURVIVOR, SURVIVOR]);
   });
 });

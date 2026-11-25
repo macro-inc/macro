@@ -7,6 +7,7 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Company } from '../crm/company';
 import type { Contact } from '../crm/contact';
+import { forgetCachedDetail } from '../entity';
 
 /**
  * A merge's review: the record that stays and the ones merged into it, what
@@ -126,7 +127,7 @@ export class CrmMergeNamespace {
    * @idempotent
    */
   async mergeCompanies(merge: CrmCompanyMergeCommit): Promise<CrmMergeOutcome> {
-    return unwrap(
+    const outcome = unwrap(
       await this.client.storage.commitCrmMerge({
         body: {
           recordType: 'company',
@@ -138,6 +139,8 @@ export class CrmMergeNamespace {
         },
       }),
     );
+    forgetCachedDetail([merge.survivor, ...merge.sources]);
+    return outcome;
   }
 
   /**
@@ -167,7 +170,7 @@ export class CrmMergeNamespace {
    * @idempotent
    */
   async mergeContacts(merge: CrmContactMergeCommit): Promise<CrmMergeOutcome> {
-    return unwrap(
+    const outcome = unwrap(
       await this.client.storage.commitCrmMerge({
         body: {
           recordType: 'contact',
@@ -179,5 +182,7 @@ export class CrmMergeNamespace {
         },
       }),
     );
+    forgetCachedDetail([merge.survivor, ...merge.sources]);
+    return outcome;
   }
 }
