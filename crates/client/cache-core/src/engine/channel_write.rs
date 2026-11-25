@@ -1,6 +1,7 @@
 //! Admission of channel content, and the channel half of a record write.
 
 use super::channel_changes::{ChannelChangeKind, ChannelChanges};
+use super::pending_sends::{Known, sent_message};
 use super::{Engine, EngineError, Storage, layer_keys};
 use crate::channel_timeline::{
     ChannelCommitOutcome, ChannelCommitStatus, ChannelEntries, ChannelGuard, ChannelGuardQuery,
@@ -73,9 +74,21 @@ impl ChannelAdmission {
         }
     }
 
-    /// The sequence the write stores `key` at, if it dates it.
-    pub(super) fn stamp(&self, key: &EntityKey<'static>) -> Option<i64> {
-        self.stamped.get(key).map(|admitted| admitted.seq)
+    /// What the write leaves of an entry, if it stores it dated or removes it.
+    pub(super) fn written(&self, key: &EntityKey<'static>) -> Option<Known> {
+        let tombstones = &self.write.tombstones;
+        let tombstone = tombstones.iter().find(|stone| stone.record_key == *key);
+        let removed = tombstone.map(|stone| Known {
+            seq: stone.seq,
+            removed: true,
+        });
+        removed.or_else(|| {
+            let admitted = self.stamped.get(key)?;
+            Some(Known {
+                seq: admitted.seq,
+                removed: false,
+            })
+        })
     }
 
     /// Whether `key` is written without merging into what is held.
@@ -394,11 +407,14 @@ impl<S: Storage> Engine<S> {
     fn pending_channel_entries(&self) -> BTreeSet<EntityKey<'static>> {
         let mut pending = layer_keys(&self.optimistic);
         pending.retain(is_channel_entry);
+        // A send the device has a copy of left no layer over it.
+        pending.extend(self.optimistic.iter().map(|layer| sent_message(layer.uuid)));
         pending
     }
 
-    /// The channels holding the removal of an entry a queued write changes.
-    pub(super) async fn channels_removed_under_pending(
+    /// The channels holding the removal of an entry a queued write changes, or
+    /// the copy a queued send shows as.
+    pub(super) async fn channels_kept_for_pending(
         &self,
     ) -> Result<BTreeSet<String>, EngineError<S::Error>> {
         let query = ChannelGuardQuery {
@@ -413,8 +429,13 @@ impl<S: Storage> Engine<S> {
             .load_channel_guard(&query)
             .await
             .map_err(EngineError::Storage)?;
-        let removed = guard.entries.into_values().filter(|state| state.removed);
-        Ok(removed.map(|state| state.channel_id).collect())
+        let sent = self.optimistic.iter().map(|layer| sent_message(layer.uuid));
+        let sent = sent.collect::<BTreeSet<_>>();
+        let kept = guard
+            .entries
+            .into_iter()
+            .filter(|(key, state)| state.removed || sent.contains(key));
+        Ok(kept.map(|(_, state)| state.channel_id).collect())
     }
 
     async fn channel_entries(
