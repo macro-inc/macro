@@ -115,8 +115,13 @@ impl From<MessageOperationStatus> for ApiMessageOperation {
             revision: status.revision.to_string(),
             remote_version: status.remote_version,
             issue: status.issue.map(Into::into),
-            send_rejection_reason: status.send_rejection_reason.map(Into::into),
-            send_refusal: status.send_refusal,
+            send_rejection_reason: status
+                .send_rejection
+                .and_then(|rejection| rejection.reason)
+                .map(Into::into),
+            send_refusal: status
+                .send_rejection
+                .and_then(|rejection| rejection.refusal),
         }
     }
 }

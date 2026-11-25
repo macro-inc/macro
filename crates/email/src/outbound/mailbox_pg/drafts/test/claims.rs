@@ -166,10 +166,12 @@ async fn a_definite_pre_data_failure_releases_the_same_link_for_its_next_draft(d
         .await
         .unwrap();
     assert_eq!(
-        facts[&input.db_id].send_rejection_reason,
+        facts[&input.db_id]
+            .send_rejection
+            .and_then(|rejection| rejection.reason),
         Some(email_api_client::domain::models::SendRejectionReason::ConnectionUnavailable)
     );
-    assert_eq!(facts[&second].send_rejection_reason, None);
+    assert!(facts[&second].send_rejection.is_none());
     let next = sync
         .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
         .await

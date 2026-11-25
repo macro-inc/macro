@@ -126,7 +126,9 @@ async fn an_edited_draft_does_not_name_a_recipient_from_the_old_rejected_revisio
         .remove(&lease.message_id)
         .unwrap();
     assert_eq!(
-        MessageOperationStatus::from(before).send_refusal,
+        MessageOperationStatus::from(before)
+            .send_rejection
+            .and_then(|rejection| rejection.refusal),
         checkpoint.send_refusal
     );
     sqlx::query!(
@@ -149,7 +151,9 @@ async fn an_edited_draft_does_not_name_a_recipient_from_the_old_rejected_revisio
         .unwrap()
         .remove(&lease.message_id)
         .unwrap();
-    assert_eq!(MessageOperationStatus::from(after).send_refusal, None);
+    let rejection = MessageOperationStatus::from(after).send_rejection.unwrap();
+    assert_eq!(rejection.reason, checkpoint.send_rejection_reason);
+    assert!(rejection.refusal.is_none());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

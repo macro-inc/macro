@@ -87,11 +87,7 @@ pub fn validate_attachment_edit(
     if facts.scheduled || !facts.generation_matches {
         return Err(AttachmentError::DeliveryConflict);
     }
-    let maximum = match facts.provider {
-        UserProvider::Gmail => 18_000_000,
-        UserProvider::Outlook => 150_000_000,
-        UserProvider::Imap => 25_000_000,
-    };
+    let maximum = u64::from(facts.provider.max_message_bytes());
     if added_bytes > 0 && facts.total_bytes.saturating_add(added_bytes) > maximum {
         return Err(AttachmentError::Invalid(
             "Combined attachment size exceeds this provider's upload limit",

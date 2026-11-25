@@ -111,11 +111,15 @@ async fn deliberate_retry_does_not_project_the_previous_send_rejection_reason(db
         .remove(&lease.message_id)
         .unwrap();
     assert_eq!(
-        MessageOperationStatus::from(facts.clone()).send_rejection_reason,
+        MessageOperationStatus::from(facts.clone())
+            .send_rejection
+            .and_then(|rejection| rejection.reason),
         Some(SendRejectionReason::ProviderRejected)
     );
     assert_eq!(
-        MessageOperationStatus::from(facts.clone()).send_refusal,
+        MessageOperationStatus::from(facts.clone())
+            .send_rejection
+            .and_then(|rejection| rejection.refusal),
         checkpoint.send_refusal
     );
     let retry = plan_resolution(
@@ -141,8 +145,7 @@ async fn deliberate_retry_does_not_project_the_previous_send_rejection_reason(db
     );
     assert_eq!(status.state, MessageOperationState::Pending);
     assert_eq!(status.issue, None);
-    assert_eq!(status.send_rejection_reason, None);
-    assert_eq!(status.send_refusal, None);
+    assert!(status.send_rejection.is_none());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

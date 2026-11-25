@@ -451,8 +451,6 @@ pub trait MailboxGateway: Send + Sync + 'static {
     fn admitted_requests(&self, mailbox: MailboxKey) -> impl Future<Output = Option<u64>> + Send;
 }
 
-/// The shared ingestion path writes content, normalized state and a projection
-/// outbox atomically. Import work must not generate incoming-mail notifications.
 /// Recoverable destination for a sender Macro blocks on protocols without rules.
 #[derive(Clone, Copy)]
 pub enum BlockedSenderDestination {
@@ -460,6 +458,8 @@ pub enum BlockedSenderDestination {
     Trash,
 }
 
+/// The shared ingestion path writes content, normalized state and a projection
+/// outbox atomically. Import work must not generate incoming-mail notifications.
 pub trait MailboxIngest: Send + Sync + 'static {
     /// Persisted user intent, scoped to this exact mailbox binding.
     fn sender_blocked(

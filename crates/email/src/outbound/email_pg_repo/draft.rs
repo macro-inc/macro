@@ -16,7 +16,7 @@ pub(super) async fn operation_facts(
     >,
     sqlx::Error,
 > {
-    use crate::domain::models::mailbox_operation::MessageOperationFacts;
+    use crate::domain::models::mailbox_operation::{MessageOperationFacts, SendRejection};
     let rows = sqlx::query!(
         r#"
         SELECT
@@ -45,6 +45,27 @@ pub(super) async fn operation_facts(
     let mut result = rows
         .into_iter()
         .map(|row| {
+            // A newer checkpoint vocabulary must not hide the rest of an old draft.
+            let reason = row.send_rejection_reason.and_then(|value| {
+                serde_json::from_value(serde_json::Value::String(value))
+                    .inspect_err(|_| {
+                        tracing::warn!(
+                            message_id = %row.message_id,
+                            "Ignoring an unknown stored send rejection reason"
+                        );
+                    })
+                    .ok()
+            });
+            let refusal = row.send_refusal.and_then(|value| {
+                serde_json::from_value(value)
+                    .inspect_err(|_| {
+                        tracing::warn!(
+                            message_id = %row.message_id,
+                            "Ignoring an unknown stored submission refusal"
+                        );
+                    })
+                    .ok()
+            });
             Ok((
                 row.message_id,
                 MessageOperationFacts {
@@ -53,23 +74,7 @@ pub(super) async fn operation_facts(
                     revision: row.revision,
                     remote_version: row.provider_version,
                     issue: row.error_code.map(operation_enum).transpose()?,
-                    send_refusal: row.send_refusal.and_then(|value| {
-                        serde_json::from_value(value).inspect_err(|_| {
-                            tracing::warn!(message_id = %row.message_id, "Ignoring an unknown stored submission refusal");
-                        }).ok()
-                    }),
-                    // New optional reason values must not hide old drafts when
-                    // another binary writes a newer checkpoint vocabulary.
-                    send_rejection_reason: row.send_rejection_reason.and_then(|value| {
-                        serde_json::from_value(serde_json::Value::String(value))
-                            .inspect_err(|_| {
-                                tracing::warn!(
-                                    message_id = %row.message_id,
-                                    "Ignoring an unknown stored send rejection reason"
-                                );
-                            })
-                            .ok()
-                    }),
+                    send_rejection: SendRejection::from_parts(reason, refusal),
                 },
             ))
         })
@@ -90,8 +95,7 @@ pub(super) async fn operation_facts(
                 issue: Some(operation_enum(
                     row.issue.unwrap_or_else(|| "move_pending".into()),
                 )?),
-                send_rejection_reason: None,
-                send_refusal: None,
+                send_rejection: None,
             },
         );
     }

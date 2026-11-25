@@ -187,11 +187,7 @@ where
             TransferPreparation::Completed(receipt) => return Ok(receipt),
             TransferPreparation::Pending(plan) => plan,
         };
-        let maximum = match plan.destination_provider {
-            UserProvider::Gmail => 18_000_000,
-            UserProvider::Outlook => 150_000_000,
-            UserProvider::Imap => 25_000_000,
-        };
+        let maximum = i64::from(plan.destination_provider.max_message_bytes());
         let mut total = plan
             .uploads
             .iter()

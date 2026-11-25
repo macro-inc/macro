@@ -1,5 +1,6 @@
 use super::*;
 use async_graphql::{EmptyMutation, EmptySubscription, Schema};
+use email::domain::models::mailbox_operation::SendRejection;
 
 #[derive(SimpleObject)]
 struct Query {
@@ -26,8 +27,7 @@ async fn failure_detail_is_optional_and_does_not_change_existing_client_queries(
                     revision: 7,
                     remote_version: None,
                     issue: Some(MessageOperationIssue::SendRejected),
-                    send_rejection_reason: reason,
-                    send_refusal: None,
+                    send_rejection: SendRejection::from_parts(reason, None),
                 }
                 .into(),
             },
@@ -64,12 +64,14 @@ async fn smtp_refusal_detail_uses_closed_types_without_transporting_recipient_ad
                 revision: 7,
                 remote_version: None,
                 issue: Some(MessageOperationIssue::SendRejected),
-                send_rejection_reason: Some(SendRejectionReason::ProviderRejected),
-                send_refusal: Some(SubmissionRefusal {
-                    phase: SubmissionRefusalPhase::Recipient,
-                    recipient_index: Some(1),
-                    reply_class: Some(SubmissionRefusalClass::Permanent),
-                }),
+                send_rejection: SendRejection::from_parts(
+                    Some(SendRejectionReason::ProviderRejected),
+                    Some(SubmissionRefusal {
+                        phase: SubmissionRefusalPhase::Recipient,
+                        recipient_index: Some(1),
+                        reply_class: Some(SubmissionRefusalClass::Permanent),
+                    }),
+                ),
             }
             .into(),
         },

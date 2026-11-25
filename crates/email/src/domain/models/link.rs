@@ -6,8 +6,11 @@ use uuid::Uuid;
 mod test;
 
 /// The provider of this email
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, strum::EnumString,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum UserProvider {
     Gmail,
     /// Microsoft Outlook and Microsoft 365.
@@ -17,6 +20,15 @@ pub enum UserProvider {
 }
 
 impl UserProvider {
+    /// Maximum combined attachment bytes admitted when editing or moving drafts.
+    pub const fn max_message_bytes(self) -> u32 {
+        match self {
+            Self::Gmail => 18_000_000,
+            Self::Outlook => 150_000_000,
+            Self::Imap => 25_000_000,
+        }
+    }
+
     /// Whether this provider uses durable folder streams, drafts and commands.
     pub fn uses_mailbox_framework(self) -> bool {
         match self {
