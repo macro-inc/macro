@@ -1211,7 +1211,7 @@ queued drafts, so an older OTA bundle cannot recover that data during rollback;
 authored variables and current-bundle draft recovery metadata remain intact.
 
 [Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
-58 mutation documents and fails when a document has no declared strategy.
+64 mutation documents and fails when a document has no declared strategy.
 Because predictions are keyed by mutation field, it also checks that local
 resolver documents select only resolved fields, and that any other document
 reaching a field resolver is a listed exception the resolver declines.
