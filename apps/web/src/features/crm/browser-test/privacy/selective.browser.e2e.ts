@@ -259,21 +259,50 @@ test('a long blacklist domain wraps beside Remove, lined up with short rows', as
     const section = page
       .getByRole('heading', { name: title, exact: true })
       .locator('xpath=ancestor::section');
-    const removeX: number[] = [];
-    for (const domain of [long, short]) {
-      const label = await section
-        .getByText(domain, { exact: true })
-        .boundingBox();
-      const remove = await section
-        .getByRole('button', { name: `Remove ${domain}`, exact: true })
-        .boundingBox();
-      if (!label || !remove) throw new Error(`${domain} row is not laid out`);
-      // Beside the domain, not on a line of its own below it.
-      expect(remove.x).toBeGreaterThanOrEqual(label.x + label.width);
-      expect(remove.y).toBeLessThan(label.y + label.height);
-      removeX.push(remove.x);
-    }
-    expect(Math.abs(removeX[0] - removeX[1])).toBeLessThan(1);
+    await expect(
+      section.getByRole('button', { name: `Remove ${short}`, exact: true })
+    ).toBeVisible();
+    // Both rows in one frame, so the phone sheet's opening animation moves
+    // them together.
+    const rows = () =>
+      section.evaluate(
+        (node, domains) =>
+          domains.map((domain) => {
+            const label = [...node.querySelectorAll('*')].find(
+              (element) =>
+                element.childElementCount === 0 &&
+                element.textContent?.trim() === domain
+            );
+            const remove = node.querySelector(
+              `button[aria-label="Remove ${domain}"]`
+            );
+            if (!label || !remove) return undefined;
+            const l = label.getBoundingClientRect();
+            const r = remove.getBoundingClientRect();
+            return {
+              labelRight: l.right,
+              labelBottom: l.bottom,
+              x: r.x,
+              y: r.y,
+            };
+          }),
+        [long, short]
+      );
+    await expect
+      .poll(async () => {
+        const [a, b] = await rows();
+        return (
+          !!a &&
+          !!b &&
+          // Beside the domain, not on a line of its own below it.
+          a.x >= a.labelRight &&
+          a.y < a.labelBottom &&
+          b.x >= b.labelRight &&
+          b.y < b.labelBottom &&
+          Math.abs(a.x - b.x) < 1
+        );
+      })
+      .toBe(true);
   }
 });
 
