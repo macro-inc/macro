@@ -43,6 +43,17 @@ export function EmailThreadTitle(props: {
     })
   );
 
+  const toggle = () => {
+    if (!expanded()) {
+      setExpandedTitle(props.title);
+      return;
+    }
+    setExpandedTitle(undefined);
+    // On touch the title scrolls with the messages: its end, where the button
+    // is, can be in view while the three lines left are above the view.
+    text()?.scrollIntoView({ block: 'nearest' });
+  };
+
   return (
     <h1
       class={cn(
@@ -104,9 +115,7 @@ export function EmailThreadTitle(props: {
                     ? 'emailThread.showLess'
                     : 'emailThread.showFullSubject'
                 )}
-                onClick={() =>
-                  setExpandedTitle(expanded() ? undefined : props.title)
-                }
+                onClick={toggle}
               >
                 <CaretDownIcon
                   class={cn(
