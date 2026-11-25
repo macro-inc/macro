@@ -515,11 +515,12 @@ describe('cache engine worker runtime', () => {
   });
 
   it.each([
-    ['reset', ['told after 1 engine-ready']],
-    ['preserved', []],
+    ['reset', 'heartbeat', ['told after 1 engine-ready']],
+    ['reset', 'engine-request', ['told after 1 engine-ready']],
+    ['preserved', 'heartbeat', []],
   ] as const)(
-    'lets go of a lost queue only once the coordinator was told (%s)',
-    async (queue, expected) => {
+    'lets go of a lost queue only once the coordinator took it in (%s, %s)',
+    async (queue, proof, expected) => {
       const scope = new FakeWorkerScope();
       const direct = new FakePort();
       const told: string[] = [];
@@ -552,6 +553,25 @@ describe('cache engine worker runtime', () => {
           expect.objectContaining({ kind: 'ready' })
         )
       );
+
+      expect(told).toEqual([]);
+
+      // Posting it proves nothing: the coordinator may die before it reads it.
+      for (const id of [1, 2]) {
+        const rest =
+          proof === 'heartbeat'
+            ? { heartbeatId: id }
+            : { routeId: id, request: { id, kind: 'current-revision' } };
+        direct.receive({ ...version, kind: proof, ownerEpoch: 7, ...rest });
+        await vi.waitFor(() =>
+          expect(
+            messagesOfKind(
+              direct,
+              proof === 'heartbeat' ? 'heartbeat-ack' : 'engine-response'
+            )
+          ).toHaveLength(id)
+        );
+      }
 
       expect(told).toEqual(expected);
     }

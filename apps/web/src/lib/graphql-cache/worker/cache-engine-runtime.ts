@@ -231,6 +231,14 @@ async function activate(
       : 'opened-existing';
   let initializationQueue: CacheQueueState =
     activation.databaseAction === 'wipe-before-open' ? 'reset' : 'preserved';
+  let lossToTell = false;
+  // A coordinator sends these only to an engine whose `engine-ready` it took.
+  const coordinatorTookReady = (): void => {
+    if (!lossToTell) return;
+    lossToTell = false;
+    if (core.queueLossTold)
+      fireAndForget(core.queueLossTold(), 'graphql_cache.queue_loss_told');
+  };
   let draining = false;
   // Keep every admitted handler and graceful drain in one explicit scope.
   // Abrupt owner loss still relies on DedicatedWorker termination; graceful
@@ -416,6 +424,7 @@ async function activate(
             fatal('coordinator routed a request after drain began');
             return;
           }
+          coordinatorTookReady();
           admitRequest(request);
         })
         .with({ kind: 'drain-engine' }, () => {
@@ -452,6 +461,7 @@ async function activate(
           });
         })
         .with({ kind: 'heartbeat' }, ({ heartbeatId }) => {
+          coordinatorTookReady();
           recordLinearMemory(false);
           core.recordCachedQueueDiagnostics?.();
           post(
@@ -512,9 +522,7 @@ async function activate(
         queue: initializationQueue,
       })
     );
-    if (initializationQueue === 'reset' && core.queueLossTold) {
-      fireAndForget(core.queueLossTold(), 'graphql_cache.queue_loss_told');
-    }
+    lossToTell = initializationQueue === 'reset';
     emitEvent({ kind: 'ready', activation });
     telemetry.record({
       name: 'graphql_cache.db_ready',
