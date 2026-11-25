@@ -198,6 +198,42 @@ fn a_label_filter_without_a_condition_runs_mail_a_receipt_condition_turns_away()
 }
 
 #[test]
+fn a_label_filter_for_another_inbox_leaves_a_label_condition_in_place() {
+    const ELSEWHERE: &str = "01900000-0000-7000-8000-0000000000c1";
+    let routine = filters(json!([
+        {
+            "events": ["email.labeled"], "inboxes": [OTHER_ID],
+            "condition": "Is it an invoice?"
+        },
+        { "events": ["email.labeled"], "inboxes": [ELSEWHERE] },
+    ]));
+    for event in [
+        labels_updated(&[LABEL], false).normalize().unwrap(),
+        received(&[LABEL]).normalize().unwrap(),
+    ] {
+        let run = routine.run_event(&event);
+        let stored: EventReference =
+            serde_json::from_str(&serde_json::to_string(&run).unwrap()).unwrap();
+        assert_eq!(stored, run);
+        assert!(matches!(
+            routine.condition_requirement(&stored),
+            ConditionRequirement::AnyOf(_)
+        ));
+    }
+}
+
+#[test]
+fn a_stored_run_keeps_its_inbox_only_beside_gained_labels() {
+    let run = filters(json!([{ "events": ["email.labeled"] }]))
+        .run_event(&received(&[LABEL]).normalize().unwrap());
+    let mut stored = serde_json::to_value(&run).unwrap();
+    assert_eq!(stored["inbox"], json!(OTHER_ID));
+    stored.as_object_mut().unwrap().remove("labels_gained");
+    stored["event_name"] = json!("email.message_received");
+    assert!(serde_json::from_value::<EventReference>(stored).is_err());
+}
+
+#[test]
 fn a_label_filter_for_another_inbox_leaves_a_receipt_condition_in_place() {
     const ELSEWHERE: &str = "01900000-0000-7000-8000-0000000000c1";
     let routine = filters(json!([

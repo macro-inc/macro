@@ -20,7 +20,7 @@ impl Mailbox {
     async fn new(db: PgPool) -> Self {
         let (sync, link) = fixture(&db).await;
         let stream = sync
-            .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+            .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
             .await
             .unwrap()
             .unwrap();

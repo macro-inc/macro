@@ -566,15 +566,14 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   once, as received mail. A label event marked `automated` (an agent's or a
   routine's write) is rejected as `UnsafeAttribution`, like a `routine_id`.
   A run that one of its routine's `email.labeled` filters took keeps
-  `labels_gained` in `event_context`, also when it runs as received mail, so
-  dispatch applies that filter's requirement too (a label filter without a
-  condition beside a conditional receipt filter runs the mail). Other runs
-  drop them, so a label filter that didn't take the event (another inbox,
-  other labels) can't match the stored run, which has no inbox. Two filters
-  of one event that differ only in their inboxes still both match at
-  dispatch. Code from before `email.labeled` can't read the runs that keep
-  them (see the `EventReference` note below), so turn its flag on only once
-  every replica runs code that knows it.
+  `labels_gained` and the mail's `inbox` in `event_context`, also when it
+  runs as received mail, so dispatch weighs exactly the filters that took
+  the event: a label filter without a condition beside a conditional
+  receipt filter runs the mail, and a filter for another inbox adds no
+  condition of its own and drops none. Other runs keep neither. Code from
+  before `email.labeled` can't read the runs that keep them (see the
+  `EventReference` note below), so turn its flag on only once every replica
+  runs code that knows it.
 - Received and labeled mail is for its inbox's owner and for each account that inbox is
   delegated to (multi-inbox, `macro_user_links`): admission asks the
   `InboxDelegates` port (`PgInboxDelegates`) once per event, and only when a
@@ -589,9 +588,12 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   same own-plus-delegated set the app lists, one index probe per pick), so the
   check never reads the owner's other inboxes or an inbox's other delegates.
   `routine.admit_event` counts the routines only their inboxes turned away as
-  `outside_inboxes`. No run keeps the mail's `inbox`, so every replica can
-  read every run: admission checks it, and a filter changed since supersedes
-  the run by revision. A shared template drops its inboxes: they are the
+  `outside_inboxes`. No run of a routine without label filters keeps the
+  mail's `inbox`, so every replica can read those runs: admission checks it,
+  and a filter changed since supersedes the run by revision. At dispatch
+  such a run matches every filter of its event whatever their inboxes: a
+  known gap, since a receipt filter with a condition can be outweighed by
+  another inbox's receipt filter without one. A shared template drops its inboxes: they are the
   publisher's own. Code without inbox filters can't decode a routine that
   picks some, and skips it at intake.
 - `EventReference` rejects unknown keys, so a replica still on older code can't

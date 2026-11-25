@@ -650,8 +650,9 @@ impl EventFilter {
                     ..
                 } => {
                     // Received mail always carries its inbox at admission. A
-                    // stored run doesn't (`run_event`): admission checked it,
-                    // and a changed filter supersedes the run by revision.
+                    // stored run doesn't unless a label filter took it
+                    // (`run_event`): admission checked it, and a changed
+                    // filter supersedes the run by revision.
                     self.ids.as_ref().is_none_or(|ids| ids.contains(entity_id))
                         && self.inboxes.as_ref().is_none_or(|inboxes| {
                             inbox.is_none_or(|inbox| inboxes.contains(&inbox))
@@ -763,8 +764,10 @@ impl EventFilters {
 
     /// What a run of this routine keeps of `event`: only routines that test
     /// property changes keep them, so older replicas can still read every
-    /// other run. No run keeps the inbox, so every replica can read every run.
-    /// Mail that arrived labeled starts a label routine's run as a label event.
+    /// other run. Only a run a label filter took keeps the gained labels and
+    /// the inbox, so every replica reads every run of a routine without label
+    /// filters. Mail that arrived labeled starts a label routine's run as a
+    /// label event.
     pub fn run_event(&self, event: &EventReference) -> EventReference {
         let mut kept = event.clone();
         let by_name = self
@@ -788,16 +791,16 @@ impl EventFilters {
             if !self.0.iter().any(|filter| filter.property.is_some()) {
                 *property_change = None;
             }
-            *inbox = None;
-            // A run a label filter took keeps them, whatever it is named, so
-            // dispatch weighs that filter too: a received-mail run its label
-            // filter alone admits must not take on a receipt condition. Other
-            // runs drop them, so a label filter that didn't take the event
-            // (another inbox, other labels) can't match the run at dispatch,
-            // and code from before them, which can't read a run that keeps
-            // them, still reads every run of a routine without label filters.
+            // A run a label filter took keeps them and the mail's inbox,
+            // whatever it is named, so dispatch weighs exactly the filters
+            // that took the event: a received-mail run its label filter alone
+            // admits takes on no receipt condition, and a filter for another
+            // inbox applies none of its own. Other runs drop both, so code from
+            // before them, which can't read a run that keeps them, still reads
+            // every run of a routine without label filters.
             if !label_filter_took_it {
                 labels_gained.clear();
+                *inbox = None;
             }
         }
         kept
@@ -933,6 +936,10 @@ struct EventReferenceInput {
     /// Label row ids only, never names.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     labels_gained: Vec<Uuid>,
+    /// The mail's inbox, kept only beside `labels_gained`: code from before
+    /// both can't read a run that keeps them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    inbox: Option<Uuid>,
 }
 
 fn skip_message_id(message_id: &Option<Option<Uuid>>) -> bool {
@@ -953,6 +960,7 @@ impl TryFrom<EventReferenceInput> for EventReference {
                 let labels_needed = name == EventName::EmailLabeled;
                 if (!name.takes_labels() && !input.labels_gained.is_empty())
                     || (labels_needed && input.labels_gained.is_empty())
+                    || (input.inbox.is_some() && input.labels_gained.is_empty())
                 {
                     return Err(EventRejection::InvalidContext);
                 }
@@ -961,7 +969,7 @@ impl TryFrom<EventReferenceInput> for EventReference {
                     message_id,
                     change_source: input.change_source,
                     property_change: input.property_change,
-                    inbox: None,
+                    inbox: input.inbox,
                     labels_gained: input.labels_gained,
                 }
             }
@@ -994,21 +1002,24 @@ impl From<EventReference> for EventReferenceInput {
             change_source: None,
             property_change: None,
             labels_gained: Vec::new(),
+            inbox: None,
         };
         match event.source {
-            // The inbox is only for admission: a stored event never keeps it.
+            // The inbox is for admission, and for dispatch of a run a label
+            // filter took; any other stored event never keeps it.
             EventSource::Entity {
                 entity_id,
                 message_id,
                 change_source,
                 property_change,
-                inbox: _,
+                inbox,
                 labels_gained,
             } => {
                 input.entity_id = Some(entity_id);
                 input.message_id = Some(message_id);
                 input.change_source = change_source;
                 input.property_change = property_change;
+                input.inbox = inbox.filter(|_| !labels_gained.is_empty());
                 input.labels_gained = labels_gained;
             }
             EventSource::Github(delivery) => input.github = Some(delivery),
