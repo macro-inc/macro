@@ -4,8 +4,10 @@
  * one.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CoordinatorGenerations } from '../host/coordinator-generations';
 import { CoordinatorCore } from '../worker/coordinator-core';
 import { CacheCoordinatorPageAdapter } from '../worker/coordinator-page-adapter';
+import { CoordinatorRouter } from '../worker/coordinator-router';
 import { explains, explore, violationKey } from './explore';
 import { KNOWN_VIOLATIONS } from './known-violations';
 import { Sim } from './sim';
@@ -90,6 +92,32 @@ describe('handover checker, on broken code', { timeout: 120_000 }, () => {
     });
     expect(await newViolations(['close'])).toContain(
       'S3:queued write lost (database wiped) [close owner]'
+    );
+  });
+
+  it('catches a name nobody answers under kept to the end', async () => {
+    usePlant(() => {
+      vi.spyOn(
+        CoordinatorGenerations.prototype,
+        'renameUnanswered'
+      ).mockResolvedValue(false);
+    });
+    expect(await newViolations(['lose-coordinator'])).toContainEqual(
+      expect.stringMatching(/^L2:no active engine \(no coordinator\)/)
+    );
+  });
+
+  it('catches a hung coordinator whose tabs stay with it', async () => {
+    usePlant(() => {
+      vi.spyOn(
+        CoordinatorRouter.prototype as unknown as {
+          endOlderGenerations(): Promise<void>;
+        },
+        'endOlderGenerations'
+      ).mockResolvedValue();
+    });
+    expect(await newViolations(['hang-coordinator'])).toContainEqual(
+      expect.stringMatching(/^L1:cache not back/)
     );
   });
 

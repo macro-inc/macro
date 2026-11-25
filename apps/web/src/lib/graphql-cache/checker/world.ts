@@ -109,6 +109,7 @@ class Coordinator {
 
   constructor(
     private readonly world: World,
+    readonly name: string,
     readonly buildTime: number
   ) {
     this.context = this.boot();
@@ -127,7 +128,10 @@ class Coordinator {
   }
 
   private createRouter(): CoordinatorRouter {
-    return new CoordinatorRouter({ telemetry: NOOP_TELEMETRY });
+    return new CoordinatorRouter({
+      telemetry: NOOP_TELEMETRY,
+      endCoordinator: () => this.close(),
+    });
   }
 
   connect(): SimPort {
@@ -150,6 +154,21 @@ class Coordinator {
    * page to connect starts another. */
   crash(): void {
     this.world.sim.kill(this.context);
+  }
+
+  /** `SharedWorkerGlobalScope.close()`, as `crash` to everybody else. */
+  private close(): void {
+    this.crash();
+    this.world.forget(this);
+  }
+
+  /** It runs no code for a while, and keeps its locks. */
+  hang(): void {
+    const { context } = this;
+    context.frozen = true;
+    this.world.sim.setTimeout(() => {
+      context.frozen = false;
+    }, HANG_MS);
   }
 
   /** Safari reconnects live page ports to a fresh, empty worker global. */
@@ -496,7 +515,10 @@ export class Page {
 /**
  * What can happen to the origin. `close` runs the page's `pagehide`; `kill`
  * ends it with no event, as a crash or a discarded tab does. `crash-process`
- * ends the coordinator its build runs along with it. `crash-engine` ends a
+ * ends the coordinator its build runs along with it, and `lose-coordinator` does
+ * too, and has its name answer nobody until every page of the build has closed,
+ * which is what Firefox does after some of those. `hang-coordinator` stops the
+ * coordinators for four minutes. `crash-engine` ends a
  * page's engine worker and tells nobody. `bfcache` navigates away with
  * the page kept, frozen, and `restore` comes back to it. `expire-session` signs
  * a page out for a second. `hold-owner-lock` has another context keep the
@@ -515,6 +537,8 @@ export type FaultKind =
   | 'crash-engine'
   | 'restart-coordinator'
   | 'crash-process'
+  | 'lose-coordinator'
+  | 'hang-coordinator'
   | 'freeze'
   | 'thaw'
   | 'expire-session'
@@ -531,6 +555,8 @@ export type FaultKind =
   | 'stall-assets';
 
 export type Fault = { kind: FaultKind; page?: string };
+
+const HANG_MS = 4 * 60_000;
 
 /** A fault as violations name it: what it was, and whether it hit a page with
  * an engine. */
@@ -565,6 +591,8 @@ export class World {
   readonly pages: Page[] = [];
   /** By SharedWorker name, which has the scope and the build in it. */
   readonly coordinators = new Map<string, Coordinator>();
+  /** Names that answer nobody, with the build whose pages keep them so. */
+  private readonly lostNames = new Map<string, number>();
   readonly engines: EngineWorker[] = [];
   readonly calls: CallOutcome[] = [];
   readonly retirements: Retirement[] = [];
@@ -644,9 +672,7 @@ export class World {
         onerror: ((event: unknown) => unknown) | null = null;
         readonly port: SimPort;
         constructor(_url: URL, options?: WorkerOptions) {
-          this.port = world
-            .coordinator(options?.name ?? '', currentBuildTime())
-            .connect();
+          this.port = world.connect(options?.name ?? '', currentBuildTime());
         }
       }
     );
@@ -774,13 +800,19 @@ export class World {
     }
   }
 
-  coordinator(name: string, buildTime: number): Coordinator {
+  connect(name: string, buildTime: number): SimPort {
+    if (this.lostNames.has(name)) return new SimMessageChannel(this.sim).port1;
     let coordinator = this.coordinators.get(name);
     if (!coordinator) {
-      coordinator = new Coordinator(this, buildTime);
+      coordinator = new Coordinator(this, name, buildTime);
       this.coordinators.set(name, coordinator);
     }
-    return coordinator;
+    return coordinator.connect();
+  }
+
+  forget(coordinator: Coordinator): void {
+    if (this.coordinators.get(coordinator.name) === coordinator)
+      this.coordinators.delete(coordinator.name);
   }
 
   async openPage(buildTime: number): Promise<Page> {
@@ -810,7 +842,7 @@ export class World {
   faults(): Fault[] {
     const faults: Fault[] = [];
     for (const kind of this.scenario.faults) {
-      if (kind === 'restart-coordinator') {
+      if (kind === 'restart-coordinator' || kind === 'hang-coordinator') {
         if (this.coordinators.size > 0) faults.push({ kind });
         continue;
       }
@@ -857,13 +889,14 @@ export class World {
         .with('crash-engine', () => this.enginesOf(page).length > 0)
         .with('require-reset', () => this.servingEnginesOf(page).length > 0)
         .with('close', () => !context.frozen)
-        .with('kill', 'crash-process', () => true)
+        .with('kill', 'crash-process', 'lose-coordinator', () => true)
         .with(
           'expire-session',
           () => page.host !== undefined && !context.frozen && !page.closing
         )
         .with(
           'restart-coordinator',
+          'hang-coordinator',
           'hold-owner-lock',
           'hold-files',
           'open-newer',
@@ -916,6 +949,10 @@ export class World {
       .with('restart-coordinator', () => {
         for (const coordinator of this.coordinators.values())
           coordinator.restart();
+      })
+      .with('hang-coordinator', () => {
+        for (const coordinator of this.coordinators.values())
+          coordinator.hang();
       })
       .with('hold-owner-lock', () => this.holdOwnerLock())
       .with('hold-files', () => this.holdFiles())
@@ -977,6 +1014,12 @@ export class World {
         this.endPage(page);
         this.crashCoordinator(page.context.buildTime);
       })
+      .with('lose-coordinator', () => {
+        page.closing = true;
+        this.loseNames(page.context.buildTime);
+        this.endPage(page);
+        this.crashCoordinator(page.context.buildTime);
+      })
       .with('expire-session', () => inPage(() => page.expireSession()))
       .otherwise((other) => {
         throw new Error(`${other} is not a page fault`);
@@ -991,9 +1034,20 @@ export class World {
     }
   }
 
+  private loseNames(buildTime: number): void {
+    for (const [name, coordinator] of this.coordinators)
+      if (coordinator.buildTime === buildTime)
+        this.lostNames.set(name, buildTime);
+  }
+
   private endPage(page: Page): void {
     for (const engine of this.enginesOf(page)) engine.terminate();
     this.sim.kill(page.context);
+    const { buildTime } = page.context;
+    if (this.livePages().some(({ context }) => context.buildTime === buildTime))
+      return;
+    for (const [name, build] of this.lostNames)
+      if (build === buildTime) this.lostNames.delete(name);
   }
 
   /** A page of a build newer than every open one. */
@@ -1122,6 +1176,7 @@ export class World {
       storage.join(),
       this.storage.failNextOpens,
       this.storage.nextAssets,
+      [...this.lostNames.keys()].join(),
       this.sim.timerSummary(),
     ].join('#');
     return createHash('sha1').update(state).digest('base64');

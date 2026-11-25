@@ -247,7 +247,13 @@ export class SimBroadcastChannel {
   }
 }
 
-type HeldLock = { name: string; mode: LockMode; context: SimContext };
+type HeldLock = {
+  name: string;
+  mode: LockMode;
+  context: SimContext;
+  /** Rejects the request when another context steals the lock. */
+  lose: (error: unknown) => void;
+};
 type LockRequest = {
   name: string;
   mode: LockMode;
@@ -310,7 +316,7 @@ export class SimLockManager {
       };
       if (options.steal) {
         for (const lock of this.held.filter((held) => held.name === name))
-          this.release(lock);
+          this.steal(lock);
         this.grant(request);
         return;
       }
@@ -419,6 +425,7 @@ export class SimLockManager {
       name: request.name,
       mode: request.mode,
       context: request.context,
+      lose: request.reject,
     };
     this.held.push(lock);
     this.pendingHeld.set(request, lock);
@@ -448,6 +455,14 @@ export class SimLockManager {
       }
     };
     this.sim.start(request.context, run);
+  }
+
+  /** The thief gets it before anyone in the queue. */
+  private steal(lock: HeldLock): void {
+    this.held.splice(this.held.indexOf(lock), 1);
+    this.answer(lock.context, 'lock-stolen', () =>
+      lock.lose(new DOMException('stolen', 'AbortError'))
+    );
   }
 
   private release(lock: HeldLock): void {
