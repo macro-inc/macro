@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH moving AS MATERIALIZED (\n                   SELECT DISTINCT ON (LOWER(e.email)) e.contact_id, e.email, e.created_at\n                   FROM crm_contact_emails e\n                   WHERE e.contact_id = ANY($2)\n                     AND NOT EXISTS (\n                         SELECT 1 FROM crm_contact_emails held\n                         WHERE held.contact_id = $1 AND LOWER(held.email) = LOWER(e.email)\n                     )\n                   ORDER BY LOWER(e.email), e.contact_id\n               ), placed AS (\n                   SELECT contact_id, email, created_at,\n                          row_number() OVER (ORDER BY created_at, email COLLATE \"C\") AS place\n                   FROM moving\n               ), after AS (\n                   SELECT GREATEST(clock_timestamp(), MAX(created_at)) AS at\n                   FROM crm_contact_emails WHERE contact_id = $1\n               ), moved AS (\n                   UPDATE crm_contact_emails e\n                   SET contact_id = $1,\n                       created_at = (SELECT at FROM after) + placed.place * INTERVAL '1 microsecond'\n                   FROM placed\n                   WHERE e.contact_id = placed.contact_id AND e.email = placed.email\n                   RETURNING e.email\n               )\n               SELECT placed.contact_id, placed.email, placed.created_at\n               FROM placed JOIN moved USING (email) ORDER BY placed.place",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fb0042b6ac097e9ee202ace6aa5925c43552097d737541c33892127350b75c18"
+}

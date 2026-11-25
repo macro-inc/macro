@@ -206,7 +206,11 @@ closes. Account changes recreate result sources/scrollers and cannot restore
 another account's anchor or ordering. A failed or empty source cannot revive rows
 from a historical snapshot. A later search
 cannot overwrite an earlier entry. **Close search** ends the
-session; opening Search from the dock starts in All/name mode. Mobile search state
+session; opening Search from the dock starts in All/name mode. Opening it from a
+tag (a mention, **Filter by**, the tags card) or the universal input's search
+starts the session on that text instead, listing full text, with its tags and channels bound by id
+as on desktop, and as a search even when its words would promote it to the
+composer; editing a bound token lets go of it. Mobile search state
 does not modify desktop search state. The dock search row has no Ask AI button.
 If opening a person fails, search stays open with its query and category intact
 so the result can be retried.

@@ -31,26 +31,6 @@ function refusalText(reason: AddRefusal): string {
     .exhaustive();
 }
 
-/** Stands in for the name while a label is split around it. */
-const NAME_MARK = '\u{E000}';
-
-/** A submit label, with the agent's name, if it has one, apart. */
-type LabelParts = { before: string; name?: string; after?: string };
-
-function SubmitLabel(props: { parts: LabelParts }) {
-  return (
-    <span class="flex min-w-0 items-baseline">
-      <span class="shrink-0 whitespace-pre">{props.parts.before}</span>
-      <Show when={props.parts.name}>
-        {(name) => <span class="min-w-0 truncate">{name()}</span>}
-      </Show>
-      <Show when={props.parts.after}>
-        {(after) => <span class="shrink-0 whitespace-pre">{after()}</span>}
-      </Show>
-    </span>
-  );
-}
-
 /**
  * Add an agent teammate: a name, shown as its initial, and the computer it
  * runs on, priced the way Buy a computer prices it. The dialog stays open
@@ -131,35 +111,18 @@ export function InviteAgentForm(props: {
     };
 
   const price = () => {
+    if (props.state.kind === 'not_started') return undefined;
     const chosen = offer();
     if (!chosen || chosen.quote.amount === 0) return undefined;
     return formatQuote(chosen.quote);
   };
 
-  // Add's label split around the agent's name, so a long name can shorten
-  // while the price stays whole, in whatever order the translation puts them.
-  const addLabel = (): LabelParts => {
-    const agentName = trimmedName() || t('teamAgents.agent');
+  const submitLabel = () => {
     const amount = price();
-    const text = amount
-      ? t('teamAgents.addPriced', { name: NAME_MARK, price: amount })
-      : t('teamAgents.add', { name: NAME_MARK });
-    const [before = '', after = ''] = text.split(NAME_MARK);
-    return { before, name: agentName, after };
+    return amount
+      ? t('teamAgents.addPriced', { price: amount })
+      : t('teamAgents.add');
   };
-
-  const submitLabel = (): LabelParts =>
-    match(props.state.kind)
-      .with('declined', 'refunded', () => {
-        const amount = price();
-        return {
-          before: amount
-            ? t('teamAgents.tryAgainPriced', { price: amount })
-            : t('teamAgents.tryAgain'),
-        };
-      })
-      .with('not_started', () => ({ before: t('teamAgents.retryStart') }))
-      .otherwise(() => addLabel());
 
   const submit = () => {
     if (adding()) return;
@@ -349,7 +312,6 @@ export function InviteAgentForm(props: {
           {noticeArea}
         </div>
       </Panel.Body>
-      {/* One row at every width: a long name shortens inside Add instead. */}
       <Panel.Footer class="justify-end gap-2 px-5 py-3">
         <Button
           type="button"
@@ -375,11 +337,14 @@ export function InviteAgentForm(props: {
         >
           <Show
             when={adding()}
-            // A long name ends in an ellipsis; the price beside it stays.
-            fallback={<SubmitLabel parts={submitLabel()} />}
+            fallback={
+              <span class="flex min-w-0 items-baseline">
+                <span class="shrink-0 whitespace-pre">{submitLabel()}</span>
+              </span>
+            }
           >
             <SpinnerIcon class="size-4 animate-spin" />
-            {t('teamAgents.adding', { name: trimmedName() })}
+            {t('teamAgents.add')}
           </Show>
         </Button>
       </Panel.Footer>

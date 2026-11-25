@@ -392,6 +392,11 @@ and the Settings → Email sample following the Row style tabs. Its
 nested label by its own name, its whole name on hover, three items and then a
 count, none of Gmail's system or hidden labels) and none on narrow or phone
 rows; `ROW_LABELS_SCREENSHOT_DIR` saves its screenshots.
+`sidebar-labels.browser.e2e.ts` checks the sidebar's Labels section on desktop
+and phone (a row per inbox when all show, none for one picked inbox, a nested
+Gmail label under its parent, eight labels then `N more` holding the rest and
+Gmail's hidden ones, the open label marked); `SIDEBAR_LABELS_SCREENSHOT_DIR`
+saves its screenshots.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the
@@ -438,9 +443,10 @@ and every answer, on desktop and phone, and wraps from the requester name stored
 the event (backend-free):
 `bunx playwright test --config src/features/channel/browser-test/playwright.config.ts`.
 
-The desktop channel gutter's Mark done checks and notification list (docked in
-a wide pane, a popover in a narrow one, hidden when the gutter has no room)
-have a backend-free regression over the real checks, list and stacking:
+The desktop channel gutter's notification list (what was unread when the
+channel opened, each entry held until its check marks the stack done; docked
+in a wide pane, a popover in a narrow one, hidden when the gutter has no room)
+has a backend-free regression over the real list, snapshot and stacking:
 `bunx playwright test --config src/features/channel-notification-stacks/browser-test/playwright.config.ts`.
 
 Channel history keeps the message being read in place when a split opens or
@@ -453,7 +459,8 @@ Discussion link scrolling has a backend-free browser regression:
 
 Adding an agent teammate from Team → Members (its Invite Agent button,
 behind `enable-agent-teammates`; members see only Invite Human): the dialog waiting until the agent is
-online, falling back to the row after five seconds, a declined card and a size
+online, the fixed Add agent label and live price beside Cancel with a long
+name, falling back to the row after five seconds, a declined card and a size
 with no room in place, its row's Setting up step and failed Retry, the ready and failed notifications (Message, Connect Claude plan for
 admins only, Retry), Connect Claude plan's one-screen sign-in with its
 expired, rejected and unreachable states, its row's Claude sign-in and switch
@@ -1345,7 +1352,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   first item" command, so a list on `useListInteractions` lands on its first
   row with no code in the view; when that command finds no row (a search with
   no results), the keys stay in the field. `wide` lets the open field take the rest of
-  the header (the view hides its other actions from `onOpenChange`), `open`
+  the header (the view hides its other actions from `onOpenChange`; left
+  empty, it closes once focus leaves the header), `open`
   lets the view keep the open state and close the field itself, and
   `suggestions` lists rows under the field that the arrows walk before the
   results (a row that `editsQuery`, such as Email's `in:` views, keeps the

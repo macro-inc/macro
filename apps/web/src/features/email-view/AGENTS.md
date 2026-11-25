@@ -52,12 +52,18 @@ the Soup-backed thread list, and saved email views.
   and
   the rows the search field lists: views (then labels) while `in:` is typed,
   people after `from:`/`to:`/`cc:`/`bcc:`, labels and tags after `label:`,
-  otherwise the operators that finish the typed token, then recent searches
+  otherwise the filter a plain word stands for (`attachment` gives
+  `has:attachment`), the operators that finish the typed token and mail from
+  or to someone a word names, then recent searches
   (`create-email-search-suggestions.ts`, drawn by
   `components/EmailSearchSuggestionList.tsx`, fed people and labels by
   `queries/use-email-search-values.ts`, which reads them only while the
-  field has focus and such an operator is typed), behind
-  `enable-email-wide-search`. Operators are drawn by the shared
+  field has focus and such an operator, or a plain word of three letters or
+  more, is typed), behind
+  `enable-email-wide-search`. `components/EmailSearchTips.tsx` is the
+  operator list the header's info button shows on hover and the touch field's
+  Search tips sheet shows, linking to the docs' `#search-mail` section.
+  Operators are drawn by the shared
   `components/view-shell/search-operator-text.tsx`, which keeps a quoted
   value in its token.
 - `filters/email-saved-view.ts`: the `kind: "email"` definition codec: strict
@@ -74,11 +80,16 @@ the Soup-backed thread list, and saved email views.
   editors; the mobile drawer shares People.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
+- `views/email-labels-section.tsx`: the sidebar's Labels section, drawn by
+  `components/EmailSidebarLabels.tsx` from `core/sidebar-labels.ts` (each
+  inbox's tree, eight rows, then `N more`). A
+  row calls `openLabel`, which opens All filtered to that label alone;
+  `activeLabelIds` and `filterViewTitle` read the labels All is filtered to.
 - `views/email-saved-views.tsx`: sidebar section, menus, the builder dialog,
   header actions, unavailable and skipped-setting states. Saved-view rows use
   the shell's sidebar layout to choose drag or, in the navigation sheet,
-  Move up and Move down. The unnamed mail-folder group, Library, and Saved views
-  use shared `ViewSidebar` ordering with per-account local preferences; Accounts
+  Move up and Move down. The unnamed mail-folder group, Library, Labels, and
+  Saved views use shared `ViewSidebar` ordering with per-account local preferences; Accounts
   is explicitly pinned above those sections.
 - Saved-view creation uses the shared `create-saved-view-creation` lifecycle and route-owned `SavedViewDraftHost` leave protection.
 
@@ -110,6 +121,14 @@ the Soup-backed thread list, and saved email views.
 - `beforeSavedView` restores the prior tab and inboxes on leaving, and is what
   local and entry persistence save while a view is open; never persist view
   filters as the user's own.
+- The view records its split entry itself (`createEntryRecorder` in
+  `persistence.ts`): the entry it mounts in, each entry it moves to while
+  mounted (a thread, another tab), and every change to what the entry keeps,
+  search included. The view can mount again without leaving its entry (an
+  older-build tab does when a newer build takes the local cache over), and
+  must come back on its own state, not the user-level copy that every tab of
+  the browser profile writes. Only a reload or a new tab starts from that
+  copy.
 - A search reaches all mail from every tab but Spam and Trash; only an `in:`
   filter in its text narrows it, through `EmailDataSourceInput.searchScope`,
   never `tab`. The tab's own slice is dropped; the Filters menu, inbox picker,

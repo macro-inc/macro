@@ -64,10 +64,10 @@ export type AddAgentEnding = Exclude<AddedAgentProgress, 'waiting'> | 'slow';
  * and size, and says what happened to the money:
  * - `declined`: the card was refused; nothing was bought or kept.
  * - `no_room`: no host has room for `size`; nothing was charged.
- * - `not_started`: the computer or agent failed to start; Retry starts it
+ * - `not_started`: the computer or agent failed to start; Add agent starts it
  *   again on the same computer, without a new charge.
  * - `refunded`: it failed again; the charge was undone and the computer
- *   released, so Retry buys afresh.
+ *   released, so Add agent buys afresh.
  * - `refused`: any other refusal, in the server's words.
  */
 export type AddAgentState =

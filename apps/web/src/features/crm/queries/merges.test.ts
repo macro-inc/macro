@@ -70,6 +70,57 @@ it('reviews a company merge and reads a refusal by its code', async () => {
   });
 });
 
+it('reads a block it shows no people for by its kind alone', async () => {
+  const people = [
+    {
+      contactId: 'c1',
+      name: 'Pat',
+      companyId: 'other',
+      companyName: 'Other Co',
+    },
+  ];
+  const previewCrmMerge = vi
+    .fn()
+    .mockResolvedValueOnce(
+      ok({
+        revision: 'r',
+        conflicts: [],
+        blocked: { kind: 'different_companies', people },
+      })
+    )
+    .mockResolvedValueOnce(
+      err([
+        {
+          code: 'merge_conflict',
+          message: 'no',
+          blocked: { kind: 'different_companies', people },
+        },
+      ])
+    );
+  const commands = commandsWith({ previewCrmMerge });
+
+  expect(
+    await commands.review({ survivorId: 'kept', sourceIds: ['old'] })
+  ).toEqual({
+    ok: true,
+    value: {
+      revision: 'r',
+      conflicts: [],
+      blocked: { kind: 'different_companies' },
+    },
+  });
+  expect(
+    await commands.review({ survivorId: 'kept', sourceIds: ['old'] })
+  ).toEqual({
+    ok: false,
+    refusal: {
+      code: 'merge_conflict',
+      blocked: { kind: 'different_companies' },
+      currentId: null,
+    },
+  });
+});
+
 it('after a commit, forgets the merged companies and reads everything again', async () => {
   const commitCrmMerge = vi.fn(async () =>
     ok({ survivorId: 'kept', mergedIds: ['OLD-1'], mergeId: 'm' })

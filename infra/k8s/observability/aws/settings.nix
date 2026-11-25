@@ -60,10 +60,22 @@ rec {
     name = "observability";
     # Newest version in EKS standard support; check before apply (README).
     version = "1.37";
+    # Managed node groups by name. To change the instance type, add a group,
+    # apply, drain the old group's nodes, then remove it and apply again:
+    # changing a group's type in place replaces the group, and every node
+    # with it, at once.
+    nodeGroups = {
+      observability = {
+        instanceType = "m7g.large";
+        count = 3;
+      };
+      observability-xlarge = {
+        instanceType = "m7g.xlarge";
+        count = 3;
+      };
+    };
     nodes = {
-      instanceType = "m7g.large";
       amiType = "AL2023_ARM_64_STANDARD";
-      count = 3;
       diskGiB = 40;
     };
     # Control-plane log groups are kept this long.

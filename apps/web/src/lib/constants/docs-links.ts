@@ -3,6 +3,9 @@ import type { ListView } from '@app/constants/list-views';
 /** Base URL for the public documentation site. */
 export const DOCS_BASE = 'https://docs.macro.com';
 
+/** The operators Mail's search reads, on the Search page. */
+export const EMAIL_SEARCH_DOCS_URL = `${DOCS_BASE}/product/search#search-mail`;
+
 /** Task projects have their own collection rather than a legacy ListView. */
 export const PROJECTS_DOCS_URL = `${DOCS_BASE}/product/projects`;
 
