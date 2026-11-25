@@ -90,9 +90,10 @@ describe('EmailLabelsSection', () => {
       made('customers', 'Customers'),
       made('larkspur', 'Customers/Larkspur'),
     ];
+    mocks.inboxIds = ['work'];
     render(() => <EmailLabelsSection />);
 
-    // One inbox needs no account row.
+    // One picked inbox needs no account row.
     expect(screen.queryByText('sam@acme.example')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Expand Customers' }));
     fireEvent.click(await screen.findByText('Larkspur'));
@@ -125,6 +126,13 @@ describe('EmailLabelsSection', () => {
     expect(screen.queryByText('sam@home.example')).toBeNull();
     expect(screen.queryByText('Board')).toBeNull();
     expect(screen.getByText('Travel')).toBeTruthy();
+  });
+
+  it('names the inbox while all inboxes show, though only one has labels', () => {
+    mocks.labels = [made('board', 'Board')];
+    render(() => <EmailLabelsSection />);
+    expect(screen.getByText('sam@acme.example')).toBeTruthy();
+    expect(screen.getByText('Board')).toBeTruthy();
   });
 
   it('stops at eight labels, then lists the rest behind more', () => {

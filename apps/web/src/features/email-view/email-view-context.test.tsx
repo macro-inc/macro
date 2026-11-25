@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   tab: (): string => 'important',
   savedView: (): string | undefined => undefined,
   tagSets: (): TagSetResponse[] => [],
-  inboxLabels: (): { id: string; fullName: string }[] => [],
+  inboxLabels: (): { id: string; fullName: string; linkId?: string }[] => [],
   /** What the view hands its list: the tab or definition it queries. */
   list: undefined as
     | {
@@ -481,7 +481,7 @@ describe('saved views', () => {
   };
 
   /** The URL follows navigation; the detail source knows one view. */
-  function mountSavedViews(options: { known: boolean }) {
+  function mountSavedViews(options: { known: boolean; linkIds?: string[] }) {
     const [search, setSearch] = createStore<{
       tab: string;
       savedView?: string;
@@ -490,7 +490,12 @@ describe('saved views', () => {
     mocks.savedView = () => search.savedView;
     mocks.useEmailLinksQuery.mockReturnValue({
       isSuccess: true,
-      data: { links: [{ id: 'saved-inbox', email_address: 'me@example.com' }] },
+      data: {
+        links: (options.linkIds ?? ['saved-inbox']).map((id) => ({
+          id,
+          email_address: 'me@example.com',
+        })),
+      },
     });
     mocks.useRouteParams.mockReturnValue({});
     mocks.navigate.mockImplementation(
@@ -555,6 +560,26 @@ describe('saved views', () => {
     expect(view.state.conditions?.participants).toEqual([]);
     expect(view.state.inboxIds).toEqual(['saved-inbox']);
     expect(view.state.facets).toEqual({ done: ['not-done'] });
+  });
+
+  it("opens one of the view's labels with its inbox still picked", () => {
+    const label = '019a1f40-2c7e-7d10-9a4b-6f2b0c1d2e43';
+    mocks.inboxLabels = () => [
+      { id: label, fullName: 'Customers / Larkspur', linkId: OTHER_INBOX },
+    ];
+    const view = mountSavedViews({
+      known: true,
+      linkIds: ['saved-inbox', OTHER_INBOX],
+    });
+    view.selectSavedView(VIEW_ID);
+
+    view.openLabel(label);
+
+    expect(view.savedViewActive()).toBe(false);
+    expect(view.state.tab).toBe('all');
+    expect(view.state.facets.labels).toEqual([label]);
+    expect(view.state.inboxIds).toEqual(['saved-inbox', OTHER_INBOX]);
+    mocks.inboxLabels = () => [];
   });
 
   it('closes an open search field as a view opens and as it is left', () => {

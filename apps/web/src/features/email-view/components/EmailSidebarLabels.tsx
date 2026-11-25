@@ -126,12 +126,14 @@ function InboxLabels(props: {
 
 /**
  * The Labels section of the Mail sidebar, drawn from the labels given: each
- * inbox's as a tree, a row per inbox when there are several. Hidden while
- * there are none.
+ * inbox's as a tree, under a row per inbox when `grouped`. Hidden while there
+ * are none.
  */
 export function EmailSidebarLabels(props: {
   /** The labels of the inboxes the account picker shows, in their order. */
   labels: readonly InboxLabelEntry[];
+  /** Whether the account picker shows several inboxes. */
+  grouped: boolean;
   addressOf: (linkId: string) => string;
   activeIds: readonly string[];
   onSelect: (id: string) => void;
@@ -173,7 +175,7 @@ export function EmailSidebarLabels(props: {
         <CollapsibleSection.Content>
           <ViewSidebar.Nav aria-label={t('emailViews.labels')}>
             <Show
-              when={inboxes().length > 1}
+              when={props.grouped}
               fallback={<InboxLabels inbox={inboxes()[0]} rows={rows} />}
             >
               <ul class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">

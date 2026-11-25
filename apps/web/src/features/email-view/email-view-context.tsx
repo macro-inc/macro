@@ -952,12 +952,16 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       ? (state.facets.labels ?? [])
       : [];
 
+  const inboxLabels = useEmailInboxLabels();
   const openLabel = (labelId: string) =>
     runTabSelection(() => {
       const open = activeLabelIds().includes(labelId);
       const labels = open
         ? activeLabelIds().filter((id) => id !== labelId)
         : [labelId];
+      const linkId = inboxLabels().find(
+        (label) => label.id === labelId
+      )?.linkId;
       batch(() => {
         selectTab('all');
         setState(
@@ -966,10 +970,21 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
             normalizeFacetSelection({ ...filterBaseline().facets, labels })
           )
         );
+        // Leaving a saved view restores the inboxes picked before it, which
+        // may leave out the label's own.
+        if (
+          !open &&
+          linkId &&
+          state.inboxIds &&
+          !state.inboxIds.includes(linkId)
+        )
+          setState({
+            inboxIds: normalizeInboxSelection([...state.inboxIds, linkId]),
+            aliasFilter: undefined,
+          });
       });
     });
 
-  const inboxLabels = useEmailInboxLabels();
   const filterViewTitle = () => {
     const tagIds = state.facets.tags ?? [];
     const labelIds = state.facets.labels ?? [];

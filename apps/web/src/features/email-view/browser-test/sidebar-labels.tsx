@@ -80,6 +80,7 @@ function Sidebar(props: { testId: string; picked?: string[] }) {
             labels={LABELS.filter(
               (entry) => !props.picked || props.picked.includes(entry.linkId)
             )}
+            grouped={(props.picked?.length ?? LINKS.length) > 1}
             addressOf={(linkId) =>
               LINKS.find((entry) => entry.id === linkId)?.email_address ?? ''
             }

@@ -86,7 +86,7 @@ By default the desktop sidebar continues with `Favorites`, `Drafts`, `Sent`,
 `Archived`, `Shared`, `Spam`, and `Trash`), **Labels** and **Saved views**
 (flagged, see [Saved email views](#saved-email-views)). Labels lists the labels
 people made in the inboxes the account picker shows, a row per inbox when it
-shows all of them, nested Gmail labels as a tree; each inbox shows eight, then
+shows several, nested Gmail labels as a tree; each inbox shows eight, then
 `N more`, which also holds the labels Gmail hides from its own list. It shows no
 counts and is missing while there are no labels. A label opens `All mail`
 filtered to it alone, and the header names it; choosing the open label again
