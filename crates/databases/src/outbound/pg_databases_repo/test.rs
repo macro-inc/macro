@@ -206,6 +206,7 @@ async fn fixture(pool: &PgPool) -> (PgDatabasesRepo<PropertiesPgRepo>, Table, Uu
 
     let database = repo
         .create_database(
+            models_databases::DatabaseId::new(),
             &CreateDatabase {
                 name: "Summer Offsite".to_string(),
                 owner_id: user(),
@@ -213,6 +214,7 @@ async fn fixture(pool: &PgPool) -> (PgDatabasesRepo<PropertiesPgRepo>, Table, Uu
                 first_table: None,
             },
             FirstTable {
+                ids: None,
                 name: "Table 1".into(),
                 title_column: "Name",
             },
@@ -253,6 +255,7 @@ async fn a_new_database_starts_with_a_title_column_that_infers_its_type(pool: Pg
     let repo = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
     let database = repo
         .create_database(
+            models_databases::DatabaseId::new(),
             &CreateDatabase {
                 name: "Hiring".to_string(),
                 owner_id: user(),
@@ -260,6 +263,7 @@ async fn a_new_database_starts_with_a_title_column_that_infers_its_type(pool: Pg
                 first_table: None,
             },
             FirstTable {
+                ids: None,
                 name: "Table 1".into(),
                 title_column: "Name",
             },

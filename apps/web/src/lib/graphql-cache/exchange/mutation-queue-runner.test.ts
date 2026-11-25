@@ -84,6 +84,7 @@ const PLAIN_OWNER: MutationQueueOwner = {
   claimOwner: () => 'owner',
   holds: () => true,
   departed: () => undefined,
+  dispose: () => {},
 };
 function fixture(
   options: MutationQueueRunnerDeps['options'] = {},
@@ -477,6 +478,7 @@ function liveOwner(departure: () => Promise<void>) {
   return {
     claimOwner: () => 'exchange-live:here',
     holds: () => true,
+    dispose: () => {},
     departed: vi.fn((leaseOwner: string) =>
       leaseOwner.startsWith('exchange-live:') ? departure() : undefined
     ),
@@ -715,6 +717,7 @@ it('hands back a claim whose owner the page let go while it waited for admission
     claimOwner: () => 'exchange-live:here:0',
     holds: (claimedAs) => shown || !claimedAs.startsWith('exchange-live:'),
     departed: () => undefined,
+    dispose: () => {},
   };
   const { runner, forwarded, host } = fixture(
     {
@@ -733,4 +736,58 @@ it('hands back a claim whose owner the page let go while it waited for admission
     expect.any(Number),
     'Admission deferred'
   );
+});
+
+it('keeps its owner while a request it sent is unanswered', async () => {
+  const letGo = vi.fn();
+  const { runner, forwarded } = fixture({}, { ...PLAIN_OWNER, dispose: letGo });
+  const op = operation();
+  const admitted = runner.admit(op, enqueue(op, '1'), runner.epoch());
+  await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+  // Retires the attempt, but not the request already on its way.
+  runner.resetStorage();
+  runner.dispose();
+  await admitted;
+  expect(letGo).not.toHaveBeenCalled();
+
+  const sent = forwarded[0]!;
+  await runner.settle(
+    { operation: sent, data: {}, stale: false, hasNext: false },
+    queueAttemptOf(sent)!
+  );
+  expect(letGo).toHaveBeenCalledOnce();
+});
+
+it('leaves no drain behind', async () => {
+  const { runner } = fixture();
+  runner.start();
+  expect(vi.getTimerCount()).toBe(1);
+  runner.dispose();
+  expect(vi.getTimerCount()).toBe(0);
+  runner.wake();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('lets its owner go at once, and sends nothing more, with no request unanswered', async () => {
+  const letGo = vi.fn();
+  let admit = (_: true) => {};
+  const { runner, forwarded, host } = fixture(
+    {
+      beforeMutationAttempt: () =>
+        new Promise((resolve) => {
+          admit = resolve;
+        }),
+    },
+    { ...PLAIN_OWNER, dispose: letGo }
+  );
+  const op = operation();
+  const admitted = runner.admit(op, enqueue(op, '1'), runner.epoch());
+  await Promise.resolve();
+  runner.dispose();
+  expect(letGo).toHaveBeenCalledOnce();
+
+  admit(true);
+  await admitted;
+  expect(forwarded).toEqual([]);
+  expect(host.deferOptimisticWrite).toHaveBeenCalledOnce();
 });

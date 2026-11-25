@@ -175,7 +175,7 @@ async fn a_revoked_grant_stays_dead_and_a_new_consent_starts_another() {
     let refused = client.refresh_microsoft_tokens(&first.refresh_token).await;
     assert!(matches!(
         refused,
-        Err(MicrosoftRuntimeError::ReauthorizationRequired)
+        Err(MicrosoftRuntimeError::ReauthorizationRequired(_))
     ));
     assert!(
         client
@@ -198,7 +198,7 @@ async fn a_revoked_grant_stays_dead_and_a_new_consent_starts_another() {
     let still_refused = client.refresh_microsoft_tokens(&first.refresh_token).await;
     assert!(matches!(
         still_refused,
-        Err(MicrosoftRuntimeError::ReauthorizationRequired)
+        Err(MicrosoftRuntimeError::ReauthorizationRequired(_))
     ));
 }
 

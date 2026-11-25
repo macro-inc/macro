@@ -1,11 +1,11 @@
 use super::report::{
     BundleLocation, Failure, FailureKind, Outcome, PendingInstall, Report, Reports, Trigger,
 };
-use super::state::{State, Status};
+use super::state::{Snapshot, State, Status};
 use download::Store;
 use macro_bundle_updater_plugin::inbound::plugin::PluginService;
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{App, AppHandle, Emitter, ExitRequestApi, Listener, Manager, Runtime};
@@ -56,6 +56,20 @@ impl Coordinator {
             current_version,
             bundle_location: BundleLocation::current(),
         }
+    }
+
+    /// Takes the record of the install the previous launch started. A failed
+    /// install stays in the state for this launch, so the webview can say so
+    /// and offer to try again.
+    fn take_pending_install(&self, path: &Path) -> Option<Report> {
+        let report = PendingInstall::take(path, &self.current_version, self.bundle_location)?;
+        if let Outcome::InstallFailed { target_version, .. } = &report.outcome {
+            self.state
+                .lock()
+                .expect("native update state poisoned")
+                .failed_install_version = Some(target_version.clone());
+        }
+        Some(report)
     }
 }
 
@@ -184,13 +198,9 @@ pub fn setup<R: Runtime>(
     app.manage(coordinator.clone());
     // Report the install the previous launch started, whether or not this
     // launch checks for updates.
-    if let Some(report) = pending_install_path(app.handle()).and_then(|path| {
-        PendingInstall::take(
-            &path,
-            &coordinator.current_version,
-            coordinator.bundle_location,
-        )
-    }) {
+    if let Some(report) =
+        pending_install_path(app.handle()).and_then(|path| coordinator.take_pending_install(&path))
+    {
         report_outcome(app.handle(), &coordinator, report);
     }
     let Some(store) = store else {
@@ -252,15 +262,14 @@ pub fn setup<R: Runtime>(
     Ok(())
 }
 
-pub fn status<R: Runtime>(app: &AppHandle<R>) -> Status {
+pub fn status<R: Runtime>(app: &AppHandle<R>) -> Snapshot {
     app.try_state::<Arc<Coordinator>>()
-        .map_or(Status::Disabled, |coordinator| {
+        .map_or_else(Snapshot::disabled, |coordinator| {
             coordinator
                 .state
                 .lock()
                 .expect("native update state poisoned")
-                .status
-                .clone()
+                .snapshot()
         })
 }
 
@@ -277,17 +286,20 @@ pub fn take_reports<R: Runtime>(app: &AppHandle<R>) -> Vec<Report> {
 }
 
 fn publish<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator, status: Status) {
-    coordinator
-        .state
-        .lock()
-        .expect("native update state poisoned")
-        .status = status.clone();
-    emit(app, &status);
+    let snapshot = {
+        let mut state = coordinator
+            .state
+            .lock()
+            .expect("native update state poisoned");
+        state.status = status;
+        state.snapshot()
+    };
+    emit(app, &snapshot);
 }
 
 /// Shows a failed check, unless a ready update or an install owns the status.
 fn fail<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator) {
-    let status = {
+    let snapshot = {
         let mut state = coordinator
             .state
             .lock()
@@ -295,13 +307,13 @@ fn fail<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator) {
         if !state.fail("Could not download the app update. Will retry automatically.".into()) {
             return;
         }
-        state.status.clone()
+        state.snapshot()
     };
-    emit(app, &status);
+    emit(app, &snapshot);
 }
 
-fn emit<R: Runtime>(app: &AppHandle<R>, status: &Status) {
-    app.emit(EVENT, status)
+fn emit<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
+    app.emit(EVENT, snapshot)
         .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update status"))
         .ok();
 }
@@ -448,7 +460,7 @@ async fn check<R: Runtime>(
             download_ms: duration_ms(download_started.elapsed()),
             error,
         })?;
-    {
+    let snapshot = {
         let mut state = coordinator
             .state
             .lock()
@@ -474,7 +486,8 @@ async fn check<R: Runtime>(
                 store: store.clone(),
             },
         );
-    }
+        state.snapshot()
+    };
     report(
         app,
         coordinator,
@@ -486,9 +499,7 @@ async fn check<R: Runtime>(
             resumed_bytes: downloaded.resumed_bytes,
         },
     );
-    app.emit(EVENT, Status::Ready { version })
-        .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update ready"))
-        .ok();
+    emit(app, &snapshot);
     Ok(true)
 }
 
@@ -555,7 +566,7 @@ pub fn restart<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let coordinator = app
         .try_state::<Arc<Coordinator>>()
         .ok_or("Native updater is unavailable")?;
-    if !matches!(status(app), Status::Ready { .. }) {
+    if !matches!(status(app).status, Status::Ready { .. }) {
         return Err("No verified app update is ready".into());
     }
     *coordinator
@@ -614,16 +625,19 @@ pub fn on_exit_requested<R: Runtime>(app: &AppHandle<R>, api: &ExitRequestApi) {
             install(&install_app, download, pending, record.as_deref())
         })
         .await;
-        let installed = matches!(&result, Ok(Ok(())));
-        if !installed {
-            tracing::error!(error=?result, "native update installation failed; leaving app for manual recovery");
+        if !matches!(&result, Ok(Ok(()))) {
+            tracing::error!(error=?result, restart, "native update installation failed");
         }
         coordinator
             .state
             .lock()
             .expect("native update state poisoned")
             .finish_exit();
-        if installed && restart {
+        // Restart to update relaunches whichever version is installed now: the
+        // update, or after a failure the version the person had, whose launch
+        // reads the install record, reports the failure and offers to try
+        // again. A quit stays quit either way; the person asked to quit.
+        if restart {
             app.restart();
         } else {
             app.exit(0);

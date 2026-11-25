@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH previous AS MATERIALIZED (\n                   SELECT manually_created, first_interaction, last_interaction\n                   FROM crm_companies WHERE id = $1\n               ), span AS (\n                   SELECT MIN(first_interaction) AS first_at, MAX(last_interaction) AS last_at\n                   FROM crm_companies WHERE id = ANY($2) OR id = $1\n               ), updated AS (\n                   UPDATE crm_companies SET manually_created = TRUE,\n                       first_interaction = (SELECT first_at FROM span),\n                       last_interaction = (SELECT last_at FROM span),\n                       updated_at = NOW()\n                   WHERE id = $1\n               )\n               SELECT manually_created, first_interaction, last_interaction FROM previous",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "manually_created",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_interaction",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_interaction",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fac84fc7ac0d709d80ab61e4b3ee3067deae699e7faa1a7130a8cc508e44e1b3"
+}

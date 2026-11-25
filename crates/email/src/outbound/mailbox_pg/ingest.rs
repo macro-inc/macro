@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::mailbox::drafts::models::DraftCheckpoint;
+use crate::domain::models::label::LabelsGained;
 use email_api_client::domain::models::MailboxMessage;
+use email_db_client::labels::thread_gain;
 
 impl MailboxIngest for PgMailboxSync {
     async fn ingest(
@@ -15,6 +17,7 @@ impl MailboxIngest for PgMailboxSync {
             folder_id,
             tags,
             version,
+            draft_content,
             ..
         } = snapshot;
         let mut message = content.message;
@@ -129,7 +132,12 @@ impl MailboxIngest for PgMailboxSync {
                     .as_ref()
                     .is_some_and(|s| !s.dirty && !s.delete_requested)
             {
-                sqlx::query!("UPDATE email_mailbox_drafts SET base_version = $2,error_code = NULL WHERE message_id = $1 AND state = 'synced'",existing.id,version).execute(&mut *tx).await.map_err(db_error)?;
+                let base_content = draft_content
+                    .map(serde_json::to_value)
+                    .transpose()
+                    .map_err(|_| MailboxError::Persistence)?;
+                // The content of the version adopted, edited or not.
+                sqlx::query!("UPDATE email_mailbox_drafts SET base_version = $2,base_content = $3,error_code = NULL WHERE message_id = $1 AND state = 'synced'",existing.id,version,base_content).execute(&mut *tx).await.map_err(db_error)?;
             }
         }
         // A sent snapshot is authoritative even after a timeout, cancellation or
@@ -180,6 +188,29 @@ impl MailboxIngest for PgMailboxSync {
             .fetch_one(&mut *tx)
             .await
             .map_err(db_error)?
+        };
+        let deleting = sqlx::query_scalar!("SELECT resource_key FROM email_mailbox_settings_work WHERE link_id=$1 AND kind='delete_label' AND completed_revision<revision",lease.mailbox.link_id)
+            .fetch_all(&mut *tx).await.map_err(db_error)?;
+        let tags: Vec<String> = tags
+            .into_iter()
+            .filter(|tag| !deleting.contains(tag))
+            .collect();
+        let mut label_ids = Vec::with_capacity(tags.len());
+        for tag in &tags {
+            let label_id = sqlx::query_scalar!(r#"
+                INSERT INTO email_labels (id,link_id,provider_label_id,name,type) VALUES ($1,$2,$3::text,$3::text,'User')
+                ON CONFLICT (link_id,provider_label_id) DO UPDATE SET name = EXCLUDED.name RETURNING id
+            "#,macro_uuid::generate_uuid_v7(),lease.mailbox.link_id,tag).fetch_one(&mut *tx).await.map_err(db_error)?;
+            label_ids.push(label_id);
+        }
+        // Before the message write below, which clears the message's own labels.
+        // The inbox row held above makes reads of one thread take turns.
+        let absent = if lease.is_import {
+            Vec::new()
+        } else {
+            thread_gain::absent_from_thread(&mut tx, lease.mailbox.link_id, thread_id, &tags)
+                .await
+                .map_err(db_error)?
         };
         if !message.is_draft
             || !shadow
@@ -234,16 +265,17 @@ impl MailboxIngest for PgMailboxSync {
         .execute(&mut *tx)
         .await
         .map_err(db_error)?;
-        let deleting = sqlx::query_scalar!("SELECT resource_key FROM email_mailbox_settings_work WHERE link_id=$1 AND kind='delete_label' AND completed_revision<revision",lease.mailbox.link_id)
-            .fetch_all(&mut *tx).await.map_err(db_error)?;
-        for tag in tags.into_iter().filter(|tag| !deleting.contains(tag)) {
-            let label_id = sqlx::query_scalar!(r#"
-                INSERT INTO email_labels (id,link_id,provider_label_id,name,type) VALUES ($1,$2,$3::text,$3::text,'User')
-                ON CONFLICT (link_id,provider_label_id) DO UPDATE SET name = EXCLUDED.name RETURNING id
-            "#,macro_uuid::generate_uuid_v7(),lease.mailbox.link_id,tag).fetch_one(&mut *tx).await.map_err(db_error)?;
+        for label_id in label_ids {
             sqlx::query!("INSERT INTO email_message_labels (message_id,label_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",message_id,label_id)
                 .execute(&mut *tx).await.map_err(db_error)?;
         }
+        let gained = thread_gain::carried_by_messages(&mut tx, &[message_id], &absent)
+            .await
+            .map_err(db_error)?;
+        let labels_gained = LabelsGained::from_provider(
+            gained.into_iter().map(|label| label.label_id).collect(),
+            message_id,
+        );
         email_db_client::threads::update::recompute_thread_metadata(
             &mut tx,
             thread_id,
@@ -268,6 +300,7 @@ impl MailboxIngest for PgMailboxSync {
             "is_draft":message.is_draft,"is_sent":message.is_sent,
             "version":version,"actor":sent_actor,
             "calendar_parts":content.calendar_parts,
+            "labels_gained":labels_gained,"traceparent":crate::trace_context::current(),
         });
         // Calendar part file names come from the sender.
         email_db_client::parse::nul_characters::remove_from_json(

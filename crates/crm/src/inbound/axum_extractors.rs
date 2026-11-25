@@ -49,6 +49,10 @@ use crate::domain::auth::{CrmCompanyReceipt, CrmContactReceipt};
 /// owning `team_id` from the same ownership row and bundles it into the
 /// receipt, so the service scopes its queries by the entity's team rather
 /// than the caller's default team.
+///
+/// A merged company's old id names the company it was merged into, and the
+/// receipt is for that company: handlers act on the receipt's id, not the
+/// path's.
 #[derive(Debug)]
 pub struct CrmCompanyAccessLevelExtractor<T: RequiredPermission, Svc, Auth> {
     /// Capability token authorizing CRM company service calls.
@@ -75,7 +79,7 @@ where
             .extract()
             .await
             .map_err(|_| ExtractorError::BadRequest("missing company_id path parameter"))?;
-        let company_id = extract_company_id(&path_params)?.to_string();
+        let requested_id = extract_company_id(&path_params)?.to_string();
 
         let authorization =
             MacroAuthorizationExtractor::<Auth, UserOrInternal>::from_request_parts(parts, state)
@@ -83,6 +87,10 @@ where
                 .map_err(ExtractorError::from)?;
         let macro_user_id = authorization.authorization.user.macro_user_id.clone();
 
+        let company_id = service
+            .current_entity_id(&requested_id, EntityType::CrmCompany)
+            .await
+            .map_err(ExtractorError::from)?;
         let (permission, team_id, team_role) = service
             .get_crm_entity_permission_with_team(
                 Some(&macro_user_id),
@@ -125,6 +133,10 @@ where
 /// Reads `contact_id` from the path. The access check resolves the contact's
 /// owning `team_id` (its parent company's team) from the same ownership row
 /// and bundles it into the receipt.
+///
+/// A merged contact's old id names the contact it was merged into, and the
+/// receipt is for that contact: handlers act on the receipt's id, not the
+/// path's.
 #[derive(Debug)]
 pub struct CrmContactAccessLevelExtractor<T: RequiredPermission, Svc, Auth> {
     /// Capability token authorizing CRM contact service calls.
@@ -151,7 +163,7 @@ where
             .extract()
             .await
             .map_err(|_| ExtractorError::BadRequest("missing contact_id path parameter"))?;
-        let contact_id = extract_contact_id(&path_params)?.to_string();
+        let requested_id = extract_contact_id(&path_params)?.to_string();
 
         let authorization =
             MacroAuthorizationExtractor::<Auth, UserOrInternal>::from_request_parts(parts, state)
@@ -159,6 +171,10 @@ where
                 .map_err(ExtractorError::from)?;
         let macro_user_id = authorization.authorization.user.macro_user_id.clone();
 
+        let contact_id = service
+            .current_entity_id(&requested_id, EntityType::CrmContact)
+            .await
+            .map_err(ExtractorError::from)?;
         let (permission, team_id, team_role) = service
             .get_crm_entity_permission_with_team(
                 Some(&macro_user_id),

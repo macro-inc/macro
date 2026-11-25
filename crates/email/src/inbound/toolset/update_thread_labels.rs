@@ -260,9 +260,11 @@ where
             });
         }
 
-        let result = service_context
-            .service
-            .update_thread_labels(&link, self.thread_id, label_id, self.add)
+        let write =
+            service_context
+                .service
+                .update_thread_labels(&link, self.thread_id, label_id, self.add);
+        let result = agent_correlation::context::as_program(write)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to update thread labels: {e}"),

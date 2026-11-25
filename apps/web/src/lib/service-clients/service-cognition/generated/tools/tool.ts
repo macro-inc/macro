@@ -354,6 +354,10 @@ type ToolParserMap = {
     call: types.MarkNotificationsSeen;
     response: types.MarkNotificationsResponse;
   };
+  MergeRecords: {
+    call: types.MergeRecords;
+    response: types.MergeRecordsResponse;
+  };
   MoveToProject: {
     call: types.MoveToProject;
     response: types.MoveToProjectResponse;
@@ -367,6 +371,10 @@ type ToolParserMap = {
   OpenDirectMessage: {
     call: types.OpenDirectMessage;
     response: types.OpenDirectMessageResponse;
+  };
+  PreviewMerge: {
+    call: types.PreviewMerge;
+    response: types.PreviewMergeResponse;
   };
   QueryDatabase: {
     call: types.QueryDatabase;
@@ -953,6 +961,10 @@ const toolParserMap = {
     call: schemas.MarkNotificationsSeen,
     response: schemas.MarkNotificationsResponse,
   },
+  MergeRecords: {
+    call: schemas.MergeRecords,
+    response: schemas.MergeRecordsResponse,
+  },
   MoveToProject: {
     call: schemas.MoveToProject,
     response: schemas.MoveToProjectResponse,
@@ -972,6 +984,10 @@ const toolParserMap = {
   OpenDirectMessage: {
     call: schemas.OpenDirectMessage,
     response: schemas.OpenDirectMessageResponse,
+  },
+  PreviewMerge: {
+    call: schemas.PreviewMerge,
+    response: schemas.PreviewMergeResponse,
   },
   QueryDatabase: {
     call: schemas.QueryDatabase,
@@ -1566,6 +1582,10 @@ type ToolDataMap = {
     call: types.MarkNotificationsSeen;
     response: types.MarkNotificationsResponse;
   };
+  MergeRecords: {
+    call: types.MergeRecords;
+    response: types.MergeRecordsResponse;
+  };
   MoveToProject: {
     call: types.MoveToProject;
     response: types.MoveToProjectResponse;
@@ -1579,6 +1599,10 @@ type ToolDataMap = {
   OpenDirectMessage: {
     call: types.OpenDirectMessage;
     response: types.OpenDirectMessageResponse;
+  };
+  PreviewMerge: {
+    call: types.PreviewMerge;
+    response: types.PreviewMergeResponse;
   };
   QueryDatabase: {
     call: types.QueryDatabase;

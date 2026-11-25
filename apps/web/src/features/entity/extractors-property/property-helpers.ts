@@ -165,6 +165,7 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
     isMetadata: definition.is_metadata,
     isSystemProperty: definition.is_system,
     isRequired: definition.id === SYSTEM_PROPERTY_IDS.STATUS,
+    ...(definition.data_type === 'TAG' ? { isTag: true } : {}),
     options,
     owner: definition.owner,
     specificEntityType: definition.specific_entity_type,

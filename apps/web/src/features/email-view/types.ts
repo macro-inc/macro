@@ -13,7 +13,8 @@ export type EmailFilterGroupId =
   | 'has'
   | 'attachments'
   | 'focus'
-  | 'tags';
+  | 'tags'
+  | 'labels';
 
 export type EmailFilterOptionId =
   | 'all'

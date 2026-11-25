@@ -33,10 +33,12 @@ Paths below `grafana-provisioning/` are under `nixos/`.
   panel both read it), and its Datadog copy in
   `infra/stacks/monitoring/monitors/` by hand. A new entry takes the next free
   `panelId`; never renumber one, since sent notifications link to it.
-- Change the Macro computers fleet dashboard:
-  `grafana-provisioning/computers-dashboard.nix`. Its series come from Alloy on
-  each Firecracker host (`nix/hosts/_nixos/firecracker-host.alloy`); rename a
-  label there and here together.
+- Change the Macro computers fleet dashboard
+  (`grafana-provisioning/computers-dashboard.nix`) or the Firecracker hosts:
+  capacity one (`grafana-provisioning/firecracker-capacity-dashboard.nix`).
+  Their series come from Alloy on each Firecracker host
+  (`nix/hosts/_nixos/firecracker-host.alloy`); rename a label there and in both
+  together.
 - Change an Email Focus rollout check: edit `grafana-provisioning/email-focus.nix`;
   its rules and the `Email Focus rollout` dashboard both read it. No Datadog copy.
 - Change a CI percentile, queue or CI hours query: edit

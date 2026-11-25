@@ -100,8 +100,8 @@ import {
   type RemoveUnreadableResult,
 } from './directory-departures';
 import {
-  CHANNEL_DIRECTORY_CHECKPOINT_ID,
   CHANNEL_DIRECTORY_INPUT,
+  CHANNEL_DIRECTORY_LANE,
 } from './directory-lane';
 import {
   readableChannelsInput,
@@ -1634,22 +1634,18 @@ function readLaneProgress(
 ): LaneProgress {
   const complete = soupBackfillLaneCompleted(
     userId,
-    CHANNEL_DIRECTORY_CHECKPOINT_ID,
+    CHANNEL_DIRECTORY_LANE,
     storageGeneration
   );
   return {
     complete,
     failed:
       !complete &&
-      soupBackfillLaneFailed(
-        userId,
-        CHANNEL_DIRECTORY_CHECKPOINT_ID,
-        storageGeneration
-      ),
+      soupBackfillLaneFailed(userId, CHANNEL_DIRECTORY_LANE, storageGeneration),
     viewsCurrent:
       complete &&
       laneReadSince(
-        loadSoupBackfillCheckpoint(userId, CHANNEL_DIRECTORY_CHECKPOINT_ID),
+        loadSoupBackfillCheckpoint(userId, CHANNEL_DIRECTORY_LANE),
         sessionStartedAt
       ),
   };
@@ -2422,7 +2418,7 @@ export function createCachedChannelDirectory(
   // Every page saves the checkpoint; only a finished pass, or the lane giving
   // up, changes what the directory can answer.
   onCleanup(
-    watchSoupBackfillCheckpoint(userId, CHANNEL_DIRECTORY_CHECKPOINT_ID, () => {
+    watchSoupBackfillCheckpoint(userId, CHANNEL_DIRECTORY_LANE, () => {
       laneStalled();
       if (generation === undefined) return;
       const next = readLaneProgress(userId, generation, sessionStartedAt);

@@ -7,7 +7,6 @@ mod test;
 use std::time::Duration;
 
 use anyhow::Result;
-use axum::http::HeaderMap;
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -49,23 +48,13 @@ impl StopRelay for PgStopRelay {
     async fn send(&self, run: Uuid) -> Result<()> {
         let payload = serde_json::to_string(&StopNotice {
             run,
-            traceparent: current_traceparent(),
+            traceparent: crate::trace_context::current(),
         })?;
         sqlx::query!("SELECT pg_notify($1, $2)", RUN_STOP_CHANNEL, payload)
             .execute(&self.db)
             .await?;
         Ok(())
     }
-}
-
-/// The current span's W3C trace context, when it has one.
-fn current_traceparent() -> Option<String> {
-    let mut headers = HeaderMap::new();
-    macro_tower_layers::inject_trace_headers(&mut headers);
-    headers
-        .get("traceparent")
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_owned)
 }
 
 /// Hear stops on `pool`'s database until `shutdown` and pass each to

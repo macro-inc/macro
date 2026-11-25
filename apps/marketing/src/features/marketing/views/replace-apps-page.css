@@ -19,7 +19,6 @@
 .replacement-app-toggle[aria-pressed=true] { color: #eee; }
 .replacement-app-toggle[aria-pressed=true] .replacement-app-tile { border-color: var(--color-success); }
 .replacement-app-toggle[aria-pressed=true] .replacement-app-check { width: 22px; height: 22px; border-color: var(--color-success); background: var(--color-success); color: var(--color-ink); box-shadow: 0 0 0 2px #000; }
-.feature-page .replace-apps-page .email-page-hero > .email-page-hero-description { text-wrap: wrap; }
 @media (max-width: 699px) {
   .replacement-calculator { width: calc(100% - 40px); padding-top: 36px; margin-bottom: 64px; }
   .replacement-app-grid { gap: 8px; }

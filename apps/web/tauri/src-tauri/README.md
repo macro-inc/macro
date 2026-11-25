@@ -692,7 +692,7 @@ it from the startup config if it no longer exists (`src/desktop/main_window.rs`)
 
 ## Desktop native updates
 
-Release builds for macOS Apple Silicon and Linux AppImage check for native updates
+Release builds for macOS (Apple silicon and Intel) and Linux AppImage check for native updates
 after startup and every six hours. The download streams into
 `native-update/` under the app's local data directory (Application Support on
 macOS, never a purgeable cache): `download.partial` while it arrives,
@@ -727,6 +727,25 @@ cache and excludes concurrent frontend OTA reloads. Neither update channel wipes
 user data. Mobile updates remain managed by the app stores. Debug, recording,
 branch, and `--no-default-features` builds do not auto-install native updates.
 
+When an install fails, **Restart to update** relaunches the version still
+installed; a quit stays quit, because the person asked to quit. The common
+failures (a read-only or translocated bundle, a declined admin prompt, a bad
+archive) leave the old app in place, and the AppImage updater restores its
+backup. On macOS the pinned updater keeps its backup of the old app in a
+temporary directory, so a failure after it moved the old app out can leave no
+app to relaunch; the app then just exits. The next launch reads the
+install record (see [update telemetry](#update-telemetry)), reports
+`install_failed`, and keeps the target version as `failedInstallVersion` in
+the status it gives the webview (`get_native_update_status`, generated as
+`src/lib/tauri/generated/native-update-status.ts` by
+`UPDATE_NATIVE_UPDATE_STATUS_TYPES=1 cargo test --manifest-path apps/web/tauri/Cargo.toml --locked -p app --lib native_update_status_wire_types`).
+A failed install keeps the saved download (unless it no longer verified, which
+deletes it), so the launch's first check, offered the same update, reuses it
+without downloading, or resumes or restarts the download otherwise; meanwhile
+the rail's update popover and Settings → Account say the last update couldn't
+be installed, and once it is ready the popover offers **Try again**, which
+restarts to install it.
+
 `../desktop-release.json` is the public release configuration; its checked-in
 defaults disable updates for local builds. `bun apps/web/scripts/desktop-release.mjs prepare <ref>`
 (run from the repository root) updates this tracked file in CI
@@ -745,7 +764,17 @@ or rebuild an already published tag; publish a higher version for fixes/reverts.
 
 The combined desktop workflow is the only publisher. It exports the final
 relocated/signed macOS app, notarizes and staples it, and archives it as
-`.app.tar.gz`. The Linux AppImage and macOS archive receive updater signatures
+`.app.tar.gz`, once per Mac architecture. The Intel build
+(`Macro-<version>-x86_64-darwin.{dmg,app.tar.gz}`, feed key `darwin-x86_64`)
+is optional: release tags build it only once
+`../desktop-cef/cef-codecs.json` pins its codec CEF, and a failed or skipped
+Intel build still publishes the others, leaving `darwin-x86_64` out of that
+release's feed. Installed Intel apps then report a failed check (the feed has no
+entry for them) and stay on their version until a release includes it; the feed
+has one version for every platform, so an older Intel package can't be carried
+forward. A failed Intel build raises the native-build alert. Rerunning it adds
+`darwin-x86_64` to that version's feed: publication accepts a same-version feed
+that only adds platforms and leaves every listed one unchanged. The Linux AppImage and macOS archive receive updater signatures
 outside Nix. `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 live in Doppler `macos-release/prd`, read using the existing
 `MACOS_RELEASE_DOPPLER_TOKEN` CI secret. Only the corresponding public key is
@@ -761,8 +790,8 @@ Apps released before that check don't read the field.
 Versioned GitHub Release assets are immutable. Publication retries reuse and
 verify any already-published signatures, since newly generated signatures include
 the signing time. The stable manifest is uploaded last to the dedicated
-`desktop-stable` prerelease's `latest.json` asset, after both packages and signatures
-exist. Promotions are serialized and reject older/equal versions; unrelated SDK
+`desktop-stable` prerelease's `latest.json` asset, after every package and signature
+exists. Promotions are serialized and reject older/equal versions; unrelated SDK
 or daemon releases cannot move the desktop update feed. A brief missing manifest
 during replacement is treated as a retryable check error.
 
@@ -795,9 +824,13 @@ link is never missing for the length of an upload; an installer whose bytes are
 already there is skipped, and reruns of an older tag change nothing. Customers
 use `https://macro.com/download/mac` and `/download/linux`, which the website's
 edge redirects to those assets (`apps/marketing/seo/download-redirects.json`), so
-the hosting can move without changing the links. A new platform (Intel Mac,
-Windows) adds a fixed name in `publish_desktop_download_links.sh` and a redirect
-in that manifest.
+the hosting can move without changing the links. A new platform (Windows) adds a
+fixed name in `publish_desktop_download_links.sh` and a redirect in that
+manifest. The Intel Mac installer becomes `Macro-macos-x86_64.dmg` only from a
+release that built it; one without it leaves the previous copy, which installs
+and then updates itself. Its redirect, `/download/mac-intel`, is added to the
+manifest after the first release that publishes it, and both download pages
+offer Intel only while the manifest has it.
 
 Failed releases post to the Macro Alerts channel. `Alert native build failures`
 posts when any job of `Build Desktop on Tag` fails or times out, or when a tag's

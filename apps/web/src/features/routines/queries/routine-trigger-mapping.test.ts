@@ -357,6 +357,40 @@ describe('GitHub triggers', () => {
   });
 });
 
+describe('email label selectors', () => {
+  it('round trips the labels of an email label trigger', () => {
+    const config = {
+      type: 'events' as const,
+      filters: [
+        {
+          events: ['email.labeled' as const],
+          labels: ['label-1', 'label-2'],
+          condition: 'Is it overdue?',
+        },
+      ],
+    };
+    const [trigger] = parseRoutineTriggers(config)!;
+    expect(routineTriggerSchema.safeParse(trigger).success).toBe(true);
+    expect(serializeTriggers([trigger])).toEqual(config);
+    expect(trigger.kind === 'event' && eventTriggerLabel(trigger)).toBe(
+      'Email labeled'
+    );
+  });
+
+  it('sends no labels for any label', () => {
+    const trigger = {
+      id: 'trigger',
+      kind: 'event' as const,
+      events: ['email.labeled' as const],
+      labels: [],
+    };
+    expect(serializeTriggers([trigger])).toEqual({
+      type: 'events',
+      filters: [{ events: ['email.labeled'] }],
+    });
+  });
+});
+
 describe('task property selectors', () => {
   const STATUS = SYSTEM_PROPERTY_IDS.STATUS;
   const COMPLETED = PROPERTY_OPTION_IDS.STATUS.COMPLETED;

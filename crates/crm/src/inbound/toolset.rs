@@ -13,6 +13,7 @@ mod create_company;
 mod create_contact;
 mod get_company;
 mod list_companies;
+pub mod merge;
 pub mod pipelines;
 pub mod transfer;
 
@@ -383,7 +384,8 @@ where
 /// Resolve the caller's permission on a CRM company (derived from their
 /// role on the owning team) and mint a receipt for it at level `T`, returning
 /// the owning team id. Access failures collapse to "not found" so company ids
-/// can't be probed across teams.
+/// can't be probed across teams. A merged company's old id names the company
+/// it was merged into: act on the receipt's id, not the argument.
 pub(crate) async fn company_receipt<T, ESvc>(
     entity_access_service: &ESvc,
     request_context: &RequestContext,
@@ -393,7 +395,13 @@ where
     T: RequiredPermission,
     ESvc: EntityAccessService,
 {
-    let company_id = company_id.to_string();
+    let company_id = entity_access_service
+        .current_entity_id(&company_id.to_string(), EntityType::CrmCompany)
+        .await
+        .map_err(|e| ToolCallError {
+            description: "failed to verify access to the CRM company".to_string(),
+            internal_error: e.into(),
+        })?;
     let (permission, team_id, team_role) = match entity_access_service
         .get_crm_entity_permission_with_team(
             Some(&request_context.user_id),

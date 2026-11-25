@@ -76,14 +76,11 @@ import {
   Switch,
 } from 'solid-js';
 import { EntityPropertyEditor } from './entity-property-editor';
+import { createGuardedHighlight } from './guarded-highlight';
 import { useAllProperties } from './hooks/useAllProperties';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
 import { LinkPropertyEditor } from './link-property-editor';
-import {
-  createUnhighlightedArrival,
-  type SavedValueState,
-  SavedValueStatus,
-} from './saved-value-status';
+import { type SavedValueState, SavedValueStatus } from './saved-value-status';
 import {
   closePropertyEditor,
   hasPropertyEditorPropertyAddedHandler,
@@ -272,6 +269,17 @@ export function PropertyEditorDialog(props: {
   const [placeholder, setPlaceholder] = createSignal('');
   let editorRevision = 0;
   onCleanup(() => editorRevision++);
+
+  // An editor belongs to one property on one set of items: reopened on
+  // another while it is open, it starts over instead of keeping a highlight
+  // the person moved to on the previous one.
+  const selectedEntityIds = () =>
+    props.state.selectedEntities.map((entity) => entity.id).join(',');
+  const valueEditorTarget = () => {
+    const property = props.state.targetProperty;
+    return `value:${property ? propertyIdentity(property) : ''}:${selectedEntityIds()}`;
+  };
+  const tagEditorTarget = () => `tags:${selectedEntityIds()}`;
 
   const handlePropertySave = (
     value: PropertyApiValues,
@@ -469,29 +477,37 @@ export function PropertyEditorDialog(props: {
               </div>
             </Match>
             <Match when={props.state.mode === 'direct'}>
-              <PropertyValueEditor
-                property={props.state.targetProperty}
-                searchValue={searchValue}
-                setSearchValue={setSearchValue}
-                selectedIndex={selectedIndex}
-                setSelectedIndex={setSelectedIndex}
-                setKeybindings={keybindings}
-                setPlaceholder={setPlaceholder}
-                setInputType={setInputType}
-                onSave={handlePropertySave}
-                selectedEntities={props.state.selectedEntities}
-                properties={props.properties}
-              />
+              <Show when={valueEditorTarget()} keyed>
+                {(_target) => (
+                  <PropertyValueEditor
+                    property={props.state.targetProperty}
+                    searchValue={searchValue}
+                    setSearchValue={setSearchValue}
+                    selectedIndex={selectedIndex}
+                    setSelectedIndex={setSelectedIndex}
+                    setKeybindings={keybindings}
+                    setPlaceholder={setPlaceholder}
+                    setInputType={setInputType}
+                    onSave={handlePropertySave}
+                    selectedEntities={props.state.selectedEntities}
+                    properties={props.properties}
+                  />
+                )}
+              </Show>
             </Match>
             <Match when={props.state.mode === 'tag'}>
-              <TagAssignmentEditor
-                entities={props.state.selectedEntities}
-                searchValue={searchValue}
-                selectedIndex={selectedIndex}
-                setSelectedIndex={setSelectedIndex}
-                setKeybindings={keybindings}
-                setPlaceholder={setPlaceholder}
-              />
+              <Show when={tagEditorTarget()} keyed>
+                {(_target) => (
+                  <TagAssignmentEditor
+                    entities={props.state.selectedEntities}
+                    searchValue={searchValue}
+                    selectedIndex={selectedIndex}
+                    setSelectedIndex={setSelectedIndex}
+                    setKeybindings={keybindings}
+                    setPlaceholder={setPlaceholder}
+                  />
+                )}
+              </Show>
             </Match>
           </Switch>
         </CommandMenuShell.Body>
@@ -945,13 +961,6 @@ function TagAssignmentEditor(props: {
     props.searchValue();
     props.setSelectedIndex(0);
   });
-  createUnhighlightedArrival(
-    waitsForSavedTags,
-    () => rows().length > 0,
-    () => hasSearch() && rows()[0]?.type === 'tag',
-    props.setSelectedIndex
-  );
-
   createEffect(() => {
     const index = props.selectedIndex();
     const elem = document.getElementById(`tag-assignment-option-${index}`);
@@ -1225,15 +1234,19 @@ function TagAssignmentEditor(props: {
     setSelectedIndex: props.setSelectedIndex,
   });
 
+  const highlight = createGuardedHighlight({
+    rows,
+    guarded: () => rows()[0]?.type === 'clear',
+    searchValue: props.searchValue,
+    selectedIndex: props.selectedIndex,
+    listController,
+  });
+
   props.setKeybindings({
-    next: () => {
-      listController.selectNext();
-    },
-    previous: () => {
-      listController.selectPrevious();
-    },
+    next: highlight.selectNext,
+    previous: highlight.selectPrevious,
     select: (event) => {
-      const row = rows()[props.selectedIndex()];
+      const row = rows()[highlight.highlightedIndex()];
       if (row) selectRow(row, event);
     },
   });
@@ -1255,7 +1268,7 @@ function TagAssignmentEditor(props: {
       >
         <CommandMenuList
           items={rows()}
-          selectedIndex={props.selectedIndex()}
+          selectedIndex={highlight.highlightedIndex()}
           scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
           itemId={(_, index) => `tag-assignment-option-${index}`}
           beforeItem={(row) =>
@@ -1264,9 +1277,7 @@ function TagAssignmentEditor(props: {
             ) : null
           }
           onSelect={(row, _, event) => selectRow(row, event)}
-          onItemMouseMove={(index) =>
-            listController.setSelectedIndexFromPointer(index)
-          }
+          onItemMouseMove={highlight.selectFromPointer}
         >
           {(row) => (
             <Switch>
@@ -1707,24 +1718,21 @@ function SelectPropertyEditor(props: {
     selectedIndex: props.selectedIndex,
     setSelectedIndex: props.setSelectedIndex,
   });
-  createUnhighlightedArrival(
-    waitsForSavedValue,
-    () => rows().length > 0,
-    () => Boolean(searchQuery()) && rows()[0]?.type === 'option',
-    props.setSelectedIndex
-  );
+  const highlight = createGuardedHighlight({
+    rows,
+    guarded: () => rows()[0]?.type === 'clear',
+    searchValue: props.searchValue,
+    selectedIndex: props.selectedIndex,
+    listController,
+  });
 
   props.setKeybindings({
     select: (event) => {
-      const row = rows()[props.selectedIndex()];
+      const row = rows()[highlight.highlightedIndex()];
       if (row) selectRow(row, event);
     },
-    next: () => {
-      listController.selectNext();
-    },
-    previous: () => {
-      listController.selectPrevious();
-    },
+    next: highlight.selectNext,
+    previous: highlight.selectPrevious,
   });
 
   return (
@@ -1748,7 +1756,7 @@ function SelectPropertyEditor(props: {
     >
       <CommandMenuList
         items={rows()}
-        selectedIndex={props.selectedIndex()}
+        selectedIndex={highlight.highlightedIndex()}
         scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
         itemId={(_, index) => `property-value-option-${index}`}
         beforeItem={(row) =>
@@ -1757,9 +1765,7 @@ function SelectPropertyEditor(props: {
           ) : null
         }
         onSelect={(row, _, event) => selectRow(row, event)}
-        onItemMouseMove={(index) =>
-          listController.setSelectedIndexFromPointer(index)
-        }
+        onItemMouseMove={highlight.selectFromPointer}
       >
         {(row, index) => (
           <Switch>

@@ -196,6 +196,8 @@ pub struct PendingEventRun {
     pub revision: ConfigurationRevision,
     pub event: EventReference,
     pub admitted_at: DateTime<Utc>,
+    /// The trace the event was admitted in, which its run joins.
+    pub traceparent: Option<String>,
 }
 
 impl PendingEventRun {

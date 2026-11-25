@@ -16,9 +16,12 @@ export function SearchDraft(props: {
     location?: SearchLocation
   ) => void;
 }) {
+  // Typing in Search for edits the query, not the filters, so it must not
+  // rebuild the facets beside the field.
+  const searchFilters = createMemo(() => props.state.fields().searchFilters);
   const filters = createMemo(() =>
     resolveSearchFilters(
-      props.state.fields().searchFilters,
+      searchFilters(),
       props.actions.person,
       props.actions.searchChannels(),
       props.actions.inboxes()

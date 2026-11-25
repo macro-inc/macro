@@ -8,7 +8,23 @@ export const MAX_RECENT_EMAIL_SEARCHES = 8;
 const STORAGE = createUserScopedStorage('macro:email:recent-searches:v1');
 const recentSearchesSchema = z.array(z.string()).catch([]);
 
-/** Puts `query` first, without repeating it, and drops the oldest. */
+/**
+ * Searches, newest first, without one that a later search starts with: the
+ * same search again, or one typed on the way to it (`bef` for `before:`).
+ */
+function withoutEarlierPrefixes(searches: readonly string[]): string[] {
+  return searches.filter((search, index) => {
+    const key = search.toLowerCase();
+    return !searches
+      .slice(0, index)
+      .some((later) => later.toLowerCase().startsWith(key));
+  });
+}
+
+/**
+ * Puts `query` first, drops the searches it starts with, and drops the
+ * oldest.
+ */
 export function addRecentSearch(
   recent: readonly string[],
   query: string
@@ -16,11 +32,10 @@ export function addRecentSearch(
   const added = query.trim();
   if (!added) return [...recent];
 
-  const key = added.toLowerCase();
-  return [
-    added,
-    ...recent.filter((entry) => entry.toLowerCase() !== key),
-  ].slice(0, MAX_RECENT_EMAIL_SEARCHES);
+  return withoutEarlierPrefixes([added, ...recent]).slice(
+    0,
+    MAX_RECENT_EMAIL_SEARCHES
+  );
 }
 
 /** Recent searches containing what is typed, leaving out the text itself. */
@@ -43,9 +58,9 @@ function read(userId: string | undefined): string[] {
   if (raw === null) return [];
 
   try {
-    return recentSearchesSchema
-      .parse(JSON.parse(raw))
-      .slice(0, MAX_RECENT_EMAIL_SEARCHES);
+    return withoutEarlierPrefixes(
+      recentSearchesSchema.parse(JSON.parse(raw))
+    ).slice(0, MAX_RECENT_EMAIL_SEARCHES);
   } catch {
     return [];
   }
