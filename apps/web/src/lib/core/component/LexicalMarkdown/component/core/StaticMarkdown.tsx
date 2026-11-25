@@ -667,7 +667,7 @@ const MagicChip: TypedRenderableEntity<MagicChipNode> = {
   guard: (node: LexicalNode): node is MagicChipNode =>
     node.__type === 'magic-chip',
   render: (props) => (
-    <div class="min-w-0 max-w-full overflow-x-hidden">
+    <div class="flow-root min-w-0 max-w-full">
       <MagicChipDecorator {...props.node.exportComponentProps()} />
     </div>
   ),

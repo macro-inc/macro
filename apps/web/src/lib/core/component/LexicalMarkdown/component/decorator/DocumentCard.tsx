@@ -174,11 +174,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
           when={props.blockName === 'form' && pollBodyHeight(props.previewData)}
         >
           {(height) => (
-            <Card
-              variant="filled"
-              depth={2}
-              class="my-2 overflow-hidden rounded-xl"
-            >
+            <Card variant="raised" depth={2} class="my-2 overflow-hidden">
               <PollCardPlaceholder
                 name={props.documentName}
                 bodyHeight={height()}
@@ -679,7 +675,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
 
   return (
     <Card
-      variant="filled"
+      variant="raised"
       depth={2}
       ref={(el) => {
         setContainerRef(el);
@@ -687,10 +683,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
       }}
       contentEditable={false}
       class={cn(
-        'my-2 rounded-xl no-select-children select-none overflow-hidden',
-        isSelectedAsNode() &&
-          !channelMessageId() &&
-          'border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] ring-2 ring-edge-muted',
+        'my-2 no-select-children select-none overflow-hidden',
+        isSelectedAsNode() && !channelMessageId() && 'outline-4 outline-edge',
         resizable() && 'resize-y shrink-0 min-h-80'
       )}
       style={{

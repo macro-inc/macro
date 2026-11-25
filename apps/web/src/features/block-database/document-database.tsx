@@ -12,7 +12,7 @@ import {
 import { useDatabaseTableChangedSync } from '@queries/storage/databases-sync';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
-import { Button, Tooltip } from '@ui';
+import { Button, Card, Tooltip } from '@ui';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { DatabaseEditorToolbar } from '../database/components/database-editor-toolbar';
 import { DatabaseTitle } from '../database/components/database-title';
@@ -114,11 +114,13 @@ export function DocumentDatabase(props: {
   });
 
   return (
-    <section
+    <Card
+      variant="raised"
+      role="region"
       aria-label={`Database: ${name()}`}
       contentEditable={false}
       data-lexical-interactive
-      class="@container/database my-2 flex min-w-0 flex-col overflow-hidden rounded-lg border border-edge-muted bg-panel text-ink"
+      class="@container/database my-2 overflow-hidden"
       onKeyDown={(event) => {
         // The card's event boundary keeps these out of outer Lexical.
         event.stopPropagation();
@@ -207,8 +209,8 @@ export function DocumentDatabase(props: {
             {(shown) => (
               <Show when={view()}>
                 {(currentView) => (
-                  <div class="flex h-96 min-h-0 flex-col border-t border-edge-muted">
-                    <div class="shrink-0 border-b border-edge-muted">
+                  <div class="flex h-96 min-h-0 flex-col border-t border-edge-divider">
+                    <div class="shrink-0 border-b border-edge-divider">
                       <DatabaseEditorToolbar
                         columns={shown().columns.map(toViewColumn)}
                         view={currentView()}
@@ -281,7 +283,7 @@ export function DocumentDatabase(props: {
                     <DatabaseGrid
                       host="document"
                       schema="cached"
-                      contentClass="m-3 rounded-lg border border-edge-muted"
+                      contentClass="m-3 rounded-lg border border-edge-divider"
                       databaseId={databaseId}
                       table={shown()}
                       canEdit={canEdit()}
@@ -314,6 +316,6 @@ export function DocumentDatabase(props: {
           </Show>
         </Show>
       </Show>
-    </section>
+    </Card>
   );
 }
