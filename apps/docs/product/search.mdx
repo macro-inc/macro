@@ -8,6 +8,8 @@ description: "Macro's unified search makes it possible to find anything in under
 
 Search is the easiest way to find specific files in Macro. When using search for multiple terms, use quotations for an exact match. Otherwise, the default is to independently match terms in a document.
 
+Put a minus before a word or a quoted phrase to leave out the results that contain it: `budget -draft` finds items about the budget that don't mention "draft", and `-"team lunch"` leaves out the exact phrase. A minus inside a word, as in `e-mail`, is part of the word. A minus word needs another word beside it, except in a search of email alone.
+
 > Use the <kbd>/</kbd> shortcut to open up search or the <kbd>cmd</kbd>+<kbd>k</kbd> menu to search by name.
 
 Type [search operators](#search-operators) such as `type:task` or `tag:finance` to narrow results.
