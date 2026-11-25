@@ -283,7 +283,7 @@ export function DocumentDatabase(props: {
                     <DatabaseGrid
                       host="document"
                       schema="cached"
-                      contentClass="m-3 rounded-lg border border-edge-divider"
+                      contentClass="m-3 rounded-lg border border-edge-divider bg-panel"
                       databaseId={databaseId}
                       table={shown()}
                       canEdit={canEdit()}
