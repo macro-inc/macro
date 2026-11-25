@@ -711,11 +711,28 @@ export function searchQueryParts(
     text,
     bindings
   );
+  // The request carries one tag group by id, any or all of it. Bound tag
+  // groups it can't hold as one (a group of alternatives beside another)
+  // stay in the service's text, which reads every group by name. A token
+  // bound to two same-named tags is such a group too.
+  const boundTagGroups = read.groups.filter(
+    (group) => group.name === 'tag' && isBoundSearchOperatorGroup(group)
+  );
+  const alternatives = (group: SearchOperatorGroup) =>
+    group.values.reduce(
+      (count, value) => count + (value.kind === 'tags' ? value.tags.length : 1),
+      0
+    );
+  const tagsByName =
+    boundTagGroups.length > 1 &&
+    boundTagGroups.some((group) => alternatives(group) > 1);
+  const sentById = (group: SearchOperatorGroup) =>
+    isBoundSearchOperatorGroup(group) && !(tagsByName && group.name === 'tag');
   const boundTokens = new Set(
     groupTermIndexes(terms, read.groups)
       .filter((_, index) => {
         const group = read.groups[index];
-        return group !== undefined && isBoundSearchOperatorGroup(group);
+        return group !== undefined && sentById(group);
       })
       .flat()
       .map((index) => readable[index])
@@ -728,7 +745,7 @@ export function searchQueryParts(
       boundTokens.has(readable[index + 1]);
     if (token.term === OR && besideBound) boundTokens.add(token);
   });
-  const boundGroups = read.groups.filter(isBoundSearchOperatorGroup);
+  const boundGroups = read.groups.filter(sentById);
   // Mail's operators are conditions only where email is searched.
   const words = searchesEmail
     ? read.terms.filter((term) => !readsAsEmailSearchOperator(term))
