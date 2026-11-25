@@ -150,11 +150,13 @@ control surface, height, and radius. Guest/reminder multiselects preserve protec
 guests and non-popup reminders; Custom accepts minutes. Long Description/Location
 fields scroll inside. The footer keeps Cancel and Create event/Save on the right.
 For recurring edits, Save opens exactly two translated choices: Apply to this event
-or Apply to all events. Enter opens the menu; arrow keys and Enter select and save.
+or Apply to all events. Enter on Save or in a single-line form field opens the
+menu; arrow keys and Enter select and save.
 Following-event updates are not supported by the current API. Cancelling the menu does not save or change scope.
 Eligible invitation forwarding appears as a labelled icon button on the left.
-Desktop field groups use a 10px gap (`gap-2.5`). Capped descriptions expose a thin
-native scrollbar. Guest summaries and selectors show neutral avatar stacks before
+Desktop field groups use a 10px gap (`gap-2.5`). Capped desktop/agent descriptions
+use the shared Scroll area with a visible scrollbar while overflowing and keep
+short descriptions at natural height. Guest summaries and selectors show neutral avatar stacks before
 selected names. The agent draft and preview share equal columns once their container
 reaches 48rem; below that width they stack. Invalid preview drafts show composer
 date/range/zone feedback, missing-title feedback, or the calendar/conference reason;

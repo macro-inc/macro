@@ -47,7 +47,8 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 - Keep unsaved Day-grid resizing bound to the mounted draft, not persisted-event mutations.
 - Keep standalone composer hotkey scopes attached to their host so app shortcuts still run from text fields.
 - Use the shared ToggleSwitch for All day and the same control surfaces for desktop and agent date/time fields.
-- Request recurring edit scope from the Save dropdown; preserve the supported `this_event`/`all` save path and single-occurrence restrictions.
+- Cap desktop/agent descriptions with the shared Scroll area, leaving short content at natural height and phone description composition unchanged.
+- Request recurring edit scope from the Save dropdown, including native form submission; preserve the supported `this_event`/`all` save path and single-occurrence restrictions.
 - Keep eligible invitation forwarding as a labelled footer-leading action, separate from Save/Cancel and event-detail header icons.
 - Keep native momentum on the virtual track; sample the live viewport without writing scrollLeft during movement.
 - Finish the previous target and advance immediately on rapid period presses; use native smooth scrolling for a single press.
