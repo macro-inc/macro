@@ -18,7 +18,7 @@ test('engines killed anywhere in a recovery wipe lose no accepted write and brin
   );
   const landings = new Map<string, number>();
   const outcomes = new Map<string, number>();
-  const totals = { kills: 0, wipes: 0, accepted: 0, settled: 0 };
+  const totals = { kills: 0, wipes: 0, accepted: 0, settled: 0, overtold: 0 };
   const violations: string[] = [];
   for (let seed = FIRST_SEED; seed < FIRST_SEED + SCHEDULES; seed += 1) {
     const report = await page.evaluate(
@@ -33,6 +33,7 @@ test('engines killed anywhere in a recovery wipe lose no accepted write and brin
     totals.wipes += report.wipes;
     totals.accepted += report.accepted;
     totals.settled += report.settled;
+    totals.overtold += report.overtold;
     violations.push(
       ...report.violations.map((violation) => `seed ${seed}: ${violation}`)
     );

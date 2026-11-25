@@ -19,6 +19,11 @@ const STEP_TIMEOUT_MS = 30_000;
 const LOAD_ATTEMPTS = 10;
 /** Markers of the attempts take 13 bytes each, a queue hundreds. */
 const ATTEMPTS_MAX_BYTES = 200;
+// A frame of the side file: length, checksum, kind, body.
+const FRAME_HEADER_BYTES = 13;
+const FRAME_KIND_OFFSET = 12;
+const QUEUE_FRAME = 1;
+const IMPORT_ATTEMPT_FRAME = 3;
 
 type RequestWithoutId = CacheRequest extends infer Request
   ? Request extends CacheRequest
@@ -43,6 +48,8 @@ type Report = {
   accepted: number;
   settled: number;
   outcomes: string[];
+  /** Opens that called a queue lost that they had, killed in two of its steps. */
+  overtold: number;
   violations: string[];
 };
 
@@ -255,6 +262,28 @@ async function landing(scope: string): Promise<Landing> {
   return side > ATTEMPTS_MAX_BYTES ? 'copied' : 'reading';
 }
 
+/**
+ * Whether one of the database's two files is gone and the side file notes an
+ * import: nothing then says whether that database had taken the copy.
+ */
+async function importInDoubt(scope: string): Promise<boolean> {
+  const sizes = [...(await filesOf(scope))];
+  const [side] = sizes.filter(([name]) => name.endsWith('-salvage'));
+  const torn = sizes.length === 2 && side !== undefined;
+  if (!torn) return false;
+  const root = await navigator.storage.getDirectory();
+  const file = await (await root.getFileHandle(side[0])).getFile();
+  const bytes = new DataView(await file.arrayBuffer());
+  let noted = false;
+  for (let at = 0; at + FRAME_HEADER_BYTES <= bytes.byteLength; ) {
+    const kind = bytes.getUint8(at + FRAME_KIND_OFFSET);
+    if (kind === QUEUE_FRAME) noted = false;
+    if (kind === IMPORT_ATTEMPT_FRAME) noted = true;
+    at += FRAME_HEADER_BYTES + bytes.getUint32(at, true);
+  }
+  return noted;
+}
+
 /** Resolves once the side file holds the queue, or after `limitMs`. */
 async function queueCopied(scope: string, limitMs: number): Promise<void> {
   const end = performance.now() + limitMs;
@@ -431,6 +460,7 @@ async function run(seed: number, recoveryMs: number): Promise<Report> {
     accepted: 0,
     settled: 0,
     outcomes: [],
+    overtold: 0,
     violations: [],
   };
   let engine = await Engine.start(scope, false);
@@ -460,16 +490,20 @@ async function run(seed: number, recoveryMs: number): Promise<Report> {
       await ownerLockFree(scope);
       report.kills.push(await landing(scope));
     }
+    const inDoubt = await importInDoubt(scope);
     engine = await Engine.start(scope, true);
     const opened = await engine.opened();
     report.wipes += 1;
     report.outcomes.push(`${opened.outcome}/${opened.queue}`);
     const queue = await engine.queue();
     report.violations.push(...model.violations(queue, `round ${round}`));
-    if (
+    const toldGone =
       opened.queue !== 'preserved' &&
-      model.unsettled.some(({ uuid }) => !model.uncertain.has(uuid))
-    )
+      model.unsettled.some(({ uuid }) => !model.uncertain.has(uuid));
+    // Killed before its import committed, then in the wipe of the half-made
+    // database: the file cannot say that no database had taken the copy.
+    if (toldGone && inDoubt) report.overtold += 1;
+    else if (toldGone)
       report.violations.push(`round ${round}: told the queue is gone`);
     model.settle(queue);
   }

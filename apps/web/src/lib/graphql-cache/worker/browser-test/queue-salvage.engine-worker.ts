@@ -74,6 +74,8 @@ async function open(scope: string, recovery: boolean): Promise<void> {
   );
   core.addPort(port);
   send(opened ? { ...opened, crossing } : { kind: 'open-failed', error });
+  // Nobody else has to hear of it.
+  if (opened) await core.queueLossTold();
 }
 
 async function handle(command: QueueSalvageCommand): Promise<void> {
