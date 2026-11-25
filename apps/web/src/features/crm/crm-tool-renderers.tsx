@@ -5,12 +5,14 @@ import Buildings from '@icon/system/regular/buildings.svg';
 import GitMergeIcon from '@icon/system/regular/git-merge.svg';
 import Globe from '@icon/system/regular/globe.svg';
 import UserPlus from '@icon/system/regular/user-plus.svg';
+import { queryClient } from '@queries/client';
 import { Show, Suspense } from 'solid-js';
 import {
   GetCompanyToolResponse,
   ListCompaniesToolResponse,
   pluralize,
 } from './components/tool-companies';
+import { refreshAfterMerge } from './queries/merges';
 
 const listCompaniesHandler = createToolRenderer({
   name: 'ListCompanies',
@@ -176,6 +178,11 @@ const previewMergeHandler = createToolRenderer({
 
 const mergeRecordsHandler = createToolRenderer({
   name: 'MergeRecords',
+  handleResponse: (ctx) =>
+    refreshAfterMerge(queryClient, {
+      companies: ctx.tool.data.mergedIds,
+      contacts: [],
+    }),
   render: (ctx) => (
     <BaseTool icon={GitMergeIcon} renderContext={ctx.renderContext} type="call">
       <div class="min-w-0 flex-1">

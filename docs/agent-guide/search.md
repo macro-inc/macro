@@ -47,19 +47,27 @@ centered inside a frame that grows to fit them, rather than clipping taller
 segments.
 
 On touch devices, the dock's **Search** button opens a persistent **Search…**
-input in `/app/search`. It starts in **All** with Command Menu-style Quick Access
-name search. Categories are **All, Email, Agents, Files, Tasks, Projects, Channels,
-People** in a horizontal pill row at the top, below the status-bar safe area;
-the query input stays in the bottom dock. Each filter row reads and updates its
-own Search history entry, including while another entry is in front. Projects respects its feature flag.
-Categories filter entities directly,
-independently of view tabs, mailbox selections, and saved facets. Commands and
-creation shortcuts are excluded. Empty queries show recent entities.
-Typed **All** and **People** name searches also find known teammates before their
-first DM, with or without CRM. Existing one-to-one DMs replace person rows while
+input in `/app/search`. It starts with Command Menu-style Quick Access name
+search across every kind. The field is the whole search, as on desktop: it
+draws typed operators and reads them by the same rules. Starters **From, Type,
+Tag, Date, Unread** sit in a horizontal pill row at the top, below the
+status-bar safe area; the query input stays in the bottom dock. A starter writes
+its operator at the end of the field (`from:`, `type:`, `tag:`, `newer_than:`)
+and lists its suggestions in place of the results; Date offers spans and a
+picked date, and Unread toggles `is:unread`. Once the text sets an operator, its
+pill shows the value (You, Tasks, a tag, Last 7 days) and tapping it again edits
+it. Each starter row reads and updates its own Search history entry, including
+while another entry is in front. Name results follow `type:` alone; any other
+operator, Mail's among them, lists full text, which sends operators beside a
+word to the search service and lists operators alone through the feed. Typed
+operators don't count toward the length that turns a search into a composer
+draft. Commands and creation shortcuts are excluded. Empty queries show recent
+entities.
+Typed name searches also find known teammates and projects before their first
+DM, with or without CRM. Existing one-to-one DMs replace person rows while
 preserving name/email matches; selecting a person opens their DM, which the
-first message creates when there isn't one yet. Verify both
-categories with a teammate who has no conversation or CRM record.
+first message creates when there isn't one yet. Verify it with a teammate who
+has no conversation or CRM record.
 Conversation search here, in Command K, and in the Chat sidebar matches participants
 in any order, separated by spaces or commas, with name prefixes allowed. Naming
 exactly its participants ranks a conversation after exact names, above a larger

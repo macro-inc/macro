@@ -196,6 +196,12 @@ function CompanyContent(props: CompanyProps) {
       >
         <CompanySharingSection company={company()} />
       </SidePanel.Section>
+      <Suspense>
+        <context.RecordActivity
+          record={{ type: 'company', id: props.companyId }}
+          order={RECORD_PANEL_ORDER.activity}
+        />
+      </Suspense>
       <SidePanel.Section
         id="company-references"
         title="References"
