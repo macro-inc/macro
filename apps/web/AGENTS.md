@@ -387,7 +387,11 @@ The same suite's `row-styles.browser.e2e.ts` covers Mail's row styles over the
 real row: Minimalist unchanged, and Classic's shared line between rows (plus
 the one above each date group's first row), lifted unread fill, weights and
 always-visible checkbox on desktop and tablet, with phones kept on Minimalist,
-and the Settings → Email sample following the Row style tabs.
+and the Settings → Email sample following the Row style tabs. Its
+`row-labels.browser.e2e.ts` checks the labels people made on wide rows (each
+nested label by its own name, its whole name on hover, three items and then a
+count, none of Gmail's system or hidden labels) and none on narrow or phone
+rows; `ROW_LABELS_SCREENSHOT_DIR` saves its screenshots.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the
@@ -460,6 +464,13 @@ service. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there. It laun
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
 
 Members rows (owners, admins, members and agents) share one shape at every width, like a Machines row: picture, name, email, one summary line (role · plan, plus **Pro at renewal** or **No CRM access** when they apply; an agent's status), and a ⋯ that holds everything the viewer can change in the order plan, role, CRM access (named `CRM access for <name>`), Remove. The ⋯ is a `Dropdown` on desktop and a `MobileDrawer` sheet on touch, switched in `TeamMembers.tsx`. A setting the viewer can't change stays in place, disabled, with its reason written under it; don't use `disabledReason` there, whose tooltip takes the Escape that should close the menu. Names and emails wrap on rows under 480px, as Machines' names do, breaking an address before its `@`. Person rows are keyed by `user_id` (`Key`), so a refetch keeps each row and an open ⋯; don't give `useTeamQuery` `reconcile`, which writes into TanStack's cached object and so into the remove mutation's rollback snapshot. The same suite checks the rows at 1440, 820 (touch), 390, 360 and 320px, and each ⋯ item for owner, admin, member and agent rows. CRM settings' **Who can use CRM** (`views/crm-member-access.tsx`, which CRM receives as `CrmContext.MemberAccess`) lists the same person rows with `TeamMemberRow` and a CRM access switch, sharing Members' roster helpers in `primitives/team-roster.ts`; keep the two lists on those helpers. The suite's `?crm` page checks a change there seen in the ⋯ and back, a failed save and its retry, admins, and that members and flag-off owners see no list.
+
+A task's phone Time sheet (the real `TaskTimeSheet` over entries held in
+memory) has a backend-free light/dark regression: every entry, one's own
+swipeable rows and a teammate's, sits on the sheet's glass at rest with no
+swipe action showing, and a row fills only while it is swiped and still opens
+to edit:
+`bunx playwright test --config src/features/time-tracking/browser-test/playwright.config.ts`.
 
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details), and event details
@@ -799,6 +810,32 @@ controls. CI runs it when
 `GanttCalendarClip`; without that the clip cuts it off at the bar's end. Only a
 cut `Gantt.BarTitle` (or the label itself overflowing) counts as a cramped bar,
 so wrap a bar's title in it.
+
+The database page's toolbar (the real `DatabasePageToolbar` and
+`DatabasePageNoTables` over tables and views kept in memory, drawn again per
+table as the page does) has a phone/desktop regression in the same suite,
+`toolbar.browser.e2e.ts`: at 320, 390 and 430px every control stays on screen
+at 36px or taller, also with search open; the table menu switches tables and
+creates a named table, with focus following to the redrawn menu button (it
+also opens one that was created but not loaded, and a database's first); the
+selected view tab shows whole; and **View actions** creates, renames and
+deletes a view. Desktop keeps one row with **New view**. Both toolbars draw
+their view tabs from `createViewControls`;
+`block-database/database-page-controls.tsx` holds the page's device switches.
+`DatabasePageHeader` there switches the header: `MobileDatabaseHeader`
+(`MobileHeader` plus a `SplitFileMenu` title menu whose database rows come from
+`databaseTitleMenuRows`) on touch, `TopBar` on desktop; both read
+`createDatabaseHeader` and `createDatabaseTransfers`. `DatabasePageRecords`
+provides `ColumnMenuContext` on touch, so `DatabaseColumnHeader` draws its menu
+as `ColumnMenuDrawer`, where Change type opens in the same sheet; embedded
+grids provide none and keep the dropdown. `column-menu-drawer.test.tsx` drives
+the real header through that sheet.
+A touch menu item that opens a dialog, starts a rename or switches tables does
+so from the menu's `onCloseAutoFocus`: a Kobalte menu closing over an open
+dialog leaves `body` with `pointer-events: none`. The database block pads
+itself by `--mobile-content-inset-top` on touch (its toolbar is in flow) and
+resets that inset for its children; phones drop the header's table tabs for
+the toolbar's table menu.
 
 Column renames have a backend-free desktop/phone regression using the real
 schema query and mutation adapter with delayed service responses:
@@ -1301,8 +1338,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   lets the view keep the open state and close the field itself, and
   `suggestions` lists rows under the field that the arrows walk before the
   results (a row that `editsQuery`, such as Email's `in:` views, keeps the
-  keyboard in the field, and `commit` hears the Enter that runs the typed
-  search, which Email remembers); `operators` marks search operators (`in:sent`) in
+  keyboard in the field); `operators` marks search operators (`in:sent`) in
   the text, which `search-operator-text.tsx` draws as tokens behind the input
   while the text stays ordinary editable text; future operators reuse it.
   Email's wide search uses all of them. It registers the

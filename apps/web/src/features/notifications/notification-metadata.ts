@@ -36,6 +36,23 @@ export function reactionText(content: {
   return `Reacted ${content.emoji} to: ${content.messageContent}`;
 }
 
+/**
+ * A finished routine run's body, as the notification service words it. A run
+ * refused for a disconnected app names the apps to reconnect.
+ */
+export function routineRunText(content: {
+  outcome: 'succeeded' | 'failed';
+  appsToConnect?: readonly string[];
+}): string {
+  if (content.outcome !== 'failed') return 'Its run finished.';
+  const apps = content.appsToConnect ?? [];
+  const last = apps.at(-1);
+  if (!last) return 'Its run failed.';
+  const rest = apps.slice(0, -1);
+  const names = rest.length ? `${rest.join(', ')} and ${last}` : last;
+  return `It needs ${names} connected to run. Reconnect ${rest.length ? 'them' : 'it'}.`;
+}
+
 export function getNotificationAction(n: UnifiedNotification): string {
   return (
     match(n.notification_metadata.tag)
@@ -305,9 +322,7 @@ export function getNotificationContent(
         (m) => m.content.question
       )
       .with({ tag: 'agent_session_mentioned' }, () => undefined)
-      .with({ tag: 'routine_run_finished' }, (m) =>
-        m.content.outcome === 'failed' ? 'Its run failed.' : 'Its run finished.'
-      )
+      .with({ tag: 'routine_run_finished' }, (m) => routineRunText(m.content))
       .with({ tag: 'agent_sign_in_expiry' }, (m) => {
         const agent = agentDisplayName(m.content.agent);
         const when = match(m.content.stage)

@@ -3,7 +3,7 @@
 //! enrollment. Local stacks override them per fleet (`OVERRIDE_*`).
 
 use macro_service_urls::{
-    AgentHarnessEgressUrl, AgentHarnessServiceUrl, ApiGatewayUrl, AuthServiceUrl,
+    AgentHarnessEgressUrl, AgentHarnessServiceUrl, ApiGatewayUrl, AppServiceUrl, AuthServiceUrl,
     ConnectionGatewayWebsocketUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl,
     McpServiceUrl, ScheduledActionServiceUrl, TelemetryIntakeUrl,
 };
@@ -71,6 +71,23 @@ fn checked(name: &'static str, raw: &str, websocket: bool) -> Result<String, Tea
     Ok(raw.trim_end_matches('/').to_owned())
 }
 
+/// A URL the agent only hands to people (its owner's browser opens it), so a
+/// local stack's loopback web app is fine; it must still be plain http(s).
+fn browser_url(name: &'static str, raw: &str) -> Result<String, TeamAgentError> {
+    let invalid = || TeamAgentError::internal(UnreachableAddress { name });
+    let url = macro_service_urls::Url::parse(raw).map_err(|_| invalid())?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(invalid());
+    }
+    Ok(raw.trim_end_matches('/').to_owned())
+}
+
 /// The agent's telemetry intake and the deployment its spans are tagged
 /// with, or neither when the intake is this machine's loopback, which a
 /// computer can't reach (a local stack without a wired collector).
@@ -105,6 +122,8 @@ fn resolve(
     let gateway = ApiGatewayUrl::new().map_err(TeamAgentError::internal)?;
     let egress = AgentHarnessEgressUrl::new().map_err(TeamAgentError::internal)?;
     let egress = checked(AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME, &egress, false)?;
+    let app = AppServiceUrl::new().map_err(TeamAgentError::internal)?;
+    let app = browser_url(AppServiceUrl::OVERRIDE_ENV_VAR_NAME, &app)?;
     let intake = TelemetryIntakeUrl::new().map_err(TeamAgentError::internal)?;
     let telemetry = telemetry(&intake, environment)?;
     Ok(vec![
@@ -157,6 +176,11 @@ fn resolve(
             checked(McpServiceUrl::OVERRIDE_ENV_VAR_NAME, &mcp, false)?,
         ),
         (GATEWAY_KEY, checked(GATEWAY_KEY, &gateway, false)?),
+        // The brain routes the agent's relay forwards (`/brain/captcha/*`,
+        // `/brain/fireworks/*`) are under it.
+        (AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME, egress.clone()),
+        // Links the agent sends its owner (its screen, a session) open here.
+        (AppServiceUrl::OVERRIDE_ENV_VAR_NAME, app),
         (ANTHROPIC_BASE_URL_KEY, format!("{egress}/brain/anthropic")),
         (SPEECH_URL_KEY, format!("{egress}/brain/inference")),
     ]

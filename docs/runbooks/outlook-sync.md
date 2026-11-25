@@ -254,10 +254,17 @@ needs a few more failures to alert.
 ## Reauthorization
 
 More Outlook mailboxes need reauthorization than an hour ago. Their sync stops
-until each user reconnects, so a spike is user-visible. Sync claims skip a
-flagged mailbox, so its queued work waits (`queued` stays above zero) without
-asking authentication-service for tokens; it resumes once a reconnect or a
-token that works again clears the flag.
+until each user reconnects, or Microsoft accepts the grant again, so a spike is
+user-visible. Sync claims skip a flagged mailbox, so its queued work waits
+(`queued` stays above zero); only its discovery is claimed, about once an hour,
+as the probe that asks authentication-service for a token. It resumes once a
+reconnect or a token that works again clears the flag.
+
+A refused refresh (`invalid_grant`, `interaction_required`, `consent_required`,
+or a response without the mail permissions) no longer revokes the grant:
+authentication-service records `refresh_refused_at` on it, answers it as needing
+a reconnect without asking Microsoft for an hour, then refreshes once more, and
+a refresh that works clears it. A disconnect or a replacing grant still revokes.
 
 - List them: `env:prod "outlook mailbox health" @needs_reauth:true`,
   grouped by `@link_id`.
@@ -267,14 +274,32 @@ token that works again clears the flag.
   authentication-service deploy. Check its logs for refresh errors.
 - Why Microsoft refused: authentication-service logs `"microsoft refused a
   token refresh"` with Microsoft's `@oauth.error` and AADSTS number
-  (`@microsoft.aadsts`), never its description, and `"microsoft grant revoked
-  after a refused refresh"` with the `@grant_id` and generation it revoked
-  (`microsoft.token.refresh` span, `@microsoft.outcome`). A refused refresh
-  (`invalid_grant`, `interaction_required`, `consent_required`, or a
-  response without the mail permissions) revokes the grant, so only a
-  reconnect brings the mailbox back.
-- Levers: fix the shared credential or roll back. Mailboxes already marked
-  need their users to reconnect.
+  (`@microsoft.aadsts`), never its description, and `"microsoft refused a
+  grant's refresh; it is kept and retried in an hour"` with the `@grant_id`
+  and generation (`microsoft.token.refresh` span, `@microsoft.outcome`,
+  `@microsoft.refresh_refused`).
+- Levers: fix the shared credential or roll back. A marked mailbox comes back
+  on its own once Microsoft accepts its grant again; otherwise its user
+  reconnects. Grants revoked before refusals stopped revoking stay revoked.
+
+## Drafts that stop
+
+A draft step that gives up logs `email_send.draft_failed` (WARN) with `link_id`,
+`message_id`, the waiting `attempt_ids`, `code`, `stage`, and for a conflict
+`change` and `changed_fields`. `change=content` means the content Graph returns
+(raw, before Macro's sanitizer) differs from the last one Macro read or wrote, in
+the fields `changed_fields` names (`body`, `subject`, `toRecipients`, …);
+`change=unknown` means nothing was recorded to compare. A send admitted onto a
+draft that already stopped logs `email_send.admitted_stopped`. Every step is an
+`outlook.draft.step` span (`@draft.stage`, `@draft.error_code`) whose children
+are its Graph requests.
+
+A moved version goes on only when the content Macro last read or wrote is
+recorded and Graph still returns it: the step logs
+`email_send.draft_version_moved` (INFO). With nothing recorded the draft stops as
+`change=unknown`. On a mailbox whose tenant changes drafts on its own, the INFO
+lines show the rule at work, and a `change=content` line shows where it does not
+apply, with the field a tool rewrites.
 
 ## No mailbox
 
