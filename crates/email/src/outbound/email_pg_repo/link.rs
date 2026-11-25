@@ -1,5 +1,6 @@
 use crate::domain::models::{
     EmailBackfillStatus, EmailInboxDetails, Link, UserEmailLinkSettings, UserProvider,
+    link::calendar_permission_required,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
@@ -244,12 +245,11 @@ pub(super) async fn inbox_details_for_macro_id(
                     BackfillJobStatus::Cancelled => EmailBackfillStatus::Cancelled,
                     BackfillJobStatus::Failed => EmailBackfillStatus::Failed,
                 }),
-                needs_calendar_permission:
-                    crate::domain::mailbox::catalog::calendar_permission_required(
-                        link.provider,
-                        &inbox.provider_granted_scopes,
-                        inbox.calendar_disabled,
-                    ),
+                needs_calendar_permission: calendar_permission_required(
+                    link.provider,
+                    &inbox.provider_granted_scopes,
+                    inbox.calendar_disabled,
+                ),
                 calendar_disabled: inbox.calendar_disabled,
                 has_calendar_data: inbox.has_calendar_data,
                 created_at: link.created_at,

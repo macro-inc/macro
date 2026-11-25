@@ -1,7 +1,9 @@
 //! One provider-neutral inbox catalog for connection and feature state.
 
 use super::*;
-use crate::domain::models::{EmailBackfillStatus, EmailSyncStatus};
+use crate::domain::models::{
+    EmailBackfillStatus, EmailSyncStatus, link::calendar_permission_required,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{
     link::{Link, UserProvider},
@@ -85,32 +87,6 @@ impl<R: InboxCatalogRepository> InboxCatalogService<R> {
                 }
             })
             .collect())
-    }
-}
-
-pub(crate) fn calendar_permission_required(
-    provider: UserProvider,
-    granted_scopes: &[String],
-    disabled: bool,
-) -> bool {
-    match provider {
-        UserProvider::Gmail => {
-            disabled
-                || !calendar_events::domain::models::GoogleScopeSet::from_scopes(
-                    granted_scopes.iter().cloned(),
-                )
-                .has_calendar_capability()
-        }
-        UserProvider::Outlook => {
-            disabled
-                || !granted_scopes.iter().any(|scope| {
-                    scope
-                        .rsplit('/')
-                        .next()
-                        .is_some_and(|scope| scope.eq_ignore_ascii_case("Calendars.ReadWrite"))
-                })
-        }
-        UserProvider::Imap => false,
     }
 }
 

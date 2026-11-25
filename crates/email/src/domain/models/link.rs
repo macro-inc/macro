@@ -5,6 +5,36 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
+/// Whether this email link needs a provider calendar grant.
+#[cfg(any(feature = "mailbox", feature = "outbound"))]
+pub(crate) fn calendar_permission_required(
+    provider: models_email::service::link::UserProvider,
+    granted_scopes: &[String],
+    disabled: bool,
+) -> bool {
+    use models_email::service::link::UserProvider;
+
+    match provider {
+        UserProvider::Gmail => {
+            disabled
+                || !calendar_events::domain::models::GoogleScopeSet::from_scopes(
+                    granted_scopes.iter().cloned(),
+                )
+                .has_calendar_capability()
+        }
+        UserProvider::Outlook => {
+            disabled
+                || !granted_scopes.iter().any(|scope| {
+                    scope
+                        .rsplit('/')
+                        .next()
+                        .is_some_and(|scope| scope.eq_ignore_ascii_case("Calendars.ReadWrite"))
+                })
+        }
+        UserProvider::Imap => false,
+    }
+}
+
 /// The provider of this email
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, strum::EnumString,
