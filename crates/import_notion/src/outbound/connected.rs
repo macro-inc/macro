@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError, Weak};
 
-use connectors::{ApiConnectionsService, ApiHandle, ApiRequest, ConnectorId};
+use connectors::{ApiConnectionsService, ApiHandle, ApiRequest, ConnectorId, ConnectorsError};
 use http::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -13,7 +13,7 @@ use super::rest::{
     NOTION_REQUEST_INTERVAL, NOTION_VERSION, NotionRead, NotionRestClient, NotionTransport,
     RequestPacer, TransportResponse,
 };
-use crate::domain::ports::{NotionConnections, NotionError};
+use crate::domain::ports::{NotionConnections, NotionError, TransportClass};
 
 /// Notion's catalog app.
 const NOTION_APP: &str = "notion";
@@ -60,7 +60,10 @@ impl<S: ApiConnectionsService> NotionConnections for ConnectedNotion<S> {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> Result<Option<Self::Api>, NotionError> {
-        let app = ConnectorId::parse(NOTION_APP).map_err(transport)?;
+        let app = ConnectorId::parse(NOTION_APP).map_err(|error| NotionError::Transport {
+            class: TransportClass::Other,
+            report: rootcause::Report::new(error).into_dynamic(),
+        })?;
         let Some(handle) = self
             .service
             .connection(user, &app)
@@ -79,8 +82,16 @@ impl<S: ApiConnectionsService> NotionConnections for ConnectedNotion<S> {
     }
 }
 
-fn transport(error: impl std::error::Error + Send + Sync + 'static) -> NotionError {
-    NotionError::Transport(rootcause::Report::new(error).into_dynamic())
+fn transport(error: ConnectorsError) -> NotionError {
+    NotionError::Transport {
+        class: transport_class(&error),
+        report: rootcause::Report::new(error).into_dynamic(),
+    }
+}
+
+/// What the connection can tell about a request that did not complete.
+fn transport_class(_: &ConnectorsError) -> TransportClass {
+    TransportClass::Other
 }
 
 /// Sends Notion REST requests through one user's Notion connection.

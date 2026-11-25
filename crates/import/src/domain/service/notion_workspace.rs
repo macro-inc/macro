@@ -925,7 +925,7 @@ fn notion_failure_text(error: &NotionError) -> &'static str {
         } => "Notion couldn’t return this item’s content.",
         NotionError::Decode(_) => "Notion returned data Macro couldn’t read.",
         NotionError::IncompleteViewList => "Notion only returned part of the database’s tab list.",
-        NotionError::Transport(_) | NotionError::Upstream { .. } => {
+        NotionError::Transport { .. } | NotionError::Upstream { .. } => {
             "Notion couldn’t complete the request."
         }
     }

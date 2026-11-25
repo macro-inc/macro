@@ -42,8 +42,93 @@ pub enum NotionError {
     #[error("the source saved-view list is incomplete")]
     IncompleteViewList,
     /// The request did not complete.
-    #[error("Notion request failed: {0:?}")]
-    Transport(rootcause::Report),
+    #[error("Notion request failed: {report:?}")]
+    Transport {
+        /// What went wrong on the way, as far as the connection can tell.
+        class: TransportClass,
+        /// The underlying report.
+        report: rootcause::Report,
+    },
+}
+
+impl NotionError {
+    /// The failure's kind, for spans and logs.
+    pub fn class(&self) -> NotionErrorClass {
+        match self {
+            Self::RateLimited { .. } => NotionErrorClass::RateLimited,
+            Self::NotFound => NotionErrorClass::NotFound,
+            Self::Forbidden => NotionErrorClass::Forbidden,
+            Self::Upstream { .. } => NotionErrorClass::Upstream,
+            Self::Decode(_) => NotionErrorClass::Decode,
+            Self::IncompleteViewList => NotionErrorClass::IncompleteViewList,
+            Self::Transport { .. } => NotionErrorClass::Transport,
+        }
+    }
+
+    /// The HTTP status Notion answered with, when it is not implied by the
+    /// kind.
+    pub fn status(&self) -> Option<u16> {
+        match self {
+            Self::Upstream { status, .. } => Some(*status),
+            Self::RateLimited { .. }
+            | Self::NotFound
+            | Self::Forbidden
+            | Self::Decode(_)
+            | Self::IncompleteViewList
+            | Self::Transport { .. } => None,
+        }
+    }
+
+    /// Why the request did not complete, for a transport failure.
+    pub fn transport_class(&self) -> Option<TransportClass> {
+        match self {
+            Self::Transport { class, .. } => Some(*class),
+            Self::RateLimited { .. }
+            | Self::NotFound
+            | Self::Forbidden
+            | Self::Upstream { .. }
+            | Self::Decode(_)
+            | Self::IncompleteViewList => None,
+        }
+    }
+}
+
+/// The kind of a [`NotionError`], without its details.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum NotionErrorClass {
+    /// [`NotionError::RateLimited`].
+    RateLimited,
+    /// [`NotionError::NotFound`].
+    NotFound,
+    /// [`NotionError::Forbidden`].
+    Forbidden,
+    /// [`NotionError::Upstream`].
+    Upstream,
+    /// [`NotionError::Decode`].
+    Decode,
+    /// [`NotionError::IncompleteViewList`].
+    IncompleteViewList,
+    /// [`NotionError::Transport`].
+    Transport,
+}
+
+/// Why a request to Notion did not complete.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum TransportClass {
+    /// The request or its response timed out.
+    Timeout,
+    /// No connection was made, including a failed TLS handshake.
+    Connect,
+    /// The response body could not be read.
+    Body,
+    /// The connection's grant must be authorized again.
+    NeedsReauth,
+    /// The user holds no Notion connection.
+    NotConnected,
+    /// Anything the connection does not tell apart.
+    Other,
 }
 
 /// A user's Notion workspace, read through the REST API.

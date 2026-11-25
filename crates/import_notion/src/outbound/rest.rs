@@ -100,7 +100,62 @@ pub enum NotionRead {
     },
 }
 
+/// Which Notion endpoint a [`NotionRead`] calls, without its ids, cursor or
+/// body: the only description of a request that spans and logs carry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum NotionEndpoint {
+    /// `POST /v1/search`.
+    Search,
+    /// `GET /v1/pages/{id}`.
+    Page,
+    /// `GET /v1/pages/{id}/markdown`.
+    PageMarkdown,
+    /// `GET /v1/pages/{page}/properties/{property}`.
+    PageProperty,
+    /// `GET /v1/data_sources/{id}`.
+    DataSource,
+    /// `POST /v1/data_sources/{id}/query`.
+    QueryDataSource,
+    /// `GET /v1/databases/{id}`.
+    Database,
+    /// `GET /v1/views`.
+    ListViews,
+    /// `GET /v1/views/{id}`.
+    RetrieveView,
+    /// `GET /v1/users`.
+    Users,
+}
+
+/// How a request's attempts ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum RequestOutcome {
+    /// Notion answered successfully, after `attempts` tries.
+    Succeeded,
+    /// Every attempt hit a rate limit or a transient failure.
+    Exhausted,
+    /// The failure is final, so it was not retried.
+    NotRetryable,
+}
+
 impl NotionRead {
+    /// The endpoint this read calls.
+    pub fn endpoint(&self) -> NotionEndpoint {
+        match self {
+            Self::Search(_) => NotionEndpoint::Search,
+            Self::Page(_) => NotionEndpoint::Page,
+            Self::PageMarkdown(_) => NotionEndpoint::PageMarkdown,
+            Self::PageProperty { .. } => NotionEndpoint::PageProperty,
+            Self::DataSource(_) => NotionEndpoint::DataSource,
+            Self::QueryDataSource { .. } => NotionEndpoint::QueryDataSource,
+            Self::Database(_) => NotionEndpoint::Database,
+            Self::ListViews { .. } => NotionEndpoint::ListViews,
+            Self::RetrieveView(_) => NotionEndpoint::RetrieveView,
+            Self::Users { .. } => NotionEndpoint::Users,
+        }
+    }
+
     /// The HTTP method Notion's API takes this read with.
     pub fn method(&self) -> Method {
         match self {
@@ -275,7 +330,7 @@ impl<Transport: NotionTransport> NotionRestClient<Transport> {
                         Failure::Transient { error, retry_after } => (error, retry_after),
                     }
                 }
-                Err(NotionError::Transport(report)) => (NotionError::Transport(report), None),
+                Err(error @ NotionError::Transport { .. }) => (error, None),
                 Err(error) => return Err(error),
             };
             if attempt >= MAX_ATTEMPTS {
