@@ -702,6 +702,61 @@ pub fn build_pipeline_tool_context(
     }
 }
 
+/// Merging duplicate CRM records, moving pipeline cells through the database
+/// tools' service.
+pub type ToolMergeService = crm::domain::record_merge::service::RecordMergeService<
+    crm::outbound::record_merge::PgRecordMergeRepository<ToolDatabasesService>,
+>;
+
+/// Type alias for the CRM merge AI tool context.
+pub type ToolMergeToolContext =
+    crm::inbound::toolset::merge::MergeToolContext<ToolMergeService, ToolEntityAccessService>;
+
+/// The notices a merge sends members whose sharing rules it changed, through
+/// `ingress`.
+pub fn merge_sharing_notices<I: notification::domain::service::NotificationIngress>(
+    ingress: Arc<I>,
+) -> Arc<dyn crm::domain::record_merge::service::MergeNotices> {
+    Arc::new(crm::outbound::record_merge::SharingNotices(ingress))
+}
+
+/// Build the merge tools over the database tools' service and access. Without
+/// a feature flag client, or without `notices` to tell members whose sharing
+/// rules a merge rewrites, merging stays off.
+pub fn build_merge_tool_context(
+    pool: sqlx::PgPool,
+    databases: &ToolDatabasesToolContext,
+    feature_flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
+    event_broker: MaybeToolEventBroker,
+    notices: Option<Arc<dyn crm::domain::record_merge::service::MergeNotices>>,
+) -> ToolMergeToolContext {
+    let mut merges = crm::domain::record_merge::service::RecordMergeService::new(
+        crm::outbound::record_merge::PgRecordMergeRepository::new(
+            pool.clone(),
+            databases.service.clone(),
+        ),
+    )
+    .with_effects(Arc::new(crm::outbound::record_merge::PropertyMergeEffects(
+        event_broker,
+    )))
+    .with_pipeline_access(Arc::new(crm::outbound::record_merge::PipelineGrants(
+        databases.entity_access_service.clone(),
+    )))
+    .with_reference_access(Arc::new(crm::outbound::record_merge::ReferenceGrants::new(
+        pool,
+        databases.entity_access_service.clone(),
+    )));
+    if let (Some(flags), Some(notices)) = (feature_flags, notices) {
+        merges = merges
+            .with_gate(Arc::new(crm::outbound::record_merge::FlaggedMerge(flags)))
+            .with_notices(notices);
+    }
+    crm::inbound::toolset::merge::MergeToolContext {
+        merges: Arc::new(merges),
+        entity_access_service: databases.entity_access_service.clone(),
+    }
+}
+
 /// CRM CSV imports and exports over the pipeline workflows, the CRM's
 /// records and Macro documents.
 pub type ToolCrmTransferService = crm::domain::crm_transfer::CrmTransferServiceImpl<
@@ -2312,6 +2367,8 @@ pub struct ToolServiceContext {
     pub crm_tool_context: ToolCrmToolContext,
     /// CRM pipelines: deals by record, fields by name.
     pub pipeline_tool_context: ToolPipelineToolContext,
+    /// Merging duplicate CRM records.
+    pub merge_tool_context: ToolMergeToolContext,
     /// CRM CSV imports and exports.
     pub crm_transfer_tool_context: ToolCrmTransferToolContext,
     pub skill_tool_context: ToolSkillToolContext,

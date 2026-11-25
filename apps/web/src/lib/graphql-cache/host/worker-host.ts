@@ -364,6 +364,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let outage: CacheUnavailableError | undefined;
   let lastHeardAt = 0;
   let stopPing: (() => void) | undefined;
+  /** Settles with the ping in flight, which a hidden page leaves open. */
+  let pinged: Promise<void> | undefined;
   /** An engine opened during the outage, which the host has yet to reach. */
   let outageChange: CacheGenerationChange | undefined;
   let adapter: CacheCoordinatorPageAdapter | undefined;
@@ -1148,6 +1150,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
    */
   function leave(mode: 'leaving' | 'navigation'): void {
     state = 'disposing';
+    stopPing?.();
     releaseTransportWaiters();
     disposalMode = mode;
     clearSubscribers();
@@ -1180,6 +1183,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     // every already-admitted RPC has a response or its existing read timer.
     // Mutations deliberately have no arbitrary disposal timeout.
     state = 'disposing';
+    stopPing?.();
     disposalMode = 'draining';
     clearSubscribers();
     // Keep pagehide armed through coordinator retirement so navigation can
@@ -1231,15 +1235,24 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     if (stopPing || lastHeardAt >= quietSince) return;
     const asked = adapter;
     if (!asked?.ping()) return;
-    const cancel = visibleTimeout(() => {
+    let settle = () => {};
+    pinged = new Promise((resolve) => {
+      settle = resolve;
+    });
+    const end = () => {
       stopPing = undefined;
+      pinged = undefined;
+      settle();
+    };
+    const cancel = visibleTimeout(() => {
+      end();
       if (adapter !== asked || !isServing()) return;
       reconnectCoordinator(
         new WorkerRestartedError('cache coordinator connection lost')
       );
     }, PING_TIMEOUT_MS);
     stopPing = () => {
-      stopPing = undefined;
+      end();
       cancel();
     };
   }
@@ -1277,7 +1290,6 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
    * the database. Connects again, as often as a restarted coordinator may.
    */
   function reconnectUnanswered(error: CacheRequestTimeoutError): void {
-    if (state !== 'initializing') return;
     telemetry.record({
       name: 'graphql_cache.owner',
       operationCategory: 'lifecycle',
@@ -1362,7 +1374,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       const error = new CacheRequestTimeoutError(entry.kind);
       recordRequestOutcome(entry, 'error', error);
       entry.reject(error);
-      if (isInitializationRequest(entry.kind)) reconnectUnanswered(error);
+      if (state === 'initializing' && isInitializationRequest(entry.kind))
+        reconnectUnanswered(error);
       else checkConnection(entry.startedAt);
       finishGracefulDisposeIfDrained();
     };
@@ -1733,6 +1746,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           error instanceof CacheNavigationError ||
           error instanceof CacheRequestTimeoutError;
         if (!interrupted || !isServing()) throw error;
+        // Over a connection that is gone, nothing was asked of the owner.
+        await pinged;
+        if (!isServing()) throw error;
         if (error instanceof CacheRequestTimeoutError && state === 'ready')
           unanswered += 1;
         if (unanswered === UNANSWERED_AUTHORITY_READS) throw error;

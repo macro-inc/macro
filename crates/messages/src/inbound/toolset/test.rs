@@ -441,6 +441,8 @@ struct FakeEntityAccessService {
     not_found: bool,
     /// Companies merged away, and the companies they were merged into.
     merged: HashMap<Uuid, Uuid>,
+    /// Contacts merged away, and the contacts they were merged into.
+    merged_contacts: HashMap<Uuid, Uuid>,
 }
 
 impl EntityAccessService for FakeEntityAccessService {
@@ -495,6 +497,13 @@ impl EntityAccessService for FakeEntityAccessService {
         _company_ids: &[Uuid],
     ) -> Result<HashMap<Uuid, Uuid>, AccessError> {
         Ok(self.merged.clone())
+    }
+
+    async fn merged_crm_contact_ids(
+        &self,
+        _contact_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Uuid>, AccessError> {
+        Ok(self.merged_contacts.clone())
     }
 
     async fn get_access_level(
@@ -583,6 +592,7 @@ fn context(access_level: AccessLevel, messages: FakeMessages) -> ServiceContext<
             access_level,
             not_found: false,
             merged: HashMap::new(),
+            merged_contacts: HashMap::new(),
         }),
     ))
 }
@@ -594,6 +604,7 @@ fn context_without_items(messages: FakeMessages) -> ServiceContext<TestToolConte
             access_level: AccessLevel::Owner,
             not_found: true,
             merged: HashMap::new(),
+            merged_contacts: HashMap::new(),
         }),
     ))
 }
@@ -682,6 +693,7 @@ async fn a_comment_on_a_merged_company_goes_to_the_company_it_was_merged_into() 
                 access_level: AccessLevel::Comment,
                 not_found: false,
                 merged: HashMap::from([(retired, survivor)]),
+                merged_contacts: HashMap::new(),
             }),
         )),
         request(),
@@ -695,6 +707,39 @@ async fn a_comment_on_a_merged_company_goes_to_the_company_it_was_merged_into() 
     };
     assert_eq!(access.entity().entity_id, survivor.to_string());
     assert_eq!(access.entity().entity_type, EntityType::CrmCompany);
+}
+
+#[tokio::test]
+async fn a_comment_on_a_merged_contact_goes_to_the_contact_it_was_merged_into() {
+    let (retired, survivor) = (Uuid::now_v7(), Uuid::now_v7());
+    let messages = FakeMessages::default();
+    Comment {
+        entity_type: Some(DiscussionParentType::CrmContact),
+        entity_id: Some(retired.to_string()),
+        thread_id: None,
+        content: "Met at the conference; follow up next week.".to_owned(),
+    }
+    .call(
+        ServiceContext(MessageToolContext::new(
+            Arc::new(messages.clone()),
+            Arc::new(FakeEntityAccessService {
+                access_level: AccessLevel::Comment,
+                not_found: false,
+                merged: HashMap::new(),
+                merged_contacts: HashMap::from([(retired, survivor)]),
+            }),
+        )),
+        request(),
+    )
+    .await
+    .unwrap();
+
+    let posts = messages.posts.lock().unwrap();
+    let [(access, _)] = posts.as_slice() else {
+        panic!("expected one post, got {}", posts.len());
+    };
+    assert_eq!(access.entity().entity_id, survivor.to_string());
+    assert_eq!(access.entity().entity_type, EntityType::CrmContact);
 }
 
 /// A host running a specific agent (the public MCP for a self-hosted

@@ -925,6 +925,15 @@ export const enableEventRoutines = defineFlag({
   env: 'ENABLE_EVENT_ROUTINES',
 });
 
+// The "Email labeled" routine trigger. The server checks the same key per
+// routine owner, on save and before each run, and turns it on in development
+// while PostHog has no such flag; so does this default.
+export const enableEmailLabeledTrigger = defineFlag({
+  key: 'enable-email-labeled-trigger',
+  env: 'ENABLE_EMAIL_LABELED_TRIGGER',
+  default: onInDev,
+});
+
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
 // newest own-touch first). Gates the view (the route redirects to the inbox
 // when off) and its sidebar entry. PostHog-gated with a dev-mode default;

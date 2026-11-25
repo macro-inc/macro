@@ -1,0 +1,341 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/firecracker_image_rollout.rs
+name: Firecracker image rollout
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to roll out; dev only
+        required: true
+        type: choice
+        options:
+          - dev
+      image_version:
+        description: Immutable image version, e.g. macro-box/2026-11-24a
+        required: true
+        type: string
+      source_sha:
+        description: Full commit SHA on main the image is built from
+        required: true
+        type: string
+      computers:
+        description: Computer ids, comma-separated, in the order they move
+        required: true
+        type: string
+      batch_size:
+        description: Computers under way at once
+        required: true
+        type: choice
+        options:
+          - '1'
+          - '2'
+          - '3'
+          - '4'
+          - '5'
+        default: '1'
+      idle_wait_minutes:
+        description: How long a computer may stay in use before it is skipped
+        required: true
+        type: string
+        default: '30'
+      reconnect_timeout_minutes:
+        description: How long macrod has after a boot before a rollback
+        required: true
+        type: string
+        default: '10'
+permissions:
+  contents: read
+jobs:
+  validate:
+    name: Validate the inputs
+    runs-on: namespace-profile-linux-small
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          clean: 'false'
+          fetch-depth: '0'
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Check the inputs
+        run: |
+          # Fail before any side effect unless every input is what a rollout may run
+          # with. Inputs arrive in the environment (never pasted into this script).
+          set -euo pipefail
+
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          # Production rollouts need their own approval; this workflow refuses them.
+          [ "$ENVIRONMENT" = "dev" ] || fail "environment must be dev, not '$ENVIRONMENT'"
+
+          # Immutable versions only: a name, a date and a letter. Never a branch,
+          # 'latest' or 'main'.
+          [[ "$IMAGE_VERSION" =~ ^[a-z0-9-]+/[0-9]{4}-[0-9]{2}-[0-9]{2}[a-z]$ ]] \
+            || fail "image_version '$IMAGE_VERSION' is not like macro-box/2026-11-24a"
+
+          # A full commit on main, at or after the agent trace wiring (#12046), so the
+          # image's agent runtime exports its traces.
+          TRACE_WIRING=aee4f581307959e81aa25037175675219f3c9ab6
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "source_sha must be a full 40-character commit SHA"
+          git fetch --quiet origin main
+          git cat-file -e "$SOURCE_SHA^{commit}" 2>/dev/null || fail "source_sha $SOURCE_SHA is not a commit here"
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main || fail "source_sha $SOURCE_SHA is not on main"
+          git merge-base --is-ancestor "$TRACE_WIRING" "$SOURCE_SHA" \
+            || fail "source_sha $SOURCE_SHA predates $TRACE_WIRING (agent trace wiring)"
+
+          uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+          [[ "$COMPUTERS" =~ ^$uuid(,$uuid)*$ ]] || fail "computers must be comma-separated computer ids"
+          count=$(tr ',' '\n' <<<"$COMPUTERS" | sort -u | wc -l)
+          [ "$count" -eq "$(tr ',' '\n' <<<"$COMPUTERS" | wc -l)" ] || fail "a computer is named twice"
+          [ "$count" -le 50 ] || fail "at most 50 computers per rollout"
+
+          [[ "$BATCH_SIZE" =~ ^[1-5]$ ]] || fail "batch_size must be 1 to 5"
+          [[ "$IDLE_WAIT_MINUTES" =~ ^[0-9]+$ ]] && [ "$IDLE_WAIT_MINUTES" -le 1440 ] \
+            || fail "idle_wait_minutes must be 0 to 1440"
+          [[ "$RECONNECT_TIMEOUT_MINUTES" =~ ^[0-9]+$ ]] \
+            && [ "$RECONNECT_TIMEOUT_MINUTES" -ge 1 ] && [ "$RECONNECT_TIMEOUT_MINUTES" -le 30 ] \
+            || fail "reconnect_timeout_minutes must be 1 to 30"
+
+          echo "rolling $IMAGE_VERSION (from $SOURCE_SHA) onto $count computer(s) in $ENVIRONMENT, $BATCH_SIZE at a time"
+        shell: bash
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          IMAGE_VERSION: ${{ inputs.image_version }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          COMPUTERS: ${{ inputs.computers }}
+          BATCH_SIZE: ${{ inputs.batch_size }}
+          IDLE_WAIT_MINUTES: ${{ inputs.idle_wait_minutes }}
+          RECONNECT_TIMEOUT_MINUTES: ${{ inputs.reconnect_timeout_minutes }}
+  build:
+    needs:
+      - validate
+    name: Build and publish the image
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=firecracker-image
+    env:
+      FILES_DIR: target/firecracker-image
+    timeout-minutes: 120
+    steps:
+      - name: Checkout the image's commit
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount /nix cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+          nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Build, hash and publish the image
+        run: |
+          # Build the image at the checked-out commit, record each file's SHA-256 and
+          # size, and publish the files zstd-compressed to the Nix cache bucket under
+          # firecracker-images/<version>/. A version already published must hold
+          # exactly these files: versions are immutable. Writes the digests to
+          # $FILES_DIR/files.json for the roll-out job.
+          set -euo pipefail
+
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          [ "$(git rev-parse HEAD)" = "$SOURCE_SHA" ] || fail "checked out $(git rev-parse HEAD), not $SOURCE_SHA"
+          [ -e /dev/kvm ] || fail "this runner has no /dev/kvm; the image's disk build needs it"
+
+          # s3://<bucket>?region=<region>
+          [[ "${NIX_CACHE_URL:-}" =~ ^s3://([a-z0-9.-]+)\?(.*&)?region=([a-z0-9-]+) ]] \
+            || fail "the NIX_CACHE_URL repository variable is not an s3:// URL with a region"
+          bucket=${BASH_REMATCH[1]}
+          export AWS_DEFAULT_REGION=${BASH_REMATCH[3]}
+          prefix="firecracker-images/$IMAGE_VERSION"
+
+          nix build --print-build-logs --out-link result-image .#macro-box-firecracker
+
+          mkdir -p "$FILES_DIR"
+          work=$(mktemp -d)
+          tools=(--inputs-from . nixpkgs#awscli2 nixpkgs#zstd nixpkgs#jq)
+
+          entries=()
+          for name in vmlinux rootfs.ext4 boot_args; do
+            file="result-image/$name"
+            sha256=$(sha256sum "$file" | cut -d' ' -f1)
+            bytes=$(stat -L -c %s "$file")
+            entries+=("{\"name\":\"$name\",\"sha256\":\"$sha256\",\"bytes\":$bytes}")
+            echo "$name: $bytes bytes, sha256 $sha256"
+          done
+          files=$(IFS=,; echo "[${entries[*]}]")
+          nix shell "${tools[@]}" -c jq -S . <<<"$files" >"$FILES_DIR/files.json"
+
+          # Published already, or definitely not? Anything else (a throttle, a network
+          # error) stops here rather than overwrite a version it could not check.
+          published=yes
+          if ! nix shell "${tools[@]}" -c aws s3api head-object --bucket "$bucket" --key "$prefix/files.json" \
+            >/dev/null 2>"$work/head.err"; then
+            grep -qE '\(404\)|Not Found' "$work/head.err" \
+              || fail "could not tell whether $IMAGE_VERSION is published: $(cat "$work/head.err")"
+            published=no
+          fi
+          if [ "$published" = yes ]; then
+            nix shell "${tools[@]}" -c aws s3 cp --only-show-errors "s3://$bucket/$prefix/files.json" "$work/published.json"
+            if ! cmp -s <(nix shell "${tools[@]}" -c jq -S . "$work/published.json") "$FILES_DIR/files.json"; then
+              echo "published:"; cat "$work/published.json"
+              echo "built:"; cat "$FILES_DIR/files.json"
+              fail "$IMAGE_VERSION is already published with other files; image versions are immutable"
+            fi
+            echo "$IMAGE_VERSION is already published with these files"
+            exit 0
+          fi
+
+          for name in vmlinux rootfs.ext4 boot_args; do
+            nix shell "${tools[@]}" -c zstd -q -T0 -10 --sparse "result-image/$name" -o "$work/$name.zst"
+            nix shell "${tools[@]}" -c aws s3 cp --only-show-errors "$work/$name.zst" "s3://$bucket/$prefix/$name.zst"
+          done
+          # The digests go last: their presence means the files are complete.
+          nix shell "${tools[@]}" -c aws s3 cp --only-show-errors "$FILES_DIR/files.json" "s3://$bucket/$prefix/files.json"
+          echo "published $IMAGE_VERSION to s3://$bucket/$prefix/"
+        shell: bash
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          IMAGE_VERSION: ${{ inputs.image_version }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          COMPUTERS: ${{ inputs.computers }}
+          BATCH_SIZE: ${{ inputs.batch_size }}
+          IDLE_WAIT_MINUTES: ${{ inputs.idle_wait_minutes }}
+          RECONNECT_TIMEOUT_MINUTES: ${{ inputs.reconnect_timeout_minutes }}
+          NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Upload firecracker-image-files artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          path: target/firecracker-image
+          name: firecracker-image-files
+          if-no-files-found: error
+          retention-days: '30'
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
+  roll-out:
+    needs:
+      - build
+    name: Roll out (${{ inputs.environment }})
+    runs-on: db-migrator
+    env:
+      FILES_DIR: target/firecracker-image
+      SQLX_OFFLINE: 'true'
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          clean: 'false'
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          pattern: firecracker-image-files
+          path: target/firecracker-image
+          merge-multiple: 'true'
+      - name: Record the upgrade and wait for it
+        run: |
+          # On the in-VPC migrator runner: presign the image's files for the hosts,
+          # record the upgrade in the environment's database through hosted_runtimes'
+          # image-upgrade binary, and wait while the control plane carries it out.
+          set -euo pipefail
+
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          [ "$ENVIRONMENT" = "dev" ] || fail "environment must be dev"
+          command -v jq >/dev/null || fail "jq is missing on this runner"
+
+          [[ "${NIX_CACHE_URL:-}" =~ ^s3://([a-z0-9.-]+)\?(.*&)?region=([a-z0-9-]+) ]] \
+            || fail "the NIX_CACHE_URL repository variable is not an s3:// URL with a region"
+          bucket=${BASH_REMATCH[1]}
+          region=${BASH_REMATCH[3]}
+          prefix="firecracker-images/$IMAGE_VERSION"
+          files="$FILES_DIR/files.json"
+          [ -s "$files" ] || fail "the build job's digests are missing"
+
+          # The runner's own temp directory: emptied at the start of every job, so a
+          # job killed before its trap still leaves nothing for the next one.
+          secrets=$(mktemp -d "$RUNNER_TEMP/rollout.XXXXXX")
+          chmod 700 "$secrets"
+          trap 'rm -rf "$secrets"' EXIT
+
+          # Six hours: the hosts download within the staging step; the URLs are
+          # dropped from the database once the image is staged.
+          sources='[]'
+          for name in vmlinux rootfs.ext4 boot_args; do
+            url=$(AWS_DEFAULT_REGION=$region aws s3 presign --expires-in 21600 "s3://$bucket/$prefix/$name.zst")
+            echo "::add-mask::$url"
+            sources=$(jq --arg name "$name" --arg url "$url" --slurpfile files "$files" \
+              '. + [{file: ($files[0][] | select(.name == $name)), url: $url}]' <<<"$sources")
+          done
+          jq -n --arg image "$IMAGE_VERSION" --argjson sources "$sources" \
+            '{image: $image, sources: $sources}' >"$secrets/manifest.json"
+
+          # The migrator's own credentials read the database URL; the image bucket's
+          # keys are not needed for it.
+          database_url=$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY \
+            aws secretsmanager get-secret-value --secret-id macro-db-dev --query SecretString --output text)
+          if [[ "$database_url" != *"sslmode="* ]]; then
+            if [[ "$database_url" == *"?"* ]]; then database_url="$database_url&sslmode=require"; else database_url="$database_url?sslmode=require"; fi
+          fi
+          echo "::add-mask::$database_url"
+          printf '%s' "$database_url" >"$secrets/database.url"
+
+          cargo build --release --locked -p hosted_runtimes --features image-upgrade-cli --bin image-upgrade
+          bin=target/release/image-upgrade
+
+          upgrade_id=$("$bin" start --environment dev --database-url-file "$secrets/database.url" \
+            --manifest "$secrets/manifest.json" --computers "$COMPUTERS" --batch-size "$BATCH_SIZE" \
+            --idle-wait-minutes "$IDLE_WAIT_MINUTES" --reconnect-timeout-minutes "$RECONNECT_TIMEOUT_MINUTES" \
+            --created-by "$RUN_URL")
+          echo "upgrade $upgrade_id recorded"
+
+          # Idle wait, plus per computer a replacement and a reconnect window, plus
+          # staging; the control plane carries on if this job stops waiting.
+          count=$(tr ',' '\n' <<<"$COMPUTERS" | wc -l)
+          timeout=$((IDLE_WAIT_MINUTES + 60 + count * (RECONNECT_TIMEOUT_MINUTES + 5)))
+          # Under the job's 360 minutes, so the cleanup above runs.
+          if [ "$timeout" -gt 300 ]; then timeout=300; fi
+          "$bin" wait --environment dev --database-url-file "$secrets/database.url" \
+            --upgrade-id "$upgrade_id" --timeout-minutes "$timeout" | tee -a "$GITHUB_STEP_SUMMARY"
+        shell: bash
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          IMAGE_VERSION: ${{ inputs.image_version }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          COMPUTERS: ${{ inputs.computers }}
+          BATCH_SIZE: ${{ inputs.batch_size }}
+          IDLE_WAIT_MINUTES: ${{ inputs.idle_wait_minutes }}
+          RECONNECT_TIMEOUT_MINUTES: ${{ inputs.reconnect_timeout_minutes }}
+          NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+concurrency:
+  group: firecracker-image-rollout-${{ inputs.environment }}
+  cancel-in-progress: false

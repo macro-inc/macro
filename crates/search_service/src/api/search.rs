@@ -14,6 +14,7 @@ pub(in crate::api) mod email;
 pub(in crate::api::search) mod email_operators;
 pub(in crate::api::search) mod enrich;
 pub(in crate::api) mod project;
+pub(in crate::api::search) mod search_operators;
 pub mod simple;
 #[cfg(test)]
 pub(in crate::api::search) mod span_capture;

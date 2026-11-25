@@ -54,10 +54,11 @@ impl CompaniesRepositoryImpl {
                 )))
             }
             CrmAssociation::Activity => Ok(None),
+            // A merged contact's old id reads the contact it was merged into.
             CrmAssociation::Contact(contact_id) => Ok(self
-                .contact_visible(scope, contact_id)
+                .visible_contact(scope, contact_id)
                 .await?
-                .then(|| CrmRecordAssociation::contact(contact_id))),
+                .map(CrmRecordAssociation::contact)),
         }
     }
 
@@ -286,28 +287,37 @@ impl CompaniesRepositoryImpl {
         rows.map_err(|error| CrmError::StorageLayerError(error.into()))
     }
 
-    async fn contact_visible(
+    /// The id of the contact `contact_id` names now, when the scope may see
+    /// it. The contact is read by primary key behind an `OFFSET 0` fence
+    /// before the team filter: unfenced, stale statistics can pick the team's
+    /// `team_id` index and test every contact of the team against the id.
+    async fn visible_contact(
         &self,
         scope: CrmContactListScope<'_>,
         contact_id: Uuid,
-    ) -> Result<bool, CrmError> {
+    ) -> Result<Option<Uuid>, CrmError> {
         let visible = match scope {
             CrmContactListScope::Viewer(user_id) => {
                 sqlx::query_scalar!(
                     r#"
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM crm_contacts ct
-                        LEFT JOIN crm_companies co ON co.id = ct.company_id
-                        JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
-                        WHERE ct.id = $2
-                          AND (NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member')
-                    ) AS "visible!"
+                    SELECT ct.id AS "id!"
+                    FROM (
+                        SELECT id, team_id, company_id, hidden
+                        FROM crm_contacts
+                        WHERE id = COALESCE(
+                              (SELECT a.contact_id FROM crm_contact_aliases a WHERE a.retired_id = $2),
+                              $2
+                          )
+                        OFFSET 0
+                    ) ct
+                    LEFT JOIN crm_companies co ON co.id = ct.company_id
+                    JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1 AND (tu.crm_access OR tu.team_role <> 'member')
+                    WHERE NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member'
                     "#,
                     user_id,
                     contact_id,
                 )
-                .fetch_one(&self.pool)
+                .fetch_optional(&self.pool)
                 .await
             }
             CrmContactListScope::Team {
@@ -316,20 +326,25 @@ impl CompaniesRepositoryImpl {
             } => {
                 sqlx::query_scalar!(
                     r#"
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM crm_contacts ct
-                        LEFT JOIN crm_companies co ON co.id = ct.company_id
-                        WHERE ct.id = $1
-                          AND ct.team_id = $2
-                          AND (NOT (ct.hidden OR co.hidden IS TRUE) OR $3)
-                    ) AS "visible!"
+                    SELECT ct.id AS "id!"
+                    FROM (
+                        SELECT id, team_id, company_id, hidden
+                        FROM crm_contacts
+                        WHERE id = COALESCE(
+                              (SELECT a.contact_id FROM crm_contact_aliases a WHERE a.retired_id = $1),
+                              $1
+                          )
+                        OFFSET 0
+                    ) ct
+                    LEFT JOIN crm_companies co ON co.id = ct.company_id
+                    WHERE ct.team_id = $2
+                      AND (NOT (ct.hidden OR co.hidden IS TRUE) OR $3)
                     "#,
                     contact_id,
                     team_id,
                     include_hidden,
                 )
-                .fetch_one(&self.pool)
+                .fetch_optional(&self.pool)
                 .await
             }
         };

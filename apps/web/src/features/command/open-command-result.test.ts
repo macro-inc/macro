@@ -51,7 +51,8 @@ vi.mock('./useCommandItems', () => ({
   isAskAiItem: (item: { kind: string }) => item.kind === 'ask-ai',
 }));
 vi.mock('./category-search-filters', () => ({
-  getCategorySearchFilters: () => undefined,
+  categorySearchIndex: (category: string) =>
+    category === 'tasks' ? 'task' : undefined,
 }));
 
 beforeEach(() => {
@@ -148,6 +149,33 @@ it('opens the shared AI fallback when no search results match', () => {
     ).toBe(true);
     expect(mocks.askAi).toHaveBeenCalledWith('how blowholes work');
     expect(mocks.open).not.toHaveBeenCalled();
+    dispose();
+  });
+});
+
+it('writes a Command K category as type: in the Search query', () => {
+  createRoot((dispose) => {
+    const open = createCommandResultOpener();
+    const item: CommandMenuItem = {
+      kind: 'search',
+      bucket: 'search',
+      id: 'search',
+      searchText: 'budget',
+      query: 'budget',
+      category: 'tasks',
+      sortTimestamp: 0,
+      timestamps: {},
+    };
+    open(item);
+    expect(mocks.open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          initialQuery: 'type:task budget',
+          initialFilters: { baseline: true },
+        }),
+      }),
+      expect.anything()
+    );
     dispose();
   });
 });

@@ -548,6 +548,14 @@ test('startup notification settings have no overrides', async () => {
   expect(server.requests.filter((request) => request.error)).toEqual([]);
 });
 
+test('the Mail label read finds no labels', async () => {
+  server = startFixtureServer();
+  const response = await fetch(`${server.origin}/email/email/labels`);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ labels: [] });
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
+});
+
 test('unknown endpoints fail closed; disconnect removes the TCP listener', async () => {
   server = startFixtureServer();
   expect((await fetch(`${server.origin}/unimplemented`)).status).toBe(501);

@@ -159,7 +159,31 @@ tools — hexagonal, heavily feature-gated.
   `has_thread_literals` mirror, so a page's LIMIT never counts threads the
   lateral drops. Match the bare `subject` column so the planner keeps its
   statistics. `Attachment(kind)` reads the denormalized thread flags
-  `email_db_client` maintains.
+  `email_db_client` maintains, from partial indexes in page order: All Mail the
+  `idx_email_threads_*_attachment_view` ones and Inbox, which sorts by its own
+  timestamp, the `idx_email_threads_*_attachment_inbox_view` ones.
+- `Label(id)` matches a thread with a message carrying the label, by
+  `email_effective_message_labels`' rules, in an inbox the viewer owns or
+  manages; another inbox's label never matches, so a shared thread can't be
+  probed by id. Don't put a label predicate on the view: its pending side
+  computes a label per row, so it scans every pending change. Read provider
+  rows by label and pending changes by attribute (`MESSAGE_CARRIES_LABEL`,
+  `build_label_superset`), and the viewer's inboxes as `= ANY(ARRAY(...))`,
+  never an `IN` subquery, which the planner hashes the inbox's messages for. An owned All Mail page whose filter has one top-level OR-tree of labels
+  and no message term is read by `OwnedRead` too: the label rows are the
+  superset (`build_label_superset`). The label tree stays out of the inbox
+  windows' terms and is tested on each walked thread before the preview pick
+  (`walked_match`): inside the window it would stretch the window to that
+  many labeled threads, and after the pick it would pay a pick for every
+  walked thread. A label read probes the superset up to 20,000 rows and walks
+  at most 10,000 threads a request (`OwnedReadTuning::for_labels`); a page the
+  walk leaves short returns `continue_below`, which the service turns into
+  the page's cursor and Soup passes on when email is the page's only source.
+  A big label whose mail is all old therefore fills over several requests,
+  each about a second; the web reads on past those empty pages
+  (`advanceEmptyPages` in the email view). A thread-per-label table would
+  page any label in one read, but needs a migration and a backfill; it was
+  left out until the slow fill bothers people.
 - An owned All Mail page filtered to one positive OR-tree of addresses (Sales
   Email and a CRM record's emails under Me, a sender or recipient search, Soup
   hydration by id with an address template) is read in page order by `OwnedRead`
@@ -491,8 +515,10 @@ tools — hexagonal, heavily feature-gated.
   message's stored labels, or a label's name, must ask for its reindex: the
   event of the change when it has one (`thread_labels_updated`,
   `thread_read`, …), else `EmailMacroEvent::thread_reindex_requested`, as a
-  re-sync that changed labels (`upsert_message`) and a diff of only
-  IMPORTANT, SENT, DRAFT or category labels do. A rename (`sync_labels`)
+  re-sync that changed labels without a thread gaining one (`upsert_message`)
+  and a diff of only IMPORTANT, SENT, DRAFT or category labels do. A re-sync
+  whose thread gained a label publishes `thread_labels_updated` instead, which
+  search reindexes the same way. A rename (`sync_labels`)
   queues its label's threads on the search event queue
   (`ThreadReindexQueue`), the bulk lane backfills use, so a big label can't
   delay new mail's events. It queues before it stores the name, and keeps the
@@ -527,6 +553,20 @@ tools — hexagonal, heavily feature-gated.
   queued goes back through `EmailRepo::revert_staged_label_change`, which
   restores the state an older write still on its way left (or the original),
   never a newer write's change.
+- A label event names the user labels its thread gained (`labels_gained` on
+  `message_received` and `thread_labels_updated`, the `email.labeled` routine
+  trigger's source): labels that no other non-draft message of the thread
+  carried before the write, read from `email_effective_message_labels` (so
+  pending Outlook categories count) in the write's transaction, under the
+  thread's label-write lock (Gmail sync, Macro writes) or the inbox row lock
+  (Outlook ingest and command confirm), with `email_db_client::labels::thread_gain`.
+  A new write path that adds labels must report its gains the same way, or
+  routines miss it. Drafts, spam and trash arrivals and historical imports
+  report none. `automated` marks a write made by an agent or a routine
+  (`agent_correlation::context::by_program`; the `UpdateThreadLabels` tool
+  runs under `as_program`), and routines skip those. Outlook carries the
+  gains, the routine id and the `traceparent` in the outbox payload to
+  `domain/mailbox/projection.rs`.
 - A reply target outside the caller's inboxes is admitted only through
   `SharedThreadReplyAccess` (edit access to its thread; wired in
   `document_storage_service` with `with_shared_thread_replies`). The reply

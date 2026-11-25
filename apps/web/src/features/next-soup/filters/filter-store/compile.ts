@@ -556,3 +556,26 @@ export function defineQueryFilters(
 
   return { ...input, include };
 }
+
+/**
+ * Two compiled queries' filters as one that keeps only what both keep, each
+ * target's filters joined by AND.
+ */
+export function bothTargetAsts(
+  first: TargetAstMap,
+  second: TargetAstMap
+): TargetAstMap {
+  const result: TargetAstMap = {};
+  const targets = new Set([...Object.keys(first), ...Object.keys(second)]);
+  targets.delete('emailView');
+  for (const key of targets) {
+    const target = key as QueryTarget;
+    const asts = [first[target], second[target]].filter(
+      (ast): ast is BackendAst => ast !== undefined
+    );
+    if (asts.length > 0) result[target] = AST.and(asts);
+  }
+  const emailView = first.emailView ?? second.emailView;
+  if (emailView) result.emailView = emailView;
+  return result;
+}

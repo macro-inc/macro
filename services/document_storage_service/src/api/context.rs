@@ -243,6 +243,16 @@ pub(crate) type DssPipelineWorkflowState =
         AuthorizationService,
     >;
 
+/// Merging duplicate CRM records, across every owner of rows that name them.
+pub(crate) type DssMergeService = crm::domain::record_merge::service::RecordMergeService<
+    crm::outbound::record_merge::PgRecordMergeRepository<DatabasesServiceType>,
+>;
+pub(crate) type DssMergeState = crm::inbound::record_merge::MergeRouterState<
+    DssMergeService,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     DssCrmService,
     DssCrmStageService,
@@ -1146,6 +1156,7 @@ pub(crate) struct ApiContext {
     pub owned_purge_state: DssOwnedPurgeState,
     pub pipeline_state: DssPipelineState,
     pub pipeline_workflow_state: DssPipelineWorkflowState,
+    pub merge_state: DssMergeState,
 }
 
 env_var! {

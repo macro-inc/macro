@@ -305,6 +305,13 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         company_ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, Uuid>, AccessError>> + Send;
 
+    /// The contact each merged contact's old id names now, for the ids a
+    /// merge retired. Grants nothing.
+    fn get_merged_crm_contact_ids(
+        &self,
+        contact_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, Uuid>, AccessError>> + Send;
+
     /// Get the access level a user has for a CRM contact, with the contact's
     /// owning `team_id` (its parent company's team).
     ///
@@ -734,8 +741,17 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         async { Ok(HashMap::new()) }
     }
 
-    /// The id of the entity an id names now: for a company merged away, the
-    /// company it was merged into; for anything else, the id itself.
+    /// The contact each merged contact's old id names now, for the ids a
+    /// merge retired; see [`Self::current_entity_id`].
+    fn merged_crm_contact_ids(
+        &self,
+        _contact_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, Uuid>, AccessError>> + Send {
+        async { Ok(HashMap::new()) }
+    }
+
+    /// The id of the entity an id names now: for a company or contact merged
+    /// away, the record it was merged into; for anything else, the id itself.
     ///
     /// Grants nothing. Every access check here is for exactly the id it is
     /// given, so a caller that accepts old ids resolves first, then
@@ -746,13 +762,16 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl Future<Output = Result<String, AccessError>> + Send {
         async move {
-            let (EntityType::CrmCompany, Ok(company_id)) = (entity_type, entity_id.parse::<Uuid>())
-            else {
+            let Ok(record_id) = entity_id.parse::<Uuid>() else {
                 return Ok(entity_id.to_owned());
             };
-            let merged = self.merged_crm_company_ids(&[company_id]).await?;
+            let merged = match entity_type {
+                EntityType::CrmCompany => self.merged_crm_company_ids(&[record_id]).await?,
+                EntityType::CrmContact => self.merged_crm_contact_ids(&[record_id]).await?,
+                _ => return Ok(entity_id.to_owned()),
+            };
             Ok(merged
-                .get(&company_id)
+                .get(&record_id)
                 .map_or_else(|| entity_id.to_owned(), Uuid::to_string))
         }
     }

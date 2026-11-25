@@ -620,3 +620,47 @@ test('a stored code step passes back with its picked items as handles, and its u
     },
   });
 });
+
+test('an email label trigger takes label handles and sends their ids', async () => {
+  const requests: Request[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return Response.json(record, { status: 201 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'bot', token: 'mbot_test' },
+    requestedAs: record.owner,
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  await macro.routines.create({
+    name: 'Invoices',
+    trigger: {
+      type: 'events',
+      filters: [
+        {
+          events: ['email.labeled'],
+          labels: [macro.email.label('label-1')],
+          condition: 'Is it overdue?',
+        },
+      ],
+    },
+    prompt: 'Summarize',
+    userPrompt: 'Summarize the invoice',
+    agent: macro.agents.byId('agent-1'),
+  });
+  const body = await requests[0].json();
+  expect(body.trigger).toEqual({
+    type: 'events',
+    filters: [
+      {
+        events: ['email.labeled'],
+        labels: ['label-1'],
+        condition: 'Is it overdue?',
+      },
+    ],
+  });
+});

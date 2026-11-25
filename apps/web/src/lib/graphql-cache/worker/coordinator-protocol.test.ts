@@ -900,6 +900,26 @@ describe('coordinator runtime protocol', () => {
         openOutcome: 'reset-storage-uncertain',
       }).ok
     ).toBe(true);
+    for (const [ownerLockClientId, ok] of [
+      ['client', true],
+      [undefined, true],
+      ['', false],
+      [1, false],
+    ] as const) {
+      expect(
+        validateEngineToCoordinatorEnvelope({
+          ...version,
+          kind: 'engine-ready',
+          tabId: 'tab',
+          ownerEpoch: 1,
+          ownerLockName: 'owner-lock',
+          ownerLockHeld: true,
+          ownerLockClientId,
+          databaseActionProof: 'opened-existing',
+          openOutcome: 'opened-existing',
+        }).ok
+      ).toBe(ok);
+    }
     expect(
       validateEngineToCoordinatorEnvelope({
         ...version,

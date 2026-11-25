@@ -124,12 +124,25 @@ the Soup-backed thread list, and saved email views.
   the typed text (narrowing a search, suggestions) parses that instead.
 - Search inside a view intersects search hits with the view's own GraphQL
   predicate, as aliases do; local working copies are left out.
+- `buildEmailQuery` sends the Attachments kinds to the server for the Inbox and
+  All mail tabs (Archived, Calendar, Favorites and Shared included) and saved
+  views, so pages come back full. Sent, Drafts, Spam and Trash, whose pages the
+  attachment flags are not indexed for, and the Focus, Reminders and CRM email
+  lists only refine the rows they loaded with the facet's own predicate, which
+  applies the same MIME prefixes as the flags. A list with that clause is server
+  membership, so it refetches when a pushed thread carries attachments and
+  after the Soup socket reconnects (`mail-list-revalidation.ts`).
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the
   ingress depth limit.
 - The data source keeps the previous rows while a search loads only when
   asked (`keepRowsWhileSearching`) and reports it as `showsPreviousRows`; they
   never cross a tab change, and `isLoading` stays false while they show, so
   gate "loading" UI on both.
+- A list page can arrive without a row but with a cursor (a label read that
+  walked old mail). `emptyListPages` reads on from the server's own rows
+  (`rawEntities`, so a page the client's filters empty doesn't count) until a
+  row shows or the list ends, at most 50 pages a load, and the list reads as
+  loading meanwhile: never show the empty state for such a page.
 - Unread dots are presence in a small first unread page per view, never a count.
 - The search field also says it was left (`setFocused(false)`) as it
   unmounts, inside the teardown of the view leaving Mail. Reading the list's

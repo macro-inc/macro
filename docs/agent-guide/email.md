@@ -65,6 +65,15 @@ panel, which the phone's Info sheet shares. Someone a thread is shared with sees
 none of the owner's labels: the server leaves out labels of inboxes the reader
 doesn't own or manage. Nothing here writes labels back to Gmail or Outlook.
 
+Mail lists can be filtered by a Gmail label or Outlook category of the
+viewer's own or managed inboxes (the `Label` condition). A label in an inbox
+the viewer doesn't own or manage matches nothing, shared threads included. A
+big label whose mail is all old fills over several requests: a page can
+arrive empty with a cursor, and the list keeps loading (a spinner, never the
+empty state) until a row shows or the list ends. No menu offers labels yet:
+check through the Soup API with an `ef` of `{"l":{"Label":"<label id>"}}` on
+All, using a label whose mail is months old in a large inbox.
+
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
 item, with pill tabs beside the Inbox title in the content header; with the Focus
 flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
@@ -573,7 +582,11 @@ default All selections are not marked.
 Email Read status and Done are single choices that close the menu; Has
 (Starred, Calendar invite) and Attachments (PDFs, Images, Documents) take
 several and stay open while you tick them. Ticked Has items all apply;
-attachment kinds match any one. Tags supports search, pins selected tags first
+attachment kinds match any one. In Inbox,
+All mail, Archived, Calendar, Favorites, Shared and saved views the server selects
+matching threads first, so a page is full even when matches are rare; Sent, Drafts,
+Spam and Trash still refine the rows they loaded. An inline image counts as an
+image, and plain text and CSV files as documents. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
 **Calendar invite** matches meetings carried as attachments or as calendar
 parts of a message, including Outlook invitations.
@@ -859,7 +872,8 @@ must still refresh affected lists after commit. Scroll across a retained row and
 check that the next page remains ordered; a baseline beyond 5,000 rows returns to
 the live server list instead of freezing local membership.
 Tag selections use cached property postings;
-attachment chips refine the cached rows on the client. Sender/recipient filters and
+attachment filters list from the server, which has the thread flags this local
+profile lacks. Sender/recipient filters and
 non-created/updated sorts remain outside this local profile. Grouping and sort-selector
 coverage are separate from the filter-selection matrix. No cache-format wipe is required: Mail uses a separate versioned profile
 and a new backfill checkpoint, preserving existing queued work. Deploy the backend

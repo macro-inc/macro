@@ -48,6 +48,7 @@ fn email() -> ParsedMessage {
             photo_url: None,
         }],
         labels: vec![ParsedLabel {
+            id: None,
             provider_id: "INBOX".into(),
             name: "Inbox".into(),
         }],

@@ -891,6 +891,17 @@ impl AccessRepository for PgAccessRepository {
         )
     }
 
+    #[tracing::instrument(err, skip_all)]
+    async fn get_merged_crm_contact_ids(
+        &self,
+        contact_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Uuid>, AccessError> {
+        Ok(
+            queries::crm_contact_access::get_merged_crm_contact_ids(&self.pool, contact_ids)
+                .await?,
+        )
+    }
+
     #[tracing::instrument(err, skip(self, user_id))]
     async fn get_crm_contact_access(
         &self,
