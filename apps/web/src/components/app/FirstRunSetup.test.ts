@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { okAsync } from 'neverthrow';
-import { createRoot, createSignal } from 'solid-js';
+import { batch, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useFirstRunSetup } from './FirstRunSetup';
 
@@ -15,13 +15,14 @@ const mocks = vi.hoisted(() => ({
   calls: [] as string[],
   nativeMobile: false,
   user: (): unknown => undefined,
+  succeeded: () => false,
   onNavigate: () => {},
 }));
 
 vi.mock('@queries/auth/user-info', () => ({
   useUserInfoQuery: () => ({
     get isSuccess() {
-      return mocks.user() !== undefined;
+      return mocks.succeeded();
     },
     get data() {
       // A real query suspends the app chrome on this read while pending.
@@ -56,15 +57,24 @@ const NEW_USER: User = {
 
 let dispose: (() => void) | undefined;
 
-/** Mounts the hook as the app chrome does, and signs `user` in. */
-function arrive(user: User) {
+/**
+ * Mounts the hook as the app chrome does, and signs `user` in. With
+ * `succeeded: false` the user read has failed but still holds `user`, as a
+ * failed refresh of a cached read does.
+ */
+function arrive(user: User, { succeeded = true } = {}) {
   const [current, setCurrent] = createSignal<User | undefined>(undefined);
+  const [success, setSuccess] = createSignal(false);
   mocks.user = current;
+  mocks.succeeded = success;
   createRoot((cleanup) => {
     dispose = cleanup;
     useFirstRunSetup();
   });
-  setCurrent(user);
+  batch(() => {
+    setCurrent(user);
+    setSuccess(succeeded);
+  });
   return setCurrent;
 }
 
@@ -103,6 +113,12 @@ it('sends a new agent to its setup page without starting email sync', () => {
   arrive({ ...NEW_USER, isAgent: true });
 
   expect(mocks.calls).toEqual(['navigate /agent-setup']);
+});
+
+it('waits for a successful user read, even with a cached first-run user', () => {
+  arrive(NEW_USER, { succeeded: false });
+
+  expect(mocks.calls).toEqual([]);
 });
 
 it('leaves a user who finished onboarding alone', () => {
