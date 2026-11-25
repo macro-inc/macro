@@ -43,8 +43,11 @@ export function sameLaneProgress(a: LaneProgress, b: LaneProgress): boolean {
 export type LaneProgressSource = {
   /** The lane's progress in the storage generation `scope`. */
   read(scope: string): Promise<LaneProgress>;
-  /** Calls `onProgress` whenever the lane saved progress, from any tab. */
-  watch(onProgress: () => void): () => void;
+  /** Calls `onProgress` whenever the lane saved progress, from any tab.
+   * A source that polls stops once `settled` (the directory's views are
+   * current, whichever source made them so) and starts over after a storage
+   * reset. */
+  watch(onProgress: () => void, settled: () => boolean): () => void;
 };
 
 /** Whether `startedAt` (an ISO time) is at or after `time`. */
@@ -64,10 +67,15 @@ function laneReadSince(checkpoint: SoupBackfillCheckpoint, time: number) {
 }
 
 /** The paged backfill's channel lane: its checkpoint, saved after every page
- * in whichever tab runs it. */
+ * in whichever tab runs it. Without `failures`, a pass the lane gave up on
+ * reads as unfinished rather than failed: while the app streams, the paged
+ * lane no longer runs, so a failure an earlier session left stays saved; and
+ * a paged pass that fails after the stream fell back stops saving, which the
+ * directory sees as a stall. */
 export function checkpointLaneProgress(
   userId: string,
-  sessionStartedAt: number
+  sessionStartedAt: number,
+  { failures = true }: { failures?: boolean } = {}
 ): LaneProgressSource {
   return {
     read: async (scope) => {
@@ -79,6 +87,7 @@ export function checkpointLaneProgress(
       return {
         complete,
         failed:
+          failures &&
           !complete &&
           soupBackfillLaneFailed(userId, CHANNEL_DIRECTORY_LANE, scope),
         viewsCurrent:
@@ -101,10 +110,10 @@ export const STREAMED_CHANNEL_LANE = 'channels';
 /** How often the streamed lane's state is read while it changes. */
 export const STREAMED_LANE_POLL_MS = 2_000;
 /** The longest wait between reads while the state stays the same and the
- * lane has not completed: half the directory's stall window
- * (`LANE_STALL_MS`), so a stream that moves is seen moving. The app may page
- * instead of stream, and then this lane never moves. */
-export const STREAMED_LANE_POLL_MAX_MS = 15_000;
+ * lane has not completed: a third of the directory's stall window
+ * (`LANE_STALL_MS`), timed from each read's start, so a stream that moves is
+ * seen moving whatever a read takes. */
+export const STREAMED_LANE_POLL_MAX_MS = 10_000;
 /** The same once the lane completed: a stall no longer matters, only a later
  * pass that makes views current. */
 export const STREAMED_LANE_POLL_COMPLETE_MAX_MS = 60_000;
@@ -113,9 +122,10 @@ export const STREAMED_LANE_POLL_COMPLETE_MAX_MS = 60_000;
  * The streamed sync's channel lane, read from the cache database, which
  * every tab shares and a storage reset wipes. A stream reports no failure of
  * its own: one that stops is seen as a stall. The state is read every 2 s
- * while it changes, backing off while it does not (to every 15 s, or every
+ * while it changes, backing off while it does not (to every 10 s, or every
  * minute once the lane completed), until the lane has finished a pass that
- * started this session; a storage reset starts it over.
+ * started this session or the directory is `settled`; a storage reset starts
+ * it over.
  */
 export function streamedLaneProgress(
   host: Pick<CacheHost, 'onCacheGenerationChanged'> & {
@@ -136,7 +146,7 @@ export function streamedLaneProgress(
   };
   return {
     read: async () => progress(await lane()),
-    watch: (onProgress) => {
+    watch: (onProgress, settled) => {
       let disposed = false;
       let timer: ReturnType<typeof setTimeout> | undefined;
       let delay = STREAMED_LANE_POLL_MS;
@@ -144,14 +154,17 @@ export function streamedLaneProgress(
       // Bumped by a storage reset, so a read of the old storage still in
       // flight neither reports nor schedules.
       let round = 0;
+      // Timed from the read's start, so a slow read does not widen the gap.
+      let readStartedAt = 0;
       const schedule = (current: number) => {
         timer = setTimeout(
           () => fireAndForget(poll(current), 'channel-directory-sync-lane'),
-          delay
+          Math.max(0, readStartedAt + delay - Date.now())
         );
       };
       const poll = async (current: number) => {
         timer = undefined;
+        readStartedAt = Date.now();
         let state: SyncLaneState | undefined;
         let answered = true;
         try {
@@ -178,7 +191,7 @@ export function streamedLaneProgress(
             : STREAMED_LANE_POLL_MAX_MS;
           delay = Math.min(delay * 2, ceiling);
         }
-        if (answered && progress(state).viewsCurrent) return;
+        if ((answered && progress(state).viewsCurrent) || settled()) return;
         schedule(current);
       };
       const start = () => {
@@ -186,6 +199,7 @@ export function streamedLaneProgress(
         round += 1;
         delay = STREAMED_LANE_POLL_MS;
         last = undefined;
+        readStartedAt = Date.now();
         schedule(round);
       };
       start();
@@ -222,8 +236,8 @@ export function eitherLaneProgress(
         viewsCurrent: read.some((progress) => progress.viewsCurrent),
       };
     },
-    watch: (onProgress) => {
-      const stops = sources.map((source) => source.watch(onProgress));
+    watch: (onProgress, settled) => {
+      const stops = sources.map((source) => source.watch(onProgress, settled));
       return () => {
         for (const stop of stops) stop();
       };

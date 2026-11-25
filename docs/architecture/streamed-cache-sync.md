@@ -309,9 +309,11 @@ Rules:
   without touching the cache. `sync_begin` also records the authority
   generation (a run begun before the cache had one adopts the first), so a
   permission transition supersedes the run the same way, on every host. A
-  reset made by the run's own page (a cache bound to an older account before
-  the run began) keeps the page but saves no lane state, and the run ends at
-  its next frame: its request was planned from the lane state the reset
+  new generation the run's own page makes without a reset (binding the
+  account of an authority that already holds a policy) is adopted. A reset
+  made by the run's own page (a cache bound to an older account before the
+  run began) keeps the page but saves no lane state, and the run ends at its
+  next frame: its request was planned from the lane state the reset
   wiped, and the next run plans from the empty cache. Hosts report the
   failure as `aborted`. The browser worker also aborts the run on `clear`,
   and the browser engine drops its run on `clear`, `physicalReset` and
@@ -397,10 +399,12 @@ The `channels` lane selects every field the channel directory reads
 directory (`queries/channel/directory.ts`) learns that a pass finished from
 that lane's saved state (`streamedLaneProgress` in
 `directory-lane-progress.ts`, read through `syncState`) instead of the paged
-lane's checkpoint, which the stream never writes. It polls the state every
-2 s until a pass that started this session has finished, and again after a
-storage reset; without progress for 30 s it pages the network itself, as it
-does for a stalled paged lane.
+lane's checkpoint, which the stream never writes; it reads both, since the
+app falls back to paging when the stream is refused, and ignores a paged
+failure an earlier session left. It reads the streamed state every 2 s while
+it changes, backing off to every 10 s (every minute once the lane completed),
+until views are current, and again after a storage reset; without progress
+for 30 s it pages the network itself, as it does for a stalled paged lane.
 
 ## App
 

@@ -2389,10 +2389,13 @@ export function createCachedChannelDirectory(
     if (!sameLaneProgress(next, lane)) refreshNow();
   };
   onCleanup(
-    laneProgress.watch(() => {
-      laneStalled();
-      fireAndForget(readLaneChange(), 'channel-directory-lane-progress');
-    })
+    laneProgress.watch(
+      () => {
+        laneStalled();
+        fireAndForget(readLaneChange(), 'channel-directory-lane-progress');
+      },
+      () => lane.viewsCurrent
+    )
   );
   laneStalled();
   refreshNow();
@@ -2663,7 +2666,9 @@ export function createAppChannelDirectory(): ChannelDirectory {
       laneProgress:
         streamed && isSyncHost(cache)
           ? eitherLaneProgress(
-              checkpointLaneProgress(userId, performance.timeOrigin),
+              checkpointLaneProgress(userId, performance.timeOrigin, {
+                failures: false,
+              }),
               streamedLaneProgress(cache, performance.timeOrigin)
             )
           : undefined,

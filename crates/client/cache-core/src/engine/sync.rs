@@ -313,7 +313,9 @@ where
     ///
     /// Fails with [`SyncStreamError::Superseded`], before touching the cache,
     /// once the cache was cleared, reset or given a new authority generation
-    /// after the run began, including by the run's own page.
+    /// after the run began. A reset its own page made ends it too; a new
+    /// generation its own page made without a reset (binding the account of
+    /// an authority that already holds a policy) is adopted.
     pub async fn sync_apply_next<H: SyncHooks<S>>(
         &mut self,
         run: &mut SyncRun,

@@ -2084,6 +2084,36 @@ describe('cached channel directory', () => {
       expect(ids(directory.channels())).toEqual(['a']);
     });
 
+    it('waits on a healthy stream despite a paged failure an earlier session left', async () => {
+      // An earlier session paged the lane and gave up; storage is the same.
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
+      const { pageAll } = mountCachedDirectory([], {
+        laneProgress: eitherLaneProgress(
+          checkpointLaneProgress(VIEWER, 0, { failures: false }),
+          streamedLaneProgress(
+            {
+              syncState: async () => [
+                {
+                  id: STREAMED_CHANNEL_LANE,
+                  resume: null,
+                  pages: 1,
+                  items: 1,
+                  passStartedAt: null,
+                  completedAt: null,
+                  watermark: null,
+                },
+              ],
+              onCacheGenerationChanged: () => () => {},
+            },
+            0
+          )
+        ),
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      expect(pageAll).not.toHaveBeenCalled();
+    });
+
     it('completes from the paged lane when the streamed sync fell back to paging', async () => {
       completeLane('g1');
       const { directory, pageAll } = mountCachedDirectory([], {

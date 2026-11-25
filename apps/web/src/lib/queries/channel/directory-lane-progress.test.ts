@@ -88,7 +88,8 @@ describe('streamedLaneProgress', () => {
     const { host, syncState, setStates, reset } = fakeHost([]);
     const onProgress = vi.fn();
     const stop = streamedLaneProgress(host, SESSION_STARTED_AT).watch(
-      onProgress
+      onProgress,
+      () => false
     );
 
     await vi.advanceTimersByTimeAsync(STREAMED_LANE_POLL_MS);
@@ -129,11 +130,14 @@ describe('streamedLaneProgress', () => {
 
   it('backs off while the lane never moves, more once it completed', async () => {
     const { host, syncState, setStates } = fakeHost([]);
-    const stop = streamedLaneProgress(host, SESSION_STARTED_AT).watch(() => {});
+    const stop = streamedLaneProgress(host, SESSION_STARTED_AT).watch(
+      () => {},
+      () => false
+    );
     await vi.advanceTimersByTimeAsync(10 * 60_000);
-    // 2, 4, 8 s, then every 15 s: a moving stream is never missed for the
+    // 2, 4, 8 s, then every 10 s: a moving stream is never missed for the
     // directory's 30 s stall window.
-    expect(syncState.mock.calls.length).toBeLessThanOrEqual(43);
+    expect(syncState.mock.calls.length).toBeLessThanOrEqual(63);
 
     // Completed before this session: views wait for a later pass.
     setStates([
@@ -145,7 +149,48 @@ describe('streamedLaneProgress', () => {
     await vi.advanceTimersByTimeAsync(STREAMED_LANE_POLL_MAX_MS);
     const reads = syncState.mock.calls.length;
     await vi.advanceTimersByTimeAsync(10 * 60_000);
-    expect(syncState.mock.calls.length - reads).toBeLessThanOrEqual(12);
+    // 2, 4, 8, 16, 32 s, then once a minute.
+    expect(syncState.mock.calls.length - reads).toBeLessThanOrEqual(15);
+    stop();
+  });
+
+  it('stops once the directory is settled by another source', async () => {
+    const { host, syncState } = fakeHost([]);
+    let settled = false;
+    const stop = streamedLaneProgress(host, SESSION_STARTED_AT).watch(
+      () => {},
+      () => settled
+    );
+    await vi.advanceTimersByTimeAsync(STREAMED_LANE_POLL_MS);
+    // The paged lane made views current: the stream will not.
+    settled = true;
+    await vi.advanceTimersByTimeAsync(STREAMED_LANE_POLL_MAX_MS);
+    const reads = syncState.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(syncState.mock.calls.length).toBe(reads);
+    stop();
+  });
+
+  it('times each read from the last read start, so slow reads keep the gap', async () => {
+    const { host, setStates } = fakeHost([]);
+    const answered = host.syncState;
+    // Every read takes 3 s.
+    host.syncState = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+      return answered();
+    });
+    const onProgress = vi.fn();
+    const stop = streamedLaneProgress(host, SESSION_STARTED_AT).watch(
+      onProgress,
+      () => false
+    );
+    // Long enough for the backoff to reach its ceiling.
+    await vi.advanceTimersByTimeAsync(60_000);
+    const before = onProgress.mock.calls.length;
+    setStates([laneState({ pages: 1 })]);
+    // Seen within one ceiling plus one read, well inside the 30 s window.
+    await vi.advanceTimersByTimeAsync(STREAMED_LANE_POLL_MAX_MS + 3_000);
+    expect(onProgress.mock.calls.length).toBe(before + 1);
     stop();
   });
 
@@ -160,7 +205,8 @@ describe('streamedLaneProgress', () => {
     );
     const onProgress = vi.fn();
     const stop = streamedLaneProgress(host, SESSION_STARTED_AT).watch(
-      onProgress
+      onProgress,
+      () => false
     );
     await vi.advanceTimersByTimeAsync(STREAMED_LANE_POLL_MS);
     stop();

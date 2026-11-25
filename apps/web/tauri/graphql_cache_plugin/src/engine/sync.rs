@@ -214,8 +214,9 @@ impl WeakEngineHandle {
         let applied = engine.sync_apply_next(run, hooks).await;
         // A page for another account resets the cache under a new authority
         // generation. Publish it before giving the engine back, as hydration
-        // does, so no later notification goes out ahead of it. The engine
-        // ends the run at its next frame; only a change is published here.
+        // does, so no later notification goes out ahead of it. After a reset
+        // the engine ends the run at its next frame; only a change is
+        // published here.
         if let Some(listener) = &self.authority_listener
             && let Some(current) = engine.authority_snapshot()
             && generation != Some(current.generation)
