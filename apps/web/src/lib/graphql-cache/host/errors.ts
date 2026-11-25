@@ -42,9 +42,9 @@ const NATIVE_WRITE_SUPERSEDED =
   'graphql cache write superseded by a committed mutation';
 
 /**
- * A mutation that committed after this background write was sent changed one
- * of its records, so the response may predate it. Nothing was written; fetch
- * the query again.
+ * A foreground write, such as a mutation's commit, went ahead of this
+ * background write and stored a different value for one of its fields, so the
+ * response may predate it. Nothing was written; fetch the query again.
  */
 export class CacheWriteSupersededError extends Error {
   constructor() {

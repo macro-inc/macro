@@ -22,11 +22,14 @@ impl EngineHandle {
             .map_err(|error| error.to_string())
     }
     /// Remove only requested nonmembers, guarded against intervening authority.
+    /// Only the contact backfill verifies, so it runs as a background command:
+    /// a contact write that goes first changes the fence, and the backfill
+    /// verifies that window again.
     pub async fn contact_reconcile(
         &self,
         request: cache_core::people::sync::ContactReconcile,
     ) -> Result<WriteResultWire, String> {
-        let mut state = self.snapshot_write().await?;
+        let mut state = self.snapshot_background_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let result = engine
             .reconcile_contacts(&request)
@@ -72,11 +75,17 @@ impl EngineHandle {
     /// Apply one bounded context operation under the same account/generation lock.
     pub async fn people_update(&self, update: ContextUpdate) -> Result<WriteResultWire, String> {
         let mut state = self.snapshot_write().await?;
-        let EngineState { engine, ops, .. } = &mut *state;
+        let EngineState {
+            engine,
+            ops,
+            commits,
+            ..
+        } = &mut *state;
         let result = engine
             .update_people_context(&update)
             .await
             .map_err(|error| error.to_string())?;
+        self.commits.settle(commits, || None);
         self.publish_bound_generation(engine);
         Ok(wire_write_result(ops, result))
     }
