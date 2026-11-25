@@ -99,3 +99,53 @@ export function useEmailLabelNames(enabled: Accessor<boolean> = () => true) {
     })
   );
 }
+
+/** A label someone made, as menus list it. */
+export type InboxLabelEntry = ShownLabel & {
+  /** The name its provider gave it ("Customers/Larkspur"), which search matches. */
+  storedName: string;
+};
+
+/**
+ * The labels people made, each inbox's as a tree with parents before their
+ * children, inboxes in the order given. A label of an inbox not given is left
+ * out.
+ */
+export function inboxLabelsOf(
+  labels: readonly InboxLabel[],
+  inboxes: readonly { id: string; provider?: string }[]
+): InboxLabelEntry[] {
+  return inboxes.flatMap((inbox) =>
+    nestLabels(
+      labels.filter((label) => label.linkId === inbox.id),
+      inbox.provider === 'OUTLOOK' ? 'OUTLOOK' : 'GMAIL'
+    ).map(({ label, leaf, path }) => ({
+      id: label.id,
+      linkId: label.linkId,
+      name: leaf,
+      fullName: formatLabelPath(path),
+      storedName: label.name,
+    }))
+  );
+}
+
+/**
+ * The labels people made in the viewer's inboxes, in their inboxes' order,
+ * from one read of their labels while `enabled`. Never suspends.
+ */
+export function useEmailInboxLabels(
+  enabled: Accessor<boolean> = () => true
+): Accessor<InboxLabelEntry[]> {
+  const catalog = useEmailUserLabelsQuery(enabled);
+  const { links } = useEmailLinksContext();
+  return createMemo(() =>
+    queryReadyGate(catalog)
+      ? inboxLabelsOf(
+          catalog.data.labels.filter(
+            (label) => label.type === ApiLabelType.User
+          ),
+          links()
+        )
+      : []
+  );
+}
