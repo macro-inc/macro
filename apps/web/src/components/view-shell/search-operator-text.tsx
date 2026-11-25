@@ -86,17 +86,21 @@ const FOLLOW_EVENTS = [
 /**
  * Draws an input's text, operators marked, behind the input. The input keeps
  * its value, caret, selection and editing; it paints its own text transparent
- * (`text-transparent caret-ink`), and this layer follows its horizontal scroll.
+ * (`text-transparent caret-ink`), and this layer follows its scroll. A
+ * textarea's text wraps here as it does in the textarea (`multiline`).
  */
 export function SearchOperatorOverlay(props: {
   parts: readonly SearchTextPart[];
-  input: () => HTMLInputElement | undefined;
+  input: () => HTMLInputElement | HTMLTextAreaElement | undefined;
+  multiline?: boolean;
   class?: string;
 }) {
   let overlay!: HTMLDivElement;
   const follow = () => {
     const input = props.input();
-    if (input) overlay.scrollLeft = input.scrollLeft;
+    if (!input) return;
+    overlay.scrollLeft = input.scrollLeft;
+    overlay.scrollTop = input.scrollTop;
   };
   const followSoon = () => requestAnimationFrame(follow);
 
@@ -118,7 +122,10 @@ export function SearchOperatorOverlay(props: {
       ref={overlay}
       aria-hidden="true"
       class={cn(
-        'pointer-events-none absolute inset-0 flex items-center overflow-hidden whitespace-pre',
+        'pointer-events-none absolute inset-0 overflow-hidden',
+        props.multiline
+          ? 'whitespace-pre-wrap break-words'
+          : 'flex items-center whitespace-pre',
         props.class
       )}
     >

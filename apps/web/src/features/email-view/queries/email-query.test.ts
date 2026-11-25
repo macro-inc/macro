@@ -378,6 +378,66 @@ describe('buildEmailQuery', () => {
     });
   });
 
+  describe('label facets', () => {
+    const LARKSPUR = '0199a1b2-0000-7000-8000-0000000000c1';
+    const ACME = '0199a1b2-0000-7000-8000-0000000000c2';
+
+    it.each([
+      'important',
+      'all',
+      'sent',
+      'drafts',
+      'favorites',
+      'archived',
+    ] as const)('sends any of the ticked labels to the server on %s', (tab) => {
+      const tree = serialize(
+        makeGraphqlSoupInput(
+          buildEmailQuery(
+            contextFor({ tab, facets: { labels: [LARKSPUR, ACME] } })
+          )
+        ).initial?.filters?.emailFilter
+      );
+
+      expect(tree).toContain(
+        serialize({
+          or: {
+            left: { literal: { label: LARKSPUR } },
+            right: { literal: { label: ACME } },
+          },
+        })
+      );
+    });
+
+    it('keeps the labels over REST, in a saved view and on rows looked up by id', () => {
+      const facets = { labels: [LARKSPUR] };
+      const label = serialize({ l: { Label: LARKSPUR } });
+      const trash = buildEmailQuery(contextFor({ tab: 'trash', facets }));
+
+      expect(trash.transport).toBe('rest');
+      expect(serialize(trash.body)).toContain(label);
+      expect(
+        serialize(buildEmailQuery(contextFor({ facets }), ['thread-a']).body)
+      ).toContain(label);
+      expect(
+        serialize(
+          buildEmailQuery(
+            contextFor({
+              facets,
+              savedView: {
+                conditions: {
+                  participants: [],
+                  participantFields: ['from', 'to', 'cc'],
+                  subject: [],
+                  starred: false,
+                },
+              },
+            })
+          ).body
+        )
+      ).toContain(label);
+    });
+  });
+
   describe('saved views', () => {
     const scope = (
       overrides: Partial<EmailViewConditions> = {}

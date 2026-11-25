@@ -147,19 +147,33 @@ Verify company domain validation by creating a company with an allowed business
 domain, then adding a contact whose email matches it. Personal email provider
 domains must still be rejected as company domains.
 
-Merging duplicate companies or duplicate people has no screen yet: team admins
-and owners merge through `POST /crm/merges/preview` then `POST /crm/merges`
-(`recordType` `company` or `contact`), the SDK's `crm.merges`, or the agent's
-PreviewMerge and MergeRecords tools, while `enable-crm-merge` is on for them.
-Verify with two throwaway companies: the review lists the domains, the people
-and deals that move, and values that differ. After the commit, the company that
-stays has every domain, person, deal, task reference and discussion message,
-and the merged company's old link opens it. Verify people with two throwaway
-contacts: the review lists the addresses that join and values that differ, and
-a contact under another company with a work address blocks the merge
-(`different_companies`). After the commit, the contact that stays has every
-address, pipeline entry, task reference and discussion message, and the merged
-contact's old link opens it.
+Team admins and owners merge duplicate companies while `enable-crm-merge` is
+on for them. Select two or more companies in a Companies list and press Merge
+in the selection toolbar, or choose Merge companies (several selected) or Merge
+with… (one) from a row's menu; on a phone, long-press a row for Merge with….
+Merge with… first asks for the other companies (search by name or domain, tick
+them). Then choose the company to keep and review: its domains, what moves to
+it, pipelines where it ends up with several entries (kept separate), values
+that differ (the kept company's win), what email sync does, and, when a
+teammate's email sharing names a merged company, Keep sharing the same mail or
+Stop sharing it (Keep is unavailable when it wouldn't fit). People under
+different companies with the same address block the merge, archived ones
+included. A review that changed before the confirm is fetched again with a
+notice. After the merge a toast offers Open, the merged companies' old links and
+chips open the company that stays, and its Activity section (side panel) shows
+one "merged … into this" entry with the team-visible values it dropped. The same
+merge is available through `POST /crm/merges/preview` then `POST /crm/merges`,
+the SDK's `crm.merges`, and the agent's PreviewMerge and MergeRecords tools.
+Verify with two throwaway companies on desktop and at phone width.
+
+Duplicate people (contacts) have no merge screen yet: team admins and owners
+merge them through the same routes with `recordType: "contact"`, the SDK's
+`crm.merges.previewContacts` and `mergeContacts`, or the same tools. Verify
+with two throwaway contacts: the review lists the addresses that join and the
+values that differ, and a contact under another company with a work address,
+or none, blocks the merge (`different_companies`). After the commit, the
+contact that stays has every address, pipeline entry, task reference and
+discussion message, and the merged contact's old link opens it.
 
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses

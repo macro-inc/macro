@@ -39,6 +39,7 @@ const SAVED_FACET_IDS: readonly string[] = [
   'attachments',
   'calendar',
   'tags',
+  'labels',
 ];
 
 const identifierSchema = z
@@ -90,6 +91,8 @@ const filtersSchema = z
     attachments: z.array(z.enum(ATTACHMENT_OPTION_IDS)).max(3),
     calendarInvite: z.boolean(),
     tags: z.array(tagSchema).max(100),
+    /** Gmail label and Outlook category ids; absent when there are none. */
+    labels: z.array(identifierSchema).max(100).optional(),
   })
   .strict();
 
@@ -180,6 +183,10 @@ function canonical(config: EmailSavedViewConfig): EmailSavedViewConfig {
       attachments: inOrder(filters.attachments, ATTACHMENT_OPTION_IDS),
       calendarInvite: filters.calendarInvite,
       tags: uniqueSorted(filters.tags, (tag) => tag.optionId),
+      ...(filters.labels &&
+        filters.labels.length > 0 && {
+          labels: uniqueSorted(filters.labels, String),
+        }),
     },
   };
 }
@@ -291,6 +298,7 @@ export function readEmailSavedView(value: unknown): EmailSavedViewRead {
         attachments: entries(z.enum(ATTACHMENT_OPTION_IDS), raw.attachments, 3),
         calendarInvite: field(shape.calendarInvite, raw.calendarInvite, false),
         tags: tags.filter((tag) => !conflicting.has(tag.optionId)),
+        labels: entries(identifierSchema, raw.labels, 100),
       },
     }),
   };
@@ -517,6 +525,7 @@ export function captureEmailSavedView(
         facet('calendar').includes(CALENDAR_OPTION_ID) ||
         (fromTab.calendarInvite ?? false),
       tags,
+      labels: facet('labels'),
     },
   });
 }
@@ -540,6 +549,7 @@ export function materializeEmailSavedView(
     attachments: [...filters.attachments],
     calendar: filters.calendarInvite ? [CALENDAR_OPTION_ID] : [],
     tags: filters.tags.map((tag) => tag.optionId),
+    labels: [...(filters.labels ?? [])],
   };
   return {
     inboxIds: filters.inboxIds.length > 0 ? [...filters.inboxIds] : undefined,

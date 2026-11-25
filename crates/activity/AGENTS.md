@@ -62,7 +62,7 @@ distribution.
   `email_focus_worker` asks `UserActivity` over 7 days before working an
   inbox.
 
-- `record_merged` is written by the CRM merge inside its own transaction (`insert_activities`), with only the values the team can see; GraphQL serves it as an unknown action until the web shows it.
+- `record_merged` is written by the CRM merge inside its own transaction (`insert_activities`), with only the values the team can see; GraphQL serves it as `GraphqlActivityRecordMerged` (the merged records' ids and names, and the dropped values), shown in a company's Activity section.
 
 ## Recipes
 
