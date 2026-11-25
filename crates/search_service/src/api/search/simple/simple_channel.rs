@@ -24,7 +24,7 @@ pub(in crate::api::search) struct FilterChannelResponse {
     reason = "each argument narrows the one name search it runs"
 )]
 #[tracing::instrument(
-    skip(db, filters, term, excluded_terms),
+    skip(db, user_id, filters, term, excluded_terms),
     fields(term_len = term.len(), excluded_terms = excluded_terms.len()),
     err
 )]

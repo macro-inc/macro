@@ -102,7 +102,7 @@ pub(in crate::api::search) async fn filter_chats(
 /// name holds one of `excluded_terms`.
 #[allow(clippy::too_many_arguments)]
 #[tracing::instrument(
-    skip(db, term, excluded_terms),
+    skip(db, user_id, term, excluded_terms),
     fields(term_len = term.len(), excluded_terms = excluded_terms.len()),
     err
 )]
