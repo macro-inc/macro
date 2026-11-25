@@ -178,4 +178,40 @@ describe('buildDriveQuery', () => {
     expect(recent.body.chanf).toBeUndefined();
     expect(JSON.stringify(recent.body.df)).toContain('"ft":"pdf"');
   });
+
+  it('expands agent creator presets on My Drive without intersecting with own userId', () => {
+    const withAgents = buildDriveQuery({
+      selection: {
+        ...selection,
+        facets: { 'created-by': ['__my_agents__'] },
+      },
+      userId: 'macro|alice@example.com',
+      facetContext: {
+        ...facetContext,
+        userId: 'macro|alice@example.com',
+        myAgentIds: ['macro|agent-a@example.com', 'macro|agent-b@example.com'],
+      },
+    });
+
+    const json = JSON.stringify(withAgents.body.df);
+    expect(json).toContain('macro|agent-a@example.com');
+    expect(json).toContain('macro|agent-b@example.com');
+    expect(json).not.toContain('macro|alice@example.com');
+  });
+
+  it('compiles Modified presets into Soup updatedAt date range predicates', () => {
+    const modified = buildDriveQuery({
+      selection: {
+        ...selection,
+        facets: { modified: ['last-7-days'] },
+      },
+      userId: 'me',
+      facetContext: {
+        ...facetContext,
+        now: new Date('2026-06-15T00:00:00.000Z'),
+      },
+    });
+
+    expect(JSON.stringify(modified.body.df)).toContain('"ua":{"gte":');
+  });
 });

@@ -24,13 +24,13 @@ import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import StarIcon from '@icon/system/regular/star.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
+import { Key } from '@solid-primitives/keyed';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, Dropdown, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
-  For,
   Match,
   onCleanup,
   Show,
@@ -896,29 +896,30 @@ export function DriveRedesignGrid(props: { onStartInlineFolder: () => void }) {
                         />
                       </div>
                     </Show>
-                    <For each={splitBands().folders}>
+                    <Key each={splitBands().folders} by="id">
                       {(row) => (
                         <FolderGridCard
-                          row={row}
-                          focused={focusedId() === row.id}
-                          selected={selectedIds().has(row.id)}
+                          row={row()}
+                          focused={focusedId() === row().id}
+                          selected={selectedIds().has(row().id)}
                           selectedEntities={selectedRowEntities}
                           onClearSelection={clearSelection}
                           splitId={panel.handle.id}
                           createDropTarget={createDropTarget}
                           onFocus={() => {
-                            setFocusedId(row.id);
-                            setInspectedEntity(row.entity);
+                            const current = row();
+                            setFocusedId(current.id);
+                            setInspectedEntity(current.entity);
                           }}
                           onToggleSelect={(shift) =>
-                            toggleSelect(row.id, shift)
+                            toggleSelect(row().id, shift)
                           }
                           onActivate={(event) =>
-                            actions.openEntity(row.entity, event)
+                            actions.openEntity(row().entity, event)
                           }
                         />
                       )}
-                    </For>
+                    </Key>
                   </div>
                 </section>
               </Show>
@@ -937,50 +938,55 @@ export function DriveRedesignGrid(props: { onStartInlineFolder: () => void }) {
                     </div>
                   </Show>
                   <div class="grid grid-cols-[repeat(auto-fill,minmax(216px,1fr))] gap-3">
-                    <For each={splitBands().files}>
-                      {(row) =>
-                        row.isFolder ? (
+                    <Key each={splitBands().files} by="id">
+                      {(row) => (
+                        <Show
+                          when={row().isFolder}
+                          fallback={
+                            <FileGridCard
+                              row={row()}
+                              focused={focusedId() === row().id}
+                              selected={selectedIds().has(row().id)}
+                              selectedEntities={selectedRowEntities}
+                              onClearSelection={clearSelection}
+                              splitId={panel.handle.id}
+                              onFocus={() => {
+                                const current = row();
+                                setFocusedId(current.id);
+                                setInspectedEntity(current.entity);
+                              }}
+                              onToggleSelect={(shift) =>
+                                toggleSelect(row().id, shift)
+                              }
+                              onActivate={(event) =>
+                                actions.openEntity(row().entity, event)
+                              }
+                            />
+                          }
+                        >
                           <FolderGridCard
-                            row={row}
-                            focused={focusedId() === row.id}
-                            selected={selectedIds().has(row.id)}
+                            row={row()}
+                            focused={focusedId() === row().id}
+                            selected={selectedIds().has(row().id)}
                             selectedEntities={selectedRowEntities}
                             onClearSelection={clearSelection}
                             splitId={panel.handle.id}
                             createDropTarget={createDropTarget}
                             onFocus={() => {
-                              setFocusedId(row.id);
-                              setInspectedEntity(row.entity);
+                              const current = row();
+                              setFocusedId(current.id);
+                              setInspectedEntity(current.entity);
                             }}
                             onToggleSelect={(shift) =>
-                              toggleSelect(row.id, shift)
+                              toggleSelect(row().id, shift)
                             }
                             onActivate={(event) =>
-                              actions.openEntity(row.entity, event)
+                              actions.openEntity(row().entity, event)
                             }
                           />
-                        ) : (
-                          <FileGridCard
-                            row={row}
-                            focused={focusedId() === row.id}
-                            selected={selectedIds().has(row.id)}
-                            selectedEntities={selectedRowEntities}
-                            onClearSelection={clearSelection}
-                            splitId={panel.handle.id}
-                            onFocus={() => {
-                              setFocusedId(row.id);
-                              setInspectedEntity(row.entity);
-                            }}
-                            onToggleSelect={(shift) =>
-                              toggleSelect(row.id, shift)
-                            }
-                            onActivate={(event) =>
-                              actions.openEntity(row.entity, event)
-                            }
-                          />
-                        )
-                      }
-                    </For>
+                        </Show>
+                      )}
+                    </Key>
                   </div>
                 </section>
               </Show>

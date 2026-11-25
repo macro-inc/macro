@@ -6,8 +6,9 @@ import FolderIcon from '@icon/system/regular/folder.svg';
 import FolderOpenIcon from '@icon/system/regular/folder-open.svg';
 import FolderSimpleUserIcon from '@icon/system/regular/folder-simple-user.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import { Key } from '@solid-primitives/keyed';
 import { cn, Tooltip } from '@ui';
-import { createEffect, For, onCleanup, Show } from 'solid-js';
+import { createEffect, onCleanup, Show } from 'solid-js';
 import type { DriveFolderMetadata } from '../../context/drive-source';
 import type { DriveFolderNode } from '../../core/types';
 import type { DriveLocationMenu } from '../drive-navigation';
@@ -227,9 +228,9 @@ function FolderTreeNodeRow(props: {
 export function RedesignFolderTree(props: RedesignFolderTreeProps) {
   return (
     <ul class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
-      <For each={props.nodes}>
-        {(node) => <FolderTreeNodeRow node={node} tree={props} />}
-      </For>
+      <Key each={props.nodes} by="id">
+        {(node) => <FolderTreeNodeRow node={node()} tree={props} />}
+      </Key>
     </ul>
   );
 }

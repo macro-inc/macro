@@ -8,11 +8,14 @@ function documentMatchesTab(
   entity: DocumentEntity,
   tab: DriveTab,
   scope: DriveScope,
-  userId: string | undefined
+  userId: string | undefined,
+  hasExplicitCreatorFilter: boolean
 ): boolean {
   if (entity.subType?.type === 'task') return false;
   if (tab === 'shared') return Boolean(userId) && entity.ownerId !== userId;
-  if (tab === 'owned' && scope === 'default') return entity.ownerId === userId;
+  if (tab === 'owned' && scope === 'default' && !hasExplicitCreatorFilter) {
+    return entity.ownerId === userId;
+  }
 
   return true;
 }
@@ -57,6 +60,9 @@ export function driveEntityMatchesLocation(
     );
   }
 
+  const hasExplicitCreatorFilter =
+    (selection.facets['created-by']?.length ?? 0) > 0;
+
   if (entity.type === 'database' || entity.type === 'form') {
     if (
       !userId ||
@@ -67,12 +73,22 @@ export function driveEntityMatchesLocation(
     )
       return false;
     if (location.tab === 'shared') return entity.ownerId !== userId;
-    return selection.scope === 'all' || entity.ownerId === userId;
+    return (
+      selection.scope === 'all' ||
+      hasExplicitCreatorFilter ||
+      entity.ownerId === userId
+    );
   }
 
   if (entity.type !== 'document') return false;
 
-  return documentMatchesTab(entity, location.tab, selection.scope, userId);
+  return documentMatchesTab(
+    entity,
+    location.tab,
+    selection.scope,
+    userId,
+    hasExplicitCreatorFilter
+  );
 }
 
 /** Matches the server's `name` order, then newest update and descending ID. */

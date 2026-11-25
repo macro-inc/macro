@@ -17,9 +17,15 @@ legacy workspace intact when the flag is off.
   `views/mobile/drive-redesign-mobile.tsx` (touch).
 - `core/`: pure models for folder/file ordering, Browse vs All files filtering,
   time buckets, extension-preserving rename ranges, Miller column paths, undo
-  entries, and Trash hierarchy summaries.
+  entries, Trash hierarchy summaries, filter presets (`drive-filters.ts`), and
+  optimistic folder state (`drive-optimistic-folders.ts`).
 - `primitives/`: reactive view preferences, inline edit coordination, Quick
-  Look inspector state, and undo manager.
+  Look inspector state, undo manager, optimistic folder controller
+  (`drive-optimistic-folders.ts`), and agent teammate lookup
+  (`use-drive-agents.ts`).
+- `components/redesign/drive-filter-bar.tsx` &
+  `views/mobile/drive-redesign-mobile-filter-strip.tsx`: second-row Ask AI +
+  Type / People / Modified / Source filter bars for desktop and touch.
 - `queries/`: Drive data sources, per-folder live contents adapter
   (`drive-folder-contents.ts`), and paginated Trash adapter (`drive-trash.ts`).
 - `views/shared/use-drive-display-items.ts`: unified display model shared by

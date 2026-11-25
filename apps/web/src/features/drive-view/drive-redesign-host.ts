@@ -1,4 +1,8 @@
 import {
+  openChatWithAgent,
+  openChatWithInput,
+} from '@app/features/chat/ChatWithAgentButton';
+import {
   type CreatableName,
   runCreateAction,
 } from '@app/features/command/Launcher';
@@ -43,6 +47,7 @@ import type {
   UndoableEntityType,
 } from './core/drive-undo';
 import { driveCreateDestinationLabel } from './core/location-label';
+import type { DriveOptimisticFoldersController } from './primitives/drive-optimistic-folders';
 import {
   createDriveUndoManager,
   type DriveUndoManager,
@@ -89,6 +94,7 @@ export function createDriveRedesignHost(options: {
   folders: Accessor<DriveFolderMetadata[]>;
   items?: Accessor<readonly { entity: EntityData }[]>;
   baseActions: DriveHostActions;
+  optimisticFolders?: DriveOptimisticFoldersController;
   onFolderCreated?: (folderId: string, parentId: string | null) => void;
   onTrashCompleted?: (ids: readonly string[]) => void;
 }): { host: DriveRedesignHostActions; undo: DriveUndoManager } {
@@ -307,6 +313,16 @@ export function createDriveRedesignHost(options: {
   ): Promise<string | undefined> => {
     const trimmed = name.trim();
     if (!trimmed) return undefined;
+    const tempId = `optimistic-folder-${crypto.randomUUID()}`;
+    const nowIso = new Date().toISOString();
+    options.optimisticFolders?.beginCreate({
+      id: tempId,
+      name: trimmed,
+      parentId,
+      userId: options.userId() ?? '',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    });
     try {
       const id = await createProject({
         name: trimmed,
@@ -314,13 +330,15 @@ export function createDriveRedesignHost(options: {
         source: 'drive_redesign_inline',
       });
       if (!id) {
+        options.optimisticFolders?.rollbackCreate(tempId);
         toast.failure(t('drive.toastFolderCreateFailed'));
         return undefined;
       }
-      await refreshDriveQueries(true);
+      options.optimisticFolders?.confirmCreate(tempId, id);
       options.onFolderCreated?.(id, parentId);
       return id;
     } catch {
+      options.optimisticFolders?.rollbackCreate(tempId);
       toast.failure(t('drive.toastFolderCreateFailed'));
       return undefined;
     }
@@ -346,13 +364,22 @@ export function createDriveRedesignHost(options: {
     const trimmed = nextName.trim();
     if (!trimmed || trimmed === entity.name) return true;
     const previousName = entity.name;
+    const isFolder = entity.type === 'project';
+    if (isFolder) {
+      options.optimisticFolders?.beginRename(entity.id, trimmed);
+    }
     try {
       const result = await renameMutation.mutateAsync({
         entity,
         newName: trimmed,
       });
-      if (!result.success) return false;
-      await refreshDriveQueries(entity.type === 'project');
+      if (!result.success) {
+        if (isFolder) options.optimisticFolders?.rollbackRename(entity.id);
+        return false;
+      }
+      if (isFolder) {
+        await refreshActiveGraphqlFoldersQueries();
+      }
       const undoType = toUndoableType(entity.type);
       if (undoType) {
         const undoId = undo.recordRename({
@@ -366,6 +393,7 @@ export function createDriveRedesignHost(options: {
       }
       return true;
     } catch {
+      if (isFolder) options.optimisticFolders?.rollbackRename(entity.id);
       return false;
     }
   };
@@ -377,7 +405,15 @@ export function createDriveRedesignHost(options: {
   ): Promise<boolean> => {
     if (entities.length === 0) return false;
     const mutable = [...entities];
+    const folderIds = mutable
+      .filter((entity) => entity.type === 'project')
+      .map((entity) => entity.id);
+    if (folderIds.length > 0) {
+      options.optimisticFolders?.beginMove(folderIds, destinationFolderId);
+    }
+
     const succeededUndoItems: MoveUndoItem[] = [];
+    const failedFolderIds: string[] = [];
     let movedCount = 0;
     let failedCount = 0;
     let movedAnyFolder = false;
@@ -403,11 +439,12 @@ export function createDriveRedesignHost(options: {
     );
 
     outcomes.forEach((outcome, index) => {
+      const entity = mutable[index];
       if (outcome.status !== 'fulfilled') {
         failedCount += 1;
+        if (entity.type === 'project') failedFolderIds.push(entity.id);
         return;
       }
-      const entity = mutable[index];
       movedCount += 1;
       if (entity.type === 'project') movedAnyFolder = true;
       const undoType = toUndoableType(entity.type);
@@ -420,8 +457,17 @@ export function createDriveRedesignHost(options: {
       }
     });
 
+    if (failedFolderIds.length > 0) {
+      options.optimisticFolders?.rollbackMove(failedFolderIds);
+    }
+
     if (movedCount > 0) {
-      await refreshDriveQueries(movedAnyFolder);
+      // Non-folder Soup queries are already refreshed by the move/remove
+      // mutation's own `onSettled` handler; only refresh GraphQL folders when
+      // a folder reparented so we avoid a duplicate reflow flash.
+      if (movedAnyFolder) {
+        await refreshActiveGraphqlFoldersQueries();
+      }
       const message =
         destinationFolderId === null
           ? t('drive.toastMovedToRoot', { count: movedCount })
@@ -517,13 +563,21 @@ export function createDriveRedesignHost(options: {
     let trashedCount = 0;
     const trashedRefs: UndoableEntityRef[] = [];
 
+    const softTrashFolders = softTrashable
+      .filter(({ entity }) => entity.type === 'project')
+      .map(({ entity }) => entity.id);
+    if (softTrashFolders.length > 0) {
+      options.optimisticFolders?.beginTrash(softTrashFolders);
+    }
+
     if (softTrashable.length > 0) {
       const outcomes = await Promise.allSettled(
         softTrashable.map(({ ref }) => trashEntity(ref))
       );
+      const failedFolders: string[] = [];
       outcomes.forEach((outcome, index) => {
+        const entity = softTrashable[index].entity;
         if (outcome.status === 'fulfilled') {
-          const entity = softTrashable[index].entity;
           const undoType = toUndoableType(entity.type);
           trashedCount += 1;
           if (undoType) {
@@ -533,8 +587,13 @@ export function createDriveRedesignHost(options: {
               name: entity.name,
             });
           }
+        } else if (entity.type === 'project') {
+          failedFolders.push(entity.id);
         }
       });
+      if (failedFolders.length > 0) {
+        options.optimisticFolders?.rollbackTrash(failedFolders);
+      }
 
       if (trashedCount > 0) {
         await Promise.allSettled([
@@ -648,6 +707,59 @@ export function createDriveRedesignHost(options: {
       },
       canMutateEntity,
       openFolderInNewSplit: options.baseActions.openFolderInNewSplit,
+      askAi: async (context) => {
+        const selected = context?.selected ?? [];
+        if (selected.length === 1) {
+          const item = selected[0];
+          if (item.type === 'document') {
+            await openChatWithAgent({
+              type: 'document',
+              id: item.id,
+              name: item.name,
+              fileType: item.fileType,
+            });
+            return;
+          }
+          if (item.type === 'project') {
+            await openChatWithAgent({
+              type: 'project',
+              id: item.id,
+              name: item.name,
+            });
+            return;
+          }
+          if (item.type === 'chat' || item.type === 'email') {
+            await openChatWithAgent({
+              type: item.type,
+              id: item.id,
+              name: item.name,
+            });
+            return;
+          }
+        }
+        if (selected.length > 1) {
+          const names = selected
+            .slice(0, 5)
+            .map((item) => item.name)
+            .join(', ');
+          const suffix =
+            selected.length > 5 ? ` (+${selected.length - 5} more)` : '';
+          await openChatWithInput(
+            `${t('drive.askAiSelectionPrompt')} ${names}${suffix} `
+          );
+          return;
+        }
+        if (context?.folder) {
+          await openChatWithAgent({
+            type: 'project',
+            id: context.folder.id,
+            name: context.folder.name,
+          });
+          return;
+        }
+        const query = context?.searchQuery?.trim();
+        await openChatWithInput(query ?? '');
+      },
     },
   };
 }

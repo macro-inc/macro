@@ -1,10 +1,17 @@
 import { t } from '@app/lib/i18n';
 import type { EntityData, ProjectEntity } from '@entity';
+import { startOfDay } from 'date-fns';
 import { createMemo } from 'solid-js';
 import type { ActiveFilterChip } from '../../components/redesign/active-filter-chips';
 import { useDriveView } from '../../context/drive-context';
 import { useDriveRedesign } from '../../context/drive-redesign-context';
 import type { DriveFolderMetadata } from '../../context/drive-source';
+import {
+  isDriveModifiedPreset,
+  matchesDateRange,
+  modifiedPresetRange,
+  resolveCreatorOptionIds,
+} from '../../core/drive-filters';
 import {
   countDirectSubfolders,
   filterRootBrowseItems,
@@ -45,8 +52,9 @@ export function folderToProjectEntity(
  */
 export function useDriveDisplayItems() {
   const { state, source, sidebar, actions } = useDriveView();
-  const { preferences } = useDriveRedesign();
+  const { preferences, agents } = useDriveRedesign();
   const filters = useDriveFilters();
+  const todayAnchor = startOfDay(new Date());
 
   const foldersById = createMemo(() => {
     const map = new Map<string, DriveFolderMetadata>();
@@ -95,6 +103,32 @@ export function useDriveDisplayItems() {
     const rawEntities: EntityData[] = source.items().map((row) => row.entity);
     const seen = new Set(rawEntities.map((entity) => entity.id));
 
+    const facets = state.value().facets;
+    const excludesFoldersByFilter =
+      (facets.type?.length ?? 0) > 0 ||
+      (facets.tags?.length ?? 0) > 0 ||
+      state.value().scope === 'attachments';
+
+    const creatorFilters = facets['created-by'] ?? [];
+    const allowedCreatorIds =
+      creatorFilters.length > 0
+        ? new Set(
+            creatorFilters.flatMap((id) =>
+              resolveCreatorOptionIds(id, {
+                userId: actions.userId(),
+                myAgentIds: agents?.myAgentIds(),
+                teamAgentIds: agents?.teamAgentIds(),
+              })
+            )
+          )
+        : undefined;
+    const modifiedFilters = (facets.modified ?? []).filter(
+      isDriveModifiedPreset
+    );
+    const modifiedRanges = modifiedFilters.map((preset) =>
+      modifiedPresetRange(preset, todayAnchor)
+    );
+
     // Synthesize top-level folders where Soup's legacy tab query omits them.
     const extraFolders: ProjectEntity[] = [];
     const addFolders = (folders: readonly DriveFolderMetadata[]) => {
@@ -106,6 +140,17 @@ export function useDriveDisplayItems() {
         ) {
           continue;
         }
+        if (allowedCreatorIds && !allowedCreatorIds.has(folder.userId)) {
+          continue;
+        }
+        if (
+          modifiedRanges.length > 0 &&
+          !modifiedRanges.some((range) =>
+            matchesDateRange(folder.updatedAt ?? folder.createdAt, range)
+          )
+        ) {
+          continue;
+        }
         seen.add(folder.id);
         extraFolders.push(folderToProjectEntity(folder));
       }
@@ -113,18 +158,22 @@ export function useDriveDisplayItems() {
 
     if (loc.kind === 'tab' && loc.tab === 'owned') {
       const showFolders =
-        !filtered && (preferences.rootMode() === 'browse' || searching);
+        !excludesFoldersByFilter &&
+        (preferences.rootMode() === 'browse' || searching || filtered);
       if (showFolders) {
-        const candidates = searching
-          ? partitionedFolders().owned
-          : topLevelFolders(partitionedFolders().owned);
+        const pool =
+          creatorFilters.length > 0
+            ? sidebar.folders()
+            : partitionedFolders().owned;
+        const candidates = searching || filtered ? pool : topLevelFolders(pool);
         addFolders(candidates);
       }
     } else if (loc.kind === 'tab' && loc.tab === 'shared') {
-      if (!filtered) {
-        const candidates = searching
-          ? partitionedFolders().shared
-          : topLevelFolders(partitionedFolders().shared);
+      if (!excludesFoldersByFilter) {
+        const candidates =
+          searching || filtered
+            ? partitionedFolders().shared
+            : topLevelFolders(partitionedFolders().shared);
         addFolders(candidates);
       }
     } else if (loc.kind === 'folder' && loc.id === null) {
@@ -227,8 +276,17 @@ export function useDriveDisplayItems() {
       chips.push({
         key: `created-by:${id}`,
         groupLabel: t('drive.filterCreatorLabel'),
-        valueLabel: labelFor('created-by', id),
+        valueLabel: filters.creatorLabel(id),
         onRemove: () => state.setFacetSelected('created-by', id, false),
+      });
+    }
+
+    for (const id of facets.modified ?? []) {
+      chips.push({
+        key: `modified:${id}`,
+        groupLabel: t('drive.filterModifiedLabel'),
+        valueLabel: labelFor('modified', id),
+        onRemove: () => state.setFacetSelected('modified', id, false),
       });
     }
 

@@ -26,6 +26,7 @@ import ShareIcon from '@icon/share.svg';
 import StarFillIcon from '@icon/system/fill/star-fill.svg';
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CaretUpDownIcon from '@icon/system/regular/caret-up-down.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
 import EyeIcon from '@icon/system/regular/eye.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
@@ -34,8 +35,10 @@ import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import StarIcon from '@icon/system/regular/star.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
+import { Key } from '@solid-primitives/keyed';
 import { Button, cn, Dropdown, Tooltip } from '@ui';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -195,18 +198,18 @@ function InlineExpandedFolderChildren(props: {
               </div>
             }
           >
-            <For each={childRows()}>
+            <Key each={childRows()} by="id">
               {(row) => (
                 <DriveListRowItem
-                  row={row}
+                  row={row()}
                   depth={props.depth}
                   expandedIds={props.expandedIds}
                   onToggleExpand={props.onToggleExpand}
                   showLocationColumn={props.showLocationColumn}
                   isRecent={props.isRecent}
                   sort={props.sort}
-                  focused={props.focusedId === row.id}
-                  selected={props.selectedIds.has(row.id)}
+                  focused={props.focusedId === row().id}
+                  selected={props.selectedIds.has(row().id)}
                   selectedEntities={() => []}
                   onClearSelection={() => {}}
                   onFocus={props.onFocus}
@@ -216,7 +219,7 @@ function InlineExpandedFolderChildren(props: {
                   splitId={props.splitId}
                 />
               )}
-            </For>
+            </Key>
           </Show>
           <Show when={childSource.isLoadingMore()}>
             <div
@@ -1037,33 +1040,36 @@ export function DriveRedesignList(props: { onStartInlineFolder: () => void }) {
     return 'my-drive' as const;
   };
 
-  const renderRowWithContext = (row: DriveDisplayRow) => (
+  const renderRowWithContext = (row: Accessor<DriveDisplayRow>) => (
     <SoupEntityContextMenu
       as="div"
       class="h-auto"
-      entity={row.entity}
+      entity={row().entity}
       list={actionState}
       selectedEntities={() =>
-        selectedRowEntities().length > 0 ? selectedRowEntities() : [row.entity]
+        selectedRowEntities().length > 0
+          ? selectedRowEntities()
+          : [row().entity]
       }
       viewContext={actionContext()}
       viewedProjectId={state.projectId()}
       onOpenChange={(open) => {
         if (!open) return;
-        setFocusedId(row.id);
-        setInspectedEntity(row.entity);
+        const current = row();
+        setFocusedId(current.id);
+        setInspectedEntity(current.entity);
       }}
     >
       <DriveListRowItem
-        row={row}
+        row={row()}
         depth={0}
         expandedIds={expandedFolderIds()}
         onToggleExpand={toggleExpandFolder}
         showLocationColumn={showLocationColumn()}
         isRecent={display.isRecentTab()}
         sort={state.value().sort}
-        focused={focusedId() === row.id}
-        selected={selectedIds().has(row.id)}
+        focused={focusedId() === row().id}
+        selected={selectedIds().has(row().id)}
         selectedEntities={selectedRowEntities}
         onClearSelection={clearSelection}
         onFocus={(entity) => {
@@ -1077,6 +1083,13 @@ export function DriveRedesignList(props: { onStartInlineFolder: () => void }) {
       />
     </SoupEntityContextMenu>
   );
+
+  const ariaSortFor = (column: 'name' | 'updated_at') => {
+    if (state.value().sort !== column) return 'none' as const;
+    return preferences.sortDirection() === 'asc'
+      ? ('ascending' as const)
+      : ('descending' as const);
+  };
 
   return (
     <EntityDragSelectionContext.Provider value={dragSelection}>
@@ -1108,58 +1121,117 @@ export function DriveRedesignList(props: { onStartInlineFolder: () => void }) {
               />
             </div>
             <div class="size-5 shrink-0" aria-hidden="true" />
-            <div class="flex min-w-0 flex-1 items-center">
-              <button
-                type="button"
-                class={cn(
-                  'inline-flex items-center gap-1 rounded px-1 py-0.5 hover:text-ink',
-                  state.value().sort === 'name' && 'text-ink'
-                )}
-                onClick={() => handleSortHeaderClick('name')}
+            <div
+              role="columnheader"
+              aria-sort={ariaSortFor('name')}
+              class="flex min-w-0 flex-1 items-center"
+            >
+              <Tooltip
+                label={
+                  state.value().sort === 'name'
+                    ? t('drive.reverseSortOrder')
+                    : t('drive.sortByColumn', {
+                        column: t('drive.columnName'),
+                      })
+                }
               >
-                <span>{t('drive.columnName')}</span>
-                <Show when={state.value().sort === 'name'}>
-                  <ArrowDownIcon
-                    class={cn(
-                      'size-3 transition-transform',
-                      preferences.sortDirection() === 'asc' && 'rotate-180'
-                    )}
-                    aria-hidden="true"
-                  />
-                </Show>
-              </button>
+                <button
+                  type="button"
+                  data-drive-sort-header="name"
+                  class={cn(
+                    'group/sort -mx-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-accent',
+                    state.value().sort === 'name'
+                      ? 'font-semibold text-ink'
+                      : 'text-ink-muted'
+                  )}
+                  onClick={() => handleSortHeaderClick('name')}
+                >
+                  <span>{t('drive.columnName')}</span>
+                  <Show
+                    when={state.value().sort === 'name'}
+                    fallback={
+                      <CaretUpDownIcon
+                        class="size-3 text-ink-subtle opacity-60 transition-opacity group-hover/sort:opacity-100"
+                        aria-hidden="true"
+                      />
+                    }
+                  >
+                    <ArrowDownIcon
+                      class={cn(
+                        'size-3 text-ink transition-transform',
+                        preferences.sortDirection() === 'asc' && 'rotate-180'
+                      )}
+                      aria-hidden="true"
+                    />
+                  </Show>
+                </button>
+              </Tooltip>
             </div>
             <Show when={showLocationColumn()}>
-              <div class="hidden w-36 shrink-0 px-2 @min-[760px]/drive-list:block">
+              <div
+                role="columnheader"
+                class="hidden w-36 shrink-0 px-2 @min-[760px]/drive-list:block"
+              >
                 {t('drive.columnLocation')}
               </div>
             </Show>
-            <div class="hidden w-24 shrink-0 @min-[640px]/drive-list:block">
+            <div
+              role="columnheader"
+              class="hidden w-24 shrink-0 @min-[640px]/drive-list:block"
+            >
               {t('drive.columnKind')}
             </div>
-            <div class="hidden w-28 shrink-0 @min-[880px]/drive-list:block">
+            <div
+              role="columnheader"
+              class="hidden w-28 shrink-0 @min-[880px]/drive-list:block"
+            >
               {t('drive.columnOwner')}
             </div>
-            <div class="hidden w-24 shrink-0 justify-end @min-[520px]/drive-list:flex">
-              <button
-                type="button"
-                class={cn(
-                  'inline-flex items-center gap-1 rounded px-1 py-0.5 hover:text-ink',
-                  state.value().sort === 'updated_at' && 'text-ink'
-                )}
-                onClick={() => handleSortHeaderClick('updated_at')}
+            <div
+              role="columnheader"
+              aria-sort={ariaSortFor('updated_at')}
+              class="hidden w-24 shrink-0 justify-end @min-[520px]/drive-list:flex"
+            >
+              <Tooltip
+                label={
+                  state.value().sort === 'updated_at'
+                    ? t('drive.reverseSortOrder')
+                    : t('drive.sortByColumn', {
+                        column: t('drive.columnModified'),
+                      })
+                }
               >
-                <span>{t('drive.columnModified')}</span>
-                <Show when={state.value().sort === 'updated_at'}>
-                  <ArrowDownIcon
-                    class={cn(
-                      'size-3 transition-transform',
-                      preferences.sortDirection() === 'asc' && 'rotate-180'
-                    )}
-                    aria-hidden="true"
-                  />
-                </Show>
-              </button>
+                <button
+                  type="button"
+                  data-drive-sort-header="updated_at"
+                  class={cn(
+                    'group/sort -mx-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-1 transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-accent',
+                    state.value().sort === 'updated_at'
+                      ? 'font-semibold text-ink'
+                      : 'text-ink-muted'
+                  )}
+                  onClick={() => handleSortHeaderClick('updated_at')}
+                >
+                  <span>{t('drive.columnModified')}</span>
+                  <Show
+                    when={state.value().sort === 'updated_at'}
+                    fallback={
+                      <CaretUpDownIcon
+                        class="size-3 text-ink-subtle opacity-60 transition-opacity group-hover/sort:opacity-100"
+                        aria-hidden="true"
+                      />
+                    }
+                  >
+                    <ArrowDownIcon
+                      class={cn(
+                        'size-3 text-ink transition-transform',
+                        preferences.sortDirection() === 'asc' && 'rotate-180'
+                      )}
+                      aria-hidden="true"
+                    />
+                  </Show>
+                </button>
+              </Tooltip>
             </div>
             <div class="w-20 shrink-0" aria-hidden="true" />
           </div>
@@ -1251,7 +1323,9 @@ export function DriveRedesignList(props: { onStartInlineFolder: () => void }) {
               <Show
                 when={display.isRecentTab()}
                 fallback={
-                  <For each={rows()}>{(row) => renderRowWithContext(row)}</For>
+                  <Key each={rows()} by="id">
+                    {(row) => renderRowWithContext(row)}
+                  </Key>
                 }
               >
                 <For each={recentGroups()}>
@@ -1260,9 +1334,9 @@ export function DriveRedesignList(props: { onStartInlineFolder: () => void }) {
                       <div class="sticky top-0 z-1 border-b border-edge-muted bg-panel/95 px-4 py-1.5 text-xs font-semibold text-ink-muted backdrop-blur-xs">
                         {timeBucketLabel(group.bucket)}
                       </div>
-                      <For each={group.items}>
+                      <Key each={group.items} by="id">
                         {(row) => renderRowWithContext(row)}
-                      </For>
+                      </Key>
                     </section>
                   )}
                 </For>

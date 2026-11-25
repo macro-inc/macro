@@ -6,16 +6,15 @@ import {
   literal,
   mergeAst,
   NIL_UUID,
-  type TagFacetContext,
 } from '@app/features/soup/filters';
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
 import type { DriveSelection } from '../context/drive-source';
-import { DRIVE_FACETS } from '../filters/drive-facets';
+import { DRIVE_FACETS, type DriveFacetContext } from '../filters/drive-facets';
 
 export type BuildDriveQueryOptions = {
   selection: DriveSelection;
   userId: string | undefined;
-  facetContext: TagFacetContext;
+  facetContext: DriveFacetContext;
 };
 
 type DriveAstBody = BackendAstMap & Pick<SoupAstBody, 'emailView'>;
@@ -61,7 +60,14 @@ function tabDocumentScope(
     return combine('&', nodes) ?? literal('id', NIL_UUID);
   }
 
-  if (location.tab === 'owned' && selection.scope === 'default') {
+  const hasExplicitCreatorFilter =
+    (selection.facets['created-by']?.length ?? 0) > 0;
+
+  if (
+    location.tab === 'owned' &&
+    selection.scope === 'default' &&
+    !hasExplicitCreatorFilter
+  ) {
     if (!userId) return literal('id', NIL_UUID);
 
     nodes.push(literal('o', userId));

@@ -15,9 +15,8 @@ import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { t } from '@app/lib/i18n';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { EntityRowIcon, isEntityDragData } from '@entity';
+import { isEntityDragData } from '@entity';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import FolderPlusIcon from '@icon/system/regular/folder-plus.svg';
@@ -29,7 +28,7 @@ import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { Button, cn, Scroll } from '@ui';
+import { Button, cn } from '@ui';
 import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
 import { InlineNameInput } from '../../components/redesign/inline-name-input';
 import { RedesignFolderTree } from '../../components/redesign/redesign-folder-tree';
@@ -45,46 +44,6 @@ import type { DriveTab } from '../../core/types';
 import { DriveLocationMenu } from '../../drive-location-menu';
 import { DriveRedesignCreateMenu } from '../../drive-redesign-create-menu';
 import { folderToProjectEntity } from '../shared/use-drive-display-items';
-
-const DATABASE_SCROLL_THRESHOLD = 10;
-
-function DriveSidebarDatabases(props: { onNavigate?: () => void }) {
-  const { sidebar, actions } = useDriveView();
-  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-  createScrollTopFade(scrollRoot);
-
-  return (
-    <Scroll
-      fill={false}
-      scrollRef={setScrollRoot}
-      class={cn(
-        sidebar.databases().length > DATABASE_SCROLL_THRESHOLD &&
-          'max-h-[calc(10*var(--sidebar-row-height)+9*var(--sidebar-row-gap))]'
-      )}
-    >
-      <ViewSidebar.Nav aria-label={t('drive.databases')}>
-        <For each={sidebar.databases()}>
-          {(database) => (
-            <ViewSidebar.Item
-              title={database.name}
-              onClick={(event) => {
-                actions.openShortcut(database, event);
-                props.onNavigate?.();
-              }}
-            >
-              <ViewSidebar.Icon>
-                <span class="size-4">
-                  <EntityRowIcon entity={database} />
-                </span>
-              </ViewSidebar.Icon>
-              <span class="truncate">{database.name}</span>
-            </ViewSidebar.Item>
-          )}
-        </For>
-      </ViewSidebar.Nav>
-    </Scroll>
-  );
-}
 
 function DriveSidebarFavorite(props: {
   favorite: Favorite;
@@ -261,8 +220,8 @@ export function DriveRedesignSidebarContent(props: {
 
   const commitSidebarCreate = async (parentId: string | null, name: string) => {
     await inlineEdit.runCommit(async () => {
-      const id = await host.createFolderInline(name, parentId);
-      if (id) selectFolder(id);
+      if (parentId) expandFolder(parentId);
+      await host.createFolderInline(name, parentId);
     });
   };
 
@@ -540,25 +499,6 @@ export function DriveRedesignSidebarContent(props: {
                 )}
               </For>
             </ViewSidebar.Nav>
-          </CollapsibleSection.Content>
-        </CollapsibleSection.Root>
-      </Show>
-
-      <Show when={sidebar.databases().length > 0}>
-        <CollapsibleSection.Root
-          sectionId="databases"
-          sectionLabel={t('drive.databases')}
-          open={state.value().databasesOpen}
-          onOpenChange={state.setDatabasesOpen}
-        >
-          <CollapsibleSection.Header>
-            <CollapsibleSection.Trigger>
-              <span class="min-w-0 truncate">{t('drive.databases')}</span>
-              <CollapsibleSection.Indicator />
-            </CollapsibleSection.Trigger>
-          </CollapsibleSection.Header>
-          <CollapsibleSection.Content>
-            <DriveSidebarDatabases onNavigate={props.onNavigate} />
           </CollapsibleSection.Content>
         </CollapsibleSection.Root>
       </Show>
