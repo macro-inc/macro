@@ -265,9 +265,11 @@ server's watermark only. Span `calendar.delta_sync` records
 through the durable mutation queue: a rejected write rolls back with the usual
 error, and a write made offline stays visible and replays on reconnect. Native
 apps whose engine lacks the calendar cache commands keep the REST path. Until the
-cache answers its first calendar read, viewports wait at most a second and then
-read from REST, and writes use REST, so a cache that is slow to start or fails
-("Local cache unavailable") never leaves the calendar on skeletons. Writes in
+cache answers its first calendar read, concurrent viewports share a single one-second
+startup wait. Each then reads its own range from the ready cache; after that shared
+wait expires, unanswered viewports read REST immediately. Writes use REST, so a
+cache that is slow to start or fails ("Local cache unavailable") never leaves the
+calendar on skeletons. Writes in
 that window behave as on the REST path: offline, they roll back with an error
 instead of replaying. After the cache has answered, a viewport still reads from
 REST whenever the cache cannot answer it: a refused or timed-out cache request

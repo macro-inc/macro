@@ -49,6 +49,7 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 - Preserve native momentum until scrollend or observed stillness; complete controlled 140ms slides without relying on native events.
 - Disable wheel snapping during controlled alignment until the virtual destination rows are mounted.
 - Preload five page keys independently of render jobs after date anchors commit; retain stable slots and freeze phone axis measurements during paging.
+- Share one cache startup head start across concurrent ranges; never restart its deadline per reader.
 
 ## Checks
 
