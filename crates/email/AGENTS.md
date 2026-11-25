@@ -160,10 +160,14 @@ tools — hexagonal, heavily feature-gated.
   lateral drops. Match the bare `subject` column so the planner keeps its
   statistics. `Attachment(kind)` reads the denormalized thread flags
   `email_db_client` maintains.
-- `Label(id)` matches a thread with a message carrying the label (through
-  `email_effective_message_labels`) in an inbox the viewer owns or manages;
-  another inbox's label never matches, so a shared thread can't be probed by
-  id. An owned All Mail page whose filter has one top-level OR-tree of labels
+- `Label(id)` matches a thread with a message carrying the label, by
+  `email_effective_message_labels`' rules, in an inbox the viewer owns or
+  manages; another inbox's label never matches, so a shared thread can't be
+  probed by id. Don't put a label predicate on the view: its pending side
+  computes a label per row, so it scans every pending change. Read provider
+  rows by label and pending changes by attribute (`MESSAGE_CARRIES_LABEL`,
+  `build_label_superset`), and the viewer's inboxes as `= ANY(ARRAY(...))`,
+  never an `IN` subquery, which the planner hashes the inbox's messages for. An owned All Mail page whose filter has one top-level OR-tree of labels
   and no message term is read by `OwnedRead` too: the label rows are the
   superset (`build_label_superset`). The label tree stays out of the inbox
   windows' terms and is tested on each walked thread before the preview pick
