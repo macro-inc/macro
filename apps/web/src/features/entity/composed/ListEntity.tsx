@@ -239,6 +239,9 @@ export function ListEntity(props: ListEntityProps) {
     get onFilterByTag() {
       return props.onFilterByTag ?? soupView?.filterByTag;
     },
+    get labels() {
+      return props.labels;
+    },
     get showCalendarAttendance() {
       return (
         props.showCalendarAttendance ??
