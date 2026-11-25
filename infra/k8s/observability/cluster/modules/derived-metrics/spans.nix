@@ -61,6 +61,8 @@ let
     outlook_sync = [ ''IsMatch(name, "^outlook[.]sync[.]")'' ];
     outlook_graph = [ (present "outlook.throttle_origin") ];
     outlook_token = [ (present "outlook.token_cache") ];
+    # A model call by any service, inside an agent session or not.
+    model_call = [ (is "gen_ai.operation.name" "chat") ];
     web_perf = [
       (is "macro.sampling.class" "perf")
       (service "web-app")
@@ -95,6 +97,22 @@ let
     inherit value;
     tags.provider = [ "gen_ai.provider.name" ];
   };
+  # Datadog's LLM Observability metrics (`ml_obs.*`), for model calls only: its
+  # `span_kind:llm`.
+  modelCall =
+    args:
+    {
+      select = "model_call";
+      tags = {
+        service = [ "service.name" ];
+        model_name = [
+          "gen_ai.response.model"
+          "gen_ai.request.model"
+        ];
+        model_provider = [ "gen_ai.provider.name" ];
+      };
+    }
+    // args;
   tool =
     args:
     {
@@ -132,6 +150,21 @@ let
     "macro.agent.chat.input_tokens" = chat "gen_ai.usage.input_tokens";
     "macro.agent.chat.cache_read_tokens" = chat "gen_ai.usage.cache_read.input_tokens";
     "macro.agent.chat.cache_write_tokens" = chat "gen_ai.usage.cache_creation.input_tokens";
+
+    "ml_obs.span.duration" = modelCall { value = "duration"; };
+    "ml_obs.span.error" = modelCall { where = [ failed ]; };
+    "ml_obs.span.llm.input.tokens" = modelCall { value = "gen_ai.usage.input_tokens"; };
+    "ml_obs.span.llm.input.cache_read.tokens" = modelCall {
+      value = "gen_ai.usage.cache_read.input_tokens";
+    };
+    "ml_obs.span.llm.input.cache_write.tokens" = modelCall {
+      value = "gen_ai.usage.cache_creation.input_tokens";
+    };
+    "ml_obs.span.llm.output.tokens" = modelCall { value = "gen_ai.usage.output_tokens"; };
+    # Not in Datadog.
+    "macro.genai.chat.time_to_first_chunk_ms" = modelCall {
+      value = "macro.genai.chat.time_to_first_chunk_ms";
+    };
 
     "macro.agent.tool.calls" = tool { };
     "macro.agent.tool.errors" = tool { where = [ failed ]; };

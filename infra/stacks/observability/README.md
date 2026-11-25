@@ -834,6 +834,11 @@ it does not replicate their history to Ohio, so these panels depend on Virginia
 remaining available. These are not a replacement for Datadog database query monitoring, RUM, or anomaly
 models.
 
+`nixos/grafana-provisioning/agents-dashboard.nix` ("AI and agents") shows model
+calls, agent turns, the prompt cache and tools from the cluster's derived
+metrics (its `modules/derived-metrics/MAPPING.md`), in place of Datadog's LLM
+Observability view.
+
 `nixos/grafana-provisioning/prod-alerts.nix` lists the prod CloudWatch alerts:
 macrodb memory, swap, load, CPU, connections, replica lag, read latency and
 storage; Redis memory and evictions; SQS queue age. Each entry holds its query,

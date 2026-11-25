@@ -12,7 +12,7 @@ Rules:
   Mimir doesn't). A span or record without the tag has no such label (Datadog:
   `N/A`).
 - Durations (`@duration`) are in seconds and end in `_seconds`; a Datadog
-  threshold on one is in nanoseconds. Fields that were already in milliseconds
+  threshold on one is in nanoseconds (`ml_obs.*`: seconds). Fields that were already in milliseconds
   or bytes stay so.
 - `tool` is a plain name or `other`: some agent harnesses put a whole
   command in it. Datadog keeps that; here `other` is every call whose tool
@@ -46,6 +46,15 @@ Metrics of production services need those services to send to Grafana: until one
 does, its metrics have no `deployment_environment="prod"`.
 
 ## From spans
+
+- `ml_obs.*` are Datadog's LLM Observability metrics for model calls (its
+  `span_kind:llm`), by any service; its `ml_app` is `service`. Agents, tools and
+  workflows are the `macro.agent.*` metrics. The model is the one that answered,
+  or else the one asked for. AI editing marks each of its steps as a model call,
+  so those last until the step's tools are done and have no model.
+- For `ml_obs.span.llm.total.cost` (in nanodollars, estimated from spans) there is
+  `macro.ai.usage.cost_usd`: in dollars, of the usage the services price and log.
+- `macro.genai.chat.time_to_first_chunk_ms` isn't in Datadog.
 
 | Datadog | Mimir | Kind | Unit | Labels |
 | --- | --- | --- | --- | --- |
@@ -83,6 +92,7 @@ does, its metrics have no `deployment_environment="prod"`.
 | `macro.agent_harness.runtime_reattach.skipped` | `macro_agent_harness_runtime_reattach_skipped` | distribution |  | `env` → `deployment_environment`, `harness` |
 | `macro.ai.editing.provider_account_unavailable` | `macro_ai_editing_provider_account_unavailable` | count |  | `env` → `deployment_environment`, `provider`, `reason` |
 | `macro.firecracker.restore.duration` | `macro_firecracker_restore_duration_seconds` | distribution | seconds, not nanoseconds | `env` → `deployment_environment`, `host`, `source` |
+| `macro.genai.chat.time_to_first_chunk_ms` | `macro_genai_chat_time_to_first_chunk_ms` | distribution |  | `env` → `deployment_environment`, `model_name`, `model_provider`, `service` |
 | `macro.outlook.graph_request` | `macro_outlook_graph_request_seconds` | distribution | seconds, not nanoseconds | `env` → `deployment_environment`, `http.status_code` → `http_status_code`, `outlook.throttle_origin` → `outlook_throttle_origin` |
 | `macro.outlook.notification_lag` | `macro_outlook_notification_lag` | distribution |  | `env` → `deployment_environment`, `outlook.outcome` → `outlook_outcome` |
 | `macro.outlook.sync` | `macro_outlook_sync` | count |  | `env` → `deployment_environment`, `outlook.defer_reason` → `outlook_defer_reason`, `outlook.outcome` → `outlook_outcome`, `resource_name` |
@@ -96,6 +106,12 @@ does, its metrics have no `deployment_environment="prod"`.
 | `macro.web.runtime.js_heap_used_bytes` | `macro_web_runtime_js_heap_used_bytes` | distribution |  | `app.platform` → `app_platform`, `app.runtime` → `app_runtime`, `env` → `deployment_environment`, `os.type` → `os_type`, `resource_name` |
 | `macro.web.typing.event_duration_p95_ms` | `macro_web_typing_event_duration_p95_ms` | distribution |  | `app.platform` → `app_platform`, `env` → `deployment_environment`, `os.type` → `os_type`, `resource_name`, `typing.surface` → `typing_surface` |
 | `macro.web.view.duration` | `macro_web_view_duration_seconds` | distribution | seconds, not nanoseconds | `app.platform` → `app_platform`, `env` → `deployment_environment`, `os.type` → `os_type`, `resource_name`, `route.id` → `route_id` |
+| `ml_obs.span.duration` | `ml_obs_span_duration_seconds` | distribution | seconds | `env` → `deployment_environment`, `model_name`, `model_provider`, `service` |
+| `ml_obs.span.error` | `ml_obs_span_error` | count |  | `env` → `deployment_environment`, `model_name`, `model_provider`, `service` |
+| `ml_obs.span.llm.input.cache_read.tokens` | `ml_obs_span_llm_input_cache_read_tokens` | distribution |  | `env` → `deployment_environment`, `model_name`, `model_provider`, `service` |
+| `ml_obs.span.llm.input.cache_write.tokens` | `ml_obs_span_llm_input_cache_write_tokens` | distribution |  | `env` → `deployment_environment`, `model_name`, `model_provider`, `service` |
+| `ml_obs.span.llm.input.tokens` | `ml_obs_span_llm_input_tokens` | distribution |  | `env` → `deployment_environment`, `model_name`, `model_provider`, `service` |
+| `ml_obs.span.llm.output.tokens` | `ml_obs_span_llm_output_tokens` | distribution |  | `env` → `deployment_environment`, `model_name`, `model_provider`, `service` |
 
 ## From logs
 
