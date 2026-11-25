@@ -776,7 +776,11 @@ rules/history and withdraw with the single **Stop sharing my emails** action.
 
 Any member can add a team domain; only team admins/owners can remove one, and
 only they see **Remove** on **Team blacklist** rows. A long domain wraps beside
-**Remove** instead of pushing it onto its own line. Personal domains affect
+**Remove** instead of pushing it onto its own line. Archiving a company lists
+its domains there until it is restored: the row says its company is archived,
+and admins get **Open company** (where **Restore** is) instead of **Remove**. A
+remove refused because the company was archived meanwhile says the same in its
+toast. Personal domains affect
 only that member's mailbox. Domains include subdomains;
 a blocked participant in To/Cc/Bcc or the sender excludes the whole thread.
 Blocking hides previously shared matching threads on subsequent CRM reads.

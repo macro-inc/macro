@@ -6,6 +6,8 @@ export type EmailPrivacy = {
   personalDomains: string[];
   teamDomainWarnings?: Record<string, MailboxDomainConflict>;
   personalDomainWarnings?: Record<string, MailboxDomainConflict>;
+  /** Team domains listed because their company is archived, by company id. */
+  archivedTeamDomains?: Record<string, string>;
   canRemoveTeamDomains: boolean;
 };
 
