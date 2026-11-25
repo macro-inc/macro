@@ -3247,6 +3247,30 @@ describe('CacheWorkerCore', () => {
     );
   });
 
+  it('tells the engine that a lost queue was told of, when it can be', async () => {
+    const queueLossTold = vi.fn().mockResolvedValue(undefined);
+    for (const engine of [{}, { queueLossTold }]) {
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheWithOutcome: vi.fn().mockResolvedValue({
+          engine,
+          outcome: 'opened-existing',
+          queue: { outcome: 'unreadable', kept: 0, dropped: 1 },
+        }),
+      });
+      const core = new CacheWorkerCore();
+      await core.queueLossTold();
+      await core.handleRequest(
+        { postMessage: vi.fn() },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+
+      expect(queueLossTold).not.toHaveBeenCalled();
+      await core.queueLossTold();
+    }
+
+    expect(queueLossTold).toHaveBeenCalledExactlyOnceWith();
+  });
+
   it.each([
     ['opened-existing', undefined, 'preserved'],
     ['opened-existing', 'none', 'preserved'],
