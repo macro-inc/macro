@@ -15,6 +15,8 @@ import type { Relay } from './relay';
 
 export class FuzzModel {
   private readonly peers: Map<string, PeerModel>;
+  /** What the person watching has typed into their composer. */
+  composer = '';
 
   constructor(names: string[]) {
     this.peers = new Map(
@@ -180,4 +182,77 @@ export function fuzzCommand(names: string[]): fc.Arbitrary<FuzzCommand> {
     { arbitrary: name.map(offlineCommand), weight: 2 },
     { arbitrary: name.map(onlineCommand), weight: 2 }
   );
+}
+
+/** Where focus is on `peer`'s page: the focused element's accessible name. */
+export const focusedField = (peer: Peer) =>
+  peer.page.evaluate(
+    () =>
+      document.activeElement?.getAttribute('aria-label') ??
+      document.activeElement?.tagName ??
+      null
+  );
+
+/** Throws a `focus` finding unless `watcher`'s focus is still in its composer. */
+export async function expectComposerFocused(
+  watcher: Peer,
+  after: string
+): Promise<void> {
+  const focused = await focusedField(watcher);
+  if (focused !== 'Composer')
+    throw new FindingsError([
+      {
+        kind: 'focus',
+        peer: watcher.name,
+        phase: 'typed',
+        detail: { after, focused },
+      },
+    ]);
+}
+
+/** `watcher` types a letter into their composer, another split's field. */
+function composerCommand(watcher: string, letter: string): FuzzCommand {
+  return {
+    check: () => true,
+    run: async (model, system) => {
+      const peer = system.peer(watcher);
+      await peer.page.keyboard.type(letter);
+      model.composer += letter;
+    },
+    toString: () =>
+      `${watcher} types ${JSON.stringify(letter)} into the composer`,
+  };
+}
+
+/** `command`, then a check that `watcher`'s focus has not left its composer. */
+function watched(command: FuzzCommand, watcher: string): FuzzCommand {
+  return {
+    check: (model) => command.check(model),
+    run: async (model, system) => {
+      await command.run(model, system);
+      await expectComposerFocused(system.peer(watcher), command.toString());
+    },
+    toString: () => command.toString(),
+  };
+}
+
+/**
+ * The fuzz commands of `names`, plus `watcher` typing into their composer,
+ * each followed by a check that `watcher`'s focus stayed in the composer.
+ */
+export function watchedCommand(
+  names: string[],
+  watcher: string
+): fc.Arbitrary<FuzzCommand> {
+  return fc
+    .oneof(
+      { arbitrary: fuzzCommand(names), weight: 9 },
+      {
+        arbitrary: fc
+          .constantFrom(...LETTERS)
+          .map((letter) => composerCommand(watcher, letter)),
+        weight: 1,
+      }
+    )
+    .map((command) => watched(command, watcher));
 }
