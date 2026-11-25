@@ -961,13 +961,18 @@ async function createThroughQueue(
     // Settlement preserves the local-to-server alias even when its response
     // content is retired. Navigation and later edits must use that server ID.
     const cache = host ?? getGraphqlSoupCacheHost();
-    let serverId: string | undefined;
-    try {
-      serverId = cache ? await settledEventId(cache, clientId) : undefined;
-    } catch {
-      // It lands once a host that serves tells its server id.
+    // It lands once a host that serves tells its server id.
+    const unread = () => {
       if (pendingCreates.has(clientId)) unreadCreates.add(clientId);
       return { outcome };
+    };
+    // A paused cache has no host to ask.
+    if (!cache) return unread();
+    let serverId: string | undefined;
+    try {
+      serverId = await settledEventId(cache, clientId);
+    } catch {
+      return unread();
     }
     landCreate(clientId, serverId);
     // Creation succeeded. The caller closes and refreshes without offering

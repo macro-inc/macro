@@ -32,6 +32,7 @@ import { attendee, graphqlEvent, graphqlOccurrence } from './fixtures';
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: vi.fn(),
+  getGraphqlSoupCacheHost: vi.fn(),
 }));
 
 const DISPOSITION = 'normalizedCacheMutationDisposition';
@@ -1295,7 +1296,12 @@ describe('executeGraphqlCreate', () => {
       untrack();
     });
 
-    it('stays pending when its own answer came without content', async () => {
+    it.each([
+      { asked: 'cannot answer', current: true },
+      { asked: 'is gone', current: false },
+    ])('stays pending when its own answer came without content and the cache $asked', async ({
+      current,
+    }) => {
       const { host, untrack } = trackedHost();
       const { calls, client } = fakeClient('committed');
       const retired = {
@@ -1321,7 +1327,7 @@ describe('executeGraphqlCreate', () => {
           },
         },
         retired,
-        host
+        current ? host : undefined
       );
       expect(created).toEqual({ outcome: { kind: 'committed' } });
       const localId = calls[0]?.optimistic.uuid ?? '';
