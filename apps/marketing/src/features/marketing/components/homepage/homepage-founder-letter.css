@@ -52,7 +52,7 @@
 @media (max-width: 699px) {
   .homepage-founder-letter {
     width: min(524px, calc(100% - 48px));
-    margin: 32px auto 52px;
+    margin: 40px auto 56px;
   }
 
   .homepage-founder-letter-body {
@@ -60,7 +60,8 @@
   }
 
   .homepage-founder-letter-body p {
-    line-height: 1.55;
+    font-size: 15px;
+    line-height: 1.65;
   }
 
   .homepage-founder-letter-signature {

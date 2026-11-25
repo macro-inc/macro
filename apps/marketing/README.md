@@ -18,7 +18,7 @@ The homepage uses the feature-page hero.
 Keep the H1 “A new kind of office suite.” on a single line across desktop and mobile, and keep the supporting H2 “Macro
 replaces 27+ apps with one connected system for humans and agents.”
 on two lines below it on desktop, breaking after “connected.” Below 700px, left-align the hero and use the
-product-list subhead ending in “Everything links to everything else.” Keep Get
+short product-list subhead (“Macro is email, chat, docs, tasks, calendar, calls and CRM in one workspace with agents.”). Keep Get
 Macro (signup) beside Book a demo. `HomepageTour` follows in an 800px
 maximum desktop frame at 16:9. Each module
 (Home, Mail, Chat, Tasks, Calendar, Docs, CRM, Calls) has a tab showing its

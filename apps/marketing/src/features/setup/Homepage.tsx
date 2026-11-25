@@ -65,8 +65,7 @@ export function Homepage(props: { embedded?: boolean } = {}) {
               </span>
               <span class="macro-home-tagline-mobile">
                 Macro is email, chat, docs, tasks, calendar, calls and CRM in
-                one workspace, with agents that work across all of it.
-                Everything links to everything else.
+                one workspace with agents.
               </span>
             </h2>
             <div class="macro-home-actions">
