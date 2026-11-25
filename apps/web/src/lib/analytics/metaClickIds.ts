@@ -1,10 +1,39 @@
+import { setCookie } from '@core/util/cookies';
 import { isProductionMetaHost } from './metaHost';
 
 const MAX_CLICK_ID_CHARS = 512;
 
+/** How long the pixel itself keeps `_fbc`, in days. */
+const CLICK_ID_COOKIE_DAYS = 90;
+
 /**
- * Meta browser and click ids from the pixel cookies. Sent with signup so the
- * server CompleteRegistration can match the ad click. Omitted off production
+ * Stores the ad click from a landing URL's `fbclid` as the `_fbc` cookie, in
+ * the format Meta documents (`fb.1.<first seen ms>.<fbclid>`). The pixel
+ * writes the same cookie, but only if it loads while `fbclid` is still in the
+ * address bar; a blocked or slow pixel, or a signup that navigates away
+ * first, would otherwise lose the click. A cookie already holding this click
+ * keeps its original timestamp.
+ */
+export function rememberMetaClick(
+  search = window.location.search,
+  hostname = window.location.hostname
+): void {
+  if (typeof document === 'undefined') return;
+  if (!isProductionMetaHost(hostname)) return;
+
+  const fbclid = new URLSearchParams(search).get('fbclid')?.trim();
+  if (!fbclid || !/^[A-Za-z0-9_-]+$/.test(fbclid)) return;
+  if (readClickId('_fbc')?.endsWith(`.${fbclid}`)) return;
+
+  const fbc = `fb.1.${Date.now()}.${fbclid}`;
+  if (fbc.length > MAX_CLICK_ID_CHARS) return;
+  setCookie('_fbc', fbc, CLICK_ID_COOKIE_DAYS);
+}
+
+/**
+ * Meta browser and click ids from the pixel cookies. Sent with signup and
+ * checkout so the server CompleteRegistration and Purchase can match the ad
+ * click. Omitted off production
  * hosts, where the production pixel is not loaded.
  */
 export function metaClickIds(hostname = window.location.hostname): {
