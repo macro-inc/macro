@@ -2,6 +2,7 @@ import { formatLocale, t } from '@app/lib/i18n';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import GlobeIcon from '@icon/system/regular/globe.svg';
 import WarningIcon from '@icon/system/regular/warning.svg';
 import {
@@ -15,6 +16,8 @@ import {
 } from '@ui';
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import {
+  type Accessor,
+  type Component,
   createMemo,
   createSignal,
   For,
@@ -23,26 +26,29 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { useCrmContext } from '../context/crm-context';
 import {
   MAX_MERGE_SOURCES,
   type MergeBlock,
-  type MergeCompany,
+  type MergeCandidate,
+  type MergeOtherCompanyPerson,
+  type MergeRecord,
+  type MergeRecordType,
   type MergeRefusal,
   type MergeReview,
+  type MergeSameAddressPerson,
   type MergeSharingChoice,
 } from '../core/merge';
 import { useQuickAccessCrmCompaniesQuery } from './use-crm';
 
-/** A company offered for a merge, with the domains that tell it apart. */
-export type MergeCandidate = MergeCompany & { domains: string[] };
-
-export type MergeCompaniesDialogProps = {
+export type MergeDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** The companies the merge starts with; one means "merge with…". */
-  companies: MergeCandidate[];
-  onMerged: (merge: { survivor: MergeCompany; merged: MergeCompany[] }) => void;
+  recordType: MergeRecordType;
+  /** The records the merge starts with; one means "merge with…". */
+  records: MergeCandidate[];
+  onMerged: (merge: { survivor: MergeRecord; merged: MergeRecord[] }) => void;
 };
 
 type Step = 'pick' | 'keep' | 'review';
@@ -52,12 +58,95 @@ type ReviewState =
   | {
       t: 'ready';
       review: MergeReview;
-      survivor: MergeCompany;
-      sources: MergeCompany[];
+      survivor: MergeRecord;
+      sources: MergeRecord[];
       /** One per review: a retry of its commit sends it again. */
       requestKey: string;
     }
   | { t: 'refused'; refusal: MergeRefusal };
+
+/** The words and marks that differ between merging companies and people. */
+type MergeCopy = {
+  entityType: 'crm_company' | 'crm_contact';
+  IdentifierIcon: Component<{ class?: string }>;
+  pickTitle: () => string;
+  pickDescription: (name: string) => string;
+  searchLabel: () => string;
+  searchPlaceholder: () => string;
+  noMatches: () => string;
+  tooMany: (count: number) => string;
+  keepTitle: () => string;
+  keepDescription: () => string;
+  keepLabel: () => string;
+  reviewDescription: (count: number, names: string, name: string) => string;
+  identifiers: () => string;
+  movesNothing: () => string;
+  sharingDescription: (count: number) => string;
+  confirm: (count: number) => string;
+  blockedTitle: () => string;
+  refusePermission: () => string;
+  refuseUnavailable: () => string;
+  refuseMissing: () => string;
+  refuseArchived: () => string;
+  refuseMerged: () => string;
+  refuseGeneric: () => string;
+};
+
+const COPY: Record<MergeRecordType, MergeCopy> = {
+  company: {
+    entityType: 'crm_company',
+    IdentifierIcon: GlobeIcon,
+    pickTitle: () => t('crm.mergePickTitle'),
+    pickDescription: (name) => t('crm.mergePickDescription', { name }),
+    searchLabel: () => t('crm.mergeSearchLabel'),
+    searchPlaceholder: () => t('crm.mergeSearchPlaceholder'),
+    noMatches: () => t('crm.mergeNoMatches'),
+    tooMany: (count) => t('crm.mergeTooMany', { count }),
+    keepTitle: () => t('crm.mergeKeepTitle'),
+    keepDescription: () => t('crm.mergeKeepDescription'),
+    keepLabel: () => t('crm.mergeKeepLabel'),
+    reviewDescription: (count, names, name) =>
+      t('crm.mergeReviewDescription', { count, names, name }),
+    identifiers: () => t('crm.mergeDomains'),
+    movesNothing: () => t('crm.mergeMovesNothing'),
+    sharingDescription: (count) => t('crm.mergeSharingDescription', { count }),
+    confirm: (count) => t('crm.mergeConfirm', { count }),
+    blockedTitle: () => t('crm.mergeBlockedTitle'),
+    refusePermission: () => t('crm.mergeRefusePermission'),
+    refuseUnavailable: () => t('crm.mergeRefuseUnavailable'),
+    refuseMissing: () => t('crm.mergeRefuseMissing'),
+    refuseArchived: () => t('crm.mergeRefuseArchived'),
+    refuseMerged: () => t('crm.mergeRefuseMerged'),
+    refuseGeneric: () => t('crm.mergeRefuseGeneric'),
+  },
+  contact: {
+    entityType: 'crm_contact',
+    IdentifierIcon: EnvelopeIcon,
+    pickTitle: () => t('crm.mergePeoplePickTitle'),
+    pickDescription: (name) => t('crm.mergePeoplePickDescription', { name }),
+    searchLabel: () => t('crm.mergePeopleSearchLabel'),
+    searchPlaceholder: () => t('crm.mergePeopleSearchPlaceholder'),
+    noMatches: () => t('crm.mergePeopleNoMatches'),
+    tooMany: (count) => t('crm.mergePeopleTooMany', { count }),
+    keepTitle: () => t('crm.mergePeopleKeepTitle'),
+    keepDescription: () => t('crm.mergePeopleKeepDescription'),
+    keepLabel: () => t('crm.mergePeopleKeepLabel'),
+    reviewDescription: (count, names, name) =>
+      t('crm.mergePeopleReviewDescription', { count, names, name }),
+    identifiers: () => t('crm.mergeAddresses'),
+    movesNothing: () => t('crm.mergePeopleMovesNothing'),
+    sharingDescription: (count) =>
+      t('crm.mergePeopleSharingDescription', { count }),
+    confirm: (count) => t('crm.mergePeopleConfirm', { count }),
+    blockedTitle: () => t('crm.mergePeopleBlockedTitle'),
+    refusePermission: () => t('crm.mergePeopleRefusePermission'),
+    refuseUnavailable: () => t('crm.mergePeopleRefuseUnavailable'),
+    refuseMissing: () => t('crm.mergePeopleRefuseMissing'),
+    refuseArchived: () => t('crm.mergePeopleRefuseArchived'),
+    refuseMerged: () => t('crm.mergePeopleRefuseMerged'),
+    refuseGeneric: () => t('crm.mergePeopleRefuseGeneric'),
+  },
+};
 
 function joinNames(names: string[]): string {
   return new Intl.ListFormat(formatLocale(), {
@@ -66,37 +155,30 @@ function joinNames(names: string[]): string {
   }).format(names);
 }
 
-function refusalText(refusal: MergeRefusal): string {
-  switch (refusal.code) {
-    case 'merge_permission_required':
-      return t('crm.mergeRefusePermission');
-    case 'merge_unavailable':
-      return t('crm.mergeRefuseUnavailable');
-    case 'record_unavailable':
-      return t('crm.mergeRefuseMissing');
-    case 'record_hidden':
-      return t('crm.mergeRefuseArchived');
-    case 'record_already_merged':
-      return t('crm.mergeRefuseMerged');
-    case 'merge_sharing_rules_too_large':
-      return t('crm.mergeRefuseTooLarge');
-    default:
-      return t('crm.mergeRefuseGeneric');
-  }
+function refusalText(refusal: MergeRefusal, copy: MergeCopy): string {
+  return match(refusal.code)
+    .with('merge_permission_required', () => copy.refusePermission())
+    .with('merge_unavailable', () => copy.refuseUnavailable())
+    .with('record_unavailable', () => copy.refuseMissing())
+    .with('record_hidden', () => copy.refuseArchived())
+    .with('record_already_merged', () => copy.refuseMerged())
+    .with('merge_sharing_rules_too_large', () => t('crm.mergeRefuseTooLarge'))
+    .otherwise(() => copy.refuseGeneric());
 }
 
 /**
- * Merging duplicate companies into the one that stays: pick the companies
- * when the merge starts from one, choose the one to keep, then confirm the
- * server's review. A review that went stale is fetched again.
+ * Merging duplicate companies or people into the one that stays: pick the
+ * others when the merge starts from one, choose the one to keep, then confirm
+ * the server's review. A review that went stale is fetched again.
  */
-export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
+export function MergeDialog(props: MergeDialogProps) {
   const context = useCrmContext();
-  const commands = context.createMergeCommands();
+  const commands = context.createMergeCommands(props.recordType);
   const valueLabel = context.createPropertyValueLabel();
-  const startsFromOne = props.companies.length < 2;
+  const copy = COPY[props.recordType];
+  const startsFromOne = props.records.length < 2;
   const [step, setStep] = createSignal<Step>(startsFromOne ? 'pick' : 'keep');
-  const [picked, setPicked] = createSignal<MergeCandidate[]>(props.companies);
+  const [picked, setPicked] = createSignal<MergeCandidate[]>(props.records);
   const [keepId, setKeepId] = createSignal<string>();
   const [review, setReview] = createSignal<ReviewState>({ t: 'loading' });
   const [sharing, setSharing] = createSignal<MergeSharingChoice>('keep');
@@ -107,8 +189,8 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
   const [pending, setPending] = createSignal(false);
   let reviewGeneration = 0;
 
-  const survivor = () => picked().find((company) => company.id === keepId());
-  const sources = () => picked().filter((company) => company.id !== keepId());
+  const survivor = () => picked().find((record) => record.id === keepId());
+  const sources = () => picked().filter((record) => record.id !== keepId());
   const tooMany = () => picked().length > MAX_MERGE_SOURCES + 1;
 
   const load = async () => {
@@ -198,13 +280,15 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
           <Switch>
             <Match when={step() === 'pick'}>
               <PickStep
-                start={props.companies[0]}
+                recordType={props.recordType}
+                copy={copy}
+                start={props.records[0]}
                 picked={picked()}
-                onToggle={(company, on) =>
+                onToggle={(record, on) =>
                   setPicked((current) =>
                     on
-                      ? [...current, company]
-                      : current.filter((other) => other.id !== company.id)
+                      ? [...current, record]
+                      : current.filter((other) => other.id !== record.id)
                   )
                 }
                 tooMany={tooMany()}
@@ -213,26 +297,29 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
             <Match when={step() === 'keep'}>
               <ActionDialogShell.Header>
                 <ActionDialogShell.Title>
-                  {t('crm.mergeKeepTitle')}
+                  {copy.keepTitle()}
                 </ActionDialogShell.Title>
                 <ActionDialogShell.Description>
-                  {t('crm.mergeKeepDescription')}
+                  {copy.keepDescription()}
                 </ActionDialogShell.Description>
               </ActionDialogShell.Header>
               <RadioGroup
                 variant="cards"
                 size="md"
-                aria-label={t('crm.mergeKeepLabel')}
+                aria-label={copy.keepLabel()}
                 class="grid grid-cols-1 gap-2"
                 value={keepId()}
                 onChange={setKeepId}
               >
                 <For each={picked()}>
-                  {(company) => (
-                    <RadioGroup.Item value={company.id}>
+                  {(record) => (
+                    <RadioGroup.Item value={record.id}>
                       <RadioGroup.ItemControl class="mt-0.5" />
                       <RadioGroup.ItemLabel class="min-w-0 flex-1">
-                        <CompanyLine company={company} />
+                        <CandidateLine
+                          recordType={props.recordType}
+                          candidate={record}
+                        />
                       </RadioGroup.ItemLabel>
                     </RadioGroup.Item>
                   )}
@@ -246,11 +333,11 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
                 </ActionDialogShell.Title>
                 <Show when={ready()}>
                   <ActionDialogShell.Description>
-                    {t('crm.mergeReviewDescription', {
-                      count: sources().length,
-                      names: joinNames(sources().map((source) => source.name)),
-                      name: survivor()?.name ?? '',
-                    })}
+                    {copy.reviewDescription(
+                      sources().length,
+                      joinNames(sources().map((source) => source.name)),
+                      survivor()?.name ?? ''
+                    )}
                   </ActionDialogShell.Description>
                 </Show>
               </ActionDialogShell.Header>
@@ -279,13 +366,17 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
                     <Show
                       when={refusal().blocked}
                       fallback={
-                        <Refusal title={refusalText(refusal())}>
+                        <Refusal title={refusalText(refusal(), copy)}>
                           <p>{t('crm.mergeNothingChanged')}</p>
                         </Refusal>
                       }
                     >
                       {(block) => (
-                        <Blocked block={block()} companies={picked()} />
+                        <Blocked
+                          block={block()}
+                          copy={copy}
+                          records={picked()}
+                        />
                       )}
                     </Show>
                   )}
@@ -298,11 +389,15 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
                       : undefined;
                   })()}
                 >
-                  {(block) => <Blocked block={block()} companies={picked()} />}
+                  {(block) => (
+                    <Blocked block={block()} copy={copy} records={picked()} />
+                  )}
                 </Match>
                 <Match when={ready()}>
                   {(current) => (
                     <ReviewBody
+                      recordType={props.recordType}
+                      copy={copy}
                       review={current()}
                       survivor={survivor()?.name ?? ''}
                       sharing={attempted() ?? sharing()}
@@ -376,7 +471,7 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
                   </Show>
                   {pending()
                     ? t('crm.mergeMerging')
-                    : t('crm.mergeConfirm', { count: picked().length })}
+                    : copy.confirm(picked().length)}
                 </Button>
               </Show>
             </Match>
@@ -387,97 +482,227 @@ export function MergeCompaniesDialog(props: MergeCompaniesDialogProps) {
   );
 }
 
-function CompanyLine(props: { company: MergeCandidate }) {
+function CandidateLine(props: {
+  recordType: MergeRecordType;
+  candidate: MergeCandidate;
+}) {
+  // A record without a name is listed by its address or domain; don't say it
+  // twice.
+  const detail = () =>
+    [
+      props.candidate.identifiers
+        .filter((identifier) => identifier !== props.candidate.name)
+        .join(', '),
+      props.candidate.company,
+    ]
+      .filter((part) => !!part)
+      .join(' · ');
   return (
     <span class="flex min-w-0 flex-1 flex-col gap-0.5">
       <span class="flex min-w-0 items-center gap-1.5 text-sm font-medium text-ink">
-        <EntityIcon targetType="crm_company" size="xs" class="shrink-0" />
-        <span class="min-w-0 truncate">{props.company.name}</span>
+        <EntityIcon
+          targetType={COPY[props.recordType].entityType}
+          size="xs"
+          class="shrink-0"
+        />
+        <span class="min-w-0 truncate">{props.candidate.name}</span>
       </span>
-      <Show when={props.company.domains.length > 0}>
-        <span class="truncate text-xs text-ink-muted">
-          {props.company.domains.join(', ')}
-        </span>
+      <Show when={detail()}>
+        <span class="truncate text-xs text-ink-muted">{detail()}</span>
       </Show>
     </span>
   );
 }
 
-function PickStep(props: {
-  start: MergeCandidate | undefined;
-  picked: MergeCandidate[];
-  onToggle: (company: MergeCandidate, on: boolean) => void;
-  tooMany: boolean;
-}) {
-  const suggestions = useQuickAccessCrmCompaniesQuery();
-  const [search, setSearch] = createSignal('');
-  const matches = createMemo(() => {
-    const query = search().trim().toLowerCase();
-    return suggestions
-      .companies()
-      .filter(
-        (company) =>
-          company.id !== props.start?.id &&
-          (query === '' ||
-            company.name.toLowerCase().includes(query) ||
-            company.domains.some((domain) =>
-              domain.domain.toLowerCase().includes(query)
-            ))
-      )
-      .slice(0, 50)
-      .map(
-        (company): MergeCandidate => ({
+type PickSource = {
+  /** The records that match `search`; the most recent ones while it's empty. */
+  matches: Accessor<MergeCandidate[]>;
+  loading: () => boolean;
+  hasMore: () => boolean;
+  loadingMore: () => boolean;
+  loadMore: () => Promise<void>;
+  /** A failed search, so an empty list isn't read as no one matching. */
+  failed: () => boolean;
+  retry: () => Promise<void>;
+};
+
+/** The first records Quick Access holds that match `search`, by any name, address or company. */
+function quickAccessMatches(
+  records: MergeCandidate[],
+  search: string
+): MergeCandidate[] {
+  const query = search.trim().toLowerCase();
+  const found = (text: string | null | undefined) =>
+    !!text && text.toLowerCase().includes(query);
+  return records
+    .filter(
+      (record) =>
+        query === '' ||
+        found(record.name) ||
+        found(record.company) ||
+        record.identifiers.some(found)
+    )
+    .slice(0, 50);
+}
+
+/**
+ * The records a merge can pick from. Companies come from Quick Access. People
+ * do too, and while a search is typed, the server's matches beyond it follow:
+ * a team can hold far more people than Quick Access keeps.
+ */
+function usePickSource(
+  recordType: MergeRecordType,
+  search: Accessor<string>
+): PickSource {
+  return match(recordType)
+    .with('company', (): PickSource => {
+      const suggestions = useQuickAccessCrmCompaniesQuery();
+      const candidates = () =>
+        suggestions.companies().map((company) => ({
           id: company.id,
           name: company.name,
-          domains: company.domains.map((domain) => domain.domain),
-        })
-      );
-  });
+          identifiers: company.domains.map((domain) => domain.domain),
+        }));
+      return {
+        matches: () => quickAccessMatches(candidates(), search()),
+        loading: () => suggestions.query.isLoading,
+        hasMore: () => false,
+        loadingMore: () => false,
+        loadMore: async () => {},
+        failed: () => false,
+        retry: async () => {},
+      };
+    })
+    .with('contact', (): PickSource => {
+      const context = useCrmContext();
+      const suggestions = context.createContactSuggestions();
+      const server = context.createContactSearch(search);
+      const person = (contact: {
+        id: string;
+        name: string;
+        email?: string | null;
+        companyName?: string | null;
+      }): MergeCandidate => ({
+        id: contact.id,
+        name: contact.name,
+        identifiers: contact.email ? [contact.email] : [],
+        company: contact.companyName ?? null,
+      });
+      const searching = () => search().trim() !== '';
+      return {
+        matches: () => {
+          const local = quickAccessMatches(
+            suggestions.contacts().map(person),
+            search()
+          );
+          if (!searching()) return local;
+          const seen = new Set(local.map((record) => record.id));
+          return [
+            ...local,
+            ...server
+              .contacts()
+              .filter((contact) => !seen.has(contact.id))
+              .map(person),
+          ];
+        },
+        loading: () =>
+          suggestions.query.isLoading || (searching() && server.isLoading()),
+        hasMore: () => searching() && server.hasMore(),
+        loadingMore: () => server.isLoadingMore(),
+        loadMore: server.loadMore,
+        failed: () => searching() && server.error() !== undefined,
+        retry: server.retry,
+      };
+    })
+    .exhaustive();
+}
+
+function PickStep(props: {
+  recordType: MergeRecordType;
+  copy: MergeCopy;
+  start: MergeCandidate | undefined;
+  picked: MergeCandidate[];
+  onToggle: (record: MergeCandidate, on: boolean) => void;
+  tooMany: boolean;
+}) {
+  const [search, setSearch] = createSignal('');
+  const source = usePickSource(props.recordType, search);
+  const matches = createMemo(() =>
+    source.matches().filter((record) => record.id !== props.start?.id)
+  );
   return (
     <>
       <ActionDialogShell.Header>
         <ActionDialogShell.Title>
-          {t('crm.mergePickTitle')}
+          {props.copy.pickTitle()}
         </ActionDialogShell.Title>
         <ActionDialogShell.Description>
-          {t('crm.mergePickDescription', { name: props.start?.name ?? '' })}
+          {props.copy.pickDescription(props.start?.name ?? '')}
         </ActionDialogShell.Description>
       </ActionDialogShell.Header>
       <Input
-        aria-label={t('crm.mergeSearchLabel')}
-        placeholder={t('crm.mergeSearchPlaceholder')}
+        aria-label={props.copy.searchLabel()}
+        placeholder={props.copy.searchPlaceholder()}
         value={search()}
         onInput={(event) => setSearch(event.currentTarget.value)}
       />
       <Show when={props.tooMany}>
         <p class="text-sm text-failure" role="status">
-          {t('crm.mergeTooMany', { count: MAX_MERGE_SOURCES + 1 })}
+          {props.copy.tooMany(MAX_MERGE_SOURCES + 1)}
         </p>
       </Show>
       <Show
-        when={matches().length > 0 || suggestions.query.isLoading}
+        when={matches().length > 0 || source.loading() || source.failed()}
         fallback={
-          <p class="text-sm text-ink-muted">{t('crm.mergeNoMatches')}</p>
+          <p class="text-sm text-ink-muted">{props.copy.noMatches()}</p>
         }
       >
         <div class="flex flex-col gap-1">
           <For each={matches()}>
-            {(company) => (
+            {(record) => (
               <Checkbox
                 class="flex min-h-11 items-center gap-3 rounded-lg px-2"
                 checked={props.picked.some(
-                  (current) => current.id === company.id
+                  (current) => current.id === record.id
                 )}
-                onChange={(checked) => props.onToggle(company, checked)}
+                onChange={(checked) => props.onToggle(record, checked)}
               >
                 <Checkbox.Control />
                 <Checkbox.Label class="min-w-0 flex-1">
-                  <CompanyLine company={company} />
+                  <CandidateLine
+                    recordType={props.recordType}
+                    candidate={record}
+                  />
                 </Checkbox.Label>
               </Checkbox>
             )}
           </For>
         </div>
+      </Show>
+      <Show when={source.failed()}>
+        <div
+          class="flex items-center gap-2 text-sm text-ink-muted"
+          role="alert"
+        >
+          <span>{t('crm.mergeSearchFailed')}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => fireAndForget(source.retry(), 'crm')}
+          >
+            {t('common.retry')}
+          </Button>
+        </div>
+      </Show>
+      <Show when={source.hasMore() && !source.failed()}>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={source.loadingMore()}
+          onClick={() => fireAndForget(source.loadMore(), 'crm')}
+        >
+          {t('common.showMore')}
+        </Button>
       </Show>
     </>
   );
@@ -493,6 +718,8 @@ function Section(props: { title: string; children: JSX.Element }) {
 }
 
 function ReviewBody(props: {
+  recordType: MergeRecordType;
+  copy: MergeCopy;
   review: MergeReview;
   survivor: string;
   sharing: MergeSharingChoice;
@@ -518,13 +745,13 @@ function ReviewBody(props: {
     props.valueLabel(propertyId, value) ?? t('crm.mergeConflictValue');
   return (
     <div class="space-y-4">
-      <Section title={t('crm.mergeDomains')}>
+      <Section title={props.copy.identifiers()}>
         <div class="flex flex-wrap gap-1.5">
           <For each={props.review.identifiers}>
-            {(domain, index) => (
+            {(identifier, index) => (
               <Badge variant="secondary" size="sm">
-                <GlobeIcon class="size-3" />
-                {domain}
+                <props.copy.IdentifierIcon class="size-3" />
+                {identifier}
                 <Show when={index() === 0}>
                   <span class="font-normal text-ink-muted">
                     {t('crm.mergePrimary')}
@@ -539,7 +766,7 @@ function ReviewBody(props: {
         <Show
           when={moves().length > 0}
           fallback={
-            <p class="text-sm text-ink-muted">{t('crm.mergeMovesNothing')}</p>
+            <p class="text-sm text-ink-muted">{props.copy.movesNothing()}</p>
           }
         >
           <ul class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-ink touch:grid-cols-1">
@@ -621,7 +848,7 @@ function ReviewBody(props: {
         {(rules) => (
           <Section title={t('crm.mergeSharing')}>
             <p class="text-sm text-ink">
-              {t('crm.mergeSharingDescription', { count: rules().teammates })}
+              {props.copy.sharingDescription(rules().teammates)}
             </p>
             <RadioGroup
               size="md"
@@ -660,44 +887,87 @@ function ReviewBody(props: {
   );
 }
 
-function Blocked(props: { block: MergeBlock; companies: MergeCandidate[] }) {
-  const company = (id: string) =>
-    props.companies.find((candidate) => candidate.id === id)?.name ?? '';
+function Blocked(props: {
+  block: MergeBlock;
+  copy: MergeCopy;
+  records: MergeCandidate[];
+}) {
+  const nameOf = (id: string) =>
+    props.records.find((record) => record.id === id)?.name ?? '';
+  const sameAddress = () =>
+    props.block.kind === 'same_address_people' ? props.block.people : undefined;
+  const otherCompanies = () =>
+    props.block.kind === 'different_companies' ? props.block.people : undefined;
   return (
-    <Show
-      when={props.block.kind === 'same_address_people' && props.block.people}
+    <Switch
       fallback={
-        <Refusal title={t('crm.mergeBlockedTitle')}>
+        <Refusal title={props.copy.blockedTitle()}>
           <p>{t('crm.mergeNothingChanged')}</p>
         </Refusal>
       }
     >
-      {(people) => (
-        <Refusal title={t('crm.mergeSameAddressTitle')}>
-          <p>{t('crm.mergeSameAddressBody')}</p>
-          <ul class="space-y-1">
-            <For each={people()}>
-              {(person) => (
-                <li>
-                  {t('crm.mergeSameAddressPerson', {
-                    name: person.name || person.address,
-                    address: person.address,
-                    company: company(person.recordId),
-                  })}
-                  <Show when={person.archived}>
-                    {' '}
-                    <Badge variant="secondary" size="sm">
-                      {t('crm.mergeArchived')}
-                    </Badge>
-                  </Show>
-                </li>
-              )}
-            </For>
-          </ul>
-          <p>{t('crm.mergeNothingChanged')}</p>
-        </Refusal>
-      )}
-    </Show>
+      <Match when={sameAddress()}>
+        {(people) => <SameAddress people={people()} company={nameOf} />}
+      </Match>
+      <Match when={otherCompanies()}>
+        {(people) => <OtherCompanies people={people()} name={nameOf} />}
+      </Match>
+    </Switch>
+  );
+}
+
+function SameAddress(props: {
+  people: MergeSameAddressPerson[];
+  company: (id: string) => string;
+}) {
+  return (
+    <Refusal title={t('crm.mergeSameAddressTitle')}>
+      <p>{t('crm.mergeSameAddressBody')}</p>
+      <ul class="space-y-1">
+        <For each={props.people}>
+          {(person) => (
+            <li>
+              {t('crm.mergeSameAddressPerson', {
+                name: person.name || person.address,
+                address: person.address,
+                company: props.company(person.recordId),
+              })}
+              <Show when={person.archived}>
+                {' '}
+                <Badge variant="secondary" size="sm">
+                  {t('crm.mergeArchived')}
+                </Badge>
+              </Show>
+            </li>
+          )}
+        </For>
+      </ul>
+      <p>{t('crm.mergeNothingChanged')}</p>
+    </Refusal>
+  );
+}
+
+function OtherCompanies(props: {
+  people: MergeOtherCompanyPerson[];
+  name: (id: string) => string;
+}) {
+  return (
+    <Refusal title={t('crm.mergeDifferentCompaniesTitle')}>
+      <p>{t('crm.mergeDifferentCompaniesBody')}</p>
+      <ul class="space-y-1">
+        <For each={props.people}>
+          {(person) => (
+            <li>
+              {t('crm.mergeDifferentCompaniesPerson', {
+                name: person.name || props.name(person.contactId),
+                company: person.companyName,
+              })}
+            </li>
+          )}
+        </For>
+      </ul>
+      <p>{t('crm.mergeNothingChanged')}</p>
+    </Refusal>
   );
 }
 

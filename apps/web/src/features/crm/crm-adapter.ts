@@ -112,7 +112,10 @@ import {
   useResetCrmStagesMutation,
 } from './queries/stages';
 import { useTeamCrmConfig } from './queries/team-config';
-import { useQuickAccessCrmContactsQuery } from './record-adapter';
+import {
+  useCrmContactSearch,
+  useQuickAccessCrmContactsQuery,
+} from './record-adapter';
 import { createAppDealStages } from './stage-adapter';
 import { crmTaskComposerContext } from './task-composer';
 
@@ -360,7 +363,7 @@ export function createAppCrmContext(): CrmContext {
     RecordTasks: CrmRecordTasks,
     RecordActivity: CrmRecordActivity,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
-    createMergeCommands: () => createMergeCommands(deps),
+    createMergeCommands: (recordType) => createMergeCommands(deps, recordType),
     createPropertyValueLabel: () => {
       const definitions = useAllProperties();
       return (propertyId, value) =>
@@ -381,6 +384,7 @@ export function createAppCrmContext(): CrmContext {
       fetchCrmExportCompanies(deps.storage, ...args),
     createCompanySuggestions: useQuickAccessCrmCompaniesQuery,
     createContactSuggestions: useQuickAccessCrmContactsQuery,
+    createContactSearch: useCrmContactSearch,
     hydrateCompany(company) {
       if (company.properties) return company;
       const cached = getSoupEntityById(company.id);

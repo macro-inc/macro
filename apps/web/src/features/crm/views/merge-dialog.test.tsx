@@ -1,26 +1,64 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX, ParentProps } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { MergeCommands, MergeReview } from '../core/merge';
-import { MergeCompaniesDialog } from './merge-companies-dialog';
+import type {
+  MergeCandidate,
+  MergeCommands,
+  MergeRecordType,
+  MergeReview,
+} from '../core/merge';
+import { MergeDialog } from './merge-dialog';
 
 const fixture = vi.hoisted(() => ({
   commands: undefined as unknown as MergeCommands,
+  commandsFor: undefined as MergeRecordType | undefined,
   suggestions: [] as {
     id: string;
     name: string;
     domains: { domain: string }[];
   }[],
+  people: [] as {
+    id: string;
+    name: string;
+    email?: string | null;
+    companyName?: string | null;
+  }[],
+  /** What the server finds for a typed search, beyond Quick Access. */
+  searched: [] as { id: string; name: string; email?: string | null }[],
+  searches: [] as string[],
+  hasMore: false,
+  loadMore: vi.fn(async () => {}),
+  searchError: undefined as unknown,
+  retry: vi.fn(async () => {}),
 }));
 
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
-    createMergeCommands: () => fixture.commands,
+    createMergeCommands: (recordType: MergeRecordType) => {
+      fixture.commandsFor = recordType;
+      return fixture.commands;
+    },
     createPropertyValueLabel: () => (_property: string, value: unknown) =>
       (value as { value?: unknown } | null)?.value?.toString(),
     createCompanySuggestions: () => ({
       companies: () => fixture.suggestions,
       query: { isLoading: false },
+    }),
+    createContactSuggestions: () => ({
+      contacts: () => fixture.people,
+      query: { isLoading: false },
+    }),
+    createContactSearch: (search: () => string) => ({
+      contacts: () => {
+        fixture.searches.push(search());
+        return search().trim() === '' ? [] : fixture.searched;
+      },
+      isLoading: () => false,
+      hasMore: () => fixture.hasMore,
+      isLoadingMore: () => false,
+      loadMore: fixture.loadMore,
+      error: () => fixture.searchError,
+      retry: fixture.retry,
     }),
   }),
 }));
@@ -124,8 +162,12 @@ vi.mock('@ui', async () => {
   };
 });
 
-const KEPT = { id: 'kept', name: 'Kept Co', domains: ['kept.example.com'] };
-const OLD = { id: 'old', name: 'Old Co', domains: ['old.example.com'] };
+const KEPT = {
+  id: 'kept',
+  name: 'Kept Co',
+  identifiers: ['kept.example.com'],
+};
+const OLD = { id: 'old', name: 'Old Co', identifiers: ['old.example.com'] };
 
 function review(overrides: Partial<MergeReview> = {}): MergeReview {
   return {
@@ -171,15 +213,27 @@ beforeEach(() => {
   onMerged = vi.fn();
   onOpenChange = vi.fn();
   fixture.suggestions = [];
+  fixture.people = [];
+  fixture.searched = [];
+  fixture.searches = [];
+  fixture.hasMore = false;
+  fixture.loadMore.mockClear();
+  fixture.searchError = undefined;
+  fixture.retry.mockClear();
+  fixture.commandsFor = undefined;
 });
 afterEach(cleanup);
 
-function open(companies = [KEPT, OLD]) {
+function open(
+  records: MergeCandidate[] = [KEPT, OLD],
+  recordType: MergeRecordType = 'company'
+) {
   render(() => (
-    <MergeCompaniesDialog
+    <MergeDialog
       open
       onOpenChange={onOpenChange}
-      companies={companies}
+      recordType={recordType}
+      records={records}
       onMerged={onMerged}
     />
   ));
@@ -338,7 +392,7 @@ it('reads a block this build doesn’t know as a generic refusal', async () => {
   fixture.commands = {
     review: vi.fn(async () => ({
       ok: true as const,
-      value: review({ blocked: { kind: 'different_companies' } }),
+      value: review({ blocked: { kind: 'unknown' } }),
     })),
     commit: vi.fn(),
   };
@@ -504,4 +558,243 @@ it('retries an unconfirmed commit with the sharing choice it sent, which stays l
   const [first, second] = commit.mock.calls.map(([input]) => input);
   expect(first.sharingRules).toBe('stop');
   expect(second).toEqual(first);
+});
+
+const PAT = {
+  id: 'pat',
+  name: 'Pat Lee',
+  identifiers: ['pat@acme.example.com'],
+  company: 'Acme',
+};
+const PAT_L = {
+  id: 'pat-l',
+  name: 'Pat L.',
+  identifiers: ['pat@home.example.com'],
+  company: 'Acme',
+};
+
+function peopleReview(overrides: Partial<MergeReview> = {}): MergeReview {
+  return review({
+    survivor: { id: 'pat', name: 'Pat Lee' },
+    sources: [{ id: 'pat-l', name: 'Pat L.' }],
+    identifiers: ['pat@acme.example.com', 'pat@home.example.com'],
+    moves: {
+      contacts: 0,
+      pipelineEntries: 1,
+      references: 2,
+      discussionMessages: 0,
+    },
+    sharedPipelines: [],
+    conflicts: [],
+    emailSync: { survivorSyncs: true, keptOut: [] },
+    ...overrides,
+  });
+}
+
+it('reviews a merge of people: their addresses, what moves, and who stays', async () => {
+  const commit = vi.fn(async () => ({
+    ok: true as const,
+    value: { survivorId: 'pat', mergedIds: ['pat-l'] },
+  }));
+  fixture.commands = {
+    review: vi.fn(async () => ({ ok: true as const, value: peopleReview() })),
+    commit,
+  };
+  open([PAT, PAT_L], 'contact');
+  expect(fixture.commandsFor).toBe('contact');
+  expect(
+    screen.getByRole('radiogroup', { name: 'Person to keep' })
+  ).toBeTruthy();
+  expect(document.body.textContent).toContain('pat@home.example.com · Acme');
+
+  await reviewKeeping('Pat Lee');
+
+  const text = document.body.textContent ?? '';
+  expect(text).toContain('Merge into Pat Lee');
+  expect(text).toContain('Pat L. goes away. Links to them open Pat Lee.');
+  expect(text).toContain('Addresses');
+  expect(text).toContain('pat@acme.example.com');
+  expect(text).toContain('pat@home.example.com');
+  expect(text).toContain('1 pipeline entry');
+  expect(text).toContain('2 linked items');
+  expect(text).not.toContain('Domains');
+  expect(
+    screen.queryByText(/^\d+ (person|people)$/),
+    'people are the records merged, not what moves'
+  ).toBeNull();
+  expect(text).toContain('1 teammate shares mail from a person being merged.');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Merge 2 people' }));
+  await vi.waitFor(() => expect(onMerged).toHaveBeenCalled());
+  expect(commit).toHaveBeenCalledWith(
+    expect.objectContaining({ survivorId: 'pat', sourceIds: ['pat-l'] })
+  );
+});
+
+it('lists people under another company, and offers no merge', async () => {
+  fixture.commands = {
+    review: vi.fn(async () => ({
+      ok: true as const,
+      value: peopleReview({
+        blocked: {
+          kind: 'different_companies',
+          people: [
+            {
+              contactId: 'pat-l',
+              name: null,
+              companyId: 'globex',
+              companyName: 'Globex',
+            },
+          ],
+        },
+      }),
+    })),
+    commit: vi.fn(),
+  };
+  open([PAT, PAT_L], 'contact');
+  fireEvent.click(screen.getByRole('radio', { name: /Pat Lee/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review merge' }));
+
+  await screen.findByText('Some of these people are under other companies');
+  expect(document.body.textContent).toContain('Pat L. in Globex');
+  expect(screen.queryByRole('button', { name: /^Merge / })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+});
+
+it('explains a refused merge of people in their words', async () => {
+  fixture.commands = {
+    review: vi.fn(async () => ({
+      ok: false as const,
+      refusal: { code: 'record_hidden' },
+    })),
+    commit: vi.fn(),
+  };
+  open([PAT, PAT_L], 'contact');
+  fireEvent.click(screen.getByRole('radio', { name: /Pat Lee/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review merge' }));
+
+  await screen.findByText(
+    'One of these people is archived. Restore them first.'
+  );
+});
+
+it('starting from one person, finds the others by name, address or company', async () => {
+  fixture.people = [
+    {
+      id: 'pat',
+      name: 'Pat Lee',
+      email: 'pat@acme.example.com',
+      companyName: 'Acme',
+    },
+    {
+      id: 'sam',
+      name: 'Sam Doe',
+      email: 'sam@globex.example.com',
+      companyName: 'Initech',
+    },
+    // Without a name, a person is listed by their address, once.
+    {
+      id: 'anon',
+      name: 'anon@acme.example.com',
+      email: 'anon@acme.example.com',
+    },
+  ];
+  fixture.commands = {
+    review: vi.fn(async () => ({ ok: true as const, value: peopleReview() })),
+    commit: vi.fn(),
+  };
+  open([PAT_L], 'contact');
+
+  expect(screen.getByText('Merge with another person')).toBeTruthy();
+  expect(
+    screen.getByText(/^Choose the people who are the same as Pat L\./)
+  ).toBeTruthy();
+  expect(
+    screen.getAllByText('anon@acme.example.com'),
+    'the address isn’t repeated under it'
+  ).toHaveLength(1);
+  const search = screen.getByLabelText('Search people');
+  // By company: no address names it.
+  fireEvent.input(search, { target: { value: 'initech' } });
+  expect(screen.queryByText('Pat Lee')).toBeNull();
+  expect(screen.getByText('Sam Doe')).toBeTruthy();
+  fireEvent.input(search, { target: { value: 'pat@acme' } });
+  expect(screen.queryByText('Sam Doe')).toBeNull();
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+  await reviewKeeping('Pat Lee');
+  expect(fixture.commands.review).toHaveBeenCalledWith({
+    survivorId: 'pat',
+    sourceIds: ['pat-l'],
+  });
+});
+
+it('finds a person beyond Quick Access through the server, and reads more pages', async () => {
+  fixture.people = [
+    { id: 'pat', name: 'Pat Lee', email: 'pat@acme.example.com' },
+  ];
+  fixture.searched = [
+    { id: 'pat', name: 'Pat Lee', email: 'pat@acme.example.com' },
+    { id: 'old-pat', name: 'Pat Leigh', email: 'pleigh@acme.example.com' },
+    { id: 'other-pat', name: 'P. Leigh', email: 'pleigh@acme.example.com' },
+  ];
+  fixture.hasMore = true;
+  fixture.commands = {
+    review: vi.fn(async () => ({ ok: true as const, value: peopleReview() })),
+    commit: vi.fn(),
+  };
+  open([PAT_L], 'contact');
+
+  expect(screen.queryByText('Pat Leigh')).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Show more' }),
+    'nothing to page before a search'
+  ).toBeNull();
+  fireEvent.input(screen.getByLabelText('Search people'), {
+    target: { value: 'pat le' },
+  });
+  expect(fixture.searches).toContain('pat le');
+  expect(
+    screen.getAllByText('Pat Lee'),
+    'a match in both is listed once'
+  ).toHaveLength(1);
+  expect(screen.getByText('Pat Leigh')).toBeTruthy();
+  expect(
+    screen.getByText('P. Leigh'),
+    'two people holding one address both list'
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+  expect(fixture.loadMore).toHaveBeenCalled();
+});
+
+it('says a failed search failed, with Retry, instead of no one matching', async () => {
+  fixture.searchError = new Error('offline');
+  fixture.commands = { review: vi.fn(), commit: vi.fn() };
+  open([PAT_L], 'contact');
+
+  fireEvent.input(screen.getByLabelText('Search people'), {
+    target: { value: 'nobody cached' },
+  });
+  expect(screen.getByText('Couldn’t search people.')).toBeTruthy();
+  expect(screen.queryByText('No other people match.')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(fixture.retry).toHaveBeenCalled();
+});
+
+it('keeps the matches it has when a later page fails, with Retry beside them', async () => {
+  fixture.searched = [
+    { id: 'old-pat', name: 'Pat Leigh', email: 'pleigh@acme.example.com' },
+  ];
+  fixture.searchError = new Error('next page failed');
+  fixture.commands = { review: vi.fn(), commit: vi.fn() };
+  open([PAT_L], 'contact');
+
+  fireEvent.input(screen.getByLabelText('Search people'), {
+    target: { value: 'pat le' },
+  });
+  expect(screen.getByText('Pat Leigh')).toBeTruthy();
+  expect(screen.getByText('Couldn’t search people.')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(fixture.retry).toHaveBeenCalled();
 });
