@@ -55,14 +55,17 @@ export const fingerprintLine = (draftId: string, fingerprint: string) =>
 export const looksLikeFingerprintLine =
   /^\s*>?\s*Draft [0-9a-f-]{36} · [0-9a-f]{64}\s*$/im;
 
-/** The body, quoted line by line, so nothing in it reads as a header line of the draft. */
+/**
+ * The body, quoted line by line, so nothing in it reads as a header line of
+ * the draft. A blank line stays blank, ending one quoted paragraph and
+ * starting the next: chat shows a bare ">" as text.
+ */
 const quoted = (text: string): string =>
   text
     .split('\n')
-    .map((line) => (line === '' ? '>' : `> ${line}`))
+    .map((line) => (line.trim() === '' ? '' : `> ${line}`))
     .join('\n');
 
-/** The DM that shows a draft to the owner. */
 export const shownText = (
   draft: Content & { readonly id: string },
   fingerprint: string

@@ -489,6 +489,17 @@ test("a body can't carry a draft line, and shows quoted so it can't draw header 
   expect(shown).not.toContain('\nTo: boss@example.com');
 });
 
+test('a blank line in the body leaves a blank line between quoted paragraphs, never a bare ">"', async () => {
+  const { context, lines } = rig();
+  const draft = await draftMyEmail(context, {
+    ...friday,
+    text: 'Friday works.\n\nSee you then.',
+  });
+  const shown = lines.find(({ id }) => id === draft.messageId)?.text ?? '';
+  expect(shown).toContain('> Friday works.\n\n> See you then.');
+  expect(shown.split('\n')).not.toContain('>');
+});
+
 test('a draft message edited after it was shown approves nothing', async () => {
   const { context, sent, post, send, edit, lines } = rig();
   const draft = await draftMyEmail(context, friday);
