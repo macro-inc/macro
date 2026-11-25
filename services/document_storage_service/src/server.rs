@@ -2038,6 +2038,22 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     ));
 
+    // Gated per user; the merge publishes the property rows it rewrote.
+    let merge_service = Arc::new(
+        crm::domain::record_merge::service::RecordMergeService::new(
+            crm::outbound::record_merge::PgRecordMergeRepository::new(
+                db.clone(),
+                databases_service.clone(),
+            ),
+        )
+        .with_gate(Arc::new(crm::outbound::record_merge::FlaggedMerge(
+            flags.clone(),
+        )))
+        .with_effects(Arc::new(crm::outbound::record_merge::PropertyMergeEffects(
+            macro_event_broker.clone(),
+        ))),
+    );
+
     let database_webhooks_service = Arc::new(database_webhooks::wiring::build_service(
         db.clone(),
         databases_service.clone(),
@@ -3030,6 +3046,11 @@ async fn run_server() -> anyhow::Result<()> {
         pipeline_state: crm::inbound::pipelines::PipelineRouterState {
             service: pipeline_service,
             access: entity_access_service.clone(),
+            authorization: authorization_state.clone(),
+        },
+        merge_state: crm::inbound::record_merge::MergeRouterState {
+            merges: merge_service,
+            entity_access: entity_access_service.clone(),
             authorization: authorization_state.clone(),
         },
         pipeline_workflow_state: crm::inbound::pipeline_workflows::PipelineWorkflowRouterState {

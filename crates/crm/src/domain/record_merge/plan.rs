@@ -71,7 +71,10 @@ pub fn plan_values(targets: &MergeTargets, values: &[RecordValue]) -> ValuePlan 
     let mut by_property: BTreeMap<Uuid, Vec<&RecordValue>> = BTreeMap::new();
     for value in values {
         if value.record_id == targets.survivor() || targets.sources().contains(&value.record_id) {
-            by_property.entry(value.property_id).or_default().push(value);
+            by_property
+                .entry(value.property_id)
+                .or_default()
+                .push(value);
         }
     }
 
@@ -137,7 +140,11 @@ pub fn rewrite_sharing_rules(
         }
         _ => None,
     };
-    if !rules.include.iter().any(|rule| names_merged(rule).is_some()) {
+    if !rules
+        .include
+        .iter()
+        .any(|rule| names_merged(rule).is_some())
+    {
         return Ok(None);
     }
 
@@ -146,16 +153,16 @@ pub fn rewrite_sharing_rules(
         match names_merged(rule) {
             None => include.push(rule.clone()),
             Some(_) if choice == SharingRulesChoice::Stop => {}
-            Some(identifiers) => include.extend(identifiers.iter().map(|identifier| {
-                match record_type {
+            Some(identifiers) => {
+                include.extend(identifiers.iter().map(|identifier| match record_type {
                     MergeRecordType::Company => EmailInclusionRule::Domain {
                         domain: identifier.clone(),
                     },
                     MergeRecordType::Contact => EmailInclusionRule::Address {
                         address: identifier.clone(),
                     },
-                }
-            })),
+                }))
+            }
         }
     }
     include.sort();
@@ -236,7 +243,11 @@ pub fn revision(preview: &MergePreview, unshown: &[String]) -> String {
 
 /// The fingerprint of a commit request, stored with the merge so a reused
 /// request key can be told from an exact retry.
-pub fn request_fingerprint(targets: &MergeTargets, revision: &str, choice: SharingRulesChoice) -> String {
+pub fn request_fingerprint(
+    targets: &MergeTargets,
+    revision: &str,
+    choice: SharingRulesChoice,
+) -> String {
     let mut digest = Sha256::new();
     digest.update(targets.record_type().as_str());
     digest.update(targets.survivor().as_bytes());

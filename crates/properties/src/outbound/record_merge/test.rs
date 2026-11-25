@@ -38,7 +38,13 @@ async fn setup(pool: &PgPool) -> Uuid {
     team
 }
 
-async fn definition(pool: &PgPool, name: &str, data_type: &str, team: Option<Uuid>, user: Option<&str>) -> Uuid {
+async fn definition(
+    pool: &PgPool,
+    name: &str,
+    data_type: &str,
+    team: Option<Uuid>,
+    user: Option<&str>,
+) -> Uuid {
     let id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO property_definitions (id, display_name, data_type, is_multi_select, team_id, user_id)
@@ -56,7 +62,13 @@ async fn definition(pool: &PgPool, name: &str, data_type: &str, team: Option<Uui
     id
 }
 
-async fn value(pool: &PgPool, entity_id: &str, entity_type: &str, definition: &str, values: Value) -> Uuid {
+async fn value(
+    pool: &PgPool,
+    entity_id: &str,
+    entity_type: &str,
+    definition: &str,
+    values: Value,
+) -> Uuid {
     let id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
@@ -96,13 +108,49 @@ async fn own_values_move_when_the_survivor_has_none_and_the_rest_are_deleted(poo
     let team = setup(&pool).await;
     let tier = definition(&pool, "Tier", "STRING", Some(team), None).await;
     let notes = definition(&pool, "My notes", "STRING", None, Some(USER)).await;
-    let [survivor, first, second] = [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()].map(|id| id.to_string());
+    let [survivor, first, second] =
+        [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()].map(|id| id.to_string());
 
-    let kept = value(&pool, &survivor, "COMPANY", &tier.to_string(), json!({"type": "String", "value": "Gold"})).await;
-    let dropped = value(&pool, &first, "COMPANY", &tier.to_string(), json!({"type": "String", "value": "Silver"})).await;
-    let private = value(&pool, &first, "COMPANY", &notes.to_string(), json!({"type": "String", "value": "mine"})).await;
-    let revenue = value(&pool, &second, "COMPANY", REVENUE, json!({"type": "Number", "value": 5})).await;
-    let contact = value(&pool, &first, "CONTACT", &tier.to_string(), json!({"type": "String", "value": "Other"})).await;
+    let kept = value(
+        &pool,
+        &survivor,
+        "COMPANY",
+        &tier.to_string(),
+        json!({"type": "String", "value": "Gold"}),
+    )
+    .await;
+    let dropped = value(
+        &pool,
+        &first,
+        "COMPANY",
+        &tier.to_string(),
+        json!({"type": "String", "value": "Silver"}),
+    )
+    .await;
+    let private = value(
+        &pool,
+        &first,
+        "COMPANY",
+        &notes.to_string(),
+        json!({"type": "String", "value": "mine"}),
+    )
+    .await;
+    let revenue = value(
+        &pool,
+        &second,
+        "COMPANY",
+        REVENUE,
+        json!({"type": "Number", "value": 5}),
+    )
+    .await;
+    let contact = value(
+        &pool,
+        &first,
+        "CONTACT",
+        &tier.to_string(),
+        json!({"type": "String", "value": "Other"}),
+    )
+    .await;
 
     let mut tx = pool.begin().await.unwrap();
     let locked = lock_entity_values_in(
@@ -130,7 +178,14 @@ async fn own_values_move_when_the_survivor_has_none_and_the_rest_are_deleted(poo
     .unwrap();
     tx.commit().await.unwrap();
 
-    assert_eq!(merged.moved.iter().map(|value| value.id).collect::<Vec<_>>(), vec![revenue]);
+    assert_eq!(
+        merged
+            .moved
+            .iter()
+            .map(|value| value.id)
+            .collect::<Vec<_>>(),
+        vec![revenue]
+    );
     let mut deleted: Vec<Uuid> = merged.deleted.iter().map(|value| value.id).collect();
     deleted.sort();
     let mut expected = vec![dropped, private];
@@ -139,26 +194,42 @@ async fn own_values_move_when_the_survivor_has_none_and_the_rest_are_deleted(poo
     assert_eq!(merged.written.len(), 1);
     assert_eq!(merged.written[0].entity_id, survivor);
 
-    assert_eq!(stored(&pool, revenue).await.unwrap().0, survivor, "the row keeps its id");
+    assert_eq!(
+        stored(&pool, revenue).await.unwrap().0,
+        survivor,
+        "the row keeps its id"
+    );
     assert_eq!(stored(&pool, kept).await.unwrap().1["value"], "Gold");
     assert_eq!(stored(&pool, dropped).await, None);
     assert_eq!(stored(&pool, private).await, None);
-    assert!(stored(&pool, contact).await.is_some(), "a contact with the same id is not the company");
+    assert!(
+        stored(&pool, contact).await.is_some(),
+        "a contact with the same id is not the company"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn references_name_the_survivor_once_and_leave_other_records_alone(pool: PgPool) {
     let team = setup(&pool).await;
     let custom = definition(&pool, "Partner", "ENTITY", Some(team), None).await;
-    let [survivor, first, second, unrelated] =
-        [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()].map(|id| id.to_string());
+    let [survivor, first, second, unrelated] = [
+        Uuid::now_v7(),
+        Uuid::now_v7(),
+        Uuid::now_v7(),
+        Uuid::now_v7(),
+    ]
+    .map(|id| id.to_string());
 
     let task = value(
         &pool,
         "task-1",
         "DOCUMENT",
         COMPANIES,
-        refs(&[("COMPANY", &first), ("COMPANY", &unrelated), ("COMPANY", &survivor)]),
+        refs(&[
+            ("COMPANY", &first),
+            ("COMPANY", &unrelated),
+            ("COMPANY", &survivor),
+        ]),
     )
     .await;
     let partner = value(
@@ -169,7 +240,14 @@ async fn references_name_the_survivor_once_and_leave_other_records_alone(pool: P
         refs(&[("CONTACT", &second), ("COMPANY", &second)]),
     )
     .await;
-    let untouched = value(&pool, "task-3", "DOCUMENT", COMPANIES, refs(&[("COMPANY", &unrelated)])).await;
+    let untouched = value(
+        &pool,
+        "task-3",
+        "DOCUMENT",
+        COMPANIES,
+        refs(&[("COMPANY", &unrelated)]),
+    )
+    .await;
 
     let mut tx = pool.begin().await.unwrap();
     let sources = [first.clone(), second.clone()];
@@ -189,7 +267,11 @@ async fn references_name_the_survivor_once_and_leave_other_records_alone(pool: P
     let previous = retargeted.iter().find(|row| row.id == task).unwrap();
     assert_eq!(
         previous.previous,
-        refs(&[("COMPANY", &first), ("COMPANY", &unrelated), ("COMPANY", &survivor)])
+        refs(&[
+            ("COMPANY", &first),
+            ("COMPANY", &unrelated),
+            ("COMPANY", &survivor)
+        ])
     );
     assert_eq!(
         stored(&pool, task).await.unwrap().1,

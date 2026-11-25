@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH moved AS (\n               DELETE FROM favorite\n               WHERE entity_type = $1 AND entity_id = ANY($2)\n               RETURNING user_id, entity_id, sort_order, created_at, updated_at\n           ), kept AS (\n               INSERT INTO favorite (user_id, entity_type, entity_id, sort_order, created_at)\n               SELECT DISTINCT ON (user_id) user_id, $1, $3, sort_order, created_at\n               FROM moved\n               ORDER BY user_id, sort_order, entity_id\n               ON CONFLICT (user_id, entity_type, entity_id) DO NOTHING\n           )\n           SELECT user_id AS \"user_id!\", entity_id AS \"entity_id!\", sort_order AS \"sort_order!\",\n                  created_at AS \"created_at!\", updated_at AS \"updated_at!\"\n           FROM moved\n           ORDER BY user_id, entity_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "sort_order!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "99d63dd29f9a109c80a6858785d42dc6d1f25a79c21dab950e41d69c957df06b"
+}

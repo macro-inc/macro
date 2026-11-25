@@ -33,8 +33,7 @@ pub use domain::models::{
     Actor, AppearanceChange, AppearanceUpdate, Attribution, CallStart, CommonAction,
     DomainActivity, DroppedPropertyValue, EntityType, Ingest, InitiativeTaskChange,
     MergedRecordName, NON_TOUCH_ACTION_TAGS, ParticipantChange, PropertyChange, RecordMerge,
-    RecordedAction, TimeLog, TimeLogSource, VIEW_ACTION_TAGS,
-    activity_id, event_time,
+    RecordedAction, TimeLog, TimeLogSource, VIEW_ACTION_TAGS, activity_id, event_time,
 };
 pub use domain::overview::{
     ActivityOverview, ActivityOverviewError, ActivityWindow, ActivityWindowError, DayCount,

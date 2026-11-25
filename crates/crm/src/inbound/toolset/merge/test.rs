@@ -23,6 +23,14 @@ fn refusals_lead_with_their_code() {
     assert!(merged.description.starts_with("record_already_merged:"));
     assert!(merged.description.contains(&Uuid::from_u128(4).to_string()));
 
-    assert!(merge_error(MergeError::PreviewStale).description.starts_with("merge_preview_stale:"));
-    assert!(merge_error(MergeError::PermissionRequired).description.starts_with("merge_permission_required:"));
+    assert!(
+        merge_error(MergeError::PreviewStale)
+            .description
+            .starts_with("merge_preview_stale:")
+    );
+    assert!(
+        merge_error(MergeError::PermissionRequired)
+            .description
+            .starts_with("merge_permission_required:")
+    );
 }

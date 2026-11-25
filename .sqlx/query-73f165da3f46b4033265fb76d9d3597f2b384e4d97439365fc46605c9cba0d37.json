@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT v.id\n           FROM (SELECT id, config FROM saved_view WHERE user_id = ANY($1) OFFSET 0) v\n           WHERE v.config->>'kind' = 'crm-list'\n             AND v.config->>'teamId' = $2::uuid::text\n             AND jsonb_typeof(v.config->'companyIds') = 'array'\n             AND v.config->'companyIds' ?| $3\n           ORDER BY v.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "73f165da3f46b4033265fb76d9d3597f2b384e4d97439365fc46605c9cba0d37"
+}

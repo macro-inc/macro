@@ -8,8 +8,8 @@ mod test;
 use std::sync::Arc;
 
 use ai_toolset::{
-    AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolAnnotated,
-    ToolAnnotations, ToolCallError, ToolResult,
+    AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations,
+    ToolCallError, ToolResult,
 };
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
@@ -142,10 +142,14 @@ pub struct MergeRecords {
     #[schemars(description = "The revision PreviewMerge returned.")]
     pub revision: String,
     /// A key for this merge; repeat it only to retry the same merge.
-    #[schemars(description = "A new UUID for this merge. Reuse it only to retry the same call: a retry returns the first result.")]
+    #[schemars(
+        description = "A new UUID for this merge. Reuse it only to retry the same call: a retry returns the first result."
+    )]
     pub request_key: Uuid,
     /// Teammates' sharing that names a merged company.
-    #[schemars(description = "keep (default): teammates keep sharing exactly the same mail. stop: they stop sharing mail from the merged companies.")]
+    #[schemars(
+        description = "keep (default): teammates keep sharing exactly the same mail. stop: they stop sharing mail from the merged companies."
+    )]
     #[serde(default)]
     pub sharing_rules: ToolSharingRules,
 }

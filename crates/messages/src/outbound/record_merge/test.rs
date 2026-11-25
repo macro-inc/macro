@@ -25,10 +25,14 @@ async fn setup(pool: &PgPool) -> Uuid {
     .await
     .unwrap();
     let team = Uuid::now_v7();
-    sqlx::query!("INSERT INTO team (id, name, owner_id) VALUES ($1, 'test', $2)", team, USER)
-        .execute(pool)
-        .await
-        .unwrap();
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'test', $2)",
+        team,
+        USER
+    )
+    .execute(pool)
+    .await
+    .unwrap();
     team
 }
 
@@ -118,13 +122,12 @@ async fn discussions_and_mentions_move_to_the_survivor_with_their_ids(pool: PgPo
             assert_eq!(thread, Some(root), "the reply keeps its thread");
         }
     }
-    let thread_parent: String = sqlx::query_scalar(
-        "SELECT parent_entity_id FROM comms_message_threads WHERE root_id = $1",
-    )
-    .bind(root)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let thread_parent: String =
+        sqlx::query_scalar("SELECT parent_entity_id FROM comms_message_threads WHERE root_id = $1")
+            .bind(root)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(thread_parent, survivor.to_string());
     let _ = survivor_root;
 
@@ -134,7 +137,11 @@ async fn discussions_and_mentions_move_to_the_survivor_with_their_ids(pool: PgPo
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(contact_target, source.to_string(), "contact mentions are not companies");
+    assert_eq!(
+        contact_target,
+        source.to_string(),
+        "contact mentions are not companies"
+    );
 
     // The source can now go without taking its discussion with it.
     sqlx::query!("DELETE FROM crm_companies WHERE id = $1", source)

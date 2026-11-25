@@ -58,7 +58,12 @@ pub(crate) struct MergeChange {
 }
 
 impl MergeChange {
-    pub(crate) fn new(owner: &'static str, table: &'static str, key: Value, previous: Value) -> Self {
+    pub(crate) fn new(
+        owner: &'static str,
+        table: &'static str,
+        key: Value,
+        previous: Value,
+    ) -> Self {
         Self {
             owner,
             table,
@@ -305,7 +310,12 @@ fn names_any(values: &Value, kind: EntityKind, ids: &[Uuid]) -> bool {
 
 /// The cell's references with merged records replaced by the one that
 /// stays, listed once each, in their first place.
-fn retargeted(values: &Value, kind: EntityKind, sources: &[Uuid], survivor: Uuid) -> Vec<EntityRef> {
+fn retargeted(
+    values: &Value,
+    kind: EntityKind,
+    sources: &[Uuid],
+    survivor: Uuid,
+) -> Vec<EntityRef> {
     let tag: &str = kind.into();
     let mut refs: Vec<EntityRef> = Vec::new();
     for reference in values
@@ -335,10 +345,9 @@ fn retargeted(values: &Value, kind: EntityKind, sources: &[Uuid], survivor: Uuid
         if merged {
             parsed.entity_id = survivor.to_string();
         }
-        if !refs
-            .iter()
-            .any(|existing| existing.entity_type == parsed.entity_type && existing.entity_id == parsed.entity_id)
-        {
+        if !refs.iter().any(|existing| {
+            existing.entity_type == parsed.entity_type && existing.entity_id == parsed.entity_id
+        }) {
             refs.push(parsed);
         }
     }
@@ -445,7 +454,10 @@ async fn record_changes(
     let owners: Vec<&str> = changes.iter().map(|change| change.owner).collect();
     let tables: Vec<&str> = changes.iter().map(|change| change.table).collect();
     let keys: Vec<Value> = changes.iter().map(|change| change.key.clone()).collect();
-    let previous: Vec<Value> = changes.iter().map(|change| change.previous.clone()).collect();
+    let previous: Vec<Value> = changes
+        .iter()
+        .map(|change| change.previous.clone())
+        .collect();
     sqlx::query!(
         r#"INSERT INTO crm_merge_changes (merge_id, seq, owner, table_name, row_key, previous)
            SELECT $1, seq, owner, table_name, row_key, previous
@@ -629,8 +641,10 @@ where
             "choice": command.sharing_rules,
         });
         changes.extend(
-            CompaniesRepositoryImpl::rewrite_merged_rules(&mut *tx, team, merge_id, &rewrites, &details)
-                .await?,
+            CompaniesRepositoryImpl::rewrite_merged_rules(
+                &mut *tx, team, merge_id, &rewrites, &details,
+            )
+            .await?,
         );
 
         let moves: Vec<Uuid> = review
@@ -642,7 +656,8 @@ where
                     .values
                     .iter()
                     .find(|value| {
-                        value.entity_id == record.to_string() && value.property_definition_id == *property
+                        value.entity_id == record.to_string()
+                            && value.property_definition_id == *property
                     })
                     .map(|value| value.id)
             })
@@ -730,13 +745,28 @@ where
         .await
         .map_err(db)?;
         changes.extend(discussions.messages.into_iter().map(|(id, previous)| {
-            MergeChange::new("messages", "comms_messages", json!({ "id": id }), json!({ "parent_entity_id": previous }))
+            MergeChange::new(
+                "messages",
+                "comms_messages",
+                json!({ "id": id }),
+                json!({ "parent_entity_id": previous }),
+            )
         }));
         changes.extend(discussions.threads.into_iter().map(|(id, previous)| {
-            MergeChange::new("messages", "comms_message_threads", json!({ "root_id": id }), json!({ "parent_entity_id": previous }))
+            MergeChange::new(
+                "messages",
+                "comms_message_threads",
+                json!({ "root_id": id }),
+                json!({ "parent_entity_id": previous }),
+            )
         }));
         changes.extend(discussions.mentions.into_iter().map(|(id, previous)| {
-            MergeChange::new("messages", "comms_entity_mentions", json!({ "id": id }), json!({ "entity_id": previous }))
+            MergeChange::new(
+                "messages",
+                "comms_entity_mentions",
+                json!({ "id": id }),
+                json!({ "entity_id": previous }),
+            )
         }));
 
         let favorites = favorites::outbound::merge::retarget_favorites_in(
@@ -792,11 +822,14 @@ where
             .conflicts
             .iter()
             .flat_map(|conflict| {
-                conflict.dropped.iter().map(move |dropped| DroppedPropertyValue {
-                    property: conflict.property_id.to_string(),
-                    record: dropped.record_id.to_string(),
-                    value: serde_json::to_value(&dropped.value).unwrap_or(Value::Null),
-                })
+                conflict
+                    .dropped
+                    .iter()
+                    .map(move |dropped| DroppedPropertyValue {
+                        property: conflict.property_id.to_string(),
+                        record: dropped.record_id.to_string(),
+                        value: serde_json::to_value(&dropped.value).unwrap_or(Value::Null),
+                    })
             })
             .collect();
         let entry = Activity::from_domain(
@@ -883,11 +916,8 @@ where
         if command.targets.record_type() != MergeRecordType::Company {
             return Err(MergeError::Invalid("contacts can't be merged yet".into()));
         }
-        let fingerprint = plan::request_fingerprint(
-            &command.targets,
-            &command.revision,
-            command.sharing_rules,
-        );
+        let fingerprint =
+            plan::request_fingerprint(&command.targets, &command.revision, command.sharing_rules);
         let mut tx = self.pool.begin().await.map_err(db)?;
         sqlx::query!("SET LOCAL lock_timeout = '5s'")
             .execute(&mut *tx)
@@ -896,9 +926,7 @@ where
         // Another request with this key waits here for the privacy lock, then
         // finds the committed merge instead of records already merged.
         CompaniesRepositoryImpl::lock_merge_privacy(&mut tx, scope.team_id).await?;
-        if let Some(outcome) =
-            replayed(&mut tx, scope, command.request_key, &fingerprint).await?
-        {
+        if let Some(outcome) = replayed(&mut tx, scope, command.request_key, &fingerprint).await? {
             tx.rollback().await.map_err(db)?;
             return Ok(MergeCommitted {
                 outcome,
@@ -931,7 +959,8 @@ where
         sqlx::query!(
             "UPDATE crm_merges SET result = $2 WHERE id = $1",
             merge_id,
-            serde_json::to_value(&outcome).map_err(|error| CrmError::StorageLayerError(error.into()))?,
+            serde_json::to_value(&outcome)
+                .map_err(|error| CrmError::StorageLayerError(error.into()))?,
         )
         .execute(&mut *tx)
         .await
@@ -983,20 +1012,21 @@ where
     fn properties_changed(&self, changes: &[ChangedEntityProperty]) {
         use properties::domain::events::{EntityPropertyUpdatedMetadata, PropertyMacroEvent};
         for change in changes {
-            let event = PropertyMacroEvent::entity_property_updated(EntityPropertyUpdatedMetadata {
-                entity_property_id: change.entity_property_id,
-                entity_id: change.entity_id.clone(),
-                entity_type: change.entity_type,
-                property_definition_id: change.property_definition_id,
-                actor_user_id: None,
-                actor: None,
-                on_behalf_of: None,
-                source: None,
-                inherited_from_project: None,
-                value: change.value.clone(),
-                previous_value: change.previous_value.clone(),
-                updated_at: change.updated_at,
-            });
+            let event =
+                PropertyMacroEvent::entity_property_updated(EntityPropertyUpdatedMetadata {
+                    entity_property_id: change.entity_property_id,
+                    entity_id: change.entity_id.clone(),
+                    entity_type: change.entity_type,
+                    property_definition_id: change.property_definition_id,
+                    actor_user_id: None,
+                    actor: None,
+                    on_behalf_of: None,
+                    source: None,
+                    inherited_from_project: None,
+                    value: change.value.clone(),
+                    previous_value: change.previous_value.clone(),
+                    updated_at: change.updated_at,
+                });
             drop(self.0.send_event(&event).inspect_err(|error| {
                 tracing::error!(error = ?error, "failed to schedule a merged property's event");
             }));

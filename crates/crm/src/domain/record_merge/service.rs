@@ -184,7 +184,10 @@ impl<R: RecordMergeRepository> RecordMerges for RecordMergeService<R> {
         let scope = self.scope(access).await?;
         let committed = self.repository.commit(&scope, command).await?;
         let span = tracing::Span::current();
-        span.record("merge_id", tracing::field::display(committed.outcome.merge_id));
+        span.record(
+            "merge_id",
+            tracing::field::display(committed.outcome.merge_id),
+        );
         span.record("replayed", committed.replayed);
         if !committed.replayed
             && !committed.changed_properties.is_empty()

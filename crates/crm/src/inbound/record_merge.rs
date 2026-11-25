@@ -189,7 +189,11 @@ impl IntoResponse for MergeError {
 }
 
 fn receipt(
-    access: MacroUserTeamExtractorV2<MemberTeamRole, impl EntityAccessService, impl MacroAuthorizationService>,
+    access: MacroUserTeamExtractorV2<
+        MemberTeamRole,
+        impl EntityAccessService,
+        impl MacroAuthorizationService,
+    >,
 ) -> Result<CrmTeamReceipt<MemberTeamRole>, MergeError> {
     Ok(CrmTeamReceipt::from_team_receipt(
         access.entity_access_receipt,
@@ -215,13 +219,19 @@ fn receipt(
     ),
 )]
 #[tracing::instrument(skip_all, err)]
-pub async fn preview<Merges: RecordMerges, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+pub async fn preview<
+    Merges: RecordMerges,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
     State(state): State<MergeRouterState<Merges, Eas, Auth>>,
     Json(request): Json<MergePreviewRequest>,
 ) -> Result<Json<MergePreview>, MergeError> {
     let targets = MergeTargets::new(request.record_type, request.survivor_id, request.source_ids)?;
-    Ok(Json(state.merges.preview(&receipt(access)?, &targets).await?))
+    Ok(Json(
+        state.merges.preview(&receipt(access)?, &targets).await?,
+    ))
 }
 
 /// Merge records into the one that stays, as reviewed. It can't be undone.
@@ -243,7 +253,11 @@ pub async fn preview<Merges: RecordMerges, Eas: EntityAccessService, Auth: Macro
     ),
 )]
 #[tracing::instrument(skip_all, err)]
-pub async fn commit<Merges: RecordMerges, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+pub async fn commit<
+    Merges: RecordMerges,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
     State(state): State<MergeRouterState<Merges, Eas, Auth>>,
     Json(request): Json<MergeCommitRequest>,
@@ -254,5 +268,7 @@ pub async fn commit<Merges: RecordMerges, Eas: EntityAccessService, Auth: MacroA
         request_key: request.request_key,
         sharing_rules: request.sharing_rules,
     };
-    Ok(Json(state.merges.commit(&receipt(access)?, &command).await?))
+    Ok(Json(
+        state.merges.commit(&receipt(access)?, &command).await?,
+    ))
 }

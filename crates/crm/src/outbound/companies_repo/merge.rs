@@ -238,7 +238,10 @@ impl CompaniesRepositoryImpl {
                 .push(MergeDomain { domain: row.domain });
         }
         let company = |id: Uuid| -> MergeCompany {
-            let row = rows.iter().find(|row| row.id == id).expect("every target was found");
+            let row = rows
+                .iter()
+                .find(|row| row.id == id)
+                .expect("every target was found");
             MergeCompany {
                 id,
                 name: row.name.clone(),

@@ -672,6 +672,12 @@ pub async fn build(
         &databases_tool_context,
         &crm_tool_context,
     );
+    let merge_tool_context = ai_tools::build_merge_tool_context(
+        db.clone(),
+        &databases_tool_context,
+        side_effect_clients.feature_flags.clone(),
+        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+    );
     let entity_creator = Arc::new(ai_tools::ToolEntityCreator {
         notion_link_editor: Some(ai_tools::NotionLinkEditor::new(
             document_tool_context.lexical_client.clone(),
@@ -855,6 +861,7 @@ pub async fn build(
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context,
         pipeline_tool_context,
+        merge_tool_context,
         crm_transfer_tool_context,
         skill_tool_context: ai_tools::build_skill_tool_context(
             search_service_client.clone(),

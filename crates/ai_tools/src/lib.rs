@@ -89,12 +89,12 @@ pub use tool_context::{
     ToolFavoritesService, ToolFavoritesToolContext, ToolForeignEntityService, ToolFormsToolContext,
     ToolFrecencyService, ToolGithubPullRequestService, ToolImageGenerationToolContext,
     ToolImportService, ToolImportToolContext, ToolInitiativeToolContext,
-    ToolItemNotificationPreferenceToolContext, ToolMessageToolContext, ToolNotificationQueue,
-    ToolNotificationService, ToolNotificationToolContext, ToolPipelineService,
-    ToolPipelineToolContext, ToolPipelineWorkflows, ToolProjectService, ToolProjectToolContext,
-    ToolPropertiesService, ToolPropertiesToolContext, ToolReadAgentSessionContext,
-    ToolServiceContext, ToolSkillService, ToolSkillToolContext, ToolSoupService,
-    ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamCalendarService,
+    ToolItemNotificationPreferenceToolContext, ToolMergeToolContext, ToolMessageToolContext,
+    ToolNotificationQueue, ToolNotificationService, ToolNotificationToolContext,
+    ToolPipelineService, ToolPipelineToolContext, ToolPipelineWorkflows, ToolProjectService,
+    ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext,
+    ToolReadAgentSessionContext, ToolServiceContext, ToolSkillService, ToolSkillToolContext,
+    ToolSoupService, ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamCalendarService,
     ToolTeamCalendarToolContext, ToolTeamService, ToolTeamToolContext, ToolTimeTrackingToolContext,
     ToolUserEmailService, ToolViewOnlyDatabasesSqlToolContext, build_activity_read_service,
     build_booking_link_tool_context, build_booking_management_tool_context, build_bot_tool_context,
@@ -105,9 +105,10 @@ pub use tool_context::{
     build_databases_tool_context, build_favorites_service, build_favorites_tool_context,
     build_forms_tool_context, build_image_generation_tool_context, build_import_repo,
     build_initiative_tool_context, build_item_notification_preference_tool_context,
-    build_message_service_with_side_effects, build_message_service_without_side_effects,
-    build_message_tool_context, build_pipeline_tool_context, build_project_tool_context,
-    build_properties_service, build_properties_service_with_broker, build_properties_tool_context,
+    build_merge_tool_context, build_message_service_with_side_effects,
+    build_message_service_without_side_effects, build_message_tool_context,
+    build_pipeline_tool_context, build_project_tool_context, build_properties_service,
+    build_properties_service_with_broker, build_properties_tool_context,
     build_read_agent_session_context, build_routine_tool_context, build_skill_tool_context,
     build_task_properties_adapter, build_team_calendar_tool_context, build_team_repository,
     build_team_tool_context, build_time_tracking_tool_context,
@@ -187,6 +188,7 @@ pub(crate) fn base_toolset() -> AiToolSet {
         .add_subtoolset::<ToolTeamToolContext>(team_toolset())
         .add_subtoolset::<ToolCrmToolContext>(crm_toolset())
         .add_subtoolset::<ToolPipelineToolContext>(pipeline_toolset())
+        .add_subtoolset::<ToolMergeToolContext>(crm::inbound::toolset::merge::merge_toolset())
         .add_subtoolset::<ToolCrmTransferToolContext>(
             crm::inbound::toolset::transfer::crm_transfer_toolset(),
         )

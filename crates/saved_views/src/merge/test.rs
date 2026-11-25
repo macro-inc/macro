@@ -52,11 +52,13 @@ async fn view(pool: &PgPool, id: Uuid) -> (Value, i64) {
 async fn crm_lists_name_the_survivor_once_in_their_order(pool: PgPool) {
     insert_user(&pool, OWNER).await;
     insert_user(&pool, OTHER).await;
-    let [survivor, first, second, kept] =
-        [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
-    let list = |team: Uuid, ids: &[Uuid]| {
-        json!({"kind": "crm-list", "teamId": team, "companyIds": ids, "name": "Prospects"})
-    };
+    let [survivor, first, second, kept] = [
+        Uuid::now_v7(),
+        Uuid::now_v7(),
+        Uuid::now_v7(),
+        Uuid::now_v7(),
+    ];
+    let list = |team: Uuid, ids: &[Uuid]| json!({"kind": "crm-list", "teamId": team, "companyIds": ids, "name": "Prospects"});
 
     let both = insert_view(&pool, OWNER, list(TEAM, &[kept, first, survivor, second])).await;
     let sources_only = insert_view(&pool, OWNER, list(TEAM, &[second, kept, first])).await;
@@ -83,11 +85,17 @@ async fn crm_lists_name_the_survivor_once_in_their_order(pool: PgPool) {
     expected.sort();
     assert_eq!(changed_ids, expected);
     let previous = changed.iter().find(|view| view.view_id == both).unwrap();
-    assert_eq!(previous.previous_config, list(TEAM, &[kept, first, survivor, second]));
+    assert_eq!(
+        previous.previous_config,
+        list(TEAM, &[kept, first, survivor, second])
+    );
     assert_eq!(previous.previous_revision, 1);
 
     assert_eq!(view(&pool, both).await, (list(TEAM, &[kept, survivor]), 2));
-    assert_eq!(view(&pool, sources_only).await, (list(TEAM, &[survivor, kept]), 2));
+    assert_eq!(
+        view(&pool, sources_only).await,
+        (list(TEAM, &[survivor, kept]), 2)
+    );
     for id in [untouched, other_team, not_a_list, non_member] {
         assert_eq!(view(&pool, id).await.1, 1, "view {id} must not change");
     }
