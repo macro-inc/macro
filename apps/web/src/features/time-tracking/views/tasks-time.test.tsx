@@ -116,6 +116,7 @@ vi.mock('../queries/report-task', async () => {
         answered() && id() === 'task-b'
           ? reportTask('task-b', 'Review the plan', {
               status: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+              priority: PROPERTY_OPTION_IDS.PRIORITY.HIGH,
             })
           : undefined;
     },
@@ -133,7 +134,8 @@ const taskBGroup = () => ({
     taskId: 'task-b',
     date: null,
     task: reportTask('task-b', 'Review the plan', {
-      status: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+      status: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+      priority: PROPERTY_OPTION_IDS.PRIORITY.HIGH,
     }),
   },
   minutes: 15,
@@ -465,7 +467,11 @@ it('puts a picked task on the sheet with its status and priority, and starts a t
       name: /Review the plan/,
     })
   ).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Status of task-b' })).toBeTruthy();
+  const lead = screen.getByRole('button', { name: 'Status of task-b' });
+  expect(lead.dataset).toMatchObject({
+    status: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+    priority: PROPERTY_OPTION_IDS.PRIORITY.HIGH,
+  });
   expect(taskReads).toEqual(['task-b']);
 
   fireEvent.click(screen.getByRole('button', { name: 'Start timer' }));
@@ -508,11 +514,16 @@ it('keeps a picked task’s status and priority in place when its first time is 
     await screen.findByRole('button', { name: 'Pick Review the plan' })
   );
   const lead = screen.getByRole('button', { name: 'Status of task-b' });
+  expect(lead.dataset.status).toBe(PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS);
 
   summaryState.withTaskB = true;
   bumpSummary();
 
   expect(screen.getByRole('button', { name: 'Status of task-b' })).toBe(lead);
+  expect(lead.dataset).toMatchObject({
+    status: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+    priority: PROPERTY_OPTION_IDS.PRIORITY.HIGH,
+  });
   expect(
     screen.getByRole('button', { name: /^Review the plan, Tue, Nov 24: 15m$/ })
   ).toBeTruthy();
