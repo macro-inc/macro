@@ -160,6 +160,28 @@ tools — hexagonal, heavily feature-gated.
   lateral drops. Match the bare `subject` column so the planner keeps its
   statistics. `Attachment(kind)` reads the denormalized thread flags
   `email_db_client` maintains.
+- `Label(id)` matches a thread with a message carrying the label, by
+  `email_effective_message_labels`' rules, in an inbox the viewer owns or
+  manages; another inbox's label never matches, so a shared thread can't be
+  probed by id. Don't put a label predicate on the view: its pending side
+  computes a label per row, so it scans every pending change. Read provider
+  rows by label and pending changes by attribute (`MESSAGE_CARRIES_LABEL`,
+  `build_label_superset`), and the viewer's inboxes as `= ANY(ARRAY(...))`,
+  never an `IN` subquery, which the planner hashes the inbox's messages for. An owned All Mail page whose filter has one top-level OR-tree of labels
+  and no message term is read by `OwnedRead` too: the label rows are the
+  superset (`build_label_superset`). The label tree stays out of the inbox
+  windows' terms and is tested on each walked thread before the preview pick
+  (`walked_match`): inside the window it would stretch the window to that
+  many labeled threads, and after the pick it would pay a pick for every
+  walked thread. A label read probes the superset up to 20,000 rows and walks
+  at most 10,000 threads a request (`OwnedReadTuning::for_labels`); a page the
+  walk leaves short returns `continue_below`, which the service turns into
+  the page's cursor and Soup passes on when email is the page's only source.
+  A big label whose mail is all old therefore fills over several requests,
+  each about a second; the web reads on past those empty pages
+  (`advanceEmptyPages` in the email view). A thread-per-label table would
+  page any label in one read, but needs a migration and a backfill; it was
+  left out until the slow fill bothers people.
 - An owned All Mail page filtered to one positive OR-tree of addresses (Sales
   Email and a CRM record's emails under Me, a sender or recipient search, Soup
   hydration by id with an address template) is read in page order by `OwnedRead`

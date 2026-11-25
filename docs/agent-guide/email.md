@@ -65,6 +65,15 @@ panel, which the phone's Info sheet shares. Someone a thread is shared with sees
 none of the owner's labels: the server leaves out labels of inboxes the reader
 doesn't own or manage. Nothing here writes labels back to Gmail or Outlook.
 
+Mail lists can be filtered by a Gmail label or Outlook category of the
+viewer's own or managed inboxes (the `Label` condition). A label in an inbox
+the viewer doesn't own or manage matches nothing, shared threads included. A
+big label whose mail is all old fills over several requests: a page can
+arrive empty with a cursor, and the list keeps loading (a spinner, never the
+empty state) until a row shows or the list ends. No menu offers labels yet:
+check through the Soup API with an `ef` of `{"l":{"Label":"<label id>"}}` on
+All, using a label whose mail is months old in a large inbox.
+
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
 item, with pill tabs beside the Inbox title in the content header; with the Focus
 flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens

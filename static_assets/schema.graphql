@@ -5104,6 +5104,11 @@ input GraphqlEmailLiteral @oneOf {
 	"""
 	attachment: GraphqlAttachmentKind
 	"""
+	Threads with at least one message carrying this label of one of the
+	viewer's inboxes.
+	"""
+	label: ID
+	"""
 	The created at option.
 	"""
 	createdAt: GraphqlDateLiteral
