@@ -166,7 +166,28 @@ class CopyTeam(unittest.TestCase):
         self.assertEqual(copied["versions"][3]["value"], {"password": "v3"})
         self.assertEqual(copy_secrets.verify_team(source, destination, TEAM), ([], 0))
 
-    def test_a_version_destroyed_after_the_first_pass_is_destroyed_in_the_destination(self):
+    def test_resumes_after_destroying_a_placeholder_for_a_pruned_version(self):
+        source = FakeVault("legacy", max_versions=2)
+        destination = FakeVault("account")
+        source.provision(TEAM)
+        destination.provision(TEAM)
+        source.put(TEAM, "item-a", {"password": "v1"}, {"password": "v2"}, {"password": "v3"})
+        destination.put(TEAM, "item-a", copy_secrets.PLACEHOLDER)
+        destination.request("POST", "passwords/destroy/item-a", {"versions": [1]}, TEAM)
+
+        report = copy_secrets.copy_team(source, destination, TEAM, dry_run=False)
+
+        self.assertEqual((report["states_changed"], report["versions_copied"], report["diverged"]), (0, 2, []))
+        copied = destination.namespaces[TEAM]["items"]["item-a"]
+        self.assertTrue(copied["versions"][1]["destroyed"])
+        self.assertEqual(copied["versions"][2]["value"], {"password": "v2"})
+        self.assertEqual(copied["versions"][3]["value"], {"password": "v3"})
+        self.assertEqual(copy_secrets.verify_team(source, destination, TEAM), ([], 0))
+
+        again = copy_secrets.copy_team(source, destination, TEAM, dry_run=False)
+        self.assertEqual((again["states_changed"], again["versions_copied"], again["diverged"]), (0, 0, []))
+
+    def test_a_version_destroyed_after_the_first_pass_needs_reconciliation(self):
         source, destination = vaults()
         source.put(TEAM, "item-a", {"password": SECRET}, {"password": "v2"})
         copy_secrets.copy_team(source, destination, TEAM, dry_run=False)
@@ -174,9 +195,9 @@ class CopyTeam(unittest.TestCase):
 
         report = copy_secrets.copy_team(source, destination, TEAM, dry_run=False)
 
-        self.assertEqual((report["states_changed"], report["diverged"]), (1, []))
-        self.assertTrue(destination.namespaces[TEAM]["items"]["item-a"]["versions"][1]["destroyed"])
-        self.assertEqual(copy_secrets.verify_team(source, destination, TEAM), ([], 0))
+        self.assertEqual((report["states_changed"], report["diverged"]), (0, ["item-a"]))
+        self.assertEqual(copy_secrets.read_version(destination, TEAM, "item-a", 1), {"password": SECRET})
+        self.assertEqual(copy_secrets.verify_team(source, destination, TEAM), (["item-a"], 0))
 
     def test_a_placeholder_left_by_a_crashed_run_is_erased_on_the_next(self):
         source, destination = vaults()
@@ -260,6 +281,42 @@ class Main(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("diverged, left alone: item-a", output)
         self.assertNotIn(SECRET, output)
+
+    def test_unreadable_source_never_erases_a_different_live_destination(self):
+        for state in ("deleted", "destroyed", "pruned"):
+            for arguments in (("--dry-run",), ()):
+                with self.subTest(state=state, arguments=arguments):
+                    source, destination = vaults()
+                    if state == "pruned":
+                        source.max_versions = 1
+                    source.put(TEAM, "item-a", {"password": "source"}, {"password": "v2"})
+                    if state in ("deleted", "destroyed"):
+                        action = "delete" if state == "deleted" else "destroy"
+                        source.request("POST", f"passwords/{action}/item-a", {"versions": [1]}, TEAM)
+                    distinct = {**copy_secrets.PLACEHOLDER, "password": SECRET}
+                    destination.put(TEAM, "item-a", distinct)
+
+                    code, output = self.run_main(source, destination, *arguments)
+                    self.assertEqual(code, 2)
+                    self.assertIn("diverged, left alone: item-a", output)
+                    self.assertNotIn(SECRET, output)
+                    self.assertEqual(copy_secrets.read_version(destination, TEAM, "item-a", 1), distinct)
+                    self.assertEqual(destination.writes, 0)
+                    self.assertEqual(copy_secrets.verify_team(source, destination, TEAM), (["item-a"], 0))
+
+    def test_a_deleted_destination_is_preserved_when_the_source_is_destroyed(self):
+        source, destination = vaults()
+        source.put(TEAM, "item-a", None)
+        destination.put(TEAM, "item-a", {"password": SECRET})
+        destination.request("POST", "passwords/delete/item-a", {"versions": [1]}, TEAM)
+
+        code, output = self.run_main(source, destination)
+
+        self.assertEqual(code, 2)
+        self.assertIn("diverged, left alone: item-a", output)
+        entry = destination.namespaces[TEAM]["items"]["item-a"]["versions"][1]
+        self.assertTrue(entry["deletion_time"])
+        self.assertFalse(entry["destroyed"])
 
     def test_one_tunnel_for_both_is_refused(self):
         argv = ["copy_secrets.py", "--source-connect", "127.0.0.1:18443", "--destination-connect", "127.0.0.1:18443"]

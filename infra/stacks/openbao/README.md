@@ -96,7 +96,11 @@ the values are copied over the API. The two vaults never share a volume.
 Every step needs explicit permission.
 
 1. **Deploy** this stack (`pulumi up --stack macro-inc/dev`). It creates the
-   replacement and leaves the legacy vault and the DNS name as they are.
+   replacement and keeps the legacy service, storage and DNS record in place.
+   A new legacy image digest changes the task definition. On a task definition
+   update, ECS stops the old task before starting its successor on the existing
+   Raft volume. Allow for a brief Passwords outage and confirm the legacy
+   target is healthy before copying.
 2. **Initialize** the replacement through a port-forward to its port 8200, as
    in "First deploy and init" below. Upload the values to Doppler `openbao/dev`
    as `OPENBAO_ACCOUNT_ROOT_TOKEN` and `OPENBAO_ACCOUNT_RECOVERY_KEY`, next to
@@ -106,21 +110,49 @@ Every step needs explicit permission.
    `infra/openbao/provision.py --connect 127.0.0.1:28443` and its root token
    ([procedure](../../openbao/README.md)). `copy_secrets.py --dry-run` names any
    team still missing.
-5. **Copy**, first with `--dry-run`, then for real
+5. **Pre-copy**, first with `--dry-run`, then for real
    ([procedure](../../openbao/README.md#copying-to-the-openbao-account-vault)).
-   The legacy vault keeps serving, so this is a first pass.
-6. **Point the name at the replacement**, in a follow-up change: the
-   `openbao-dev.macro-internal.com` record becomes an alias of the
-   `consumerEndpointDnsName` output. DSS follows within the record's TTL.
-7. **Copy again.** This picks up what DSS wrote or erased on the legacy vault
-   before it followed the name. An item the script reports as diverged was
-   written differently on both sides, so fix it by hand. Every user with a TOTP enrollment must enroll
-   again: OpenBao never returns a TOTP seed, so the script can't copy one.
-8. **Scale the legacy vault to 0** and keep it for a rollback window. Rolling
-   back means pointing the name back and running the copy the other way.
-9. **Remove the legacy vault**, in a follow-up change. Its seal key, EFS volume
-   and backup vault are `protect` + `retainOnDelete`: unprotect them in state,
-   drop them from the code, and delete them by hand once no backup is needed.
+   Keep application writes to the replacement fenced from the start. The legacy
+   vault keeps serving during this pass.
+6. **Fence and drain writers before the final copy.** In an approved
+   maintenance window, stop accepting new Passwords writes, including creates,
+   edits, deletes, and TOTP changes.
+   Inventory all writers and pause background and lifecycle jobs (including
+   DSS's item and TOTP cleanup), queued work and retries, provisioning, and
+   direct operator writes to both vaults. Pause automatic DSS deploys and
+   scaling that could restart a writer. Drain in-flight requests, then stop
+   all DSS tasks and close remaining legacy client connections, including
+   operator sessions other than the copy tunnels. Keep ingress from DSS to the
+   legacy ALB blocked through the transition. Confirm that the old DSS tasks
+   are stopped, work has drained, and legacy audit logs show no write requests
+   after the fence. Keep destination writes blocked for all clients except the
+   copy operator. Stop the procedure if any part of the fence cannot be verified.
+7. **Reconcile under the fence.** Run a dry run, then the final copy and its
+   built-in verification for all teams. Any reported divergence, verification
+   failure, nonzero exit, destination-ahead item, or destination-only item
+   blocks cutover. Keep writes fenced and resolve discrepancies under a
+   separately approved procedure. Rerun the final copy and require exit 0,
+   no mismatches, and zero ahead or destination-only items before continuing.
+8. **Switch traffic with explicit approval.** In a follow-up change, make
+   `openbao-dev.macro-internal.com` an alias of `consumerEndpointDnsName`.
+   Keep DSS stopped while verifying from its network that the name resolves
+   to the replacement and that fresh read-only probes reach it. Check the
+   replacement audit logs for those reads and confirm client traffic is still
+   fenced off from the legacy vault. DNS TTL alone cannot prove that cached
+   routes or existing connections have drained. Start fresh DSS tasks only
+   after these checks pass, because DSS runs cleanup on startup. Confirm they
+   connect to the replacement before resuming client traffic and other writers.
+   Every user with a TOTP enrollment must enroll again because OpenBao never
+   returns the seed.
+9. **Keep the legacy vault for rollback.** Retain its service, storage, seal
+   key, and backups, and keep it fenced from writers. Before a rollback, fence
+   and drain writers again, reconcile and verify changes made on the replacement,
+   and explicitly approve the traffic switch. Reversing DNS alone would leave
+   post-cutover writes behind. A reverse copy has the same divergence gates.
+10. **Remove the legacy vault** after the rollback window, in a follow-up change.
+    Its seal key, EFS volume and backup vault are `protect` + `retainOnDelete`.
+    Unprotect them in state, drop them from the code, and delete them by hand
+    once no backup is needed.
 
 ## First deploy and init (once)
 

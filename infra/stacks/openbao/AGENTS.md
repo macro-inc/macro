@@ -30,7 +30,8 @@ From `infra/`: `bun run check`, `bunx biome check stacks/openbao`;
 ## Gotchas
 
 - Never let two tasks open the Raft volume. Keep the stop-then-start deployment
-  (`minimumHealthyPercent: 0`, `maximumPercent: 100`); every deploy is a short outage.
+  (`minimumHealthyPercent: 0`, `maximumPercent: 100`). Replacing a task briefly
+  interrupts service for that vault.
 - The seal key policy is the only grant on that key; don't add IAM policies for
   it. Losing the key makes every backup unreadable, so it stays `protect` +
   `retainOnDelete`.

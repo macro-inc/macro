@@ -8,13 +8,12 @@ verified against that name. For every provisioned team namespace it copies the
 numbers the document storage service's metadata points at.
 
 It only moves the destination forward. A version it already has is checked
-against the source and never rewritten; a version the source has destroyed or
-deleted since is destroyed or deleted there too. A destination that is ahead
-(written to after the name moved) is fine as long as the versions both have
-match. Anything else is reported as diverged and left alone. Runs are
-idempotent; a repeat run copies only what changed. `--dry-run` writes nothing
-and reports what a run would do. Output is counts and item ids only, never
-values.
+against the source. For an unreadable source version, only an exact copy
+placeholder can be automatically deleted or destroyed in the destination.
+A destination that is ahead is accepted if its shared versions match.
+Diverged items are reported and left alone. An identical repeat run changes
+nothing. `--dry-run` writes nothing and reports what a run would do. Output is
+limited to counts and item ids.
 
 TOTP seeds are write-only in OpenBao, so they can't be copied; the report counts
 them per team.
@@ -33,6 +32,7 @@ TOTP_MOUNT = "totp"
 # Written for a version whose value the source no longer has (destroyed,
 # deleted, or pruned past max_versions), then given the same state.
 PLACEHOLDER = {"copied_placeholder": "true"}
+ERASED = {"destroyed", "pruned"}
 
 
 class CopyError(RuntimeError):
@@ -96,11 +96,6 @@ def write_version(client, namespace, path, version, state, value):
     apply_state(client, namespace, path, version, state)
 
 
-# The state changes the destination may follow: a value can be erased later,
-# never brought back.
-FORWARD = {("live", "destroyed"), ("live", "deleted"), ("deleted", "destroyed"), ("live", "pruned")}
-
-
 def plan_item(source, destination, namespace, path, source_metadata, destination_metadata):
     """What the destination needs: the first version to copy, state changes, and
     whether it is ahead. None when the shared versions differ."""
@@ -110,9 +105,16 @@ def plan_item(source, destination, namespace, path, source_metadata, destination
     for version in range(1, min(present, current) + 1):
         wanted = version_state(source_metadata, version)
         have = version_state(destination_metadata, version)
-        if have == "pruned" and wanted in ("pruned", "destroyed"):
+        # Both states permanently erase the value. A pruned source version is
+        # copied by destroying its placeholder, even if the destination keeps it.
+        if have in ERASED and wanted in ERASED:
             continue
-        if (have, wanted) in FORWARD:
+        # Only the exact synthetic payload can be changed when the source
+        # value is unreadable. The version number alone cannot prove a match.
+        if (
+            have == "live" and wanted != "live"
+            and read_version(destination, namespace, path, version) == PLACEHOLDER
+        ):
             changes.append((version, wanted))
         elif have != wanted:
             return None
@@ -125,7 +127,7 @@ def plan_item(source, destination, namespace, path, source_metadata, destination
 
 
 def apply_state(client, namespace, path, version, state):
-    if state in ("destroyed", "pruned"):
+    if state in ERASED:
         client.request("POST", f"{MOUNT}/destroy/{path}", {"versions": [version]}, namespace)
     elif state == "deleted":
         client.request("POST", f"{MOUNT}/delete/{path}", {"versions": [version]}, namespace)
@@ -222,7 +224,7 @@ def main():
         verb = "would copy" if arguments.dry_run else "copied"
         print(f"{namespace}: {report['items']} items, {verb} {report['versions_copied']} versions, "
               f"{report['versions_present']} already present, "
-              f"{report['states_changed']} versions erased since, "
+              f"{report['states_changed']} placeholder state changes, "
               f"{report['ahead']} items ahead in the destination, "
               f"{only_in_destination} items only in the destination, "
               f"{report['totp_keys']} TOTP keys not copyable")

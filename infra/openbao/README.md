@@ -66,16 +66,21 @@ to its replacement in the OpenBao account. It is one step of the move in the
 [stack README](../stacks/openbao/README.md#moving-the-vault-to-the-openbao-account-once).
 
 - **Version numbers stay the same,** because the document storage service's
-  metadata points at them. Destroyed and pruned versions are written as
-  placeholders and destroyed again.
+  metadata points at them. Unreadable versions are filled with synthetic
+  placeholders and then soft-deleted or destroyed, depending on source state.
+  A destroyed destination version matches a pruned source version, so a rerun
+  can continue appending after the placeholder has been destroyed.
 - **It only moves the destination forward.**
-  - It checks the versions the destination already has against the source and
-    never rewrites one.
-  - A version the source has erased since is erased there too.
-  - A destination that is ahead (written to after the name moved) is accepted
-    if the versions both have match.
-  - An item written differently on both sides is reported as diverged and left
-    alone.
+  - It compares readable versions. For an unreadable source version, it can
+    change the state of an existing destination version only if the entire
+    destination value is the exact synthetic placeholder.
+  - Any other live destination value makes the item diverge when the source
+    version is deleted, destroyed, or pruned, even if an earlier copy run may
+    have written that value. An unreadable destination with a different
+    erasure state also diverges unless both versions are permanently erased.
+    The script skips all changes to diverged items.
+  - It reports destination-ahead and destination-only items separately. These
+    counts must both be zero for the final cutover check.
 - **It is idempotent.** A repeat run copies only what changed, and also cleans
   up after a run that stopped partway.
 - **It checks its work.** After copying, it compares each team's items, current
@@ -96,5 +101,8 @@ doppler run -p openbao -c dev --only-secrets OPENBAO_ROOT_TOKEN OPENBAO_ACCOUNT_
 ```
 
 Drop `--dry-run` to copy. The run exits 2 if any item diverged or failed the
-check; `--team-id` limits a run to named teams. To roll back after the name
-points at the replacement, swap the two tunnels and tokens.
+check. `--team-id` limits a run to named teams. For the final copy, include
+all teams and follow the stack README's write fence and verification steps.
+Any divergence blocks cutover until it is independently reconciled and the
+fenced verification passes. A reverse copy for a separately approved
+rollback swaps both tunnels and tokens and uses the same checks.

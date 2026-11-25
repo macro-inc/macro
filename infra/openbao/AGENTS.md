@@ -19,6 +19,9 @@ role, and never deletes or replaces secret values.
 - `copy_secrets.py`: the one-off copy of every team's values from the legacy
   hosted vault to its replacement in the OpenBao account. It only moves the
   destination forward, keeps version numbers, and prints counts and ids only.
+  It can change the state of an existing version only when its value is the
+  exact synthetic placeholder. Follow the stack README's write fence and stop
+  the cutover on any divergence.
 
 ## Checks
 
