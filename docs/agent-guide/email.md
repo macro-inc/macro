@@ -281,9 +281,11 @@ organization notices and inbox settings show pending or failed changes; the
 mark-as-read from opening a thread is announced only if it fails. Draft sync and
 delivery progress is silent, as on Gmail: a composer or sent message shows a
 notice only for a conflict, uncertain or rejected delivery, revoked access,
-unsavable content, or an inbox move. A draft conflicts only when its content was
+unsavable content, or an inbox move. A draft conflicts when its content was
 edited in Outlook: a version the mailbox moved on its own (an add-in, a label
-policy) or that Macro's own archive moved still syncs and sends. Use its recovery
+policy) or that Macro's own archive moved still syncs and sends, as long as Macro
+recorded the content of the version it last read. Without that record (a draft
+last written by an older build), any moved version conflicts. Use its recovery
 actions and check the provider copy before choosing an explicit resend; a resend
 in flight shows as the send button's pending state. A draft whose sync failed or could not be
 confirmed (the "Draft could not be synced" banner) still sends: Send carries the

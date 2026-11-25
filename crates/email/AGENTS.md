@@ -538,7 +538,8 @@ tools — hexagonal, heavily feature-gated.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
   through `set_thread_inbox`, and read Outlook inbox, trash, and junk state from
   `email_message_mailbox_facts`, never from labels.
-- An Outlook draft is a conflict only when its content was edited outside Macro
+- An Outlook draft is a conflict when its content was edited outside Macro, or
+  when its version moved with no baseline recorded for it (below)
   (`DraftChange::between` in `domain/mailbox/drafts/models.rs`): a mailbox
   stamps drafts on its own (an add-in, a label policy) and Macro's own archive
   moves them, which move the version and keep the content fingerprint. Compare
