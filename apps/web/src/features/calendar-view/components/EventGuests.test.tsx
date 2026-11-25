@@ -737,8 +737,8 @@ it('keeps the composer footer forwarding action gated by permissions and pending
 });
 
 it.each([
-  { scope: 'this_event', label: 'This event' },
-  { scope: 'all', label: 'All events' },
+  { scope: 'this_event', label: 'Apply to this event' },
+  { scope: 'all', label: 'Apply to all events' },
 ])(
   'preserves $scope for recurring conference replacement',
   async ({ scope, label }) => {

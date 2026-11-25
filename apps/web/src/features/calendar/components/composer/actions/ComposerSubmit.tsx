@@ -11,10 +11,10 @@ export function ComposerScopeOptions(props: {
   return (
     <Dropdown.Group>
       <Dropdown.Item onSelect={() => props.onSelect('this_event')}>
-        {t('calendar.thisEvent')}
+        {t('calendar.applyToThisEvent')}
       </Dropdown.Item>
       <Dropdown.Item onSelect={() => props.onSelect('all')}>
-        {t('calendar.allEvents')}
+        {t('calendar.applyToAllEvents')}
       </Dropdown.Item>
     </Dropdown.Group>
   );

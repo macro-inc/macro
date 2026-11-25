@@ -559,10 +559,10 @@ function showComposerSave(recurring: boolean, fullWidth = false) {
 }
 
 it.each([
-  { phone: false, scope: 'this_event', label: 'This event' },
-  { phone: false, scope: 'all', label: 'All events' },
-  { phone: true, scope: 'this_event', label: 'This event' },
-  { phone: true, scope: 'all', label: 'All events' },
+  { phone: false, scope: 'this_event', label: 'Apply to this event' },
+  { phone: false, scope: 'all', label: 'Apply to all events' },
+  { phone: true, scope: 'this_event', label: 'Apply to this event' },
+  { phone: true, scope: 'all', label: 'Apply to all events' },
 ])(
   'saves the chosen $scope scope only after selection (phone=$phone)',
   async ({ phone, scope, label }) => {
@@ -585,7 +585,7 @@ it('opens recurring scope from Enter and uses menu keyboard navigation to save',
   expect(onSubmit).not.toHaveBeenCalled();
   await waitFor(() =>
     expect(document.activeElement).toBe(
-      screen.getByRole('menuitem', { name: 'This event' })
+      screen.getByRole('menuitem', { name: 'Apply to this event' })
     )
   );
   await user.keyboard('{ArrowDown}{Enter}');
@@ -599,7 +599,9 @@ it('prompts on recurring form submission and preserves the draft when dismissed'
   model.setVisibility('private');
   fireEvent.submit(form);
   expect(onSubmit).not.toHaveBeenCalled();
-  expect(screen.getByRole('menuitem', { name: 'This event' })).toBeTruthy();
+  expect(
+    screen.getByRole('menuitem', { name: 'Apply to this event' })
+  ).toBeTruthy();
   await user.keyboard('{Escape}');
   expect(model.visibility()).toBe('private');
   expect(onSubmit).not.toHaveBeenCalled();
@@ -615,7 +617,9 @@ it('preserves occurrence metadata restrictions and blocks a pending scope choice
     canSeeOtherGuests: true,
   });
   await user.click(screen.getByRole('button', { name: 'Save' }));
-  await user.click(screen.getByRole('menuitem', { name: 'This event' }));
+  await user.click(
+    screen.getByRole('menuitem', { name: 'Apply to this event' })
+  );
   expect(onSubmit).toHaveBeenCalledTimes(1);
   expect(onSubmit.mock.calls[0][1]).toBe('this_event');
   expect(onSubmit.mock.calls[0][2]?.visibility).toBeUndefined();

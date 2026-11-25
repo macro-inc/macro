@@ -167,6 +167,8 @@ export default {
   saveEvent: 'Save',
   thisEvent: 'This event',
   allEvents: 'All events',
+  applyToThisEvent: 'Apply to this event',
+  applyToAllEvents: 'Apply to all events',
   location: 'Location',
   addLocation: 'Add location',
   declineMode: 'Decline settings',

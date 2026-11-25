@@ -149,9 +149,9 @@ without Duration or More/Fewer. Desktop and agent date/time controls use the sam
 control surface, height, and radius. Guest/reminder multiselects preserve protected
 guests and non-popup reminders; Custom accepts minutes. Long Description/Location
 fields scroll inside. The footer keeps Cancel and Create event/Save on the right.
-For recurring edits, Save opens its scope menu: This event or All events. Enter
-opens the menu; arrow keys and Enter select and save. Following-event updates are
-not supported by the current API. Cancelling the menu does not save or change scope.
+For recurring edits, Save opens exactly two translated choices: Apply to this event
+or Apply to all events. Enter opens the menu; arrow keys and Enter select and save.
+Following-event updates are not supported by the current API. Cancelling the menu does not save or change scope.
 Eligible invitation forwarding appears as a labelled icon button on the left.
 Desktop field groups use a 10px gap (`gap-2.5`). Capped descriptions expose a thin
 native scrollbar. Guest summaries and selectors show neutral avatar stacks before
@@ -1813,7 +1813,7 @@ disables Save and shows a notice with `Replace event…` and `Undo`; `Undo` turn
 Teams back on. `Replace event…` previews a replacement that carries the editor's
 unsaved changes (title, time, description, location, guests, reminders, repeat
 rule) without Teams; nothing is saved to the old event. For recurring events,
-`Replace without meeting` asks for This event or All events before its preview.
+`Replace without meeting` asks for Apply to this event or Apply to all events before its preview.
 A time or repeat change on the whole series drops its changed and cancelled occurrences, as Outlook does;
 otherwise occurrences still showing the series' value take the edit, and guests
 added or removed on the series are added to or removed from every occurrence. Check the

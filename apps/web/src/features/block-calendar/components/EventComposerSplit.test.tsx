@@ -83,12 +83,14 @@ vi.mock(
     return {
       CalendarDesktopPlacement: (props: {
         children?: JSX.Element;
+        footerLeading?: JSX.Element;
         onClose: () => void;
       }) => {
         const { controller } = useCalendarComposer();
         return (
           <>
             {props.children}
+            <footer>{props.footerLeading}</footer>
             <button type="button" onClick={props.onClose}>
               Cancel
             </button>
@@ -127,12 +129,12 @@ const GUEST_COPY = {
   isCancelled: false,
 } as CalendarEvent;
 
-it('offers Forward invitation beside the guests of an event the viewer cannot invite to', () => {
+it('offers Forward invitation in the footer of an event the viewer cannot invite to', () => {
   mocks.canForward = true;
   render(() => <EventComposerSplit event={GUEST_COPY} />);
   expect(
-    screen.getByRole('button', { name: 'Forward invitation' })
-  ).toBeTruthy();
+    screen.getByRole('button', { name: 'Forward invitation' }).closest('footer')
+  ).not.toBeNull();
   // The forward follows its own flag.
   expect(mocks.controllerEnabled?.()).toBe(true);
 });
