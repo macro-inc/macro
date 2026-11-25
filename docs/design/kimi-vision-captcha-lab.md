@@ -96,7 +96,7 @@ Browser Tests job.
 
 | Run | Attempts | Solved | Incorrect | `model_error` | Planner latency | Tokens per call |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1: default reasoning | 5 | 0 | 0 | 5 | 1.6–2.0 s | 714 (all 64 output tokens spent reasoning) |
+| 1: default reasoning | 5 | 0 | 0 | 5 | 1.6–2.0 s | not recorded (the failed parse dropped usage) |
 | 2: `reasoning_effort: none` | 10 | 10 | 0 | 0 | 0.9–1.9 s | 713–756 |
 | 3: same, after the review fixes to the runner | 5 | 5 | 0 | 0 | 1.0–1.5 s | 713–756 |
 
