@@ -2816,8 +2816,10 @@ Navigation and batch submission save the visible editor first. Completed and
 dismissed items stay in the stack, with their saved state. Calendar cards reuse
 the existing event composer and offer **Create all** for a batch. Once an item's
 event is created (from the card or by the agent after approval), its preview
-draws that event, in its calendar's color, in the draft's place as soon as the
-calendar has it; a dismissed or failed item keeps the draft. Questions keep
+draws that event, in its calendar's color, in the draft's place once an
+occurrence of it loads in the preview's window. Until then, or if the event
+moved out of that window, the draft stays; a dismissed or failed item keeps the
+draft too. Questions keep
 the existing ACP `AskUser` interaction. Batch submission checks every selected
 draft before starting any sends/creates, and waits for attachments still
 uploading in the active email.
