@@ -118,6 +118,11 @@ const CrmRecordTasks = lazy(async () => ({
   default: (await import('./record-tasks-adapter')).CrmRecordTasks,
 }));
 
+// Loaded on demand, like the Tasks tab: the activity views pull in soup.
+const CrmRecordActivity = lazy(async () => ({
+  default: (await import('./record-activity-adapter')).CrmRecordActivity,
+}));
+
 const CrmActivityTasks = lazy(async () => ({
   default: (await import('./activity-tasks-adapter')).CrmActivityTasks,
 }));
@@ -350,6 +355,7 @@ export function createAppCrmContext(): CrmContext {
         useRecordReferencesQuery(useSoupAstItemsQuery, scope)
       ),
     RecordTasks: CrmRecordTasks,
+    RecordActivity: CrmRecordActivity,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
     createSettingsCommands: () =>
       usePatchTeamCrmSettingsMutation({

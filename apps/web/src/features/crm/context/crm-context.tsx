@@ -179,6 +179,11 @@ export type CrmContext = {
   ): ItemListSource;
   /** The record's Tasks tab, scoped to tasks associated with it. */
   RecordTasks: Component<{ scope: CrmRecordScope }>;
+  /** The record's Activity section in its side panel. */
+  RecordActivity: Component<{
+    record: { type: 'company' | 'contact'; id: string };
+    order: number;
+  }>;
   createPropertyCommands(): PropertyCommands;
   hydrateCompany(company: CrmCompanyEntity): CrmCompanyEntity;
   createSettingsCommands(): CrmMutation<

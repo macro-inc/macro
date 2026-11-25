@@ -16,8 +16,13 @@ export type FeedEntry =
     };
 
 function runKey(event: ActivityEvent): string {
+  // Each merge keeps its own line, with what it merged and dropped.
   const property =
-    event.action.kind === 'property-changed' ? event.action.property : '';
+    event.action.kind === 'property-changed'
+      ? event.action.property
+      : event.action.kind === 'record-merged'
+        ? event.id
+        : '';
   return `${event.actorId}\u0000${event.entityId}\u0000${event.action.kind}\u0000${property}`;
 }
 
