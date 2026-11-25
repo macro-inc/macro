@@ -10,6 +10,7 @@ import {
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
+import { crmRecordSectionSearch } from '@app/features/crm/crm-record-block';
 import {
   crmPeopleSearch,
   crmRecordSearch,
@@ -97,15 +98,22 @@ function redirectLegacyRoutes(
   const isTouch = options.isTouchDevice();
   const isPhone = options.isMobile?.() ?? isTouch;
 
-  // Touch shows records on their own pages, as the Customers lists open them.
+  // Touch shows records on their own pages, as the Customers lists open them,
+  // on the section the link names.
   if (rootId === 'view-companies' && isTouch) {
-    const { recordType, recordId, itemId } = routeParams(route);
+    const { recordType, recordId, itemId, section } = routeParams(route);
     if (
       typeof recordType === 'string' &&
       typeof recordId === 'string' &&
       typeof itemId !== 'string'
     ) {
-      return redirect(`/${recordType}/${encodeURIComponent(recordId)}`);
+      const page = `/${recordType}/${encodeURIComponent(recordId)}`;
+      if (typeof section !== 'string') return redirect(page);
+      const query = new URLSearchParams();
+      replacePaneSearchParams(query, [
+        { [crmRecordSectionSearch.namespace]: { section: [section] } },
+      ]);
+      return redirect(`${page}?${query}`);
     }
   }
 

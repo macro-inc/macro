@@ -400,22 +400,28 @@ const legacyEntry = (type: string, id: string): Entry => ({
 const recordEntry = (
   recordType: 'company' | 'contact',
   recordId: string,
-  pipelineId?: string
-): Entry => ({
-  id: 'entry',
-  location: {
-    route: pipelineId
-      ? paneRoute(
-          { id: companiesRoute.id, params: {} },
-          { id: crmPipelineRoute.id, params: { pipelineId } },
-          { id: crmPipelineRecordRoute.id, params: { recordType, recordId } }
-        )
-      : paneRoute(
-          { id: companiesRoute.id, params: {} },
-          { id: crmRecordRoute.id, params: { recordType, recordId } }
-        ),
-  },
-});
+  pipelineId?: string,
+  section?: string
+): Entry => {
+  const params = section
+    ? { recordType, recordId, section }
+    : { recordType, recordId };
+  return {
+    id: 'entry',
+    location: {
+      route: pipelineId
+        ? paneRoute(
+            { id: companiesRoute.id, params: {} },
+            { id: crmPipelineRoute.id, params: { pipelineId } },
+            { id: crmPipelineRecordRoute.id, params }
+          )
+        : paneRoute(
+            { id: companiesRoute.id, params: {} },
+            { id: crmRecordRoute.id, params }
+          ),
+    },
+  };
+};
 
 describe('legacy CRM URLs', () => {
   const run = (
@@ -565,6 +571,22 @@ describe('legacy CRM URLs', () => {
       run(recordEntry('contact', contactId, pipelineId), { touch: true })
     ).toEqual({ type: 'redirect', to: `/contact/${contactId}` });
     expect(run(recordEntry('company', companyId))).toBeUndefined();
+  });
+
+  it('opens a Customers record tab link on that section of the record page on touch', () => {
+    for (const [type, id, section, pipeline] of [
+      ['company', companyId, 'team', undefined],
+      ['contact', contactId, 'tasks', undefined],
+      ['contact', contactId, 'emails', pipelineId],
+    ] as const) {
+      const result = run(recordEntry(type, id, pipeline, section), {
+        touch: true,
+      });
+      if (result?.type !== 'redirect') throw new Error('Expected a redirect');
+      const url = new URL(result.to, window.location.origin);
+      expect(url.pathname).toBe(`/${type}/${id}`);
+      expect(url.searchParams.get('s0.crm-section.section')).toBe(section);
+    }
   });
 
   it('keeps a record item link inside Customers on touch instead of dropping the item', () => {
