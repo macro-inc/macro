@@ -28,10 +28,44 @@ data:
       limit = "768MiB"
       spike_limit = "128MiB"
       output {
-        logs = [otelcol.processor.batch.ingest.input]
-        traces = [otelcol.processor.batch.ingest.input]
+        logs = [otelcol.processor.filter.local_logs.input]
+        traces = [otelcol.processor.transform.ai_content.input]
         metrics = [otelcol.processor.batch.ingest.input]
       }
+    }
+
+    // Local stacks forward their logs here (docker/grafana-forwarder), and one
+    // service failing in a loop sent more than every other sender together, nearly
+    // all of it error-level. Only local-telemetry's run events are kept; the rest
+    // stay in the stack's own Loki.
+    otelcol.processor.filter "local_logs" {
+      error_mode = "ignore"
+      logs {
+        log_record = [
+          `(resource.attributes["deployment.environment"] == "local" or resource.attributes["deployment.environment.name"] == "local") and resource.attributes["service.name"] != "local-telemetry"`,
+        ]
+      }
+      output { logs = [otelcol.processor.batch.ingest.input] }
+    }
+
+    // What people and models wrote never reaches storage. Token counts, models,
+    // operations, outcomes and the macro.genai.* sizes stay. A failed statement
+    // fails the batch, so content can't slip through.
+    otelcol.processor.transform "ai_content" {
+      error_mode = "propagate"
+      trace_statements {
+        context = "span"
+        statements = [
+          `delete_matching_keys(attributes, "^gen_ai\\.(input|output|prompt|completion|choice|system_instructions|(system|user|assistant|tool)\\.message|tool\\.definitions|tool\\.call\\.(arguments|result))(\\.|$)")`,
+        ]
+      }
+      trace_statements {
+        context = "spanevent"
+        statements = [
+          `delete_matching_keys(attributes, "^gen_ai\\.(input|output|prompt|completion|choice|system_instructions|(system|user|assistant|tool)\\.message|tool\\.definitions|tool\\.call\\.(arguments|result))(\\.|$)")`,
+        ]
+      }
+      output { traces = [otelcol.processor.batch.ingest.input] }
     }
 
     otelcol.processor.batch "ingest" {

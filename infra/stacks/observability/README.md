@@ -181,19 +181,29 @@ cover only runs recorded since; the other panels cover every event.
 ### Local stacks' own telemetry
 
 A developer who sets `services = true` in their local telemetry settings also
-sends their local stacks' service traces, logs and metrics through the same
+sends their local stacks' service traces and metrics through the same
 route and token (`docs/development/running-locally.md`). A Grafana Alloy
 forwarder on their machine (`docker/grafana-forwarder/config.alloy`) keeps every
 trace with an error in its first 30 seconds and a tenth of the rest, drops the
-local collector's own telemetry and debug and trace logs,
-and tags resources and metric datapoints with `host.name` (the machine's name)
+local collector's own telemetry, and tags resources and metric datapoints with `host.name` (the machine's name)
 and `deployment.environment="local"`; services add `macro.local.instance`,
 which the forwarder copies onto metric datapoints. Dev
 dashboards and alerts select `dev`/`development`, so this data stays out of
-them. In Loki, `host_name` and `macro_local_instance` are structured metadata,
-under `deployment_environment="local"`. The `Macro run_local` dashboard's last row
+them. It also forwards their logs above debug, which ingest drops
+(`nixos/ingest.alloy`): one local service failing in a loop sent more than every
+other sender together. Only `local-telemetry`'s run events reach Loki. The
+`Macro run_local` dashboard's last row
 (`nixos/grafana-provisioning/local-dashboard.nix`, not the shared report spec)
-shows bring-ups, stacks, sampled traces, error logs and logs by machine.
+shows sampled traces by machine.
+
+### What ingest removes
+
+Before storage, `nixos/ingest.alloy` removes what people and models wrote from
+spans and span events, whichever service sent them: the `gen_ai.*` messages,
+prompts, completions, system instructions, tool definitions, and tool call
+arguments and results. Token counts, models, operations, outcomes and the
+`macro.genai.*` sizes stay. A new attribute that carries content belongs in its
+`ai_content` pattern.
 
 ### Pinned exporter limits
 

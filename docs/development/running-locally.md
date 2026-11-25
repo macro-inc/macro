@@ -1022,7 +1022,7 @@ it with `endpoint = "http://127.0.0.1:3100/otlp"` and `traces = false`.
 
 ### Your stacks' telemetry in Grafana (opt-in)
 
-To see your local stacks' own traces, logs and metrics in the hosted Grafana,
+To see your local stacks' own traces and metrics in the hosted Grafana,
 next to dev's, add `services = true` to the same settings file. It applies to
 every stack on the machine, from every worktree and instance:
 
@@ -1040,7 +1040,8 @@ the file as having unknown keys and send no timings until they are rebased. The 
 everything it receives there; stacks that are already running are sent from then
 on, but carry their instance name only after their next bring-up. The summary
 links the `Macro run_local` dashboard filtered to your machine: its last row
-shows bring-ups, stacks, traces, error logs and logs by machine.
+shows traces by machine. The hosted ingest drops local stacks' logs, so read
+those in the stack's own Loki.
 
 **What is sent.** Everything your services send to the local collector, which
 includes request attributes, log messages and error text from your local data;
