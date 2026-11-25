@@ -636,10 +636,13 @@ export async function executeGraphqlSetCalendarColor(
     } as OptimisticResponse<SetCalendarColorMutation>,
     { uuid: uuidv5(args.calendarId, CALENDAR_COLOR_NAMESPACE) }
   ).toPromise();
-  if (optimisticMutationDispositionOf(result)?.kind === 'queued') {
+  const disposition = optimisticMutationDispositionOf(result);
+  if (disposition?.kind === 'queued') {
     return { kind: 'queued' };
   }
   if (result.error) throw graphqlError(result);
+  // The queue can give up on a write that brought back no error.
+  if (disposition?.kind === 'permanently-failed') throw disposition.error;
   return { kind: 'committed' };
 }
 

@@ -39,12 +39,19 @@ function withCustomColor(
   );
 }
 
-type CalendarColorTransport = 'graphql' | 'rest';
+/**
+ * The transport that carried a save, and whether the server has it yet or
+ * the cache's queue still holds it.
+ */
+export interface CalendarColorSave {
+  transport: 'graphql' | 'rest';
+  outcome: 'committed' | 'queued';
+}
 
-/** Saves the color and reports the transport that carried it. */
+/** Saves the color and reports how it was saved. */
 async function saveCalendarColor(
   change: CalendarColorChange
-): Promise<CalendarColorTransport> {
+): Promise<CalendarColorSave> {
   return Telemetry.span('calendar.set_color', async (span) => {
     const host = answeringGraphqlCalendarHost();
     span.setAttr('calendar.calendar_id', change.calendarId);
@@ -52,9 +59,9 @@ async function saveCalendarColor(
     span.setAttr('calendar.transport', host ? 'graphql' : 'rest');
     try {
       if (host) {
-        const outcome = await executeGraphqlSetCalendarColor(change);
-        span.setAttr('calendar.color.outcome', outcome.kind);
-        return 'graphql';
+        const { kind } = await executeGraphqlSetCalendarColor(change);
+        span.setAttr('calendar.color.outcome', kind);
+        return { transport: 'graphql', outcome: kind };
       }
       await throwOnErr(() =>
         emailClient.setCalendarColor(change.calendarId, {
@@ -62,7 +69,7 @@ async function saveCalendarColor(
         })
       );
       span.setAttr('calendar.color.outcome', 'committed');
-      return 'rest';
+      return { transport: 'rest', outcome: 'committed' };
     } catch (error) {
       span.setAttr('calendar.color.outcome', 'failed');
       span.error('Calendar color save failed');
@@ -130,12 +137,12 @@ const calendarColorMutationOptions = {
   // patch and the send), is reread once no color save is pending, so a read
   // started before another save's write cannot bring its old color back.
   onSettled: (
-    transport: CalendarColorTransport | undefined,
+    saved: CalendarColorSave | undefined,
     _error: unknown,
     change: CalendarColorChange,
     snapshot: CalendarColorSnapshot | undefined
   ) =>
-    (snapshot?.patched || transport === 'rest') &&
+    (snapshot?.patched || saved?.transport === 'rest') &&
     isLastPendingSave(CALENDAR_COLOR_MUTATION_KEY)
       ? queryClient.invalidateQueries(visibleCalendarsOf(change.userId))
       : undefined,

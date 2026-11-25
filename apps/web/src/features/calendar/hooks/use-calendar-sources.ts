@@ -1,4 +1,5 @@
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
+import { queryReadyGate } from '@queries/gate';
 import { createMemo } from 'solid-js';
 import type { CalendarSource } from '../types';
 import { DEFAULT_CALENDAR_SOURCE } from '../types';
@@ -9,7 +10,8 @@ export function useCalendarSources() {
   const [preferences] = useCalendarPreferences();
   const calendarsQuery = useVisibleCalendarsQuery();
   const sources = createMemo<CalendarSource[]>(() => {
-    const calendars = calendarsQuery.isSuccess
+    // A failed refetch keeps the cached calendars, and with them their colors.
+    const calendars = queryReadyGate(calendarsQuery)
       ? calendarsQuery.data
       : undefined;
     if (!calendars || calendars.length === 0) {

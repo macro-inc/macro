@@ -23,6 +23,7 @@ import {
   executeGraphqlDelete,
   executeGraphqlInviteGuests,
   executeGraphqlRsvp,
+  executeGraphqlSetCalendarColor,
   executeGraphqlUpdate,
   isCalendarEventCreating,
   isCalendarOccurrenceMoving,
@@ -41,7 +42,8 @@ const DISPOSITION = 'normalizedCacheMutationDisposition';
 const OPTIMISTIC = 'normalizedCacheOptimistic';
 const ENQUEUED = 'normalizedCacheOptimisticEnqueued';
 
-type Disposition = 'committed' | 'queued' | 'failed';
+/** `gave-up`: the queue stopped retrying a write that answered no data and no error. */
+type Disposition = 'committed' | 'queued' | 'failed' | 'gave-up';
 
 interface OptimisticContext {
   uuid: string;
@@ -125,7 +127,7 @@ function fakeClient(
             },
           },
           data:
-            disposition === 'failed'
+            disposition === 'failed' || disposition === 'gave-up'
               ? undefined
               : {
                   [field]: {
@@ -150,7 +152,7 @@ function fakeClient(
             [DISPOSITION]:
               disposition === 'queued'
                 ? { kind: 'queued', transactionId: 'tx-1' }
-                : disposition === 'failed'
+                : disposition === 'failed' || disposition === 'gave-up'
                   ? { kind: 'permanently-failed' }
                   : { kind: 'committed' },
           },
@@ -267,6 +269,22 @@ describe('executeGraphqlRsvp', () => {
     });
     expect(calls[1]?.optimistic.uuid).toBe(calls[0]?.optimistic.uuid);
     expect(host.calendarCommit).not.toHaveBeenCalled();
+  });
+});
+
+describe('executeGraphqlSetCalendarColor', () => {
+  const change = { calendarId: 'calendar-1', color: '#5c8aee' };
+
+  it('reports a save the queue still holds as queued', async () => {
+    await expect(
+      executeGraphqlSetCalendarColor(change, fakeClient('queued').client)
+    ).resolves.toEqual({ kind: 'queued' });
+  });
+
+  it('fails a save the queue gave up on, even without an error', async () => {
+    await expect(
+      executeGraphqlSetCalendarColor(change, fakeClient('gave-up').client)
+    ).rejects.toThrow();
   });
 });
 

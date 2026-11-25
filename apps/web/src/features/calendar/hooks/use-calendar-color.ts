@@ -67,7 +67,9 @@ export function useUploadBrowserCalendarColors() {
       mutation.mutateAsync(change),
       (error) => error
     );
-    if (saved.isOk()) {
+    // A save the cache only queued can still fail; the next load finds the
+    // account's color once it lands, or uploads this one again.
+    if (saved.isOk() && saved.value.outcome === 'committed') {
       setPreferences('sourceColors', change.calendarId, undefined);
     }
   };

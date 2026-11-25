@@ -2,7 +2,10 @@
  * @vitest-environment jsdom
  */
 
-import type { CalendarColorChange } from '@queries/calendar/colors';
+import type {
+  CalendarColorChange,
+  CalendarColorSave,
+} from '@queries/calendar/colors';
 import type { VisibleCalendar } from '@service-calendar/generated/schemas/visibleCalendar';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
@@ -15,7 +18,8 @@ import {
 import { useCalendarSources } from './use-calendar-sources';
 
 const state = vi.hoisted(() => ({
-  mutateAsync: vi.fn<(change: CalendarColorChange) => Promise<void>>(),
+  mutateAsync:
+    vi.fn<(change: CalendarColorChange) => Promise<CalendarColorSave>>(),
   failure: vi.fn<(message: string) => void>(),
   started: [] as Promise<unknown>[],
 }));
@@ -24,6 +28,14 @@ const state = vi.hoisted(() => ({
 const settled = () => Promise.all(state.started);
 
 const [calendars, setCalendars] = createSignal<VisibleCalendar[]>();
+/** A background refetch failed while the cached list stays. */
+const [refetchFailed, setRefetchFailed] = createSignal(false);
+
+const COMMITTED: CalendarColorSave = {
+  transport: 'graphql',
+  outcome: 'committed',
+};
+const QUEUED: CalendarColorSave = { transport: 'graphql', outcome: 'queued' };
 const [preferences, setPreferences] = createStore<{
   sourceColors: Record<string, string | undefined>;
   accountColors: Record<string, string | undefined>;
@@ -43,7 +55,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 vi.mock('@queries/calendar/calendars', () => ({
   useVisibleCalendarsQuery: () => ({
     get isSuccess() {
-      return calendars() !== undefined;
+      return calendars() !== undefined && !refetchFailed();
     },
     get isPending() {
       return calendars() === undefined;
@@ -95,10 +107,10 @@ function calendar(
 function pendingSaves() {
   const saves: {
     change: CalendarColorChange;
-    settle: PromiseWithResolvers<void>;
+    settle: PromiseWithResolvers<CalendarColorSave>;
   }[] = [];
   state.mutateAsync.mockImplementation((change) => {
-    const settle = Promise.withResolvers<void>();
+    const settle = Promise.withResolvers<CalendarColorSave>();
     saves.push({ change, settle });
     return settle.promise;
   });
@@ -109,6 +121,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.started.length = 0;
   setCalendars(undefined);
+  setRefetchFailed(false);
   setPreferences({ sourceColors: {}, accountColors: {} });
 });
 
@@ -129,10 +142,25 @@ describe('a calendar color saved in this browser', () => {
       { userId: 'alice', calendarId: 'primary', color: '#5c8aee' },
     ]);
     expect(preferences.sourceColors.primary).toBe('#5C8AEE');
-    saves[0].settle.resolve();
+    saves[0].settle.resolve(COMMITTED);
     await settled();
 
     expect(preferences.sourceColors.primary).toBeUndefined();
+  });
+
+  it('stays in the browser while the save waits in the queue, which may still fail', async () => {
+    const saves = pendingSaves();
+    setPreferences('sourceColors', { primary: '#5c8aee' });
+    render(() => {
+      useUploadBrowserCalendarColors();
+      return null;
+    });
+    setCalendars([calendar('primary', null)]);
+
+    saves[0].settle.resolve(QUEUED);
+    await settled();
+
+    expect(preferences.sourceColors.primary).toBe('#5c8aee');
   });
 
   it('stays in the browser when the upload fails, for the next load to retry', async () => {
@@ -200,6 +228,22 @@ describe('calendar colors', () => {
     ]);
   });
 
+  it('keep their colors when a background refetch fails', () => {
+    setCalendars([calendar('work', '#5c8aee'), calendar('primary', null)]);
+    let sources!: ReturnType<typeof useCalendarSources>;
+    render(() => {
+      sources = useCalendarSources();
+      return null;
+    });
+
+    setRefetchFailed(true);
+
+    expect(sources.sources().map(({ id, color }) => [id, color])).toEqual([
+      ['work', '#5c8aee'],
+      ['primary', '#9fe1e7'],
+    ]);
+  });
+
   it('saves a choice to the account and drops what this browser held', async () => {
     const saves = pendingSaves();
     setPreferences('sourceColors', { primary: '#ed6a86' });
@@ -210,7 +254,7 @@ describe('calendar colors', () => {
     });
 
     setColor('primary', undefined);
-    saves[0].settle.resolve();
+    saves[0].settle.resolve(QUEUED);
     await settled();
 
     expect(saves[0].change).toEqual({
