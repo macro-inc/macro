@@ -12,7 +12,7 @@
   flex: 0 0 28px;
   align-items: center;
   text-align: center;
-  font-size: var(--text-xxs);
+  font-size: var(--text-xs);
   line-height: var(--leading-normal);
   min-width: 0;
   color: var(--color-ink-muted);
@@ -22,6 +22,7 @@
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 .phone-month-weekday-today { color: var(--color-accent); }
 .phone-month-card {
@@ -101,13 +102,6 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-.phone-month-bar > .calendar-event-time {
-  flex: none;
-  white-space: nowrap;
-  font-size: var(--text-xxs);
-  line-height: var(--leading-normal);
-  font-variant-numeric: tabular-nums;
 }
 .phone-month-bar.phone-month-bar-timed {
   border: 0;

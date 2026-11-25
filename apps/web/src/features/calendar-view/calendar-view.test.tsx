@@ -2,20 +2,29 @@
  * @vitest-environment jsdom
  */
 
+import 'fake-indexeddb/auto';
 import { readFileSync } from 'node:fs';
 import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSnapPager } from '@ui/components/SnapPager/SnapPager';
 import { createEffect, createSignal, type JSX, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  CalendarGrid,
+  type CalendarGridHandle,
+} from '../calendar/components/CalendarGrid';
 import {
   CalendarPagerContextProvider,
   useCalendarPager,
 } from '../calendar/components/CalendarPagerContext';
 import { calendarPageRange } from '../calendar/core/page-range';
 import { createCalendarPageMounts } from '../calendar/primitives/create-calendar-page-mounts';
+import type { CalendarEvent } from '../calendar/types';
+import { MonthDaySheet } from './components/month/MonthDaySheet';
+import { MonthGrid } from './components/month/MonthGrid';
+import { layoutPhoneMonthWeek } from './core/phone-month-layout';
 import { createMobileGridAxis } from './primitives/create-mobile-grid-axis';
 import { CalendarPagePreloads } from './views/CalendarPagePreloads';
 import { MobileCalendarGridAxis } from './views/mobile/calendar-grid-axis';
@@ -248,6 +257,257 @@ it('matches the phone width compensation against the grid hierarchy', () => {
   } finally {
     style.remove();
   }
+});
+
+describe('phone Month presentation', () => {
+  const event: CalendarEvent = {
+    id: 'month-event',
+    eventId: 'month-event',
+    occurrenceKey: '2026-11-02T09:00:00Z',
+    isCancelled: false,
+    isReadOnly: false,
+    attendees: [],
+    guestPolicy: {
+      canModify: false,
+      canInviteOthers: false,
+      canSeeOtherGuests: false,
+    },
+    viewerCan: {
+      editDetails: false,
+      inviteGuests: false,
+      organize: false,
+      removeGuests: false,
+      rsvp: false,
+      setGuestPolicy: false,
+    },
+    sourceCalendarIds: [],
+    recurrenceLines: [],
+    title: 'Planning',
+    start: '2026-11-02T09:00:00Z',
+    end: '2026-11-02T10:00:00Z',
+    allDay: false,
+    calendar: { id: 'calendar', name: 'Calendar', color: '#517be6' },
+    visibleCalendars: [],
+  };
+
+  it('keeps timed titles without time labels in the fixed weekday columns', () => {
+    const days = Array.from({ length: 7 }, (_, index) => ({
+      date: new Date(2026, 10, 2 + index),
+      events: index === 0 ? [event] : [],
+    }));
+    const { container } = render(() => (
+      <MonthGrid
+        weeks={[layoutPhoneMonthWeek(days, 3)]}
+        month={days[0].date}
+        today={days[0].date}
+        selected={undefined}
+        capacity={3}
+        cardRef={() => {}}
+        isSupported={() => true}
+        onPick={() => {}}
+      />
+    ));
+    expect(container.querySelector('.phone-month-bar')?.textContent).toBe(
+      'Planning'
+    );
+    expect(container.querySelector('.calendar-event-time')).toBeNull();
+    const weekdays = container.querySelector<HTMLElement>(
+      '.phone-month-weekdays'
+    );
+    expect(weekdays?.children.length).toBe(7);
+    expect(weekdays?.style.gridTemplateColumns).toBe(
+      'repeat(7, minmax(0, 1fr))'
+    );
+    const style = document.createElement('style');
+    style.textContent = readFileSync(
+      'src/features/calendar-view/components/month/month-grid.css',
+      'utf8'
+    );
+    document.head.append(style);
+    try {
+      expect(
+        Array.from(style.sheet?.cssRules ?? []).find(
+          (rule) =>
+            rule instanceof CSSStyleRule &&
+            rule.selectorText === '.phone-month-weekdays'
+        )?.cssText
+      ).toContain('font-size: var(--text-xs)');
+    } finally {
+      style.remove();
+    }
+  });
+
+  it('keeps the day-sheet title noninteractive while preserving event and create actions', async () => {
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const select = vi.fn();
+    const create = vi.fn();
+    render(() => (
+      <MonthDaySheet
+        open
+        date={new Date(2026, 10, 2)}
+        events={[event]}
+        timeFormat="24-hour"
+        onOpenChange={() => {}}
+        onCreate={create}
+        onSelect={select}
+        ref={() => {}}
+      />
+    ));
+    const title = await screen.findByRole('heading', {
+      name: 'Mon, November 2',
+    });
+    expect(title.closest('button')).toBeNull();
+    expect(screen.getByRole('dialog').classList.contains('bg-menu')).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Open day view' })).toBeNull();
+    const eventRow = screen.getByRole('button', { name: /Planning/ });
+    expect(eventRow.textContent).toContain('09:00');
+    expect(eventRow.classList.contains('calendar-agenda-event')).toBe(false);
+    expect(eventRow.classList.contains('text-ink')).toBe(true);
+    expect(
+      screen
+        .getByText('09:00 – 10:00')
+        .parentElement?.classList.contains('text-ink-muted')
+    ).toBe(true);
+    const dot = eventRow.querySelector<HTMLElement>(
+      '[aria-hidden="true"] span'
+    );
+    expect(dot?.classList.contains('border-ink-muted')).toBe(true);
+    expect(dot?.style.backgroundColor).toBe('rgb(81, 123, 230)');
+    fireEvent.click(eventRow);
+    expect(select).toHaveBeenCalledWith(event, eventRow);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Create event on selected day' })
+    );
+    expect(create).toHaveBeenCalledOnce();
+  });
+});
+
+describe('phone time-grid spacing', () => {
+  it('retains the two-lane Week cap and sends a third all-day event to overflow', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    let handle: CalendarGridHandle | undefined;
+    const { container } = render(() => (
+      <CalendarGrid
+        initialDate={new Date(2026, 10, 2)}
+        events={[]}
+        eventsById={new Map()}
+        settings={{
+          initialView: 'timeGridWeek',
+          compactAllDaySlot: true,
+          showWeekends: true,
+          weekStartsOn: 1,
+          timeFormat: '24-hour',
+          useNarrowDayHeaders: false,
+          useNarrowEventContent: false,
+        }}
+        selection={{ color: 'blue' }}
+      >
+        {(grid) => {
+          handle = grid;
+          return null;
+        }}
+      </CalendarGrid>
+    ));
+    const api = handle?.api();
+    if (!api) throw new Error('Calendar did not mount');
+    const host = container.querySelector<HTMLElement>('.calendar-view-host');
+    expect(host?.style.getPropertyValue('--calendar-all-day-max-height')).toBe(
+      '48px'
+    );
+    for (let index = 0; index < 3; index++) {
+      api.addEvent({
+        id: `event-${index}`,
+        title: `Event ${index}`,
+        start: '2026-11-02',
+        end: '2026-11-03',
+        allDay: true,
+      });
+      const overflow = container.querySelector('.fc-daygrid-more-link');
+      if (index < 2) expect(overflow).toBeNull();
+      else expect(overflow).not.toBeNull();
+    }
+    api.removeAllEvents();
+    expect(container.querySelector('.fc-daygrid-more-link')).toBeNull();
+    expect(host?.style.getPropertyValue('--calendar-all-day-max-height')).toBe(
+      '48px'
+    );
+  });
+  it.each([
+    [
+      'timeGridWeek',
+      '--calendar-all-day-min-height',
+      'var(--calendar-all-day-max-height)',
+    ],
+    ['timeGridThreeDay', 'height', '2rem'],
+  ])('applies the phone-only spacing to %s', (view, property, value) => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    document.documentElement.dataset.touchDevice = 'true';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'calendar-view';
+    const element = document.createElement('div');
+    wrapper.append(element);
+    document.body.append(wrapper);
+    const style = document.createElement('style');
+    style.textContent = readFileSync(
+      'src/features/calendar/calendar-phone-grid.css',
+      'utf8'
+    );
+    document.head.append(style);
+    const grid = new Calendar(element, {
+      plugins: [timeGridPlugin],
+      initialView: view,
+      initialDate: '2026-11-02',
+      views: { timeGridThreeDay: { type: 'timeGrid', duration: { days: 3 } } },
+    });
+    try {
+      grid.render();
+      const rules = Array.from(style.sheet?.cssRules ?? [])
+        .filter((rule): rule is CSSMediaRule => rule instanceof CSSMediaRule)
+        .flatMap((media) => Array.from(media.cssRules))
+        .filter((rule): rule is CSSStyleRule => rule instanceof CSSStyleRule);
+      const spacing = rules.find(
+        (rule) =>
+          rule.style.getPropertyValue(property) === value &&
+          wrapper.querySelector(rule.selectorText)
+      );
+      expect(spacing).toBeDefined();
+      if (!spacing) throw new Error('Phone spacing rule missing');
+      expect(style.sheet?.cssRules[0].cssText).toContain('max-width: 639px');
+      for (const other of ['timeGridDay', 'timeGridWeek', 'timeGridThreeDay']) {
+        grid.changeView(other);
+        expect(!!wrapper.querySelector(spacing.selectorText)).toBe(
+          other === view
+        );
+      }
+      delete document.documentElement.dataset.touchDevice;
+      expect(wrapper.querySelector(spacing.selectorText)).toBeNull();
+    } finally {
+      grid.destroy();
+      wrapper.remove();
+      style.remove();
+      delete document.documentElement.dataset.touchDevice;
+    }
+  });
 });
 
 describe('stationary phone time axis', () => {

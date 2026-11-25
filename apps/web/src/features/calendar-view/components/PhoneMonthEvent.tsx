@@ -28,10 +28,15 @@ export function PhoneMonthEvent(props: {
     <button
       data-calendar-month-event={props.event.id}
       type="button"
-      class="calendar-agenda-event flex min-h-11 w-full items-start gap-2 rounded-xl px-2.5 py-1 text-left text-sm"
-      style={{ '--event-calendar-color': props.event.calendar.color }}
+      class="flex min-h-11 w-full items-start gap-2 rounded-xl px-2.5 py-1 text-left text-sm text-ink hover:bg-hover"
       onClick={(event) => props.onSelect(props.event, event.currentTarget)}
     >
+      <span class="flex h-5 shrink-0 items-center" aria-hidden="true">
+        <span
+          class="size-2 rounded-full border border-ink-muted"
+          style={{ 'background-color': props.event.calendar.color }}
+        />
+      </span>
       <span class="min-w-0 flex-1">
         <span class="block truncate font-medium">
           {props.event.title || t('calendar.agendaUntitled')}

@@ -15,6 +15,16 @@
     margin-left: calc(-1 * var(--calendar-phone-axis-width));
   }
 
+  /* Reserve the same two-lane envelope even when a week has no all-day events. */
+  html[data-touch-device="true"] .calendar-view .fc-timeGridWeek-view {
+    --calendar-all-day-min-height: var(--calendar-all-day-max-height);
+  }
+
+  /* FullCalendar uses half-hour slots: two 32px slots make a 64px hour. */
+  html[data-touch-device="true"] .calendar-view .fc-timeGridThreeDay-view .fc-timegrid-slot {
+    height: 2rem;
+  }
+
   html[data-touch-device="true"] .calendar-phone-now-line::before {
     content: "";
     position: absolute;

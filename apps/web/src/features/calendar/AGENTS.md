@@ -50,6 +50,8 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 - Preserve native momentum until scrollend or observed stillness; complete controlled 140ms slides without relying on native events.
 - Disable wheel snapping during controlled alignment until the virtual destination rows are mounted.
 - Prepare all five stable slots before swiping, retarget recycled grids synchronously at settlement, and prefetch two ranges past each edge plus near-edge lookahead; freeze phone axis measurements during paging.
+- Reserve the full two-row all-day envelope in phone Week; use 64px hours only in phone three-day view, leaving Day/Week spacing unchanged.
+- Keep phone Month pills title-only and its day-sheet date noninteractive; use semantic readable text and preserve calendar-dot identity.
 - Share one cache startup head start across concurrent ranges; never restart its deadline per reader.
 
 ## Checks

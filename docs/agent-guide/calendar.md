@@ -43,6 +43,9 @@ calendar account metadata and other conferencing providers keep their original U
   sits beside the pager; hour labels retain their geometry during horizontal motion.
   The current-time marker starts at the boundary between that column and the days.
   Midnight and the current-time label remain readable.
+- Phone Week reserves two all-day rows even when empty; extra events use the existing
+  `+N` overflow. Phone 3-day uses 64px hours (32px half-hour slots); Day and Week
+  retain their existing hour spacing, and desktop is unchanged.
 - Reduced motion removes nonessential transitions without changing destinations.
 
 ## Cached saves
@@ -81,12 +84,16 @@ cache serves again; then it moves to the server's id.
 ## Month and Agenda
 
 Phone Month uses equal-height week rows above the bottom controls. All-day and
-multi-day spans precede stacked timed entries. Every pill is one fixed-height line;
-times stay beside truncated titles without wrapping. Adjacent-month dates are muted,
-but events remain readable. The final fitting row
-becomes `+N` when events overflow. Tap a day/count for its complete event sheet;
-select an event for details, the date heading for Day, or Add for a new event.
-Desktop Month shares its event presentation between grid and overflow popover.
+multi-day spans precede stacked timed entries. Every pill is one fixed-height line
+with a truncated title and no time. Weekday headings use the next type-scale step
+(`xs`) in their fixed columns. Adjacent-month dates are muted, but events remain
+readable. The final fitting row becomes `+N` when events overflow. Tap a day/count
+for its complete event sheet; select an event for details or Add for a new event.
+The sheet date is a plain title, not a Day-view button. Choose Day in the navigation
+drawer to switch views. Event times remain visible in muted semantic text on the
+sheet's opaque menu surface, with primary-ink titles and calendar-colored dots
+outlined in muted ink. Desktop Month shares its event presentation between grid and
+overflow popover.
 
 Agenda lists events chronologically with sticky headings and all-day events first.
 Arrows move one week; scrolling loads older/newer windows within supported dates.

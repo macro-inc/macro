@@ -138,15 +138,6 @@ export function PhoneMonthBars(props: {
     selectEvent(event, row);
     props.onFocusHandled(target.requestId);
   });
-  const openDay = () => {
-    const date = month.selected();
-    cancelPendingFocus();
-    setOpen(false);
-    batch(() => {
-      navigation.gotoDate(date);
-      navigation.changeView('timeGridDay');
-    });
-  };
   const createOnDay = () => {
     const date = month.selected();
     cancelPendingFocus();
@@ -169,7 +160,6 @@ export function PhoneMonthBars(props: {
         weeks={weeks()}
         month={currentMonth()}
         today={today()}
-        timeFormat={props.timeFormat}
         selected={sheetState.open ? month.selected() : undefined}
         capacity={capacity()}
         cardRef={setCard}
@@ -182,7 +172,6 @@ export function PhoneMonthBars(props: {
         events={month.events()}
         timeFormat={props.timeFormat}
         onOpenChange={changeSheetOpen}
-        onOpenDay={openDay}
         onCreate={createOnDay}
         onSelect={selectEvent}
         ref={setSheet}
