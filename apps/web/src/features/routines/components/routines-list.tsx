@@ -108,7 +108,7 @@ export function RoutinesList(props: {
   let focusSearch: (() => void) | undefined;
   const matches = (row: RoutineRow) =>
     (showing() !== 'on' || row.enabled) &&
-    `${row.name} ${row.when} ${row.does}`
+    `${row.name} ${row.whenDetails ?? row.when} ${row.does}`
       .toLowerCase()
       .includes(search().trim().toLowerCase());
   // A routine shows for its own match or for one of what its runs created.

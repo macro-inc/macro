@@ -1,15 +1,18 @@
-//! `Build Desktop on Tag` — orchestrator workflow that triggers the AppImage
-//! and the Apple silicon and Intel DMG builds in parallel when a release tag is
-//! pushed. Also supports manual dispatch. Generated into
-//! `build_desktop_on_tag.yml`.
+//! `Build Desktop on Tag` — orchestrator workflow that triggers the AppImage,
+//! the Apple silicon and Intel DMG, and the Windows installer builds in
+//! parallel when a release tag is pushed. Also supports manual dispatch.
+//! Generated into `build_desktop_on_tag.yml`.
 //!
 //! The Intel DMG is optional: it runs only once the tag pins its CEF codec
 //! build (`scripts/decide_intel_desktop.sh`), and when it fails or is skipped
 //! the other builds still publish, without `darwin-x86_64` in the feed.
 //!
-//! The reusable job definitions live in [`super::build_appimage_on_tag`] and
-//! [`super::build_dmg_on_tag`]. The macOS release QA job comes from
-//! [`super::desktop_qa_macos`]; promotion to `desktop-stable` waits for it.
+//! The reusable job definitions live in [`super::build_appimage_on_tag`],
+//! [`super::build_dmg_on_tag`] and [`super::desktop_windows`]. Apple silicon
+//! and Linux must both build for a release; Windows joins it only when its
+//! build succeeds, the installed app launches, and it may be published. The
+//! macOS release QA job comes from [`super::desktop_qa_macos`]; promotion to
+//! `desktop-stable` waits for it.
 
 use gh_workflow::expr::typed::{
     Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, cancelled, github, input,
@@ -20,7 +23,9 @@ use gh_workflow::{
 };
 
 use crate::workflows::build_dmg_on_tag::MacArch;
-use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag, desktop_qa_macos, steps, vars};
+use crate::workflows::{
+    build_appimage_on_tag, build_dmg_on_tag, desktop_qa_macos, desktop_windows, steps, vars,
+};
 
 #[cfg(test)]
 mod test;
@@ -74,9 +79,10 @@ const DECIDE_INTEL: StepHandle<DecideIntelOutputs> = StepHandle::new(
 /// release needs, keeps GitHub's default.
 const INTEL_DMG_TIMEOUT_MINUTES: u32 = 180;
 
-/// The builds' artifacts (`macro-appimage-*`, `macro-dmg-*`). The publish jobs
-/// attach every artifact they download to the release, so they download only
-/// these, never the QA results.
+/// The builds' artifacts (`macro-appimage-*`, `macro-dmg-*`, and
+/// `macro-windows-*` when Windows may be published). The publish jobs attach
+/// every artifact they download to the release, so they download only these,
+/// never the Windows frontend, an unpublished installer or the QA results.
 const BUILD_ARTIFACT_PATTERN: &str = "macro-*";
 
 /// The job that attaches the installers to the release.
@@ -121,6 +127,23 @@ pub fn build_desktop_on_tag() -> Workflow {
                 // must not hold Apple silicon and Linux for GitHub's six hours.
                 .timeout_minutes(INTEL_DMG_TIMEOUT_MINUTES),
         )
+        .add_job(
+            desktop_windows::WINDOWS_FRONTEND,
+            desktop_windows::frontend_job(resolved_ref(), desktop_windows::Purpose::Release)
+                .add_needs(RESOLVE_REF),
+        )
+        .add_job(
+            desktop_windows::BUILD_WINDOWS,
+            desktop_windows::windows_job(resolved_ref(), desktop_windows::Purpose::Release)
+                .add_needs(RESOLVE_REF)
+                .add_needs(desktop_windows::WINDOWS_FRONTEND),
+        )
+        .add_job(
+            desktop_windows::LAUNCH_WINDOWS,
+            desktop_windows::launch_job(resolved_ref(), desktop_windows::Purpose::Release)
+                .add_needs(RESOLVE_REF)
+                .add_needs(desktop_windows::BUILD_WINDOWS),
+        )
         // The installers users download must reach the release on their own.
         // Updater signing needs Doppler, Apple, and the stable channel; none of
         // that may stand between a green build and macro.com/download.
@@ -135,9 +158,11 @@ pub fn build_desktop_on_tag() -> Workflow {
             .add_needs(RESOLVE_REF)
             .add_needs(build_appimage_on_tag::BUILD_APPIMAGE)
             .add_needs(build_dmg_on_tag::BUILD_DMG)
-            // Waits for the Intel build so its installer lands too, but
-            // publishes without it when it fails or is skipped.
+            // Waits for the Intel build and the Windows launch so their
+            // installers land too, but publishes without them when they fail
+            // or are skipped.
             .add_needs(build_dmg_on_tag::BUILD_DMG_X86_64)
+            .add_needs(desktop_windows::LAUNCH_WINDOWS)
             .cond(all_succeeded([
                 RESOLVE_REF.result(),
                 build_appimage_on_tag::BUILD_APPIMAGE.result(),

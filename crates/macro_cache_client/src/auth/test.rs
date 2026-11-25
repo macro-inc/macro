@@ -23,6 +23,20 @@ async fn take_plain(cache: &MacroCache, code: &str) -> Option<MobileLoginSession
     }
 }
 
+/// Redis's own clock, in milliseconds, which session deadlines are kept on.
+async fn redis_now_ms(cache: &MacroCache) -> i64 {
+    let mut connection = cache
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .unwrap();
+    let (seconds, micros): (i64, i64) = redis::cmd("TIME")
+        .query_async(&mut connection)
+        .await
+        .unwrap();
+    seconds * 1000 + micros / 1000
+}
+
 fn fresh_code(label: &str) -> String {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -95,11 +109,11 @@ async fn a_restored_session_redeems_once_more_within_its_lifetime() {
         .unwrap();
 
     let mut taken = take_plain(&cache, &code).await.unwrap();
-    let lifetime = std::time::Duration::from_secs(MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS);
-    assert!(!taken.remaining().is_zero() && taken.remaining() <= lifetime);
+    let now = redis_now_ms(&cache).await;
+    let lifetime_ms = i64::try_from(MACRO_MOBILE_LOGIN_SESSION_EXPIRY_SECONDS * 1000).unwrap();
+    assert!(taken.deadline_ms > now && taken.deadline_ms <= now + lifetime_ms);
     // Most of the code's lifetime went by while the refresh failed.
-    let left = std::time::Duration::from_secs(2);
-    taken.expires_at = std::time::Instant::now() + left;
+    taken.deadline_ms = now + 2000;
     assert!(
         cache
             .restore_mobile_login_session(&code, &taken)
@@ -110,9 +124,13 @@ async fn a_restored_session_redeems_once_more_within_its_lifetime() {
     let again = take_plain(&cache, &code).await.unwrap();
     assert_eq!(again.refresh_token(), "fake-refresh-token");
     // The restore keeps the original deadline instead of starting a new one.
-    // Redis keeps whole milliseconds, so allow one.
-    assert!(!again.remaining().is_zero());
-    assert!(again.remaining() <= left + std::time::Duration::from_millis(1));
+    // Redis keeps whole milliseconds, so allow one either way.
+    assert!(
+        (again.deadline_ms - taken.deadline_ms).abs() <= 1,
+        "{} vs {}",
+        again.deadline_ms,
+        taken.deadline_ms
+    );
     assert!(take_plain(&cache, &code).await.is_none());
 }
 
@@ -162,7 +180,7 @@ async fn errors_and_debug_output_never_contain_the_code_or_token() {
     let session = MobileLoginSession {
         refresh_token: "fake-refresh-token".into(),
         challenge: Some("fake-challenge".into()),
-        expires_at: std::time::Instant::now(),
+        deadline_ms: 0,
     };
     let text = format!("{session:?}");
     assert!(!text.contains("fake-refresh-token"), "{text}");
@@ -178,8 +196,9 @@ async fn a_session_past_its_original_deadline_is_not_restored() {
         .await
         .unwrap();
     let mut taken = take_plain(&cache, &code).await.unwrap();
-    // The refresh outlasted the code's original five minutes.
-    taken.expires_at = std::time::Instant::now() - std::time::Duration::from_millis(1);
+    // The refresh outlasted the code's original five minutes: the deadline
+    // is checked by Redis when the restore runs, after any delay before it.
+    taken.deadline_ms = redis_now_ms(&cache).await - 1;
 
     assert!(
         !cache
@@ -308,4 +327,30 @@ async fn bound_code_errors_never_contain_the_code_token_or_challenge() {
         assert!(!text.contains("fake-refresh-token"), "{text}");
         assert!(!text.contains(CHALLENGE), "{text}");
     }
+}
+
+#[tokio::test]
+async fn a_bound_session_past_its_original_deadline_is_not_restored() {
+    let cache = cache();
+    let code = bound_code(&cache, "bound-expired").await;
+    let MobileLoginRedemption::Taken(mut taken) = cache
+        .take_mobile_login_session(&code, Some(CHALLENGE))
+        .await
+        .unwrap()
+    else {
+        panic!("the bound code should redeem");
+    };
+    taken.deadline_ms = redis_now_ms(&cache).await - 1;
+
+    assert!(
+        !cache
+            .restore_mobile_login_session(&code, &taken)
+            .await
+            .unwrap()
+    );
+    let after = cache
+        .take_mobile_login_session(&code, Some(CHALLENGE))
+        .await
+        .unwrap();
+    assert!(matches!(after, MobileLoginRedemption::Missing), "{after:?}");
 }

@@ -874,15 +874,22 @@ export function triggerKind(trigger: RoutineTriggerDraft): TriggerKind {
     .exhaustive();
 }
 
+/** A compact trigger line; the caller keeps all labels for details and search. */
+export function summarizeTriggerLabels(labels: string[]): string {
+  const [first] = labels;
+  if (!first) return '';
+  return labels.length > 1 ? `${first} +${labels.length - 1}` : first;
+}
+
 export function describeTriggers(triggers: RoutineTriggerDraft[]): string {
-  return triggers
-    .map((trigger) =>
+  return summarizeTriggerLabels(
+    triggers.map((trigger) =>
       trigger.kind === 'event'
         ? eventTriggerLabel(trigger)
         : (triggerFrequencies.find((f) => f.value === trigger.frequency)
             ?.label ?? 'Scheduled')
     )
-    .join(' · ');
+  );
 }
 
 export function hasOnlyScheduledTriggers(

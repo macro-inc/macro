@@ -5,6 +5,7 @@ import { useLicenseStatus, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useAiBillingSummaryQuery,
+  useSubscriptionStatusQuery,
   useTrialEligibilityQuery,
 } from '@queries/auth';
 import { queryReadyGate } from '@queries/gate';
@@ -28,6 +29,9 @@ const PaywallComponent = (props: PaywallProps) => {
   const trialEligibility = useTrialEligibilityQuery({
     enabled: () => !hasPaid(),
   });
+  // A paid plan change keeps the subscription's interval; the cards price
+  // at it.
+  const subscriptionStatus = useSubscriptionStatusQuery({ enabled: hasPaid });
   const availability = () =>
     team.isPending || summary.isPending
       ? 'loading'
@@ -58,6 +62,9 @@ const PaywallComponent = (props: PaywallProps) => {
           ? trialEligibility.data.eligible
           : undefined,
       trialing: licenseStatus() === 'trialing',
+      interval: queryReadyGate(subscriptionStatus)
+        ? (subscriptionStatus.data.interval ?? undefined)
+        : undefined,
     });
   };
 

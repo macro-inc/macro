@@ -103,3 +103,35 @@ fn only_the_first_ten_term_clauses_carry_inner_hits() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn a_left_out_term_drops_calls_it_would_match_by_name_or_a_speakers_segment() -> anyhow::Result<()>
+{
+    let speakers = vec!["macro|ana@example.com".to_string()];
+    let built = |terms: Vec<String>, excluded: Vec<String>| -> anyhow::Result<serde_json::Value> {
+        let json = CallRecordQueryBuilder::new(terms)
+            .match_type("partial")
+            .ids(vec!["call-1".to_string()])
+            .ids_only(true)
+            .speaker_ids(speakers.clone())
+            .mode(CallRecordSearchMode::NameContent)
+            .excluded_terms(excluded)
+            .build_bool_query()?
+            .build()
+            .to_json();
+        Ok(json)
+    };
+
+    let json = built(vec!["budget".to_string()], vec!["draft".to_string()])?;
+    let as_a_term = built(vec!["draft".to_string()], vec![])?;
+
+    let matched = &as_a_term["bool"]["must"][0]["bool"]["should"];
+    let segment = &matched[0]["bool"]["must"][0]["has_child"]["query"];
+    let name = &matched[1];
+    assert_eq!(
+        json["bool"]["must_not"],
+        serde_json::json!([name, {"has_child": {"type": "segment", "query": segment}}]),
+        "the left-out word matches the name or a segment the speaker said, as the term would"
+    );
+    Ok(())
+}

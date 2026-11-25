@@ -1,4 +1,4 @@
-import type { CacheRequest } from '../../protocol';
+import type { CacheRequest, ClaimedMutation } from '../../protocol';
 import type {
   ProductionCacheRequestWithoutId,
   ProductionHarnessCommand,
@@ -45,6 +45,9 @@ type QueueTelemetry = {
   name?: string;
   openOutcome?: string;
   queueDepth?: number;
+  queueOutcome?: string;
+  queueKept?: number;
+  queueDropped?: number;
   oldestAgeMs?: number;
 };
 
@@ -186,6 +189,24 @@ class ProductionSession {
       command: { ...command, commandId } as ProductionHarnessCommand,
     } satisfies ProductionHarnessEnvelope);
     return result;
+  }
+
+  /** Sends `request` under the session generation a page would stamp it with. */
+  async request(
+    tabId: string,
+    request: ProductionCacheRequestWithoutId
+  ): Promise<unknown> {
+    const authority = (await this.command(tabId, {
+      kind: 'request',
+      request: { kind: 'current-authority', identity: this.scope },
+    })) as { generation: string };
+    return await this.command(tabId, {
+      kind: 'request',
+      request: {
+        ...request,
+        generation: authority.generation,
+      } as ProductionCacheRequestWithoutId,
+    });
   }
 
   async gracefulClose(tabId: string): Promise<void> {
@@ -353,16 +374,10 @@ async function runFaultKind(kind: MutatingRequestKind) {
   );
   try {
     await session.openTab('fault-tab');
-    await session.command('fault-tab', {
-      kind: 'request',
-      request: writeRequest('seed-record'),
-    });
+    await session.request('fault-tab', writeRequest('seed-record'));
     const owner = `seed-owner-${kind}`;
     const seed = seededMutation(
-      await session.command('fault-tab', {
-        kind: 'request',
-        request: enqueueRequest(owner, 10),
-      }),
+      await session.request('fault-tab', enqueueRequest(owner, 10)),
       owner
     );
     await session.command('fault-tab', {
@@ -380,10 +395,7 @@ async function runFaultKind(kind: MutatingRequestKind) {
         event.kind === 'mutation-block-armed' && event.requestKind === kind
     );
     const oldRequest = session
-      .command('fault-tab', {
-        kind: 'request',
-        request: blockedRequest(kind, seed),
-      })
+      .request('fault-tab', blockedRequest(kind, seed))
       .then(
         () => ({ rejected: false, error: '' }),
         (error: unknown) => ({
@@ -421,10 +433,7 @@ async function runFaultKind(kind: MutatingRequestKind) {
       (event) => event.kind === 'ready'
     );
     assert(replacementReadyIndex > armIndex, 'missing replacement ready index');
-    await session.command('fault-tab', {
-      kind: 'request',
-      request: admissionBarrierRequest(),
-    });
+    await session.request('fault-tab', admissionBarrierRequest());
     await waitUntil('replacement request-admission barrier', () =>
       session.runtimeTelemetry
         .slice(replacementReadyIndex + 1)
@@ -459,28 +468,23 @@ async function runFaultKind(kind: MutatingRequestKind) {
       'replacement admitted unexpected replayed mutation work'
     );
 
-    const replacementRead = await session.command('fault-tab', {
-      kind: 'request',
-      request: {
-        kind: 'read',
-        query: QUERY,
-        operationName: 'Soup',
-        variables: VARIABLES,
-      },
+    const replacementRead = await session.request('fault-tab', {
+      kind: 'read',
+      query: QUERY,
+      operationName: 'Soup',
+      variables: VARIABLES,
     });
-    const replacementClaim = await session.command('fault-tab', {
-      kind: 'request',
-      request: {
-        kind: 'claim-next-mutation',
-        owner: 'replacement-probe',
-        nowMs: 10_000,
-        leaseExpiresAtMs: 11_000,
-      },
+    const replacementClaim = await session.request('fault-tab', {
+      kind: 'claim-next-mutation',
+      owner: 'replacement-probe',
+      nowMs: 10_000,
+      leaseExpiresAtMs: 11_000,
     });
     assert(isMiss(replacementRead), 'replacement retained a durable record');
+    const kept = replacementClaim as Partial<ClaimedMutation> | undefined;
     assert(
-      replacementClaim === undefined || replacementClaim === null,
-      'replacement retained the durable queue'
+      kept?.transactionId === seed.transactionId,
+      'replacement lost the durable queue'
     );
     const ready = session.runtimeTelemetry
       .filter((event) => event.kind === 'ready')
@@ -517,7 +521,7 @@ async function runFaultKind(kind: MutatingRequestKind) {
       midSqlExecutionClaimed: false,
       oldRequestRejected: old.rejected,
       replacementRecordsEmpty: true,
-      replacementQueueEmpty: true,
+      replacementQueueKept: true,
       mutationAdmissionCount: mutationAdmissions.length,
       unexpectedReplacementMutatingAdmissionCount:
         unexpectedReplacementMutatingAdmissions.length,
@@ -527,11 +531,15 @@ async function runFaultKind(kind: MutatingRequestKind) {
       performanceMemoryAvailable: ready?.performanceMemoryAvailable ?? false,
       userAgentSpecificMemoryAvailable:
         ready?.userAgentSpecificMemoryAvailable ?? false,
-      queueTelemetryObserved: session.cacheTelemetry.some(
-        (event) =>
-          event.name === 'graphql_cache.queue_diagnostics' &&
-          event.queueDepth === 0
-      ),
+      queueTelemetryObserved:
+        resetTelemetry.some(
+          (event) =>
+            event.name === 'graphql_cache.queue_diagnostics' &&
+            event.queueDepth === 1
+        ) &&
+        resetTelemetry.some(
+          (event) => event.queueOutcome === 'kept' && event.queueKept === 1
+        ),
     };
   } finally {
     session.close();
@@ -583,14 +591,14 @@ async function runRecoveryKind(kind: RecoveryKind) {
   const session = new ProductionSession(scope);
   try {
     await session.openTab('before-corruption');
-    await session.command('before-corruption', {
-      kind: 'request',
-      request: writeRequest('must-reset'),
-    });
-    await session.command('before-corruption', {
-      kind: 'request',
-      request: enqueueRequest('recovery-seed-owner', 10),
-    });
+    await session.request('before-corruption', writeRequest('must-reset'));
+    const seed = seededMutation(
+      await session.request(
+        'before-corruption',
+        enqueueRequest('recovery-seed-owner', 10)
+      ),
+      'recovery-seed-owner'
+    );
     await session.gracefulClose('before-corruption');
     const browserTestWasmUrl = await runStorageControl(scope, kind);
     const telemetryBeforeReopen = session.cacheTelemetry.length;
@@ -610,41 +618,29 @@ async function runRecoveryKind(kind: RecoveryKind) {
       kind === 'incompatible-namespace'
         ? 'reset-incompatible'
         : 'reset-corrupt';
-    const replacementRead = await session.command('after-corruption', {
-      kind: 'request',
-      request: {
-        kind: 'read',
-        query: QUERY,
-        operationName: 'Soup',
-        variables: VARIABLES,
-      },
+    const replacementRead = await session.request('after-corruption', {
+      kind: 'read',
+      query: QUERY,
+      operationName: 'Soup',
+      variables: VARIABLES,
     });
-    const replacementClaim = await session.command('after-corruption', {
-      kind: 'request',
-      request: {
-        kind: 'claim-next-mutation',
-        owner: 'recovery-probe',
-        nowMs: 10_000,
-        leaseExpiresAtMs: 11_000,
-      },
+    const replacementClaim = await session.request('after-corruption', {
+      kind: 'claim-next-mutation',
+      owner: 'recovery-probe',
+      nowMs: 10_000,
+      leaseExpiresAtMs: 11_000,
     });
     assert(isMiss(replacementRead), 'recovery retained a durable record');
-    assert(
-      replacementClaim === undefined || replacementClaim === null,
-      'recovery retained the durable queue'
+    const claimed = replacementClaim as Partial<ClaimedMutation> | undefined;
+    await session.request(
+      'after-corruption',
+      writeRequest('usable-after-reset')
     );
-    await session.command('after-corruption', {
-      kind: 'request',
-      request: writeRequest('usable-after-reset'),
-    });
-    const usableRead = await session.command('after-corruption', {
-      kind: 'request',
-      request: {
-        kind: 'read',
-        query: QUERY,
-        operationName: 'Soup',
-        variables: VARIABLES,
-      },
+    const usableRead = await session.request('after-corruption', {
+      kind: 'read',
+      query: QUERY,
+      operationName: 'Soup',
+      variables: VARIABLES,
     });
     assert(isHit(usableRead), 'recovered cache was not usable');
     const phaseCount = (name: string): number =>
@@ -673,18 +669,23 @@ async function runRecoveryKind(kind: RecoveryKind) {
       productionCoordinatorProtocolUnchanged: true,
       openOutcome: expectedOutcome,
       recordsWiped: true,
-      durableQueueWiped: true,
+      durableQueueKept: claimed?.transactionId === seed.transactionId,
       usableAfterReset: true,
       storageResetRequiredCount: phaseCount(
         'graphql_cache.storage_reset_required'
       ),
       logicalResetCount: phaseCount('graphql_cache.logical_reset'),
       resetWipeCount: phaseCount('graphql_cache.reset_wipe'),
-      queueTelemetryObserved: replacementTelemetry.some(
-        (event) =>
-          event.name === 'graphql_cache.queue_diagnostics' &&
-          event.queueDepth === 0
-      ),
+      queueDepths: replacementTelemetry
+        .filter((event) => event.name === 'graphql_cache.queue_diagnostics')
+        .map((event) => event.queueDepth),
+      queueOutcomes: replacementTelemetry
+        .filter((event) => event.queueOutcome !== undefined)
+        .map(({ queueOutcome, queueKept, queueDropped }) => ({
+          queueOutcome,
+          queueKept,
+          queueDropped,
+        })),
     };
   } finally {
     session.close();

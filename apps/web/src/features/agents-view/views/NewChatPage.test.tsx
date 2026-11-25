@@ -1,4 +1,8 @@
 import type { InputAttachmentData } from '@channel/Input/types';
+import {
+  preferredSpeed,
+  setPreferredSpeed,
+} from '@core/component/AI/signal/speed';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
 import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
@@ -721,6 +725,126 @@ describe('agent-led new conversation', () => {
       expect(onKeepModel).toHaveBeenCalledWith(true);
     }
   );
+
+  it.each(['all', 'agentModels'])(
+    'keeps focused model rows across catalog refreshes on %s',
+    async (page) => {
+      const user = userEvent.setup();
+      const [models, setModels] = createSignal([
+        { id: 'openai/gpt-5.6', label: 'GPT-5.6' },
+        { id: 'anthropic/claude-sonnet-5-5', label: 'Sonnet 5.5' },
+      ]);
+      const cursor = buildAgentRoster({
+        agents: [],
+        runtimes: [],
+        cursorConnected: true,
+        cursorNeedsConnection: false,
+      }).find((agent) => agent.id === CURSOR_BOT_ID);
+      const select = vi.fn();
+      render(() => (
+        <UnifiedModelSelector
+          state={{
+            model: 'openai/gpt-5.6',
+            agent: page === 'agentModels' ? cursor : undefined,
+            get models() {
+              return models();
+            },
+            get suggestedModels() {
+              return models();
+            },
+            onModel: select,
+            onEffort: () => {},
+            onSpeed: () => {},
+          }}
+        />
+      ));
+      await user.click(
+        screen.getByRole('button', { name: 'Choose an agent or model' })
+      );
+      await user.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: 'GPT-5.6',
+        })
+      );
+      if (page === 'all')
+        await user.click(screen.getByRole('button', { name: 'More models' }));
+      const row = screen.getByRole('button', { name: 'GPT-5.6' });
+      row.focus();
+      setModels((previous) => previous.map((option) => ({ ...option })));
+      expect(row.isConnected).toBe(true);
+      expect(document.activeElement).toBe(row);
+      await user.keyboard('{Enter}');
+      expect(select).toHaveBeenCalledWith('openai/gpt-5.6');
+    }
+  );
+
+  it('translates visible agent groups and their accessible names', async () => {
+    const i18n = await import('@app/lib/i18n');
+    const translated = vi
+      .spyOn(i18n, 't')
+      .mockImplementation((...args) => `translated ${args[0]}`);
+    try {
+      const agents = buildAgentRoster({
+        agents: [
+          {
+            bot: {
+              id: '11111111-1111-4111-8111-111111111111',
+              name: 'Workspace helper',
+              handle: 'helper',
+            },
+            harness: 'in-memory',
+            default_model: 'model',
+          },
+        ],
+        runtimes: [],
+        cursorConnected: false,
+        cursorNeedsConnection: true,
+      });
+      agents.push({
+        ...agents[0]!,
+        id: 'builtin-helper',
+        botId: 'builtin-helper',
+        name: 'Built-in helper',
+      });
+      render(() => (
+        <UnifiedModelSelector
+          state={{
+            model: 'model',
+            models: [{ id: 'model', label: 'Model' }],
+            suggestedModels: [],
+            agents,
+            onModel: () => {},
+            onEffort: () => {},
+            onSpeed: () => {},
+          }}
+        />
+      ));
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'translated agentControls.modelSelector',
+        })
+      );
+      fireEvent.click(
+        within(screen.getByRole('dialog')).getByRole('button', {
+          name: 'Model',
+        })
+      );
+      fireEvent.click(
+        screen.getByRole('button', { name: 'translated agentControls.seeAll' })
+      );
+      for (const key of [
+        'agentControls.builtInAgents',
+        'agentWork.yourAgents',
+        'agentControls.needsConnection',
+      ]) {
+        expect(
+          screen.getByRole('group', { name: `translated ${key}` })
+        ).toBeTruthy();
+      }
+    } finally {
+      translated.mockRestore();
+    }
+  });
   it('offers only Chat and Code without the Auto flag', () => {
     mocks.autoEnabled = false;
     const send = page();
@@ -2339,6 +2463,43 @@ describe('agent-led new conversation', () => {
     }
   );
 
+  it('keeps an unsent model pick with the account that selected it', async () => {
+    const [identity, setIdentity] = createSignal<string | undefined>('user-a');
+    mocks.userId = identity;
+    localStorage.setItem(
+      'agents-view-kept-model-v1:user-b',
+      JSON.stringify({ [CURSOR_BOT_ID]: 'cursor-default' })
+    );
+    const send = page(true, [], false, [], 'code');
+    const models = await openAgentModels('Cursor');
+    fireEvent.click(models.getByRole('button', { name: 'GPT-5' }));
+    setIdentity('user-b');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send.mock.lastCall?.[0]).not.toHaveProperty('modelOverride');
+    setIdentity('user-a');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ modelOverride: 'gpt-5' })
+    );
+  });
+
+  it('keeps speed on a Cursor pick and resets it on an in-memory pick', async () => {
+    setPreferredSpeed('ultrafast');
+    page();
+    fireEvent.click(screen.getByRole('radio', { name: 'Code' }));
+    const models = await openAgentModels('Cursor');
+    fireEvent.click(models.getByRole('button', { name: 'GPT-5' }));
+    expect(preferredSpeed()).toBe('ultrafast');
+    fireEvent.click(screen.getByRole('radio', { name: 'Chat' }));
+    openAgents();
+    fireEvent.input(
+      screen.getByRole('textbox', { name: 'Search agents and models' }),
+      { target: { value: 'Sonnet 5.5' } }
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Sonnet 5.5' }));
+    expect(preferredSpeed()).toBe('standard');
+  });
+
   it('isolates kept models across account changes without leaking one-shot choices', () => {
     const [identity, setIdentity] = createSignal<string | undefined>('user-a');
     mocks.userId = identity;
@@ -2665,6 +2826,17 @@ describe('agent-led new conversation', () => {
     const slider = screen.getByRole('slider', { name: 'Thinking' });
     slider.focus();
     fireEvent.keyDown(slider, { key: 'End' });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Choose an agent or model' })
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Choose an agent or model' })
+    );
+    expect(
+      screen
+        .getByRole('slider', { name: 'Thinking' })
+        .getAttribute('aria-valuetext')
+    ).toBe('Ultra');
     fireEvent.click(
       screen.getByRole('button', { name: 'Choose an agent or model' })
     );

@@ -261,16 +261,3 @@ export function searchOperatorCompletions(
   const token = searchTokenAtEnd(text) ?? '';
   return rows.filter((row) => row.insert !== token).slice(0, MAX_ROWS);
 }
-
-/**
- * The field's text with the token being typed replaced by `row`'s. The caret
- * stays right after it: a space typed next starts the next word, as it would
- * have without the row.
- */
-export function completeSearchOperator(
-  text: string,
-  row: SearchOperatorCompletion
-): string {
-  const token = searchTokenAtEnd(text) ?? '';
-  return `${text.slice(0, text.length - token.length)}${row.insert}`;
-}

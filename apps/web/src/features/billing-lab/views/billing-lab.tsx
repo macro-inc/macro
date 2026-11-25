@@ -7,6 +7,7 @@ import { Button, Dialog, Layer, Surface } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { AiUsageLimitDialogView } from '../../paywall/components/ai-usage-limit-dialog';
+import { BillingCycleDialog } from '../../paywall/components/billing-cycle-dialog';
 import { PLAN_BY_TIER } from '../../paywall/plans';
 import { BillingSettingsView } from '../../settings/views/billing-settings';
 import { formatCreditBalance } from '../../usage/core/usage';
@@ -50,7 +51,8 @@ function PaymentSummary(props: { payment: LabPayment }) {
         )
         .with(
           { kind: 'subscription' },
-          (payment) => `Start a ${PLAN_BY_TIER[payment.tier].name} subscription`
+          (payment) =>
+            `Start a ${PLAN_BY_TIER[payment.tier].name} subscription (${payment.interval === 'year' ? 'billed annually' : 'billed monthly'})`
         )
         .with(
           { kind: 'methods' },
@@ -471,6 +473,22 @@ export function BillingLabView(props: {
               >
                 Open usage-limit dialog
               </Button>
+              <div class="grid grid-cols-2 gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => lab.setCycleDialogPlan('business')}
+                >
+                  Business cycle
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => lab.setCycleDialogPlan('max')}
+                >
+                  Max cycle
+                </Button>
+              </div>
               <label class="flex items-center gap-2 text-xs text-ink-muted">
                 <input
                   type="checkbox"
@@ -530,6 +548,16 @@ export function BillingLabView(props: {
         onOpenSettings={() => {
           lab.setLimitOpen(false);
           lab.setSurface(lab.state().tier === 'free' ? 'billing' : 'usage');
+        }}
+      />
+      <BillingCycleDialog
+        plan={lab.cycleDialogPlan()}
+        perSeat={lab.state().role !== 'solo'}
+        pending={lab.pending()}
+        onClose={() => lab.setCycleDialogPlan(null)}
+        onConfirm={(plan, interval) => {
+          lab.setCycleDialogPlan(null);
+          fireAndForget(lab.billing.checkout(plan, interval), 'billing-lab');
         }}
       />
       <Dialog

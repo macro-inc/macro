@@ -78,6 +78,7 @@ use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_run_stops::{PgStopRelay, listen_for_stops};
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo as PgRoutineSuggestionRepo;
+use scheduled_action::outbound::routine_plans::EntitlementRoutinePlans;
 use scheduled_action::swagger::ApiDoc;
 use suggestion_generation::domain::audience::PaidAudience;
 use suggestion_generation::domain::model::GenerationAgent;
@@ -850,6 +851,9 @@ where
         )
         .with_event_routines(event_routines)
         .with_run_stops(run_stops)
+        .with_routine_plans(EntitlementRoutinePlans::new(
+            ai_billing::composition::pg_entitlement_source(db.clone()),
+        ))
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(
             TargetValidation::new(Arc::clone(&sessions)).with_knob_entities(knob_entities),

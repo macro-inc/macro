@@ -62,8 +62,17 @@ fn pricing_values_deserialize_from_integers_and_validate() {
 fn raw_pricing_values_parse_and_validate() {
     use crate::domain::PlanTier;
 
-    let raw = |free, premium, max| RawPlanAllowances { free, premium, max };
+    let raw = |free, premium, max| RawPlanAllowances {
+        free,
+        premium,
+        business: "6000",
+        max,
+    };
     let pricing = parse_ai_pricing(raw("500", " 2000 ", "10000"), "5").unwrap();
+    assert_eq!(
+        pricing.included_allowance_cents_for(PlanTier::Business),
+        6_000
+    );
     assert_eq!(pricing.included_allowance_cents_for(PlanTier::Free), 500);
     assert_eq!(
         pricing.included_allowance_cents_for(PlanTier::Premium),
