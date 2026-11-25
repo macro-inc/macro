@@ -121,9 +121,13 @@ async fn insert_thread(
         content: format!("{subject} {WORD}"),
         properties: Vec::new(),
     };
-    index
-        .write_email_documents(1, &[document], &[], None)
+    // Email writes are fenced, so a seed carries a version later than any
+    // delete of the same document, as a real writer's lease grant does.
+    let version = u64::try_from(chrono::Utc::now().timestamp_micros())?;
+    let writes = index
+        .write_email_documents(version, &[document], &[], None)
         .await?;
+    anyhow::ensure!(writes.indexed == 1, "the seeded message was not written");
     Ok(thread_id)
 }
 

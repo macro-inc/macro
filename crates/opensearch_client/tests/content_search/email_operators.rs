@@ -995,9 +995,19 @@ async fn seed_and_search(
         .iter()
         .map(upsert_args)
         .collect::<anyhow::Result<Vec<_>>>()?;
-    client
-        .write_email_documents(1, &documents, &[], None)
+    // Email writes are fenced: each test removes what it seeded, and the
+    // index remembers those deletes' versions, so a seed must carry a later
+    // version, as a real writer's lease grant does.
+    let version = u64::try_from(chrono::Utc::now().timestamp_micros())?;
+    let writes = client
+        .write_email_documents(version, &documents, &[], None)
         .await?;
+    if writes.refused_stale > 0 {
+        bail!(
+            "the index refused {} seeded messages as stale",
+            writes.refused_stale
+        );
+    }
     refresh(raw, EMAILS).await?;
 
     let mut failures = Vec::new();
