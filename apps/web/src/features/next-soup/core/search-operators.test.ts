@@ -3,8 +3,10 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  isUnfinishedSearchOperator,
   readSearchOperators,
   searchOperatorIndexes,
+  searchQueryParts,
   splitSearchTerms,
 } from './search-operators';
 
@@ -57,7 +59,10 @@ describe('readSearchOperators', () => {
       { kind: 'person', person: { me: true } },
     ]);
     expect(read('author:Ana@Example.com').groups[0]?.values).toEqual([
-      { kind: 'person', person: { me: false, userId: 'macro|ana@example.com' } },
+      {
+        kind: 'person',
+        person: { me: false, userId: 'macro|ana@example.com' },
+      },
     ]);
   });
 
@@ -73,9 +78,9 @@ describe('readSearchOperators', () => {
 
 describe('splitSearchTerms', () => {
   it('splits by whitespace outside quotes and drops the quotes', () => {
-    expect(splitSearchTerms('tag:"team offsite"  in:#“q3 launch” notes')).toEqual(
-      ['tag:team offsite', 'in:#q3 launch', 'notes']
-    );
+    expect(
+      splitSearchTerms('tag:"team offsite"  in:#“q3 launch” notes')
+    ).toEqual(['tag:team offsite', 'in:#q3 launch', 'notes']);
   });
 });
 
@@ -94,5 +99,49 @@ describe('searchOperatorIndexes', () => {
       'channels'
     );
     expect(searchOperatorIndexes(read('type:task type:email'))).toEqual([]);
+  });
+});
+
+describe('searchQueryParts', () => {
+  it('sends the service the query once it has a word, holding back half-typed operators', () => {
+    expect(searchQueryParts('launch status:').serviceText).toBe('launch');
+    expect(searchQueryParts('launch type:ta').serviceText).toBe('launch');
+    expect(searchQueryParts('"q3 plan" tag:finance').serviceText).toBe(
+      '"q3 plan" tag:finance'
+    );
+  });
+
+  it('sends nothing when only operators are left, for the view to list', () => {
+    const parts = searchQueryParts('assignee:me status:in_progress');
+    expect(parts.serviceText).toBe('');
+    expect(parts.read.operators).toBe(2);
+  });
+
+  it('keeps email operators for the service, which reads them alone', () => {
+    expect(searchQueryParts('is:unread').serviceText).toBe('is:unread');
+  });
+
+  it('matches names with the words beside type: alone', () => {
+    expect(searchQueryParts('type:task launch').nameText).toBe('launch');
+    expect(searchQueryParts('status:in_progress launch').nameText).toBe('');
+    expect(searchQueryParts('subject:lunch notes').nameText).toBe('');
+  });
+});
+
+describe('isUnfinishedSearchOperator', () => {
+  it.each([
+    ['status:', true],
+    ['type:ta', true],
+    ['in:#', true],
+    ['assignee:ana@', true],
+    ['author:an', true],
+    ['inbox:ana@', true],
+    ['assignee:me', false],
+    ['from:ana', false],
+    ['tag:fin', false],
+    ['type:tasks', false],
+    ['launch', false],
+  ])('%s: %s', (term, unfinished) => {
+    expect(isUnfinishedSearchOperator(term)).toBe(unfinished);
   });
 });

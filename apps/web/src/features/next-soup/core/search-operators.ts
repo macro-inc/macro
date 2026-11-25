@@ -1,3 +1,7 @@
+import {
+  isUnfinishedEmailSearchOperator,
+  readsAsEmailSearchOperator,
+} from '@app/features/email-view/search/email-search-operators';
 import { match } from 'ts-pattern';
 import type { SearchIndexId } from './search-filters';
 
@@ -52,7 +56,8 @@ export type SearchOperatorTaskStatus =
   (typeof SEARCH_OPERATOR_TASK_STATUSES)[number];
 export type SearchOperatorCallStatus =
   (typeof SEARCH_OPERATOR_CALL_STATUSES)[number];
-export type SearchOperatorPriority = (typeof SEARCH_OPERATOR_PRIORITIES)[number];
+export type SearchOperatorPriority =
+  (typeof SEARCH_OPERATOR_PRIORITIES)[number];
 
 /** The operators' names as typed, in the order the field suggests them. */
 export const SEARCH_OPERATOR_NAMES = [
@@ -252,7 +257,9 @@ function entries(terms: readonly string[]): Entry[] {
       previous.group.terms.push(OR, term);
       continue;
     }
-    joined.push({ group: { name: read.name, values: [read.value], terms: [term] } });
+    joined.push({
+      group: { name: read.name, values: [read.value], terms: [term] },
+    });
   }
   const kept: Entry[] = [];
   joined.forEach((entry, index) => {
@@ -328,7 +335,9 @@ export function readSearchOperators(
 ): SearchOperators {
   const read = entries(terms);
   const typeKinds = read.flatMap((entry) =>
-    'group' in entry && entry.group.name === 'type' ? [applies(entry.group)] : []
+    'group' in entry && entry.group.name === 'type'
+      ? [applies(entry.group)]
+      : []
   );
   const types =
     typeKinds.length > 0
@@ -355,7 +364,12 @@ export function readSearchOperators(
   }, types ?? ALL_KINDS);
   const readsChannels = reachesChannels && (narrowed & CHANNEL_OR_CALL) !== 0;
 
-  const result: SearchOperators = { terms: [], operators: 0, groups: [], types };
+  const result: SearchOperators = {
+    terms: [],
+    operators: 0,
+    groups: [],
+    types,
+  };
   for (const entry of read) {
     if ('word' in entry) {
       result.terms.push(entry.word);
@@ -386,7 +400,94 @@ export function searchOperatorIndexes(read: SearchOperators): SearchIndexId[] {
   for (const group of read.groups) {
     if (group.name !== 'type') kinds &= narrowedBy(group, read.types);
   }
-  return SEARCH_OPERATOR_TYPES.filter((type) => (kinds & KINDS[type]) !== 0).map(
-    (type) => KIND_INDEX[type]
-  );
+  return SEARCH_OPERATOR_TYPES.filter(
+    (type) => (kinds & KINDS[type]) !== 0
+  ).map((type) => KIND_INDEX[type]);
+}
+
+/** The values an operator with a short list of them takes. */
+const LISTED_VALUES: Partial<Record<SearchOperatorName, readonly string[]>> = {
+  type: SEARCH_OPERATOR_TYPES,
+  status: [...SEARCH_OPERATOR_TASK_STATUSES, ...SEARCH_OPERATOR_CALL_STATUSES],
+  priority: SEARCH_OPERATOR_PRIORITIES,
+};
+
+/**
+ * An operator still being typed: a name with no value yet (`status:`, `in:#`),
+ * part of a value from its list (`type:ta`), or an assignee, author or inbox
+ * before the address is whole (`assignee:ana@`). It names nothing yet, so
+ * the search leaves it out rather than looking for it as a word.
+ */
+export function isUnfinishedSearchOperator(term: string): boolean {
+  const parsed = NAME_AND_VALUE.exec(term);
+  if (!parsed) return false;
+  const [, typedName = '', value = ''] = parsed;
+  const name = typedName.toLowerCase();
+  if (!isOneOf(SEARCH_OPERATOR_NAMES, name) || readsAsSearchOperator(term))
+    return false;
+  if (name === 'in') return value === '' || value.startsWith('#');
+  if (value === '') return true;
+  // `from:ana` is a whole email operator: mail from a name.
+  if (name === 'from') return false;
+  const lowered = value.toLowerCase();
+  const listed = LISTED_VALUES[name];
+  if (listed) return listed.some((full) => full.startsWith(lowered));
+  // A person or an inbox reads once its address is whole.
+  return name !== 'tag' && !/\s/.test(value);
+}
+
+/** The query's tokens as typed, quotes kept, split by whitespace outside them. */
+function typedTokens(text: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (const char of text) {
+    if (PHRASE_QUOTES.test(char)) inQuotes = !inQuotes;
+    if (/\s/.test(char) && !inQuotes) {
+      if (current) tokens.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  if (current) tokens.push(current);
+  return tokens;
+}
+
+/** What a Search query asks for. */
+export type SearchQueryParts = {
+  /**
+   * The text the search service is sent: the query without operators still
+   * being typed, or empty when only operators are left, which the view lists
+   * itself.
+   */
+  serviceText: string;
+  /**
+   * The words names are matched with, or empty when an operator narrows the
+   * search past what a name match can be checked against.
+   */
+  nameText: string;
+  read: SearchOperators;
+};
+
+/** Reads a Search query, as typed in its field. */
+export function searchQueryParts(text: string): SearchQueryParts {
+  const searched = typedTokens(text)
+    .filter((token) => {
+      const term = splitSearchTerms(token)[0] ?? token;
+      return (
+        !isUnfinishedSearchOperator(term) &&
+        !isUnfinishedEmailSearchOperator(token)
+      );
+    })
+    .join(' ');
+  const read = readSearchOperators(splitSearchTerms(searched));
+  const words = read.terms.filter((term) => !readsAsEmailSearchOperator(term));
+  const onlyTypes = read.groups.every((group) => group.name === 'type');
+  return {
+    serviceText: read.terms.length > 0 ? searched : '',
+    nameText:
+      onlyTypes && words.length === read.terms.length ? words.join(' ') : '',
+    read,
+  };
 }
