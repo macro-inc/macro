@@ -513,8 +513,10 @@ tools — hexagonal, heavily feature-gated.
   message's stored labels, or a label's name, must ask for its reindex: the
   event of the change when it has one (`thread_labels_updated`,
   `thread_read`, …), else `EmailMacroEvent::thread_reindex_requested`, as a
-  re-sync that changed labels (`upsert_message`) and a diff of only
-  IMPORTANT, SENT, DRAFT or category labels do. A rename (`sync_labels`)
+  re-sync that changed labels without a thread gaining one (`upsert_message`)
+  and a diff of only IMPORTANT, SENT, DRAFT or category labels do. A re-sync
+  whose thread gained a label publishes `thread_labels_updated` instead, which
+  search reindexes the same way. A rename (`sync_labels`)
   queues its label's threads on the search event queue
   (`ThreadReindexQueue`), the bulk lane backfills use, so a big label can't
   delay new mail's events. It queues before it stores the name, and keeps the
@@ -549,6 +551,20 @@ tools — hexagonal, heavily feature-gated.
   queued goes back through `EmailRepo::revert_staged_label_change`, which
   restores the state an older write still on its way left (or the original),
   never a newer write's change.
+- A label event names the user labels its thread gained (`labels_gained` on
+  `message_received` and `thread_labels_updated`, the `email.labeled` routine
+  trigger's source): labels that no other non-draft message of the thread
+  carried before the write, read from `email_effective_message_labels` (so
+  pending Outlook categories count) in the write's transaction, under the
+  thread's label-write lock (Gmail sync, Macro writes) or the inbox row lock
+  (Outlook ingest and command confirm), with `email_db_client::labels::thread_gain`.
+  A new write path that adds labels must report its gains the same way, or
+  routines miss it. Drafts, spam and trash arrivals and historical imports
+  report none. `automated` marks a write made by an agent or a routine
+  (`agent_correlation::context::by_program`; the `UpdateThreadLabels` tool
+  runs under `as_program`), and routines skip those. Outlook carries the
+  gains, the routine id and the `traceparent` in the outbox payload to
+  `domain/mailbox/projection.rs`.
 - A reply target outside the caller's inboxes is admitted only through
   `SharedThreadReplyAccess` (edit access to its thread; wired in
   `document_storage_service` with `with_shared_thread_replies`). The reply

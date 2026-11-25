@@ -38,7 +38,7 @@ pub async fn insert_message_with_tx(
     // write made while it was fetched, so labels change only where Gmail
     // disagrees with what was stored before the fetch.
     resync: Option<&ResyncSnapshot>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Uuid> {
     if let Some(provider_thread_id) = message.provider_thread_id.as_deref() {
         threads::provider_identity::lock_provider_thread(tx, link_id, provider_thread_id).await?;
     }
@@ -124,7 +124,7 @@ pub async fn insert_message_with_tx(
         .await?;
     }
 
-    Ok(())
+    Ok(message_db_id)
 }
 
 /// inserts message object into the database
@@ -324,7 +324,7 @@ impl<U: Fn(&anyhow::Error) -> bool> BackfillMessageWriter<'_, U> {
             )
             .await
             {
-                Ok(()) => savepoint.commit().await?,
+                Ok(_) => savepoint.commit().await?,
                 Err(error) if (self.is_unstorable)(&error) => {
                     savepoint.rollback().await?;
                     skipped.push(SkippedMessage { index, error });
@@ -372,6 +372,56 @@ pub async fn insert_message(
     update_thread_metadata: bool,
     resync: Option<&ResyncSnapshot>,
 ) -> anyhow::Result<()> {
+    insert_message_in_tx(
+        pool,
+        thread_id,
+        message,
+        link_id,
+        update_thread_metadata,
+        resync,
+        false,
+    )
+    .await
+    .map(|_| ())
+}
+
+/// As [`insert_message`], returning the user labels the thread gained with the
+/// message.
+#[tracing::instrument(skip(pool, message), fields(link_id = %message.link_id), err)]
+pub async fn insert_message_gaining_labels(
+    pool: &PgPool,
+    thread_id: Uuid,
+    message: &mut message::Message,
+    link_id: Uuid,
+    update_thread_metadata: bool,
+    resync: Option<&ResyncSnapshot>,
+) -> anyhow::Result<Vec<Uuid>> {
+    let has_user_label = message
+        .labels
+        .iter()
+        .any(|label| !system_labels::is_system(&label.provider_label_id));
+
+    insert_message_in_tx(
+        pool,
+        thread_id,
+        message,
+        link_id,
+        update_thread_metadata,
+        resync,
+        has_user_label,
+    )
+    .await
+}
+
+async fn insert_message_in_tx(
+    pool: &PgPool,
+    thread_id: Uuid,
+    message: &mut message::Message,
+    link_id: Uuid,
+    update_thread_metadata: bool,
+    resync: Option<&ResyncSnapshot>,
+    read_gained_labels: bool,
+) -> anyhow::Result<Vec<Uuid>> {
     // we have to insert addresses before inserting the message. these values are shared
     // across messages, so inserting them in the txn can cause deadlocks.
     let addresses = addresses_from_message(message);
@@ -382,20 +432,34 @@ pub async fn insert_message(
 
     let mut tx = pool.begin().await?;
 
-    match insert_message_with_tx(
-        &mut tx,
-        thread_id,
-        message,
-        link_id,
-        recipients,
-        update_thread_metadata,
-        resync,
-    )
-    .await
-    {
-        Ok(_) => {
+    let result: anyhow::Result<Vec<Uuid>> = async {
+        let absent = if read_gained_labels {
+            labels_absent_before(&mut tx, thread_id, message, link_id).await?
+        } else {
+            Vec::new()
+        };
+
+        let message_id = insert_message_with_tx(
+            &mut tx,
+            thread_id,
+            message,
+            link_id,
+            recipients,
+            update_thread_metadata,
+            resync,
+        )
+        .await?;
+
+        let carried =
+            labels::thread_gain::carried_by_messages(&mut tx, &[message_id], &absent).await?;
+        Ok(carried.into_iter().map(|label| label.label_id).collect())
+    }
+    .await;
+
+    match result {
+        Ok(gained) => {
             tx.commit().await?;
-            Ok(())
+            Ok(gained)
         }
         Err(e) => {
             if let Err(rollback_err) = tx.rollback().await {
@@ -405,4 +469,28 @@ pub async fn insert_message(
             Err(e)
         }
     }
+}
+
+/// The message's user labels its thread lacks before the message is written,
+/// taking the locks in the order [`insert_message_with_tx`] takes them.
+async fn labels_absent_before(
+    tx: &mut sqlx::PgConnection,
+    thread_id: Uuid,
+    message: &message::Message,
+    link_id: Uuid,
+) -> anyhow::Result<Vec<Uuid>> {
+    if let Some(provider_thread_id) = message.provider_thread_id.as_deref() {
+        threads::provider_identity::lock_provider_thread(tx, link_id, provider_thread_id).await?;
+    }
+    labels::pending_writes::lock_thread_label_writes(tx, &[thread_id]).await?;
+
+    let provider_label_ids: Vec<String> = message
+        .labels
+        .iter()
+        .map(|label| label.provider_label_id.clone())
+        .collect();
+    Ok(
+        labels::thread_gain::absent_from_thread(tx, link_id, thread_id, &provider_label_ids)
+            .await?,
+    )
 }

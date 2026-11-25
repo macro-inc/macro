@@ -103,19 +103,26 @@ pub trait InboxSyncMessageStore: InboxSyncRepository {
         provider: &str,
     ) -> impl Future<Output = Result<HashMap<String, Uuid>, Self::Err>> + Send;
     /// Insert the already cleaned message with the original resync snapshot.
+    /// Returns the user labels its thread gained.
     fn insert_message(
         &self,
         link: Uuid,
         thread: Uuid,
         message: &mut service::message::Message,
         resync: Option<&InboxSyncResync>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
     /// Insert a cleaned provider thread and its messages atomically.
     fn insert_thread(
         &self,
         link: Uuid,
         thread: service::thread::Thread,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// The user labels a message of a thread that was just imported whole
+    /// carries and none of the thread's earlier messages does.
+    fn labels_new_to_thread(
+        &self,
+        message: Uuid,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
     /// Resolve the committed message and thread identities.
     fn message_ids(
         &self,

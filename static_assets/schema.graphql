@@ -8107,6 +8107,10 @@ type GraphqlScheduledActionEventFilter {
 	"""
 	property: GraphqlScheduledActionPropertySelector
 	"""
+	Email label ids, one of which an `EMAIL_LABELED` thread must gain. Null matches any label.
+	"""
+	labelIds: [ID!]
+	"""
 	Yes/no question the triggering content must answer with yes before the routine runs.
 	"""
 	condition: String
@@ -8148,6 +8152,10 @@ enum GraphqlScheduledActionEventName {
 	A new email was received.
 	"""
 	EMAIL_MESSAGE_RECEIVED
+	"""
+	An email thread gained a Gmail label or Outlook category.
+	"""
+	EMAIL_LABELED
 	"""
 	A channel was created.
 	"""

@@ -28,4 +28,19 @@ export default {
   inboxCount: { one: '{{count}} inbox', other: '{{count}} inboxes' },
   /** Where a new-email trigger watches: the person's one inbox, or all of them. */
   yourInboxes: { one: 'Your inbox', other: 'Your inboxes' },
+  /** The labels an Email labeled trigger watches, and their picker. */
+  labels: 'Labels',
+  anyLabel: 'Any label',
+  chooseLabels: 'Choose labels',
+  searchLabels: 'Search labels',
+  removeLabel: 'Remove {{name}}',
+  unknownLabel: 'Unknown label',
+  removeUnknownLabel: 'Remove unknown label',
+  loadingLabels: 'Loading…',
+  labelsUnavailable: 'Your labels couldn’t be loaded.',
+  noLabelMatches: 'No label matches.',
+  noLabels: 'Your inboxes have no labels yet.',
+  /** Two chosen labels on a trigger's chip: "Invoices or Receipts". */
+  eitherLabel: '{{first}} or {{second}}',
+  labelCount: { one: '{{count}} label', other: '{{count}} labels' },
 };
