@@ -64,6 +64,11 @@ fn the_punctuation_around_a_url_is_not_part_of_it() {
         ("“https://example.com/a”", "https://example.com/a"),
         ("https://example.com/a。次に", "https://example.com/a"),
         ("https://example.com/café", "https://example.com/café"),
+        (
+            "https://hi.wikipedia.org/wiki/हिन्दी",
+            "https://hi.wikipedia.org/wiki/हिन्दी",
+        ),
+        ("«https://example.com/a»", "https://example.com/a"),
     ] {
         assert_eq!(message_links(text), [link], "{text}");
     }
@@ -114,6 +119,14 @@ fn a_link_is_indexed_up_to_its_query_and_fragment() {
         ("https://example.com/a#section", "https://example.com/a"),
         ("(https://example.com/a?x=(1))", "https://example.com/a"),
         ("https://example.com?q=1", "https://example.com"),
+        (
+            "https://app.example.com/#/board/roadmap?view=1",
+            "https://app.example.com/#/board/roadmap",
+        ),
+        (
+            "https://app.example.com/#!/inbox",
+            "https://app.example.com/#!/inbox",
+        ),
     ] {
         assert_eq!(message_links(text), [link], "{text}");
     }

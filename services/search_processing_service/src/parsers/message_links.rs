@@ -46,12 +46,17 @@ pub(crate) fn message_links(markup: &str) -> Vec<String> {
 }
 
 /// The part of a URL found in text that search indexes: as written, up to its
-/// query or fragment, which hold parameters and tokens (`?usp=sharing`)
-/// rather than words a person remembers, without the punctuation that closes
-/// around it, and at most [`MAX_LINK_BYTES`]. `None` when nothing is left
-/// after its scheme.
+/// query, which holds parameters and tokens (`?usp=sharing`) rather than
+/// words a person remembers, and its fragment unless that is an app's route
+/// (`#/board/roadmap`); without the punctuation that closes around it; and at
+/// most [`MAX_LINK_BYTES`]. `None` when nothing is left after its scheme.
 fn indexed_link(url: &str) -> Option<&str> {
-    let url = url.split(['?', '#']).next().unwrap_or(url);
+    let url = url.split('?').next().unwrap_or(url);
+    let url = match url.split_once('#') {
+        Some((_, route)) if route.starts_with(['/', '!']) => url,
+        Some((before, _)) => before,
+        None => url,
+    };
     let url = without_closing_punctuation(url);
     let url = url
         .get(..floor_char_boundary(url, MAX_LINK_BYTES))
@@ -118,17 +123,32 @@ fn url(input: &str) -> IResult<&str, &str> {
 }
 
 /// A URL holds printable ASCII but for the characters text puts around one,
-/// and letters and digits of any script; other punctuation (`）`, `”`, `。`)
-/// ends it.
+/// and any other character but whitespace and the punctuation text puts
+/// around it (`）`, `”`, `。`, `«`).
 fn is_url_char(c: char) -> bool {
-    if !c.is_ascii() {
-        return c.is_alphanumeric();
+    if c.is_ascii() {
+        return c.is_ascii_graphic()
+            && !matches!(
+                c,
+                '<' | '>' | '"' | '`' | '[' | ']' | '{' | '}' | '|' | '\\' | '^'
+            );
     }
-    c.is_ascii_graphic()
-        && !matches!(
-            c,
-            '<' | '>' | '"' | '`' | '[' | ']' | '{' | '}' | '|' | '\\' | '^'
-        )
+    !c.is_whitespace() && !c.is_control() && !is_punctuation_around_text(c)
+}
+
+/// Latin-1 punctuation (`«`, `¿`), general punctuation (quotes, dashes, `…`),
+/// CJK punctuation (`。`, `「`) and fullwidth ASCII punctuation (`）`, `，`).
+fn is_punctuation_around_text(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00A1}'..='\u{00BF}'
+            | '\u{2000}'..='\u{206F}'
+            | '\u{3000}'..='\u{303F}'
+            | '\u{FF01}'..='\u{FF0F}'
+            | '\u{FF1A}'..='\u{FF20}'
+            | '\u{FF3B}'..='\u{FF40}'
+            | '\u{FF5B}'..='\u{FF65}'
+    )
 }
 
 /// Whether `candidate` is a whole URL with something after its scheme.

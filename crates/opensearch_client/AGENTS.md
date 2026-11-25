@@ -202,8 +202,8 @@ projects.
   `email_operators.rs` runs every shape of term up to the cap of 50 terms. A
   `has_child` clause counts as one in its parent's query and has its own
   limit.
-- Channel messages carry their link URLs in `links` (up to the query and
-  fragment, at most 2 KB each), analyzed by the built-in `pattern` analyzer,
+- Channel messages carry their link URLs in `links` (up to the query, at
+  most 2 KB each), analyzed by the built-in `pattern` analyzer,
   which splits a host into its names (`app.sketchpad.example` -> app,
   sketchpad, example); `content_text` keeps a host whole, so a site name
   inside a subdomain never matched. A built-in analyzer needs no analysis

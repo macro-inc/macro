@@ -93,7 +93,8 @@ OpenSearch, and exposes backfill HTTP routes for each.
 - A channel message also writes its web links (`parsers::message_links`):
   every `<m-link>` URL, which its text replaces with the label, and every
   `http(s)://` or `www.` URL in its text and pastes, each once, up to its
-  query and fragment and at most 2 KB (the `pattern` analyzer would fail the
+  query, without a fragment that is not an app route (`#/board`), and at
+  most 2 KB (the `pattern` analyzer would fail the
   document on a token over Lucene's term limit). A message
   indexed before the `links` mapping gains them only when it is reindexed
   (`POST /internal/backfill/channels`) or edited.
