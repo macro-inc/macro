@@ -127,7 +127,9 @@ word docs, Illustrator/Photoshop files).
 - Create a document from a Notion page: `DocumentCreator::create_notion_markdown`
   (`src/domain/create.rs`) with a `NotionMarkdown` (`src/domain/notion_markdown.rs`);
   lexical-service converts it through `MarkdownInitializationPort::initialize_existing_notion`
-  and returns the Macro markdown that mention tracking reads.
+  and returns the Macro markdown that mention tracking reads. If the import
+  supplied a source last-edited time, its one-time ready transition persists
+  that time. Normal edits continue to advance the document timestamp.
 - Set creation-time link access with the canonical
   `models_permissions::share_permission::InitialLinkShare` (re-exported from
   `domain::models`); `NewDocumentMetadata::builder(..).initial_link_share(Off)`
@@ -268,3 +270,8 @@ one as they do a document released today.
   Skill: `collab-surface-core`
 
 - Signed document grants carry agent correlation into Sync; editor deduplication and activity debounce include the invocation ID.
+
+Notion markdown initialization carries page-local database occurrence targets
+through `domain/notion_markdown.rs` to lexical-service. Keep UUIDs typed inside
+this domain and stringify them only at the outbound HTTP boundary; database
+sharing is independent of a document containing a card.

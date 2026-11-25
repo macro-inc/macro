@@ -296,8 +296,8 @@ right preview instead of a standalone split. The Agents sidebar stays left and c
 be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
-The phone collection uses one measured floating header. An initial nonshrinking spacer inside the unpadded list scroller reserves the island row; its single 20/26 heading follows the bubbles and sticks at that same measured inset while rows scroll beneath it. Archived shares this layout, with its heading immediately below the islands.
-The phone list shows startable custom agents as bubbles above a sticky **Conversations** heading, followed by Waiting on you, Favorites, and the remaining rows. The hamburger opens the shell's left navigation drawer with Conversations, Archived, an Agents row with New agent, and routines with their schedules and New routine. Custom agents appear only in the bubbles, not as drawer rows. Choosing a destination closes the drawer. The Agents roster and Routines list keep the hamburger when opened from this drawer; external links and other entry points retain Back. This choice follows the current history entry on Back and Forward. Archived keeps the hamburger, has no bubbles or Back button, and retains the dock and accessory composer. Conversation and archive totals appear only after all pages load. Empty views use the shared AI illustration without search or filter controls; **Start a conversation** focuses the existing composer. Tap a bubble to focus that composer with its agent selected. Long-press a row for entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
+The phone collection uses one measured floating header and one vertical list scroller. The scroller reserves the island row with top padding. Waiting on you, Favorites, and Conversations each contain their own normal in-flow heading and rows. Headings scroll with their sections instead of sticking over list content. Archived uses the same structure, with its heading immediately below the islands. Section gaps and padding own the spacing; the embedded empty panel does not add another scroller or top inset.
+The phone list shows startable custom agents as bubbles, followed by the Waiting on you and Favorites cards, then the **Conversations** section and its remaining rows. The hamburger opens the shell's left navigation drawer with Conversations, Archived, an Agents row with New agent, and routines with their schedules and New routine. Custom agents appear only in the bubbles, not as drawer rows. Choosing a destination closes the drawer. The Agents roster and Routines list keep the hamburger when opened from this drawer; external links and other entry points retain Back. This choice follows the current history entry on Back and Forward. Archived keeps the hamburger, has no bubbles or Back button, and retains the dock and accessory composer. Conversation and archive totals appear only after all pages load. Empty views use the shared AI illustration without search or filter controls; **Start a conversation** focuses the existing composer. Tap a bubble to focus that composer with its agent selected. Long-press a row for entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
 draft, attachments, agent, model, repository, and branch. Tap the agent/model pill to open the phone model sheet. Its search and
 Suggested models sit above Built-in and Your agents; All models opens a pushed
@@ -2814,7 +2814,12 @@ titles/times. Only the active composer is mounted. A single email or event has n
 deck header, position counter, navigation, or batch action.
 Navigation and batch submission save the visible editor first. Completed and
 dismissed items stay in the stack, with their saved state. Calendar cards reuse
-the existing event composer and offer **Create all** for a batch. Questions keep
+the existing event composer and offer **Create all** for a batch. Once an item's
+event is created (from the card or by the agent after approval), its preview
+draws that event, in its calendar's color, in the draft's place once an
+occurrence of it loads in the preview's window. Until then, or if the event
+moved out of that window, the draft stays; a dismissed or failed item keeps the
+draft too. Questions keep
 the existing ACP `AskUser` interaction. Batch submission checks every selected
 draft before starting any sends/creates, and waits for attachments still
 uploading in the active email.
@@ -2835,8 +2840,9 @@ attempting another send elsewhere. Review decisions produce durable system event
 for the same review ID. The card refreshes in place, with **Responding** below it
 until the agent starts its reply. This behaves the same on mobile. Approving an
 import plan only starts its write, so no **Responding** shows until the write
-ends; the card shows its final state and the agent's reply follows. A plan
-still being made when it was presented also wakes the agent once it is ready.
+ends; the card shows its final state and the agent's reply follows. Verify that
+sibling pages keep their review order while writing and after completion, even
+for a large plan staged together. A plan still being made when it was presented also wakes the agent once it is ready.
 These events create no user bubble; events without an existing card use a
 quiet timeline row.
 The agent can read final drafts and confirmed outcomes through **GetReview**.
@@ -2909,7 +2915,8 @@ the existing card without adding a second timeline row when that card is
 already in the thread. Import reviews add "Import plan ready" with the plan's
 counts once planning finishes, and settle as "Import finished", "Import
 failed" or "Import cancelled" with imported, failed and by-hand counts.
-Linear and Jira imports name their tracker ("Linear import plan ready · 40
+If database copies stopped partway through, the row also shows how many
+database rows survived. Linear and Jira imports name their tracker ("Linear import plan ready · 40
 tasks · 3 projects", "Jira import finished"). The row never shows the
 report's error text. The row stays on one line and
 truncates on phones.

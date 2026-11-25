@@ -263,7 +263,16 @@ test('gate off retains selected rules, history and single-action withdrawal', as
   await expect(
     page.getByRole('button', { name: 'History', exact: true })
   ).toBeEnabled();
-  await page
+  const contribution = page
+    .getByText('Primary mailbox · Selected by rules', { exact: true })
+    .locator('xpath=ancestor::section');
+  await expect(
+    contribution.getByText(
+      'Stopping withdraws your email from CRM. Companies and contacts stay.',
+      { exact: true }
+    )
+  ).toBeVisible();
+  await contribution
     .getByRole('button', { name: 'Stop sharing my emails', exact: true })
     .click();
   await expect(page.getByTestId('last-change')).toHaveText(
@@ -285,7 +294,12 @@ test('a disconnected mailbox connects without enabling selected sharing', async 
   await expect(page.getByText('member@example.com')).toBeVisible();
   await expect(connect).toHaveCount(0);
   await expect(
-    page.getByText('Your emails are not contributing to CRM.')
+    page.getByText('Primary mailbox · Sharing off', { exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText('Review both blacklists below before you share.', {
+      exact: true,
+    })
   ).toBeVisible();
   await expect(page.getByTestId('policy-calls')).not.toContainText('replace');
   await expect(page.getByTestId('last-change')).toHaveText('');

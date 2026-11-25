@@ -47,8 +47,6 @@
 .homepage-section-break > span { flex: 1; height: 1px; background: color-mix(in srgb, var(--color-ink) 16%, transparent); }
 .homepage-section-break p { flex: 0 1 440px; min-width: 0; margin: 0; color: inherit; text-wrap: balance; }
 @media (max-width: 699px) { .homepage-section-break { gap: 12px; font-size: 13px; } .homepage-section-break > span { flex: 0 0 20px; } .homepage-section-break p { flex: 1; } }
-.homepage-founder-rule { color: color-mix(in srgb, var(--color-ink) 16%, transparent); }
-@media (max-width: 699px) { .homepage-founder-letter { font-size: 12px; } }
 .homepage-feature-email, .homepage-feature-spreadsheet { max-width: 920px; margin-inline: auto; }
 .homepage-feature-email { --homepage-email-height: 500px; }
 .homepage-feature-email .homepage-email-demo { --color-composer: var(--color-surface-0); }

@@ -290,8 +290,12 @@ impl EmailRepo for EmailPgRepo {
         preview::contacts_by_thread_ids(&self.pool, thread_ids).await
     }
 
-    async fn labels_by_thread_ids(&self, thread_ids: &[Uuid]) -> Result<Vec<Label>, Self::Err> {
-        preview::labels_by_thread_ids(&self.pool, thread_ids).await
+    async fn labels_by_thread_ids(
+        &self,
+        thread_ids: &[Uuid],
+        reader: Option<&MacroUserIdStr<'_>>,
+    ) -> Result<Vec<Label>, Self::Err> {
+        preview::labels_by_thread_ids(&self.pool, thread_ids, reader).await
     }
 
     async fn link_by_fusionauth_and_macro_id(
@@ -317,6 +321,14 @@ impl EmailRepo for EmailPgRepo {
         macro_id: MacroUserIdStr<'_>,
     ) -> Result<Vec<Link>, Self::Err> {
         link::inboxes_for_macro_id(&self.pool, macro_id).await
+    }
+
+    async fn inbox_ids_among(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        ids: &[Uuid],
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        link::inbox_ids_among(&self.pool, macro_id, ids).await
     }
 
     async fn thread_by_id(&self, thread_id: Uuid) -> Result<Option<ThreadRow>, Self::Err> {
@@ -381,8 +393,9 @@ impl EmailRepo for EmailPgRepo {
     async fn labels_by_message_ids(
         &self,
         message_ids: &[Uuid],
+        reader: Option<&MacroUserIdStr<'_>>,
     ) -> Result<HashMap<Uuid, Vec<MessageLabel>>, Self::Err> {
-        message::labels_by_message_ids(&self.pool, message_ids).await
+        message::labels_by_message_ids(&self.pool, message_ids, reader).await
     }
 
     async fn calendar_invitations_by_message_ids(

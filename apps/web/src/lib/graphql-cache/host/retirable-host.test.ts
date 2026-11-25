@@ -54,6 +54,25 @@ describe('createRetirableCacheHost', () => {
     expect(inner.readQuery).toHaveBeenCalledOnce();
   });
 
+  it('forwards its owner being ready until it is retired', () => {
+    let report: (() => void) | undefined;
+    const inner: CacheHost = {
+      ...disposedLikeHost(),
+      onOwnerReady: (cb) => {
+        report = cb;
+        return () => undefined;
+      },
+    };
+    const host = createRetirableCacheHost(inner);
+    const ready = vi.fn();
+    host.onOwnerReady?.(ready);
+    report?.();
+    host.dispose();
+    report?.();
+    expect(ready).toHaveBeenCalledOnce();
+    expect(() => host.onOwnerReady?.(ready)()).not.toThrow();
+  });
+
   it('turns every captured reference into a disabled cache on dispose', async () => {
     const inner = disposedLikeHost();
     const host = createRetirableCacheHost(inner);

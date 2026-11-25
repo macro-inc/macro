@@ -6,6 +6,7 @@ import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockw
 import SignInIcon from '@icon/system/regular/arrow-square-in.svg';
 import SwitchIcon from '@icon/system/regular/arrows-left-right.svg';
 import CalendarXIcon from '@icon/system/regular/calendar-x.svg';
+import DesktopIcon from '@icon/system/regular/desktop.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import PowerIcon from '@icon/system/regular/power.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
@@ -19,6 +20,7 @@ import {
 } from '../../components/runtime-options';
 
 export type ComputerMenuIcon =
+  | 'screen'
   | 'power'
   | 'sign-in'
   | 'credits'
@@ -37,6 +39,7 @@ export type ComputerMenuItem = {
 
 function ItemIcon(props: { icon: ComputerMenuIcon }): JSX.Element {
   return match(props.icon)
+    .with('screen', () => <DesktopIcon class="size-4" />)
     .with('power', () => <PowerIcon class="size-4" />)
     .with('sign-in', () => <SignInIcon class="size-4" />)
     .with('credits', () => <SwitchIcon class="size-4" />)

@@ -24,6 +24,8 @@ export type ListSearchSuggestions = {
    * running a search, so the keyboard stays in the field to go on typing.
    */
   editsQuery?: (index: number) => boolean;
+  /** Enter in the field, with no row active, runs the typed search. */
+  commit?: () => void;
   /** The list's element id and its active row's, announced from the field. */
   listId?: string;
   activeId?: () => string | undefined;
@@ -31,6 +33,11 @@ export type ListSearchSuggestions = {
 
 export type ListSearchKeysOptions = {
   value: () => string;
+  /**
+   * Whether the view keeps the field open as a search before anything is
+   * typed in it, so Escape in the list closes it.
+   */
+  open?: () => boolean;
   /** Empties the query and collapses the field. */
   clear: () => void;
   /** Moves keyboard focus into the view's result list. */
@@ -146,7 +153,8 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
     onCleanup(
       registerListSearch(scopeId, {
         isActive: () =>
-          options.value().trim().length > 0 && (options.ownsEscape?.() ?? true),
+          (options.value().trim().length > 0 || (options.open?.() ?? false)) &&
+          (options.ownsEscape?.() ?? true),
         clear: options.clear,
       })
     );
@@ -172,6 +180,7 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
       if (event.key !== 'ArrowDown' && event.key !== 'Enter') return;
 
       event.preventDefault();
+      if (event.key === 'Enter') options.suggestions?.()?.commit?.();
       leave('first');
     },
     onEscape: () => leave('current'),

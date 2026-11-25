@@ -402,6 +402,13 @@ export type MutationQueueRunner = {
   wake: () => void;
   /** Retires every attempt token and returns the head to idle. */
   resetStorage: () => void;
+  /** The caller of an operation gave it up, which cancels its request. */
+  abandon: (operationKey: number) => void;
+  /**
+   * Stops sending, and lets the queue's owner go once no request it sent is
+   * unanswered: another page sends what a departed owner had claimed.
+   */
+  dispose: () => void;
 };
 
 export function createMutationQueueRunner(
@@ -413,6 +420,10 @@ export function createMutationQueueRunner(
   const liveQueuedOps = new Map<string, LiveQueuedOperation>();
   let storageGeneration = 0;
   let activeAttempt: AttemptToken | undefined;
+  // Requests on their way, with the key of the operation a caller still holds.
+  // Unlike the active attempt, they survive a reset.
+  const unanswered = new Map<AttemptToken, number | undefined>();
+  let disposed = false;
   // Queue IDs advance in order; retries advance their lease.
   // Keep the watermark after settlement so a late claim cannot revive an old head.
   let latestClaim:
@@ -467,8 +478,18 @@ export function createMutationQueueRunner(
     return true;
   }
 
+  function letOwnerGo(): void {
+    if (disposed && unanswered.size === 0) owner.dispose();
+  }
+
+  function answered(attempt: AttemptToken): void {
+    if (unanswered.delete(attempt)) letOwnerGo();
+  }
+
   function scheduleDrain(delayMs = 0): void {
     if (drainTimer !== undefined) clearTimeout(drainTimer);
+    drainTimer = undefined;
+    if (disposed) return;
     drainTimer = setTimeout(
       () => {
         drainTimer = undefined;
@@ -594,10 +615,10 @@ export function createMutationQueueRunner(
       return;
     }
     admissionFailures.delete(claimed.transactionId);
-    if (!owner.holds(attempt.leaseOwner)) {
-      // The page was hidden while this head waited for admission and let its
-      // owner go, so another page may have released and sent this claim.
-      // Hand the claim back; the next drain claims it under the page's owner.
+    if (disposed || !owner.holds(attempt.leaseOwner)) {
+      // While this head waited for admission the client ended, or the page
+      // was hidden and let its owner go, so another page may have released
+      // and sent this claim. Hand the claim back; the next drain claims it under the page's owner.
       await deferAdmission(claimed, attempt);
       attemptTelemetry.finish('deferred');
       return;
@@ -634,6 +655,7 @@ export function createMutationQueueRunner(
       return;
     }
     const live = liveQueuedOps.get(claimed.transactionId);
+    unanswered.set(attempt, live?.operation.key);
     if (live) {
       liveQueuedOps.delete(claimed.transactionId);
       live.resolveRoute(undefined);
@@ -690,6 +712,8 @@ export function createMutationQueueRunner(
         } finally {
           if (transition(attempt, IDLE)) scheduleDrain();
         }
+      } finally {
+        answered(attempt);
       }
     }
     // Any other live operation is ordered behind the claimed head.
@@ -779,8 +803,8 @@ export function createMutationQueueRunner(
   }
 
   async function drainQueue(): Promise<void> {
-    // A retired host stays disabled for good: stop polling instead of failing
-    // every 30 seconds against the no-op host.
+    // A retired host stays disabled for good, and a paused one wakes the queue:
+    // stop polling instead of failing every 30 seconds.
     if (host.disabled) {
       telemetry.skipped('host-disabled');
       resolveLiveOperationsAsQueued();
@@ -1070,6 +1094,17 @@ export function createMutationQueueRunner(
   }
 
   async function settle(
+    networkResult: OperationResult,
+    attempt: QueueAttemptContext
+  ): Promise<OperationResult> {
+    try {
+      return await settleAttempt(networkResult, attempt);
+    } finally {
+      answered(attempt);
+    }
+  }
+
+  async function settleAttempt(
     networkResult: OperationResult,
     attempt: QueueAttemptContext
   ): Promise<OperationResult> {
@@ -1374,5 +1409,14 @@ export function createMutationQueueRunner(
     },
     wake: wakeDrain,
     resetStorage,
+    abandon: (operationKey) => {
+      for (const [attempt, key] of unanswered)
+        if (key === operationKey) answered(attempt);
+    },
+    dispose: () => {
+      disposed = true;
+      clearTimeout(drainTimer);
+      letOwnerGo();
+    },
   };
 }

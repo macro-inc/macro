@@ -204,6 +204,7 @@ describe('coordinator runtime protocol', () => {
       ...version,
       kind: 'cache-unavailable',
       reason: 'another app version holds the database',
+      unavailableReason: 'files-busy',
     };
     const superseded = {
       ...version,
@@ -218,7 +219,8 @@ describe('coordinator runtime protocol', () => {
     };
     for (const valid of [
       cacheUnavailable,
-      { ...cacheUnavailable, superseded: true },
+      { ...cacheUnavailable, unavailableReason: 'recovery-failed' },
+      { ...version, kind: 'pong' },
       superseded,
       removeStale,
     ]) {
@@ -226,7 +228,10 @@ describe('coordinator runtime protocol', () => {
     }
     for (const invalid of [
       { ...cacheUnavailable, reason: '' },
-      { ...cacheUnavailable, superseded: false },
+      { ...cacheUnavailable, superseded: true },
+      { ...cacheUnavailable, unavailableReason: undefined },
+      { ...version, kind: 'pong', extra: true },
+      { ...cacheUnavailable, unavailableReason: 'disk on fire' },
       { ...superseded, reason: '' },
       { ...superseded, superseded: true },
       { ...superseded, buildTime: 1 },
@@ -739,6 +744,7 @@ describe('coordinator runtime protocol', () => {
   it.each([
     { ...version, kind: 'registered', tabId: 'tab' },
     { ...version, kind: 'registered', tabId: 'tab', ownerElsewhere: true },
+    { ...version, kind: 'registered', tabId: 'tab', coordinatorLockName: 'a' },
     {
       ...version,
       kind: 'become-owner',
@@ -773,7 +779,7 @@ describe('coordinator runtime protocol', () => {
       openOutcome: 'opened-existing',
     },
     { ...version, kind: 'protocol-error', error: 'bad envelope' },
-    { ...version, kind: 'terminal-error', error: 'recovery exhausted' },
+    { ...version, kind: 'connection-closed', reason: 'tab messageerror' },
   ])('accepts coordinator-to-tab envelope $kind', (message) => {
     expect(validateCoordinatorToTabEnvelope(message).ok).toBe(true);
   });
@@ -787,6 +793,20 @@ describe('coordinator runtime protocol', () => {
           kind: 'registered',
           tabId: 'tab',
           ownerElsewhere,
+        }).ok
+      ).toBe(false);
+    }
+  );
+
+  it.each(['', 1, null])(
+    'rejects a registration whose coordinatorLockName is %s',
+    (coordinatorLockName) => {
+      expect(
+        validateCoordinatorToTabEnvelope({
+          ...version,
+          kind: 'registered',
+          tabId: 'tab',
+          coordinatorLockName,
         }).ok
       ).toBe(false);
     }

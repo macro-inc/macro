@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use connectors::McpConnectionsService;
-use import_notion::domain::inventory::full_markdown;
+use futures::FutureExt;
 use import_notion::domain::macro_cells::PeopleMap;
 use import_notion::domain::model::NotionId;
 use import_notion::domain::ports::{NotionApi, NotionConnections};
@@ -13,10 +13,9 @@ use uuid::Uuid;
 
 use super::super::ImportServiceImpl;
 use super::run::JobControl;
-use super::{Place, failure_text, plan, values, write};
+use super::{Place, databases, failure_text, plan, reserve::Reservations, values, write};
 use crate::domain::models::{
-    ImportEntity, ImportKind, ImportStatus, NotionAlreadyImported, NotionDecision, TeamClaim,
-    WrittenObject,
+    ImportKind, ImportStatus, NotionAlreadyImported, NotionDecision, TeamClaim, WrittenObject,
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility, NotionLinks,
@@ -50,7 +49,7 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
         item: &write::WriteItem,
-        target: &Target<'_, N::Api>,
+        target: &Target<'_, databases::CachedNotion<N::Api>>,
         control: &JobControl,
     ) -> Outcome {
         for _ in 0..WAIT_CHECKS {
@@ -80,12 +79,29 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
         item: &write::WriteItem,
-        target: &Target<'_, N::Api>,
+        target: &Target<'_, databases::CachedNotion<N::Api>>,
         control: &JobControl,
     ) -> Outcome {
-        let progress = write::Progress::new(&self.repo, user, item.import_id, target.written);
-        match self.write_item(user, item, target, &progress).await {
-            Ok(Written::Done) => Outcome::Done,
+        let progress = write::Progress::new(&self.repo, user, item.import_id, target.written)
+            .in_review(target.review_id);
+        let result = async {
+            let result = self.write_item(user, item, target, &progress).boxed().await;
+            progress.flush_warnings().await?;
+            let outcome = result?;
+            if let Written::Done {
+                entity_id,
+                entity_type,
+            } = &outcome
+            {
+                self.repo
+                    .mark_imported(user, item.import_id, entity_id, entity_type, None)
+                    .await?;
+            }
+            Result::Ok(outcome)
+        }
+        .await;
+        match result {
+            Ok(Written::Done { .. }) => Outcome::Done,
             Ok(Written::Waiting(holder)) => Outcome::Waiting(holder),
             // Stopped part way for the next process: the row stays
             // `importing` for it to finish.
@@ -107,9 +123,18 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
         item: &write::WriteItem,
-        target: &Target<'_, N::Api>,
+        target: &Target<'_, databases::CachedNotion<N::Api>>,
         progress: &write::Progress<'_, R>,
     ) -> Result<Written> {
+        if let Err(error) = progress.ensure_supported() {
+            progress
+                .source_stopped(
+                    &item.title,
+                    crate::domain::models::SourceStopReason::UnsupportedMarker,
+                )
+                .await?;
+            return Err(error.into());
+        }
         let claim = match target.team_id {
             Some(team_id) if item.shared || item.already_imported => {
                 super::super::lifecycle::claim_team_object(
@@ -124,36 +149,34 @@ where
             }
             _ => TeamClaim::Free,
         };
-        let destination = match &claim {
-            TeamClaim::Linked {
-                entity_id,
-                entity_type,
-            } if matches!(entity_type.as_str(), "md" | "task") => Uuid::parse_str(entity_id).ok(),
-            TeamClaim::Waiting { holder } if item.kind != ImportKind::DataSource => {
-                Some(write::document_id(*holder))
-            }
-            TeamClaim::Held | TeamClaim::Free if item.kind != ImportKind::DataSource => {
-                Some(write::document_id(item.import_id))
-            }
-            _ => None,
-        };
-        if let Some(document) = destination
-            && let Some(page) = target.links.write().await.pages.get_mut(&item.notion_id)
-        {
-            page.document_id = document;
-        }
         let share = match claim {
             TeamClaim::Linked {
                 entity_id,
                 entity_type,
             } => {
-                self.repo
-                    .mark_imported(user, item.import_id, &entity_id, &entity_type, None)
-                    .await?;
+                if item.kind == ImportKind::DataSource
+                    && entity_type == write::DATABASE_ENTITY
+                    && !self
+                        .creator
+                        .database_access(
+                            user,
+                            entity_id
+                                .parse()
+                                .map_err(|error| ImportError::Other(anyhow::Error::new(error)))?,
+                        )
+                        .await?
+                {
+                    return Err(ImportError::Other(anyhow::anyhow!(
+                        "database view access is unavailable"
+                    )));
+                }
                 if item.shared && item.kind == ImportKind::DataSource {
                     progress.clear_task_notices().await?;
                 }
-                return Ok(Written::Done);
+                return Ok(Written::Done {
+                    entity_id,
+                    entity_type,
+                });
             }
             TeamClaim::Waiting { holder } => return Ok(Written::Waiting(holder)),
             TeamClaim::Held => true,
@@ -221,6 +244,7 @@ where
                     share,
                     target.people,
                     target.links,
+                    &target.reservations.destinations,
                     progress,
                     cancel,
                     personal_child_folder,
@@ -229,17 +253,33 @@ where
                 (tasks.to_string(), write::FOLDER_ENTITY)
             }
             (ImportKind::DataSource, _) => {
-                let written = write::write_database(
+                let prepared = target
+                    .reservations
+                    .prepared
+                    .get(&item.notion_id)
+                    .ok_or_else(|| {
+                        ImportError::Other(anyhow::anyhow!(
+                            "database reservation failed: {}",
+                            target
+                                .reservations
+                                .failures
+                                .get(&item.notion_id)
+                                .map(String::as_str)
+                                .unwrap_or("source is not ready")
+                        ))
+                    })?;
+                let written = write::write_prepared_database(
                     api,
                     self.creator.as_ref(),
                     user,
                     item,
-                    folder,
                     share,
                     target.people,
                     target.links,
                     progress,
                     cancel,
+                    prepared,
+                    &target.reservations.destinations,
                     personal_child_folder,
                 )
                 .await?;
@@ -252,7 +292,14 @@ where
                 (id, write::DATABASE_ENTITY)
             }
             _ => {
-                let markdown = full_markdown(api, &item.notion_id).await?;
+                let (markdown, database_links) = databases::body_links(
+                    api,
+                    &item.notion_id,
+                    &item.title,
+                    &target.reservations.destinations,
+                    progress,
+                )
+                .await?;
                 // A teammate's copy can disappear after the link snapshot.
                 // Once this row writes, its identity belongs to this generation.
                 let id = write::document_id(item.import_id);
@@ -266,7 +313,8 @@ where
                         (Default::default(), None)
                     }
                 };
-                let links = target.links.read().await.clone();
+                let mut links = target.links.read().await.clone();
+                links.databases = database_links;
                 let document = self
                     .creator
                     .create_document(
@@ -281,88 +329,65 @@ where
                         ImportVisibility::from_shared(item.shared),
                     )
                     .await?;
+                progress
+                    .record_document(
+                        crate::domain::models::WrittenKind::Document,
+                        &item.notion_id,
+                        &document,
+                    )
+                    .await?;
                 if share {
                     self.creator
                         .share_with_team(user, SharedEntity::Document(id))
                         .await?;
                 }
-                (document, write::DOCUMENT_ENTITY)
+                (document.id, write::DOCUMENT_ENTITY)
             }
         };
         if item.shared && item.kind == ImportKind::DataSource {
             progress.clear_task_notices().await?;
         }
-        // The row's team claim, taken before writing, stays on it.
-        self.repo
-            .mark_imported(user, item.import_id, &entity_id, entity_type, None)
-            .await?;
-        Ok(Written::Done)
+        Ok(Written::Done {
+            entity_id,
+            entity_type: entity_type.to_owned(),
+        })
     }
 
-    /// Where the plan's pages and people resolve in Macro, known before
-    /// anything is written: the user's own document when it exists, the
-    /// team's copy of a shared page (written, or being written by a
-    /// teammate), otherwise the document the page becomes.
-    pub(super) async fn links(
+    /// Refresh stale copies before a reviewed write claims pages, and count
+    /// earlier copies that the ledger could no longer reuse.
+    pub(super) async fn unavailable_page_copies(
         &self,
         user: &MacroUserIdStr<'static>,
         items: &[write::WriteItem],
-        people: &PeopleMap,
-    ) -> Result<(NotionLinks, usize)> {
-        let pages: Vec<&write::WriteItem> = items
+    ) -> Result<usize> {
+        let pages: Vec<_> = items
             .iter()
             .filter(|item| item.kind != ImportKind::DataSource)
             .collect();
-        let foreign_ids: Vec<String> = pages
+        let foreign_ids: Vec<_> = pages
             .iter()
             .filter(|item| item.shared || item.already_imported)
-            .map(|item| item.notion_id.as_str().to_string())
+            .map(|item| item.notion_id.as_str().to_owned())
             .collect();
-        let copies: HashMap<String, ImportEntity> = super::super::lifecycle::team_copies(
-            &self.repo,
-            self.creator.as_ref(),
-            user,
-            &foreign_ids,
-        )
-        .await?
-        .into_iter()
-        .map(|copy| (copy.foreign_id.clone(), copy))
-        .collect();
-        let mut imported = HashMap::new();
-        let mut unavailable = std::collections::HashSet::new();
+        super::super::lifecycle::team_copies(&self.repo, self.creator.as_ref(), user, &foreign_ids)
+            .await?;
+
+        let mut unavailable = 0;
         for item in pages {
-            let own = self
-                .repo
-                .get(user, item.import_id)
-                .await?
-                .filter(|row| row.status == ImportStatus::Imported);
-            if let Some(row) = &own
+            if let Some(row) = self.repo.get(user, item.import_id).await?
+                && row.status == ImportStatus::Imported
                 && !super::super::lifecycle::live_for_write(
                     &self.repo,
                     self.creator.as_ref(),
                     user,
-                    row,
+                    &row,
                 )
                 .await?
             {
-                unavailable.insert(item.notion_id.clone());
-                continue;
-            }
-            let document = match (own, copies.get(item.notion_id.as_str())) {
-                (Some(row), _) => imported_document(&row),
-                (None, Some(copy)) if copy.status == ImportStatus::Importing => {
-                    Some(write::document_id(copy.id))
-                }
-                (None, Some(copy)) => imported_document(copy),
-                (None, None) => None,
-            };
-            if let Some(document) = document {
-                imported.insert(item.notion_id.clone(), document);
+                unavailable += 1;
             }
         }
-        let mut links = write::notion_links(items, &imported, people);
-        links.pages.retain(|id, _| !unavailable.contains(id));
-        Ok((links, unavailable.len()))
+        Ok(unavailable)
     }
 
     /// Teammates' copies shared with the team of the planned objects, by
@@ -405,14 +430,6 @@ where
     }
 }
 
-/// The document an imported row became, when it became one.
-fn imported_document(row: &ImportEntity) -> Option<Uuid> {
-    if row.entity_type.as_deref() != Some(write::DOCUMENT_ENTITY) {
-        return None;
-    }
-    row.entity_id.as_deref()?.parse().ok()
-}
-
 /// How writing one object ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Outcome {
@@ -427,7 +444,10 @@ pub(super) enum Outcome {
 /// What one object's write did.
 enum Written {
     /// It was written, or linked to the team's copy.
-    Done,
+    Done {
+        entity_id: String,
+        entity_type: String,
+    },
     /// A teammate is writing it for the team; nothing was written.
     Waiting(Uuid),
 }
@@ -435,10 +455,12 @@ enum Written {
 /// Everything one object's write needs from the write around it.
 pub(super) struct Target<'a, Api> {
     pub api: &'a Api,
+    pub review_id: Uuid,
     pub team_id: Option<Uuid>,
     pub place: Place<'a>,
     pub people: &'a PeopleMap,
     pub links: &'a tokio::sync::RwLock<NotionLinks>,
+    pub reservations: &'a Reservations,
     pub databases: &'a tokio::sync::Mutex<HashMap<NotionId, write::WrittenDatabase>>,
     pub written: &'a [WrittenObject],
     pub cancel: &'a write::Cancel,

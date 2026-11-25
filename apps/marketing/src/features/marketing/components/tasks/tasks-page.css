@@ -53,13 +53,3 @@
 .task-checklist-select-row { display: flex; align-items: center; gap: 10px; min-height: 38px; font-size: 15px; }
 .task-checklist-select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
 .task-checklist-owner { color: var(--color-accent); white-space: nowrap; }
-
-/* Give the Tasks summary room for two lines without changing its type size. */
-@media (min-width: 700px) {
-  .feature-page .tasks-page .email-page-hero {
-    grid-template-columns: minmax(0, 600px);
-  }
-  .feature-page .tasks-page .email-page-hero-description {
-    text-wrap: wrap;
-  }
-}

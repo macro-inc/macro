@@ -122,6 +122,7 @@ export const createSearchState = ({
     searchText,
     setSearchText,
     localFuzzyResults: search.localFuzzyResults,
+    localSearchText: search.localSearchText,
     refresh: search.refresh,
     isSearching: search.isSearching,
     serviceSearchResults: search.serviceSearchResults,

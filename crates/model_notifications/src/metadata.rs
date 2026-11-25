@@ -2137,6 +2137,23 @@ pub struct RoutineRunFinishedMetadata {
     pub routine_name: String,
     /// How the run ended.
     pub outcome: RoutineRunOutcome,
+    /// The apps the routine needs connected, by name, when the run failed
+    /// because one of them is not. Empty for every other run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub apps_to_connect: Vec<String>,
+}
+
+impl RoutineRunFinishedMetadata {
+    /// `apps_to_connect` as a phrase: "Linear", "Linear and Slack",
+    /// "Linear, Notion and Slack".
+    fn apps_phrase(&self) -> Option<String> {
+        let (last, rest) = self.apps_to_connect.split_last()?;
+        Some(if rest.is_empty() {
+            last.clone()
+        } else {
+            format!("{} and {last}", rest.join(", "))
+        })
+    }
 }
 
 impl Notification for RoutineRunFinishedMetadata {
@@ -2160,9 +2177,13 @@ impl NotificationTitle for RoutineRunFinishedMetadata {
     ) -> Result<String, rootcause::Report> {
         Ok(match self.outcome {
             RoutineRunOutcome::Succeeded => "A routine run finished.".to_string(),
-            RoutineRunOutcome::Failed => {
-                "A routine run failed. Open its history to see why.".to_string()
-            }
+            RoutineRunOutcome::Failed => match self.apps_phrase() {
+                Some(apps) if self.apps_to_connect.len() == 1 => {
+                    format!("It needs {apps} connected to run. Reconnect it.")
+                }
+                Some(apps) => format!("It needs {apps} connected to run. Reconnect them."),
+                None => "A routine run failed. Open its history to see why.".to_string(),
+            },
         })
     }
 }

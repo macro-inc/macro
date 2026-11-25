@@ -35,6 +35,7 @@ afterEach(() => {
   setVisibility('visible');
 });
 
+import { registerActivityRevalidator } from '../../queries/activity/push-registry';
 import { registerActiveGraphqlSoupQuery } from '../../queries/soup/graphql/active-queries';
 import {
   ActivityUpdatesDocument,
@@ -434,6 +435,31 @@ describe('GraphQL Soup subscription lifecycle', () => {
     lifecycle.dispose();
     dispatchEvent(new Event('online'));
     expect(client.subscription).toHaveBeenCalledTimes(4);
+  });
+
+  it('refreshes activity when it subscribes the same client again', async () => {
+    vi.useFakeTimers();
+    const client = {
+      subscription: vi.fn(() => ({
+        subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
+      })),
+    };
+    const refresh = vi.fn();
+    const unregister = registerActivityRevalidator({
+      client: () => client as never,
+      refresh,
+    });
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never);
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(refresh).not.toHaveBeenCalled();
+
+    // A push between the two sets, or one whose refresh was not due yet.
+    lifecycle.replace(client as never, { disabled: true } as never);
+    await vi.advanceTimersByTimeAsync(1_001);
+    expect(refresh).toHaveBeenCalledExactlyOnceWith(null);
+    lifecycle.dispose();
+    unregister();
   });
 
   it('signals a new outage after a successful reconnection', () => {
