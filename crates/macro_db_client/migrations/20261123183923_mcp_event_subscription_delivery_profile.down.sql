@@ -1,6 +1,7 @@
 SET LOCAL lock_timeout = '5s';
 
 ALTER TABLE mcp_event_subscription
+    DROP CONSTRAINT mcp_event_subscription_chatgpt_secret_version,
     DROP COLUMN previous_secret_expires_at,
     DROP COLUMN previous_secret_encryption_version,
     DROP COLUMN previous_secret_kms_key_id,

@@ -7,6 +7,8 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 const ME: &str = "macro|mcp-subscriber@example.com";
 const OTHER: &str = "macro|mcp-other@example.com";
 const URL: &str = "https://hooks.example.com/events";
+/// The encryption version `KmsMcpSecretCipher` seals ChatGPT secrets under.
+const CHATGPT_ENCRYPTION_VERSION: i16 = 2;
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_owned()).expect("valid user id")
@@ -122,6 +124,7 @@ async fn store_inserts_then_refreshes_in_place(pool: PgPool) -> anyhow::Result<(
         Duration::hours(1),
     );
     first.profile = McpDeliveryProfile::Chatgpt;
+    first.secret.encryption_version = CHATGPT_ENCRYPTION_VERSION;
     let stored = store(&repo, first.clone()).await?;
     assert_eq!(stored.id, first.id);
     assert_eq!(stored.subscription_id, first.subscription_id);
@@ -602,6 +605,43 @@ async fn a_refresh_of_a_row_deleted_since_it_was_read_is_not_written(
         repo.get(&user(ME), &first.subscription_id).await?,
         None,
         "the deleted row does not come back with the old secret's overlap"
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_chatgpt_row_never_holds_a_secret_older_builds_can_open(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let repo = setup(&pool).await?;
+    let mut chatgpt = upsert(ME, URL, "mentions", &["message.posted"], Duration::hours(1));
+    chatgpt.profile = McpDeliveryProfile::Chatgpt;
+    assert!(
+        repo.store_within_quota(chatgpt.clone(), MAX).await.is_err(),
+        "a version 1 secret on a ChatGPT row"
+    );
+    chatgpt.secret.encryption_version = CHATGPT_ENCRYPTION_VERSION;
+    store(&repo, chatgpt.clone()).await?;
+
+    // A refresh by a build from before delivery profiles: a version 1
+    // secret, the profile left as it is.
+    let refreshed = sqlx::query!(
+        r#"
+        UPDATE mcp_event_subscription
+        SET secret_ciphertext = '\x01', secret_encryption_version = 1
+        WHERE user_id = $1 AND subscription_id = $2
+        "#,
+        ME,
+        chatgpt.subscription_id.as_str(),
+    )
+    .execute(&pool)
+    .await;
+    assert!(refreshed.is_err(), "the constraint refuses it");
+    assert_eq!(
+        repo.get(&user(ME), &chatgpt.subscription_id)
+            .await?
+            .map(|row| row.secret.encryption_version),
+        Some(CHATGPT_ENCRYPTION_VERSION)
     );
     Ok(())
 }

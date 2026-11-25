@@ -453,7 +453,9 @@ encrypts the secret before calling it.
   encrypts it with its KMS key (purpose `mcp-event-subscription-secret`,
   bound to the user and to an encryption version: 1 for `mcp` rows, 2 for
   `chatgpt` rows, which a build from before delivery profiles refuses to
-  open, so it cannot send a ChatGPT row's events unredacted); this service
+  open, so it cannot send a ChatGPT row's events unredacted, and a check
+  constraint refuses a version 1 secret on a ChatGPT row, which that
+  build's refresh would write); this service
   only decrypts it: per delivery, and on a refresh to tell whether the
   secret changed. A refresh with a new secret
   keeps the old one in `previous_secret_*` for 10 minutes
