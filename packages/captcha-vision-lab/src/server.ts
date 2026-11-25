@@ -7,7 +7,12 @@
  */
 import { z } from 'zod';
 import { signCapability, verifyCapability } from './capability.ts';
-import { type Challenge, FAMILIES, type FamilyName } from './families.ts';
+import {
+  type Challenge,
+  FAMILIES,
+  type FamilyName,
+  TEXT_PATTERN,
+} from './families.ts';
 import { renderPage } from './page.ts';
 import { cryptoRandom, type Random } from './random.ts';
 import {
@@ -118,6 +123,7 @@ const score = (
   }
 
   if (submission.kind === 'text' && challenge.kind === 'text') {
+    if (!TEXT_PATTERN.test(submission.text)) return 'malformed';
     return submission.text === challenge.text ? 'solved' : 'incorrect';
   }
   return 'malformed';

@@ -4,7 +4,7 @@
  * which response is right: option ids are opaque, every control has the same shape, and
  * the server's status is all it shows back.
  */
-import type { Challenge } from './families.ts';
+import { type Challenge, TEXT_LENGTH } from './families.ts';
 import { LAB_SUBMIT_PATH, TEXT_INPUT_ID, TEXT_SUBMIT_ID } from './registry.ts';
 
 export type PageOption = {
@@ -55,7 +55,7 @@ const controls = (content: PageContent): string => {
   if (content.kind === 'text') {
     return (
       `<div class="typing"><input id="${TEXT_INPUT_ID}" type="text" ` +
-      'maxlength="16" autocomplete="off" spellcheck="false">' +
+      `maxlength="${TEXT_LENGTH}" autocomplete="off" spellcheck="false">` +
       `<button type="button" id="${TEXT_SUBMIT_ID}">Submit</button></div>`
     );
   }

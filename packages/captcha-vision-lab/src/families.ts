@@ -200,7 +200,7 @@ export const count = (random: Random): ChoiceChallenge => {
 export const order = (random: Random): OrderChallenge => {
   const shape = pick(random, SHAPES);
   const color = pick(random, COLOR_NAMES);
-  // Radii at least 7 pixels apart.
+  // Radii at least 5 pixels apart (9 before jitter).
   const radii = [12, 21, 30, 39].map(
     (radius) => radius + between(random, -2, 2)
   );
@@ -223,7 +223,10 @@ export const order = (random: Random): OrderChallenge => {
 
 /**
  * Transcription: "Type the digits in the image." Five digits, each scaled,
- * sheared, turned and placed with jitter, under a few crossing lines.
+ * sheared, turned and placed with jitter, under a few crossing lines. At
+ * most a glyph reaches about 22 px from its centre (15 px half width, plus
+ * 3 px from the turn and 4 px from the shear), and centres are at least
+ * 46 px apart, so neighbours never touch.
  */
 export const transcription = (random: Random): TextChallenge => {
   const width = 260;
@@ -233,14 +236,14 @@ export const transcription = (random: Random): TextChallenge => {
   for (let index = 0; index < TEXT_LENGTH; index++) {
     const digit = String(Math.floor(random() * 10));
     text += digit;
-    const scale = between(random, 5, 6.5);
+    const scale = between(random, 5, 6);
     canvas.digit(
       digit,
-      18 + index * 46 + between(random, -4, 4),
+      10 + index * 50 + between(random, -2, 2),
       between(random, 12, 28),
       scale,
-      between(random, -0.25, 0.25),
-      between(random, -12, 12)
+      between(random, -0.2, 0.2),
+      between(random, -8, 8)
     );
   }
   for (let line = 0; line < 3; line++) {

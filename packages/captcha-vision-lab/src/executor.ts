@@ -68,8 +68,8 @@ export const prepareAction = async (
   decision: Exclude<PlannerDecision, { kind: 'abort' }>
 ): Promise<PreparedAction | undefined> => {
   if (decision.kind === 'text') {
-    const input = page.locator(`#${TEXT_INPUT_ID}`);
-    const submit = page.locator(`#${TEXT_SUBMIT_ID}`);
+    const input = page.locator(`#${TEXT_INPUT_ID}`).filter({ visible: true });
+    const submit = page.locator(`#${TEXT_SUBMIT_ID}`).filter({ visible: true });
     if ((await input.count()) !== 1 || (await submit.count()) !== 1) {
       return undefined;
     }
