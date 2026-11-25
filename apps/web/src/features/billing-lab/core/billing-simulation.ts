@@ -317,6 +317,16 @@ export function createScenario(scenario: ScenarioId): BillingSimulation {
     .exhaustive();
 }
 
+function nextPlanInterval(
+  state: BillingSimulation,
+  tier: PlanTier,
+  interval?: BillingInterval
+): BillingInterval | undefined {
+  if (tier === 'free') return undefined;
+  if (state.tier === 'free') return interval ?? 'month';
+  return state.interval ?? 'month';
+}
+
 /** UI fixture transitions only; the backend remains the billing-policy authority. */
 export function changePlan(
   state: BillingSimulation,
@@ -329,12 +339,7 @@ export function changePlan(
   return {
     ...state,
     tier,
-    interval:
-      tier === 'free'
-        ? undefined
-        : state.tier === 'free'
-          ? (interval ?? 'month')
-          : (state.interval ?? 'month'),
+    interval: nextPlanInterval(state, tier, interval),
     scheduledPlan: undefined,
     usedCents: 0,
     blockedReason: undefined,

@@ -437,8 +437,11 @@ state, completes onboarding, and enters the app without an extra confirmation
 click. A pending webhook shows a retryable confirmation state. If the catalog
 cannot load, Free remains available, Pro still returns to its offer, and
 Business and Max checkout stay disabled until prices can be loaded with the
-retry action. The comparison offers Business and Max billed annually or
-monthly (annually first); Pro is monthly only.
+retry action. The comparison shows Business and Max at their annual rates with
+the monthly rate noted (Pro is monthly only), includes an `Active routines` row
+(`10` / `1,000` / `3,000` / `10,000`), and clicking `Continue with Business` or
+`Continue with Max` opens a compact billing-cycle dialog to choose Annual
+(default) or Monthly before Stripe Checkout.
 Both completion paths preserve an original `next` destination and otherwise land on Home (`/app/home`). Old saved email,
 connector, building, and summary step names are migrated on resume. A lifecycle
 email can open a specific step with `/app/onboarding?step=<step>` (see

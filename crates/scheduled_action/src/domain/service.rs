@@ -396,12 +396,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Ok(())
     }
 
-    /// Every create goes through here, so only a person creates a routine
-    /// that writes as them, whichever route it comes by.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "each create route sets a different subset"
-    )]
     /// The limit a write must respect when it leaves `action` active and it
     /// wasn't before. `None` when the write adds no active routine, so pausing,
     /// deleting, and editing an active routine never depend on plan lookups.
@@ -429,6 +423,12 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Ok(Some(limit))
     }
 
+    /// Every create goes through here, so only a person creates a routine
+    /// that writes as them, whichever route it comes by.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each create route sets a different subset"
+    )]
     async fn create(
         &self,
         principal: &CreationPrincipal,

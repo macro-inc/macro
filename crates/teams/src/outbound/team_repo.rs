@@ -241,7 +241,7 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(seat_included.unwrap_or(false))
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn get_user_billed_seat(
         &self,
         user_id: &MacroUserIdStr<'_>,

@@ -248,7 +248,7 @@ where
         })
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn user_plan(&self, user: &MacroUserIdStr<'_>) -> Result<UserPlan> {
         if let Some(seat) = self
             .teams
