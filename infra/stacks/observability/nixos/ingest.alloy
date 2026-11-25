@@ -84,7 +84,7 @@ otelcol.processor.batch "ingest" {
   send_batch_max_size = 1024
   output {
     logs = [otelcol.exporter.otlphttp.loki.input]
-    traces = [otelcol.exporter.otlp.tempo.input]
+    traces = [otelcol.exporter.loadbalancing.sampler.input]
     metrics = [otelcol.exporter.prometheus.metrics.input]
   }
 }
@@ -94,12 +94,33 @@ otelcol.exporter.otlphttp "loki" {
   sending_queue { queue_size = 256 }
 }
 
-otelcol.exporter.otlp "tempo" {
-  client {
-    endpoint = "127.0.0.1:4317"
-    tls { insecure = true }
+// Every span of a trace to the same sampler (modules/sampler in
+// infra/k8s/observability/cluster), which keeps or drops whole traces. The
+// queue is in front of the routing, so a span waiting here goes to a sampler
+// that is up when it leaves; a full one holds senders back instead of dropping.
+otelcol.exporter.loadbalancing "sampler" {
+  timeout = "10s"
+  resolver {
+    dns {
+      hostname = "127.0.0.1"
+      interval = "5s"
+    }
   }
-  sending_queue { queue_size = 256 }
+  protocol {
+    otlp {
+      timeout = "2s"
+      queue { enabled = false }
+      retry { enabled = false }
+      client {
+        tls { insecure = true }
+      }
+    }
+  }
+  sending_queue {
+    queue_size = 256
+    block_on_overflow = true
+  }
+  retry_on_failure { max_elapsed_time = "2m" }
 }
 
 otelcol.exporter.prometheus "metrics" {

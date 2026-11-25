@@ -1,7 +1,7 @@
-# The metrics Datadog computes from spans (spans.nix), computed here instead.
-# alloy-ingest forwards the spans they read (the tap, alloy.nix), before any
-# sampling; two Alloys turn them into delta samples and native histograms in
-# Mimir. See README "Derived metrics".
+# The metrics Datadog computes from spans (spans.nix) and logs (logs.nix),
+# computed here instead. alloy-ingest forwards what they read (the tap,
+# alloy.nix), before any sampling; two Alloys turn that into delta samples and
+# native histograms in Mimir. See README "Derived metrics".
 #
 # A StatefulSet, so a restarted replica writes to its own series again rather
 # than starting new ones.
@@ -28,7 +28,7 @@ in
     type = lib.types.lines;
     readOnly = true;
     default = alloy.tap "${name}.${namespace}.svc.cluster.local:${toString port}";
-    description = "Alloy configuration alloy-ingest appends; it sends traces to `otelcol.processor.filter.derived.input`.";
+    description = "Alloy configuration alloy-ingest appends; it sends traces and logs to `otelcol.processor.filter.derived.input`.";
   };
 
   config.applications.${name} = {
@@ -98,7 +98,7 @@ in
           # Stay in the Service while kube-proxy everywhere drops this pod;
           # then Alloy flushes what it holds on SIGTERM.
           lifecycle.preStop.sleep.seconds = 10;
-          # The memory limiter starts refusing spans at 192 MiB.
+          # The memory limiter starts refusing data at 192 MiB.
           resources = {
             requests = {
               cpu = "50m";

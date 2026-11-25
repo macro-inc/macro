@@ -2,6 +2,7 @@
 { lib }:
 let
   spans = import ./spans.nix { inherit lib; };
+  logs = import ./logs.nix { inherit lib; };
   code = text: "`${text}`";
   labels =
     m:
@@ -10,6 +11,11 @@ let
         tag: label: if tag == label then code label else "${code tag} → ${code label}"
       ) m.labels
     );
+  table = metrics: ''
+    | Datadog | Mimir | Kind | Unit | Labels |
+    | --- | --- | --- | --- | --- |
+    ${lib.concatMapStringsSep "\n" row metrics}
+  '';
   row =
     m:
     "| ${code m.name} | ${code m.metric} | ${m.kind} | ${
@@ -20,15 +26,16 @@ in
   # Derived metrics: Datadog to Mimir
 
   Generated from `modules/derived-metrics/*.nix` by `nix run .#render`; edit those.
-  To use the mapping from Nix, import `spans.nix`: each entry of its `metrics` has
-  the Datadog `name`, the Mimir `metric`, its `kind` and `labels` (Datadog tag to
-  Mimir label).
+  To use the mapping from Nix, import `spans.nix` and `logs.nix`: each entry of
+  their `metrics` has the Datadog `name`, the Mimir `metric`, its `kind` and
+  `labels` (Datadog tag to Mimir label).
 
   Rules:
 
   - Dots become underscores, in metric names and in tags. `env` is
     `deployment_environment`; tag values are unchanged (Datadog lowercases them,
-    Mimir doesn't). A span without the tag has no such label (Datadog: `N/A`).
+    Mimir doesn't). A span or record without the tag has no such label (Datadog:
+    `N/A`).
   - Durations (`@duration`) are in seconds and end in `_seconds`; a Datadog
     threshold on one is in nanoseconds. Fields that were already in milliseconds
     or bytes stay so.
@@ -53,11 +60,12 @@ in
   | `sum:DIST{...}` over 1h | `histogram_sum(sum(sum_over_time(DIST{...}[1h])))` |
   | `avg:DIST{...}` over 1h | `histogram_avg(sum(sum_over_time(DIST{...}[1h])))` |
   | `p95:DIST{...} by {model}` over 1h | `histogram_quantile(0.95, sum by (model) (sum_over_time(DIST{...}[1h])))` |
-  | `max:DIST{...}` | `histogram_quantile(1, ...)`, within a bucket |
+  | `max:DIST{...}`, `min:DIST{...}` | `histogram_quantile(1, ...)`, `histogram_quantile(0, ...)` |
 
   Distributions are native histograms: no `_bucket`, `_sum` or `_count` series.
-  Counts, sums and averages are exact; quantiles are within a bucket (a few
-  percent; Datadog's sketches are within 1 %).
+  Counts, sums and averages are exact; quantiles, minimum and maximum are within a
+  bucket (a few percent, up to 20 % where one series mixes values a hundred
+  thousand apart; Datadog's sketches are within 1 %).
   Nothing happening means no sample: an ungrouped query that has to give zero needs
   `or vector(0)`; a grouped one has no series for a group where nothing happened.
 
@@ -66,7 +74,22 @@ in
 
   ## From spans
 
-  | Datadog | Mimir | Kind | Unit | Labels |
-  | --- | --- | --- | --- | --- |
-  ${lib.concatMapStringsSep "\n" row spans.metrics}
-''
+  ${table spans.metrics}
+  ## From logs
+
+  Computed from the log records ingest receives, before Loki.
+
+  - Datadog's `status` is the record's `level` field by its first letters, or else
+    its OpenTelemetry severity; `status:error` is neither critical nor fatal. A
+    phrase in a definition matches anywhere in the message, in any case, as
+    whole words.
+  - `service` is the OpenTelemetry service name, without the environment Datadog
+    has in some (`email-service-pubsub-workers-prod`).
+  - `macro.logs.errors` counts prod only in Datadog and has no `env` there; here it
+    counts every environment, by `deployment_environment`: a ported monitor needs
+    `deployment_environment="prod"`.
+  - `TimeToFirstToken` and `TimeToSendRequest` read the log field `metric`.
+    Datadog's, made in its UI, read `event`, which nothing sets any more, so they
+    are empty there.
+
+  ${table logs.metrics}''

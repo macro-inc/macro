@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE hosted_runtime_host SET endpoint = 'https://host.invalid', server_certificate_pem = 'fixture' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b3c1099cb5ee8d272de97c9ded6eb45e7e03aaf39fbe1453da83e647e0f6680d"
+}

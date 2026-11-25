@@ -152,6 +152,33 @@ function start(port: MessagePort) {
     const target = canvas();
     if (target) watchSize(target);
     post(port, { type: 'connected' });
+
+    // noVNC 1.7 has no public frame event. A completed update may be empty
+    // or carry only cursor or resize metadata. Wait for one with pixels
+    // and let its queued display operations finish.
+    const update = rfb._framebufferUpdate;
+    const dataRect = rfb._handleDataRect;
+    let hasPixels = false;
+    rfb._handleDataRect = function () {
+      const decoded = dataRect.call(this);
+      if (decoded && this._FBU.width > 0 && this._FBU.height > 0)
+        hasPixels = true;
+      return decoded;
+    };
+    rfb._framebufferUpdate = function () {
+      const decoded = update.call(this);
+      if (decoded && hasPixels) {
+        this._framebufferUpdate = update;
+        this._handleDataRect = dataRect;
+        // The port is scoped to this connection. A closed parent drops the
+        // message, including when the display queue finished after teardown.
+        this._display.flush().then(
+          () => post(port, { type: 'firstFrame' }),
+          () => {}
+        );
+      }
+      return decoded;
+    };
   });
   rfb.addEventListener('disconnect', (event) => {
     const clean = event instanceof CustomEvent && event.detail?.clean === true;

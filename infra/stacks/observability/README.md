@@ -784,13 +784,13 @@ Drilldown apps. The service selector discovers names from dev logs; a service
 that emits only traces or metrics can be found in the corresponding Drilldown.
 
 Loki enables pattern ingestion, log-level detection, and volume queries. Tempo's
-metrics generator enables TraceQL metrics, span metrics, and service graphs, and
-writes the generated metrics to Mimir. They describe
-received spans, so sampling and missing instrumentation can prevent parity with
+metrics generator enables TraceQL metrics, of the traces sampling keeps. Span
+metrics and service graphs come from the sampler, which counts every received
+span before dropping any and writes them to Mimir. Missing instrumentation, and
+the senders that sample before ingest, can prevent parity with
 Datadog request counts. Span names remain in Tempo rather than becoming unbounded
-Prometheus labels. Generated series are capped at 50,000; monitor
-`tempo_metrics_generator_registry_series_limited_total` and local-block discards
-before expanding ingestion. The cluster's README covers how these backends run.
+Prometheus labels. Monitor local-block discards before expanding ingestion. The
+cluster's README covers how these backends run and what sampling keeps.
 
 Tempo spans link to the service's logs in a time window and its generated metrics;
 logs carrying an OTLP trace ID link back to the trace. FireLens logs do not always

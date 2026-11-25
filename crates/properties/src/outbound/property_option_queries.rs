@@ -8,12 +8,13 @@ use sqlx::{PgExecutor, Pool, Postgres};
 use uuid::Uuid;
 
 use super::entity_property_queries::EntityPropertyMutationRow;
-use super::query_error::PropertyQueryError;
+use super::query_error::{OPTION_VALUE_INDEXES, PropertyQueryError, violates_unique};
 use crate::domain::database_option_writer::ColorChange;
 
 use crate::domain::model::{
-    EntityPropertyMutationSnapshot, GetOrCreatePropertyOptionResult, PropertyOptionReplaceOutcome,
-    PropertyOptionReplacePlan, UpdatePropertyOptionOutcome,
+    CreatePropertyOptionWithIdOutcome, EntityPropertyMutationSnapshot,
+    GetOrCreatePropertyOptionResult, PropertyOptionReplaceOutcome, PropertyOptionReplacePlan,
+    UpdatePropertyOptionOutcome,
 };
 
 /// Keep selected options alive until their assignment commits. Validation
@@ -219,6 +220,64 @@ pub async fn insert_property_option(
         created_at: row.created_at,
         updated_at: row.updated_at,
     })
+}
+
+/// Inserts a property option under an id the client minted, unless a row
+/// already has that id. Writes nothing when the id is taken, so a replayed
+/// request can be told apart from a new one, or when the definition already
+/// has the value.
+#[tracing::instrument(skip(executor, value, color), err)]
+pub async fn insert_property_option_unless_id_taken(
+    executor: impl PgExecutor<'_>,
+    id: Uuid,
+    property_definition_id: Uuid,
+    display_order: i32,
+    value: PropertyOptionValue,
+    color: Option<String>,
+) -> Result<CreatePropertyOptionWithIdOutcome, PropertyQueryError> {
+    let (number_value, string_value) = value.to_db_values();
+
+    let row = match sqlx::query!(
+        r#"
+        INSERT INTO property_options (
+            id,
+            property_definition_id,
+            display_order,
+            number_value,
+            string_value,
+            color
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO NOTHING
+        RETURNING id, created_at, updated_at
+        "#,
+        id,
+        property_definition_id,
+        display_order,
+        number_value,
+        string_value,
+        color.clone()
+    )
+    .fetch_optional(executor)
+    .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => return Ok(CreatePropertyOptionWithIdOutcome::IdTaken),
+        Err(err) if violates_unique(&err, &OPTION_VALUE_INDEXES) => {
+            return Ok(CreatePropertyOptionWithIdOutcome::DuplicateValue);
+        }
+        Err(err) => return Err(err.into()),
+    };
+
+    Ok(CreatePropertyOptionWithIdOutcome::Created(PropertyOption {
+        id: row.id,
+        property_definition_id,
+        display_order,
+        value,
+        color,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    }))
 }
 
 /// Resolve an option without overwriting an existing option's metadata.

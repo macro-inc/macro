@@ -76,7 +76,6 @@
     metrics_generator = {
       ring.instance_addr = "127.0.0.1";
       processor = {
-        service_graphs.dimensions = [ "deployment.environment" ];
         local_blocks = {
           filter_server_spans = false;
           flush_to_storage = true;
@@ -84,30 +83,17 @@
           max_block_bytes = 50000000;
           concurrent_blocks = 2;
         };
-        span_metrics = {
-          # Keep unbounded span names out of Prometheus; they remain searchable in Tempo.
-          intrinsic_dimensions.span_name = false;
-          dimensions = [ "deployment.environment" ];
-        };
       };
       traces_storage.path = "/srv/observability/tempo/generator/traces";
-      storage = {
-        path = "/srv/observability/tempo/generator/wal";
-        remote_write = [
-          {
-            url = "http://127.0.0.1:9090/api/v1/write";
-            send_exemplars = true;
-          }
-        ];
-      };
+      storage.path = "/srv/observability/tempo/generator/wal";
+      # The sampler holds a trace 30s before sending it, and the generator drops
+      # spans that ended longer ago than this (30s by default).
+      metrics_ingestion_time_range_slack = "5m";
     };
     overrides.defaults.metrics_generator = {
-      processors = [
-        "local-blocks"
-        "span-metrics"
-        "service-graphs"
-      ];
-      max_active_series = 50000;
+      # Span metrics and service graphs come from the sampler, which sees the
+      # spans sampling drops.
+      processors = [ "local-blocks" ];
     };
     query_frontend.metrics.concurrent_jobs = 4;
     storage.trace = {

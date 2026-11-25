@@ -1,15 +1,16 @@
 # Derived metrics: Datadog to Mimir
 
 Generated from `modules/derived-metrics/*.nix` by `nix run .#render`; edit those.
-To use the mapping from Nix, import `spans.nix`: each entry of its `metrics` has
-the Datadog `name`, the Mimir `metric`, its `kind` and `labels` (Datadog tag to
-Mimir label).
+To use the mapping from Nix, import `spans.nix` and `logs.nix`: each entry of
+their `metrics` has the Datadog `name`, the Mimir `metric`, its `kind` and
+`labels` (Datadog tag to Mimir label).
 
 Rules:
 
 - Dots become underscores, in metric names and in tags. `env` is
   `deployment_environment`; tag values are unchanged (Datadog lowercases them,
-  Mimir doesn't). A span without the tag has no such label (Datadog: `N/A`).
+  Mimir doesn't). A span or record without the tag has no such label (Datadog:
+  `N/A`).
 - Durations (`@duration`) are in seconds and end in `_seconds`; a Datadog
   threshold on one is in nanoseconds. Fields that were already in milliseconds
   or bytes stay so.
@@ -32,11 +33,12 @@ in those 30 s (OpenTelemetry delta temporality). Windows are summed with
 | `sum:DIST{...}` over 1h | `histogram_sum(sum(sum_over_time(DIST{...}[1h])))` |
 | `avg:DIST{...}` over 1h | `histogram_avg(sum(sum_over_time(DIST{...}[1h])))` |
 | `p95:DIST{...} by {model}` over 1h | `histogram_quantile(0.95, sum by (model) (sum_over_time(DIST{...}[1h])))` |
-| `max:DIST{...}` | `histogram_quantile(1, ...)`, within a bucket |
+| `max:DIST{...}`, `min:DIST{...}` | `histogram_quantile(1, ...)`, `histogram_quantile(0, ...)` |
 
 Distributions are native histograms: no `_bucket`, `_sum` or `_count` series.
-Counts, sums and averages are exact; quantiles are within a bucket (a few
-percent; Datadog's sketches are within 1 %).
+Counts, sums and averages are exact; quantiles, minimum and maximum are within a
+bucket (a few percent, up to 20 % where one series mixes values a hundred
+thousand apart; Datadog's sketches are within 1 %).
 Nothing happening means no sample: an ungrouped query that has to give zero needs
 `or vector(0)`; a grouped one has no series for a group where nothing happened.
 
@@ -94,3 +96,45 @@ does, its metrics have no `deployment_environment="prod"`.
 | `macro.web.runtime.js_heap_used_bytes` | `macro_web_runtime_js_heap_used_bytes` | distribution |  | `app.platform` → `app_platform`, `app.runtime` → `app_runtime`, `env` → `deployment_environment`, `os.type` → `os_type`, `resource_name` |
 | `macro.web.typing.event_duration_p95_ms` | `macro_web_typing_event_duration_p95_ms` | distribution |  | `app.platform` → `app_platform`, `env` → `deployment_environment`, `os.type` → `os_type`, `resource_name`, `typing.surface` → `typing_surface` |
 | `macro.web.view.duration` | `macro_web_view_duration_seconds` | distribution | seconds, not nanoseconds | `app.platform` → `app_platform`, `env` → `deployment_environment`, `os.type` → `os_type`, `resource_name`, `route.id` → `route_id` |
+
+## From logs
+
+Computed from the log records ingest receives, before Loki.
+
+- Datadog's `status` is the record's `level` field by its first letters, or else
+  its OpenTelemetry severity; `status:error` is neither critical nor fatal. A
+  phrase in a definition matches anywhere in the message, in any case, as
+  whole words.
+- `service` is the OpenTelemetry service name, without the environment Datadog
+  has in some (`email-service-pubsub-workers-prod`).
+- `macro.logs.errors` counts prod only in Datadog and has no `env` there; here it
+  counts every environment, by `deployment_environment`: a ported monitor needs
+  `deployment_environment="prod"`.
+- `TimeToFirstToken` and `TimeToSendRequest` read the log field `metric`.
+  Datadog's, made in its UI, read `event`, which nothing sets any more, so they
+  are empty there.
+
+| Datadog | Mimir | Kind | Unit | Labels |
+| --- | --- | --- | --- | --- |
+| `TimeToFirstToken` | `TimeToFirstToken` | distribution |  | `env` → `deployment_environment`, `model_name` |
+| `TimeToSendRequest` | `TimeToSendRequest` | distribution |  | `env` → `deployment_environment`, `model_name` |
+| `macro.agent_harness.runtime_starvation` | `macro_agent_harness_runtime_starvation` | count |  | `env` → `deployment_environment` |
+| `macro.ai.provider_account_unavailable` | `macro_ai_provider_account_unavailable` | count |  | `env` → `deployment_environment`, `provider`, `reason`, `service` |
+| `macro.ai.usage.cost_usd` | `macro_ai_usage_cost_usd` | distribution |  | `env` → `deployment_environment`, `provider` |
+| `macro.logs.errors` | `macro_logs_errors` | count |  | `env` → `deployment_environment`, `service` |
+| `macro.outlook.mailbox.abandoned` | `macro_outlook_mailbox_abandoned` | distribution |  | `env` → `deployment_environment`, `link_id`, `needs_reauth`, `sync_active` |
+| `macro.outlook.mailbox.import_round_wait_seconds` | `macro_outlook_mailbox_import_round_wait_seconds` | distribution |  | `env` → `deployment_environment`, `link_id`, `needs_reauth`, `sync_active` |
+| `macro.outlook.mailbox.imported_5m` | `macro_outlook_mailbox_imported_5m` | distribution |  | `env` → `deployment_environment`, `link_id`, `needs_reauth`, `sync_active` |
+| `macro.outlook.mailbox.oldest_waiting_seconds` | `macro_outlook_mailbox_oldest_waiting_seconds` | distribution |  | `env` → `deployment_environment`, `link_id`, `needs_reauth`, `sync_active` |
+| `macro.outlook.mailbox.parked` | `macro_outlook_mailbox_parked` | distribution |  | `env` → `deployment_environment`, `link_id`, `needs_reauth`, `sync_active` |
+| `macro.outlook.mailbox.parked_until_max_seconds` | `macro_outlook_mailbox_parked_until_max_seconds` | distribution |  | `env` → `deployment_environment`, `link_id`, `needs_reauth`, `sync_active` |
+| `macro.outlook.mailbox.queued` | `macro_outlook_mailbox_queued` | distribution |  | `env` → `deployment_environment`, `link_id`, `needs_reauth`, `sync_active` |
+| `macro.outlook.mailbox.seconds_since_last_import` | `macro_outlook_mailbox_seconds_since_last_import` | distribution |  | `env` → `deployment_environment`, `link_id`, `needs_reauth`, `sync_active` |
+| `macro.routine_suggestions.dismissed` | `macro_routine_suggestions_dismissed` | count |  | `env` → `deployment_environment`, `from`, `kind`, `surface` |
+| `macro.routine_suggestions.duration_ms` | `macro_routine_suggestions_duration_ms` | distribution |  | `env` → `deployment_environment`, `outcome` |
+| `macro.routine_suggestions.first_ms` | `macro_routine_suggestions_first_ms` | distribution |  | `env` → `deployment_environment`, `outcome` |
+| `macro.routine_suggestions.generation` | `macro_routine_suggestions_generation` | count |  | `env` → `deployment_environment`, `outcome` |
+| `macro.routine_suggestions.saved` | `macro_routine_suggestions_saved` | count |  | `env` → `deployment_environment`, `from`, `kind`, `surface` |
+| `macro.routine_suggestions.suggested` | `macro_routine_suggestions_suggested` | count |  | `env` → `deployment_environment`, `kind`, `ok`, `surface` |
+| `macro.routine_suggestions.surface` | `macro_routine_suggestions_surface` | count |  | `env` → `deployment_environment`, `filled`, `surface` |
+| `macro.routine_suggestions.surfaces_filled` | `macro_routine_suggestions_surfaces_filled` | distribution |  | `env` → `deployment_environment`, `outcome` |

@@ -1,10 +1,11 @@
-# The Alloy configuration that computes the metrics of spans.nix, in two parts:
-# `tap` runs in alloy-ingest and forwards the spans a metric reads, `config`
-# runs in the `derived-metrics` application and turns them into metrics.
+# The Alloy configuration that computes the metrics of spans.nix and logs.nix,
+# in two parts: `tap` runs in alloy-ingest and forwards the spans and log records
+# a metric reads, `config` runs in the `derived-metrics` application and turns
+# them into metrics.
 { lib }:
 let
-  spans = import ./spans.nix { inherit lib; };
-  inherit (spans) metrics selections;
+  spans = signal (import ./spans.nix { inherit lib; });
+  logs = signal (import ./logs.nix { inherit lib; });
 
   # An Alloy raw string; OTTL has no backticks.
   raw =
@@ -13,68 +14,141 @@ let
     "`${text}`";
   list = items: "[\n${lib.concatMapStrings (item: "    ${raw item},\n") items}  ]";
   attr = key: ''attributes["${key}"]'';
+  present = key: "${attr key} != nil";
   all = lib.concatStringsSep " and ";
-  selected = name: all selections.${name};
 
-  # Labels are collected under a prefix no span uses, so that a label never
-  # picks up an unrelated span attribute of the same name.
+  # Labels are collected under a prefix nothing uses, so that a label never
+  # picks up an unrelated attribute of the same name.
   prefix = "tag.";
 
-  values = lib.unique (
-    map (m: m.value) (lib.filter (m: m.value != null && m.value != "duration") metrics)
-  );
-  sources = lib.unique (lib.concatMap (m: lib.concatLists (lib.attrValues m.tags)) metrics);
-  isAttribute = source: source != "name";
-
-  # Attributes the definitions read: what the tap keeps of a span. Conditions
-  # are text, so their attributes are found by pattern.
-  mentioned =
-    text:
-    map (match: builtins.elemAt match 0) (
-      lib.filter builtins.isList (builtins.split ''attributes\["([^"]+)"]'' text)
-    );
-  conditionText = lib.concatStringsSep "\n" (
-    lib.concatLists (lib.attrValues selections) ++ lib.concatMap (m: m.where) metrics
-  );
-  kept = lib.unique (values ++ lib.filter isAttribute sources ++ mentioned conditionText);
-  keep = raw "keep_keys(attributes, [${lib.concatMapStringsSep ", " (key: ''"${key}"'') kept}])";
-
-  # Longer than any value a metric reads; some attributes hold whole commands.
-  truncate = raw "truncate_all(attributes, 256)";
-
-  # Datadog's tags as `tag.<label>` attributes. Later statements win, so the
-  # sources run from the last resort to the first choice. Strings, so that 429
-  # and "429" aren't two sets of one series' samples.
-  tagStatements =
+  # What the configuration needs of one signal's definitions.
+  signal =
     {
-      select,
-      label,
-      from,
+      selections,
+      openTags,
+      metrics,
+      messages ? { },
+      ...
     }:
-    let
-      set =
-        source:
-        "set(${attr "${prefix}${label}"}, String(${source})) where ${source} != nil and ${selected select}";
-      attributeSources = lib.reverseList (lib.filter isAttribute from);
-    in
-    lib.optional (!lib.all isAttribute from) (set "name")
-    ++ map (key: set ''resource.attributes["${key}"]'') attributeSources
-    ++ map (key: set (attr key)) attributeSources;
-  tags = lib.unique (
-    lib.concatMap (
-      m:
-      lib.mapAttrsToList (tag: from: {
-        inherit (m) select;
-        inherit from;
-        label = m.labels.${tag};
-      }) m.tags
-    ) metrics
-  );
+    rec {
+      inherit metrics;
+      selected = name: all selections.${name};
+      conditions =
+        m:
+        selections.${m.select}
+        ++ m.where
+        # The bounds leave out NaN and infinity, which would be the sum for good.
+        ++ lib.optionals (m.value != null && m.value != "duration") [
+          "IsDouble(${attr m.value})"
+          "${attr m.value} > -1.0e300"
+          "${attr m.value} < 1.0e300"
+        ];
+
+      values = lib.unique (
+        map (m: m.value) (lib.filter (m: m.value != null && m.value != "duration") metrics)
+      );
+
+      # Everything no metric is computed from.
+      unselected = "not (${
+        lib.concatMapStringsSep " or " (name: "(${selected name})") (lib.attrNames selections)
+      })";
+
+      # What the tap leaves of a record's body: the phrases definitions look for.
+      bodies =
+        lib.mapAttrsToList (
+          key: text:
+          ''set(cache["${key}"], true) where IsString(body) and IsMatch(body, "(?i)\\b${text}\\b")''
+        ) messages
+        ++ [ ''set(body, "")'' ]
+        ++ lib.mapAttrsToList (
+          key: text: ''set(body, Concat([body, "${text}"], ". ")) where cache["${key}"] == true''
+        ) messages;
+
+      # Attributes the definitions read: what the tap keeps. Conditions are
+      # text, so their attributes are found by pattern.
+      keep =
+        let
+          mentioned = map (match: builtins.elemAt match 0) (
+            lib.filter builtins.isList (builtins.split ''attributes\["([^"]+)"]'' conditionText)
+          );
+          conditionText = lib.concatStringsSep "\n" (
+            lib.concatLists (lib.attrValues selections) ++ lib.concatMap (m: m.where) metrics
+          );
+          sources = lib.filter isAttribute (
+            lib.concatMap (m: lib.concatLists (lib.attrValues m.tags)) metrics
+          );
+          kept = lib.unique (values ++ sources ++ mentioned);
+        in
+        [ "keep_keys(attributes, [${lib.concatMapStringsSep ", " (key: ''"${key}"'') kept}])" ]
+        # A map, a list or bytes are no value a definition reads, and
+        # truncating leaves their content.
+        ++ map (
+          key:
+          "delete_key(attributes, \"${key}\") where ${present key} and not (IsString(${attr key}) or IsBool(${attr key}) or IsInt(${attr key}) or IsDouble(${attr key}))"
+        ) kept
+        ++ [ "truncate_all(attributes, 256)" ];
+
+      # Numbers as numbers (many are sent as strings) and tags as Datadog has
+      # them.
+      statements =
+        map (
+          key: "set(${attr key}, Double(${attr key})) where ${attr key} != nil and not IsBool(${attr key})"
+        ) values
+        ++ lib.concatMap tagStatements tags
+        ++ lib.concatMap (openTagStatements selected) (lib.filter (t: lib.elem t.label openTags) tags);
+
+      tags = lib.unique (
+        lib.concatMap (
+          m:
+          lib.mapAttrsToList (tag: from: {
+            inherit (m) select;
+            inherit from;
+            label = m.labels.${tag};
+          }) m.tags
+        ) metrics
+      );
+
+      # Datadog's tags as `tag.<label>` attributes. Later statements win, so the
+      # sources run from the last resort to the first choice. Strings, so `true`
+      # and "true" aren't two sets of one series' samples.
+      tagStatements =
+        {
+          select,
+          label,
+          from,
+        }:
+        let
+          set =
+            source:
+            "set(${attr "${prefix}${label}"}, String(${source})) where ${source} != nil and ${selected select}";
+          attributeSources = lib.reverseList (lib.filter isAttribute from);
+        in
+        lib.optional (!lib.all isAttribute from) (set "name")
+        ++ (
+          let
+            fromResource = map (key: set ''resource.attributes["${key}"]'') attributeSources;
+            fromItem = map (key: set (attr key)) attributeSources;
+          in
+          # A service or environment is the sender's, not what one item says.
+          if lib.elem label reserved then fromItem ++ fromResource else fromResource ++ fromItem
+        );
+    };
+  # Longer than any value a metric reads; some attributes hold whole commands.
+
+  # Labels that are the resource's, whatever the span or record says.
+  reserved = [
+    "service"
+    "deployment_environment"
+  ];
+
+  # "name" is the span's name.
+  isAttribute = source: source != "name";
 
   # A tag in `openTags` holds whatever its source says, up to whole commands:
   # only a plain name is worth a series (and fit to store as a label). Ingest
   # removes the name of a call that isn't one, so that is `other` too.
   openTagStatements =
+    selected:
     { select, label, ... }:
     let
       tag = attr "${prefix}${label}";
@@ -83,22 +157,17 @@ let
       ''set(${tag}, "other") where ${selected select} and (${tag} == nil or not IsMatch(${tag}, "^[A-Za-z][A-Za-z0-9_-]{0,63}$"))''
     ];
 
+  # One metric for signaltometrics; `block` is its signal there.
   metricBlock =
-    m:
+    block: conditions: m:
     let
-      # The bounds leave out NaN and infinity, which would be the sum for good.
-      isNumber = lib.optionals (m.value != null && m.value != "duration") [
-        "IsDouble(${attr m.value})"
-        "${attr m.value} > -1.0e300"
-        "${attr m.value} < 1.0e300"
-      ];
       value = if m.value == "duration" then "Seconds(end_time - start_time)" else attr m.value;
     in
     ''
-      spans {
+      ${block} {
         name        = "${m.metric}"
         description = "Datadog ${m.name}"
-        conditions  = [${raw (all (selections.${m.select} ++ m.where ++ isNumber))}]
+        conditions  = [${raw (all (conditions m))}]
 
         // None: without this block, every resource attribute becomes a label.
         include_resource_attributes {
@@ -119,30 +188,37 @@ let
         }
       }
     '';
+  metricBlocks = block: s: lib.concatMapStrings (metricBlock block s.conditions) s.metrics;
 in
 {
-  # Forwards to `endpoint` (host:port, OTLP gRPC) only the spans some metric
-  # reads, with only the attributes the metrics read.
+  # Forwards to `endpoint` (host:port, OTLP gRPC) only the spans and log records
+  # some metric reads, with only the attributes the metrics read.
   #
   # It must never hold up or grow the ingest it hangs off: errors drop nothing
-  # but the span at hand, what it queues is stripped and bounded in bytes, and
-  # when derived-metrics is away for longer than that its spans are dropped.
+  # but the item at hand, what it queues is stripped and bounded in bytes, and
+  # when derived-metrics is away for longer than that its items are dropped.
   tap = endpoint: ''
     // Generated by infra/k8s/observability/cluster/modules/derived-metrics.
     otelcol.processor.filter "derived" {
       error_mode = "ignore"
       traces {
-        span      = [${raw "not (${lib.concatMapStringsSep " or " (name: "(${selected name})") (lib.attrNames selections)})"}]
+        span      = [${raw spans.unselected}]
         spanevent = [`true`]
       }
-      output { traces = [otelcol.processor.transform.derived.input] }
+      logs {
+        log_record = [${raw logs.unselected}]
+      }
+      output {
+        traces = [otelcol.processor.transform.derived.input]
+        logs   = [otelcol.processor.transform.derived.input]
+      }
     }
 
     otelcol.processor.transform "derived" {
       error_mode = "ignore"
       trace_statements {
         context    = "resource"
-        statements = [${keep}, ${truncate}]
+        statements = ${list (spans.keep)}
       }
       trace_statements {
         context    = "scope"
@@ -150,9 +226,33 @@ in
       }
       trace_statements {
         context    = "span"
-        statements = [${keep}, ${truncate}, `set(status.message, "")`, `set(trace_state, "")`, `set(links, nil)`]
+        statements = ${
+          list (
+            spans.keep
+            ++ [
+              ''set(status.message, "")''
+              ''set(trace_state, "")''
+              "set(links, nil)"
+            ]
+          )
+        }
       }
-      output { traces = [otelcol.exporter.otlp.derived.input] }
+      log_statements {
+        context    = "resource"
+        statements = ${list (logs.keep)}
+      }
+      log_statements {
+        context    = "scope"
+        statements = [`keep_keys(attributes, [])`]
+      }
+      log_statements {
+        context    = "log"
+        statements = ${list (logs.keep ++ logs.bodies)}
+      }
+      output {
+        traces = [otelcol.exporter.otlp.derived.input]
+        logs   = [otelcol.exporter.otlp.derived.input]
+      }
     }
 
     otelcol.exporter.otlp "derived" {
@@ -176,49 +276,57 @@ in
     }:
     ''
       // Generated by infra/k8s/observability/cluster/modules/derived-metrics.
-      otelcol.receiver.otlp "spans" {
+      otelcol.receiver.otlp "derived" {
         grpc { endpoint = "0.0.0.0:${toString port}" }
-        output { traces = [otelcol.processor.memory_limiter.spans.input] }
+        output {
+          traces = [otelcol.processor.memory_limiter.derived.input]
+          logs   = [otelcol.processor.memory_limiter.derived.input]
+        }
       }
 
-      otelcol.processor.memory_limiter "spans" {
+      otelcol.processor.memory_limiter "derived" {
         check_interval = "1s"
         limit          = "256MiB"
         spike_limit    = "64MiB"
-        output { traces = [otelcol.processor.transform.spans.input] }
+        output {
+          traces = [otelcol.processor.transform.derived.input]
+          logs   = [otelcol.processor.transform.derived.input]
+        }
       }
 
-      // Numbers as numbers (many are sent as strings) and tags as Datadog has
-      // them. An attribute that is no number stays as it is, and no metric
-      // reads it; `silent` because that isn't worth a log line per span.
-      otelcol.processor.transform "spans" {
+      // An attribute that is no number stays as it is, and no metric reads it;
+      // `silent` because that isn't worth a log line each.
+      otelcol.processor.transform "derived" {
         error_mode = "silent"
         trace_statements {
           context    = "span"
-          statements = ${
-            list (
-              map (
-                key: "set(${attr key}, Double(${attr key})) where ${attr key} != nil and not IsBool(${attr key})"
-              ) values
-              ++ lib.concatMap tagStatements tags
-              ++ lib.concatMap openTagStatements (lib.filter (t: lib.elem t.label spans.openTags) tags)
-            )
-          }
+          statements = ${list spans.statements}
         }
-        output { traces = [otelcol.processor.batch.spans.input] }
+        log_statements {
+          context    = "log"
+          statements = ${list logs.statements}
+        }
+        output {
+          traces = [otelcol.processor.batch.derived.input]
+          logs   = [otelcol.processor.batch.derived.input]
+        }
       }
 
       // One batch becomes one sample per series, so the timeout is the metrics'
       // resolution; it never sends early on size.
-      otelcol.processor.batch "spans" {
+      otelcol.processor.batch "derived" {
         timeout             = "30s"
         send_batch_size     = 100000000
         send_batch_max_size = 0
-        output { traces = [otelcol.connector.signaltometrics.spans.input] }
+        output {
+          traces = [otelcol.connector.signaltometrics.derived.input]
+          logs   = [otelcol.connector.signaltometrics.derived.input]
+        }
       }
 
-      otelcol.connector.signaltometrics "spans" {
-      ${lib.concatMapStrings metricBlock metrics}
+      otelcol.connector.signaltometrics "derived" {
+      ${metricBlocks "spans" spans}
+      ${metricBlocks "logs" logs}
         output { metrics = [otelcol.processor.transform.metrics.input] }
       }
 

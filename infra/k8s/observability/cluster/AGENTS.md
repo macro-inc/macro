@@ -19,6 +19,8 @@ The [README](README.md) has the application list, bootstrap and contract with
   (README, "Grafana, the edge and ingest").
 - `modules/derived-metrics/`: Datadog's derived metrics, computed here; `MAPPING.md`
   there is how to translate a Datadog query.
+- `modules/sampler/`: the tier behind ingest that samples traces and counts span
+  metrics (README, "Trace sampling"); what is kept is `policies.nix`.
 
 ## Scope
 
@@ -44,7 +46,7 @@ The [README](README.md) has the application list, bootstrap and contract with
   in `env/prod.nix`. Until then only the watchdog heartbeat sends.
 - Start Grafana: set `macro.grafana.database` in `env/prod.nix` from the
   `../aws/` outputs; it runs 0 replicas until then.
-- Add or change a derived metric: `modules/derived-metrics/spans.nix`, then render
+- Add or change a derived metric: `modules/derived-metrics/spans.nix` or `logs.nix`, then render
   (also writes `MAPPING.md`). While Datadog still has it, change
   `infra/stacks/monitoring` with it.
 - Change an edge or query-gateway rule: `modules/edge.nix`.

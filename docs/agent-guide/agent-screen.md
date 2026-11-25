@@ -109,5 +109,7 @@ stubbed channel and team queries, where the Offline chip drops to its dot
 before the agent's name truncates: `just test-agent-screen-browser` from
 `apps/web`; `AGENT_SCREEN_SHOTS_DIR=<dir>` keeps a PNG of each state. CI's
 Browser Tests job runs it when the viewer, that top bar, or a module the
-fixture stubs changes. A real run needs a local stack with an
-agent teammate's computer and the harness screen socket.
+fixture stubs changes. The telemetry fixture runs the sandboxed viewer
+against a scripted WebSocket to verify that canceling and retrying keeps
+the same journey, and that the first frame summary waits for pixels.
+For live trace lookup, see [VNC viewer attempts](observability.md#vnc-viewer-attempts).

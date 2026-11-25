@@ -373,6 +373,8 @@ where
             .await
             .map_err(|report| ComputerError::Internal(report.into_dynamic()))?;
         overcommit::mark_in_use(&mut guests, &in_use);
+        let held = self.repo.held_on(host).await.map_err(internal)?;
+        overcommit::mark_in_use(&mut guests, &held);
         let picked = overcommit::relieve(capacity, report, &guests, now);
         if picked.is_empty() {
             return Ok(());
@@ -394,6 +396,15 @@ where
     ) {
         let span = tracing::info_span!("computer.overcommit.hibernate", computer_id = %computer_id, host_id = %record.id, otel.status_code = tracing::field::Empty);
         async {
+            // A computer may have been held while waiting for this batch slot.
+            match self.repo.held(computer_id).await {
+                Ok(false) => {}
+                Ok(true) => return,
+                Err(error) => {
+                    tracing::warn!(%computer_id, ?error, "could not check computer hold before hibernation");
+                    return;
+                }
+            }
             let outcome = match fleet.hibernate(computer_id).await {
                 Ok(()) => {
                     self.relief.forget(record.id, computer_id);
