@@ -126,12 +126,14 @@ Pages run like this:
 - 429 with `Retry-After` when the user's budget across streams and tasks is
   spent (`stream/budget.rs` in DSS, counted in Redis through
   `crates/rate_limit`): 10 stream starts a minute, and 30 minutes of page
-  execution time an hour, waits for a turn excluded. Each page's time is
-  charged after it runs; a page that does not fit ends its stream with
-  `deadline` (lanes resume from their last `resume`) and takes what is left,
-  so the next start is refused until the hour's window ends. When Redis cannot
-  answer, streams run: the budget guards cost, not access. It applies in
-  every environment.
+  execution time an hour, waits for a turn excluded. Only a stream that can
+  run counts a start (a 409 or 503 costs nothing). Each page's time is charged
+  after it runs and gives back its turn, timeouts and failures included, and a
+  page the client hangs up on is charged as it is dropped; a page that does
+  not fit ends its stream with `deadline` (lanes resume from their last
+  `resume`) and takes what is left, so the next start is refused until the
+  hour's window ends. When Redis cannot answer within 250 ms, streams run:
+  the budget guards cost, not access. It applies in every environment.
 - Open streams take turns. A task runs at most `PAGE_SLOTS` pages at once,
   whatever the number of open streams, and a freed slot goes to the waiting
   stream whose user's pages took the least time in the last 5 minutes (summed

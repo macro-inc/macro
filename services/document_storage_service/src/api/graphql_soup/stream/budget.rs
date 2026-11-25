@@ -6,8 +6,10 @@
 //!
 //! It guards cost, not access: when Redis cannot answer, the stream runs.
 
-use rate_limit::{RateBudgetPort, RateLimitConfig, RateLimitKey};
+use rate_limit::{RateBudgetPort, RateLimitConfig, RateLimitExceeded, RateLimitKey};
+use rootcause::Report;
 use std::time::Duration;
+use tracing::field::Empty;
 
 /// Stream starts per user per minute. A second pass streams back to back,
 /// 15 to 30 s each with a 2 s pause, about 2 to 4 starts a minute.
@@ -16,8 +18,12 @@ const STARTS_PER_MINUTE: u64 = 10;
 /// first and second pass takes a few minutes of page time (about 2.5 minutes
 /// for the benchmark's L account on a debug build).
 const PAGE_MS_PER_HOUR: u64 = 30 * 60 * 1_000;
-/// Page time a stream needs left to start: about one page.
-const PAGE_MS_TO_START: u64 = 1_000;
+/// What a start spends of the page time: just enough to be refused once a
+/// page took the hour's last millisecond.
+const PAGE_MS_TO_START: u64 = 1;
+/// The longest a budget read may take. Past it the budget counts as
+/// unavailable and the stream runs, so a slow store never holds a stream.
+const STORE_TIMEOUT: Duration = Duration::from_millis(250);
 
 fn starts() -> RateLimitConfig {
     RateLimitConfig::new(STARTS_PER_MINUTE, Duration::from_secs(60))
@@ -37,6 +43,16 @@ fn page_time_key(user: &str) -> RateLimitKey {
     RateLimitKey::builder(&"soup-sync-stream-page-ms")
         .append(&user)
         .finish()
+}
+
+/// What charging a page did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Charge {
+    Charged,
+    /// The hour's page time is spent: the stream ends.
+    Spent,
+    /// The store did not answer; nothing was charged.
+    Unavailable,
 }
 
 /// Whether a user may start a stream now.
@@ -60,9 +76,27 @@ impl<B: RateBudgetPort> SyncStreamBudget<B> {
         Self { counters }
     }
 
+    /// Spends `cost` of `key`'s budget, within [`STORE_TIMEOUT`].
+    async fn spend(
+        &self,
+        key: RateLimitKey,
+        config: RateLimitConfig,
+        cost: u64,
+    ) -> Result<Result<u64, RateLimitExceeded>, Report> {
+        tokio::time::timeout(STORE_TIMEOUT, self.counters.spend(key, config, cost))
+            .await
+            .unwrap_or_else(|_| Err(rootcause::report!("the budget store timed out")))
+    }
+
     /// Counts a stream start. Refused when the user started too many this
-    /// minute or has less than a page of page time left this hour.
+    /// minute or has spent the hour's page time.
+    #[tracing::instrument(
+        name = "soup.sync_stream.budget_admit",
+        skip_all,
+        fields(sync.budget_outcome = Empty)
+    )]
     pub(super) async fn admit(&self, user: &str) -> Admission {
+        let span = tracing::Span::current();
         for (key, config, cost, budget) in [
             (starts_key(user), starts(), 1, "starts"),
             (
@@ -72,9 +106,10 @@ impl<B: RateBudgetPort> SyncStreamBudget<B> {
                 "page_time",
             ),
         ] {
-            match self.counters.spend(key, config, cost).await {
+            match self.spend(key, config, cost).await {
                 Ok(Ok(_)) => {}
                 Ok(Err(exceeded)) => {
+                    span.record("sync.budget_outcome", budget);
                     tracing::warn!(
                         sync.budget = budget,
                         sync.retry_after_s =
@@ -86,41 +121,49 @@ impl<B: RateBudgetPort> SyncStreamBudget<B> {
                     };
                 }
                 Err(error) => {
+                    span.record("sync.budget_outcome", "unavailable");
                     tracing::warn!(error = ?error, sync.budget = budget, "soup sync stream budget unavailable");
+                    return Admission::Admitted;
                 }
             }
         }
+        span.record("sync.budget_outcome", "admitted");
         Admission::Admitted
     }
 
-    /// Charges a page's execution time. `false` once the hour's page time is
-    /// spent: the page that does not fit takes what is left, so the next
-    /// start is refused until the window ends.
-    pub(super) async fn charge(&self, user: &str, ran: Duration) -> bool {
+    /// Charges a page's execution time. [`Charge::Spent`] once the hour's
+    /// page time is spent: the page that does not fit takes what is left, so
+    /// the next start is refused until the window ends.
+    #[tracing::instrument(
+        name = "soup.sync_stream.budget_charge",
+        skip_all,
+        fields(sync.charge_ms = Empty, sync.budget_outcome = Empty)
+    )]
+    pub(super) async fn charge(&self, user: &str, ran: Duration) -> Charge {
+        let span = tracing::Span::current();
         let ms = u64::try_from(ran.as_millis()).unwrap_or(u64::MAX).max(1);
-        match self
-            .counters
-            .spend(page_time_key(user), page_time(), ms)
-            .await
-        {
-            Ok(Ok(_)) => true,
+        span.record("sync.charge_ms", i64::try_from(ms).unwrap_or(i64::MAX));
+        let charge = match self.spend(page_time_key(user), page_time(), ms).await {
+            Ok(Ok(_)) => Charge::Charged,
             Ok(Err(exceeded)) => {
                 let left = exceeded.max_count.saturating_sub(exceeded.current_count);
-                if left > 0
-                    && let Err(error) = self
-                        .counters
-                        .spend(page_time_key(user), page_time(), left)
-                        .await
-                {
-                    tracing::warn!(error = ?error, "soup sync stream budget unavailable");
+                if left > 0 {
+                    // Best effort: a store that fails now refuses nothing.
+                    let _ = self.spend(page_time_key(user), page_time(), left).await;
                 }
-                false
+                Charge::Spent
             }
-            Err(error) => {
-                tracing::warn!(error = ?error, "soup sync stream budget unavailable");
-                true
-            }
-        }
+            Err(_) => Charge::Unavailable,
+        };
+        span.record(
+            "sync.budget_outcome",
+            match charge {
+                Charge::Charged => "charged",
+                Charge::Spent => "spent",
+                Charge::Unavailable => "unavailable",
+            },
+        );
+        charge
     }
 }
 

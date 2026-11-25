@@ -165,6 +165,9 @@ struct Runner<E> {
     waiting_since: Option<Instant>,
     /// The user's budget across streams ran out: no further page starts.
     out_of_budget: bool,
+    /// How long the page just run executed, charged once its turn is given
+    /// back.
+    page_ran: Option<Duration>,
     finished: bool,
     telemetry: StreamTelemetry,
 }
@@ -182,6 +185,7 @@ impl<E: PageExecutor> Runner<E> {
             deadline: Instant::now() + STREAM_DEADLINE,
             waiting_since: None,
             out_of_budget: false,
+            page_ran: None,
             finished: false,
             telemetry,
         }
@@ -216,7 +220,6 @@ impl<E: PageExecutor> Runner<E> {
         }
         if self.out_of_budget {
             // Its lanes pick up from their last `resume` in a later stream.
-            self.telemetry.out_of_budget = true;
             return self.finish(EndReason::Deadline);
         }
 
@@ -232,6 +235,14 @@ impl<E: PageExecutor> Runner<E> {
 
         self.run_page(lane, waited).await;
         drop(turn);
+        // Charged after the turn is given back, so a slow budget store holds
+        // no page slot.
+        if let Some(ran) = self.page_ran.take()
+            && !self.executor.charge(ran).await
+        {
+            self.out_of_budget = true;
+            self.telemetry.out_of_budget = true;
+        }
     }
 
     async fn run_page(&mut self, mut lane: LaneRun, waited: Duration) {
@@ -257,9 +268,7 @@ impl<E: PageExecutor> Runner<E> {
                 .instrument(span.clone()),
         )
         .await;
-        if !self.executor.charge(started.elapsed()).await {
-            self.out_of_budget = true;
-        }
+        self.page_ran = Some(started.elapsed());
         let response = match executed {
             Ok(Ok(response)) => response,
             Ok(Err(error)) => {

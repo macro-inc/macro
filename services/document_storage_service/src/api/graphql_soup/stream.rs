@@ -19,7 +19,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::Cached;
-use budget::{Admission, SyncStreamBudget};
+use budget::{Admission, Charge, SyncStreamBudget};
 use calendar_events::domain::models::OccurrenceRange;
 use complete_graph::{GraphqlRequestParts, MAIL_CACHE_PROFILE_HEADER, MailCacheProfile};
 use futures::StreamExt as _;
@@ -33,8 +33,11 @@ use soup_sync_stream::{
 };
 use std::{
     convert::Infallible,
-    sync::{Arc, LazyLock},
-    time::Duration,
+    sync::{
+        Arc, LazyLock,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::{Duration, Instant},
 };
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
@@ -106,20 +109,6 @@ pub(super) async fn sync_stream_handler(
         }
         Err(error) => return (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
     };
-    let budget = SyncStreamBudget::new(state.sync_stream_budget.clone());
-    if let Admission::Refused { retry_after } =
-        budget.admit(acting_user.macro_user_id.as_ref()).await
-    {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            [(
-                header::RETRY_AFTER,
-                retry_after.as_secs().max(1).to_string(),
-            )],
-            "this user's Soup sync stream budget is spent; retry later",
-        )
-            .into_response();
-    }
     let Some(active) = ACTIVE_STREAMS.try_acquire(acting_user.macro_user_id.clone()) else {
         return (
             StatusCode::CONFLICT,
@@ -139,6 +128,22 @@ pub(super) async fn sync_stream_handler(
         )
             .into_response();
     };
+    // Only a stream that can run spends the budget: a 409 or 503 above
+    // costs nothing.
+    let budget = SyncStreamBudget::new(state.sync_stream_budget.clone());
+    if let Admission::Refused { retry_after } =
+        budget.admit(acting_user.macro_user_id.as_ref()).await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(
+                header::RETRY_AFTER,
+                retry_after.as_secs().max(1).to_string(),
+            )],
+            "this user's Soup sync stream budget is spent; retry later",
+        )
+            .into_response();
+    }
     let mail_profile = MailCacheProfile::from_advertised(
         request_parts
             .headers
@@ -155,6 +160,7 @@ pub(super) async fn sync_stream_handler(
         lane_lists: graphql_soup::SoupLaneLists::default(),
         turns: PAGE_TURNS.stream(acting_user.macro_user_id.clone()),
         budget,
+        budget_unavailable: AtomicBool::new(false),
         _active: active,
         _slot: slot,
     };
@@ -184,7 +190,10 @@ struct SchemaPageExecutor {
     /// This stream's turns on [`PAGE_TURNS`].
     turns: StreamTurns<MacroUserIdStr<'static>>,
     /// The user's budget across streams, charged with each page's time.
-    budget: SyncStreamBudget<rate_limit::RedisRateLimitAdapter<redis::Client>>,
+    budget: SyncStreamBudget<DssBudgetStore>,
+    /// The budget store failed once in this stream; later failures are not
+    /// logged again.
+    budget_unavailable: AtomicBool,
     _active: ActiveStreamGuard<MacroUserIdStr<'static>>,
     /// This stream's slot of [`STREAM_SLOTS`], released with the body.
     _slot: OwnedSemaphorePermit,
@@ -203,6 +212,14 @@ impl PageExecutor for SchemaPageExecutor {
         request: async_graphql::Request,
         budget: PageBudget,
     ) -> Result<serde_json::Value, Self::Error> {
+        // The runner charges a page that finishes; one the client hangs up
+        // on is dropped here mid-way, and still ran on the database.
+        let mut unfinished = UnfinishedPage {
+            budget: self.budget.clone(),
+            user: self.macro_user_id.clone(),
+            started: Instant::now(),
+            finished: false,
+        };
         let response = telemetry::observe(request, true, |request| {
             let request = graphql_query_context_data(
                 request,
@@ -220,10 +237,46 @@ impl PageExecutor for SchemaPageExecutor {
             )
         })
         .await;
+        unfinished.finished = true;
         serde_json::to_value(&response)
     }
 
     async fn charge(&self, ran: Duration) -> bool {
-        self.budget.charge(self.macro_user_id.as_ref(), ran).await
+        match self.budget.charge(self.macro_user_id.as_ref(), ran).await {
+            Charge::Charged => true,
+            Charge::Spent => false,
+            Charge::Unavailable => {
+                if !self.budget_unavailable.swap(true, Ordering::Relaxed) {
+                    tracing::warn!("soup sync stream budget unavailable; pages run uncharged");
+                }
+                true
+            }
+        }
+    }
+}
+
+/// The budget store DSS keeps in Redis.
+type DssBudgetStore = rate_limit::RedisRateLimitAdapter<redis::Client>;
+
+/// Charges a page dropped before it finished: the response body was dropped
+/// with the stream, so the runner never charges it.
+struct UnfinishedPage {
+    budget: SyncStreamBudget<DssBudgetStore>,
+    user: MacroUserIdStr<'static>,
+    started: Instant,
+    finished: bool,
+}
+
+impl Drop for UnfinishedPage {
+    fn drop(&mut self) {
+        if self.finished {
+            return;
+        }
+        let budget = self.budget.clone();
+        let user = self.user.clone();
+        let ran = self.started.elapsed();
+        tokio::spawn(async move {
+            budget.charge(user.as_ref(), ran).await;
+        });
     }
 }
