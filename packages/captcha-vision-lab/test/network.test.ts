@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { LAB_HOST, LAB_PORT, LAB_URL } from '../src/registry.ts';
-import { ISOLATED_NETWORK } from '../src/run.ts';
+import { isolatedBrowser } from '../src/run.ts';
 
 let outsideHits = 0;
 let outside: ReturnType<typeof Bun.serve>;
@@ -40,7 +40,7 @@ test('only the lab origin is reachable, even with no allowlist', async () => {
   const context = await chromium.launchPersistentContext(profile, {
     headless: true,
     executablePath: process.env.LAB_CHROMIUM_PATH,
-    ...ISOLATED_NETWORK,
+    ...isolatedBrowser(),
   });
   try {
     const page = context.pages()[0] ?? (await context.newPage());
@@ -62,5 +62,38 @@ test('only the lab origin is reachable, even with no allowlist', async () => {
   } finally {
     await context.close();
     await rm(profile, { recursive: true, force: true });
+  }
+});
+
+test('the browser gets only an allowlisted environment', () => {
+  const saved = {
+    LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH,
+    LAB_TEST_SECRET: process.env.LAB_TEST_SECRET,
+  };
+  process.env.LD_LIBRARY_PATH = '/nix/store/not-for-chromium/lib';
+  process.env.LAB_TEST_SECRET = 'not-for-the-browser';
+  try {
+    const { env } = isolatedBrowser();
+
+    expect(env.LD_LIBRARY_PATH).toBeUndefined();
+    expect(env.LAB_TEST_SECRET).toBeUndefined();
+    expect(
+      Object.keys(env).every((name) =>
+        [
+          'HOME',
+          'PATH',
+          'TMPDIR',
+          'LANG',
+          'TZ',
+          'FONTCONFIG_FILE',
+          'FONTCONFIG_PATH',
+        ].includes(name)
+      )
+    ).toBe(true);
+  } finally {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   }
 });
