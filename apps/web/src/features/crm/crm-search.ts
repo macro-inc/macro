@@ -2,8 +2,10 @@ import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 
 export { materializeCachedGraphqlCrmCompanies } from './queries/graphql';
 
+import { debouncedDependent } from '@core/util/debounce';
 import { queryReadyGate } from '@queries/gate';
 import { useSoupItemsQuery } from '@queries/soup/items';
+import { validateSearchServiceText } from '@queries/soup/search';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { crmCompanySearchQueryOptions } from './queries/company-search';
@@ -37,5 +39,33 @@ export function useCrmCompanySearchSource(
       if (query.isFetchNextPageError) await query.fetchNextPage();
       else await query.refetch();
     },
+  };
+}
+
+const COMPANY_PICKER_SEARCH_DEBOUNCE_MS = 250;
+
+/**
+ * Companies the search service matches for what a picker's field holds,
+ * once typing settles: a picker that must reach beyond the companies Quick
+ * Access keeps.
+ */
+export function useCrmCompanyPickerSearch(search: Accessor<string>) {
+  const query = debouncedDependent(
+    () => search().trim(),
+    COMPANY_PICKER_SEARCH_DEBOUNCE_MS
+  );
+  const enabled = () =>
+    crmAccessAllowed() &&
+    query().length > 0 &&
+    validateSearchServiceText(query());
+  const source = useCrmCompanySearchSource(query, enabled);
+  return {
+    companies: source.companies,
+    isLoading: () => enabled() && source.isLoading(),
+    hasMore: source.hasMore,
+    isLoadingMore: source.isLoadingMore,
+    loadMore: source.loadMore,
+    error: () => source.error(),
+    retry: source.retry,
   };
 }

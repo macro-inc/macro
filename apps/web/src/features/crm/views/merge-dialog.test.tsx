@@ -16,15 +16,28 @@ const fixture = vi.hoisted(() => ({
     id: string;
     name: string;
     domains: { domain: string }[];
+    teamId?: string;
   }[],
   people: [] as {
     id: string;
     name: string;
     email?: string | null;
     companyName?: string | null;
+    teamId?: string;
   }[],
   /** What the server finds for a typed search, beyond Quick Access. */
-  searched: [] as { id: string; name: string; email?: string | null }[],
+  searched: [] as {
+    id: string;
+    name: string;
+    email?: string | null;
+    teamId?: string;
+  }[],
+  companiesSearched: [] as {
+    id: string;
+    name: string;
+    domains: { domain: string }[];
+    teamId?: string;
+  }[],
   searches: [] as string[],
   hasMore: false,
   loadMore: vi.fn(async () => {}),
@@ -32,8 +45,26 @@ const fixture = vi.hoisted(() => ({
   retry: vi.fn(async () => {}),
 }));
 
+// Records belong to the viewer's current team unless a test names another.
+const inTeam = <T extends { teamId?: string }>(records: T[]) =>
+  records.map((record) => ({ teamId: 'team-1', ...record }));
+
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
+    createTeamSource: () => ({
+      data: { team: { id: 'team-1', crm_enabled: true }, members: [] },
+      isPending: false,
+    }),
+    createCompanySearch: (search: () => string) => ({
+      companies: () =>
+        search().trim() === '' ? [] : inTeam(fixture.companiesSearched),
+      isLoading: () => false,
+      hasMore: () => false,
+      isLoadingMore: () => false,
+      loadMore: async () => {},
+      error: () => undefined,
+      retry: async () => {},
+    }),
     createMergeCommands: (recordType: MergeRecordType) => {
       fixture.commandsFor = recordType;
       return fixture.commands;
@@ -41,17 +72,17 @@ vi.mock('../context/crm-context', () => ({
     createPropertyValueLabel: () => (_property: string, value: unknown) =>
       (value as { value?: unknown } | null)?.value?.toString(),
     createCompanySuggestions: () => ({
-      companies: () => fixture.suggestions,
+      companies: () => inTeam(fixture.suggestions),
       query: { isLoading: false },
     }),
     createContactSuggestions: () => ({
-      contacts: () => fixture.people,
+      contacts: () => inTeam(fixture.people),
       query: { isLoading: false },
     }),
     createContactSearch: (search: () => string) => ({
       contacts: () => {
         fixture.searches.push(search());
-        return search().trim() === '' ? [] : fixture.searched;
+        return search().trim() === '' ? [] : inTeam(fixture.searched);
       },
       isLoading: () => false,
       hasMore: () => fixture.hasMore,
@@ -215,6 +246,7 @@ beforeEach(() => {
   fixture.suggestions = [];
   fixture.people = [];
   fixture.searched = [];
+  fixture.companiesSearched = [];
   fixture.searches = [];
   fixture.hasMore = false;
   fixture.loadMore.mockClear();
@@ -797,4 +829,80 @@ it('keeps the matches it has when a later page fails, with Retry beside them', a
   expect(screen.getByText('Couldn’t search people.')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   expect(fixture.retry).toHaveBeenCalled();
+});
+
+it('finds a company beyond Quick Access through the search service', async () => {
+  fixture.suggestions = [
+    { id: 'kept', name: 'Kept Co', domains: [{ domain: 'kept.example.com' }] },
+  ];
+  fixture.companiesSearched = [
+    {
+      id: 'older',
+      name: 'Older Kept Co',
+      domains: [{ domain: 'older-kept.example.com' }],
+    },
+  ];
+  fixture.commands = { review: vi.fn(), commit: vi.fn() };
+  open([OLD]);
+
+  expect(screen.queryByText('Older Kept Co')).toBeNull();
+  fireEvent.input(screen.getByLabelText('Search companies'), {
+    target: { value: 'kept' },
+  });
+  expect(screen.getByText('Kept Co')).toBeTruthy();
+  expect(screen.getByText('Older Kept Co')).toBeTruthy();
+});
+
+it('lists only the current team’s companies and people to merge with', async () => {
+  fixture.suggestions = [
+    { id: 'kept', name: 'Kept Co', domains: [{ domain: 'kept.example.com' }] },
+    {
+      id: 'theirs',
+      name: 'Kept Co Elsewhere',
+      domains: [{ domain: 'kept-elsewhere.example.com' }],
+      teamId: 'team-2',
+    },
+  ];
+  fixture.companiesSearched = [
+    {
+      id: 'theirs-older',
+      name: 'Kept Co Abroad',
+      domains: [{ domain: 'kept-abroad.example.com' }],
+      teamId: 'team-2',
+    },
+  ];
+  fixture.commands = { review: vi.fn(), commit: vi.fn() };
+  open([OLD]);
+  fireEvent.input(screen.getByLabelText('Search companies'), {
+    target: { value: 'kept' },
+  });
+  expect(screen.getByText('Kept Co')).toBeTruthy();
+  expect(screen.queryByText('Kept Co Elsewhere')).toBeNull();
+  expect(screen.queryByText('Kept Co Abroad')).toBeNull();
+  cleanup();
+
+  fixture.people = [
+    { id: 'pat', name: 'Pat Lee', email: 'pat@acme.example.com' },
+    {
+      id: 'their-pat',
+      name: 'Pat Lane',
+      email: 'plane@acme.example.com',
+      teamId: 'team-2',
+    },
+  ];
+  fixture.searched = [
+    {
+      id: 'their-other-pat',
+      name: 'Pat Long',
+      email: 'plong@acme.example.com',
+      teamId: 'team-2',
+    },
+  ];
+  open([PAT_L], 'contact');
+  fireEvent.input(screen.getByLabelText('Search people'), {
+    target: { value: 'pat' },
+  });
+  expect(screen.getByText('Pat Lee')).toBeTruthy();
+  expect(screen.queryByText('Pat Lane')).toBeNull();
+  expect(screen.queryByText('Pat Long')).toBeNull();
 });

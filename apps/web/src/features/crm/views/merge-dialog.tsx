@@ -40,7 +40,6 @@ import {
   type MergeSameAddressPerson,
   type MergeSharingChoice,
 } from '../core/merge';
-import { useQuickAccessCrmCompaniesQuery } from './use-crm';
 
 export type MergeDialogProps = {
   open: boolean;
@@ -550,69 +549,109 @@ function quickAccessMatches(
  * do too, and while a search is typed, the server's matches beyond it follow:
  * a team can hold far more people than Quick Access keeps.
  */
+type PickRecord = { id: string; teamId?: string | null };
+
+/**
+ * Quick Access matches, then the server's beyond them while a search is
+ * typed, each listed once. A merge stays within one team, so the viewer's
+ * other teams' records are left out.
+ */
+function combinedSource<T extends PickRecord>(options: {
+  search: Accessor<string>;
+  teamId: () => string | undefined;
+  teamPending: () => boolean;
+  suggestions: () => readonly T[];
+  suggestionsLoading: () => boolean;
+  server: {
+    results: () => readonly T[];
+    isLoading: () => boolean;
+    hasMore: () => boolean;
+    isLoadingMore: () => boolean;
+    loadMore: () => Promise<void>;
+    error: () => unknown;
+    retry: () => Promise<void>;
+  };
+  candidate: (record: T) => MergeCandidate;
+}): PickSource {
+  const searching = () => options.search().trim() !== '';
+  const ours = (record: T) =>
+    options.teamId() !== undefined && record.teamId === options.teamId();
+  return {
+    matches: () => {
+      const local = quickAccessMatches(
+        options.suggestions().filter(ours).map(options.candidate),
+        options.search()
+      );
+      if (!searching()) return local;
+      const seen = new Set(local.map((record) => record.id));
+      return [
+        ...local,
+        ...options.server
+          .results()
+          .filter((record) => ours(record) && !seen.has(record.id))
+          .map(options.candidate),
+      ];
+    },
+    loading: () =>
+      options.teamPending() ||
+      options.suggestionsLoading() ||
+      (searching() && options.server.isLoading()),
+    hasMore: () => searching() && options.server.hasMore(),
+    loadingMore: () => options.server.isLoadingMore(),
+    loadMore: options.server.loadMore,
+    failed: () => searching() && options.server.error() !== undefined,
+    retry: options.server.retry,
+  };
+}
+
+/**
+ * The records a merge can pick from: the current team's, from Quick Access
+ * and, while a search is typed, the server's matches beyond it, since a team
+ * can hold far more records than Quick Access keeps.
+ */
 function usePickSource(
   recordType: MergeRecordType,
   search: Accessor<string>
 ): PickSource {
+  const context = useCrmContext();
+  const team = context.createTeamSource();
+  const teamId = () => team.data?.team.id;
+  const teamPending = () => team.isPending;
   return match(recordType)
     .with('company', (): PickSource => {
-      const suggestions = useQuickAccessCrmCompaniesQuery();
-      const candidates = () =>
-        suggestions.companies().map((company) => ({
+      const suggestions = context.createCompanySuggestions();
+      const server = context.createCompanySearch(search);
+      return combinedSource({
+        search,
+        teamId,
+        teamPending,
+        suggestions: suggestions.companies,
+        suggestionsLoading: () => suggestions.query.isLoading,
+        server: { ...server, results: server.companies },
+        candidate: (company) => ({
           id: company.id,
           name: company.name,
           identifiers: company.domains.map((domain) => domain.domain),
-        }));
-      return {
-        matches: () => quickAccessMatches(candidates(), search()),
-        loading: () => suggestions.query.isLoading,
-        hasMore: () => false,
-        loadingMore: () => false,
-        loadMore: async () => {},
-        failed: () => false,
-        retry: async () => {},
-      };
+        }),
+      });
     })
     .with('contact', (): PickSource => {
-      const context = useCrmContext();
       const suggestions = context.createContactSuggestions();
       const server = context.createContactSearch(search);
-      const person = (contact: {
-        id: string;
-        name: string;
-        email?: string | null;
-        companyName?: string | null;
-      }): MergeCandidate => ({
-        id: contact.id,
-        name: contact.name,
-        identifiers: contact.email ? [contact.email] : [],
-        company: contact.companyName ?? null,
+      return combinedSource({
+        search,
+        teamId,
+        teamPending,
+        suggestions: suggestions.contacts,
+        suggestionsLoading: () => suggestions.query.isLoading,
+        server: { ...server, results: server.contacts },
+        candidate: (contact) => ({
+          id: contact.id,
+          name: contact.name,
+          identifiers: contact.email ? [contact.email] : [],
+          company: contact.companyName ?? null,
+        }),
       });
-      const searching = () => search().trim() !== '';
-      return {
-        matches: () => {
-          const local = quickAccessMatches(
-            suggestions.contacts().map(person),
-            search()
-          );
-          if (!searching()) return local;
-          const seen = new Set(local.map((record) => record.id));
-          return [
-            ...local,
-            ...server
-              .contacts()
-              .filter((contact) => !seen.has(contact.id))
-              .map(person),
-          ];
-        },
-        loading: () =>
-          suggestions.query.isLoading || (searching() && server.isLoading()),
-        hasMore: () => searching() && server.hasMore(),
-        loadingMore: () => server.isLoadingMore(),
-        loadMore: server.loadMore,
-        failed: () => searching() && server.error() !== undefined,
-        retry: server.retry,
-      };
     })
     .exhaustive();
 }
