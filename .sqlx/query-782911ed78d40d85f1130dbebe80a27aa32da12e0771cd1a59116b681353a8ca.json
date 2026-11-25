@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH reference AS MATERIALIZED (\n               SELECT DISTINCT r.id AS row_id, r.table_id, ep.property_definition_id, ep.values\n               FROM UNNEST($1::text[]) AS record(id)\n               JOIN entity_properties ep\n                 ON ep.entity_type = 'DATABASE_ROW'\n                AND ep.values ->> 'type' = 'EntityReference'\n                AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object('entity_id', record.id))\n               JOIN database_rows r\n                 ON r.id = (CASE\n                     WHEN ep.entity_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'\n                     THEN ep.entity_id\n                 END)::uuid\n           )\n           SELECT t.database_id AS \"database_id!\", reference.table_id AS \"table_id!\",\n                  reference.row_id AS \"row_id!\", c.id AS \"column_id!\", reference.values AS \"values!\"\n           FROM reference\n           JOIN database_tables t ON t.id = reference.table_id\n           JOIN database_columns c\n             ON c.table_id = reference.table_id\n            AND c.property_definition_id = reference.property_definition_id\n           WHERE NOT EXISTS (SELECT 1 FROM crm_pipeline_entities p WHERE p.table_id = reference.table_id)\n           ORDER BY t.database_id, reference.row_id, c.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "database_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "table_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "row_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "column_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "values!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "782911ed78d40d85f1130dbebe80a27aa32da12e0771cd1a59116b681353a8ca"
+}

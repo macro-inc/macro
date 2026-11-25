@@ -54,6 +54,29 @@ mailbox tab. On All, selected tag names appear in the header and breadcrumb.
 A narrow pane keeps its short `Email` or `Inbox` breadcrumb label. A tag filter
 on any other tab keeps that tab's title.
 
+Gmail labels and Outlook categories that people made show read-only, after a
+row's tags under the same limit of three, with a label icon where a tag has its
+color dot. A nested Gmail label shows its own name on the row and its whole
+name (`Customers / Larkspur`) on hover. Gmail's system labels and labels it hides
+from the message list never show, and phone rows show neither tags nor labels.
+An open thread shows them as one pill after its tags (`3 Labels`, or a sole
+label's name) listing their whole names, and in a Labels section of the side
+panel, which the phone's Info sheet shares. Someone a thread is shared with sees
+none of the owner's labels: the server leaves out labels of inboxes the reader
+doesn't own or manage. Nothing here writes labels back to Gmail or Outlook.
+
+Mail lists can be filtered by a Gmail label or Outlook category of the
+viewer's own or managed inboxes (the `Label` condition). A label in an inbox
+the viewer doesn't own or manage matches nothing, shared threads included. A
+big label whose mail is all old fills over several requests: a page can
+arrive empty with a cursor, and the list keeps loading (a spinner, never the
+empty state) until a row shows or the list ends. Filters (and the phone's
+filter drawer) has a Labels group after Tags on every tab but Reminders: the
+labels people made, by whole name, any of the ticked ones, each inbox's
+together and marked with the inbox's avatar when there are several. A saved
+view keeps them. To check a slow label, use one whose mail is months old in a
+large inbox.
+
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
 item, with pill tabs beside the Inbox title in the content header; with the Focus
 flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
@@ -74,7 +97,8 @@ sender name, checkbox or actions, Load more, a header button), in the search
 field, in an open thread, and in another mailbox, whose header has no tabs,
 `Tab` is browser focus order. Leaving the
 search field (`Escape`, `ArrowDown`, `Enter`, or picking a recent search)
-hands the keyboard to the view, so `Tab` switches tabs there too. Calendar mail
+hands the keyboard to the view; a search shows no tabs, so `Tab` and `1`–`3`
+switch them again once it closes. Calendar mail
 remains available through
 the calendar filter and existing Calendar route. Touch shows the same Inbox
 pills as desktop: Signal and Noise, with Focus first when enabled. Other
@@ -91,7 +115,7 @@ focus) hides it on that device for good (`localStorage`
 keyboard focus skips it.
 Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
-use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` within the surface: it focuses the list header's search field, and when a thread or a new email has replaced the list it is left to the browser's find. Outside a text field, `/` opens the app's Search view from Email in every state, as in every other view. The Email sidebar has no search field.
+use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` within the surface: it focuses the list header's search field, and when a thread or a new email has replaced the list it is left to the browser's find. Outside a text field, `/` opens the app's Search view from Email in every state, as in every other view. The Email sidebar has no search field. The search field takes Gmail-style operators as typed text (`subject:lunch`, `from:ana`, `is:unread`, `has:attachment`, `after:2025/01/31`, `newer_than:1m`, `-in:inbox`), which the search service reads; the list in `crates/search_service/AGENTS.md` is the reference.
 
 Email search covers all mail from every tab ("Search all mail"), as the All
 tab lists it, except Spam and Trash, which the search index leaves out (they
@@ -104,16 +128,28 @@ inbox: Focus, Signal and Noise), `in:focus`, `in:signal`, `in:noise`,
 `in:favorites`, `in:sent`, `in:drafts`, `in:calendar`, `in:shared` or
 `in:archived`. Each matches what that list shows, applied by the search service
 before paging (Focus and Favorites by their thread ids); the last one typed
-wins, an `in:` still being typed is left out of the words, and any other `in:`
-is searched as a word. Picking a tab while a search runs narrows it to that
+wins, and any other `in:` (`in:travel`) goes to the search service, which
+reads it as a label or tag name. An operator still being typed (`in:se`,
+`-in:se`, `is:un`, `subject:`, `after:2026/06`) is left out of the words; a
+date that can no longer become one (`after:2026/13/01`) is searched as a word,
+as the service reads it. Picking a tab while a search runs narrows it to that
 tab's view and keeps the words (All mail goes back to all mail, the sidebar's
 Inbox gives `in:inbox`); Scheduled, Reminders, Spam and Trash, which the index
-has no view of, end the search. While a search runs, the sidebar and the
-header show the view its `in:` filter names (the Inbox tabs only while it is
-in the Inbox); a search with no `in:` selects nothing, and the header says
-Search. Check from Inbox with a
+has no view of, end the search, and so does any tab picked before a word is
+typed. While a search runs, the sidebar and the header show the view its `in:`
+filter names (the header says Focus, and the sidebar selects Inbox, for
+`in:focus`); a search with no `in:` selects nothing, and the header says
+Search. The Focus, Signal and Noise tabs never show while the field is open,
+empty or not, on desktop or phone; closing it brings them back on the tab that
+was open. Open and empty, the field leaves that tab's rows on screen, while
+the desktop header says Search and the sidebar selects nothing. Text with no
+words yet (`in:`, `in:se`, or a view alone such as `in:focus`) runs no search
+of its own: the list, header and sidebar stay on the last search that had
+words, or, when there was none (the text was pasted), the open view's rows
+stay under Search. Check from Inbox with a
 term that only Noise or archived mail holds, then the same term with each
-`in:`, then pick Sent, Signal and All mail while it runs.
+`in:`, then pick Sent and All mail in the sidebar while it runs; then type
+`in`, `in:`, pick Focus and type a word, clear the field, and close it.
 
 ### Wide search (flagged)
 
@@ -126,15 +162,41 @@ spinner. Once its own results arrive, a new search starts at the top of the list
 wherever the list was scrolled. With the field focused, up to five recent searches containing the
 typed text are listed above the results: `ArrowDown` walks them before it
 reaches the results, `Enter` or a click runs one and moves to its first
-result. A search is remembered when the field is left with words in it, with
-its `in:` filter, at most eight per person, in this browser only and not per
-inbox. Typing `in:` lists the views instead (only those the person has, so
-Focus only with its flag), narrowed as the name is typed; `Enter` or a click
-finishes the `in:` where it was typed, and the keyboard stays in the field.
-The filter stays ordinary text (caret, selection, `Backspace`, paste), and a
-complete, valid one is drawn as an operator token: accent ink on a faint accent
-tint, while `in:se` stays plain. Delete it like any text to search all mail
-again. Recent searches draw their filter the same way. Rows of a search that can reach archived
+result. A search is remembered, with its `in:` filter, once the person settles
+on it: `Enter` (the phone's Search key too), a picked recent search, opening a
+thread from its results, or leaving the field with that search's own results on
+screen. Leaving before they arrive, another window or app taking the focus, or
+leaving on a last word the field offers to finish as an operator (`bef` for
+`before:`) remembers nothing; an
+operator still being typed is left out of what is remembered. A remembered
+search drops the earlier ones it starts with (`bud` once `budget` is), and at
+most eight are kept per person, in this browser only and not per inbox. Typing `in:` lists the views instead (only those the person has, so
+Focus only with its flag), narrowed as the name is typed, and `-in:` lists the
+views a search can leave out, then the labels and tags whose names hold what
+follows `in:` (not one that reads as a view, such as Archive, which
+`label:` still offers); `Enter` or a click finishes the `in:` where it was
+typed, and the keyboard stays in the field. Two or more letters of an
+operator's name list that operator above the recent searches (`su` gives
+`subject:`, `-fr` gives `-from:`); `is:` and `has:` list their values;
+`from:`, `to:`, `cc:` and `bcc:` list the people matching what follows,
+found and ranked as the composer's recipient picker finds them, and finish
+with their address; `label:` lists the person's tags and their inboxes' own
+labels (not system labels such as Inbox), quoting a name with a space.
+People and labels are read only while the field has focus and such an
+operator is typed. Picking one finishes it the same way. A row is the
+filter's text, drawn as an operator, with a few words beside it only when
+they say something the text does not (`to:` also covers Cc and Bcc;
+`after:` counts its day, `before:` does not). Typing changes the rows, so it
+also clears the row the arrow keys picked out. Operators stay ordinary text (caret,
+selection, `Backspace`, paste), and every one the search service would read,
+once complete and valid (`in:sent`, `subject:"team lunch"`, `-from:ana`,
+`newer_than:7d`, `in:travel`), is drawn as an operator token: accent ink on a
+faint accent tint, while one still being typed (`in:se`, `is:un`) or invalid
+(`is:important`, `-in:signal`) stays plain. Delete an `in:` like any text to
+search all mail again. Dates are read in the browser's time zone, which every
+web search sends (a browser that cannot tell its zone sends none, and the
+service reads dates in UTC). Recent searches draw their operators the same
+way. Rows of a search that can reach archived
 mail (no filter, or a view other than the inbox ones and Archived) say
 `Archived` on archived threads; a thread of only sent mail or drafts was never
 in the inbox and gets no label. Check with a slow search
@@ -153,8 +215,9 @@ keeping the previous rows dimmed while a new query loads. The keyboard's Search
 key drops the keyboard to show the results; the field's X clears the text and
 keeps the keyboard; Cancel (or Android Back) clears the search and returns to
 the mailbox. Opening a result and coming back returns to the search page with
-its results. If the flag turns off or the tab changes to one that cannot be
-searched while the page is open, the page closes and its search ends. The
+its results. If the flag turns off, the tab changes to one that cannot be
+searched, or a view is picked before a word is typed while the page is open,
+the page closes and its search ends. The
 dock's app-wide search is unchanged. Check at 390px with touch
 emulation: the pill row scrolls, so the search pill can start off screen on a
 tab far to the right.
@@ -165,8 +228,8 @@ keeps its app-wide meaning inside Email too ([navigation](navigation.md)):
 `g e` opens Email on Signal and `g s` on Sent from any view, as long as no
 editor or input (Email search included) has focus; other mailboxes are in the
 sidebar. `Escape` in a
-list steps back one level: it clears a selection, then a search, and with
-neither returns to Signal; in the reading pane it first hands the keyboard back
+list steps back one level: it clears a selection, then a search (an open
+field counts, empty or not), and with neither returns to Signal; in the reading pane it first hands the keyboard back
 to the list. From the search field, `ArrowDown` or `Enter` moves to the first
 result and `Escape` leaves the field with the search kept (see
 [list search keys](navigation.md)). `?` lists every shortcut for the focused
@@ -247,9 +310,13 @@ organization notices and inbox settings show pending or failed changes; the
 mark-as-read from opening a thread is announced only if it fails. Draft sync and
 delivery progress is silent, as on Gmail: a composer or sent message shows a
 notice only for a conflict, uncertain or rejected delivery, revoked access,
-unsavable content, or an inbox move. Use its recovery actions and check the
-provider copy before choosing an explicit resend; a resend in flight shows as
-the send button's pending state. A draft whose sync failed or could not be
+unsavable content, or an inbox move. A draft conflicts when its content was
+edited in Outlook: a version the mailbox moved on its own (an add-in, a label
+policy) or that Macro's own archive moved still syncs and sends, as long as Macro
+recorded the content of the version it last read. Without that record (a draft
+last written by an older build), any moved version conflicts. Use its recovery
+actions and check the provider copy before choosing an explicit resend; a resend
+in flight shows as the send button's pending state. A draft whose sync failed or could not be
 confirmed (the "Draft could not be synced" banner) still sends: Send carries the
 editor's latest text through the outbox. Check that it sends once, with the
 latest text, and that Undo brings the draft back. A new-email draft locked by a conflict or an
@@ -451,8 +518,8 @@ or a scoped `Loading email` spinner until they arrive—not the previous tab's r
 under the new heading. Active searches also hide retained results and show loading
 while selected tag sets are pending. Background refreshes retain the current list.
 
-While the search field has text the list shows only search states: no Watch
-tutorial row, a spinner while the search runs (from the first character), and
+While the search field has words the list shows only search states: no Watch
+tutorial row (nor with an `in:` alone), a spinner while the search runs (from the first character), and
 `No results` when nothing matches, naming the view an `in:` filter narrowed it
 to. `Load More` appears under result
 rows. A page that adds no row (an alias, saved view or client-side filter drops
@@ -518,7 +585,11 @@ default All selections are not marked.
 Email Read status and Done are single choices that close the menu; Has
 (Starred, Calendar invite) and Attachments (PDFs, Images, Documents) take
 several and stay open while you tick them. Ticked Has items all apply;
-attachment kinds match any one. Tags supports search, pins selected tags first
+attachment kinds match any one. In Inbox,
+All mail, Archived, Calendar, Favorites, Shared and saved views the server selects
+matching threads first, so a page is full even when matches are rare; Sent, Drafts,
+Spam and Trash still refine the rows they loaded. An inline image counts as an
+image, and plain text and CSV files as documents. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
 **Calendar invite** matches meetings carried as attachments or as calendar
 parts of a message, including Outlook invitations.
@@ -804,7 +875,8 @@ must still refresh affected lists after commit. Scroll across a retained row and
 check that the next page remains ordered; a baseline beyond 5,000 rows returns to
 the live server list instead of freezing local membership.
 Tag selections use cached property postings;
-attachment chips refine the cached rows on the client. Sender/recipient filters and
+attachment filters list from the server, which has the thread flags this local
+profile lacks. Sender/recipient filters and
 non-created/updated sorts remain outside this local profile. Grouping and sort-selector
 coverage are separate from the filter-selection matrix. No cache-format wipe is required: Mail uses a separate versioned profile
 and a new backfill checkpoint, preserving existing queued work. Deploy the backend
@@ -831,7 +903,8 @@ that driver.
 **Reading pane.** On desktop the header's columns button (or `Shift+V`) shows
 threads beside the list instead of in its place; the choice is remembered per
 browser. A pane too narrow for the header's actions hides the columns button
-and the Focus sort before Search would leave the pane; `Shift+V` still works
+and the Focus sort before Search would leave the pane, then shows the inbox
+tabs as icons alone (a third of a small window); `Shift+V` still works
 there. The list keeps its own keys: j/k and arrows move the cursor and the
 pane follows it (replacing history rather than adding entries) while the list
 keeps focus, even if the thread is still loading; Mark done on
@@ -1212,9 +1285,12 @@ durable mutation metadata support. An older app receiving an OTA bundle opens
 the update-required dialog once and uses the existing uncached fallback. Its old queue
 must remain intact, with no new claims or queued writes, until the native update.
 When the cache becomes unavailable, draft saves and discards must not bypass its
-preserved queue through GraphQL or REST fallback. Local editing stays durable;
-reload or update the app to resume server sync. Verify this after a native
-upgrade-required error and a worker initialization failure; ordinary reads still work.
+preserved queue through GraphQL or REST fallback. Local editing stays durable.
+A cache whose worker never started or answered, or whose database another tab
+holds, starts again by itself, on reconnect, on foregrounding, and on draft Retry;
+after any other failure, reload or update the app to resume server sync. Verify this
+after a native upgrade-required error and a worker initialization failure; ordinary
+reads still work.
 
 For recovery verification, reject a draft save with a GraphQL error (including
 legacy `retryable: true` metadata), then perform an unrelated queued action: the
@@ -1410,7 +1486,9 @@ header. Only one active send can own a draft across tabs; queued composers
 remain read-only.
 
 Queued sends remain visible in **Drafts** and their conversation with a persistent
-status and **Cancel** action. A never-attempted send can be cancelled offline.
+status and **Cancel** action. A failed send says why when its draft does: it
+changed in the mailbox, the provider rejected it or could not save it, or access
+to the inbox changed. A never-attempted send can be cancelled offline.
 If admission may have reached the server, **Cancellation pending** keeps it locked
 until the server confirms cancellation. A definitive inbox-access rejection of
 the first submission permits restoring the saved draft locally. Verify this still

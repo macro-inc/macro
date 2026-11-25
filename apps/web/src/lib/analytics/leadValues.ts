@@ -8,9 +8,6 @@
  * rebalancing.
  */
 
-/** Mobile web email capture (user can't sign up on mobile; we email them). */
-export const MOBILE_WEB_SIGNUP_LEAD_VALUE = 5;
-
 /** Signup Lead value per subscription tier. */
 export const SIGNUP_LEAD_VALUE_BY_TIER: Record<string, number> = {
   free: 20,

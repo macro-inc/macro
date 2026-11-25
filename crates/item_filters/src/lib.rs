@@ -225,6 +225,56 @@ pub enum EmailSearchView {
     Sent,
     /// Threads with a draft, as the Drafts view lists.
     Drafts,
+    /// Threads with a calendar invitation, as the Calendar tab lists; the
+    /// same threads as `calendar_only`.
+    Calendar,
+}
+
+/// The part of an email message a search condition matches.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub enum EmailTextPart {
+    /// Every part a search word matches: the subject, the body, and every
+    /// address and name on the message.
+    Any,
+    /// The subject.
+    Subject,
+    /// The sender's name or address.
+    From,
+    /// The name or address of anyone the message was sent to: To, Cc and Bcc.
+    To,
+    /// A Cc recipient's name or address.
+    Cc,
+    /// A Bcc recipient's name or address.
+    Bcc,
+}
+
+/// A word or phrase that must, or must not, appear in one part of a message.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct EmailTextMatch {
+    /// The part of the message matched.
+    pub part: EmailTextPart,
+    /// One word, matched as a search word is (a prefix unless the search is
+    /// exact), or several words, matched as an adjacent phrase.
+    pub text: String,
+    /// Leave out the messages that match instead.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub exclude: bool,
+}
+
+/// A tag or provider label that an email thread must, or must not, carry,
+/// named by its label.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct EmailLabelMatch {
+    /// The label of one of the caller's tags, or the name of a label in one
+    /// of the caller's inboxes, ignoring case.
+    pub name: String,
+    /// Leave out the threads that carry it instead.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub exclude: bool,
 }
 
 /// The email filters used to filter down what emails you search over.
@@ -335,6 +385,62 @@ pub struct EmailFilters {
     /// filter is an error.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view: Option<EmailSearchView>,
+
+    /// Leave out the threads in these mailbox views. Search only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude_views: Vec<EmailSearchView>,
+
+    /// Words or phrases each message must contain, or must not, in one part
+    /// of it, as typing `subject:`, `from:`, `to:`, `cc:`, `bcc:` or a minus
+    /// into the search does. Search only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub text_matches: Vec<EmailTextMatch>,
+
+    /// Tags or labels each thread must carry, or must not, by name, as typing
+    /// `label:` or `in:<name>` into the search does. A name matches the
+    /// caller's tags with that label and the labels with that name in the
+    /// caller's inboxes, ignoring case; a name that is neither matches
+    /// nothing. Search only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub label_names: Vec<EmailLabelMatch>,
+
+    /// True for the caller's favorite threads only, false to leave them out.
+    /// Search only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub favorite: Option<bool>,
+
+    /// True for threads with an attachment on any message, false for threads
+    /// with none. Search only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_attachment: Option<bool>,
+
+    /// Only messages sent at or after this instant. Mail with no sent time
+    /// never matches. Search only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sent_after: Option<chrono::DateTime<chrono::Utc>>,
+
+    /// Only messages sent before this instant. Mail with no sent time never
+    /// matches. Search only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sent_before: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl EmailFilters {
+    /// The name of the first filter set here that only search applies, if any.
+    pub fn search_only_filter(&self) -> Option<&'static str> {
+        [
+            ("view", self.view.is_some()),
+            ("exclude_views", !self.exclude_views.is_empty()),
+            ("text_matches", !self.text_matches.is_empty()),
+            ("label_names", !self.label_names.is_empty()),
+            ("favorite", self.favorite.is_some()),
+            ("has_attachment", self.has_attachment.is_some()),
+            ("sent_after", self.sent_after.is_some()),
+            ("sent_before", self.sent_before.is_some()),
+        ]
+        .into_iter()
+        .find_map(|(name, set)| set.then_some(name))
+    }
 }
 
 impl IsEmpty for EmailFilters {
@@ -359,6 +465,13 @@ impl IsEmpty for EmailFilters {
             calendar_only,
             attachments,
             view,
+            exclude_views,
+            text_matches,
+            label_names,
+            favorite,
+            has_attachment,
+            sent_after,
+            sent_before,
         } = self;
         senders.is_empty()
             && cc.is_empty()
@@ -379,6 +492,13 @@ impl IsEmpty for EmailFilters {
             && !calendar_only.unwrap_or(false)
             && attachments.is_empty()
             && view.is_none()
+            && exclude_views.is_empty()
+            && text_matches.is_empty()
+            && label_names.is_empty()
+            && favorite.is_none()
+            && has_attachment.is_none()
+            && sent_after.is_none()
+            && sent_before.is_none()
     }
 }
 

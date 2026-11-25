@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { Client } from '@urql/core';
 import { ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TimeTrackingContextProvider } from '../context/time-tracking-context';
 import type { TaskTime } from '../primitives/create-task-time';
 import type { RunningTimerState } from '../primitives/running-timer';
@@ -51,9 +51,21 @@ vi.mock('../primitives/create-task-time', () => ({
   },
 }));
 
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
+
 afterEach(() => {
   cleanup();
   update.mockClear();
+  vi.unstubAllGlobals();
 });
 
 function fakeTimer(running?: RunningTimer) {
@@ -84,7 +96,7 @@ function renderDesktop(runningTimer: RunningTimerState): void {
       taskId="task-1"
       minutes={30}
       canEdit
-      person={() => <span>Author</span>}
+      person={{ avatar: () => null, name: () => 'Author' }}
     />
   );
   render(() => (

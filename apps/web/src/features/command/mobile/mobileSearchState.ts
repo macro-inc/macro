@@ -1,12 +1,10 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, batch, createSignal } from 'solid-js';
-import { shouldUseUniversalInput } from '../core/universal-input-mode';
-import type { EntitySearchCategory } from '../queries/entity-search';
+import { shouldUseUniversalInputForSearch } from '../core/universal-input-mode';
 
 export type MobileSearchSnapshot = {
   query: string;
-  category: EntitySearchCategory;
   mode: 'name' | 'full-text';
   universalInputActive?: boolean;
 };
@@ -14,8 +12,6 @@ export type MobileSearchSnapshot = {
 export interface MobileSearchSession {
   /** A promoted input stays in composer mode until cleared; UI checks the rollout flag. */
   universalInputActive: Accessor<boolean>;
-  category: Accessor<EntitySearchCategory>;
-  setCategory: (category: EntitySearchCategory) => void;
   mode: Accessor<'name' | 'full-text'>;
   searchFullText: () => void;
 
@@ -31,10 +27,10 @@ export function createMobileSearchSession(
 ): MobileSearchSession {
   const [query, writeQuery] = createSignal(initial?.query ?? '');
   const [universalInputActive, setUniversalInputActive] = createSignal(
-    shouldUseUniversalInput(initial?.query ?? '', initial?.universalInputActive)
-  );
-  const [category, writeCategory] = createSignal<EntitySearchCategory>(
-    initial?.category ?? 'all'
+    shouldUseUniversalInputForSearch(
+      initial?.query ?? '',
+      initial?.universalInputActive
+    )
   );
   const [mode, setMode] = createSignal<'name' | 'full-text'>(
     initial?.mode ?? 'name'
@@ -43,20 +39,14 @@ export function createMobileSearchSession(
     batch(() => {
       writeQuery(value);
       setUniversalInputActive((active) =>
-        shouldUseUniversalInput(value, active)
+        shouldUseUniversalInputForSearch(value, active)
       );
       if (!value.trim()) setMode('name');
     });
-  const setCategory = (value: EntitySearchCategory) =>
-    batch(() => {
-      writeCategory(value);
-      if (value === 'projects') setMode('name');
-    });
   const searchFullText = () => {
-    if (!query().trim() || category() === 'projects') return;
+    if (!query().trim()) return;
     const span = Telemetry.span('mobile.search.full_text');
     try {
-      span.setAttr('search.category', category());
       span.setAttr('search.query_length', query().trim().length);
       setMode('full-text');
     } finally {
@@ -68,13 +58,10 @@ export function createMobileSearchSession(
     universalInputActive,
     query,
     setQuery,
-    category,
-    setCategory,
     mode,
     searchFullText,
     snapshot: () => ({
       query: query(),
-      category: category(),
       mode: mode(),
       universalInputActive: universalInputActive(),
     }),
@@ -113,8 +100,6 @@ export function createMobileSearchState() {
     },
     query: () => session().query(),
     setQuery: (value: string) => session().setQuery(value),
-    category: () => session().category(),
-    setCategory: (value: EntitySearchCategory) => session().setCategory(value),
     mode: () => session().mode(),
     searchFullText: () => session().searchFullText(),
   };

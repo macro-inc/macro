@@ -1,7 +1,11 @@
 import { t } from '@app/lib/i18n';
 import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
+import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
-import { CompanyDomainProperty } from '../components/company-domain-property';
+import {
+  CompanyDomainList,
+  CompanyDomainPill,
+} from '../components/company-domain-property';
 import { useCrmContext } from '../context/crm-context';
 import type { CompanyDomainChange } from '../core/company';
 
@@ -35,15 +39,19 @@ function domainEditError(error: unknown, change: CompanyDomainChange): string {
 }
 
 /**
- * The company's domains, each removable, with a control to add another.
- * Key it by the company's id so navigation cannot reuse an old draft.
+ * The company's domains: one pill in the header, a line each in Record
+ * details. Key it by the company's id so navigation cannot reuse an old draft.
  */
 export function CompanyDomainField(props: {
   company: { id: string; domains: { domain: string }[] };
+  surface: 'header' | 'details';
 }) {
   const mutation = useCrmContext().editCompanyDomain();
   return (
-    <CompanyDomainProperty
+    <Dynamic
+      component={
+        props.surface === 'header' ? CompanyDomainPill : CompanyDomainList
+      }
       domains={props.company.domains.map((domain) => domain.domain)}
       errorMessage={domainEditError}
       change={async (domain, change) => {

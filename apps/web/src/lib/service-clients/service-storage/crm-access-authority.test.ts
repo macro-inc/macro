@@ -14,6 +14,7 @@ import {
 } from './crm-access-authority';
 
 const team = '00000000-0000-4000-8000-000000000001';
+const otherTeam = '00000000-0000-4000-8000-000000000002';
 afterEach(() => vi.useRealTimers());
 function sharedOwner(policy: string | null = null) {
   let state: CacheAuthority = {
@@ -158,6 +159,83 @@ it('keeps a proven denial when its owner is replaced by one that still records a
   await authority.refresh();
   expect(authority.state()).toBe('allowed');
 });
+
+it('keeps its generation while its host is paused, and when it serves again', async () => {
+  const owner = sharedOwner(`${team}:allowed`);
+  const { authority, retire } = client(owner);
+  await authority.refresh();
+  retire.mockClear();
+  const generation = authority.snapshot()?.generation;
+
+  authority.setHost(undefined, authority.snapshot());
+  await authority.refresh();
+  expect(authority.state()).toBe('allowed');
+  expect(authority.snapshot()?.generation).toBe(generation);
+
+  authority.setHost(owner);
+  await authority.refresh();
+  expect(authority.state()).toBe('allowed');
+  expect(authority.snapshot()?.generation).toBe(generation);
+  expect(retire).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['another team', `${team}:allowed`, `${otherTeam}:allowed`, true],
+  ['a denial', `${team}:allowed`, `${team}:denied`, true],
+  ['the same denial', `${team}:denied`, `${team}:denied`, false],
+])(
+  'compares what it proves while its host is paused with the policy before: %s',
+  async (_, before, proven, retires) => {
+    const { authority, fetchProof, retire } = client(sharedOwner(before));
+    fetchProof.mockResolvedValue(before);
+    await authority.refresh();
+    retire.mockClear();
+    const generation = authority.snapshot()?.generation;
+
+    fetchProof.mockResolvedValue(proven);
+    authority.setHost(undefined, authority.snapshot());
+    await authority.refresh();
+
+    expect(authority.snapshot()?.generation === generation).toBe(!retires);
+    expect(retire).toHaveBeenCalledTimes(retires ? 1 : 0);
+  }
+);
+
+it.each([
+  ['the proof is committed', `${otherTeam}:allowed`],
+  ['the first team is proven again', `${team}:allowed`],
+])(
+  'does not reopen the generation a paused proof retired until %s',
+  async (_, provenAfter) => {
+    const owner = sharedOwner(`${team}:allowed`);
+    const { authority, fetchProof, retire } = client(owner);
+    await authority.refresh();
+    const generation = owner.snapshot()?.generation;
+    const generations = () =>
+      (retire.mock.calls as unknown[][]).map(([, next]) => next);
+
+    fetchProof.mockResolvedValue(`${otherTeam}:allowed`);
+    authority.setHost(undefined, authority.snapshot());
+    await authority.refresh();
+    retire.mockClear();
+
+    const proof = Promise.withResolvers<string>();
+    fetchProof.mockReturnValueOnce(proof.promise);
+    authority.setHost(owner);
+    await authority.initialize();
+    const refreshed = authority.refresh();
+    await vi.waitFor(() => expect(fetchProof).toHaveBeenCalledTimes(3));
+    expect(generations()).not.toContain(generation);
+    expect(authority.snapshot()?.generation).not.toBe(generation);
+
+    proof.resolve(provenAfter);
+    await refreshed;
+    expect(authority.snapshot()).toEqual(owner.snapshot());
+    expect(authority.snapshot()?.policy).toBe(provenAfter);
+    expect(generations()).toEqual([owner.snapshot()?.generation]);
+    expect(authority.state()).toBe('allowed');
+  }
+);
 
 it('follows a regrant committed by another window after proving the denial itself', async () => {
   const owner = sharedOwner(`${team}:allowed`);

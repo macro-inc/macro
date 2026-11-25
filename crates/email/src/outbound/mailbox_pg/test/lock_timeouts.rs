@@ -1,12 +1,13 @@
 use super::retries::{Provider, queue, row, sync};
 use super::*;
+use crate::domain::mailbox::claim::StreamClaim;
 use email_api_client::domain::models::MailboxState;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_page_commit_behind_a_share_locked_link_fails_fast_then_commits(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let lease = repo
-        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
         .unwrap();
@@ -20,7 +21,7 @@ async fn a_page_commit_behind_a_share_locked_link_fails_fast_then_commits(db: Pg
 
     let blocked = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        repo.commit_page(&lease, &page()),
+        repo.commit_page(&lease, &page(), POLL_INTERVALS),
     )
     .await;
     assert!(
@@ -48,7 +49,9 @@ async fn a_page_commit_behind_a_share_locked_link_fails_fast_then_commits(db: Pg
     assert_eq!(queued, Some(0));
 
     population.rollback().await.unwrap();
-    repo.commit_page(&lease, &page()).await.unwrap();
+    repo.commit_page(&lease, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
     let position = sqlx::query_scalar!(
         "SELECT position FROM email_sync_streams WHERE id = $1",
         lease.id

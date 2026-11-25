@@ -1,13 +1,17 @@
 import { lazy, Show, Suspense } from 'solid-js';
-import { demoHref, handleDemoClick } from '../../app/utils/utilCta';
+import {
+  demoHref,
+  handleDemoClick,
+  handleSignupLinkClick,
+} from '../../app/utils/utilCta';
 import { setPageSeo } from '../../app/utils/utilSeo';
 import { FeatureUiStyles } from '../marketing/components/FeaturePage';
+import { HomepageFounderLetter } from '../marketing/components/HomepageFounderLetter';
 import { HomepageResources } from '../marketing/components/HomepageResources';
 import { HomepageTrustBadges } from '../marketing/components/HomepageTrustBadges';
 import { HomepageTour } from '../marketing/components/homepage/HomepageTour';
 import { SiteHeader } from '../marketing/components/SiteHeader';
 import { wallpapers } from '../marketing/components/TutorialWallpaper';
-import { routePhoneToMobileSignup } from '../marketing/core/navigation';
 import '../marketing/components/homepage/macro-homepage.css';
 import '../marketing/components/page-aura.css';
 
@@ -52,26 +56,18 @@ export function Homepage(props: { embedded?: boolean } = {}) {
             aria-labelledby="macro-home-title"
           >
             <h1 id="macro-home-title" data-welcome-heading>
-              The unified workspace <br />
-              for your company.
+              A new kind of office suite.
             </h1>
             <h2 class="macro-home-tagline">
-              <span class="macro-home-tagline-desktop">
-                Macro replaces 27+ apps with one connected system for humans and
-                agents.
-              </span>
-              <span class="macro-home-tagline-mobile">
-                Macro is email, chat, docs, tasks, calendar, calls and CRM in
-                one workspace, with agents that work across all of it.
-                Everything links to everything else.
-              </span>
+              Macro replaces 27+ apps with one connected <br />
+              workspace for humans and agents.
             </h2>
             <div class="macro-home-actions">
               <a
                 class="site-nav-start homepage-hero-cta"
                 target="_self"
                 href="/app/signup"
-                onClick={routePhoneToMobileSignup}
+                onClick={(event) => handleSignupLinkClick(event, '/app/signup')}
               >
                 Get Macro
               </a>
@@ -88,6 +84,7 @@ export function Homepage(props: { embedded?: boolean } = {}) {
           </header>
           <HomepageTour />
           <HomepageTrustBadges showGithub />
+          <HomepageFounderLetter />
           <Suspense>
             <HomepageSections />
           </Suspense>

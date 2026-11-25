@@ -100,6 +100,9 @@ pub trait SearchQueryConfig {
     const CONTENT_KEY: &'static str = "content";
     /// Fields searched for each content term; highlights still use `CONTENT_KEY`.
     const CONTENT_FIELDS: &'static [&'static str] = &[Self::CONTENT_KEY];
+    /// A field of link URLs that each content term also matches, by the
+    /// words of a URL ([`super::query::link_query`]).
+    const LINK_FIELD: Option<&'static str> = None;
     /// The entity index for the search query
     const ENTITY_INDEX: OpenSearchEntityType;
 }
@@ -119,10 +122,6 @@ pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     pub page_size: u32,
     /// The user id to search for
     pub user_id: String,
-    /// Additional user ids to filter access by. When non-empty the access
-    /// filter matches any of these (terms) instead of the single `user_id`.
-    /// Used for multi-inbox email search across delegated inboxes.
-    pub user_ids: Vec<String>,
     /// Whether to collapse the results to be a single result per ID_KEY
     /// Defaults to false.
     pub collapse: bool,
@@ -144,7 +143,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             page: 0,
             page_size: 10,
             user_id: String::new(),
-            user_ids: Vec::new(),
             collapse: false,
             ids_only: false,
             ids: Vec::new(),
@@ -175,11 +173,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
     pub fn user_id(mut self, user_id: &str) -> Self {
         self.user_id = user_id.to_string();
-        self
-    }
-
-    pub fn user_ids(mut self, user_ids: Vec<String>) -> Self {
-        self.user_ids = user_ids;
         self
     }
 
@@ -217,11 +210,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         } else {
             let user_id_key =
                 user_id_key.ok_or(OpensearchClientError::UserIdKeyRequired(T::ENTITY_INDEX))?;
-            let user_id_query = if self.user_ids.is_empty() {
-                QueryType::term(user_id_key.to_string(), self.user_id.clone())
-            } else {
-                QueryType::terms(user_id_key.to_string(), self.user_ids.clone())
-            };
+            let user_id_query = QueryType::term(user_id_key.to_string(), self.user_id.clone());
 
             // If there are no ids provided we can return only the user id query to filter over
             if self.ids.is_empty() {
@@ -243,13 +232,28 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         }
     }
 
-    /// Builds a content bool query
-    pub fn build_content_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+    /// Builds the filters every query of this index carries, the items the
+    /// user can reach and the index itself, with no term clause.
+    pub fn build_access_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         if self.ids_only && self.ids.is_empty() {
             return Err(OpensearchClientError::EmptyIdsWithIdsOnly(T::ENTITY_INDEX));
         }
 
         let mut access_bool_query = BoolQueryBuilder::new();
+
+        // Filter over only items you have access to
+        let filter_bool_query = self.build_filter_query(T::USER_ID_KEY)?;
+        access_bool_query.filter(filter_bool_query);
+
+        // Only search on the provided index
+        access_bool_query.filter(QueryType::term("_index", T::ENTITY_INDEX.index_name()));
+
+        Ok(access_bool_query)
+    }
+
+    /// Builds a content bool query
+    pub fn build_content_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+        let mut access_bool_query = self.build_access_bool_query()?;
 
         let term_must_array: Vec<QueryType<'a>> = self.build_must_term_query()?;
 
@@ -263,13 +267,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
         // Add in the inner bool query on content + owner to must of access bool query
         access_bool_query.must(inner_bool_query.build().into());
-
-        // Filter over only items you have access to
-        let filter_bool_query = self.build_filter_query(T::USER_ID_KEY)?;
-        access_bool_query.filter(filter_bool_query);
-
-        // Only search on the provided index
-        access_bool_query.filter(QueryType::term("_index", T::ENTITY_INDEX.index_name()));
 
         Ok(access_bool_query)
     }
@@ -287,6 +284,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         let must_array = vec![super::query::generate_terms_must_query_for_fields(
             query_key,
             T::CONTENT_FIELDS,
+            T::LINK_FIELD,
             terms,
             self.term_combine,
         )];

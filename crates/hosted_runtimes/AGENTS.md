@@ -63,6 +63,14 @@ read it before changing behaviour.
   and applies `Event::Moved` in one transaction. While a cutover or rollback
   holds a computer, reconcile skips it and its fleet effects wait; an open
   move counts the computer on both hosts in the held-capacity CTEs.
+- `src/domain/image_upgrade.rs` + `src/domain/operator/image_upgrade.rs`: an
+  operator's image upgrade of named computers (stage on their hosts, then a
+  fresh system disk per idle computer, a batch at a time; rollback and pause
+  when macrod does not come back), advanced by the upgrade pass (dev only,
+  `agent_harness_service`). One unfinished upgrade at a time, leased by one
+  replica; computers under way are held like a move's. Recorded by the
+  `image-upgrade` binary (`src/bin/image_upgrade.rs`, feature
+  `image-upgrade-cli`), which the Firecracker image rollout workflow runs.
 
 ## Scope
 

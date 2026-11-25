@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT picked.id AS \"id!\"\n        FROM (\n            SELECT el.id, el.macro_id\n            FROM email_links el\n            WHERE el.id = ANY($2::uuid[])\n            OFFSET 0\n        ) picked\n        WHERE picked.macro_id = $1\n        UNION\n        SELECT asked.id\n        FROM unnest($2::uuid[]) AS asked(id)\n        CROSS JOIN LATERAL (\n            SELECT 1\n            FROM macro_user_links mul\n            WHERE mul.link_id = asked.id AND mul.primary_macro_id = $1\n            LIMIT 1\n        ) delegated\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b5c4d10684d92104da119b3d1029447d0cff0a606dadd0457d23d5ae07efe40d"
+}

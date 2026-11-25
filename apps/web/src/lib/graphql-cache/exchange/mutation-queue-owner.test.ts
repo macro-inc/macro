@@ -92,6 +92,23 @@ it('holds plain claims, and live ones only while it holds their owner', async ()
   expect(owner.holds('exchange-live:here:1')).toBe(true);
 });
 
+it('lets its owner go for good once disposed', async () => {
+  const { locks, isHeld } = originLocks();
+  const lifecycle = page();
+  const owner = createMutationQueueOwner('here', locks, lifecycle.target);
+  await flush();
+  expect(isHeld('exchange-live:here:0')).toBe(true);
+
+  owner.dispose();
+  lifecycle.show(true);
+  await flush();
+
+  expect(owner.claimOwner()).toBe('exchange:here');
+  expect(owner.holds('exchange-live:here:0')).toBe(false);
+  expect(isHeld('exchange-live:here:0')).toBe(false);
+  expect(isHeld('exchange-live:here:1')).toBe(false);
+});
+
 it('claims as a plain owner until the page holds its lock', async () => {
   const { locks } = originLocks();
   const owner = createMutationQueueOwner('here', locks, page().target);

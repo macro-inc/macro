@@ -24,6 +24,28 @@ pub struct Process {
     pub pid: i32,
 }
 
+/// Which of a computer's system disk files the VM boots: generation 0 is
+/// the rootfs its create cloned, each [`ReplaceSystemDisk`] clone takes the
+/// next generation. The record naming one is what puts it in place, so a
+/// swap or a rollback is one record save.
+///
+/// [`ReplaceSystemDisk`]: firecracker_host_api::ReplaceSystemDisk
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[serde(transparent)]
+pub struct SystemDisk(pub u32);
+
+/// The system disk a computer booted before its current one, kept for a
+/// rollback.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PreviousSystemDisk {
+    /// Its file.
+    pub disk: SystemDisk,
+    /// The image it was cloned from.
+    pub image: GuestImage,
+}
+
 /// One computer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ComputerRecord {
@@ -35,8 +57,15 @@ pub struct ComputerRecord {
     pub generation: EnrollmentGeneration,
     /// The pairing the current enrollment claims.
     pub pairing_id: PairingId,
-    /// Image the VM was created from.
+    /// Image of the system disk the VM boots: the one it was created from
+    /// until a system disk replacement.
     pub image: GuestImage,
+    /// The system disk the VM boots.
+    #[serde(default)]
+    pub system_disk: SystemDisk,
+    /// The one it booted before, kept for a rollback.
+    #[serde(default)]
+    pub previous_system_disk: Option<PreviousSystemDisk>,
     /// Whom the computer is for.
     pub role: ComputerRole,
     /// Enforced limits.
@@ -61,6 +90,11 @@ pub struct ComputerRecord {
     /// succeeded since, so a repeated create boots it.
     #[serde(default)]
     pub start_pending: bool,
+    /// Whether a system disk replacement stopped this running computer and
+    /// has not booted it again yet: a repeat of the replacement (or of the
+    /// one going back) boots it.
+    #[serde(default)]
+    pub boot_after_system_disk: bool,
     /// Whether a hibernation began and was not settled: after a crash, a
     /// published snapshot finishes it; without one the VM stays as it was.
     #[serde(default)]
@@ -81,6 +115,8 @@ impl ComputerRecord {
             generation: request.generation,
             pairing_id: request.pairing_id,
             image: request.image.clone(),
+            system_disk: SystemDisk::default(),
+            previous_system_disk: None,
             role: request.role,
             resources: request.resources,
             enrollment: Some(request.enrollment.clone()),
@@ -89,6 +125,7 @@ impl ComputerRecord {
             rootfs_never_booted: true,
             guest_restore_pending: false,
             start_pending: request.start,
+            boot_after_system_disk: false,
             hibernating: false,
             last_launch: None,
             created_at: now,
@@ -104,6 +141,18 @@ impl ComputerRecord {
         }
     }
 
+    /// The system disks the record holds: the current one, then the
+    /// previous one if any. Any other file is a leftover.
+    pub fn system_disks(&self) -> Vec<SystemDisk> {
+        let mut disks = vec![self.system_disk];
+        disks.extend(
+            self.previous_system_disk
+                .as_ref()
+                .map(|previous| previous.disk),
+        );
+        disks
+    }
+
     /// Whether `request` is the create that made this computer.
     pub fn created_by(&self, request: &CreateComputer) -> bool {
         self.control_plane_id == request.control_plane_id && self.generation == request.generation
@@ -117,6 +166,10 @@ impl ComputerRecord {
             generation: self.generation,
             pairing_id: self.pairing_id,
             image: self.image.clone(),
+            previous_image: self
+                .previous_system_disk
+                .as_ref()
+                .map(|previous| previous.image.clone()),
             role: self.role,
             resources: self.resources,
             state: self.state,

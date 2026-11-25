@@ -23,11 +23,27 @@ table opens on its remembered view.
 A database contains tables; records belong to a table and
 its properties describe each record. The database name in the split header is a
 static label until edited. Double-click it or choose **Rename** in Database actions
-to edit the same inline title with the current name selected. On touch devices,
-use **Database actions → Rename**. Enter or leaving the input saves and closes it; Escape cancels. Saving
+to edit the same inline title with the current name selected. Enter or leaving the input saves and closes it; Escape cancels. Saving
 a title does not enter the grid, and a failed rename shows a toast. Reload to verify
 the saved name persists. Viewers cannot enter rename from either entry point and
 see the split header's `viewer` badge instead.
+
+On touch devices the split header is the title, the access badge, Share and Info.
+Tap the title for its menu, a sheet that starts with the whole name and holds
+everything else the desktop header offers: **Ask Macro** (the desktop **AI**
+button), **Rename** (a dialog), Copy Link, Copy ID, Favorite, Change icon,
+Duplicate, Move to folder, Import CSV, Webhooks, **Download table as CSV** and
+Delete. A column's arrow opens a sheet too; **Change type** there shows the
+column's current type and opens the list of types in the same sheet, with **Back**.
+
+On touch devices the page's first row holds the **New** button for records and
+search, and the second row the view tabs, filter, sort and **View actions** (rename
+or delete the selected view, or create one). The selected view's tab is scrolled
+into view. On phones the split header has no table tabs: the first row starts with
+the table menu (the open table's name), which lists every table, **New table**
+(a dialog asks for its name) and the open table's forms; a database with no
+tables shows **New table** in the page instead. Rename, reorder and
+delete tables on a tablet or desktop.
 
 **Database actions → Duplicate** (any grant, viewers included) copies the database
 into a new one named "<name> copy" that you own, and opens it in the same split.
@@ -456,7 +472,7 @@ the table in its own order. Filters, sorts and column changes made on All record
 change only what you see, until you make a view of them. Viewers can search and use
 All records; only editors change stored views.
 
-**New view** (the **+** beside the tabs) opens a dropdown with **Table**,
+**New view** (the **+** beside the tabs; under **View actions** on touch devices) opens a dropdown with **Table**,
 **Board**, and **Timeline**. Choosing one immediately creates and opens it with an
 available default name, keeping the current filter and sort. A board starts grouped
 by the first single-select or single-person column, or creates a Status column if

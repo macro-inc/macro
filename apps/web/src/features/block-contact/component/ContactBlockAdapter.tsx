@@ -5,6 +5,12 @@ import {
   ContactVisibilityButton,
 } from '@app/features/crm/crm-contact';
 import { CrmCopyLinkButton } from '@app/features/crm/crm-link';
+import { useOpenMergedRecord } from '@app/features/crm/crm-merged-record';
+import {
+  type CrmRecordBlockProps,
+  crmRecordSectionKey,
+  mergedRecordBlockContent,
+} from '@app/features/crm/crm-record-block';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
@@ -18,7 +24,9 @@ import { useBlockId } from '@core/block';
 import {
   createParamsState,
   ParamsProvider,
+  useResolvedParam,
 } from '@core/component/ParamsProvider';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { crmAccessAllowed } from '@service-storage/crm-access-authority';
@@ -29,11 +37,14 @@ import { Show } from 'solid-js';
  * `contacts` feature package. All block-specific glue lives here; the
  * `contacts` package itself has zero block dependencies.
  */
-export function ContactBlockAdapter() {
+export function ContactBlockAdapter(props: CrmRecordBlockProps) {
   const contactId = useBlockId();
   const params = createParamsState();
+  const sentComment = props[COMMENT_LINK_PARAM];
+  if (sentComment) params.navigate({ [COMMENT_LINK_PARAM]: sentComment });
+  const shownComment = useResolvedParam(params, COMMENT_LINK_PARAM);
   const [section, setSection] = useEntryState<ContactSection>(
-    `crm.recordSection:contact:${contactId}`,
+    crmRecordSectionKey({ type: 'contact', id: contactId }),
     { default: 'overview' }
   );
   const panel = useSplitPanelOrThrow();
@@ -43,6 +54,15 @@ export function ContactBlockAdapter() {
     // entry, which is when entry state is otherwise captured.
     panel.handle.captureEntryState();
   };
+  const openMerged = useOpenMergedRecord((survivor) =>
+    panel.handle.replace({
+      next: mergedRecordBlockContent(survivor, {
+        section: section(),
+        commentId: shownComment(),
+      }),
+      mergeHistory: true,
+    })
+  );
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: params.navigate,
   });
@@ -82,7 +102,11 @@ export function ContactBlockAdapter() {
         </SplitHeaderRight>
       </Show>
       <ParamsProvider state={params}>
-        <Contact contactId={contactId} section={section()} />
+        <Contact
+          contactId={contactId}
+          section={section()}
+          onMerged={(id) => openMerged({ type: 'contact', id })}
+        />
       </ParamsProvider>
     </>
   );

@@ -36,7 +36,7 @@ test('three pages fence graceful, abrupt, stale, and worker-only ownership', asy
     workerOnlyWiped: boolean;
     livenessPageStayedAlive: boolean;
     livenessTerminationReason: string;
-    livenessWiped: boolean;
+    livenessPreserved: boolean;
     staleMessageDrops: number;
     staleMessagePortResponseDropped: boolean;
     pushReachedAllTabs: boolean;
@@ -59,7 +59,7 @@ test('three pages fence graceful, abrupt, stale, and worker-only ownership', asy
     workerOnlyWiped: true,
     livenessPageStayedAlive: true,
     livenessTerminationReason: 'tab liveness lock was released',
-    livenessWiped: true,
+    livenessPreserved: true,
     staleMessageDrops: 1,
     staleMessagePortResponseDropped: true,
     pushReachedAllTabs: true,
@@ -68,7 +68,7 @@ test('three pages fence graceful, abrupt, stale, and worker-only ownership', asy
     replacementStorageOutcomes: [
       [2, 'opened-existing'],
       [3, 'reset-storage-uncertain'],
-      [4, 'reset-storage-uncertain'],
+      [4, 'opened-existing'],
     ],
     protocolErrors: [],
   });
@@ -254,6 +254,123 @@ test('a suspended owner resumes without replacement or cache loss', async ({
   expect(
     await follower.evaluate(() => window.cacheLifecycleHarness.read())
   ).toEqual(before);
+});
+
+test('an owner page that dies while writes arrive leaves every accepted write queued', async ({
+  context,
+  page,
+}, testInfo) => {
+  const path = `${harnessPath(testInfo.project.name, 'cache-lifecycle.html')}?treatment=true&scope=${crypto.randomUUID()}`;
+  const open = async (target: typeof page): Promise<typeof page> => {
+    // The development server reloads a page whose dependencies it just bundled.
+    await expect(async () => {
+      await target.goto(path);
+      await target.evaluate(() => window.cacheLifecycleHarness.startSingle());
+    }).toPass();
+    return target;
+  };
+  const crash = async (target: typeof page): Promise<void> => {
+    const devtools = await context.newCDPSession(target);
+    // A crashed page never answers the command, so only the event is awaited.
+    const crashed = target.waitForEvent('crash');
+    devtools.send('Page.crash').catch(() => undefined);
+    await crashed;
+  };
+  const runsEngine = (target: typeof page) => target.workers().length > 0;
+  let owner = await open(page);
+  const everAccepted: string[] = [];
+  for (const killAfterMs of [0, 0, 20, 60, 150]) {
+    const writer = await open(await context.newPage());
+    const generation = await writer.evaluate(() =>
+      window.cacheLifecycleHarness.storageGeneration()
+    );
+    const refusals = writer.evaluate(() =>
+      window.cacheLifecycleHarness.queueWrites()
+    );
+    const accepted = () =>
+      writer.evaluate(() => window.cacheLifecycleHarness.acceptedWriteCount());
+    await expect.poll(accepted).toBeGreaterThan(3);
+    await writer.waitForTimeout(killAfterMs);
+    expect([runsEngine(owner), runsEngine(writer)]).toEqual([true, false]);
+    // The first page's process also runs the coordinator, which a crash ends.
+    // Playwright crashes Chromium only.
+    if (testInfo.project.name.includes('firefox')) await owner.close();
+    else await crash(owner);
+    const before = await accepted();
+    await expect
+      .poll(accepted, { timeout: 20_000 })
+      .toBeGreaterThan(before + 3);
+    await writer.evaluate(() => window.cacheLifecycleHarness.stopQueueing());
+
+    // At most the one in flight, whose outcome only the dead engine knew.
+    expect([[], ['admitted-enqueue-uncertain']]).toContainEqual(await refusals);
+    everAccepted.push(
+      ...(await writer.evaluate(() =>
+        window.cacheLifecycleHarness.acceptedWrites()
+      ))
+    );
+    const queued = new Set(
+      await writer.evaluate(() => window.cacheLifecycleHarness.queuedWrites())
+    );
+    expect(everAccepted.filter((uuid) => !queued.has(uuid))).toEqual([]);
+    expect(
+      await writer.evaluate(() =>
+        window.cacheLifecycleHarness.storageGeneration()
+      )
+    ).toBe(generation);
+    owner = writer;
+  }
+});
+
+test('pages left by the crash of the one that started the coordinator get their cache back', async ({
+  context,
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name.includes('firefox'),
+    'Playwright crashes Chromium only'
+  );
+  const path = `${harnessPath(testInfo.project.name, 'cache-lifecycle.html')}?treatment=true&scope=${crypto.randomUUID()}`;
+  const open = async (target: typeof page): Promise<typeof page> => {
+    await expect(async () => {
+      await target.goto(path);
+      await target.evaluate(() => window.cacheLifecycleHarness.startSingle());
+    }).toPass();
+    return target;
+  };
+  const first = await open(page);
+  const left = [
+    await open(await context.newPage()),
+    await open(await context.newPage()),
+  ];
+  const generation = await first.evaluate(() =>
+    window.cacheLifecycleHarness.storageGeneration()
+  );
+  const devtools = await context.newCDPSession(first);
+  const crashed = first.waitForEvent('crash');
+  devtools.send('Page.crash').catch(() => undefined);
+  await crashed;
+
+  for (const target of left) {
+    await expect
+      .poll(
+        () =>
+          target.evaluate(() =>
+            window.cacheLifecycleHarness.read().then(
+              (answer) => answer,
+              () => 'refused'
+            )
+          ),
+        { timeout: 20_000 }
+      )
+      .toEqual({ kind: 'miss' });
+    expect(
+      await target.evaluate(() =>
+        window.cacheLifecycleHarness.storageGeneration()
+      )
+    ).toBe(generation);
+  }
+  expect(left.flatMap((target) => target.workers())).toHaveLength(1);
 });
 
 test('a silently terminated engine still recovers after releasing its owner lock', async ({

@@ -2,6 +2,7 @@ import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
 import agentControls from './en/agent-controls';
 import agentNavigation from './en/agent-navigation';
+import agentScreen from './en/agent-screen';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
 import appearance from './en/appearance';
@@ -32,9 +33,13 @@ import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
 import passwords from './en/passwords';
 import routineDrafts from './en/routine-drafts';
+import routineFilters from './en/routine-filters';
 import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
+import routinesList from './en/routines-list';
 import runtimeSharing from './en/runtime-sharing';
+import searchOperators from './en/search-operators';
+import searchResults from './en/search-results';
 import settingsBilling from './en/settings-billing';
 import settingsDownloads from './en/settings-downloads';
 import settingsEmail from './en/settings-email';
@@ -60,6 +65,7 @@ export default {
   appearance,
   agentControls,
   agentNavigation,
+  agentScreen,
   accountManager,
   agentSetup,
   githubConnect,
@@ -91,11 +97,15 @@ export default {
   notificationsInbox,
   passwords,
   routineDrafts,
+  routineFilters,
   routineMenu,
   routineSuggestions,
+  routinesList,
   settingsBilling,
   settingsEmail,
   runtimeSharing,
+  searchOperators,
+  searchResults,
   settingsLanguage,
   settingsNativeApp,
   settingsDownloads,

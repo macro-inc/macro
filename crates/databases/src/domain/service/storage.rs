@@ -7,9 +7,10 @@ use crate::domain::catalog::{ColumnEntry, StorageTable};
 use crate::domain::journal::Restoration;
 use crate::domain::models::{AppliedOps, WritesOutcome};
 use crate::domain::ports::DatabaseStorage;
+use crate::domain::provisioning::DatabaseStorageProvisioner;
 use crate::domain::storage::{
-    DatabaseStorageService, StorageRow, StorageRows, StorageRowsQuery, StorageRowsRead,
-    StorageTableRows,
+    DatabaseStorageService, DatabaseStorageTransactions, StorageRow, StorageRows, StorageRowsQuery,
+    StorageRowsRead, StorageTableRows,
 };
 use models_databases::{ColumnChange, ColumnKind, DatabaseOp, NewColumn};
 
@@ -366,41 +367,7 @@ where
         viewer: Viewer,
         batch: OpBatch,
     ) -> Result<AppliedOps, DatabaseError> {
-        for (index, op) in batch.ops.iter().enumerate() {
-            if matches!(
-                op,
-                DatabaseOp::Column {
-                    change: ColumnChange::Create {
-                        definition: NewColumn::Existing { .. },
-                        ..
-                    },
-                    ..
-                } | DatabaseOp::Column {
-                    change: ColumnChange::Create {
-                        definition: NewColumn::New {
-                            kind: ColumnKind::Relation { .. },
-                            ..
-                        },
-                        ..
-                    },
-                    ..
-                } | DatabaseOp::Column {
-                    change: ColumnChange::ChangeType {
-                        to: ColumnKind::Relation { .. }
-                    },
-                    ..
-                }
-            ) {
-                return Err(DatabaseError::InvalidOp(crate::domain::models::OpRefusal {
-                    op: index,
-                    row: None,
-                    column: None,
-                    taken: None,
-                    reason: "Storage consumers must authorize external bindings and relations"
-                        .into(),
-                }));
-            }
-        }
+        refuse_external_bindings(&batch)?;
         for _ in 0..ops::MAX_PLANNING_ATTEMPTS {
             let entries = self.storage_entries(id).await?;
             let (writes, planner) = self
@@ -411,6 +378,86 @@ where
                 .apply_storage_writes(&writes)
                 .await
                 .map_err(repository_error)?;
+            if matches!(outcome, WritesOutcome::SchemaMoved(_)) {
+                continue;
+            }
+            return planner.finish(&entries, &batch, &writes, outcome);
+        }
+        Err(DatabaseError::VersionConflict)
+    }
+}
+
+/// Storage consumers authorize external bindings and relations themselves, so
+/// these entry points refuse ops that would add one.
+fn refuse_external_bindings(batch: &OpBatch) -> Result<(), DatabaseError> {
+    for (index, op) in batch.ops.iter().enumerate() {
+        if matches!(
+            op,
+            DatabaseOp::Column {
+                change: ColumnChange::Create {
+                    definition: NewColumn::Existing { .. },
+                    ..
+                },
+                ..
+            } | DatabaseOp::Column {
+                change: ColumnChange::Create {
+                    definition: NewColumn::New {
+                        kind: ColumnKind::Relation { .. },
+                        ..
+                    },
+                    ..
+                },
+                ..
+            } | DatabaseOp::Column {
+                change: ColumnChange::ChangeType {
+                    to: ColumnKind::Relation { .. }
+                },
+                ..
+            }
+        ) {
+            return Err(DatabaseError::InvalidOp(crate::domain::models::OpRefusal {
+                op: index,
+                row: None,
+                column: None,
+                taken: None,
+                reason: "Storage consumers must authorize external bindings and relations".into(),
+            }));
+        }
+    }
+    Ok(())
+}
+
+impl<R, D, C, E, A, B> DatabaseStorageTransactions for DatabasesServiceImpl<R, D, C, E, A, B>
+where
+    R: DatabasesRepo,
+    D: ColumnDefinitionStore,
+    C: CellStore + DatabaseStorageProvisioner,
+    E: TableEventPublisher,
+    A: AccessDirectory,
+    B: MacroEventBroker,
+{
+    type Transaction = C::Transaction;
+
+    #[tracing::instrument(name = "database.storage.apply_in", skip_all, fields(database_id = %id, ops = batch.ops.len()), err)]
+    async fn apply_storage_ops_in(
+        &self,
+        transaction: &mut Self::Transaction,
+        id: DatabaseId,
+        viewer: Viewer,
+        batch: OpBatch,
+    ) -> Result<AppliedOps, DatabaseError> {
+        refuse_external_bindings(&batch)?;
+        for _ in 0..ops::MAX_PLANNING_ATTEMPTS {
+            let entries = self.storage_entries(id).await?;
+            let (writes, planner) = self
+                .prepare_storage_batch(id, &entries, &viewer, &batch, &Restoration::default())
+                .await?;
+            let outcome = self
+                .cells
+                .apply_storage_writes_in(transaction, &writes)
+                .await
+                .map_err(repository_error)?;
+            // The schema check runs before any write, so replanning is safe.
             if matches!(outcome, WritesOutcome::SchemaMoved(_)) {
                 continue;
             }

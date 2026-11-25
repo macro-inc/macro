@@ -17,6 +17,7 @@ use email::domain::mailbox::inbox_sync::*;
 use email_api_client::domain::models::EmailApiError;
 use futures::future::BoxFuture;
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::api::refresh::RefreshEmailEvent;
 use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
 use models_email::service::link::Link;
@@ -61,6 +62,20 @@ impl InboxSyncGmail for GmailInboxSync {
         provider_id: &'a str,
     ) -> BoxFuture<'a, Result<Option<Vec<String>>, EmailApiError>> {
         Box::pin(self.0.get_message_label_ids(link_id, provider_id))
+    }
+}
+
+impl ThreadReindexQueue for InboxSyncSqs {
+    type ReindexError = InboxPersistenceError;
+
+    async fn enqueue_thread_reindex(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        threads: Vec<Uuid>,
+    ) -> Result<(), Self::ReindexError> {
+        crate::outbound::thread_reindex::enqueue(&self.0, owner, threads)
+            .await
+            .map_err(Into::into)
     }
 }
 

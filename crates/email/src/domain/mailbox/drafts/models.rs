@@ -2,7 +2,7 @@ use super::super::MailboxKey;
 use crate::domain::models::ResolvedDraftInput;
 use chrono::{DateTime, Utc};
 use email_api_client::domain::models::{
-    AttachmentUploadSession, ProviderDraft, ProviderId, SendRequest,
+    AttachmentUploadSession, DraftContent, ProviderDraft, ProviderId, SendRequest,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -90,8 +90,57 @@ pub struct DraftLease {
     pub attachments: crate::domain::models::draft_attachment_manifest::DraftAttachmentManifest,
     pub provider_id: Option<ProviderId>,
     pub base_version: Option<String>,
+    /// Content the provider held at the last sync. Survives the checkpoint,
+    /// which a new local revision clears.
+    pub base_content: Option<DraftContent>,
     pub delete_requested: bool,
     pub checkpoint: Option<DraftCheckpoint>,
+}
+
+/// How a draft differs from the one Macro last read or wrote. Names only, so it
+/// can be logged.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DraftChange {
+    /// The content the provider returns changed, in these fields.
+    Content(Vec<String>),
+    /// Nothing is recorded to compare the content with.
+    Unknown,
+}
+
+impl DraftChange {
+    /// What `observed` changed since `prior`, or `None` when nobody edited it. A
+    /// mailbox stamps drafts on its own (an add-in, a label policy) and Macro's
+    /// own archive moves them: both change only the version. An edit also
+    /// changes the content, which the fingerprint covers. Attachments are not
+    /// in it.
+    pub fn between(
+        prior_version: Option<&str>,
+        prior: Option<&DraftContent>,
+        observed: &ProviderDraft,
+    ) -> Option<Self> {
+        if prior_version.is_some() && observed.version.as_deref() == prior_version {
+            return None;
+        }
+        match prior.filter(|prior| prior.version.as_deref() == prior_version) {
+            Some(prior) => Self::of_content(prior, observed),
+            None => Some(Self::Unknown),
+        }
+    }
+
+    /// What `observed` changed since `prior`, whatever its version.
+    pub fn of_content(prior: &DraftContent, observed: &ProviderDraft) -> Option<Self> {
+        if observed.content_fingerprint.as_deref() == Some(prior.fingerprint.as_str()) {
+            return None;
+        }
+        Some(Self::Content(
+            prior
+                .fields
+                .iter()
+                .filter(|(name, digest)| observed.field_digests.get(*name) != Some(digest))
+                .map(|(name, _)| name.clone())
+                .collect(),
+        ))
+    }
 }
 
 /// Persisted user-visible outcome. Unknown is never an automatic retry instruction.

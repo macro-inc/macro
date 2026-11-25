@@ -11,6 +11,7 @@ import {
   toolLabel,
 } from '@app/features/block-agent/component/parts/shared';
 import { issueSessionAction } from '@app/features/block-agent/queries/issue-session-action';
+import { shownSessionModel } from '@app/features/block-agent/state/session-model';
 import { describeToolCall } from '@app/features/block-agent/state/tool-approval-wording';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
@@ -77,7 +78,10 @@ function modelName(
 ): string | undefined {
   const model = metadata?.model || session?.model;
   if (!model) return undefined;
-  return modelDisplayName(model, metadata?.supportedModels ?? []);
+  return modelDisplayName(
+    shownSessionModel(model, session?.harness),
+    metadata?.supportedModels ?? []
+  );
 }
 
 /** Replace the message under the same turn and author, or append it. */

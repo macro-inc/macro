@@ -1137,6 +1137,52 @@ async fn test_update_document_modified(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
+async fn initial_notion_ready_preserves_source_dates_and_ordinary_edit_advances_time(
+    pool: Pool<Postgres>,
+) {
+    use crate::domain::content::{DocumentContent, DocumentContentLocation};
+
+    let repo = test_repo(pool);
+    let document = "d0000000-0000-0000-0000-000000000001";
+    let source_edited = chrono::DateTime::parse_from_rfc3339("2019-03-02T12:00:00Z")
+        .unwrap()
+        .to_utc();
+    let created = repo
+        .get_document_metadata(document)
+        .await
+        .unwrap()
+        .created_at;
+    repo.set_document_content(document, DocumentContent::pending())
+        .await
+        .unwrap();
+
+    repo.ready_imported_document(document, source_edited)
+        .await
+        .unwrap();
+
+    let ready = repo.get_document_metadata(document).await.unwrap();
+    assert_eq!(ready.created_at, created);
+    assert_eq!(ready.updated_at, Some(source_edited));
+    assert_eq!(
+        repo.get_persisted_document_content(document).await.unwrap(),
+        Some(DocumentContent::ready(DocumentContentLocation::SyncService))
+    );
+
+    repo.update_document_modified(document).await.unwrap();
+    assert!(
+        repo.ready_imported_document(document, source_edited)
+            .await
+            .is_err()
+    );
+    let edited = repo.get_document_metadata(document).await.unwrap();
+    assert_eq!(edited.created_at, created);
+    assert!(edited.updated_at.unwrap() > source_edited);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
 async fn test_get_latest_document_version_id(pool: Pool<Postgres>) {
     let repo = test_repo(pool);
 

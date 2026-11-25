@@ -114,6 +114,7 @@ const runSchema = z
   );
 const stepsSchema = z.object({ steps: z.array(stepSchema) });
 const errorSchema = z.object({ error: z.string() });
+const stoppedSchema = z.object({ stopped: z.literal(true) });
 const revisionSchema = z.object({ configuration_revision: z.number().int() });
 
 /** What each step of a run did; unknown or older results have none. */
@@ -204,6 +205,9 @@ export function toHistoryRecord(record: {
     revision: revisionSchema.safeParse(record.result).data
       ?.configuration_revision,
     error: errorSchema.safeParse(record.result).data?.error,
+    ...(stoppedSchema.safeParse(record.result).success
+      ? { stopped: true }
+      : {}),
     ...(record.created?.length ? { created: record.created } : {}),
   };
 }

@@ -48,6 +48,7 @@ async fn the_owner_gets_an_edit_receipt_and_a_stranger_none(pool: PgPool) {
         .into_owned();
     let database = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()))
         .create_database(
+            models_databases::DatabaseId::new(),
             &CreateDatabase {
                 name: "Offsite".to_string(),
                 owner_id: owner.clone(),
@@ -55,6 +56,7 @@ async fn the_owner_gets_an_edit_receipt_and_a_stranger_none(pool: PgPool) {
                 first_table: None,
             },
             FirstTable {
+                ids: None,
                 name: "Table 1".into(),
                 title_column: "Name",
             },

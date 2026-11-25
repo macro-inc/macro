@@ -325,7 +325,8 @@ Check that the load function does not return a preload source when the intent is
     if (!isNested && data) {
       const tracksOpenHistory = props.definition.openTrackingEnabled !== false;
       if (tracksOpenHistory) {
-        trackOpen(props.id, data.__block, authenticated);
+        if (props.definition.openHistoryFromView !== true)
+          trackOpen(props.id, data.__block, authenticated);
         analytics.pageView(data.__block);
       }
 

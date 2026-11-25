@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
-import { throwOnErr } from '@core/util/result';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import {
   assertQueryAccount,
@@ -14,7 +15,7 @@ import type {
   crmEmailPrivacyClient,
 } from '@service-storage/crm-email-privacy';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createEffect } from 'solid-js';
 import type {
   EmailConsent,
   EmailPrivacy,
@@ -39,8 +40,19 @@ function fromResponse(data: CrmEmailPrivacyResponse): EmailPrivacy {
     personalDomains: data.personal_domains,
     teamDomainWarnings: data.team_domain_warnings ?? {},
     personalDomainWarnings: data.personal_domain_warnings ?? {},
+    archivedTeamDomains: data.archived_team_domains ?? {},
     canRemoveTeamDomains: data.can_remove_team_domains,
   };
+}
+
+/** The server refuses a team domain while its company is archived (409). */
+function isArchivedCompanyRemoval(error: Error, change: EmailPrivacyChange) {
+  return (
+    change.action === 'remove_domain' &&
+    change.scope === 'team' &&
+    error instanceof ThrownResultError &&
+    error.errors.some((e) => e.code === 'CONFLICT')
+  );
 }
 
 type EmailPrivacyDependencies = Pick<
@@ -235,8 +247,12 @@ export function createEmailPrivacyMutation(
           });
           return data;
         }),
-      onError: (error: Error) =>
-        deps.feedback.failure(error.message || t('crm.privacyUpdateFailed')),
+      onError: (error: Error, change: EmailPrivacyChange) =>
+        deps.feedback.failure(
+          isArchivedCompanyRemoval(error, change)
+            ? t('crm.privacyArchivedCompanyConflict')
+            : error.message || t('crm.privacyUpdateFailed')
+        ),
     }),
     () => deps.client
   );
@@ -257,12 +273,35 @@ export function createEmailConsentQuery(
 export function createEmailPrivacySource(
   deps: EmailPrivacyDependencies,
   teamId: Accessor<string | undefined>,
-  userId: Accessor<string | undefined>
+  userId: Accessor<string | undefined>,
+  /** The app's primary email link, which changes when a mailbox is linked. */
+  primaryLinkId: Accessor<string | undefined>
 ) {
   const query = useQuery(
     () => emailPrivacyOptions(deps, teamId(), userId()),
     () => deps.client
   );
+
+  // A mailbox linked in place (native OAuth, no page reload) leaves these
+  // settings and the policy view cached without it. Reread both once per new
+  // primary link the settings don't report yet. This never changes consent.
+  let reread: string | undefined;
+  createEffect(() => {
+    const linkId = primaryLinkId();
+    const reported = query.isSuccess ? query.data.mailboxLinkId : linkId;
+    if (!linkId || reported === linkId || reread === linkId) return;
+
+    reread = linkId;
+    fireAndForget(
+      deps.client.invalidateQueries({ queryKey: crmKeys.emailPrivacy._def }),
+      'crm'
+    );
+    fireAndForget(
+      deps.client.invalidateQueries({ queryKey: crmKeys.emailPolicy._def }),
+      'crm'
+    );
+  });
+
   const update = createEmailPrivacyMutation(deps, teamId, userId);
   const createExcludedThreads = (after: Accessor<string | undefined>) =>
     useQuery(

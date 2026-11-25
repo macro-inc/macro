@@ -91,6 +91,9 @@ pub struct Mail {
     /// Whether the mailbox's owner sent it from another mail client, so it is
     /// in Gmail's `SENT` label or Outlook's Sent Items instead of the inbox.
     pub sent_from_mailbox: bool,
+    /// Labels the mailbox's owner made that it arrives with, as a mail filter
+    /// would put them on: Gmail label ids, or Outlook category names.
+    pub labels: Vec<String>,
 }
 
 /// An attachment of a [`Mail`].
@@ -140,6 +143,12 @@ impl Mail {
     /// The same message, sent by the mailbox's owner from another mail client.
     pub fn sent_from_mailbox(mut self) -> Self {
         self.sent_from_mailbox = true;
+        self
+    }
+
+    /// The same message, arriving with one of the owner's own labels.
+    pub fn labeled(mut self, label: &str) -> Self {
+        self.labels.push(label.to_owned());
         self
     }
 }
@@ -752,7 +761,7 @@ impl Mail {
             message_id: self.message_id.clone(),
             in_reply_to: self.in_reply_to.clone(),
             date: self.date,
-            labels: self.sent_from_mailbox.then(|| vec![SENT_LABEL.to_owned()]),
+            labels: self.gmail_labels(),
             attachments: self
                 .attachments
                 .iter()
@@ -768,6 +777,24 @@ impl Mail {
     }
 
     /// The message as the Outlook emulator takes it.
+    /// The Gmail labels it arrives with; `None` lets the mailbox's filters
+    /// decide, as they do for mail with no labels of its own.
+    fn gmail_labels(&self) -> Option<Vec<String>> {
+        let placed = if self.sent_from_mailbox {
+            vec![SENT_LABEL.to_owned()]
+        } else if self.labels.is_empty() {
+            return None;
+        } else {
+            vec!["INBOX".to_owned(), "UNREAD".to_owned()]
+        };
+        Some(
+            placed
+                .into_iter()
+                .chain(self.labels.iter().cloned())
+                .collect(),
+        )
+    }
+
     pub(crate) fn for_outlook(&self) -> outlook_emulator::NewMessage {
         outlook_emulator::NewMessage {
             from: Some(self.from.clone()),
@@ -780,6 +807,7 @@ impl Mail {
             in_reply_to: self.in_reply_to.clone(),
             date: self.date,
             folder: self.sent_from_mailbox.then(|| SENT_FOLDER.to_owned()),
+            categories: self.labels.clone(),
             attachments: self
                 .attachments
                 .iter()

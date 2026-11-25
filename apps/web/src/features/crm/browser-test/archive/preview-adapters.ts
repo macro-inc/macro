@@ -65,14 +65,15 @@ let company: CrmCompanyResponse = {
   teamId: 'team-1',
   hidden: params.has('companyArchived'),
   emailSync: !params.has('companyArchived'),
-  domains: [
-    {
-      id: 'domain-1',
+  // `domains=a,b` lists them in that order; `domains=` gives none.
+  domains: (params.get('domains')?.split(',') ?? ['example.com'])
+    .filter(Boolean)
+    .map((domain, index) => ({
+      id: `domain-${index + 1}`,
       companyId: 'company-1',
-      domain: 'example.com',
+      domain,
       createdAt: '2026-10-15',
-    },
-  ],
+    })),
   createdAt: '2026-10-15',
   updatedAt: '2026-10-15',
   contacts: [],

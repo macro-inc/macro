@@ -1,0 +1,13 @@
+{"results": [
+  {"id": "75e28846-ad0d-4be2-a027-5e1da6590b98", "label": "Partners", "displayOrder": 1, "archived": false, "stages": [
+    {"id": "1001", "label": "Intro", "displayOrder": 0, "archived": false, "metadata": {"isClosed": "false", "probability": "0.1"}},
+    {"id": "1002", "label": "Signed", "displayOrder": 1, "archived": false, "metadata": {"isClosed": "true", "probability": "1.0"}}
+  ]},
+  {"id": "default", "label": "Sales Pipeline", "displayOrder": 0, "archived": false, "stages": [
+    {"id": "closedlost", "label": "Closed lost", "displayOrder": 6, "archived": false, "metadata": {"isClosed": "true", "probability": "0.0"}},
+    {"id": "appointmentscheduled", "label": "Appointment scheduled", "displayOrder": 0, "archived": false, "metadata": {"isClosed": "false", "probability": "0.2"}},
+    {"id": "oldstage", "label": "Old stage", "displayOrder": 2, "archived": true, "metadata": {"isClosed": "false", "probability": "0.5"}},
+    {"id": "closedwon", "label": "Closed won", "displayOrder": 5, "archived": false, "metadata": {"isClosed": "true", "probability": "1.0"}}
+  ]},
+  {"id": "999", "label": "Retired", "displayOrder": 2, "archived": true, "stages": []}
+]}
