@@ -457,8 +457,11 @@ impl Crossing {
             remove(sidecar).await?;
             return Ok(report);
         }
-        let attempt = SalvageFile::import_attempt();
-        unless_busy(sidecar.write_tail(end, &attempt).await)?;
+        // Writing to one that could not be read would end what it holds.
+        if !unread {
+            let attempt = SalvageFile::import_attempt();
+            unless_busy(sidecar.write_tail(end, &attempt).await)?;
+        }
         let imported = storage
             .import_queue(&queue, now_ms())
             .map_err(storage_error)?;

@@ -548,6 +548,38 @@ async fn a_copy_of_a_torn_database_is_never_called_kept_after_a_death() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn an_import_from_memory_leaves_the_copy_that_could_not_be_read() {
+    const SCOPE: &str = "cache-wasm-salvage-import-unread";
+    closed_with_queue(SCOPE).await;
+    let owner = owner(SCOPE).await;
+    let Ok((owner, crossing)) = wipe_keeping_queue(SCOPE, owner).await else {
+        panic!("wipe keeps the queue")
+    };
+    let sidecar = owner.sidecar();
+    let Ok((mut storage, _, crossing)) = open_or_wipe(SCOPE, owner, &sidecar, crossing).await
+    else {
+        panic!("a fresh database opens")
+    };
+    break_side_files("read", "throw new DOMException('no', 'NotReadableError');").await;
+    let full = "const handle = FileSystemSyncAccessHandle.prototype;
+         if (name === '') { handle.write = self.writeAny; return Promise.resolve(); }
+         self.writeAny = handle.write;
+         handle.write = () => { throw new DOMException('full', 'QuotaExceededError'); };
+         return Promise.resolve();";
+    run_js(full, "refuse").await;
+    let died = crossing.finish(&sidecar, &mut storage).await;
+    run_js(full, "").await;
+    restore_side_files().await;
+    assert!(died.is_err());
+    release_storage(storage).await.expect("release");
+
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["kept", 1, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
 async fn a_copy_that_cannot_be_forgotten_fails_without_losing_the_lock() {
     const SCOPE: &str = "cache-wasm-salvage-forget-fails";
     closed_with_queue(SCOPE).await;
