@@ -3,7 +3,10 @@ use std::borrow::Cow;
 use crate::Result;
 use crate::error::OpensearchClientError;
 use crate::search::query::QueryKey;
-use crate::search::query::{TermCombine, generate_terms_must_query};
+use crate::search::query::{
+    CreateQueryParams, TermCombine, create_query, generate_terms_must_query,
+    generate_terms_must_query_for_fields,
+};
 use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, Script, ScriptSort, ScriptSortType, SortOrder, SortType,
@@ -100,6 +103,9 @@ pub trait SearchQueryConfig {
     const CONTENT_KEY: &'static str = "content";
     /// Fields searched for each content term; highlights still use `CONTENT_KEY`.
     const CONTENT_FIELDS: &'static [&'static str] = &[Self::CONTENT_KEY];
+    /// A field of link URLs that each content term also matches, by the
+    /// words of a URL ([`super::query::link_query`]).
+    const LINK_FIELD: Option<&'static str> = None;
     /// The entity index for the search query
     const ENTITY_INDEX: OpenSearchEntityType;
 }
@@ -119,10 +125,6 @@ pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     pub page_size: u32,
     /// The user id to search for
     pub user_id: String,
-    /// Additional user ids to filter access by. When non-empty the access
-    /// filter matches any of these (terms) instead of the single `user_id`.
-    /// Used for multi-inbox email search across delegated inboxes.
-    pub user_ids: Vec<String>,
     /// Whether to collapse the results to be a single result per ID_KEY
     /// Defaults to false.
     pub collapse: bool,
@@ -133,6 +135,9 @@ pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     pub ids: Vec<String>,
     /// How multi-term content queries combine.
     pub term_combine: TermCombine,
+    /// Words and phrases a minus left out of the query: every item that
+    /// would match one of them as a term is left out.
+    pub excluded_terms: Vec<String>,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -144,13 +149,18 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             page: 0,
             page_size: 10,
             user_id: String::new(),
-            user_ids: Vec::new(),
             collapse: false,
             ids_only: false,
             ids: Vec::new(),
             term_combine: TermCombine::default(),
+            excluded_terms: Vec::new(),
             _phantom: std::marker::PhantomData,
         }
+    }
+
+    pub fn excluded_terms(mut self, excluded_terms: Vec<String>) -> Self {
+        self.excluded_terms = excluded_terms;
+        self
     }
 
     pub fn term_combine(mut self, term_combine: TermCombine) -> Self {
@@ -175,11 +185,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
     pub fn user_id(mut self, user_id: &str) -> Self {
         self.user_id = user_id.to_string();
-        self
-    }
-
-    pub fn user_ids(mut self, user_ids: Vec<String>) -> Self {
-        self.user_ids = user_ids;
         self
     }
 
@@ -217,11 +222,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         } else {
             let user_id_key =
                 user_id_key.ok_or(OpensearchClientError::UserIdKeyRequired(T::ENTITY_INDEX))?;
-            let user_id_query = if self.user_ids.is_empty() {
-                QueryType::term(user_id_key.to_string(), self.user_id.clone())
-            } else {
-                QueryType::terms(user_id_key.to_string(), self.user_ids.clone())
-            };
+            let user_id_query = QueryType::term(user_id_key.to_string(), self.user_id.clone());
 
             // If there are no ids provided we can return only the user id query to filter over
             if self.ids.is_empty() {
@@ -295,11 +296,42 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         let must_array = vec![super::query::generate_terms_must_query_for_fields(
             query_key,
             T::CONTENT_FIELDS,
+            T::LINK_FIELD,
             terms,
             self.term_combine,
         )];
 
         Ok(must_array)
+    }
+
+    /// One query per excluded term, matching it against `field` as a search
+    /// term matches there.
+    pub(crate) fn excluded_field_queries<'a>(&self, field: &str) -> Result<Vec<QueryType<'a>>> {
+        let query_key = QueryKey::from_match_type(&self.match_type)?;
+        let queries = self.excluded_terms.iter().map(|term| {
+            create_query(CreateQueryParams {
+                query_key,
+                field,
+                term,
+            })
+        });
+        Ok(queries.collect())
+    }
+
+    /// One query per excluded term, matching it against the content fields
+    /// and links as a search term matches there.
+    pub(crate) fn excluded_content_queries<'a>(&'a self) -> Result<Vec<QueryType<'a>>> {
+        let query_key = QueryKey::from_match_type(&self.match_type)?;
+        let queries = self.excluded_terms.iter().map(|term| {
+            generate_terms_must_query_for_fields(
+                query_key,
+                T::CONTENT_FIELDS,
+                T::LINK_FIELD,
+                vec![term.as_str()],
+                self.term_combine,
+            )
+        });
+        Ok(queries.collect())
     }
 
     /// Builds a query targeting the title field (TITLE_KEY)

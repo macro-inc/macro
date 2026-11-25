@@ -75,6 +75,8 @@ export type MutationEnqueueFailure =
   /** The queue may hold the write; the caller cannot safely retry. */
   | 'uncertain'
   | 'storage-changed'
+  /** No owner took the write in time: it is neither queued nor sent. */
+  | 'not-admitted'
   /** Another context holds the database; the mutation went straight out. */
   | 'owner-lock'
   /** The engine refused the write; the mutation went straight out. */

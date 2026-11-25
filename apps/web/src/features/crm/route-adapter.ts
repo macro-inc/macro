@@ -27,16 +27,19 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import type {
+  CrmCommentTarget,
   CrmRecordNavigation,
   CrmRoute,
 } from './context/workspace-context';
 import { pipelineIdOfTab, pipelineTab } from './core/navigation';
 import type { CrmRecordRef, CrmRecordSection } from './core/record';
+import { useOpenMergedRecord } from './crm-merged-record';
 import {
   type CrmItemParams,
   type CrmRecordParams,
   crmItemBlockType,
   crmRecordSearch,
+  crmRecordSearchCodec,
   crmSearch,
   crmSearchCodec,
 } from './crm-route';
@@ -132,7 +135,9 @@ export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
   const showRecord = (
     trail: readonly CrmRecordRef[],
     section: CrmRecordSection | undefined,
-    followLink = false
+    followLink = false,
+    replace = false,
+    commentTarget?: CrmCommentTarget
   ) => {
     const record = trail.at(-1);
     if (!record) return;
@@ -144,8 +149,13 @@ export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
     // A message target belongs to the record it was asked for.
     const options = {
       allowDuplicate: !followLink,
+      replace,
       state: [...trail],
-      search: { [crmRecordSearch.namespace]: undefined },
+      search: {
+        [crmRecordSearch.namespace]: commentTarget
+          ? crmRecordSearchCodec.serialize(commentTarget)
+          : undefined,
+      },
     };
     const pipelineId = params.pipelineId;
     fireAndForget(
@@ -161,6 +171,28 @@ export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
       'crm'
     );
   };
+
+  const openMerged = useOpenMergedRecord((survivor) => {
+    const before = records().slice(0, -1);
+    // A trail that passed the record that stays goes back to it.
+    const earlier = before.findIndex(
+      (record) =>
+        record.type === survivor.type &&
+        record.id.toLowerCase() === survivor.id.toLowerCase()
+    );
+    // The merged record's tab and Discussion message are the one that
+    // stays's; a new seek scrolls its Discussion to the message.
+    const commentId = recordSearch.commentId;
+    showRecord(
+      earlier === -1
+        ? [...before, { type: survivor.type, id: survivor.id, name: '' }]
+        : before.slice(0, earlier + 1),
+      params.section,
+      true,
+      true,
+      commentId ? { commentId, seek: crypto.randomUUID() } : undefined
+    );
+  });
 
   const showList = (next: string, replace?: boolean) => {
     const pipelineId = pipelineIdOfTab(next);
@@ -311,6 +343,7 @@ export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
         ? { commentId: recordSearch.commentId, seek: recordSearch.seek }
         : undefined,
     open: (trail, options) => showRecord(trail, undefined, options?.followLink),
+    openMerged,
     setSection: (section) => showRecord(records(), section),
     item,
     openItem,

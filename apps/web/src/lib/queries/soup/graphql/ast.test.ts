@@ -326,6 +326,25 @@ describe('makeGraphqlSoupInput', () => {
     });
   });
 
+  it('maps email labels by id', () => {
+    expect(
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: { ef: { l: { Label: '00000000-0000-0000-0000-000000000007' } } },
+      })
+    ).toMatchObject({
+      initial: {
+        filters: {
+          emailFilter: {
+            tree: {
+              literal: { label: '00000000-0000-0000-0000-000000000007' },
+            },
+          },
+        },
+      },
+    });
+  });
+
   it('maps email attachment kinds and rejects unknown ones', () => {
     expect(
       makeGraphqlSoupInput({

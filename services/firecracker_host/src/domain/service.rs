@@ -9,8 +9,8 @@ use tokio_util::task::TaskTracker;
 use chrono::Utc;
 use firecracker_host_api::mmds::{Document, Identity, MacroData, Network};
 use firecracker_host_api::{
-    Action, Computer, ComputerId, CreateComputer, ErrorCode, GuestImage, HostLimits, LaunchSource,
-    LaunchTimings, PowerState,
+    Action, Computer, ComputerId, CreateComputer, ErrorCode, GoldenKey, GuestImage, HostLimits,
+    LaunchSource, LaunchTimings, PowerState,
 };
 use std::time::Instant;
 use tokio::sync::Mutex;
@@ -30,6 +30,7 @@ mod moves;
 mod operations;
 pub mod pressure;
 pub mod reconcile;
+mod system_disk;
 #[cfg(test)]
 mod test;
 mod upkeep;
@@ -79,6 +80,9 @@ pub enum HostError {
     /// The guest agent did not answer, or what it ran failed.
     #[error("the guest did not answer: {0}")]
     GuestUnreachable(#[source] GuestFailure),
+    /// A hibernated computer's memory belongs to its current system disk.
+    #[error("computer {0} is hibernated; start and stop it before replacing its system disk")]
+    Hibernated(ComputerId),
     /// The computer is staged here (moving): not served, not created.
     #[error("computer {0} is staged on this host by a move")]
     Staged(ComputerId),
@@ -105,6 +109,13 @@ pub enum InvalidRequest {
     /// The image name cannot become a path.
     #[error("image {0} is not a valid image name")]
     UnsafeImage(GuestImage),
+    /// An image to stage must name vmlinux, rootfs.ext4 and boot_args
+    /// once each.
+    #[error("an image to stage names vmlinux, rootfs.ext4 and boot_args once each")]
+    ImageFiles,
+    /// An image file must come over HTTPS and be at most 64 GiB.
+    #[error("{0} must be fetched over https and be at most 64 GiB")]
+    ImageSource(firecracker_host_api::ImageFileName),
     /// Host limits whose squeeze window is upside down.
     #[error(transparent)]
     HostLimits(#[from] firecracker_host_api::InvalidHostLimits),
@@ -154,7 +165,7 @@ impl HostError {
             Self::NoNetworkSlot => ErrorCode::NoNetworkSlot,
             Self::InvalidState(_) => ErrorCode::InvalidState,
             Self::GuestUnreachable(_) => ErrorCode::GuestUnreachable,
-            Self::Staged(_) | Self::Busy(_) => ErrorCode::InvalidState,
+            Self::Staged(_) | Self::Busy(_) | Self::Hibernated(_) => ErrorCode::InvalidState,
             Self::MoveRefused(_) => ErrorCode::InvalidRequest,
             Self::Internal(_) => ErrorCode::Internal,
         }
@@ -287,7 +298,7 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
                 .await
                 .map_err(internal)?;
         }
-        let report = reconcile::at_startup(&mut records, &store, &machines)
+        let report = reconcile::at_startup(&mut records, &store, &disks, &machines)
             .instrument(tracing::info_span!("firecracker_host.reconcile_startup"))
             .await;
         let metrics = HostMetrics::new();
@@ -577,15 +588,20 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
     }
 
     fn require_golden(&self, record: &ComputerRecord) -> Result<(), HostError> {
-        let key = record.golden_key();
-        match self.goldens.availability(&key) {
+        self.require_golden_of(&record.golden_key())
+    }
+
+    /// The golden of `key` is ready, or the error to answer (starting its
+    /// build when it is absent).
+    fn require_golden_of(&self, key: &GoldenKey) -> Result<(), HostError> {
+        match self.goldens.availability(key) {
             GoldenAvailability::Ready => Ok(()),
-            GoldenAvailability::Building => Err(HostError::GoldenNotReady(record.image.clone())),
+            GoldenAvailability::Building => Err(HostError::GoldenNotReady(key.image.clone())),
             GoldenAvailability::Absent => {
-                self.goldens.build(key);
-                Err(HostError::GoldenNotReady(record.image.clone()))
+                self.goldens.build(key.clone());
+                Err(HostError::GoldenNotReady(key.image.clone()))
             }
-            GoldenAvailability::ImageMissing => Err(HostError::ImageMissing(record.image.clone())),
+            GoldenAvailability::ImageMissing => Err(HostError::ImageMissing(key.image.clone())),
         }
     }
 
@@ -603,6 +619,12 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
         self.observe(record).await?;
         tracing::Span::current().record("state", record.state.as_ref());
         let operation = Operation::power(action, record.state);
+        // An explicit power action decides the run state: a replacement
+        // that stopped the computer no longer owes it a boot.
+        if record.boot_after_system_disk {
+            record.boot_after_system_disk = false;
+            self.save(record).await?;
+        }
 
         let result = async {
             let steps = plan(record.state, action)?;

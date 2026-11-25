@@ -2,7 +2,7 @@ Create a routine: work that runs as the authenticated user on a schedule or when
 
 A routine is triggers plus steps. Pass `steps` as a JSON array encoded in a string.
 
-Triggers: `once` (future RFC3339 time), `cron` (six-field expression and IANA time zone), or `event` (activity such as `email.message_received`, `task.created` or `channel.message_posted`, optionally limited to item `ids` and gated by a yes/no `condition`). Only people's actions trigger routines.
+Triggers: `once` (future RFC3339 time), `cron` (six-field expression and IANA time zone), or `event` (activity such as `email.message_received`, `task.created` or `channel.message_posted`, optionally limited to item `ids` and gated by a yes/no `condition`; `email.labeled`, alone in its trigger, runs when a thread gains one of the label ids from ListLabels in `labels`, or any label without them). Only people's actions trigger routines, so labels a routine or an agent adds never start one.
 
 Steps run in order and a failed step stops the run:
 - `code`: TypeScript against Macro's SDK, for anything that acts or decides: labeling or archiving email, setting properties, creating tasks, posting messages, or judging items with `macro.ai.decide`. See Code steps at the end.

@@ -91,6 +91,30 @@ impl Store {
         Ok(bytes)
     }
 
+    /// Where a newer update downloads while this store's update stays ready
+    /// to install.
+    pub fn staging(&self) -> Self {
+        Self::new(self.directory.join("next"), self.pubkey.clone())
+    }
+
+    /// Moves a verified download from `staged` into this store, replacing the
+    /// update it held. The bytes move in one rename, so the store holds one
+    /// whole update or the other; a stale record costs only a fresh download
+    /// on a later launch, since every install verifies the bytes again.
+    pub fn adopt(&self, staged: &Store) -> std::io::Result<()> {
+        std::fs::rename(
+            staged.directory.join(COMPLETE),
+            self.directory.join(COMPLETE),
+        )?;
+        std::fs::rename(staged.directory.join(RECORD), self.directory.join(RECORD))
+            .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not move the native update download record"))
+            .ok();
+        remove_file(&self.directory.join(PARTIAL))
+            .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not remove a replaced native update download"))
+            .ok();
+        Ok(())
+    }
+
     /// Deletes the saved download, once it is installed or no longer offered.
     pub fn remove(&self) -> std::io::Result<()> {
         for name in [COMPLETE, PARTIAL, RECORD] {

@@ -37,12 +37,13 @@ const addsRow = (rows: readonly string[], start: readonly string[]) => {
 function nextStep(
   current: Load,
   rows: readonly string[],
-  hasNextPage: boolean
+  hasNextPage: boolean,
+  maxPages: number
 ): 'restart' | 'end' | 'advance' | 'stop' {
   if (current.ended)
     return rows.length === 0 && hasNextPage ? 'restart' : 'stop';
   if (addsRow(rows, current.rows) || !hasNextPage) return 'end';
-  return current.pages < MAX_PAGES_PER_LOAD ? 'advance' : 'stop';
+  return current.pages < maxPages ? 'advance' : 'stop';
 }
 
 /** A page of candidates can add no row: alias or saved-view membership is
@@ -59,7 +60,11 @@ export function advanceEmptyPages(options: {
   rows: Accessor<readonly string[]>;
   hasNextPage: Accessor<boolean>;
   loadMore: () => Promise<unknown>;
+  /** Most pages one load reads without a row; Mail's list reads on to a row
+   * or the end. Defaults to `MAX_PAGES_PER_LOAD`. */
+  maxPages?: number;
 }) {
+  const maxPages = options.maxPages ?? MAX_PAGES_PER_LOAD;
   // Each visit to a scope gets its own page budget and failures, so a request
   // from an earlier visit never settles the current one.
   let visits = 0;
@@ -135,7 +140,7 @@ export function advanceEmptyPages(options: {
         if (failure() && failure()?.visit !== current.visit)
           setFailure(undefined);
         if (!enabled || !ready || busy || failed) return;
-        match(nextStep(current, rows, hasNextPage))
+        match(nextStep(current, rows, hasNextPage, maxPages))
           .with('restart', () =>
             setLoad({ visit: current.visit, rows: [], pages: 1, ended: false })
           )
@@ -151,7 +156,7 @@ export function advanceEmptyPages(options: {
 
   const settledStep = () =>
     options.enabled() && options.ready() && !running() && !error()
-      ? nextStep(currentLoad(), options.rows(), options.hasNextPage())
+      ? nextStep(currentLoad(), options.rows(), options.hasNextPage(), maxPages)
       : undefined;
 
   return {

@@ -18,8 +18,9 @@ pub struct GithubAccessTokenParams {
 }
 
 /// The user's GitHub token from their account link: 404 when they never
-/// linked, 428 when the token no longer works and they must link again.
-#[tracing::instrument(skip(ctx, _internal_authorization))]
+/// linked, 428 when the token no longer works and they must link again, 502
+/// or 503 when GitHub could not say.
+#[tracing::instrument(skip_all)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
@@ -47,6 +48,7 @@ pub async fn handler(
             StatusCode::PRECONDITION_REQUIRED,
             "github reauthentication required",
         ),
+        Err(GithubError::Upstream(error)) => error.into_response(),
         Err(error) => {
             tracing::error!(error=?error, "failed to read github access token");
             error_response(StatusCode::INTERNAL_SERVER_ERROR, "internal error")

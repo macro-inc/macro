@@ -15,7 +15,7 @@ use crate::{
         },
         channels::{
             ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
-            ChannelMessageSearchConfig,
+            ChannelMessageSearchConfig, LINKS_KEY,
         },
         chats::{ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig},
         documents::{
@@ -24,7 +24,7 @@ use crate::{
         },
         emails::{
             EmailIndex, EmailLabelCondition, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig,
-            EmailTextCondition,
+            EmailTextCondition, EmailTextFields,
         },
         model::{
             DefaultSearchResponse, Hit, MacroEm, SearchGotoCallRecord, SearchGotoChannel,
@@ -65,6 +65,11 @@ pub struct UnifiedSearchArgs {
     pub cursor: SearchCursorOption,
     /// The indices to search over
     pub search_indices: HashSet<OpenSearchEntityType>,
+    /// Words and phrases a minus left out of the query. Every index leaves
+    /// out each item that would match one of them as a term, where that
+    /// index matches its terms in the search's mode; email leaves out mail
+    /// holding one in any part, as a Mail search does.
+    pub excluded_terms: Vec<String>,
     /// The document search args
     pub document_search_args: UnifiedDocumentSearchArgs,
     /// The email search args. If None, we do not search emails
@@ -93,6 +98,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             ids_only: args.document_search_args.ids_only,
             document_ids: args.document_search_args.document_ids,
             sub_types: args.document_search_args.sub_types,
+            excluded_sub_types: args.document_search_args.excluded_sub_types,
             mode: args.document_search_args.mode,
             property_filters: args.document_search_args.property_filters,
             tag_option_ids: args.document_search_args.tag_option_ids,
@@ -107,7 +113,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
         EmailSearchArgs {
             terms: args.email_search_args.terms,
             user_id: args.user_id,
-            user_ids: args.email_search_args.user_ids,
+            inbox_link_ids: args.email_search_args.inbox_link_ids,
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
@@ -128,7 +134,20 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             subject_only: args.email_search_args.subject_only,
             tag_option_ids: args.email_search_args.tag_option_ids,
             match_all_tags: args.email_search_args.match_all_tags,
-            text_conditions: args.email_search_args.text_conditions,
+            text_conditions: args
+                .email_search_args
+                .text_conditions
+                .into_iter()
+                .chain(
+                    args.excluded_terms
+                        .into_iter()
+                        .map(|text| EmailTextCondition {
+                            fields: EmailTextFields::Any,
+                            text,
+                            exclude: true,
+                        }),
+                )
+                .collect(),
             label_conditions: args.email_search_args.label_conditions,
             exclude_thread_ids: args.email_search_args.exclude_thread_ids,
             sent_after_millis: args.email_search_args.sent_after_millis,
@@ -247,6 +266,8 @@ pub struct UnifiedDocumentSearchArgs {
     pub document_ids: Vec<String>,
     pub ids_only: bool,
     pub sub_types: Vec<String>,
+    /// Sub types left out, such as tasks for a search of documents alone.
+    pub excluded_sub_types: Vec<String>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
     pub tag_option_ids: Vec<String>,
@@ -257,11 +278,14 @@ pub struct UnifiedDocumentSearchArgs {
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedEmailSearchArgs {
     pub terms: Vec<String>,
-    pub user_ids: Vec<String>,
-    /// Threads reachable besides the `user_ids` mailboxes, or, with
+    /// The inboxes the caller reads, by link id: their own and those
+    /// delegated to them. Mail matches by the inbox holding it, not by its
+    /// owner, whose other inboxes may not be delegated.
+    pub inbox_link_ids: Vec<String>,
+    /// Threads reachable besides the `inbox_link_ids` inboxes, or, with
     /// `ids_only`, the only threads searched.
     pub thread_ids: Vec<String>,
-    /// Search only `thread_ids`, not the `user_ids` mailboxes.
+    /// Search only `thread_ids`, not the `inbox_link_ids` inboxes.
     pub ids_only: bool,
     /// When non-empty, every hit's thread must be one of these, on top of
     /// the access filter.
@@ -782,8 +806,11 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .search_indices
         .contains(&OpenSearchEntityType::AgentSessions)
     {
-        let mut query =
-            super::agent_sessions::build_query(&args.agent_session_search_args, &args.match_type)?;
+        let mut query = super::agent_sessions::build_query(
+            &args.agent_session_search_args,
+            &args.match_type,
+            &args.excluded_terms,
+        )?;
         query.name(OpenSearchEntityType::AgentSessions.query_name());
         bool_query.should(query.build().into());
     }
@@ -793,7 +820,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .contains(&OpenSearchEntityType::Documents)
     {
         let document_search_args: DocumentSearchArgs = args.clone().into();
-        let document_query_builder: DocumentQueryBuilder = document_search_args.into();
+        let document_query_builder = DocumentQueryBuilder::from(document_search_args)
+            .excluded_terms(args.excluded_terms.clone());
         let mut document_bool_query = document_query_builder.build_bool_query()?;
         document_bool_query.name(OpenSearchEntityType::Documents.query_name());
         let query_type: QueryType = document_bool_query.build().into();
@@ -814,8 +842,9 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .contains(&OpenSearchEntityType::Channels)
     {
         let channel_message_search_args: ChannelMessageSearchArgs = args.clone().into();
-        let channel_message_query_builder: ChannelMessageQueryBuilder =
-            channel_message_search_args.into();
+        let channel_message_query_builder =
+            ChannelMessageQueryBuilder::from(channel_message_search_args)
+                .excluded_terms(args.excluded_terms.clone());
         let mut channel_message_bool_query = channel_message_query_builder.build_bool_query()?;
         channel_message_bool_query.name(OpenSearchEntityType::Channels.query_name());
         let query_type: QueryType = channel_message_bool_query.build().into();
@@ -824,7 +853,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
 
     if args.search_indices.contains(&OpenSearchEntityType::Chats) {
         let chat_search_args: ChatSearchArgs = args.clone().into();
-        let chat_query_builder: ChatQueryBuilder = chat_search_args.into();
+        let chat_query_builder =
+            ChatQueryBuilder::from(chat_search_args).excluded_terms(args.excluded_terms.clone());
         let mut chat_bool_query = chat_query_builder.build_bool_query()?;
         chat_bool_query.name(OpenSearchEntityType::Chats.query_name());
         let query_type: QueryType = chat_bool_query.build().into();
@@ -836,7 +866,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .contains(&OpenSearchEntityType::CallRecords)
     {
         let call_record_search_args: CallRecordSearchArgs = args.clone().into();
-        let call_record_query_builder: CallRecordQueryBuilder = call_record_search_args.into();
+        let call_record_query_builder = CallRecordQueryBuilder::from(call_record_search_args)
+            .excluded_terms(args.excluded_terms.clone());
         let mut call_record_bool_query = call_record_query_builder.build_bool_query()?;
         call_record_bool_query.name(OpenSearchEntityType::CallRecords.query_name());
         let query_type: QueryType = call_record_bool_query.build().into();
@@ -848,7 +879,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .contains(&OpenSearchEntityType::Projects)
     {
         let project_search_args: ProjectSearchArgs = args.clone().into();
-        let project_query_builder: ProjectQueryBuilder = project_search_args.into();
+        let project_query_builder = ProjectQueryBuilder::from(project_search_args)
+            .excluded_terms(args.excluded_terms.clone());
         let mut project_bool_query = project_query_builder.build_bool_query()?;
         project_bool_query.name(OpenSearchEntityType::Projects.query_name());
         let query_type: QueryType = project_bool_query.build().into();
@@ -860,8 +892,9 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .contains(&OpenSearchEntityType::CalendarEvents)
     {
         let calendar_event_search_args: CalendarEventSearchArgs = args.clone().into();
-        let calendar_event_query_builder: CalendarEventQueryBuilder =
-            calendar_event_search_args.into();
+        let calendar_event_query_builder =
+            CalendarEventQueryBuilder::from(calendar_event_search_args)
+                .excluded_terms(args.excluded_terms.clone());
         let mut calendar_event_bool_query = calendar_event_query_builder.build_bool_query()?;
         calendar_event_bool_query.name(OpenSearchEntityType::CalendarEvents.query_name());
         let query_type: QueryType = calendar_event_bool_query.build().into();
@@ -895,6 +928,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .require_field_match(true)
         .max_analyzer_offset(super::HIGHLIGHT_MAX_ANALYZER_OFFSET)
         .field("content", em_field().number_of_fragments(1))
+        .field(LINKS_KEY, em_field().number_of_fragments(1))
         .field("document_name", em_field().number_of_fragments(0))
         .field("name", em_field().number_of_fragments(0))
         .field("source_names", em_field().number_of_fragments(0))

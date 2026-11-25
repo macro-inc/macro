@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH moving AS MATERIALIZED (\n                   SELECT ct.id, ct.company_id FROM (\n                       SELECT id, team_id, company_id FROM crm_contacts WHERE company_id = ANY($2) OFFSET 0\n                   ) ct WHERE ct.team_id = $3\n               ), moved AS (\n                   UPDATE crm_contacts ct SET company_id = $1, updated_at = NOW()\n                   FROM moving WHERE ct.id = moving.id\n                   RETURNING ct.id\n               )\n               SELECT moving.id, moving.company_id AS \"company_id!\" FROM moving JOIN moved USING (id)\n               ORDER BY moving.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "1a892bf6d38824c8bf79e4700f9bb605e8f9ab1ea602ace6dc0b7a1262b2cfb8"
+}

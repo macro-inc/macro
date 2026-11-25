@@ -676,6 +676,10 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	... on GraphqlInboxReauthRequiredMetadata {
 		inboxReauthRequiredEmailAddress: emailAddress
 	}
+	... on GraphqlCrmEmailSharingChangedMetadata {
+		crmEmailSharingChangedTeamId: teamId
+		crmEmailSharingChangedReason: reason
+	}
 	... on GraphqlRoutineRunFinishedMetadata {
 		routineRunFinishedRoutineId: routineId
 		routineRunFinishedRoutineName: routineName

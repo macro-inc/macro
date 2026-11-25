@@ -90,6 +90,8 @@ pub(crate) struct GraphqlScheduledActionEventFilter {
     payload_match: Vec<String>,
     /// The task property that must have changed, and the values it must gain.
     property: Option<GraphqlScheduledActionPropertySelector>,
+    /// Email label ids, one of which an `EMAIL_LABELED` thread must gain. Null matches any label.
+    label_ids: Option<Vec<ID>>,
     /// Yes/no question the triggering content must answer with yes before the routine runs.
     condition: Option<String>,
 }
@@ -155,6 +157,8 @@ pub(crate) enum GraphqlScheduledActionEventName {
     TaskPropertyChanged,
     /// A new email was received.
     EmailMessageReceived,
+    /// An email thread gained a Gmail label or Outlook category.
+    EmailLabeled,
     /// A channel was created.
     ChannelCreated,
     /// A channel message was posted.
@@ -184,6 +188,7 @@ impl From<EventName> for GraphqlScheduledActionEventName {
             EventName::TaskPriorityChanged => Self::TaskPriorityChanged,
             EventName::TaskPropertyChanged => Self::TaskPropertyChanged,
             EventName::EmailMessageReceived => Self::EmailMessageReceived,
+            EventName::EmailLabeled => Self::EmailLabeled,
             EventName::ChannelCreated => Self::ChannelCreated,
             EventName::ChannelMessagePosted => Self::ChannelMessagePosted,
             EventName::ChannelMentioned => Self::ChannelMentioned,
@@ -338,6 +343,13 @@ fn event_filters(
                         definition_id: ID(selector.definition_id().to_string()),
                         values: selector.values().to_vec(),
                     }
+                }),
+                label_ids: filter.labels().map(|selector| {
+                    selector
+                        .labels()
+                        .iter()
+                        .map(|label| ID(label.to_string()))
+                        .collect()
                 }),
                 condition: filter
                     .condition()

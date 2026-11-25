@@ -8,9 +8,15 @@ mod company_contacts;
 mod company_domains;
 mod contact_filing;
 mod contact_listing;
+#[cfg(feature = "merge")]
+pub(crate) mod contact_merge;
 mod contact_update;
 mod email_policy;
 mod email_privacy;
+#[cfg(feature = "merge")]
+pub(crate) mod merge;
+#[cfg(feature = "merge")]
+pub(crate) use email_policy::merge_rules::MemberRules;
 mod previews;
 
 use crate::domain::{
@@ -573,7 +579,7 @@ impl CompaniesRepositoryImpl {
     /// serializes populate / depopulate / manual create for one domain.
     /// `normalized_domain` must already be lowercased.
     async fn lock_team_domain(
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        conn: &mut sqlx::PgConnection,
         team_id: &uuid::Uuid,
         normalized_domain: &str,
     ) -> Result<(), CrmError> {
@@ -581,7 +587,7 @@ impl CompaniesRepositoryImpl {
             r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
             format!("{team_id}:{normalized_domain}"),
         )
-        .execute(&mut **tx)
+        .execute(conn)
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         Ok(())

@@ -72,6 +72,22 @@ async fn email_link(pool: &PgPool) -> Uuid {
     id
 }
 
+/// What a deleted message said is gone: nothing may cite it or quote it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_deleted_message_is_no_part_of_its_channel(pool: PgPool) {
+    let channel = channel(&pool).await;
+    let message = channel_message(&pool, channel).await;
+    let item = target(EntityType::Channel, channel);
+    let part = message.to_string();
+    assert!(part_of(&pool, &item, &part).await.unwrap());
+    sqlx::query("UPDATE comms_messages SET deleted_at = now() WHERE id = $1")
+        .bind(message)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(!part_of(&pool, &item, &part).await.unwrap());
+}
+
 /// A suggestion names a part only together with the item it belongs to.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_part_counts_only_with_its_own_item(pool: PgPool) {
@@ -119,4 +135,23 @@ async fn a_part_counts_only_with_its_own_item(pool: PgPool) {
             "{item:?} with part {part_id}"
         );
     }
+}
+
+/// One the mailbox no longer holds is kept, marked, and left out of its thread.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_message_gone_from_the_mailbox_is_no_part_of_its_thread(pool: PgPool) {
+    let link = email_link(&pool).await;
+    let thread = email_thread(&pool, link).await;
+    let message = email_message(&pool, link, thread).await;
+    let item = target(EntityType::EmailThread, thread);
+    let part = message.to_string();
+    assert!(part_of(&pool, &item, &part).await.unwrap());
+    sqlx::query(
+        "UPDATE email_messages SET mailbox_state = '{\"provider_missing\": true}' WHERE id = $1",
+    )
+    .bind(message)
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(!part_of(&pool, &item, &part).await.unwrap());
 }

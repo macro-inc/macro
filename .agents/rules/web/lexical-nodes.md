@@ -33,3 +33,13 @@ every row and the channel visibly jumps.
 
 Check: open a channel with the node in an older message, reload, and confirm the
 scroll position does not move while the node loads.
+
+## Tag writes the person did not make
+
+A decorator or plugin that writes on its own (saving a size it measured, a URL
+it resolved, data it loaded) tags the update with `BACKGROUND_UPDATE_TAGS` from
+`@macro-inc/lexical-core` and writes only when the value changed, never just
+because it mounted. Lexical keeps a blurred editor's selection, and an untagged
+update writes it back into the page, which pulls focus out of whatever the
+person is typing in (a composer in another split) whenever a collaborator's edit
+remounts the decorator.

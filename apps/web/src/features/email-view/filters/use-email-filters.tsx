@@ -29,6 +29,7 @@ import {
   EMAIL_FILTER_GROUPS,
   EMAIL_FOCUS_FILTER_GROUP,
 } from './email-facets';
+import { useLabelFilterGroup } from './use-label-filter-group';
 
 type EmailFilterGroup = ListFilterGroup<EmailFilterGroupId, string>;
 
@@ -160,7 +161,7 @@ const emailFilterField = (groupId: EmailFilterGroupId): EmailFilterField =>
         write: (_, ids) => ({ inboxIds: ids.length > 0 ? ids : undefined }),
       })
     )
-    .with('read', 'done', 'attachments', 'focus', 'tags', (id) =>
+    .with('read', 'done', 'attachments', 'focus', 'tags', 'labels', (id) =>
       facetField(id)
     )
     .exhaustive();
@@ -293,6 +294,7 @@ function useParticipantOptions(chosen: Accessor<readonly string[]>) {
 export function useEmailFilters() {
   const { state, setFilters, filterBaseline, inboxOptions } = useEmailView();
   const tagGroup = useTagFilterGroup();
+  const labelGroup = useLabelFilterGroup();
   const people = () =>
     state.conditions?.participants.map(participantValue) ?? [];
   const peopleOptions = useParticipantOptions(people);
@@ -311,6 +313,11 @@ export function useEmailFilters() {
     </div>
   );
   const tags = () => (tagGroup().options.length > 0 ? [tagGroup()] : []);
+  // Reminders list through their own read, which has no label filter.
+  const labels = (): EmailFilterGroup[] => {
+    const group = labelGroup();
+    return group && state.tab !== 'reminders' ? [group] : [];
+  };
   const inboxes = (): EmailFilterGroup[] =>
     inboxOptions().length > 1 || state.aliasFilter
       ? [
@@ -344,6 +351,7 @@ export function useEmailFilters() {
       footer: people().length > 0 ? matchFrom : undefined,
     },
     ...tags(),
+    ...labels(),
     {
       id: 'importance',
       label: t('emailViews.importance'),
@@ -395,8 +403,10 @@ export function useEmailFilters() {
       if (state.conditions) return conditionGroups();
       return [
         ...(state.tab === 'focus' ? FOCUS_FILTER_GROUPS : STATIC_FILTER_GROUPS),
-        // Tags come last: the static groups are short, the tag list grows with use.
+        // Tags and labels come last: the static groups are short, their lists
+        // grow with use.
         ...tags(),
+        ...labels(),
         ...inboxes(),
       ];
     }),
@@ -413,11 +423,16 @@ export function createEmailFilters(
   setFacets: (facets: EmailListFilters['facets']) => void
 ) {
   const tagGroup = useTagFilterGroup();
+  const labelGroup = useLabelFilterGroup();
   return createEmailFilterModel({
-    groups: createMemo((): EmailFilterGroup[] => [
-      ...STATIC_FILTER_GROUPS,
-      ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
-    ]),
+    groups: createMemo((): EmailFilterGroup[] => {
+      const labels = labelGroup();
+      return [
+        ...STATIC_FILTER_GROUPS,
+        ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
+        ...(labels ? [labels] : []),
+      ];
+    }),
     filters: () => ({ facets: facets(), inboxIds: undefined }),
     baseline: () => ({ facets: {}, inboxIds: undefined }),
     setFilters: (filters) => {

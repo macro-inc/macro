@@ -1,6 +1,6 @@
 import { useIsAuthenticated } from '@core/context/user';
 import { type Accessor, createEffect, on } from 'solid-js';
-import { type BlockName, useMaybeBlockId } from '../block';
+import { type BlockName, useIsNestedBlock, useMaybeBlockName } from '../block';
 import { trackOpen } from './track-open';
 
 /**
@@ -10,13 +10,22 @@ import { trackOpen } from './track-open';
  * while nothing is shown, so an item shown again after another item or after
  * nothing counts as a new open. Inside a block BlockLoader already records the
  * open (or the block is an embed, which is not an open), so this records
- * nothing there.
+ * nothing there. `ownBlock` records it in the item's own block too, when that
+ * block's definition leaves the history row to its view
+ * (`openHistoryFromView`), as a block whose id can name a record merged into
+ * another does.
  */
 export function createOpenTracker(
   blockName: BlockName,
-  item: Accessor<string | undefined>
+  item: Accessor<string | undefined>,
+  options?: { ownBlock?: boolean }
 ): void {
-  if (useMaybeBlockId() !== undefined) return;
+  const block = useMaybeBlockName();
+  if (block !== undefined) {
+    const records =
+      options?.ownBlock === true && block === blockName && !useIsNestedBlock();
+    if (!records) return;
+  }
   const authenticated = useIsAuthenticated();
   createEffect(
     on(item, (id, previous) => {
