@@ -37,12 +37,12 @@ type StarterToken = { starter: SearchStarter; name: string; value: string };
 
 /** The starter a whole token belongs to, with its name and value. */
 function starterOf(token: string): StarterToken | undefined {
-  const parsed = /^([A-Za-z_]+):(.*)$/s.exec(token);
+  // Quotes anywhere in a token are the search's phrase marks, not its name.
+  const unquoted = [...token].filter((char) => !isPhraseQuote(char)).join('');
+  const parsed = /^([A-Za-z_]+):(.*)$/s.exec(unquoted);
   if (!parsed) return undefined;
   const name = (parsed[1] ?? '').toLowerCase();
-  const value = [...(parsed[2] ?? '')]
-    .filter((char) => !isPhraseQuote(char))
-    .join('');
+  const value = parsed[2] ?? '';
   if (name === 'from' || name === 'type' || name === 'tag')
     return { starter: name, name, value };
   if (DATE_NAMES.includes(name)) return { starter: 'date', name, value };

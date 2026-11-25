@@ -11,6 +11,7 @@ const capture = vi.hoisted(() => ({
     | undefined,
   pending: false,
   serviceEnabled: true,
+  browseState: { isPending: false, isFetching: false },
 }));
 vi.mock('@app/features/soup/search', () => ({
   createSearchState: (options: CreateSearchStateOptions) => {
@@ -34,7 +35,7 @@ vi.mock('@queries/soup/items', () => ({
     options: () => { enabled: boolean }
   ) => {
     capture.browse = { request, options };
-    return { isPending: false, isFetching: false };
+    return capture.browseState;
   },
 }));
 
@@ -85,6 +86,19 @@ it('sends words with their operators, and lists operators alone through the feed
     setQuery('  ');
     expect(options.enabled?.()).toBe(false);
     expect(capture.browse?.options().enabled).toBe(false);
+    dispose();
+  });
+});
+
+it('keeps listed rows settled while an operator-only search refetches', () => {
+  createRoot((dispose) => {
+    const [query] = createSignal('assignee:me');
+    const search = createMobileFullTextSearch(query, () => LOOKUP);
+    Object.assign(capture.browseState, { isPending: true, isFetching: true });
+    expect(search.isSettling()).toBe(true);
+    Object.assign(capture.browseState, { isPending: false, isFetching: true });
+    expect(search.isSettling()).toBe(false);
+    Object.assign(capture.browseState, { isPending: false, isFetching: false });
     dispose();
   });
 });

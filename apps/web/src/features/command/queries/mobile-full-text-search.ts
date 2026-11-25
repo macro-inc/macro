@@ -76,8 +76,9 @@ export function createMobileFullTextSearch(
   return {
     data: () => (browsing() ? browsed() : search.data()).filter(matches()),
     isSettling: () =>
+      // A refetch keeps the rows already listed; only a first page settles.
       browsing()
-        ? browse.isPending || (browse.isFetching && !browse.isFetchingNextPage)
+        ? browse.isPending
         : search.isSettling() ||
           (search.searchQuery.isEnabled && search.searchQuery.isPending),
     error: () =>

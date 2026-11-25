@@ -1,4 +1,9 @@
-import { searchOperatorSpans } from '@app/features/next-soup/core/search-operators';
+import { isUnfinishedEmailSearchOperator } from '@app/features/email-view/search/email-search-operators';
+import {
+  isUnfinishedSearchOperator,
+  searchOperatorSpans,
+  splitSearchTerms,
+} from '@app/features/next-soup/core/search-operators';
 
 const UNIVERSAL_INPUT_CHARACTERS = 34;
 
@@ -11,8 +16,9 @@ export function shouldUseUniversalInput(text: string, active = false): boolean {
 
 /**
  * The phone Search's rule, whose field reads search operators: they say how
- * to search, not what, so they don't count toward the length that promotes a
- * search, and a search narrowed by several of them stays a search.
+ * to search, not what, so neither whole ones nor ones still being typed count
+ * toward the length that promotes a search, and a search narrowed by several
+ * of them stays a search.
  */
 export function shouldUseUniversalInputForSearch(
   text: string,
@@ -20,11 +26,22 @@ export function shouldUseUniversalInputForSearch(
 ): boolean {
   if (!text.trim()) return false;
   if (active) return true;
-  let words = '';
+  let rest = '';
   let at = 0;
   for (const { start, end } of searchOperatorSpans(text)) {
-    words += text.slice(at, start);
+    rest += text.slice(at, start);
     at = end;
   }
-  return shouldUseUniversalInput(words + text.slice(at));
+  rest += text.slice(at);
+  const words = rest
+    .split(/\s+/)
+    .filter((token) => {
+      const term = splitSearchTerms(token)[0] ?? token;
+      return (
+        !isUnfinishedSearchOperator(term) &&
+        !isUnfinishedEmailSearchOperator(token)
+      );
+    })
+    .join(' ');
+  return shouldUseUniversalInput(words);
 }

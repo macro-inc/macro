@@ -44,6 +44,12 @@ describe('startSearchOperator', () => {
     expect(
       startSearchOperator('hello type:task OR type:doc world', 'type')
     ).toBe('hello world type:');
+    expect(startSearchOperator('“type:task” hello', 'type')).toBe(
+      'hello type:'
+    );
+    expect(startSearchOperator('"type:task" hello', 'type')).toBe(
+      'hello type:'
+    );
   });
 });
 

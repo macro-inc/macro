@@ -26,6 +26,10 @@ it('leaves typed search operators out of the phone Search length', () => {
     true
   );
   expect(shouldUseUniversalInputForSearch(operators, true)).toBe(true);
+  // An operator still being typed doesn't promote the search either.
+  expect(
+    shouldUseUniversalInputForSearch('quarterly financial planning type:')
+  ).toBe(false);
 });
 
 it('keeps a shorter edited draft in composer mode until cleared', () => {
