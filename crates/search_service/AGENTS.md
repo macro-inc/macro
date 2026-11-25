@@ -202,6 +202,29 @@ per-entity-type search plus a unified search across them — mounted into
   is an operator; these tests and Mail's search field
   (`apps/web/src/features/email-view/search/email-search-operators.ts`, which
   draws and completes operators) both check it, so change it with the parser.
+- Typed search operators that choose kinds and narrow them are read out of
+  the query before the email operators, for every caller of the unified
+  search (`api/search/search_operators.rs`): `type:doc|task|email|channel|
+  call|folder|agent|calendar` names the kinds (`doc` leaves tasks out through
+  `excluded_sub_types`); `status:` (task statuses, or `missed`, `attended`,
+  `unattended` for calls), `priority:`, `assignee:` and `author:` narrow to
+  tasks (`author:` beside `type:doc` to documents); `tag:` to the tagged
+  kinds; `inbox:<address>` to email; `in:#<channel>` to channels and calls;
+  `from:` is the email operator unless `type:` leaves email out and names
+  channels or calls, where it names senders and speakers. People are `me` or
+  an address. `OR` between two of the same operator joins their values;
+  repeated without it, each must hold, and kinds that cannot meet them all
+  are left out. Status, priority, assignees and authors need no lookup;
+  tag, inbox and channel names resolve for the caller inside their lane
+  turn (`domain/operator_names.rs`) through the queries tag, inbox and
+  channel name search already run, and a name reaching nothing matches
+  nothing. Tags must fit the search's one any-of or all-of list, so an `OR`
+  group beside another tag is a 400 (`TagConditionsDontCombine`); operators
+  leaving no word are a 400 (`OperatorsNeedAWord`) unless only email is
+  searched; at most `MAX_CHANNEL_NAMES` channel names. An unknown name or
+  invalid value stays a word. `search_operators/typed_operators.json` lists
+  typed queries and how many operators each holds, for these tests and the
+  web Search field; change it with the parser.
 - The typed conditions that are not thread states run in OpenSearch: text
   matches, labels and tags (`labels` terms or the nested tag filter, each name
   resolved for the caller in Postgres; a required name naming nothing matches

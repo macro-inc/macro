@@ -132,6 +132,27 @@ fn test_build_bool_query_join_shape_sub_type_filter() -> anyhow::Result<()> {
 }
 
 #[test]
+fn excluded_sub_types_leave_those_documents_out() -> anyhow::Result<()> {
+    let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
+        .match_type("partial")
+        .user_id("alice")
+        .excluded_sub_types(vec!["task".to_string()]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let must_not = json["bool"]["must_not"].as_array().expect("must_not array");
+    assert!(
+        must_not.contains(&serde_json::json!({"terms": {"sub_type": ["task"]}})),
+        "tasks should be left out on the parent: {must_not:?}"
+    );
+    let filter = json["bool"]["filter"].as_array().expect("filter array");
+    assert!(
+        !filter.iter().any(|f| f.get("terms").and_then(|t| t.get("sub_type")).is_some()),
+        "documents without a sub type must stay: {filter:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_build_bool_query_join_shape_has_inner_hits() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string(), "bar".to_string()])
         .match_type("partial")

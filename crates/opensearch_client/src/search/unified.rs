@@ -93,6 +93,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             ids_only: args.document_search_args.ids_only,
             document_ids: args.document_search_args.document_ids,
             sub_types: args.document_search_args.sub_types,
+            excluded_sub_types: args.document_search_args.excluded_sub_types,
             mode: args.document_search_args.mode,
             property_filters: args.document_search_args.property_filters,
             tag_option_ids: args.document_search_args.tag_option_ids,
@@ -247,6 +248,8 @@ pub struct UnifiedDocumentSearchArgs {
     pub document_ids: Vec<String>,
     pub ids_only: bool,
     pub sub_types: Vec<String>,
+    /// Sub types left out, such as tasks for a search of documents alone.
+    pub excluded_sub_types: Vec<String>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
     pub tag_option_ids: Vec<String>,
