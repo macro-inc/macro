@@ -8,12 +8,11 @@ import {
   createSignal,
   on,
   onCleanup,
-  type Signal,
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
 import {
-  registerRowVersion,
+  bumpRowVersion,
   unwrapStoreProxy,
 } from '../../../graphql-cache/exchange/live-query';
 import type { RecordSelection } from '../../../graphql-cache/exchange/record-selection';
@@ -96,17 +95,10 @@ export function createPredicateQuery<T extends object>(options: {
       }
       const id = crypto.randomUUID();
       const [rows, setRows] = createStore<Record<string, LiveQueryRow<T>>>({});
-      const rowVersions = new Map<string, Signal<number>>();
       const touchRowVersion = (recordKey: string) => {
         const row = rows[recordKey];
         if (!row) return;
-        let version = rowVersions.get(recordKey);
-        if (!version) {
-          version = createSignal(0);
-          rowVersions.set(recordKey, version);
-        }
-        registerRowVersion(unwrapStoreProxy(row.record), version[0]);
-        version[1]((count) => count + 1);
+        bumpRowVersion(unwrapStoreProxy(row.record));
       };
       let keys: readonly string[] = [];
       let orderedRows: readonly LiveQueryRow<T>[] = [];
@@ -209,11 +201,9 @@ export function createPredicateQuery<T extends object>(options: {
                     result.keys !== undefined ||
                     result.removed.length > 0;
                   if (result.reset) {
-                    rowVersions.clear();
                     setRows(reconcile({}));
                   }
                   for (const key of result.removed) {
-                    rowVersions.delete(key);
                     setRows(key, undefined!);
                   }
                   for (const row of result.upserts) {
@@ -340,7 +330,6 @@ export function createPredicateQuery<T extends object>(options: {
       refresh();
       onCleanup(() => {
         active = false;
-        rowVersions.clear();
         clearTimeout(retryTimer);
         deferral.dispose();
         unsubscribeChanges();

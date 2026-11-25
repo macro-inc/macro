@@ -20,7 +20,19 @@ import {
 
 const LIVE_DATA = Symbol('live-query-data');
 const QUERY_SNAPSHOT = Symbol('query-snapshot');
-const rowVersions = new WeakMap<object, Accessor<unknown>>();
+const LIVE_ROW_LAZY = Symbol('live-row-lazy');
+type RowVersionEntry = Accessor<unknown> | typeof LIVE_ROW_LAZY;
+const rowVersions = new WeakMap<object, RowVersionEntry>();
+const lazyRowSignals = new WeakMap<object, Signal<number>>();
+
+function ensureLazyRowSignal(rawRow: object): Signal<number> {
+  let signal = lazyRowSignals.get(rawRow);
+  if (!signal) {
+    signal = createSignal(0);
+    lazyRowSignals.set(rawRow, signal);
+  }
+  return signal;
+}
 
 /**
  * Unwraps a Solid store proxy in O(1) without recursively walking plain
@@ -44,15 +56,39 @@ export function registerRowVersion(
 }
 
 /**
+ * Marks an unwrapped store-backed record for lazy coarse version tracking
+ * without retaining its owning query or allocating a signal until read.
+ */
+export function markRowVersioned(rawRecord: object): void {
+  if (!rowVersions.has(rawRecord)) {
+    rowVersions.set(rawRecord, LIVE_ROW_LAZY);
+  }
+}
+
+/**
+ * Marks an unwrapped record versioned and notifies any active `readRowSnapshot`
+ * subscribers for that record without retaining its owning query.
+ */
+export function bumpRowVersion(rawRecord: object): void {
+  markRowVersioned(rawRecord);
+  const signal = lazyRowSignals.get(rawRecord);
+  if (signal) signal[1]((version) => version + 1);
+}
+
+/**
  * Subscribes to a registered record's coarse version signal and returns its
  * unwrapped object; unregistered values are returned unchanged so ad-hoc
  * stores keep fine-grained tracking.
  */
 export function readRowSnapshot<T extends object>(record: T): T {
   const raw = unwrapStoreProxy(record);
-  const readVersion = rowVersions.get(raw);
-  if (!readVersion) return record;
-  readVersion();
+  const entry = rowVersions.get(raw);
+  if (!entry) return record;
+  if (entry === LIVE_ROW_LAZY) {
+    ensureLazyRowSignal(raw)[0]();
+  } else {
+    entry();
+  }
   return raw;
 }
 
@@ -86,7 +122,6 @@ export class LiveQuery {
   private readonly state;
   private readonly setState;
   private readonly source = createSignal<Record<string, unknown>>({});
-  private readonly rowSignals = new WeakMap<object, Signal<number>>();
   private readonly knownRows = new WeakSet<object>();
   snapshot: Record<string, unknown>;
 
@@ -105,25 +140,15 @@ export class LiveQuery {
     return this.state.data;
   }
 
-  private ensureRowSignal(rawRow: object): Signal<number> {
-    let signal = this.rowSignals.get(rawRow);
-    if (!signal) {
-      signal = createSignal(0);
-      this.rowSignals.set(rawRow, signal);
-    }
-    return signal;
-  }
-
   private registerRow(rawRow: object): void {
     if (this.knownRows.has(rawRow)) return;
     this.knownRows.add(rawRow);
-    rowVersions.set(rawRow, () => this.ensureRowSignal(rawRow)[0]());
+    markRowVersioned(rawRow);
   }
 
   private bumpRow(rawRow: object): void {
     this.registerRow(rawRow);
-    const signal = this.rowSignals.get(rawRow);
-    if (signal) signal[1]((version) => version + 1);
+    bumpRowVersion(rawRow);
   }
 
   /** Register identified list items lazily and bump only changed rows. */

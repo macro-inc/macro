@@ -177,44 +177,35 @@ export function useCachedChannelsByIds(
           query.isFetching ||
           query.hasNextPage ||
           query.cacheStatus === 'loading');
-      // A refresh or compaction handoff must not empty sections that already
-      // resolved their members. Filter to current bucket membership so removed
-      // IDs drop immediately.
-      const channels = createMemo<ChannelEntity[]>((previous) => {
+      // A refresh must not empty sections that already resolved their members.
+      // Filter to current bucket membership so removed IDs drop immediately.
+      const resolved = createMemo<ChannelEntity[]>((previous) => {
         const activeIds = batchIdSet();
-        for (const id of handoff.keys()) {
-          if (!activeIds.has(id)) handoff.delete(id);
-        }
-        const mergeHandoff = (rows: ChannelEntity[]) => {
-          if (handoff.size === 0) return rows;
-          const present = new Set(rows.map((row) => row.id));
-          let merged: ChannelEntity[] | undefined;
-          for (const [id, row] of handoff) {
-            if (!present.has(id)) {
-              merged ??= [...rows];
-              merged.push(row);
-            }
-          }
-          return merged ?? rows;
-        };
         if (!queryReadyGate(query)) {
-          return mergeHandoff(
-            previous.filter((channel) => activeIds.has(channel.id))
-          );
+          return previous.filter((channel) => activeIds.has(channel.id));
         }
-        const resolved = query.data.entities.filter(
+        return query.data.entities.filter(
           (entity): entity is ChannelEntity =>
             isChannelEntity(entity) && activeIds.has(entity.id)
         );
-        for (const channel of resolved) handoff.delete(channel.id);
-        if (handoff.size > 0) {
-          if (loading() || error() || !query.hasPageData) {
-            return mergeHandoff(resolved);
-          }
-          handoff.clear();
-        }
-        return resolved;
       }, []);
+      // Bridge rows handed off during compaction only while the receiving
+      // query is still loading. Once loading ends (success or failure), the
+      // receiving query owns membership, errors, and retries.
+      const channels = createMemo<ChannelEntity[]>(() => {
+        const activeIds = batchIdSet();
+        const own = resolved();
+        const ownIds = new Set(own.map((channel) => channel.id));
+        for (const id of handoff.keys()) {
+          if (!activeIds.has(id) || ownIds.has(id)) handoff.delete(id);
+        }
+        if (handoff.size === 0) return own;
+        if (!loading()) {
+          handoff.clear();
+          return own;
+        }
+        return [...own, ...handoff.values()];
+      });
       const unresolved = createMemo(() => {
         const loaded = new Set(channels().map((channel) => channel.id));
         return batchIds().filter((id) => !loaded.has(id));
@@ -222,7 +213,7 @@ export function useCachedChannelsByIds(
       const absorb = (rows: readonly ChannelEntity[]) => {
         for (const row of rows) handoff.set(row.id, row);
       };
-      const snapshotRows = () => [...handoff.values(), ...untrack(channels)];
+      const snapshotRows = () => [...handoff.values(), ...untrack(resolved)];
       return {
         ids: batchIds,
         setIds: setBatchIds,

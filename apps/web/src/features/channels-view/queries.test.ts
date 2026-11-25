@@ -484,22 +484,33 @@ describe('channels resolved by id', () => {
     }
   });
 
-  it('keeps rows from a retired bucket visible during compaction while the receiving query is pending or fails', () => {
+  it('keeps rows visible while compaction is pending, then drops omitted moved rows and exposes error and retry on failure', async () => {
     const batchStates: Array<{
       pending: ReturnType<typeof createSignal<boolean>>;
+      hasPageData: ReturnType<typeof createSignal<boolean>>;
       error: ReturnType<typeof createSignal<Error | undefined>>;
       entities: ReturnType<typeof createSignal<ChannelEntity[]>>;
+      refresh: ReturnType<typeof vi.fn<() => Promise<void>>>;
       disposed: boolean;
     }> = [];
     useSoupAstItemsQuery.mockImplementation((args) => {
       const initialMatches =
         JSON.stringify(args().body).match(/ch-\d{4}/g) ?? [];
       const pending = createSignal(false);
+      const hasPageData = createSignal(true);
       const error = createSignal<Error | undefined>(undefined);
       const entities = createSignal(
         initialMatches.map((id) => channelEntity(id))
       );
-      const state = { pending, error, entities, disposed: false };
+      const refresh = vi.fn(async () => {});
+      const state = {
+        pending,
+        hasPageData,
+        error,
+        entities,
+        refresh,
+        disposed: false,
+      };
       batchStates.push(state);
       onCleanup(() => {
         state.disposed = true;
@@ -519,9 +530,10 @@ describe('channels resolved by id', () => {
           return error[0]();
         },
         get hasPageData() {
-          return !pending[0]();
+          return hasPageData[0]();
         },
         hasNextPage: false,
+        refresh,
         get data() {
           if (pending[0]())
             throw new Error('A pending query resource was read');
@@ -545,11 +557,15 @@ describe('channels resolved by id', () => {
       // Put all receiving batches into a pending state (simulating a cache miss
       // for moved IDs) and shrink to 1 surviving ID per bucket so compaction
       // merges 2 buckets into the remaining 2.
-      for (const state of batchStates) state.pending[1](true);
+      for (const state of batchStates) {
+        state.pending[1](true);
+        state.hasPageData[1](false);
+      }
       const surviving = ['ch-0000', 'ch-0500', 'ch-1000', 'ch-1500'];
       setIds(surviving);
 
       expect(batchStates.filter((s) => s.disposed)).toHaveLength(2);
+      // While the receiving queries are loading, moved rows stay visible.
       expect(
         result
           .channels()
@@ -557,28 +573,42 @@ describe('channels resolved by id', () => {
           .sort()
       ).toEqual(surviving);
 
-      // Even if the receiving queries transition from pending to failed,
-      // already-resolved rows stay visible.
+      // Now simulate a deleted moved channel: the receiving predicate omits the
+      // moved IDs (returning only its own pre-existing channel) and the network
+      // lookup fails. Handoff rows must NOT stay visible or suppress error/retry.
+      const offline = new Error('offline');
+      const liveBatches = batchStates.filter((s) => !s.disposed);
       batch(() => {
-        for (const state of batchStates) {
-          if (state.disposed) continue;
+        for (const state of liveBatches) {
           state.pending[1](false);
-          state.error[1](new Error('offline'));
+          state.hasPageData[1](false);
+          state.error[1](offline);
         }
       });
-      expect(
-        result
-          .channels()
-          .map((ch) => ch.id)
-          .sort()
-      ).toEqual(surviving);
+      const visibleAfterFailure = result
+        .channels()
+        .map((ch) => ch.id)
+        .sort();
+      const failedAfterFailure = [...result.failedIds()].sort();
+      expect(visibleAfterFailure).toHaveLength(2);
+      expect(failedAfterFailure).toHaveLength(2);
+      expect([...visibleAfterFailure, ...failedAfterFailure].sort()).toEqual(
+        surviving
+      );
+      expect(result.error()).toBe(offline);
 
-      // Once a receiving query settles authoritatively without error, it owns
-      // the merged IDs and drops any omitted ID.
+      await result.retry();
+      const refreshed = liveBatches.filter(
+        (state) => state.refresh.mock.calls.length === 1
+      );
+      expect(refreshed.length).toBeGreaterThanOrEqual(1);
+
+      // Once the receiving queries settle authoritatively without error,
+      // returned rows stay visible and omitted rows move to unavailableIds.
       batch(() => {
-        for (const state of batchStates) {
-          if (state.disposed) continue;
+        for (const state of liveBatches) {
           state.error[1](undefined);
+          state.hasPageData[1](true);
           state.entities[1](
             surviving.filter((id) => id !== 'ch-0000').map(channelEntity)
           );
@@ -590,6 +620,8 @@ describe('channels resolved by id', () => {
           .map((ch) => ch.id)
           .sort()
       ).toEqual(['ch-0500', 'ch-1000', 'ch-1500']);
+      expect([...result.failedIds()]).toEqual([]);
+      expect([...result.unavailableIds()]).toEqual(['ch-0000']);
     } finally {
       dispose();
       useSoupAstItemsQuery.mockReset();

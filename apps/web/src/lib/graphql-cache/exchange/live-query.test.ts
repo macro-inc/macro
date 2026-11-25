@@ -1,3 +1,5 @@
+import v8 from 'node:v8';
+import vm from 'node:vm';
 import { gql } from '@urql/core';
 import fc from 'fast-check';
 import { createComputed, createRoot } from 'solid-js';
@@ -410,5 +412,60 @@ describe('live query field propagation', () => {
       expect(projected()[4].read).toBe(false);
       dispose();
     });
+  });
+
+  it('does not retain the LiveQuery or sibling rows when a single row is held', async () => {
+    v8.setFlagsFromString('--expose_gc');
+    const runGc = vm.runInNewContext('gc') as () => void;
+
+    const retainOneRow = () => {
+      let view: LiveQuery | undefined = new LiveQuery({
+        user: {
+          soup: {
+            items: [
+              {
+                __typename: 'GraphqlSoupChannel',
+                id: 'ch-1',
+                name: 'General',
+                payload: 'a'.repeat(4096),
+              },
+              {
+                __typename: 'GraphqlSoupChannel',
+                id: 'ch-2',
+                name: 'Random',
+                payload: 'b'.repeat(4096),
+              },
+            ],
+          },
+        },
+      });
+      const items = (
+        view.data as {
+          user: { soup: { items: Array<{ id: string; name: string }> } };
+        }
+      ).user.soup.items;
+      const keptRow = unwrap(items[0]);
+      const siblingRow = unwrap(items[1]);
+      // Exercise readRowSnapshot inside a disposed computation too.
+      createRoot((dispose) => {
+        expect(readRowSnapshot(items[0]).name).toBe('General');
+        dispose();
+      });
+      const viewRef = new WeakRef(view);
+      const siblingRef = new WeakRef(siblingRow);
+      view = undefined;
+      return { keptRow, viewRef, siblingRef };
+    };
+
+    const { keptRow, viewRef, siblingRef } = retainOneRow();
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      runGc();
+      if (!viewRef.deref() && !siblingRef.deref()) break;
+    }
+
+    expect(keptRow.id).toBe('ch-1');
+    expect(viewRef.deref()).toBeUndefined();
+    expect(siblingRef.deref()).toBeUndefined();
   });
 });
