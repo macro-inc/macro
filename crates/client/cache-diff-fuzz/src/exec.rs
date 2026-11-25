@@ -309,7 +309,7 @@ impl<'a> Exec<'a> {
                 json!({ "error": error })
             }
         };
-        let value = self.normalizer.value(value);
+        let value = self.normalizer.answer(value);
         self.lines.push(Line { index, kind, value });
     }
 
