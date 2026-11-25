@@ -80,7 +80,7 @@
   cursor: pointer;
 }
 .partners-play-icon { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 50%; background: #fff; color: #1d1c1a; font-size: 12px; }
-html[data-palette='cream'] .partners-action-primary { background: #1d1c1a; color: #faf8f3; }
+html[data-palette='cream'] .partners-action-primary { background: #1d1c1a; color: #f8f6f3; }
 html[data-palette='cream'] .partners-action-primary:hover { background: #38352f; color: #fff; }
 html[data-palette='cream'] .partners-article .partners-video-frame { border-color: #1d1c1a20; box-shadow: 0 16px 56px -20px #40352530; }
 @media (max-width: 899px) {

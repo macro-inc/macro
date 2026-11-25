@@ -1,6 +1,6 @@
 /* Cream palette for the public website, /start, and the sample workspace: the
    site's light theme, applied when the visitor picks it (see sitePalette.ts).
-   Palette sampled from the cream ad set: page #f5f1e8, with brighter, less saturated
+   Palette sampled from the cream ad set: page #f3efe8, with brighter, less saturated
    raised surfaces; body #54524f, labels #6a6762 (4.5:1 on the page), near-black ink.
    Everything is scoped to html[data-palette=cream]; the dark site is unchanged.
    Components draw from tokens; prefer overriding a token here to restyling a
@@ -16,21 +16,21 @@ html[data-palette='cream'] .palette-dark-only { display: none !important; }
 html[data-palette='cream'] {
   --marketing-mention: oklch(.5 .14 250deg);
   /* Override every surface level: the frozen dark palette defines each one. */
-  --color-surface-0: #f5f1e8;
-  --color-surface-1: #faf8f3;
-  --color-surface-2: #fcfbf8;
-  --color-surface-3: #fdfcfb;
-  --color-surface-4: #fefefd;
+  --color-surface-0: #f3efe8;
+  --color-surface-1: #f8f6f3;
+  --color-surface-2: #faf9f8;
+  --color-surface-3: #fbfafa;
+  --color-surface-4: #fcfcfc;
   --color-content-0: oklch(0.2 0.004 70deg);
   --color-content-1: #54524f;
   --color-content-2: #6a6762;
   --color-content-3: #8f8c86;
   --color-content-4: #a29f98;
-  --color-chrome: #faf8f3;
-  --color-edge: #d9d4ca;
-  --color-edge-muted: #e6e1d7;
+  --color-chrome: #f8f6f3;
+  --color-edge: #d7d2ca;
+  --color-edge-muted: #e4dfd7;
   --color-accent: oklch(0.2 0.004 70deg);
-  background: #f5f1e8;
+  background: #f3efe8;
   color-scheme: light;
 }
 
@@ -39,11 +39,11 @@ html[data-palette='cream'] {
 html[data-palette='cream'],
 html[data-palette='cream'] :is(.homepage-sections, .feature-page) {
   --a0l: 0.2 !important; --a0c: 0.004 !important; --a0h: 70deg !important;
-  --b0l: 0.959 !important; --b0c: 0.011 !important; --b0h: 85deg !important;
-  --b1l: .981 !important; --b1c: .007 !important; --b1h: 85deg !important;
-  --b2l: .988 !important; --b2c: .004 !important; --b2h: 85deg !important;
-  --b3l: .992 !important; --b3c: .002 !important; --b3h: 85deg !important;
-  --b4l: .997 !important; --b4c: .001 !important; --b4h: 85deg !important;
+  --b0l: 0.953 !important; --b0c: 0.01 !important; --b0h: 82deg !important;
+  --b1l: .974 !important; --b1c: .005 !important; --b1h: 80deg !important;
+  --b2l: .983 !important; --b2c: .002 !important; --b2h: 75deg !important;
+  --b3l: .986 !important; --b3c: .001 !important; --b3h: 75deg !important;
+  --b4l: .991 !important; --b4c: 0 !important; --b4h: 75deg !important;
   --c0l: 0.15 !important;  --c0c: 0.004 !important; --c0h: 70deg !important;
   --c1l: 0.2 !important;   --c1c: 0.004 !important; --c1h: 70deg !important;
   --c2l: 0.36 !important;  --c2c: 0.005 !important; --c2h: 70deg !important;
@@ -51,26 +51,26 @@ html[data-palette='cream'] :is(.homepage-sections, .feature-page) {
   --c4l: 0.5 !important;  --c4c: 0.006 !important; --c4h: 75deg !important;
 }
 
-html[data-palette='cream'] body { background: #f5f1e8; color: var(--color-ink); }
+html[data-palette='cream'] body { background: #f3efe8; color: var(--color-ink); }
 
 /* OnboardingShell writes a black palette inline; override it for the hero. */
 html[data-palette='cream'] .onboarding-flow {
-  --color-surface: #f5f1e8 !important;
+  --color-surface: #f3efe8 !important;
   --color-ink: oklch(0.2 0.004 70deg) !important;
   --color-ink-muted: #54524f !important;
   --color-ink-extra-muted: #6a6762 !important;
-  --color-edge: #d9d4ca !important;
-  --color-edge-muted: #e6e1d7 !important;
+  --color-edge: #d7d2ca !important;
+  --color-edge-muted: #e4dfd7 !important;
 }
 
 /* ---- Glass panels and drawn graphics ---------------------------------
    demo-glass.css and benefit-page.css draw with these tokens. On cream the
    glass is a pale fill and every white hairline becomes an ink one. */
 html[data-palette='cream'] :is(.feature-page, .macro-homepage) {
-  --demo-glass-fill: rgb(252 251 248 / 78%);
-  --demo-glass-solid: #faf8f3;
-  --demo-glass-chip: rgb(252 251 248 / 70%);
-  --demo-glass-chip-solid: #fcfbf8;
+  --demo-glass-fill: rgb(250 249 248 / 78%);
+  --demo-glass-solid: #f8f6f3;
+  --demo-glass-chip: rgb(250 249 248 / 70%);
+  --demo-glass-chip-solid: #faf9f8;
   --demo-glass-rim: 29 28 26;
 }
 html[data-palette='cream'] .benefit-graphic {
@@ -78,8 +78,10 @@ html[data-palette='cream'] .benefit-graphic {
   --benefit-ink-muted: var(--color-ink-muted);
   --benefit-ink-subtle: var(--color-ink-subtle);
   --benefit-line: 29 28 26;
-  --benefit-surface: #fcfbf8;
+  --benefit-surface: #faf9f8;
   --benefit-mention: var(--marketing-mention);
+  /* A block-colored mention takes more ink to stay readable on its tint. */
+  --benefit-block-share: 40%;
 }
 
 /* ---- Dark app screens --------------------------------------------------
@@ -115,7 +117,7 @@ html[data-palette='cream'] .wall-of-love {
   --love-accent: #a8506b;
   --love-intro: #54524f;
   --love-quote: #33312e;
-  --love-card-fill: rgb(252 251 248 / 72%);
+  --love-card-fill: rgb(250 249 248 / 72%);
   --love-rim: 29 28 26;
 }
 /* The monograms keep white initials, so their tints turn opaque and deeper. */
@@ -123,24 +125,37 @@ html[data-palette='cream'] .love-avatar { --initial-top: #857a80; --initial-bott
 html[data-palette='cream'] .love-card:nth-child(3n + 2) .love-avatar { --initial-top: #76828d; --initial-bottom: #58636f; }
 html[data-palette='cream'] .love-card:nth-child(3n) .love-avatar { --initial-top: #7f8376; --initial-bottom: #5f6659; }
 
+/* ---- Page aura ---------------------------------------------------------
+   The per-page color wash and the homepage's section ovals are tuned for
+   black, where they read as a glow. On cream the same strength shifts the
+   page toward the module's hue, so keep only a trace of it. */
+html[data-palette='cream'] :is(main.feature-page, .page-aura, .marketing-content) {
+  --page-aura-strength: 0.15;
+}
+html[data-palette='cream'] .macro-homepage .page-aura { --page-aura-strength: 0.06; }
+html[data-palette='cream'] .macro-homepage {
+  --section-oval-tint: 4%;
+  --section-oval-dots: 10%;
+}
+
 /* ---- Page chrome ---------------------------------------------------- */
-html[data-palette='cream'] .homepage-sections { background: #f5f1e8; }
-html[data-palette='cream'] .site-page-vignette::before { background: linear-gradient(to bottom, #f5f1e8 0%, #f5f1e8dd 25%, #f5f1e866 58%, transparent 100%); }
-html[data-palette='cream'] .site-page-vignette::after { background: linear-gradient(to top, #f5f1e8 0%, #f5f1e8dd 22%, #f5f1e866 55%, transparent 100%); }
+html[data-palette='cream'] .homepage-sections { background: #f3efe8; }
+html[data-palette='cream'] .site-page-vignette::before { background: linear-gradient(to bottom, #f3efe8 0%, #f3efe8dd 25%, #f3efe866 58%, transparent 100%); }
+html[data-palette='cream'] .site-page-vignette::after { background: linear-gradient(to top, #f3efe8 0%, #f3efe8dd 22%, #f3efe866 55%, transparent 100%); }
 html[data-palette='cream'] .site-header {
   --nav-ink: #1d1c1a;
   --nav-muted: #6a6762;
-  --nav-surface: rgb(250 248 243 / 85%);
+  --nav-surface: rgb(248 246 243 / 85%);
   --nav-menu-surface: var(--color-surface-2);
-  --nav-mobile-surface: #f5f1e8;
+  --nav-mobile-surface: #f3efe8;
   --nav-menu-shadow: 0 20px 60px #1d1c1a26, inset 0 1px 0 #ffffff80;
   --nav-edge: rgb(29 28 26 / 10%);
 }
-html[data-palette='cream'] .site-nav-demo { color: #1d1c1a; background: linear-gradient(165deg, #f3f0e9 35%, #ebe7df 100%); }
+html[data-palette='cream'] .site-nav-demo { color: #1d1c1a; background: linear-gradient(165deg, #f1eee9 35%, #e9e5df 100%); }
 html[data-palette='cream'] :is(.site-nav-demo, .macro-home-demo)::after { background: linear-gradient(135deg, #ffffff60 0%, #ffffff1c 24%, #00000005 60%, #0000001c 100%); }
 html[data-palette='cream'] .site-menu-panel a:hover { background: #1d1c1a0a; }
 html[data-palette='cream'] .site-header :focus-visible { outline-color: #1d1c1a; }
-html[data-palette='cream'] .site-header[data-menu-open=true]::before { background: #f5f1e8; }
+html[data-palette='cream'] .site-header[data-menu-open=true]::before { background: #f3efe8; }
 /* The primary CTA stays raised; the secondary keeps a quieter cream finish. */
 html[data-palette='cream'] :is(.site-nav-start, .site-nav-demo) { box-shadow: inset 0 1px 0 #fff, inset 0 -2px 2px #0000000f, 0 0 0 1px #1d1c1a14, 0 10px 24px -14px #1d1c1a59; }
 html[data-palette='cream'] .site-nav-demo { box-shadow: inset 0 1px 0 #ffffff40, inset 0 -1px 1px #00000003, 0 0 0 1px #1d1c1a09, 0 3px 10px -6px #1d1c1a0a; }
@@ -151,7 +166,7 @@ html[data-palette='cream'] .homepage-email-surface::after { border-color: #1d1c1
 html[data-palette='cream'] .homepage-email-row { border-bottom-color: #1d1c1a12; }
 html[data-palette='cream'] .homepage-email-row input { color: #1d1c1a; }
 html[data-palette='cream'] .homepage-email-sender { background: #1d1c1a0d; color: #1d1c1a; }
-html[data-palette='cream'] .homepage-email-toolbar button.homepage-email-send { background: #1d1c1a; color: #f5f1e8; }
+html[data-palette='cream'] .homepage-email-toolbar button.homepage-email-send { background: #1d1c1a; color: #f3efe8; }
 html[data-palette='cream'] .homepage-email-toolbar button.homepage-email-send:disabled { background: #1d1c1a0d; color: #a29f98; }
 html[data-palette='cream'] .homepage-email-format button { background: #1d1c1a0a; }
 
@@ -161,11 +176,11 @@ html[data-palette='cream'] .homepage-email-format button { background: #1d1c1a0a
 html[data-palette='cream'] .mds { --a0: var(--marketing-mention); }
 html[data-palette='cream'] .homepage-collaborative-doc .mds-card { background: var(--color-surface-1); box-shadow: 0 10px 40px -12px #1d1c1a26; }
 html[data-palette='cream'] .homepage-collaborative-doc .mds-card::before { background: linear-gradient(135deg, #ffffff80, transparent 45%) border-box; border-color: #1d1c1a0d; }
-html[data-palette='cream'] .homepage-history-caption { background: #f5f1e8; }
+html[data-palette='cream'] .homepage-history-caption { background: #f3efe8; }
 
 /* ---- Spreadsheet ----------------------------------------------------- */
 html[data-palette='cream'] .homepage-spreadsheet { box-shadow: 0 10px 40px -12px #1d1c1a26; }
-html[data-palette='cream'] .homepage-sheet-editor { background: #faf8f3; color: #1d1c1a; }
+html[data-palette='cream'] .homepage-sheet-editor { background: #f8f6f3; color: #1d1c1a; }
 html[data-palette='cream'] :is(.homepage-sheet-toolbar, .homepage-sheet-formula, .homepage-sheet-formula input:first-child) { border-color: #1d1c1a14; }
 html[data-palette='cream'] .homepage-sheet-tool:hover:not(:disabled),
 html[data-palette='cream'] .homepage-sheet-tool[aria-pressed=true] { color: #1d1c1a; background: #1d1c1a0d; }
@@ -187,31 +202,31 @@ html[data-palette='cream'] .homepage-sheet-tab { border-bottom-color: #1d1c1a; b
 html[data-palette='cream'] .homepage-sheet-add-rows { background: #1d1c1a08; border-color: #1d1c1a14; }
 
 /* ---- Embedded workspace --------------------------------------------- */
-html[data-palette='cream'] .homepage-embedded-demo { --demo-page: #f5f1e8; }
-html[data-palette='cream'] .homepage-embedded-window { background: #faf8f3; }
+html[data-palette='cream'] .homepage-embedded-demo { --demo-page: #f3efe8; }
+html[data-palette='cream'] .homepage-embedded-window { background: #f8f6f3; }
 html[data-palette='cream'] .homepage-demo-slide-copy h2 { color: #1d1c1a; }
 
 /* ---- Sample workspace (/demo, embedded on the homepage) ----------------
    Match the HTML bootstrap before RouteDemo's client code runs. */
 html[data-palette='cream'] .dummy-route {
-  --color-surface-0: #f5f1e8;
-  --color-surface-1: #faf8f3;
-  --color-surface-2: #fcfbf8;
-  --color-surface-3: #fdfcfb;
-  --color-surface-4: #fefefd;
+  --color-surface-0: #f3efe8;
+  --color-surface-1: #f8f6f3;
+  --color-surface-2: #faf9f8;
+  --color-surface-3: #fbfafa;
+  --color-surface-4: #fcfcfc;
   --color-content-0: oklch(0.2 0.004 70deg);
   --color-content-1: #54524f;
   --color-content-2: #6a6762;
   --color-content-3: #8f8c86;
   --color-content-4: #a29f98;
-  --color-chrome: #faf8f3;
-  --color-edge: #d9d4ca;
-  --color-edge-muted: #e6e1d7;
+  --color-chrome: #f8f6f3;
+  --color-edge: #d7d2ca;
+  --color-edge-muted: #e4dfd7;
   --color-accent: oklch(0.2 0.004 70deg);
   --glass-tint: white;
   --glass-shade-color: var(--color-content-0);
   --glass-shadow-alpha: 0.18;
-  background: #f5f1e8;
+  background: #f3efe8;
   color-scheme: light;
 }
 
@@ -222,7 +237,7 @@ html[data-palette='cream'] .homepage-demo-slide-copy h2 { color: var(--color-ink
    stronger fill, while received messages stay close to the page surface. */
 html[data-palette='cream'] [data-user-message-bubble],
 html[data-palette='cream'] .homepage-message [data-user-message-bubble] {
-  background: #e9e3d9;
+  background: #e7e1d9;
   border: 0;
   outline: 1px solid #1d1c1a0a;
   outline-offset: -1px;
@@ -231,7 +246,7 @@ html[data-palette='cream'] .homepage-message [data-user-message-bubble] {
 }
 html[data-palette='cream'] [data-user-message-bubble].glass,
 html[data-palette='cream'] .homepage-message[data-side=peer] [data-user-message-bubble] {
-  background: #faf8f3;
+  background: #f8f6f3;
   outline-color: #1d1c1a08;
 }
 html[data-palette='cream'] [data-user-message-bubble]::before,
@@ -244,51 +259,51 @@ html[data-palette='cream'] [data-user-message-bubble]::after {
    selector outranks it. Pages also set OnboardingShell's palette inline on
    hero and heading wrappers, so those need !important. */
 html[data-palette='cream'] :is(.feature-page, .macro-homepage) {
-  --color-surface-0: #f5f1e8;
-  --color-surface-1: #faf8f3;
-  --color-surface-2: #fcfbf8;
-  --color-surface-3: #fdfcfb;
-  --color-surface-4: #fefefd;
+  --color-surface-0: #f3efe8;
+  --color-surface-1: #f8f6f3;
+  --color-surface-2: #faf9f8;
+  --color-surface-3: #fbfafa;
+  --color-surface-4: #fcfcfc;
   --color-content-0: oklch(0.2 0.004 70deg);
   --color-content-1: #54524f;
   --color-content-2: #6a6762;
   --color-content-3: #8f8c86;
   --color-content-4: #a29f98;
-  --color-chrome: #faf8f3;
-  --color-edge: #d9d4ca;
-  --color-edge-muted: #e6e1d7;
+  --color-chrome: #f8f6f3;
+  --color-edge: #d7d2ca;
+  --color-edge-muted: #e4dfd7;
   --color-accent: oklch(0.2 0.004 70deg);
-  background: #f5f1e8;
+  background: #f3efe8;
   color: #1d1c1a;
 }
 html[data-palette='cream'] .feature-page :is(h1, h2, h3) { color: #1d1c1a; }
 html[data-palette='cream'] .tour-page :is(.tour-hero, .tour-constellation, .tour-heading) {
-  --color-surface: #f5f1e8 !important;
+  --color-surface: #f3efe8 !important;
   --color-ink: oklch(0.2 0.004 70deg) !important;
   --color-ink-muted: #54524f !important;
   --color-ink-extra-muted: #6a6762 !important;
-  --color-edge: #d9d4ca !important;
-  --color-edge-muted: #e6e1d7 !important;
+  --color-edge: #d7d2ca !important;
+  --color-edge-muted: #e4dfd7 !important;
 }
-html[data-palette='cream'] .sales-calc-check svg { color: #f5f1e8; }
+html[data-palette='cream'] .sales-calc-check svg { color: #f3efe8; }
 html[data-palette='cream'] .replacement-app-toggle[aria-pressed=true] .replacement-app-check { color: var(--color-surface-0); }
-html[data-palette='cream'] .sales-calc-tools button[aria-pressed=true] .sales-calc-check { color: #f5f1e8; }
+html[data-palette='cream'] .sales-calc-tools button[aria-pressed=true] .sales-calc-check { color: #f3efe8; }
 
 /* The main site (App.tsx) runs applyTheme, which writes the b and c color inputs inline
    on <html>; only !important outranks inline declarations. */
 html[data-palette='cream'] {
-  --b0l: 0.959 !important; --b0c: 0.011 !important; --b0h: 85deg !important;
-  --b1l: .981 !important; --b1c: .007 !important; --b1h: 85deg !important;
-  --b2l: .988 !important; --b2c: .004 !important; --b2h: 85deg !important;
-  --b3l: .992 !important; --b3c: .002 !important; --b3h: 85deg !important;
-  --b4l: .997 !important; --b4c: .001 !important; --b4h: 85deg !important;
+  --b0l: 0.953 !important; --b0c: 0.01 !important; --b0h: 82deg !important;
+  --b1l: .974 !important; --b1c: .005 !important; --b1h: 80deg !important;
+  --b2l: .983 !important; --b2c: .002 !important; --b2h: 75deg !important;
+  --b3l: .986 !important; --b3c: .001 !important; --b3h: 75deg !important;
+  --b4l: .991 !important; --b4c: 0 !important; --b4h: 75deg !important;
   --c0l: 0.15 !important;  --c0c: 0.004 !important; --c0h: 70deg !important;
   --c1l: 0.2 !important;   --c1c: 0.004 !important; --c1h: 70deg !important;
   --c2l: 0.36 !important;  --c2c: 0.005 !important; --c2h: 70deg !important;
   --c3l: 0.45 !important;  --c3c: 0.005 !important; --c3h: 70deg !important;
   --c4l: 0.5 !important;  --c4c: 0.006 !important; --c4h: 75deg !important;
 }
-html[data-palette='cream'] :is(#root, #app-scroll-root) { background: #f5f1e8; }
+html[data-palette='cream'] :is(#root, #app-scroll-root) { background: #f3efe8; }
 html[data-palette='cream'] .site-menu-trigger { color: #1d1c1a; }
 
 /* Shared product walkthroughs and public-page copy use the same light surfaces
@@ -341,9 +356,9 @@ html[data-palette='cream'] :is(
   .email-tag-count
 ) { color: var(--color-ink-muted); }
 html[data-palette='cream'] :is(.chat-shortcut-dock, .email-shortcut-dock) kbd {
-  background: linear-gradient(#fefefd, #faf8f3);
+  background: linear-gradient(#fcfcfc, #f8f6f3);
   color: var(--color-ink);
-  box-shadow: inset 0 1px #fff, inset 0 0 0 1px #1d1c1a14, 0 3px 0 #d9d4ca;
+  box-shadow: inset 0 1px #fff, inset 0 0 0 1px #1d1c1a14, 0 3px 0 #d7d2ca;
 }
 html[data-palette='cream'] :is(.chat-shortcut-dock, .email-shortcut-dock) > button[data-active='true'] kbd {
   background: var(--color-ink);
@@ -361,7 +376,7 @@ html[data-palette='cream'] .email-desktop-demo .email-desktop-titlebar {
 html[data-palette='cream'] .email-desktop-titlebar a { color: var(--color-ink-muted); }
 html[data-palette='cream'] .email-desktop-titlebar a:hover { color: var(--color-ink); }
 html[data-palette='cream'] .email-desktop-demo[data-hero-frame=true] .email-desktop-wallpaper {
-  background: #ebe6dc;
+  background: #e9e4dc;
 }
 html[data-palette='cream'] .email-desktop-demo[data-hero-frame=true] .email-desktop-wallpaper::before {
   background: url('../../assets/desktop/monterey-dark.jpg') center / cover;
@@ -422,13 +437,16 @@ html[data-palette='cream'] .posts-shell {
   --post-ink: #1d1c1a;
   --post-muted: #54524f;
   --post-faint: #6a6762;
-  --post-rule: #d9d4ca;
+  --post-rule: #d7d2ca;
 }
 /* Legacy CTAs set both colors inline; override the pair together. */
 html[data-palette='cream'] .home-hero-cta {
-  background: #faf8f3 !important;
+  background: #f8f6f3 !important;
   color: #1d1c1a !important;
 }
+/* This pill sits on a video poster and stays dark, so its label takes a light
+   ink instead of the page's muted one. */
+html[data-palette='cream'] .pricing-customer-video button { color: var(--color-surface-1); }
 html[data-palette='cream'] :is(.pricing-savings-note, .partners-terms-link) {
   color: #54524f;
 }
@@ -440,7 +458,7 @@ html[data-palette='cream'] body .feature-page .email-desktop-demo[data-hero-fram
   background: var(--color-surface-1);
 }
 html[data-palette='cream'] body .feature-page .email-desktop-demo[data-hero-frame=true] .email-desktop-wallpaper {
-  background: #ebe6dc;
+  background: #e9e4dc;
 }
 html[data-palette='cream'] body .feature-page .email-desktop-demo[data-hero-frame=true] .email-desktop-wallpaper::before {
   background: url('../../assets/desktop/monterey-dark.jpg') center / cover;
@@ -585,7 +603,7 @@ html[data-palette='cream'] .homepage-sections .homepage-crm .mds-card::before {
 /* Toolbar label colors must not override the contrast of the send action. */
 html[data-palette='cream'] :is([data-send-button], .homepage-email-toolbar button.homepage-email-send):not(:disabled):not([data-disabled]) {
   background-color: var(--color-ink);
-  color: #f5f1e8;
+  color: #f3efe8;
 }
 
 /* A colorful, warm field for cream, with a soft perimeter and a bright
@@ -632,11 +650,11 @@ html[data-palette='cream'] :is(.feature-flow-icon, .feature-flow-core) {
   --glass-shade-base: 3%;
   --glass-rim-shade-base: 3%;
   --glass-rim-soft-base: 18%;
-  background: linear-gradient(145deg, #fffdf5a6, #f5f1e833);
+  background: linear-gradient(145deg, #fffdf5a6, #f3efe833);
   backdrop-filter: none;
 }
 html[data-palette='cream'] .feature-flow-core {
-  background: linear-gradient(145deg, #fffdf5c2, #f5f1e859);
+  background: linear-gradient(145deg, #fffdf5c2, #f3efe859);
 }
 html[data-palette='cream'] .feature-flow {
   overflow: visible;
@@ -653,9 +671,9 @@ html[data-palette='cream'] :is(.product-page, .feature-page) :is(
   .mail-app,
   .crm-pipeline-frame
 ) {
-  --color-panel: #faf8f3;
-  --theme-panel: #faf8f3;
-  background-color: #faf8f3;
+  --color-panel: #f8f6f3;
+  --theme-panel: #f8f6f3;
+  background-color: #f8f6f3;
   outline: 1px solid #1d1c1a1a;
   outline-offset: -1px;
   box-shadow: 0 10px 40px -12px #1d1c1a26;

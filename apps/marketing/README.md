@@ -6,7 +6,7 @@ package manifest, Vite entry points, TypeScript aliases, styles, assets, and UI
 components. Application UI changes must not alter the website.
 
 The website has two palettes: dark, the default, and a light cream palette
-(`cream`: page `#f5f1e8`, ink `#1d1c1a`). The theme toggle beside the sidebar
+(`cream`: page `#f3efe8`, ink `#1d1c1a`). The theme toggle beside the sidebar
 search (`ThemeToggle`, also in the phone menu) switches between them and keeps
 the choice in `localStorage` under `macro-site-palette`. `?theme=cream` or
 `?theme=dark` pins a palette for one URL. The site does not follow the
@@ -22,7 +22,10 @@ never off a component flag. Components draw from tokens, the shared
 `--color-*` set or a few local ones declared beside the component, and
 `cream-preview.css` overrides those tokens for the cream palette. Add a token
 and its cream value rather than a hardcoded hex or a per-component override,
-and keep text at 4.5:1 on both palettes.
+and keep text at 4.5:1 on both palettes. The page's color wash
+(`--page-aura-strength`) and the homepage's section ovals (`--section-oval-*`)
+are tuned for black; cream keeps only a trace of them so the page stays a
+neutral `#f3efe8` instead of drifting toward each module's hue.
 
 An app capture that has a light counterpart renders both images, classed
 `palette-dark-only` and `palette-light-only`; CSS shows the one for the
@@ -1231,7 +1234,10 @@ previews, already cropped to the app window, and the homepage's
 `src/assets/homepage/*-light.webp` windows. A tutorial listed in
 `LIGHT_PREVIEWS` (`core/tutorial-videos.ts`) shows its light preview; the
 others, whose module the sample workspace does not have, keep their dark
-frame. Do not invert screenshots or portraits. Keep the per-feature
+frame. A light preview shows the whole window, with wallpaper margins as
+wide as the stage's corner radius (`--tutorial-video-radius`) and the window
+running off the bottom; the play pill is light glass on the light palette.
+Do not invert screenshots or portraits. Keep the per-feature
 wallpaper and original playback in both themes. The documentation compiler routes
 known tutorial embeds through this player; external videos stay native.
 

@@ -48,7 +48,7 @@ main.feature-page:has(.pricing-page)::before { display: none; }
 .pricing-customer-name span { color: var(--color-content-3); }
 .pricing-customer-video { position: relative; overflow: hidden; border-radius: 14px; background: #111; }
 .pricing-customer-video video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
-.pricing-customer-video button { display: flex; align-items: center; gap: 10px; position: absolute; bottom: 20px; left: 20px; border: 1px solid color-mix(in srgb, var(--color-ink) 15.7%, transparent); border-radius: 999px; padding: 10px 16px; background: #111e; color: #eee; font-size: 13px; }
+.pricing-customer-video button { display: flex; align-items: center; gap: 10px; position: absolute; bottom: 20px; left: 20px; border: 1px solid #ffffff28; border-radius: 999px; padding: 10px 16px; background: #111e; color: #eee; font-size: 13px; }
 .pricing-customer-video button svg { width: 17px; height: 17px; }
 .pricing-open-source { width: min(100% - 48px, 640px); margin: 0 auto !important; padding-top: 20px; color: var(--color-content-4); text-align: center; font-size: 13px; line-height: 1.6; }
 .pricing-open-source a { color: var(--color-ink-muted); text-decoration: underline; text-underline-offset: 3px; }
