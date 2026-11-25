@@ -61,6 +61,7 @@ import {
   driveKindExtensionBadge,
   driveKindLabel,
 } from '../../components/redesign/kind-label';
+import { ShareProvenanceBadge } from '../../components/redesign/share-provenance-badge';
 import { useDriveView } from '../../context/drive-context';
 import { useDriveRedesign } from '../../context/drive-redesign-context';
 import {
@@ -68,6 +69,7 @@ import {
   groupByTimeBucket,
   partitionFoldersAndFiles,
 } from '../../core/drive-items';
+import type { DriveShareScope } from '../../core/drive-share-provenance';
 import {
   type DriveTrashItem,
   filterTrashItems,
@@ -453,7 +455,7 @@ function MobileDriveListRow(props: {
   onOpenSheet: (entity: EntityData) => void;
 }) {
   const { actions } = useDriveView();
-  const { host } = useDriveRedesign();
+  const { host, shareProvenance } = useDriveRedesign();
   const kind = () => driveItemKind(props.row.entity);
   const starred = () => host.isStarred(props.row.entity);
   const ts = () => mobileEntityTimestamp(props.row.entity);
@@ -463,6 +465,8 @@ function MobileDriveListRow(props: {
     const viewerId = actions.userId();
     return Boolean(ownerId && viewerId && ownerId !== viewerId);
   };
+  const provenance = () =>
+    isShared() ? shareProvenance?.get(props.row.entity) : undefined;
 
   return (
     <div
@@ -500,7 +504,11 @@ function MobileDriveListRow(props: {
               </span>
             </Show>
             <Show when={isShared()}>
-              <span>· {t('drive.sharedLabel')}</span>
+              <ShareProvenanceBadge
+                provenance={provenance()}
+                compact
+                fallbackShared
+              />
             </Show>
             <Show when={ts()}>
               {(date) => <span>· {formatRelativeTimestamp(date())}</span>}
@@ -938,6 +946,33 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                       <DriveMobileFilterStrip />
                     </Show>
 
+                    {/* Shared with me provenance touch switcher (All / Direct / Team & Channels) */}
+                    <Show when={display.isSharedTab()}>
+                      <div class="flex items-center">
+                        <Tabs<DriveShareScope>
+                          touch="pill"
+                          size="sm"
+                          aria-label={t('drive.sharedScopeLabel')}
+                          data-testid="drive-mobile-share-scope-tabs"
+                          value={display.shareScope()}
+                          onChange={(value) =>
+                            display.filters.setShareScope(value)
+                          }
+                          options={[
+                            { value: 'all', label: t('drive.sharedScopeAll') },
+                            {
+                              value: 'direct',
+                              label: t('drive.sharedScopeDirectShort'),
+                            },
+                            {
+                              value: 'team_or_channel',
+                              label: t('drive.sharedScopeTeamOrChannel'),
+                            },
+                          ]}
+                        />
+                      </div>
+                    </Show>
+
                     {/* My Drive Browse / All files segmented pill + New button (also inside folders) */}
                     <Show
                       when={
@@ -1218,8 +1253,7 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                             </div>
                           </Show>
 
-                          <Show
-                            when={display.isRecentTab()}
+                          <Switch
                             fallback={
                               <Key each={display.items()} by="id">
                                 {(row) => (
@@ -1234,33 +1268,76 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                               </Key>
                             }
                           >
-                            <For each={recentGroups()}>
-                              {(group) => (
-                                <section>
-                                  <div class="border-b border-edge-muted bg-panel/90 px-4 py-1.5 text-xs font-semibold text-ink-muted">
-                                    {group.bucket === 'today'
-                                      ? t('drive.bucketToday')
-                                      : group.bucket === 'yesterday'
-                                        ? t('drive.bucketYesterday')
-                                        : group.bucket === 'this_week'
-                                          ? t('drive.bucketThisWeek')
-                                          : t('drive.bucketEarlier')}
-                                  </div>
-                                  <Key each={group.items} by="id">
-                                    {(row) => (
-                                      <MobileDriveListRow
-                                        row={row()}
-                                        onActivate={(entity, event) =>
-                                          actions.openEntity(entity, event)
-                                        }
-                                        onOpenSheet={setSheetEntity}
-                                      />
-                                    )}
-                                  </Key>
-                                </section>
-                              )}
-                            </For>
-                          </Show>
+                            <Match when={display.isRecentTab()}>
+                              <For each={recentGroups()}>
+                                {(group) => (
+                                  <section>
+                                    <div class="border-b border-edge-muted bg-panel/90 px-4 py-1.5 text-xs font-semibold text-ink-muted">
+                                      {group.bucket === 'today'
+                                        ? t('drive.bucketToday')
+                                        : group.bucket === 'yesterday'
+                                          ? t('drive.bucketYesterday')
+                                          : group.bucket === 'this_week'
+                                            ? t('drive.bucketThisWeek')
+                                            : t('drive.bucketEarlier')}
+                                    </div>
+                                    <Key each={group.items} by="id">
+                                      {(row) => (
+                                        <MobileDriveListRow
+                                          row={row()}
+                                          onActivate={(entity, event) =>
+                                            actions.openEntity(entity, event)
+                                          }
+                                          onOpenSheet={setSheetEntity}
+                                        />
+                                      )}
+                                    </Key>
+                                  </section>
+                                )}
+                              </For>
+                            </Match>
+                            <Match
+                              when={
+                                display.isSharedTab() &&
+                                display.shareScope() === 'all' &&
+                                display.sharedGroups().hasResolvedProvenance
+                              }
+                            >
+                              <For each={display.sharedGroups().groups}>
+                                {(group) => (
+                                  <section
+                                    data-drive-mobile-shared-section={
+                                      group.bucket
+                                    }
+                                  >
+                                    <div class="flex items-center gap-2 border-b border-edge-muted bg-panel/90 px-4 py-1.5 text-xs">
+                                      <span class="font-semibold text-ink">
+                                        {group.bucket === 'direct'
+                                          ? t('drive.sharedSectionDirectTitle')
+                                          : t(
+                                              'drive.sharedSectionTeamOrChannelTitle'
+                                            )}
+                                      </span>
+                                      <span class="rounded-full bg-inset px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-ink-muted">
+                                        {group.items.length}
+                                      </span>
+                                    </div>
+                                    <Key each={group.items} by="id">
+                                      {(row) => (
+                                        <MobileDriveListRow
+                                          row={row()}
+                                          onActivate={(entity, event) =>
+                                            actions.openEntity(entity, event)
+                                          }
+                                          onOpenSheet={setSheetEntity}
+                                        />
+                                      )}
+                                    </Key>
+                                  </section>
+                                )}
+                              </For>
+                            </Match>
+                          </Switch>
 
                           <Show when={source.hasMore()}>
                             <div class="flex justify-center py-4">

@@ -753,7 +753,7 @@ fn literal_constants_match_their_sql() {
         ProjectLiteral::Importance(false),
     ] {
         let value = project_literal_constant(&literal).unwrap();
-        let sql = build_project_filter(Some(&Expr::val(literal.clone())));
+        let sql = build_project_filter(Some(&Expr::val(literal.clone())), None);
         assert!(renders(sql, value), "{literal:?}");
     }
     for literal in [
@@ -761,7 +761,7 @@ fn literal_constants_match_their_sql() {
         DocumentLiteral::CrmAssociated(CrmAssociation::Activity),
     ] {
         let value = document_literal_constant(&literal).unwrap();
-        let sql = build_document_filter(Some(&Expr::val(literal.clone())), None);
+        let sql = build_document_filter(Some(&Expr::val(literal.clone())), None, None);
         assert!(renders(sql, value), "{literal:?}");
     }
 }
@@ -1089,20 +1089,24 @@ fn selective_filters_read_the_item_tables() {
             properties.as_ref(),
             notified,
             USER,
+            9,
+            None,
+            None,
             &mut DocumentIdArrays::starting_at(10),
         );
         assert_eq!(arm.is_some(), projected, "{description}");
     }
-    assert!(FeedArm::chat(None, None, false).is_some());
+    assert!(FeedArm::chat(None, None, false, 9).is_some());
     assert!(
-        FeedArm::chat(Some(&Expr::val(ChatLiteral::Owner(user()))), None, false).is_none(),
+        FeedArm::chat(Some(&Expr::val(ChatLiteral::Owner(user()))), None, false, 9).is_none(),
         "chats have no owner driver"
     );
     assert!(
         FeedArm::chat(
             Some(&Expr::is_not(Expr::val(ChatLiteral::Importance(true)))),
             None,
-            false
+            false,
+            9
         )
         .is_none(),
         "every chat is important"
@@ -1111,7 +1115,8 @@ fn selective_filters_read_the_item_tables() {
         FeedArm::chat(
             Some(&Expr::is_not(Expr::val(ChatLiteral::Role(ChatRole::User)))),
             None,
-            false
+            false,
+            9
         )
         .is_none(),
         "role filters match every chat"
@@ -1122,6 +1127,9 @@ fn selective_filters_read_the_item_tables() {
             None,
             false,
             USER,
+            9,
+            None,
+            None,
             &mut DocumentIdArrays::starting_at(10),
         )
         .is_none(),
@@ -1136,7 +1144,10 @@ fn selective_filters_read_the_item_tables() {
                 Expr::is_not(Expr::val(ProjectLiteral::Importance(true))),
             )),
             None,
-            false
+            false,
+            9,
+            None,
+            None
         )
         .is_none(),
         "every project is important"
@@ -1150,7 +1161,10 @@ fn selective_filters_read_the_item_tables() {
                 ))),
             )),
             None,
-            false
+            false,
+            9,
+            None,
+            None
         )
         .is_some(),
         "a disjunct can still match"
@@ -1199,5 +1213,195 @@ async fn a_revoke_after_maintenance_stops_hides_the_item(pool: PgPool) -> anyhow
         after,
         listed(legacy.expanded_generic_cursor_soup(request()).await?)
     );
+    Ok(())
+}
+
+/// `ShareSource::Direct` and `ShareSource::TeamOrChannel` partition shared documents and projects
+/// identically across both `ItemTables` and `SourceItems`, excluding dual-shared items from
+/// `TeamOrChannel` and ignoring left DM channels.
+#[sqlx::test(
+    fixtures(path = "../../../../../../fixtures", scripts("source_items_triggers")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn share_source_partitions_direct_and_team_or_channel_with_source_items_parity(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use item_filters::ast::share_source::ShareSource;
+    use std::collections::BTreeSet;
+
+    sqlx::raw_sql(
+        r#"
+        INSERT INTO public."Organization" ("id", "name", "status")
+        VALUES (1, 'Share Org', 'PILOT');
+
+        INSERT INTO public.macro_user ("id", "username", "email", "stripe_customer_id")
+        VALUES ('a1111111-1111-1111-1111-111111111111', 'user-1@example.com', 'user-1@example.com', 'stripe_1'),
+               ('a2222222-2222-2222-2222-222222222222', 'user-2@example.com', 'user-2@example.com', 'stripe_2'),
+               ('a3333333-3333-3333-3333-333333333333', 'user-3@example.com', 'user-3@example.com', 'stripe_3');
+
+        INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
+        VALUES ('macro|user-1@example.com', 'user-1@example.com', 'stripe_1', 1, 'a1111111-1111-1111-1111-111111111111'),
+               ('macro|user-2@example.com', 'user-2@example.com', 'stripe_2', 1, 'a2222222-2222-2222-2222-222222222222'),
+               ('macro|user-3@example.com', 'user-3@example.com', 'stripe_3', 1, 'a3333333-3333-3333-3333-333333333333');
+
+        INSERT INTO public.team ("id", "name", "owner_id")
+        VALUES ('eeeeeeee-0000-4000-8000-000000000001', 'Engineering', 'macro|user-2@example.com'),
+               ('eeeeeeee-0000-4000-8000-000000000002', 'Outsiders', 'macro|user-3@example.com');
+
+        INSERT INTO public.team_user ("user_id", "team_id", "team_role")
+        VALUES ('macro|user-1@example.com', 'eeeeeeee-0000-4000-8000-000000000001', 'member'),
+               ('macro|user-2@example.com', 'eeeeeeee-0000-4000-8000-000000000001', 'owner'),
+               ('macro|user-3@example.com', 'eeeeeeee-0000-4000-8000-000000000002', 'owner');
+
+        INSERT INTO public.comms_channels ("id", "channel_type", "name", "owner_id")
+        VALUES ('cccccccc-0000-4000-8000-000000000001', 'private', 'design', 'macro|user-2@example.com'),
+               ('cccccccc-0000-4000-8000-000000000002', 'direct_message', NULL, 'macro|user-2@example.com'),
+               ('cccccccc-0000-4000-8000-000000000003', 'direct_message', NULL, 'macro|user-2@example.com');
+
+        INSERT INTO public.comms_channel_participants ("channel_id", "role", "user_id", "left_at")
+        VALUES ('cccccccc-0000-4000-8000-000000000001', 'member', 'macro|user-1@example.com', NULL),
+               ('cccccccc-0000-4000-8000-000000000002', 'member', 'macro|user-1@example.com', NULL),
+               ('cccccccc-0000-4000-8000-000000000003', 'member', 'macro|user-1@example.com', '2024-01-10 00:00:00+00');
+
+        INSERT INTO public."Document" ("id", "name", "owner", "fileType", "createdAt", "updatedAt")
+        VALUES ('11111111-0000-4000-8000-000000000001', 'Direct Doc', 'macro|user-2@example.com', 'md', '2024-02-01 01:00:00', '2024-02-01 01:00:00'),
+               ('11111111-0000-4000-8000-000000000002', 'DM Doc', 'macro|user-2@example.com', 'md', '2024-02-01 02:00:00', '2024-02-01 02:00:00'),
+               ('11111111-0000-4000-8000-000000000003', 'Channel Doc', 'macro|user-2@example.com', 'md', '2024-02-01 03:00:00', '2024-02-01 03:00:00'),
+               ('11111111-0000-4000-8000-000000000004', 'Team Doc', 'macro|user-2@example.com', 'md', '2024-02-01 04:00:00', '2024-02-01 04:00:00'),
+               ('11111111-0000-4000-8000-000000000005', 'Both User And Team Doc', 'macro|user-2@example.com', 'md', '2024-02-01 05:00:00', '2024-02-01 05:00:00'),
+               ('11111111-0000-4000-8000-000000000006', 'Both DM And Channel Doc', 'macro|user-2@example.com', 'md', '2024-02-01 06:00:00', '2024-02-01 06:00:00'),
+               ('11111111-0000-4000-8000-000000000007', 'Left DM Plus Team Doc', 'macro|user-2@example.com', 'md', '2024-02-01 07:00:00', '2024-02-01 07:00:00'),
+               ('11111111-0000-4000-8000-000000000008', 'Outsider Doc', 'macro|user-3@example.com', 'md', '2024-02-01 08:00:00', '2024-02-01 08:00:00');
+
+        INSERT INTO public."DocumentInstance" ("documentId", "sha", "createdAt", "updatedAt")
+        SELECT id, 'sha-' || id, "createdAt", "updatedAt" FROM public."Document";
+
+        INSERT INTO public."Project" ("id", "name", "userId", "createdAt", "updatedAt")
+        VALUES ('aaaaaaaa-0000-4000-8000-000000000001', 'Direct Folder', 'macro|user-2@example.com', '2024-02-02 01:00:00', '2024-02-02 01:00:00'),
+               ('aaaaaaaa-0000-4000-8000-000000000002', 'DM Folder', 'macro|user-2@example.com', '2024-02-02 02:00:00', '2024-02-02 02:00:00'),
+               ('aaaaaaaa-0000-4000-8000-000000000003', 'Channel Folder', 'macro|user-2@example.com', '2024-02-02 03:00:00', '2024-02-02 03:00:00'),
+               ('aaaaaaaa-0000-4000-8000-000000000004', 'Team Folder', 'macro|user-2@example.com', '2024-02-02 04:00:00', '2024-02-02 04:00:00'),
+               ('aaaaaaaa-0000-4000-8000-000000000005', 'Dual Folder', 'macro|user-2@example.com', '2024-02-02 05:00:00', '2024-02-02 05:00:00');
+
+        INSERT INTO public.entity_access ("entity_id", "entity_type", "source_id", "source_type", "access_level")
+        VALUES ('11111111-0000-4000-8000-000000000001', 'document', 'macro|user-1@example.com', 'user', 'view'),
+               ('11111111-0000-4000-8000-000000000002', 'document', 'cccccccc-0000-4000-8000-000000000002', 'channel', 'view'),
+               ('11111111-0000-4000-8000-000000000003', 'document', 'cccccccc-0000-4000-8000-000000000001', 'channel', 'view'),
+               ('11111111-0000-4000-8000-000000000004', 'document', 'eeeeeeee-0000-4000-8000-000000000001', 'team', 'view'),
+               ('11111111-0000-4000-8000-000000000005', 'document', 'macro|user-1@example.com', 'user', 'view'),
+               ('11111111-0000-4000-8000-000000000005', 'document', 'eeeeeeee-0000-4000-8000-000000000001', 'team', 'view'),
+               ('11111111-0000-4000-8000-000000000006', 'document', 'cccccccc-0000-4000-8000-000000000002', 'channel', 'view'),
+               ('11111111-0000-4000-8000-000000000006', 'document', 'cccccccc-0000-4000-8000-000000000001', 'channel', 'view'),
+               ('11111111-0000-4000-8000-000000000007', 'document', 'cccccccc-0000-4000-8000-000000000003', 'channel', 'view'),
+               ('11111111-0000-4000-8000-000000000007', 'document', 'eeeeeeee-0000-4000-8000-000000000001', 'team', 'view'),
+               ('11111111-0000-4000-8000-000000000008', 'document', 'eeeeeeee-0000-4000-8000-000000000002', 'team', 'view'),
+               ('aaaaaaaa-0000-4000-8000-000000000001', 'project', 'macro|user-1@example.com', 'user', 'view'),
+               ('aaaaaaaa-0000-4000-8000-000000000002', 'project', 'cccccccc-0000-4000-8000-000000000002', 'channel', 'view'),
+               ('aaaaaaaa-0000-4000-8000-000000000003', 'project', 'cccccccc-0000-4000-8000-000000000001', 'channel', 'view'),
+               ('aaaaaaaa-0000-4000-8000-000000000004', 'project', 'eeeeeeee-0000-4000-8000-000000000001', 'team', 'view'),
+               ('aaaaaaaa-0000-4000-8000-000000000005', 'project', 'macro|user-1@example.com', 'user', 'view'),
+               ('aaaaaaaa-0000-4000-8000-000000000005', 'project', 'eeeeeeee-0000-4000-8000-000000000001', 'team', 'view');
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    let legacy = PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone()));
+    let projected =
+        PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone())).with_source_items_enabled(true);
+
+    async fn run(
+        repo: &PgSoupRepo,
+        sort: SimpleSortMethod,
+        filter: EntityFilterAst,
+    ) -> anyhow::Result<Vec<Uuid>> {
+        let request = SimpleSortRequest {
+            user_id: MacroUserIdStr::parse_from_str(USER).unwrap(),
+            limit: 100,
+            cursor: SimpleSortQuery::ItemsFilter(Query::Sort(sort, filter)),
+        };
+        let items = repo.expanded_generic_cursor_soup(request).await?;
+        Ok(items.into_iter().map(|i| i.id()).collect())
+    }
+
+    let only_docs = |expr: Expr<DocumentLiteral>| EntityFilterAst {
+        document_filter: tree(expr),
+        project_filter: tree(Expr::val(ProjectLiteral::ProjectId(Uuid::nil()))),
+        chat_filter: tree(Expr::val(ChatLiteral::ChatId(Uuid::nil()))),
+        ..Default::default()
+    };
+
+    let only_projects = |expr: Expr<ProjectLiteral>| EntityFilterAst {
+        document_filter: tree(Expr::val(DocumentLiteral::Id(Uuid::nil()))),
+        project_filter: tree(expr),
+        chat_filter: tree(Expr::val(ChatLiteral::ChatId(Uuid::nil()))),
+        ..Default::default()
+    };
+
+    let expected_direct_docs: BTreeSet<Uuid> = [document(1), document(2), document(5), document(6)]
+        .into_iter()
+        .collect();
+    let expected_team_channel_docs: BTreeSet<Uuid> = [document(3), document(4), document(7)]
+        .into_iter()
+        .collect();
+
+    for sort in [SimpleSortMethod::UpdatedAt, SimpleSortMethod::ViewedUpdated] {
+        let direct_filter = only_docs(Expr::val(DocumentLiteral::ShareSource(ShareSource::Direct)));
+        let legacy_direct = run(&legacy, sort, direct_filter.clone()).await?;
+        let projected_direct = run(&projected, sort, direct_filter).await?;
+        assert_eq!(
+            legacy_direct, projected_direct,
+            "Direct parity for {sort:?}"
+        );
+        assert_eq!(
+            legacy_direct.into_iter().collect::<BTreeSet<_>>(),
+            expected_direct_docs,
+            "Direct docs for {sort:?}"
+        );
+
+        let tc_filter = only_docs(Expr::val(DocumentLiteral::ShareSource(
+            ShareSource::TeamOrChannel,
+        )));
+        let legacy_tc = run(&legacy, sort, tc_filter.clone()).await?;
+        let projected_tc = run(&projected, sort, tc_filter).await?;
+        assert_eq!(legacy_tc, projected_tc, "TeamOrChannel parity for {sort:?}");
+        assert_eq!(
+            legacy_tc.into_iter().collect::<BTreeSet<_>>(),
+            expected_team_channel_docs,
+            "TeamOrChannel docs for {sort:?}"
+        );
+
+        let contradiction = only_docs(Expr::and(
+            Expr::val(DocumentLiteral::ShareSource(ShareSource::Direct)),
+            Expr::val(DocumentLiteral::ShareSource(ShareSource::TeamOrChannel)),
+        ));
+        assert!(run(&legacy, sort, contradiction.clone()).await?.is_empty());
+        assert!(run(&projected, sort, contradiction).await?.is_empty());
+    }
+
+    let expected_direct_projects: BTreeSet<Uuid> =
+        [project(1), project(2), project(5)].into_iter().collect();
+    let expected_tc_projects: BTreeSet<Uuid> = [project(3), project(4)].into_iter().collect();
+
+    let proj_direct = only_projects(Expr::val(ProjectLiteral::ShareSource(ShareSource::Direct)));
+    let legacy_pd = run(&legacy, SimpleSortMethod::UpdatedAt, proj_direct.clone()).await?;
+    let proj_pd = run(&projected, SimpleSortMethod::UpdatedAt, proj_direct).await?;
+    assert_eq!(legacy_pd, proj_pd);
+    assert_eq!(
+        legacy_pd.into_iter().collect::<BTreeSet<_>>(),
+        expected_direct_projects
+    );
+
+    let proj_tc = only_projects(Expr::val(ProjectLiteral::ShareSource(
+        ShareSource::TeamOrChannel,
+    )));
+    let legacy_ptc = run(&legacy, SimpleSortMethod::UpdatedAt, proj_tc.clone()).await?;
+    let proj_ptc = run(&projected, SimpleSortMethod::UpdatedAt, proj_tc).await?;
+    assert_eq!(legacy_ptc, proj_ptc);
+    assert_eq!(
+        legacy_ptc.into_iter().collect::<BTreeSet<_>>(),
+        expected_tc_projects
+    );
+
     Ok(())
 }

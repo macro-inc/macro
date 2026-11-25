@@ -238,7 +238,8 @@ fn only_id_bounded_arms_check_access_after_their_filters() {
     assert!(broad.contains(&bound_access_semi_join(
         "d.id",
         "document",
-        source_ids_slot(SORT, false)
+        source_ids_slot(SORT, false),
+        None,
     )));
 
     // An id OR'ed with anything else does not bound the arm.

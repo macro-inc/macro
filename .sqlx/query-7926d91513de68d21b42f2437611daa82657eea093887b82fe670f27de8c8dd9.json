@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT cp.channel_id::text AS \"source_id\",\n               COALESCE(c.channel_type = 'direct_message', FALSE) AS \"is_direct\"\n        FROM comms_channel_participants cp\n        LEFT JOIN comms_channels c ON c.id = cp.channel_id\n        WHERE cp.user_id = $1 AND cp.left_at IS NULL\n        UNION ALL\n        SELECT t.team_id::text AS \"source_id\",\n               FALSE AS \"is_direct\"\n        FROM team_user t\n        WHERE t.user_id = $1\n        UNION ALL\n        SELECT $1 AS \"source_id\",\n               TRUE AS \"is_direct\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_direct",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "7926d91513de68d21b42f2437611daa82657eea093887b82fe670f27de8c8dd9"
+}

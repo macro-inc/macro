@@ -84,7 +84,7 @@ test('desktop keyboard navigation, Quick Look Inspector, extension-preserving in
   await page.goto(FIXTURE_URL);
 
   const grid = page.getByRole('grid', { name: 'Drive files' });
-  await expect(grid).toBeVisible();
+  await expect(grid).toBeVisible({ timeout: 15_000 });
   await grid.focus();
 
   // Press Space on focused folder to open Quick Look Inspector.
@@ -158,12 +158,12 @@ test('desktop large folder, empty folder, folder-scoped search with Search all o
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${FIXTURE_URL}?theme=dark`);
 
-  // Verify dark mode attribute applied cleanly.
-  expect(
-    await page.evaluate(() =>
-      document.documentElement.getAttribute('data-theme-light')
-    )
-  ).toBe('false');
+  // Verify dark mode attribute applied cleanly once fixture module boots.
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-theme-light',
+    'false',
+    { timeout: 15_000 }
+  );
 
   // Open large folder (40 items) and verify breadcrumb + search inside folder.
   await page
@@ -205,7 +205,7 @@ test('desktop filter bar surfaces Ask AI, sort header affordances, Modified, and
   // Sort headers expose clear clickable aria-sort semantics.
   const nameSortBtn = page.locator('[data-drive-sort-header="name"]');
   const modifiedSortBtn = page.locator('[data-drive-sort-header="updated_at"]');
-  await expect(nameSortBtn).toBeVisible();
+  await expect(nameSortBtn).toBeVisible({ timeout: 15_000 });
   await expect(modifiedSortBtn).toBeVisible();
   await nameSortBtn.click();
   await expect(
@@ -241,6 +241,72 @@ test('desktop filter bar surfaces Ask AI, sort header affordances, Modified, and
   await expect(
     page.getByRole('row', { name: /Q3 Operating Plan\.md/ })
   ).toBeVisible();
+});
+
+test('desktop Shared with me groups Direct vs Team & Channels with provenance badges and filters', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(FIXTURE_URL);
+
+  await page
+    .getByRole('navigation', { name: 'Drive views' })
+    .getByRole('button', { name: 'Shared with me' })
+    .click();
+
+  // Default "All" scope partitions into Shared directly and Team & Channels sections with badges.
+  const directSection = page.locator('[data-drive-shared-section="direct"]');
+  const teamSection = page.locator(
+    '[data-drive-shared-section="team_or_channel"]'
+  );
+  await expect(directSection).toBeVisible();
+  await expect(teamSection).toBeVisible();
+  await expect(directSection.getByText('Board Review Memo.md')).toBeVisible();
+  await expect(directSection.getByText('1:1 Feedback Notes.md')).toBeVisible();
+  await expect(
+    directSection.locator('[data-share-provenance="direct"]')
+  ).toBeVisible();
+  await expect(
+    directSection.locator('[data-share-provenance="dm"]')
+  ).toBeVisible();
+
+  await expect(teamSection.getByText('API Migration Plan.md')).toBeVisible();
+  await expect(teamSection.getByText('Partner SLA Terms.pdf')).toBeVisible();
+  await expect(
+    teamSection.locator('[data-share-provenance="channel"]', {
+      hasText: 'engineering',
+    })
+  ).toBeVisible();
+  await expect(
+    teamSection.locator('[data-share-provenance="team"]', {
+      hasText: 'Acme Core',
+    })
+  ).toBeVisible();
+
+  // Switch to "Shared directly" tab -> only direct & DM items remain.
+  const scopeTabs = page.getByRole('radiogroup', { name: 'Share source' });
+  await scopeTabs.getByText('Shared directly', { exact: true }).click();
+  await expect(
+    page.getByRole('row', { name: /Board Review Memo\.md/ })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('row', { name: /1:1 Feedback Notes\.md/ })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('row', { name: /API Migration Plan\.md/ })
+  ).toHaveCount(0);
+
+  // Switch to "Team & Channels" tab -> only channel & team items (including shared folder) remain.
+  await scopeTabs.getByText('Team & Channels', { exact: true }).click();
+  await expect(
+    page.getByRole('row', { name: /API Migration Plan\.md/ })
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-drive-row-id="folder-partner"]')
+  ).toBeVisible();
+  await expect(
+    page.getByRole('row', { name: /Board Review Memo\.md/ })
+  ).toHaveCount(0);
 });
 
 test.describe('mobile phone width (390x844 touch)', () => {
@@ -294,5 +360,42 @@ test.describe('mobile phone width (390x844 touch)', () => {
     await expect(
       page.getByRole('button', { name: 'Open file filters' })
     ).toBeVisible();
+  });
+
+  test('Shared with me touch switcher filters Direct vs Team & Channels without overflow', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${FIXTURE_URL}?mobile=1`);
+
+    // Open mobile sidebar drawer and navigate to Shared with me.
+    await page.getByRole('button', { name: 'Show sidebar' }).click();
+    await page.getByRole('button', { name: 'Shared with me' }).click();
+
+    await expect(
+      page.getByRole('heading', { name: 'Shared with me' })
+    ).toBeVisible();
+    await expect(
+      page.locator('[data-drive-mobile-shared-section="direct"]')
+    ).toBeVisible();
+    await expect(
+      page.locator('[data-drive-mobile-shared-section="team_or_channel"]')
+    ).toBeVisible();
+
+    const overflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth + 1
+    );
+    expect(overflows).toBe(false);
+
+    const mobileScopeTabs = page.getByRole('radiogroup', {
+      name: 'Share source',
+    });
+    await mobileScopeTabs.getByText('Direct', { exact: true }).click();
+    await expect(page.getByText('Board Review Memo.md')).toBeVisible();
+    await expect(page.getByText('API Migration Plan.md')).toHaveCount(0);
+
+    await mobileScopeTabs.getByText('Team & Channels', { exact: true }).click();
+    await expect(page.getByText('API Migration Plan.md')).toBeVisible();
+    await expect(page.getByText('Board Review Memo.md')).toHaveCount(0);
   });
 });

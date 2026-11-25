@@ -269,3 +269,4 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `.agents/rules/rust/db.md`, `.agents/rules/rust/architecture.md`
 
 - CRM list, association, and attention visibility includes effective per-member CRM access; team membership alone is insufficient. Current primary-backed gates also protect cached-source reads.
+- `DocumentLiteral::ShareSource` and `ProjectLiteral::ShareSource` narrow `fetch_user_sources` to direct (`user` + active DM channel) vs team/non-DM channel grants, keeping `TeamOrChannel` exclusion fenced with `LIMIT 1` + `array_position` (inside `kept` on item-table paths and per-candidate on `source_items`) so stale statistics cannot unnest an anti-join across the item table.

@@ -113,7 +113,7 @@ pub(super) fn document_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> S
                 {PER_CANDIDATE}
             )"#,
         access = access_semi_join("d.id", "document"),
-        doc_fold = build_document_filter(doc_filter, None),
+        doc_fold = build_document_filter(doc_filter, None, None),
         props_fold = build_properties_filter(props_filter, "d.id"),
     )
 }
@@ -151,7 +151,7 @@ pub(super) fn project_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> St
                 {PER_CANDIDATE}
             )"#,
         access = access_semi_join("p.id", "project"),
-        project_fold = build_project_filter(project_filter),
+        project_fold = build_project_filter(project_filter, None),
         props_fold = build_properties_filter(props_filter, "p.id"),
     )
 }

@@ -39,6 +39,7 @@ use item_filters::{
         initiative::InitiativeLiteral,
         project::ProjectLiteral,
         properties::{EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
+        share_source::ShareSource,
     },
 };
 use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
@@ -740,6 +741,29 @@ enum GraphqlDocumentLiteral {
     CrmAssociated(GraphqlCrmAssociation),
     /// Case-insensitive substring of the document name.
     NameContains(String),
+    /// Viewer-relative share provenance (direct user/mention/DM vs team/channel).
+    ShareSource(GraphqlShareSource),
+}
+
+/// GraphQL input representing viewer-relative share provenance filtering.
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum GraphqlShareSource {
+    /// Shared directly with the viewer (direct person share, `@mention`, or DM).
+    Direct,
+    /// Shared through a team or non-DM channel, and not also shared directly.
+    TeamOrChannel,
+}
+
+impl GraphqlShareSource {
+    /// Convert this GraphQL share source into the domain filter value.
+    fn into_model(self) -> ShareSource {
+        match self {
+            Self::Direct => ShareSource::Direct,
+            Self::TeamOrChannel => ShareSource::TeamOrChannel,
+        }
+    }
 }
 
 /// GraphQL input naming the CRM record an association filter restricts to.
@@ -799,6 +823,7 @@ impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
             }
             Self::CrmAssociated(record) => DocumentLiteral::CrmAssociated(record.into_ast()?),
             Self::NameContains(name) => DocumentLiteral::NameContains(name),
+            Self::ShareSource(source) => DocumentLiteral::ShareSource(source.into_model()),
         };
         Ok(Expr::val(literal))
     }
@@ -851,6 +876,8 @@ enum GraphqlProjectLiteral {
     CreatedAt(GraphqlDateLiteral),
     /// The updated at option.
     UpdatedAt(GraphqlDateLiteral),
+    /// Viewer-relative share provenance (direct user/mention/DM vs team/channel).
+    ShareSource(GraphqlShareSource),
 }
 
 impl IntoFilterExpr<ProjectLiteral> for GraphqlProjectLiteral {
@@ -866,6 +893,7 @@ impl IntoFilterExpr<ProjectLiteral> for GraphqlProjectLiteral {
             Self::NotificationState(state) => ProjectLiteral::NotificationState(state.into()),
             Self::CreatedAt(date) => ProjectLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => ProjectLiteral::UpdatedAt(date.into_ast()?),
+            Self::ShareSource(source) => ProjectLiteral::ShareSource(source.into_model()),
         };
         Ok(Expr::val(literal))
     }
@@ -1658,5 +1686,34 @@ impl IntoFilterExpr<CrmContactLiteral> for GraphqlCrmContactLiteral {
             Self::Search(query) => CrmContactLiteral::Search(query.trim().to_owned()),
             Self::Hidden(hidden) => CrmContactLiteral::Hidden(hidden),
         }))
+    }
+}
+
+#[cfg(test)]
+mod share_source_tests {
+    use super::*;
+    use item_filters::ast::share_source::ShareSource;
+
+    #[test]
+    fn materializes_share_source_for_documents_and_projects() {
+        let input: GraphqlEntityFilterAst = serde_json::from_value(serde_json::json!({
+            "documentFilter": { "literal": { "shareSource": "DIRECT" } },
+            "projectFilter": { "literal": { "shareSource": "TEAM_OR_CHANNEL" } }
+        }))
+        .expect("deserialize GraphqlEntityFilterAst");
+
+        let ast = input.into_ast().expect("materialize EntityFilterAst");
+        assert!(matches!(
+            ast.document_filter.as_deref(),
+            Some(Expr::Literal(DocumentLiteral::ShareSource(
+                ShareSource::Direct
+            )))
+        ));
+        assert!(matches!(
+            ast.project_filter.as_deref(),
+            Some(Expr::Literal(ProjectLiteral::ShareSource(
+                ShareSource::TeamOrChannel
+            )))
+        ));
     }
 }

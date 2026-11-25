@@ -1,0 +1,14 @@
+query DriveShareProvenance($entities: [ShareProvenanceEntityInput!]!) {
+  user {
+    id
+    shareProvenance(entities: $entities) {
+      entityType
+      entityId
+      kind
+      channelId
+      channelName
+      teamId
+      teamName
+    }
+  }
+}

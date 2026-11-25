@@ -31,6 +31,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  For,
   Match,
   onCleanup,
   Show,
@@ -46,6 +47,7 @@ import {
   driveKindExtensionBadge,
   driveKindLabel,
 } from '../../components/redesign/kind-label';
+import { ShareProvenanceBadge } from '../../components/redesign/share-provenance-badge';
 import { useDriveView } from '../../context/drive-context';
 import { useDriveRedesign } from '../../context/drive-redesign-context';
 import {
@@ -150,13 +152,15 @@ function FolderGridCard(props: {
   onActivate: (event?: MouseEvent) => void;
 }) {
   const { actions } = useDriveView();
-  const { inlineEdit, inspector, host } = useDriveRedesign();
+  const { inlineEdit, inspector, host, shareProvenance } = useDriveRedesign();
   const isShared = () => {
     const ownerId =
       'ownerId' in props.row.entity ? props.row.entity.ownerId : undefined;
     const viewerId = actions.userId();
     return Boolean(ownerId && viewerId && ownerId !== viewerId);
   };
+  const provenance = () =>
+    isShared() ? shareProvenance?.get(props.row.entity) : undefined;
   const starred = () => host.isStarred(props.row.entity);
   const dropTarget = props.createDropTarget?.(() => props.row.id);
 
@@ -274,7 +278,11 @@ function FolderGridCard(props: {
             </span>
           </Show>
           <Show when={isShared()}>
-            <span>· {t('drive.sharedLabel')}</span>
+            <ShareProvenanceBadge
+              provenance={provenance()}
+              compact
+              fallbackShared
+            />
           </Show>
         </div>
       </div>
@@ -315,13 +323,15 @@ function FileGridCard(props: {
   onActivate: (event?: MouseEvent) => void;
 }) {
   const { actions } = useDriveView();
-  const { inlineEdit, inspector, host } = useDriveRedesign();
+  const { inlineEdit, inspector, host, shareProvenance } = useDriveRedesign();
   const isShared = () => {
     const ownerId =
       'ownerId' in props.row.entity ? props.row.entity.ownerId : undefined;
     const viewerId = actions.userId();
     return Boolean(ownerId && viewerId && ownerId !== viewerId);
   };
+  const provenance = () =>
+    isShared() ? shareProvenance?.get(props.row.entity) : undefined;
   const starred = () => host.isStarred(props.row.entity);
   const kind = () => driveItemKind(props.row.entity);
   const fileType = () =>
@@ -504,7 +514,11 @@ function FileGridCard(props: {
             />
             <span class="truncate">{driveKindLabel(kind())}</span>
             <Show when={isShared()}>
-              <span class="shrink-0">· {t('drive.sharedLabel')}</span>
+              <ShareProvenanceBadge
+                provenance={provenance()}
+                compact
+                fallbackShared
+              />
             </Show>
           </div>
           <Show when={updatedAt()}>
@@ -564,11 +578,18 @@ export function DriveRedesignGrid(props: { onStartInlineFolder: () => void }) {
     };
   });
 
+  const isGroupedShared = () =>
+    display.isSharedTab() &&
+    display.shareScope() === 'all' &&
+    display.sharedGroups().hasResolvedProvenance;
+
   // Flat ordered sequence matching visual order for 2D keyboard navigation.
-  const visualRows = createMemo(() => [
-    ...splitBands().folders,
-    ...splitBands().files,
-  ]);
+  const visualRows = createMemo(() => {
+    if (isGroupedShared()) {
+      return display.sharedGroups().groups.flatMap((group) => group.items);
+    }
+    return [...splitBands().folders, ...splitBands().files];
+  });
 
   const estimatedColumns = () => {
     const width = containerSize.width ?? 800;
@@ -858,137 +879,231 @@ export function DriveRedesignGrid(props: { onStartInlineFolder: () => void }) {
               ref={setViewportRef}
               class="min-h-0 flex-1 overflow-y-auto overscroll-none p-4"
             >
-              {/* Folders Band */}
               <Show
-                when={splitBands().folders.length > 0 || isCreatingInlineHere()}
-              >
-                <section class="mb-6">
-                  <div class="mb-2.5 flex items-center justify-between">
-                    <h2 class="text-xs font-semibold tracking-wide text-ink-muted uppercase">
-                      {t('drive.folders')}
-                    </h2>
-                    <span class="text-xs tabular-nums text-ink-subtle">
-                      {splitBands().folders.length}
-                    </span>
-                  </div>
-                  <div class="grid grid-cols-[repeat(auto-fill,minmax(216px,1fr))] gap-2.5">
-                    <Show when={isCreatingInlineHere()}>
-                      <div class="flex h-14 items-center gap-2.5 rounded-xl border border-accent bg-accent/5 px-3">
-                        <FolderPlusIcon
-                          class="size-5 shrink-0 text-accent"
-                          aria-hidden="true"
-                        />
-                        <InlineNameInput
-                          initialValue=""
-                          isFolder
-                          placeholder={t('drive.folderNamePlaceholder')}
-                          ariaLabel={t('drive.newFolderInputLabel')}
-                          disabled={inlineEdit.isPending()}
-                          onCommit={(name) =>
-                            inlineEdit.runCommit(async () => {
-                              await host.createFolderInline(
-                                name,
-                                inlineEdit.creatingFolder()?.parentId ?? null
-                              );
-                            })
-                          }
-                          onCancel={inlineEdit.cancelCreateFolder}
-                        />
-                      </div>
+                when={isGroupedShared()}
+                fallback={
+                  <>
+                    {/* Folders Band */}
+                    <Show
+                      when={
+                        splitBands().folders.length > 0 ||
+                        isCreatingInlineHere()
+                      }
+                    >
+                      <section class="mb-6">
+                        <div class="mb-2.5 flex items-center justify-between">
+                          <h2 class="text-xs font-semibold tracking-wide text-ink-muted uppercase">
+                            {t('drive.folders')}
+                          </h2>
+                          <span class="text-xs tabular-nums text-ink-subtle">
+                            {splitBands().folders.length}
+                          </span>
+                        </div>
+                        <div class="grid grid-cols-[repeat(auto-fill,minmax(216px,1fr))] gap-2.5">
+                          <Show when={isCreatingInlineHere()}>
+                            <div class="flex h-14 items-center gap-2.5 rounded-xl border border-accent bg-accent/5 px-3">
+                              <FolderPlusIcon
+                                class="size-5 shrink-0 text-accent"
+                                aria-hidden="true"
+                              />
+                              <InlineNameInput
+                                initialValue=""
+                                isFolder
+                                placeholder={t('drive.folderNamePlaceholder')}
+                                ariaLabel={t('drive.newFolderInputLabel')}
+                                disabled={inlineEdit.isPending()}
+                                onCommit={(name) =>
+                                  inlineEdit.runCommit(async () => {
+                                    await host.createFolderInline(
+                                      name,
+                                      inlineEdit.creatingFolder()?.parentId ??
+                                        null
+                                    );
+                                  })
+                                }
+                                onCancel={inlineEdit.cancelCreateFolder}
+                              />
+                            </div>
+                          </Show>
+                          <Key each={splitBands().folders} by="id">
+                            {(row) => (
+                              <FolderGridCard
+                                row={row()}
+                                focused={focusedId() === row().id}
+                                selected={selectedIds().has(row().id)}
+                                selectedEntities={selectedRowEntities}
+                                onClearSelection={clearSelection}
+                                splitId={panel.handle.id}
+                                createDropTarget={createDropTarget}
+                                onFocus={() => {
+                                  const current = row();
+                                  setFocusedId(current.id);
+                                  setInspectedEntity(current.entity);
+                                }}
+                                onToggleSelect={(shift) =>
+                                  toggleSelect(row().id, shift)
+                                }
+                                onActivate={(event) =>
+                                  actions.openEntity(row().entity, event)
+                                }
+                              />
+                            )}
+                          </Key>
+                        </div>
+                      </section>
                     </Show>
-                    <Key each={splitBands().folders} by="id">
-                      {(row) => (
-                        <FolderGridCard
-                          row={row()}
-                          focused={focusedId() === row().id}
-                          selected={selectedIds().has(row().id)}
-                          selectedEntities={selectedRowEntities}
-                          onClearSelection={clearSelection}
-                          splitId={panel.handle.id}
-                          createDropTarget={createDropTarget}
-                          onFocus={() => {
-                            const current = row();
-                            setFocusedId(current.id);
-                            setInspectedEntity(current.entity);
-                          }}
-                          onToggleSelect={(shift) =>
-                            toggleSelect(row().id, shift)
-                          }
-                          onActivate={(event) =>
-                            actions.openEntity(row().entity, event)
-                          }
-                        />
-                      )}
-                    </Key>
-                  </div>
-                </section>
-              </Show>
 
-              {/* Files Band */}
-              <Show when={splitBands().files.length > 0}>
-                <section>
-                  <Show when={splitBands().folders.length > 0}>
-                    <div class="mb-2.5 flex items-center justify-between">
-                      <h2 class="text-xs font-semibold tracking-wide text-ink-muted uppercase">
-                        {t('drive.filesSection')}
-                      </h2>
-                      <span class="text-xs tabular-nums text-ink-subtle">
-                        {splitBands().files.length}
-                      </span>
-                    </div>
-                  </Show>
-                  <div class="grid grid-cols-[repeat(auto-fill,minmax(216px,1fr))] gap-3">
-                    <Key each={splitBands().files} by="id">
-                      {(row) => (
-                        <Show
-                          when={row().isFolder}
-                          fallback={
-                            <FileGridCard
-                              row={row()}
-                              focused={focusedId() === row().id}
-                              selected={selectedIds().has(row().id)}
-                              selectedEntities={selectedRowEntities}
-                              onClearSelection={clearSelection}
-                              splitId={panel.handle.id}
-                              onFocus={() => {
-                                const current = row();
-                                setFocusedId(current.id);
-                                setInspectedEntity(current.entity);
-                              }}
-                              onToggleSelect={(shift) =>
-                                toggleSelect(row().id, shift)
-                              }
-                              onActivate={(event) =>
-                                actions.openEntity(row().entity, event)
-                              }
-                            />
-                          }
-                        >
-                          <FolderGridCard
-                            row={row()}
-                            focused={focusedId() === row().id}
-                            selected={selectedIds().has(row().id)}
-                            selectedEntities={selectedRowEntities}
-                            onClearSelection={clearSelection}
-                            splitId={panel.handle.id}
-                            createDropTarget={createDropTarget}
-                            onFocus={() => {
-                              const current = row();
-                              setFocusedId(current.id);
-                              setInspectedEntity(current.entity);
-                            }}
-                            onToggleSelect={(shift) =>
-                              toggleSelect(row().id, shift)
-                            }
-                            onActivate={(event) =>
-                              actions.openEntity(row().entity, event)
-                            }
-                          />
+                    {/* Files Band */}
+                    <Show when={splitBands().files.length > 0}>
+                      <section>
+                        <Show when={splitBands().folders.length > 0}>
+                          <div class="mb-2.5 flex items-center justify-between">
+                            <h2 class="text-xs font-semibold tracking-wide text-ink-muted uppercase">
+                              {t('drive.filesSection')}
+                            </h2>
+                            <span class="text-xs tabular-nums text-ink-subtle">
+                              {splitBands().files.length}
+                            </span>
+                          </div>
                         </Show>
-                      )}
-                    </Key>
-                  </div>
-                </section>
+                        <div class="grid grid-cols-[repeat(auto-fill,minmax(216px,1fr))] gap-3">
+                          <Key each={splitBands().files} by="id">
+                            {(row) => (
+                              <Show
+                                when={row().isFolder}
+                                fallback={
+                                  <FileGridCard
+                                    row={row()}
+                                    focused={focusedId() === row().id}
+                                    selected={selectedIds().has(row().id)}
+                                    selectedEntities={selectedRowEntities}
+                                    onClearSelection={clearSelection}
+                                    splitId={panel.handle.id}
+                                    onFocus={() => {
+                                      const current = row();
+                                      setFocusedId(current.id);
+                                      setInspectedEntity(current.entity);
+                                    }}
+                                    onToggleSelect={(shift) =>
+                                      toggleSelect(row().id, shift)
+                                    }
+                                    onActivate={(event) =>
+                                      actions.openEntity(row().entity, event)
+                                    }
+                                  />
+                                }
+                              >
+                                <FolderGridCard
+                                  row={row()}
+                                  focused={focusedId() === row().id}
+                                  selected={selectedIds().has(row().id)}
+                                  selectedEntities={selectedRowEntities}
+                                  onClearSelection={clearSelection}
+                                  splitId={panel.handle.id}
+                                  createDropTarget={createDropTarget}
+                                  onFocus={() => {
+                                    const current = row();
+                                    setFocusedId(current.id);
+                                    setInspectedEntity(current.entity);
+                                  }}
+                                  onToggleSelect={(shift) =>
+                                    toggleSelect(row().id, shift)
+                                  }
+                                  onActivate={(event) =>
+                                    actions.openEntity(row().entity, event)
+                                  }
+                                />
+                              </Show>
+                            )}
+                          </Key>
+                        </div>
+                      </section>
+                    </Show>
+                  </>
+                }
+              >
+                <For each={display.sharedGroups().groups}>
+                  {(group) => {
+                    const title = () =>
+                      group.bucket === 'direct'
+                        ? t('drive.sharedSectionDirectTitle')
+                        : t('drive.sharedSectionTeamOrChannelTitle');
+                    const hint = () =>
+                      group.bucket === 'direct'
+                        ? t('drive.sharedSectionDirectHint')
+                        : t('drive.sharedSectionTeamOrChannelHint');
+                    return (
+                      <section
+                        class="mb-6"
+                        aria-label={title()}
+                        data-drive-shared-grid-section={group.bucket}
+                      >
+                        <div class="mb-2.5 flex items-center gap-2">
+                          <h2 class="text-xs font-semibold tracking-wide text-ink uppercase">
+                            {title()}
+                          </h2>
+                          <span class="rounded-full bg-inset px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-ink-muted">
+                            {group.items.length}
+                          </span>
+                          <span class="hidden text-xs text-ink-subtle sm:inline">
+                            · {hint()}
+                          </span>
+                        </div>
+                        <div class="grid grid-cols-[repeat(auto-fill,minmax(216px,1fr))] gap-3">
+                          <Key each={group.items} by="id">
+                            {(row) => (
+                              <Show
+                                when={row().isFolder}
+                                fallback={
+                                  <FileGridCard
+                                    row={row()}
+                                    focused={focusedId() === row().id}
+                                    selected={selectedIds().has(row().id)}
+                                    selectedEntities={selectedRowEntities}
+                                    onClearSelection={clearSelection}
+                                    splitId={panel.handle.id}
+                                    onFocus={() => {
+                                      const current = row();
+                                      setFocusedId(current.id);
+                                      setInspectedEntity(current.entity);
+                                    }}
+                                    onToggleSelect={(shift) =>
+                                      toggleSelect(row().id, shift)
+                                    }
+                                    onActivate={(event) =>
+                                      actions.openEntity(row().entity, event)
+                                    }
+                                  />
+                                }
+                              >
+                                <FolderGridCard
+                                  row={row()}
+                                  focused={focusedId() === row().id}
+                                  selected={selectedIds().has(row().id)}
+                                  selectedEntities={selectedRowEntities}
+                                  onClearSelection={clearSelection}
+                                  splitId={panel.handle.id}
+                                  createDropTarget={createDropTarget}
+                                  onFocus={() => {
+                                    const current = row();
+                                    setFocusedId(current.id);
+                                    setInspectedEntity(current.entity);
+                                  }}
+                                  onToggleSelect={(shift) =>
+                                    toggleSelect(row().id, shift)
+                                  }
+                                  onActivate={(event) =>
+                                    actions.openEntity(row().entity, event)
+                                  }
+                                />
+                              </Show>
+                            )}
+                          </Key>
+                        </div>
+                      </section>
+                    );
+                  }}
+                </For>
               </Show>
 
               <Show when={source.isLoadingMore()}>

@@ -18,6 +18,8 @@ mod mutation_thread;
 mod objects;
 /// Top-level Soup query resolver.
 mod resolvers;
+/// User-scoped batched share provenance query.
+mod share_provenance;
 
 pub use folders::{
     FoldersQuery, FoldersQueryError, FoldersQueryReader, NoOpFoldersQueryReader, resolve_folders,
@@ -46,4 +48,9 @@ pub use resolvers::{
     SoupEmailThreadMutationOutput, load_soup_agent_session, resolve_grouped_soup, resolve_soup,
     resolve_soup_agent_session, resolve_soup_email_thread, resolve_soup_email_threads,
     resolve_soup_entity, resolve_soup_updates,
+};
+pub use share_provenance::{
+    GraphqlEntityShareProvenance, GraphqlShareProvenanceKind, NoOpShareProvenanceQueryReader,
+    ShareProvenanceEntityInput, ShareProvenanceQuery, ShareProvenanceQueryError,
+    ShareProvenanceQueryReader, resolve_share_provenance,
 };

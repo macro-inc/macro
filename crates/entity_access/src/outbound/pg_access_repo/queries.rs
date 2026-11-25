@@ -44,6 +44,7 @@ pub mod initiative_access;
 pub mod pipeline_access;
 pub mod project_access;
 pub mod scheduled_action_access;
+pub mod share_provenance;
 pub mod team_access;
 pub mod thread_access;
 

@@ -8,7 +8,7 @@ import RobotIcon from '@icon/system/regular/robot.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import UserIcon from '@icon/system/regular/user.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
-import { Button, cn, Dropdown, Tooltip } from '@ui';
+import { Button, cn, Dropdown, Tabs, Tooltip } from '@ui';
 import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 import { useDriveView } from '../../context/drive-context';
 import { useDriveRedesign } from '../../context/drive-redesign-context';
@@ -18,6 +18,7 @@ import {
   DRIVE_CREATOR_PRESET_TEAM_AGENTS,
   isDriveCreatorPreset,
 } from '../../core/drive-filters';
+import type { DriveShareScope } from '../../core/drive-share-provenance';
 import {
   DRIVE_TYPE_FILTER_OPTIONS,
   driveModifiedFilterOptions,
@@ -301,6 +302,11 @@ export function DriveDesktopFilterBar(props: {
     return ids.length === 1 ? first : `${first} +${ids.length - 1}`;
   };
 
+  const isSharedTab = () => {
+    const loc = state.value().location;
+    return loc.kind === 'tab' && loc.tab === 'shared';
+  };
+
   return (
     <div
       role="toolbar"
@@ -323,6 +329,26 @@ export function DriveDesktopFilterBar(props: {
       </Tooltip>
 
       <div class="h-4 w-px shrink-0 bg-edge-muted" aria-hidden="true" />
+
+      {/* Shared with me provenance scope switcher */}
+      <Show when={isSharedTab()}>
+        <Tabs<DriveShareScope>
+          size="sm"
+          aria-label={t('drive.sharedScopeLabel')}
+          data-testid="drive-share-scope-tabs"
+          value={filters.shareScope()}
+          onChange={(value) => filters.setShareScope(value)}
+          options={[
+            { value: 'all', label: t('drive.sharedScopeAll') },
+            { value: 'direct', label: t('drive.sharedScopeDirect') },
+            {
+              value: 'team_or_channel',
+              label: t('drive.sharedScopeTeamOrChannel'),
+            },
+          ]}
+        />
+        <div class="h-4 w-px shrink-0 bg-edge-muted" aria-hidden="true" />
+      </Show>
 
       <Show when={!filters.isRecent()}>
         {/* Type */}

@@ -61,7 +61,7 @@ fn strings(ids: &[Uuid]) -> Vec<String> {
 
 fn render(expr: &Expr<DocumentLiteral>) -> (String, Vec<Vec<String>>) {
     let mut arrays = DocumentIdArrays::starting_at(9);
-    let sql = build_document_filter(Some(expr), Some(&mut arrays));
+    let sql = build_document_filter(Some(expr), Some(&mut arrays), None);
     (sql, arrays.into_binds())
 }
 
@@ -166,7 +166,7 @@ fn lone_ids_render_inline() {
 fn bind_free_rendering_keeps_every_id_inline() {
     let expr = Expr::is_not(any_of(&[IN_A, IN_B, IN_C]));
     assert_eq!(
-        build_document_filter(Some(&expr), None),
+        build_document_filter(Some(&expr), None, None),
         format!(
             " AND ((NOT d.id = '{IN_A}') AND ((NOT d.id = '{IN_B}') AND (NOT d.id = '{IN_C}')))"
         )

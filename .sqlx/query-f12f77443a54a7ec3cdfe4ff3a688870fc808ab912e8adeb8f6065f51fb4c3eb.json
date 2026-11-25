@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.id,\n               (c.channel_type = 'direct_message') AS \"is_dm!\",\n               c.name\n        FROM comms_channel_participants cp\n        JOIN comms_channels c ON c.id = cp.channel_id\n        WHERE cp.user_id = $1 AND cp.left_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_dm!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true
+    ]
+  },
+  "hash": "f12f77443a54a7ec3cdfe4ff3a688870fc808ab912e8adeb8f6065f51fb4c3eb"
+}

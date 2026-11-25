@@ -19,6 +19,12 @@ import {
   splitOwnedAndSharedFolders,
   topLevelFolders,
 } from '../../core/drive-items';
+import {
+  DRIVE_SHARE_SOURCE_FACET_ID,
+  driveShareScopeFromFacet,
+  matchesDriveShareScope,
+  partitionSharedByProvenance,
+} from '../../core/drive-share-provenance';
 import { useDriveFilters } from '../../filters/use-drive-filters';
 
 export type DriveDisplayRow = {
@@ -52,9 +58,12 @@ export function folderToProjectEntity(
  */
 export function useDriveDisplayItems() {
   const { state, source, sidebar, actions } = useDriveView();
-  const { preferences, agents } = useDriveRedesign();
+  const { preferences, agents, shareProvenance } = useDriveRedesign();
   const filters = useDriveFilters();
   const todayAnchor = startOfDay(new Date());
+
+  const shareScope = () =>
+    driveShareScopeFromFacet(state.value().facets[DRIVE_SHARE_SOURCE_FACET_ID]);
 
   const foldersById = createMemo(() => {
     const map = new Map<string, DriveFolderMetadata>();
@@ -170,11 +179,22 @@ export function useDriveDisplayItems() {
       }
     } else if (loc.kind === 'tab' && loc.tab === 'shared') {
       if (!excludesFoldersByFilter) {
+        const currentShareScope = shareScope();
         const candidates =
           searching || filtered
             ? partitionedFolders().shared
             : topLevelFolders(partitionedFolders().shared);
-        addFolders(candidates);
+        addFolders(
+          currentShareScope === 'all'
+            ? candidates
+            : candidates.filter((folder) =>
+                matchesDriveShareScope(
+                  currentShareScope,
+                  shareProvenance?.get({ type: 'project', id: folder.id }),
+                  false
+                )
+              )
+        );
       }
     } else if (loc.kind === 'folder' && loc.id === null) {
       // Replace the flattened all-depth legacy dump with top-level folders only.
@@ -199,6 +219,23 @@ export function useDriveDisplayItems() {
     }
 
     let combined: EntityData[] = [...extraFolders, ...rawEntities];
+
+    if (loc.kind === 'tab' && loc.tab === 'shared') {
+      const currentShareScope = shareScope();
+      if (currentShareScope !== 'all') {
+        combined = combined.filter((entity) => {
+          const provenance = shareProvenance?.get(entity);
+          // Documents are already server-filtered by Soup's ShareSource literal;
+          // client-synthesized databases, forms, and folders wait for resolved provenance.
+          const fallback = entity.type === 'document';
+          return matchesDriveShareScope(
+            currentShareScope,
+            provenance,
+            fallback
+          );
+        });
+      }
+    }
 
     if (loc.kind === 'tab' && loc.tab === 'owned') {
       combined = filterRootBrowseItems(
@@ -293,8 +330,19 @@ export function useDriveDisplayItems() {
     return chips;
   });
 
+  const sharedGroups = createMemo(() => {
+    if (!isSharedTab() || shareScope() !== 'all') {
+      return { groups: [], hasResolvedProvenance: false };
+    }
+    return partitionSharedByProvenance(items(), (row) =>
+      shareProvenance?.get(row.entity)
+    );
+  });
+
   return {
     items,
+    sharedGroups,
+    shareScope,
     foldersById,
     subfolderCounts,
     partitionedFolders,

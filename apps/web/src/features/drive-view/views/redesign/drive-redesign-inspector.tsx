@@ -39,6 +39,7 @@ import {
 } from 'solid-js';
 import { InlineNameInput } from '../../components/redesign/inline-name-input';
 import { driveKindLabel } from '../../components/redesign/kind-label';
+import { ShareProvenanceBadge } from '../../components/redesign/share-provenance-badge';
 import { useDriveView } from '../../context/drive-context';
 import { useDriveRedesign } from '../../context/drive-redesign-context';
 import { countDirectSubfolders, driveItemKind } from '../../core/drive-items';
@@ -165,6 +166,7 @@ export function DriveRedesignInspector() {
     inlineEdit,
     inspector,
     host,
+    shareProvenance,
     inspectedEntity,
     selectedEntities,
     clearActiveSelection,
@@ -474,6 +476,19 @@ export function DriveRedesignInspector() {
                               />
                             </dd>
                           </div>
+
+                          <Show when={shareProvenance?.get(entity())}>
+                            {(prov) => (
+                              <div class="flex items-center justify-between gap-3">
+                                <dt class="text-ink-muted">
+                                  {t('drive.inspectorSharedVia')}
+                                </dt>
+                                <dd class="min-w-0">
+                                  <ShareProvenanceBadge provenance={prov()} />
+                                </dd>
+                              </div>
+                            )}
+                          </Show>
 
                           <Show when={updatedAt()}>
                             {(date) => (

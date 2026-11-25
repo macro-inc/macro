@@ -64,6 +64,8 @@ pub mod initiative;
 pub mod project;
 /// contains the ast literal value for property-based filtering
 pub mod properties;
+/// Viewer-relative share provenance filter values.
+pub mod share_source;
 
 #[cfg(test)]
 mod tests;

@@ -297,6 +297,13 @@ function mapDocumentSubType(value: unknown): 'TASK' | 'SNIPPET' | 'SKILL' {
   unsupported(`unsupported document subType ${subType}`);
 }
 
+function mapShareSource(value: unknown): 'DIRECT' | 'TEAM_OR_CHANNEL' {
+  const source = mapString(value, 'shareSource');
+  if (source === 'direct') return 'DIRECT';
+  if (source === 'team_or_channel') return 'TEAM_OR_CHANNEL';
+  unsupported(`unsupported shareSource ${source}`);
+}
+
 function mapChannelType(
   value: unknown
 ): 'PUBLIC' | 'PRIVATE' | 'DIRECT_MESSAGE' | 'TEAM' {
@@ -402,6 +409,8 @@ function mapDocumentLiteral(literal: unknown): GraphqlDocumentLiteralInput {
       return { crmAssociated: mapCrmAssociation(value) };
     case 'nc':
       return { nameContains: mapString(value, 'nameContains') };
+    case 'ss':
+      return { shareSource: mapShareSource(value) };
     default:
       unsupported(`document literal ${field}`);
   }
@@ -432,6 +441,8 @@ function mapProjectLiteral(literal: unknown): GraphqlProjectLiteralInput {
       return { createdAt: mapDateLiteral(value) };
     case 'ua':
       return { updatedAt: mapDateLiteral(value) };
+    case 'ss':
+      return { shareSource: mapShareSource(value) };
     default:
       unsupported(`project literal ${field}`);
   }

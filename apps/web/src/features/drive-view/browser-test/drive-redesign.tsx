@@ -67,6 +67,10 @@ import {
   modifiedPresetRange,
   resolveCreatorOptionIds,
 } from '../core/drive-filters';
+import {
+  type DriveShareProvenance,
+  driveShareProvenanceKey,
+} from '../core/drive-share-provenance';
 import type { DriveTrashItem } from '../core/drive-trash';
 import type { DriveState } from '../core/types';
 import { createDriveInlineEdit } from '../primitives/drive-inline-edit';
@@ -225,6 +229,33 @@ function makeInitialDocs(): EntityData[] {
       projectId: 'folder-design',
       updatedAt: minsAgo(18),
       createdAt: minsAgo(90),
+    },
+    {
+      type: 'document',
+      id: 'doc-shared-direct',
+      name: 'Board Review Memo.md',
+      fileType: 'md',
+      ownerId: BOB_ID,
+      updatedAt: minsAgo(4),
+      createdAt: minsAgo(70),
+    },
+    {
+      type: 'document',
+      id: 'doc-shared-dm',
+      name: '1:1 Feedback Notes.md',
+      fileType: 'md',
+      ownerId: BOB_ID,
+      updatedAt: minsAgo(9),
+      createdAt: minsAgo(95),
+    },
+    {
+      type: 'document',
+      id: 'doc-shared-channel',
+      name: 'API Migration Plan.md',
+      fileType: 'md',
+      ownerId: BOB_ID,
+      updatedAt: minsAgo(16),
+      createdAt: minsAgo(110),
     },
     {
       type: 'document',
@@ -924,6 +955,86 @@ function DriveRedesignFixture() {
                               teamAgentIds: () => [AGENT_ID],
                               hasTeamAgents: () => true,
                             },
+                            shareProvenance: (() => {
+                              const entries = new Map<
+                                string,
+                                DriveShareProvenance
+                              >([
+                                [
+                                  driveShareProvenanceKey(
+                                    'document',
+                                    'doc-shared-direct'
+                                  ),
+                                  {
+                                    entityType: 'document',
+                                    entityId: 'doc-shared-direct',
+                                    kind: 'direct',
+                                  },
+                                ],
+                                [
+                                  driveShareProvenanceKey(
+                                    'document',
+                                    'doc-shared-dm'
+                                  ),
+                                  {
+                                    entityType: 'document',
+                                    entityId: 'doc-shared-dm',
+                                    kind: 'dm',
+                                    channelId: 'dm-bob',
+                                  },
+                                ],
+                                [
+                                  driveShareProvenanceKey(
+                                    'document',
+                                    'doc-shared-channel'
+                                  ),
+                                  {
+                                    entityType: 'document',
+                                    entityId: 'doc-shared-channel',
+                                    kind: 'channel',
+                                    channelId: 'ch-eng',
+                                    channelName: 'engineering',
+                                  },
+                                ],
+                                [
+                                  driveShareProvenanceKey(
+                                    'document',
+                                    'doc-shared-sla'
+                                  ),
+                                  {
+                                    entityType: 'document',
+                                    entityId: 'doc-shared-sla',
+                                    kind: 'team',
+                                    teamId: 'team-1',
+                                    teamName: 'Acme Core',
+                                  },
+                                ],
+                                [
+                                  driveShareProvenanceKey(
+                                    'project',
+                                    'folder-partner'
+                                  ),
+                                  {
+                                    entityType: 'project',
+                                    entityId: 'folder-partner',
+                                    kind: 'channel',
+                                    channelId: 'ch-partners',
+                                    channelName: 'partnerships',
+                                  },
+                                ],
+                              ]);
+                              return {
+                                byKey: () => entries,
+                                get: (entity: { type: string; id: string }) =>
+                                  entries.get(
+                                    driveShareProvenanceKey(
+                                      entity.type,
+                                      entity.id
+                                    )
+                                  ),
+                                isLoading: () => false,
+                              };
+                            })(),
                             createFolderContents,
                             inspectedEntity,
                             setInspectedEntity,

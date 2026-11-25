@@ -180,6 +180,21 @@ impl AccessRepository for PgAccessRepository {
         Ok(levels)
     }
 
+    #[tracing::instrument(
+        err,
+        skip(self, user_id, entities),
+        fields(entity_count = entities.len())
+    )]
+    async fn get_entities_share_provenance(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        entities: &[(Uuid, EntityType)],
+    ) -> Result<Vec<crate::domain::models::EntityShareProvenance>, AccessError> {
+        queries::share_provenance::get_entities_share_provenance(&self.pool, user_id, entities)
+            .await
+            .map_err(AccessError::from)
+    }
+
     #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_chat_access(
         &self,

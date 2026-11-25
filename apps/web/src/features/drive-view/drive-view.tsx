@@ -39,6 +39,7 @@ import {
 } from 'solid-js';
 import { DriveProvider } from './context/drive-context';
 import { DriveRedesignProvider } from './context/drive-redesign-context';
+import { splitOwnedAndSharedFolders } from './core/drive-items';
 import { driveLocationLabel } from './core/location-label';
 import {
   DriveDetailNavigationProvider,
@@ -64,6 +65,7 @@ import { createDriveViewPreferences } from './primitives/drive-view-preferences'
 import { useDriveAgents } from './primitives/use-drive-agents';
 import { createDriveDataSource } from './queries/drive-data-source';
 import { createDriveFolderContentsSource } from './queries/drive-folder-contents';
+import { createDriveShareProvenanceSource } from './queries/drive-share-provenance';
 import { createDriveSidebarSource } from './queries/drive-sidebar-source';
 import { createDriveTrashSource } from './queries/drive-trash';
 import { documentsTour } from './tour';
@@ -269,6 +271,29 @@ function DriveComposition(props: { route: DriveRouteState }) {
       const loc = selection().location;
       return loc.kind === 'tab' && loc.tab === 'trash';
     });
+    const isSharedLocation = () => {
+      const loc = selection().location;
+      return loc.kind === 'tab' && loc.tab === 'shared';
+    };
+    const sharedProvenanceEntities = createMemo(() => {
+      if (!isSharedLocation()) return [];
+      const fromList = source.items().map((row) => ({
+        type: row.entity.type,
+        id: row.entity.id,
+      }));
+      const fromFolders = splitOwnedAndSharedFolders(
+        sidebar.folders(),
+        userId()
+      ).shared.map((folder) => ({
+        type: 'project' as const,
+        id: folder.id,
+      }));
+      return [...fromList, ...fromFolders];
+    });
+    const shareProvenance = createDriveShareProvenanceSource({
+      enabled: isSharedLocation,
+      entities: sharedProvenanceEntities,
+    });
     const { host, undo } = createDriveRedesignHost({
       userId,
       projectId: () => state.projectId(),
@@ -306,6 +331,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
           trash,
           host,
           agents,
+          shareProvenance,
           createFolderContents,
           inspectedEntity,
           setInspectedEntity,

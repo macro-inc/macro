@@ -15,6 +15,11 @@ import {
   type DriveModifiedPresetId,
   isDriveCreatorPreset,
 } from '../core/drive-filters';
+import {
+  DRIVE_SHARE_SOURCE_FACET_ID,
+  type DriveShareScope,
+  driveShareScopeFromFacet,
+} from '../core/drive-share-provenance';
 
 export type DriveFilterGroupId =
   | 'type'
@@ -216,11 +221,27 @@ export function useDriveFilters() {
     }
   };
 
+  const shareScope = () =>
+    driveShareScopeFromFacet(state.value().facets[DRIVE_SHARE_SOURCE_FACET_ID]);
+
+  const setShareScope = (next: DriveShareScope) => {
+    const existing = state.value().facets[DRIVE_SHARE_SOURCE_FACET_ID] ?? [];
+    for (const id of existing) {
+      if (id !== next) {
+        state.setFacetSelected(DRIVE_SHARE_SOURCE_FACET_ID, id, false);
+      }
+    }
+    if (next !== 'all' && !existing.includes(next)) {
+      state.setFacetSelected(DRIVE_SHARE_SOURCE_FACET_ID, next, true);
+    }
+  };
+
   const activeCount = () => {
     const { facets, scope } = state.value();
 
-    const facetCount = Object.values(facets).reduce(
-      (count, ids) => count + ids.length,
+    const facetCount = Object.entries(facets).reduce(
+      (count, [facetId, ids]) =>
+        facetId === DRIVE_SHARE_SOURCE_FACET_ID ? count : count + ids.length,
       0
     );
 
@@ -232,6 +253,8 @@ export function useDriveFilters() {
     tagGroup,
     isRecent,
     creatorLabel,
+    shareScope,
+    setShareScope,
     isSelected,
     selectedIds: (group: DriveFilterGroupId) =>
       group === 'scope'

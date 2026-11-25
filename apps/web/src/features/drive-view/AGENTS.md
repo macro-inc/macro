@@ -17,17 +17,23 @@ legacy workspace intact when the flag is off.
   `views/mobile/drive-redesign-mobile.tsx` (touch).
 - `core/`: pure models for folder/file ordering, Browse vs All files filtering,
   time buckets, extension-preserving rename ranges, Miller column paths, undo
-  entries, Trash hierarchy summaries, filter presets (`drive-filters.ts`), and
-  optimistic folder state (`drive-optimistic-folders.ts`).
+  entries, Trash hierarchy summaries, filter presets (`drive-filters.ts`),
+  optimistic folder state (`drive-optimistic-folders.ts`), and Shared with me
+  provenance partitioning (`drive-share-provenance.ts`).
 - `primitives/`: reactive view preferences, inline edit coordination, Quick
   Look inspector state, undo manager, optimistic folder controller
   (`drive-optimistic-folders.ts`), and agent teammate lookup
   (`use-drive-agents.ts`).
-- `components/redesign/drive-filter-bar.tsx` &
+- `components/redesign/drive-filter-bar.tsx`,
+  `components/redesign/share-provenance-badge.tsx`, and
   `views/mobile/drive-redesign-mobile-filter-strip.tsx`: second-row Ask AI +
-  Type / People / Modified / Source filter bars for desktop and touch.
+  Type / People / Modified / Source filter bars, Shared with me scope switcher
+  (`All` / `Shared directly` / `Team & Channels`), and provenance badges for
+  desktop and touch.
 - `queries/`: Drive data sources, per-folder live contents adapter
-  (`drive-folder-contents.ts`), and paginated Trash adapter (`drive-trash.ts`).
+  (`drive-folder-contents.ts`), paginated Trash adapter (`drive-trash.ts`), and
+  batched viewer-relative share provenance lookup
+  (`drive-share-provenance.ts`).
 - `views/shared/use-drive-display-items.ts`: unified display model shared by
   desktop and touch views without crossing the FE-70 boundary.
 

@@ -34,6 +34,7 @@ use item_filters::ast::{
     email::Email,
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
+    share_source::ShareSource,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
@@ -135,7 +136,73 @@ fn source_ids_slot(sort: DynamicSort, grouped: bool) -> usize {
     fixed_parameters + sort_parameters + 1
 }
 
-/// First document-ID array, after the caller's source ids.
+/// Parameter slots binding the viewer's partitioned share-provenance source arrays.
+/// Bound only when a filter contains a [`ShareSource`] literal so unaffected queries
+/// keep their exact existing SQL and parameter layout.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::outbound::pg_soup_repo) struct ShareSourceSlots {
+    pub(in crate::outbound::pg_soup_repo) direct: usize,
+    pub(in crate::outbound::pg_soup_repo) team_or_channel: usize,
+}
+
+/// Whether `expr` mentions any [`ShareSource`] literal.
+fn expr_contains_share_source<T>(
+    expr: &Expr<T>,
+    is_share_source: impl Fn(&T) -> bool + Copy,
+) -> bool {
+    match expr {
+        Expr::And(a, b) | Expr::Or(a, b) => {
+            expr_contains_share_source(a, is_share_source)
+                || expr_contains_share_source(b, is_share_source)
+        }
+        Expr::Not(a) => expr_contains_share_source(a, is_share_source),
+        Expr::Literal(lit) => is_share_source(lit),
+    }
+}
+
+/// Whether any arm of `filter_ast` references [`ShareSource`].
+fn filter_uses_share_source(filter_ast: &EntityFilterAst) -> bool {
+    filter_ast.document_filter.as_deref().is_some_and(|expr| {
+        expr_contains_share_source(expr, |lit| matches!(lit, DocumentLiteral::ShareSource(_)))
+    }) || filter_ast.project_filter.as_deref().is_some_and(|expr| {
+        expr_contains_share_source(expr, |lit| matches!(lit, ProjectLiteral::ShareSource(_)))
+    })
+}
+
+/// Parameter slots for `(direct_source_ids, team_or_channel_source_ids)` when
+/// `filter_ast` uses [`ShareSource`], or `None` otherwise.
+fn share_source_slots(
+    filter_ast: &EntityFilterAst,
+    sort: DynamicSort,
+    grouped: bool,
+) -> Option<ShareSourceSlots> {
+    if !filter_uses_share_source(filter_ast) {
+        return None;
+    }
+    let base = source_ids_slot(sort, grouped);
+    Some(ShareSourceSlots {
+        direct: base + 1,
+        team_or_channel: base + 2,
+    })
+}
+
+/// First document-ID array slot for a query with optional share-source array binds.
+fn first_document_id_slot_for(
+    filter_ast: &EntityFilterAst,
+    sort: DynamicSort,
+    grouped: bool,
+) -> usize {
+    source_ids_slot(sort, grouped)
+        + if filter_uses_share_source(filter_ast) {
+            3
+        } else {
+            1
+        }
+}
+
+/// First document-ID array, after the caller's source ids (for queries without
+/// share-source binds).
+#[cfg(test)]
 fn first_document_id_slot(sort: DynamicSort, grouped: bool) -> usize {
     source_ids_slot(sort, grouped) + 1
 }
@@ -259,27 +326,71 @@ static PREFIX: &str = r#"
     ),
 "#;
 
-/// The `user_source_ids` rows, bound into the document, chat, and project
-/// access gates by [`bound_access_semi_join`].
-async fn fetch_user_source_ids(
+/// The caller's `entity_access` source ids, partitioned by share provenance:
+/// `direct` holds the viewer id (direct shares and `@mentions`) plus active DM
+/// channels; `team_or_channel` holds teams and active non-DM channels.
+struct UserSources {
+    all: Vec<String>,
+    direct: Vec<String>,
+    team_or_channel: Vec<String>,
+}
+
+/// Fetches the caller's `user_source_ids` partitioned by direct (self + DM) vs
+/// team/channel provenance in one statement.
+async fn fetch_user_sources(
     connection: &mut PgConnection,
     user_id: &str,
-) -> Result<Vec<String>, sqlx::Error> {
-    let source_ids = sqlx::query_scalar!(
+) -> Result<UserSources, sqlx::Error> {
+    let rows = sqlx::query!(
         r#"
-        SELECT cp.channel_id::text FROM comms_channel_participants cp
-            WHERE cp.user_id = $1 AND cp.left_at IS NULL
+        SELECT cp.channel_id::text AS "source_id",
+               COALESCE(c.channel_type = 'direct_message', FALSE) AS "is_direct"
+        FROM comms_channel_participants cp
+        LEFT JOIN comms_channels c ON c.id = cp.channel_id
+        WHERE cp.user_id = $1 AND cp.left_at IS NULL
         UNION ALL
-        SELECT t.team_id::text FROM team_user t
-            WHERE t.user_id = $1
+        SELECT t.team_id::text AS "source_id",
+               FALSE AS "is_direct"
+        FROM team_user t
+        WHERE t.user_id = $1
         UNION ALL
-        SELECT $1
+        SELECT $1 AS "source_id",
+               TRUE AS "is_direct"
         "#,
         user_id
     )
     .fetch_all(connection)
     .await?;
-    Ok(source_ids.into_iter().flatten().collect())
+
+    let mut all = Vec::with_capacity(rows.len());
+    let mut direct = Vec::new();
+    let mut team_or_channel = Vec::new();
+    for row in rows {
+        let Some(source_id) = row.source_id else {
+            continue;
+        };
+        if row.is_direct.unwrap_or(false) {
+            direct.push(source_id.clone());
+        } else {
+            team_or_channel.push(source_id.clone());
+        }
+        all.push(source_id);
+    }
+    Ok(UserSources {
+        all,
+        direct,
+        team_or_channel,
+    })
+}
+
+#[cfg(test)]
+async fn fetch_user_source_ids(
+    connection: &mut PgConnection,
+    user_id: &str,
+) -> Result<Vec<String>, sqlx::Error> {
+    fetch_user_sources(connection, user_id)
+        .await
+        .map(|sources| sources.all)
 }
 
 // -- Lightweight top clauses: only id + sort_ts (plus filter-required joins) --
@@ -1229,6 +1340,216 @@ fn date_predicate(col: &str, lit: &DateLiteral) -> String {
     }
 }
 
+/// Result of stripping a top-level [`ShareSource`] conjunct from an arm filter
+/// so the arm can narrow its driving source-id array directly instead of scanning
+/// all sources and post-filtering.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StrippedShareSource {
+    Direct,
+    TeamOrChannel,
+    /// Both `Direct` and `TeamOrChannel` were required simultaneously; since the
+    /// sets are disjoint, no item can match.
+    Contradiction,
+}
+
+fn strip_share_source_conjunction<T: Clone>(
+    expr: &Expr<T>,
+    extract: impl Fn(&T) -> Option<ShareSource> + Copy,
+) -> Option<(StrippedShareSource, Option<Expr<T>>)> {
+    match expr {
+        Expr::Literal(lit) => extract(lit).map(|source| {
+            (
+                match source {
+                    ShareSource::Direct => StrippedShareSource::Direct,
+                    ShareSource::TeamOrChannel => StrippedShareSource::TeamOrChannel,
+                },
+                None,
+            )
+        }),
+        Expr::And(a, b) => {
+            let left = strip_share_source_conjunction(a, extract);
+            let right = strip_share_source_conjunction(b, extract);
+            match (left, right) {
+                (Some((left_ss, left_expr)), Some((right_ss, right_expr))) => {
+                    let combined = match (left_ss, right_ss) {
+                        (StrippedShareSource::Contradiction, _)
+                        | (_, StrippedShareSource::Contradiction) => {
+                            StrippedShareSource::Contradiction
+                        }
+                        (StrippedShareSource::Direct, StrippedShareSource::Direct) => {
+                            StrippedShareSource::Direct
+                        }
+                        (
+                            StrippedShareSource::TeamOrChannel,
+                            StrippedShareSource::TeamOrChannel,
+                        ) => StrippedShareSource::TeamOrChannel,
+                        _ => StrippedShareSource::Contradiction,
+                    };
+                    let stripped = match (left_expr, right_expr) {
+                        (Some(left), Some(right)) => Some(Expr::and(left, right)),
+                        (Some(expr), None) | (None, Some(expr)) => Some(expr),
+                        (None, None) => None,
+                    };
+                    Some((combined, stripped))
+                }
+                (Some((ss, left_expr)), None)
+                    if !expr_contains_share_source(b, |lit| extract(lit).is_some()) =>
+                {
+                    let right_expr = clone_expr(b);
+                    Some((
+                        ss,
+                        Some(match left_expr {
+                            Some(left_expr) => Expr::and(left_expr, right_expr),
+                            None => right_expr,
+                        }),
+                    ))
+                }
+                (None, Some((ss, right_expr)))
+                    if !expr_contains_share_source(a, |lit| extract(lit).is_some()) =>
+                {
+                    let left_expr = clone_expr(a);
+                    Some((
+                        ss,
+                        Some(match right_expr {
+                            Some(right_expr) => Expr::and(left_expr, right_expr),
+                            None => left_expr,
+                        }),
+                    ))
+                }
+                _ => None,
+            }
+        }
+        Expr::Or(_, _) | Expr::Not(_) => None,
+    }
+}
+
+/// Resolves the `(driving_source_slot, exclude_source_slot)` pair for an arm
+/// after stripping any top-level [`ShareSource`] conjunct.
+fn arm_source_slots(
+    stripped: Option<StrippedShareSource>,
+    all_slot: usize,
+    slots: Option<ShareSourceSlots>,
+) -> (usize, Option<usize>) {
+    match (stripped, slots) {
+        (Some(StrippedShareSource::Direct), Some(slots)) => (slots.direct, None),
+        (Some(StrippedShareSource::TeamOrChannel), Some(slots)) => {
+            (slots.team_or_channel, Some(slots.direct))
+        }
+        _ => (all_slot, None),
+    }
+}
+
+/// Fenced per-entity anti-check on `entity_access` using native UUID equality
+/// against `entity_access_entity_id_entity_type_idx` and `array_position` so
+/// each candidate performs one index descent instead of one per excluded source.
+fn fenced_entity_access_exclude(
+    uuid_id_sql: &str,
+    entity_type: &str,
+    exclude_slot: usize,
+) -> String {
+    format!(
+        r#"NOT EXISTS (
+                    SELECT 1 FROM (
+                        SELECT 1
+                        FROM entity_access ea_ex
+                        WHERE ea_ex.entity_id = {uuid_id_sql}
+                          AND ea_ex.entity_type = '{entity_type}'
+                          AND array_position(${exclude_slot}::text[], ea_ex.source_id) IS NOT NULL
+                        LIMIT 1
+                    ) direct_grant
+                )"#
+    )
+}
+
+/// Renders a [`ShareSource`] literal inside a boolean expression (e.g. under OR/NOT,
+/// or in candidate-gate queries without bound share-source arrays).
+fn share_source_literal_sql(
+    entity_id_sql: &str,
+    entity_type: &str,
+    source: ShareSource,
+    slots: Option<ShareSourceSlots>,
+) -> String {
+    if let Some(slots) = slots {
+        let direct_exists = format!(
+            r#"EXISTS (
+                SELECT 1 FROM (
+                    SELECT 1 FROM entity_access ea_ss
+                    WHERE ea_ss.entity_id::text = {entity_id_sql}
+                      AND ea_ss.entity_type = '{entity_type}'
+                      AND array_position(${direct}::text[], ea_ss.source_id) IS NOT NULL
+                    LIMIT 1
+                ) direct_match
+            )"#,
+            direct = slots.direct,
+        );
+        return match source {
+            ShareSource::Direct => direct_exists,
+            ShareSource::TeamOrChannel => format!(
+                r#"(EXISTS (
+                    SELECT 1 FROM (
+                        SELECT 1 FROM entity_access ea_ss
+                        WHERE ea_ss.entity_id::text = {entity_id_sql}
+                          AND ea_ss.entity_type = '{entity_type}'
+                          AND array_position(${team_or_channel}::text[], ea_ss.source_id) IS NOT NULL
+                        LIMIT 1
+                    ) tc_match
+                ) AND NOT {direct_exists})"#,
+                team_or_channel = slots.team_or_channel,
+            ),
+        };
+    }
+
+    // Self-contained fallback for candidate-gate queries (touched/notified) that
+    // bind only `$1` (viewer user id) without separate share-source arrays.
+    let direct_exists = format!(
+        r#"EXISTS (
+            SELECT 1 FROM entity_access ea_ss
+            WHERE ea_ss.entity_id::text = {entity_id_sql}
+              AND ea_ss.entity_type = '{entity_type}'
+              AND (
+                  ea_ss.source_id = $1
+                  OR EXISTS (
+                      SELECT 1
+                      FROM comms_channel_participants cp
+                      JOIN comms_channels ch ON ch.id = cp.channel_id
+                      WHERE cp.user_id = $1
+                        AND cp.left_at IS NULL
+                        AND ch.channel_type = 'direct_message'
+                        AND cp.channel_id::text = ea_ss.source_id
+                  )
+              )
+            {PER_CANDIDATE}
+        )"#
+    );
+    match source {
+        ShareSource::Direct => direct_exists,
+        ShareSource::TeamOrChannel => format!(
+            r#"(EXISTS (
+                SELECT 1 FROM entity_access ea_ss
+                WHERE ea_ss.entity_id::text = {entity_id_sql}
+                  AND ea_ss.entity_type = '{entity_type}'
+                  AND (
+                      EXISTS (
+                          SELECT 1 FROM team_user tu
+                          WHERE tu.user_id = $1
+                            AND tu.team_id::text = ea_ss.source_id
+                      )
+                      OR EXISTS (
+                          SELECT 1
+                          FROM comms_channel_participants cp
+                          JOIN comms_channels ch ON ch.id = cp.channel_id
+                          WHERE cp.user_id = $1
+                            AND cp.left_at IS NULL
+                            AND ch.channel_type <> 'direct_message'
+                            AND cp.channel_id::text = ea_ss.source_id
+                      )
+                  )
+                {PER_CANDIDATE}
+            ) AND NOT {direct_exists})"#
+        ),
+    }
+}
+
 /// Renders the document filter as ` AND ...` against the `d` alias.
 /// `id_arrays` binds its runs of document ids as arrays (see
 /// [`document_ids`]); without it every id renders inline, for queries with no
@@ -1236,18 +1557,20 @@ fn date_predicate(col: &str, lit: &DateLiteral) -> String {
 pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
     ast: Option<&Expr<DocumentLiteral>>,
     id_arrays: Option<&mut DocumentIdArrays>,
+    share_source_slots: Option<ShareSourceSlots>,
 ) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
     let expr = push_not_inward(expr, false);
+    let literal_sql = |literal| document_literal_sql(literal, share_source_slots);
     let formatting = match id_arrays {
-        Some(id_arrays) => document_ids::render(&expr, id_arrays, document_literal_sql),
+        Some(id_arrays) => document_ids::render(&expr, id_arrays, literal_sql),
         None => expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
             filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
             filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
-            filter_ast::ExprFrame::Literal(literal) => document_literal_sql(literal),
+            filter_ast::ExprFrame::Literal(literal) => literal_sql(literal),
         }),
     };
     if formatting.is_empty() {
@@ -1277,11 +1600,15 @@ pub(in crate::outbound::pg_soup_repo) fn document_literal_constant(
         | DocumentLiteral::UpdatedAt(_)
         | DocumentLiteral::Property(_)
         | DocumentLiteral::EmailAttachmentParticipant(_)
-        | DocumentLiteral::NameContains(_) => None,
+        | DocumentLiteral::NameContains(_)
+        | DocumentLiteral::ShareSource(_) => None,
     }
 }
 
-fn document_literal_sql(literal: DocumentLiteral) -> String {
+fn document_literal_sql(
+    literal: DocumentLiteral,
+    share_source_slots: Option<ShareSourceSlots>,
+) -> String {
     match literal {
         DocumentLiteral::FileType(f) => {
             format!(r#"d."fileType" = '{f}'"#)
@@ -1352,6 +1679,9 @@ fn document_literal_sql(literal: DocumentLiteral) -> String {
         // The Soup domain replaces CRM associations with the associated
         // document ids before querying, so an unresolved one matches nothing.
         DocumentLiteral::CrmAssociated(_) => "FALSE".to_string(),
+        DocumentLiteral::ShareSource(source) => {
+            share_source_literal_sql("d.id", "document", source, share_source_slots)
+        }
     }
 }
 
@@ -1524,12 +1854,14 @@ pub(in crate::outbound::pg_soup_repo) fn project_literal_constant(
         | ProjectLiteral::Owner(_)
         | ProjectLiteral::NotificationState(_)
         | ProjectLiteral::CreatedAt(_)
-        | ProjectLiteral::UpdatedAt(_) => None,
+        | ProjectLiteral::UpdatedAt(_)
+        | ProjectLiteral::ShareSource(_) => None,
     }
 }
 
 pub(in crate::outbound::pg_soup_repo) fn build_project_filter(
     ast: Option<&Expr<ProjectLiteral>>,
+    share_source_slots: Option<ShareSourceSlots>,
 ) -> String {
     let Some(expr) = ast else {
         return String::new();
@@ -1561,6 +1893,9 @@ pub(in crate::outbound::pg_soup_repo) fn build_project_filter(
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::UpdatedAt(lit)) => {
             date_predicate(r#"p."updatedAt""#, &lit)
+        }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::ShareSource(source)) => {
+            share_source_literal_sql("p.id", "project", source, share_source_slots)
         }
     });
     if formatting.is_empty() {
@@ -1885,7 +2220,33 @@ pub(in crate::outbound::pg_soup_repo) fn access_semi_join(
 /// source's grant count, so it planned callers holding hundreds of thousands
 /// of grants with one item probe per grant; it estimates the array from
 /// `entity_access.source_id` statistics and hashes the grants instead.
-fn bound_access_semi_join(id_sql: &str, entity_type: &str, source_ids: usize) -> String {
+///
+/// When `exclude_source_ids` is set (e.g. excluding direct/DM grants when
+/// listing team/channel-only shares), the anti-check runs inside the
+/// deduplicated `entity_access` set behind an `OFFSET 0` fence so stale table
+/// statistics can never push it onto a full scan of the outer item table.
+fn bound_access_semi_join(
+    id_sql: &str,
+    entity_type: &str,
+    source_ids: usize,
+    exclude_source_ids: Option<usize>,
+) -> String {
+    if let Some(exclude_slot) = exclude_source_ids {
+        let exclude = fenced_entity_access_exclude("kept.entity_id", entity_type, exclude_slot);
+        return format!(
+            r#"{id_sql} IN (
+                    SELECT kept.entity_id::text
+                    FROM (
+                        SELECT DISTINCT ea.entity_id
+                        FROM entity_access ea
+                        WHERE ea.source_id = ANY(${source_ids}::text[])
+                            AND ea.entity_type = '{entity_type}'
+                        OFFSET 0
+                    ) kept
+                    WHERE {exclude}
+                )"#
+        );
+    }
     format!(
         r#"{id_sql} IN (
                     SELECT ea.entity_id::text
@@ -1910,7 +2271,32 @@ fn bound_access_semi_join(id_sql: &str, entity_type: &str, source_ids: usize) ->
 /// The fence reads the grants by source before the `DISTINCT`; without it,
 /// `DISTINCT ... LIMIT` was answered by walking an entity-ordered index over
 /// all of `entity_access`.
-fn counted_document_access_semi_join(source_ids: usize, grants: u32) -> String {
+fn counted_document_access_semi_join(
+    source_ids: usize,
+    grants: u32,
+    exclude_source_ids: Option<usize>,
+) -> String {
+    if let Some(exclude_slot) = exclude_source_ids {
+        let exclude = fenced_entity_access_exclude("kept.entity_id", "document", exclude_slot);
+        return format!(
+            r#"d.id IN (
+                    SELECT kept.entity_id::text
+                    FROM (
+                        SELECT DISTINCT held.entity_id
+                        FROM (
+                            SELECT ea.entity_id
+                            FROM entity_access ea
+                            WHERE ea.source_id = ANY(${source_ids}::text[])
+                                AND ea.entity_type = 'document'
+                            OFFSET 0
+                        ) held
+                        LIMIT {grants}
+                    ) kept
+                    WHERE {exclude}
+                    LIMIT {grants}
+                )"#
+        );
+    }
     format!(
         r#"d.id IN (
                     SELECT DISTINCT held.entity_id::text
@@ -1954,11 +2340,23 @@ impl DocumentGrants {
     async fn count(
         connection: &mut PgConnection,
         filter: &EntityFilterAst,
-        source_ids: &[String],
+        sources: &UserSources,
     ) -> Result<Self, sqlx::Error> {
         if !document_arm_gates_on_count(filter) {
             return Ok(Self::Estimated);
         }
+        let stripped = filter.document_filter.as_deref().and_then(|expr| {
+            strip_share_source_conjunction(expr, |lit| match lit {
+                DocumentLiteral::ShareSource(source) => Some(*source),
+                _ => None,
+            })
+        });
+        let source_ids: &[String] = match stripped.as_ref().map(|(ss, _)| *ss) {
+            Some(StrippedShareSource::Contradiction) => return Ok(Self::Estimated),
+            Some(StrippedShareSource::Direct) => &sources.direct,
+            Some(StrippedShareSource::TeamOrChannel) => &sources.team_or_channel,
+            None => &sources.all,
+        };
         let span = tracing::info_span!(
             "soup.sql.count_document_grants",
             grants = tracing::field::Empty
@@ -2111,12 +2509,23 @@ impl DocumentArmAccess {
     /// Closes the arm, after its filters. A flat timestamp page passes
     /// [`FLAT_TIMESTAMP_PAGE`]; property and name sorts, and grouped pages,
     /// which count every candidate, pass `None` and probe them all.
-    fn close(self, page: Option<&FencedPage>, source_ids: usize) -> String {
+    fn close(
+        self,
+        page: Option<&FencedPage>,
+        source_ids: usize,
+        exclude_source_ids: Option<usize>,
+    ) -> String {
         let probe = bounded_access_probe("bounded_documents.id", "document", source_ids);
+        let exclude = exclude_source_ids.map_or_else(String::new, |slot| {
+            format!(
+                " AND {}",
+                fenced_entity_access_exclude("bounded_documents.id::uuid", "document", slot)
+            )
+        });
         match (self, page) {
             (Self::Joined | Self::Counted(_), _) => String::new(),
             (Self::AfterFilters, None) => {
-                format!(" {PER_CANDIDATE}) bounded_documents WHERE {probe}\n")
+                format!(" {PER_CANDIDATE}) bounded_documents WHERE {probe}{exclude}\n")
             }
             (
                 Self::AfterFilters,
@@ -2125,7 +2534,7 @@ impl DocumentArmAccess {
                     after_cursor,
                 }),
             ) => format!(
-                " ORDER BY {order_by} {PER_CANDIDATE}) bounded_documents WHERE {after_cursor} AND {probe}\n"
+                " ORDER BY {order_by} {PER_CANDIDATE}) bounded_documents WHERE {after_cursor} AND {probe}{exclude}\n"
             ),
         }
     }
@@ -2159,6 +2568,7 @@ fn document_top_where_clause(
     sort_method: SimpleSortMethod,
     access: DocumentArmAccess,
     source_ids: usize,
+    exclude_source_ids: Option<usize>,
 ) -> String {
     let user_history_join = if top_needs_user_history(sort_method) {
         r#"                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
@@ -2169,11 +2579,11 @@ fn document_top_where_clause(
     let access_clause = match access {
         DocumentArmAccess::Joined => format!(
             "\n                AND {}",
-            bound_access_semi_join("d.id", "document", source_ids)
+            bound_access_semi_join("d.id", "document", source_ids, exclude_source_ids)
         ),
         DocumentArmAccess::Counted(grants) => format!(
             "\n                AND {}",
-            counted_document_access_semi_join(source_ids, grants)
+            counted_document_access_semi_join(source_ids, grants, exclude_source_ids)
         ),
         DocumentArmAccess::AfterFilters => String::new(),
     };
@@ -2188,16 +2598,16 @@ fn chat_top_where_clause(source_ids: usize) -> String {
         r#"                WHERE c."deletedAt" IS NULL
                 AND {}
 "#,
-        bound_access_semi_join("c.id", "chat", source_ids)
+        bound_access_semi_join("c.id", "chat", source_ids, None)
     )
 }
 
-fn project_top_where_clause(source_ids: usize) -> String {
+fn project_top_where_clause(source_ids: usize, exclude_source_ids: Option<usize>) -> String {
     format!(
         r#"                WHERE p."deletedAt" IS NULL
                 AND {}
 "#,
-        bound_access_semi_join("p.id", "project", source_ids)
+        bound_access_semi_join("p.id", "project", source_ids, exclude_source_ids)
     )
 }
 
@@ -2242,9 +2652,9 @@ impl ScanBound {
 
 async fn scan_bound(
     connection: &mut sqlx::PgConnection,
-    source_ids: &[String],
+    source_count: usize,
 ) -> Result<ScanBound, sqlx::Error> {
-    let sources = i64::try_from(source_ids.len()).unwrap_or(i64::MAX);
+    let sources = i64::try_from(source_count).unwrap_or(i64::MAX);
     let span = tracing::info_span!(
         "soup.source_items.bound",
         sources,
@@ -2310,13 +2720,14 @@ fn build_query_from<'a>(
 ) -> (QueryBuilder<'a, Postgres>, Option<FeedReads>) {
     let sort_method = sort.timestamp_method();
     let source_ids = source_ids_slot(sort, false);
+    let ss_slots = share_source_slots(filter_ast, sort, false);
     let property_sort = matches!(sort, DynamicSort::Property { .. });
     let name_sort = matches!(sort, DynamicSort::Name { .. });
 
     let DynamicArms {
-        documents: include_documents,
+        documents: mut include_documents,
         chats: include_chats,
-        projects: include_projects,
+        projects: mut include_projects,
         initiatives: include_initiatives,
         database_rows: include_database_rows,
     } = DynamicArms::new(filter_ast);
@@ -2355,7 +2766,7 @@ fn build_query_from<'a>(
         })
         .flatten();
 
-    let document_filter =
+    let document_filter_after_notif =
         if optimized_notification_predicate.is_some() && document_notification.is_some() {
             document_notification
                 .as_ref()
@@ -2370,7 +2781,7 @@ fn build_query_from<'a>(
     } else {
         filter_ast.chat_filter.as_deref()
     };
-    let project_filter =
+    let project_filter_after_notif =
         if optimized_notification_predicate.is_some() && project_notification.is_some() {
             project_notification
                 .as_ref()
@@ -2378,6 +2789,51 @@ fn build_query_from<'a>(
         } else {
             filter_ast.project_filter.as_deref()
         };
+
+    let doc_share_source = document_filter_after_notif.and_then(|expr| {
+        strip_share_source_conjunction(expr, |lit| match lit {
+            DocumentLiteral::ShareSource(source) => Some(*source),
+            _ => None,
+        })
+    });
+    let proj_share_source = project_filter_after_notif.and_then(|expr| {
+        strip_share_source_conjunction(expr, |lit| match lit {
+            ProjectLiteral::ShareSource(source) => Some(*source),
+            _ => None,
+        })
+    });
+
+    if matches!(
+        doc_share_source.as_ref().map(|(ss, _)| *ss),
+        Some(StrippedShareSource::Contradiction)
+    ) {
+        include_documents = false;
+    }
+    if matches!(
+        proj_share_source.as_ref().map(|(ss, _)| *ss),
+        Some(StrippedShareSource::Contradiction)
+    ) {
+        include_projects = false;
+    }
+
+    let document_filter = match &doc_share_source {
+        Some((_, expr)) => expr.as_ref(),
+        None => document_filter_after_notif,
+    };
+    let project_filter = match &proj_share_source {
+        Some((_, expr)) => expr.as_ref(),
+        None => project_filter_after_notif,
+    };
+    let (doc_source_ids, doc_exclude_source_ids) = arm_source_slots(
+        doc_share_source.as_ref().map(|(ss, _)| *ss),
+        source_ids,
+        ss_slots,
+    );
+    let (proj_source_ids, proj_exclude_source_ids) = arm_source_slots(
+        proj_share_source.as_ref().map(|(ss, _)| *ss),
+        source_ids,
+        ss_slots,
+    );
 
     let properties_filter = filter_ast.properties_filter.as_deref();
     // An arm comes from source_items when the projection can order this sort and
@@ -2393,6 +2849,9 @@ fn build_query_from<'a>(
                 properties_filter,
                 optimized_notification_predicate.is_some() && document_notification.is_some(),
                 viewer,
+                doc_source_ids,
+                doc_exclude_source_ids,
+                ss_slots,
                 document_ids,
             )
         })
@@ -2403,6 +2862,7 @@ fn build_query_from<'a>(
                 chat_filter,
                 properties_filter,
                 optimized_notification_predicate.is_some() && chat_notification.is_some(),
+                source_ids,
             )
         })
         .flatten();
@@ -2412,6 +2872,9 @@ fn build_query_from<'a>(
                 project_filter,
                 properties_filter,
                 optimized_notification_predicate.is_some() && project_notification.is_some(),
+                proj_source_ids,
+                proj_exclude_source_ids,
+                ss_slots,
             )
         })
         .flatten();
@@ -2423,7 +2886,6 @@ fn build_query_from<'a>(
             Feed::new(
                 sort_method,
                 exclude_frecency,
-                source_ids,
                 [document_arm, chat_arm, project_arm].into_iter().flatten(),
             )
         })
@@ -2481,15 +2943,24 @@ fn build_query_from<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method, access, source_ids));
-        builder.push(build_document_filter(document_filter, Some(document_ids)));
+        builder.push(document_top_where_clause(
+            sort_method,
+            access,
+            doc_source_ids,
+            doc_exclude_source_ids,
+        ));
+        builder.push(build_document_filter(
+            document_filter,
+            Some(document_ids),
+            ss_slots,
+        ));
         builder.push(build_probed_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "d.id",
             access.property_probe(),
         ));
         let page = (!property_sort && !name_sort).then_some(&FLAT_TIMESTAMP_PAGE);
-        builder.push(access.close(page, source_ids));
+        builder.push(access.close(page, doc_source_ids, doc_exclude_source_ids));
     }
 
     if chats_from_table {
@@ -2514,8 +2985,11 @@ fn build_query_from<'a>(
         if optimized_notification_predicate.is_some() && project_notification.is_some() {
             builder.push(build_notification_join("p", "project"));
         }
-        builder.push(project_top_where_clause(source_ids));
-        builder.push(build_project_filter(project_filter));
+        builder.push(project_top_where_clause(
+            proj_source_ids,
+            proj_exclude_source_ids,
+        ));
+        builder.push(build_project_filter(project_filter, ss_slots));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "p.id",
@@ -3047,10 +3521,12 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     }
 
     let mut transaction = begin_dynamic_query(db).await?;
-    let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
+    let sources = fetch_user_sources(&mut transaction, user_id.as_ref()).await?;
     let document_grants =
-        DocumentGrants::count(&mut transaction, cursor.filter(), &source_ids).await?;
-    let first_document_ids = first_document_id_slot(*cursor.sort_method(), false);
+        DocumentGrants::count(&mut transaction, cursor.filter(), &sources).await?;
+    let uses_share_source = filter_uses_share_source(cursor.filter());
+    let first_document_ids =
+        first_document_id_slot_for(cursor.filter(), *cursor.sort_method(), false);
     let mut document_ids = DocumentIdArrays::starting_at(first_document_ids);
     let build = |item_source, document_ids: &mut DocumentIdArrays| {
         build_query_from(
@@ -3064,13 +3540,15 @@ async fn expanded_dynamic_cursor_soup_hydrated(
         )
     };
     let (mut builder, feed_reads) = build(item_source, &mut document_ids);
-    if let Some(reads) = feed_reads
-        && !scan_bound(&mut transaction, &source_ids)
+    if let Some(reads) = feed_reads {
+        let effective_source_count = effective_scan_source_count(cursor.filter(), &sources);
+        if !scan_bound(&mut transaction, effective_source_count)
             .await?
             .allows(reads, query_limit)
-    {
-        document_ids = DocumentIdArrays::starting_at(first_document_ids);
-        (builder, _) = build(ItemSource::ItemTables, &mut document_ids);
+        {
+            document_ids = DocumentIdArrays::starting_at(first_document_ids);
+            (builder, _) = build(ItemSource::ItemTables, &mut document_ids);
+        }
     }
     let mut query = builder
         .build()
@@ -3094,7 +3572,10 @@ async fn expanded_dynamic_cursor_soup_hydrated(
         }
         DynamicSort::Timestamp(_) => {}
     }
-    query = query.bind(&source_ids);
+    query = query.bind(&sources.all);
+    if uses_share_source {
+        query = query.bind(&sources.direct).bind(&sources.team_or_channel);
+    }
     for ids in document_ids.into_binds() {
         query = query.bind(ids);
     }
@@ -3321,6 +3802,48 @@ fn build_grouped_items_cte(
     bind
 }
 
+/// Worst-case source count across the active arms of a projected `source_items`
+/// scan: a `Direct`-only query counts only direct sources (`self` + DMs), so a
+/// caller in hundreds of channels still uses the fast `source_items` scan.
+fn effective_scan_source_count(filter_ast: &EntityFilterAst, sources: &UserSources) -> usize {
+    let arms = DynamicArms::new(filter_ast);
+    let mut max_sources = 0usize;
+    if arms.documents {
+        let stripped = filter_ast.document_filter.as_deref().and_then(|expr| {
+            strip_share_source_conjunction(expr, |lit| match lit {
+                DocumentLiteral::ShareSource(source) => Some(*source),
+                _ => None,
+            })
+        });
+        let count = match stripped.map(|(ss, _)| ss) {
+            Some(StrippedShareSource::Direct) => sources.direct.len(),
+            Some(StrippedShareSource::TeamOrChannel) => sources.team_or_channel.len(),
+            Some(StrippedShareSource::Contradiction) => 0,
+            None => sources.all.len(),
+        };
+        max_sources = max_sources.max(count);
+    }
+    if arms.chats {
+        max_sources = max_sources.max(sources.all.len());
+    }
+    if arms.projects {
+        let stripped = filter_ast.project_filter.as_deref().and_then(|expr| {
+            strip_share_source_conjunction(expr, |lit| match lit {
+                ProjectLiteral::ShareSource(source) => Some(*source),
+                _ => None,
+            })
+        });
+        let count = match stripped.map(|(ss, _)| ss) {
+            Some(StrippedShareSource::Direct) => sources.direct.len(),
+            Some(StrippedShareSource::TeamOrChannel) => sources.team_or_channel.len(),
+            Some(StrippedShareSource::Contradiction) => 0,
+            None => sources.all.len(),
+        };
+        max_sources = max_sources.max(count);
+    }
+    max_sources
+}
+
 /// Build the grouped query with grouping CTE.
 /// Returns (QueryBuilder, entity_type_bind) where entity_type_bind is Some when
 /// property grouping with entity_type filter is used (bind at $10).
@@ -3334,17 +3857,60 @@ fn build_grouped_query<'a>(
 ) -> (QueryBuilder<'a, Postgres>, Option<String>) {
     let sort_method = sort.timestamp_method();
     let source_ids = source_ids_slot(sort, true);
+    let ss_slots = share_source_slots(filter_ast, sort, true);
     let property_sort = matches!(sort, DynamicSort::Property { .. });
     let name_sort = matches!(sort, DynamicSort::Name { .. });
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
     let DynamicArms {
-        documents: include_documents,
+        documents: mut include_documents,
         chats: include_chats,
-        projects: include_projects,
+        projects: mut include_projects,
         initiatives: include_initiatives,
         database_rows: include_database_rows,
     } = DynamicArms::new(filter_ast);
+    let doc_share_source = filter_ast.document_filter.as_deref().and_then(|expr| {
+        strip_share_source_conjunction(expr, |lit| match lit {
+            DocumentLiteral::ShareSource(source) => Some(*source),
+            _ => None,
+        })
+    });
+    let proj_share_source = filter_ast.project_filter.as_deref().and_then(|expr| {
+        strip_share_source_conjunction(expr, |lit| match lit {
+            ProjectLiteral::ShareSource(source) => Some(*source),
+            _ => None,
+        })
+    });
+    if matches!(
+        doc_share_source.as_ref().map(|(ss, _)| *ss),
+        Some(StrippedShareSource::Contradiction)
+    ) {
+        include_documents = false;
+    }
+    if matches!(
+        proj_share_source.as_ref().map(|(ss, _)| *ss),
+        Some(StrippedShareSource::Contradiction)
+    ) {
+        include_projects = false;
+    }
+    let document_filter = match &doc_share_source {
+        Some((_, expr)) => expr.as_ref(),
+        None => filter_ast.document_filter.as_deref(),
+    };
+    let project_filter = match &proj_share_source {
+        Some((_, expr)) => expr.as_ref(),
+        None => filter_ast.project_filter.as_deref(),
+    };
+    let (doc_source_ids, doc_exclude_source_ids) = arm_source_slots(
+        doc_share_source.as_ref().map(|(ss, _)| *ss),
+        source_ids,
+        ss_slots,
+    );
+    let (proj_source_ids, proj_exclude_source_ids) = arm_source_slots(
+        proj_share_source.as_ref().map(|(ss, _)| *ss),
+        source_ids,
+        ss_slots,
+    );
     // Gated like the other three legs. Beyond skipping a union branch that can
     // never match, this keeps the NIL-id exclusion every Soup query now sends
     // from reaching `push_filter` below — see the bind-numbering note there.
@@ -3374,7 +3940,6 @@ fn build_grouped_query<'a>(
 
     if include_documents {
         push_union_separator(&mut builder, &mut needs_separator);
-        let document_filter = filter_ast.document_filter.as_deref();
         let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
         let access = DocumentArmAccess::new(document_filter, document_grants);
         builder.push(access.open());
@@ -3387,15 +3952,24 @@ fn build_grouped_query<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method, access, source_ids));
-        builder.push(build_document_filter(document_filter, Some(document_ids)));
+        builder.push(document_top_where_clause(
+            sort_method,
+            access,
+            doc_source_ids,
+            doc_exclude_source_ids,
+        ));
+        builder.push(build_document_filter(
+            document_filter,
+            Some(document_ids),
+            ss_slots,
+        ));
         builder.push(build_probed_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "d.id",
             access.property_probe(),
         ));
         // Group totals count every candidate, so no early stop to order for.
-        builder.push(access.close(None, source_ids));
+        builder.push(access.close(None, doc_source_ids, doc_exclude_source_ids));
     }
 
     if include_chats {
@@ -3412,8 +3986,11 @@ fn build_grouped_query<'a>(
     if include_projects {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(grouped_project_top_clause(sort_method, name_sort));
-        builder.push(project_top_where_clause(source_ids));
-        builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
+        builder.push(project_top_where_clause(
+            proj_source_ids,
+            proj_exclude_source_ids,
+        ));
+        builder.push(build_project_filter(project_filter, ss_slots));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "p.id",
@@ -3625,11 +4202,15 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     let mut transaction = begin_dynamic_query(db).await?;
-    let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
+    let sources = fetch_user_sources(&mut transaction, user_id.as_ref()).await?;
     let document_grants =
-        DocumentGrants::count(&mut transaction, cursor.filter(), &source_ids).await?;
-    let mut document_ids =
-        DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), true));
+        DocumentGrants::count(&mut transaction, cursor.filter(), &sources).await?;
+    let uses_share_source = filter_uses_share_source(cursor.filter());
+    let mut document_ids = DocumentIdArrays::starting_at(first_document_id_slot_for(
+        cursor.filter(),
+        *cursor.sort_method(),
+        true,
+    ));
     let (mut query_builder, entity_type_bind) = build_grouped_query(
         cursor.filter(),
         exclude_frecency,
@@ -3677,7 +4258,10 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         }
         DynamicSort::Timestamp(_) => {}
     }
-    query = query.bind(&source_ids);
+    query = query.bind(&sources.all);
+    if uses_share_source {
+        query = query.bind(&sources.direct).bind(&sources.team_or_channel);
+    }
     for ids in document_ids.into_binds() {
         query = query.bind(ids);
     }
