@@ -283,6 +283,18 @@ describe('CRM email privacy query adapter', () => {
         'archived.example.com': company,
       })
     );
+
+    // Other refusals don't reread the list.
+    const reads = h.privacy.get.mock.calls.length;
+    await expect(
+      h.source.update.mutateAsync({
+        action: 'remove_domain',
+        scope: 'personal',
+        domain: 'personal.example.com',
+      })
+    ).rejects.toThrow();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(h.privacy.get).toHaveBeenCalledTimes(reads);
   });
 
   it('does not replace another user’s settings when an earlier mutation finishes', async () => {

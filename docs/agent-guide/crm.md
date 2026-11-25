@@ -793,7 +793,8 @@ only they see **Remove** on **Team blacklist** rows. A long domain wraps beside
 **Remove** instead of pushing it onto its own line. Archiving a company lists
 its domains there until it is restored. Admins see that the row's company is
 archived and get **Open company** (where **Restore** is) instead of **Remove**;
-shift-click opens the company beside the current split. Members, who can't see
+shift-click opens it in a new split, and a company already open in another split
+is brought to the front instead. Members, who can't see
 archived companies, get a plain row. A remove refused because the company was
 archived meanwhile says the same in its toast, and the row then shows the
 archived company. Personal domains affect
