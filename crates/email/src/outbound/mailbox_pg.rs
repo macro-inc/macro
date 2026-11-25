@@ -273,7 +273,7 @@ impl MailboxSyncRepository for PgMailboxSync {
                 s.id = $1 AND s.lease_id = $2 AND s.fence = $3
                 AND s.lease_until > now() AND s.link_id = l.id AND s.generation = l.sync_generation
                 AND l.is_sync_active AND l.grant_generation = $6
-            RETURNING s.next_run_at > now() AS "scheduled!", subscribed.working AS "subscribed!"
+            RETURNING s.next_run_at > now() AS "scheduled!", (s.provider <> 'IMAP' AND subscribed.working) AS "subscribed!"
         "#,
             lease.id,
             lease.lease_id,

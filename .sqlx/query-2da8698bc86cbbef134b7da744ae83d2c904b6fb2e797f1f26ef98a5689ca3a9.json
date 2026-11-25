@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH subscribed AS (\n                SELECT EXISTS (\n                    SELECT 1 FROM email_provider_subscriptions p\n                    JOIN email_mailbox_watch_work w ON w.link_id = p.link_id\n                    WHERE p.link_id = $8 AND p.generation = $9 AND p.provider_id IS NOT NULL\n                        AND p.expires_at > now() AND w.failures = 0\n                ) AS working\n            )\n            UPDATE\n                email_sync_streams s\n            SET\n                position = $4,\n                initial_complete = s.initial_complete OR $5,\n                -- A round's first page records the reader revision it started at,\n                -- and when: the claim that read it.\n                reader_revision = CASE WHEN s.position IS NULL THEN $7 ELSE s.reader_revision END,\n                round_started_at = CASE WHEN s.position IS NULL THEN s.lease_started_at ELSE s.round_started_at END,\n                last_completed_at = CASE WHEN $5 THEN now() ELSE last_completed_at END,\n                next_run_at = CASE\n                    WHEN s.provider = 'IMAP' THEN CASE\n                        WHEN $5 AND s.notification_revision <= s.leased_notification_revision\n                            THEN now() + make_interval(secs => $11::float8)\n                        ELSE now()\n                    END\n                    WHEN $5 AND (s.notified_at IS NULL OR s.notified_at <= s.lease_started_at)\n                        THEN now() + make_interval(secs => CASE WHEN subscribed.working THEN $10::float8 ELSE $11::float8 END)\n                    ELSE now()\n                END,\n                -- A checkpoint that started reading after the notification has\n                -- answered it; a deferred or partial read leaves it pending.\n                notified_at = CASE\n                    WHEN s.provider = 'IMAP' THEN CASE\n                        WHEN $5 AND s.notification_revision <= s.leased_notification_revision THEN NULL\n                        ELSE s.notified_at\n                    END\n                    WHEN $5 AND s.notified_at <= s.lease_started_at THEN NULL\n                    ELSE s.notified_at\n                END,\n                lease_id = NULL, lease_until = NULL\n            FROM\n                email_links l,\n                subscribed\n            WHERE\n                s.id = $1 AND s.lease_id = $2 AND s.fence = $3\n                AND s.lease_until > now() AND s.link_id = l.id AND s.generation = l.sync_generation\n                AND l.is_sync_active AND l.grant_generation = $6\n            RETURNING s.next_run_at > now() AS \"scheduled!\", (s.provider <> 'IMAP' AND subscribed.working) AS \"subscribed!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "scheduled!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "subscribed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text",
+        "Bool",
+        "Int8",
+        "Int2",
+        "Uuid",
+        "Int8",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "2da8698bc86cbbef134b7da744ae83d2c904b6fb2e797f1f26ef98a5689ca3a9"
+}

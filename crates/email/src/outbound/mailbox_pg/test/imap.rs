@@ -940,3 +940,99 @@ async fn reordered_host_hints_cannot_clear_newer_mailbox_health(db: PgPool) {
         .unwrap();
     assert!(issue.is_none(), "a new binding starts a new revision scope");
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_imap_checkpoint_polls_every_two_minutes_unless_a_newer_revision_arrived(db: PgPool) {
+    let (repo, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+    // A working Graph subscription row on the link: IMAP must not take
+    // Outlook's subscribed interval from it.
+    sqlx::query!(
+        "INSERT INTO email_mailbox_watch_work (link_id, failures) VALUES ($1, 0)",
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_provider_subscriptions (id, link_id, generation, provider_id, client_state_hash, expires_at)
+            VALUES ($1, $2, 1, 'graph-subscription', '\x00', now() + interval '3 days')
+        "#,
+        Uuid::from_u128(200),
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let stream = repo
+        .claim_stream(Uuid::from_u128(201), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+
+    let committed = repo
+        .commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        committed.next_poll_seconds,
+        Some(POLL_INTERVALS.unsubscribed)
+    );
+    let interval = sqlx::query_scalar!(
+        r#"
+        SELECT EXTRACT(EPOCH FROM next_run_at - last_completed_at)::float8 AS "seconds!"
+        FROM email_sync_streams
+        WHERE id = $1
+        "#,
+        stream.id,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(interval, f64::from(POLL_INTERVALS.unsubscribed));
+
+    sqlx::query!(
+        "UPDATE email_sync_streams SET next_run_at = now() WHERE id = $1",
+        stream.id,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let stream = repo
+        .claim_stream(Uuid::from_u128(202), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE email_sync_streams
+        SET notification_revision = notification_revision + 1
+        WHERE id = $1
+        "#,
+        stream.id,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let committed = repo
+        .commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
+
+    assert_eq!(committed.next_poll_seconds, None);
+    let due = sqlx::query_scalar!(
+        r#"SELECT next_run_at <= clock_timestamp() AS "due!" FROM email_sync_streams WHERE id = $1"#,
+        stream.id,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(
+        due,
+        "a revision that arrived during the read keeps the folder due"
+    );
+}
