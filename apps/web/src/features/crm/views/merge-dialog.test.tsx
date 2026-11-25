@@ -23,6 +23,11 @@ const fixture = vi.hoisted(() => ({
     email?: string | null;
     companyName?: string | null;
   }[],
+  /** What the server finds for a typed search, beyond Quick Access. */
+  searched: [] as { id: string; name: string; email?: string | null }[],
+  searches: [] as string[],
+  hasMore: false,
+  loadMore: vi.fn(async () => {}),
 }));
 
 vi.mock('../context/crm-context', () => ({
@@ -40,6 +45,16 @@ vi.mock('../context/crm-context', () => ({
     createContactSuggestions: () => ({
       contacts: () => fixture.people,
       query: { isLoading: false },
+    }),
+    createContactSearch: (search: () => string) => ({
+      contacts: () => {
+        fixture.searches.push(search());
+        return search().trim() === '' ? [] : fixture.searched;
+      },
+      isLoading: () => false,
+      hasMore: () => fixture.hasMore,
+      isLoadingMore: () => false,
+      loadMore: fixture.loadMore,
     }),
   }),
 }));
@@ -195,6 +210,10 @@ beforeEach(() => {
   onOpenChange = vi.fn();
   fixture.suggestions = [];
   fixture.people = [];
+  fixture.searched = [];
+  fixture.searches = [];
+  fixture.hasMore = false;
+  fixture.loadMore.mockClear();
   fixture.commandsFor = undefined;
 });
 afterEach(cleanup);
@@ -703,4 +722,37 @@ it('starting from one person, finds the others by name, address or company', asy
     survivorId: 'pat',
     sourceIds: ['pat-l'],
   });
+});
+
+it('finds a person beyond Quick Access through the server, and reads more pages', async () => {
+  fixture.people = [
+    { id: 'pat', name: 'Pat Lee', email: 'pat@acme.example.com' },
+  ];
+  fixture.searched = [
+    { id: 'pat', name: 'Pat Lee', email: 'pat@acme.example.com' },
+    { id: 'old-pat', name: 'Pat Leigh', email: 'pleigh@acme.example.com' },
+  ];
+  fixture.hasMore = true;
+  fixture.commands = {
+    review: vi.fn(async () => ({ ok: true as const, value: peopleReview() })),
+    commit: vi.fn(),
+  };
+  open([PAT_L], 'contact');
+
+  expect(screen.queryByText('Pat Leigh')).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Show more' }),
+    'nothing to page before a search'
+  ).toBeNull();
+  fireEvent.input(screen.getByLabelText('Search people'), {
+    target: { value: 'pat le' },
+  });
+  expect(fixture.searches).toContain('pat le');
+  expect(
+    screen.getAllByText('Pat Lee'),
+    'a match in both is listed once'
+  ).toHaveLength(1);
+  expect(screen.getByText('Pat Leigh')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+  expect(fixture.loadMore).toHaveBeenCalled();
 });

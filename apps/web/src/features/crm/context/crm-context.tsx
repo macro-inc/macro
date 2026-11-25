@@ -218,6 +218,24 @@ export type CrmContext = {
     >;
     query: { readonly isLoading: boolean };
   };
+  /**
+   * People matching a typed query beyond the suggestions: cached matches at
+   * once, then the server's pages across the viewer's CRM teams.
+   */
+  createContactSearch(search: Accessor<string>): {
+    contacts: Accessor<
+      readonly {
+        id: string;
+        name: string;
+        email?: string | null;
+        companyName?: string | null;
+      }[]
+    >;
+    isLoading: () => boolean;
+    hasMore: () => boolean;
+    isLoadingMore: () => boolean;
+    loadMore: () => Promise<void>;
+  };
   exportCompanies(
     signal: AbortSignal,
     progress: (count: number) => void

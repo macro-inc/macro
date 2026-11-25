@@ -40,10 +40,7 @@ import {
   type MergeSameAddressPerson,
   type MergeSharingChoice,
 } from '../core/merge';
-import {
-  useQuickAccessCrmCompaniesQuery,
-  useQuickAccessCrmContactsQuery,
-} from './use-crm';
+import { useQuickAccessCrmCompaniesQuery } from './use-crm';
 
 export type MergeDialogProps = {
   open: boolean;
@@ -517,35 +514,97 @@ function CandidateLine(props: {
   );
 }
 
-/** The records Quick Access holds that a merge can pick from. */
-function usePickSource(recordType: MergeRecordType): {
-  candidates: Accessor<MergeCandidate[]>;
+type PickSource = {
+  /** The records that match `search`; the most recent ones while it's empty. */
+  matches: Accessor<MergeCandidate[]>;
   loading: () => boolean;
-} {
+  hasMore: () => boolean;
+  loadingMore: () => boolean;
+  loadMore: () => Promise<void>;
+};
+
+/** The first records Quick Access holds that match `search`, by any name, address or company. */
+function quickAccessMatches(
+  records: MergeCandidate[],
+  search: string
+): MergeCandidate[] {
+  const query = search.trim().toLowerCase();
+  const found = (text: string | null | undefined) =>
+    !!text && text.toLowerCase().includes(query);
+  return records
+    .filter(
+      (record) =>
+        query === '' ||
+        found(record.name) ||
+        found(record.company) ||
+        record.identifiers.some(found)
+    )
+    .slice(0, 50);
+}
+
+/**
+ * The records a merge can pick from. Companies come from Quick Access. People
+ * do too, and while a search is typed, the server's matches beyond it follow:
+ * a team can hold far more people than Quick Access keeps.
+ */
+function usePickSource(
+  recordType: MergeRecordType,
+  search: Accessor<string>
+): PickSource {
   return match(recordType)
-    .with('company', () => {
+    .with('company', (): PickSource => {
       const suggestions = useQuickAccessCrmCompaniesQuery();
+      const candidates = () =>
+        suggestions.companies().map((company) => ({
+          id: company.id,
+          name: company.name,
+          identifiers: company.domains.map((domain) => domain.domain),
+        }));
       return {
-        candidates: () =>
-          suggestions.companies().map((company) => ({
-            id: company.id,
-            name: company.name,
-            identifiers: company.domains.map((domain) => domain.domain),
-          })),
+        matches: () => quickAccessMatches(candidates(), search()),
         loading: () => suggestions.query.isLoading,
+        hasMore: () => false,
+        loadingMore: () => false,
+        loadMore: async () => {},
       };
     })
-    .with('contact', () => {
-      const suggestions = useQuickAccessCrmContactsQuery();
+    .with('contact', (): PickSource => {
+      const context = useCrmContext();
+      const suggestions = context.createContactSuggestions();
+      const server = context.createContactSearch(search);
+      const person = (contact: {
+        id: string;
+        name: string;
+        email?: string | null;
+        companyName?: string | null;
+      }): MergeCandidate => ({
+        id: contact.id,
+        name: contact.name,
+        identifiers: contact.email ? [contact.email] : [],
+        company: contact.companyName ?? null,
+      });
+      const searching = () => search().trim() !== '';
       return {
-        candidates: () =>
-          suggestions.contacts().map((contact) => ({
-            id: contact.id,
-            name: contact.name,
-            identifiers: contact.email ? [contact.email] : [],
-            company: contact.companyName ?? null,
-          })),
-        loading: () => suggestions.query.isLoading,
+        matches: () => {
+          const local = quickAccessMatches(
+            suggestions.contacts().map(person),
+            search()
+          );
+          if (!searching()) return local;
+          const seen = new Set(local.map((record) => record.id));
+          return [
+            ...local,
+            ...server
+              .contacts()
+              .filter((contact) => !seen.has(contact.id))
+              .map(person),
+          ];
+        },
+        loading: () =>
+          suggestions.query.isLoading || (searching() && server.isLoading()),
+        hasMore: () => searching() && server.hasMore(),
+        loadingMore: () => server.isLoadingMore(),
+        loadMore: server.loadMore,
       };
     })
     .exhaustive();
@@ -559,24 +618,11 @@ function PickStep(props: {
   onToggle: (record: MergeCandidate, on: boolean) => void;
   tooMany: boolean;
 }) {
-  const source = usePickSource(props.recordType);
   const [search, setSearch] = createSignal('');
-  const matches = createMemo(() => {
-    const query = search().trim().toLowerCase();
-    const found = (text: string | null | undefined) =>
-      !!text && text.toLowerCase().includes(query);
-    return source
-      .candidates()
-      .filter(
-        (record) =>
-          record.id !== props.start?.id &&
-          (query === '' ||
-            found(record.name) ||
-            found(record.company) ||
-            record.identifiers.some(found))
-      )
-      .slice(0, 50);
-  });
+  const source = usePickSource(props.recordType, search);
+  const matches = createMemo(() =>
+    source.matches().filter((record) => record.id !== props.start?.id)
+  );
   return (
     <>
       <ActionDialogShell.Header>
@@ -625,6 +671,16 @@ function PickStep(props: {
             )}
           </For>
         </div>
+      </Show>
+      <Show when={source.hasMore()}>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={source.loadingMore()}
+          onClick={() => fireAndForget(source.loadMore(), 'crm')}
+        >
+          {t('common.showMore')}
+        </Button>
       </Show>
     </>
   );
