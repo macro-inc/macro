@@ -980,9 +980,9 @@ For a lost volume, restore the latest dump with
 ## ECS dual export
 
 Every dev ECS service using the shared Datadog sidecars also runs Alloy, and so
-do the prod services of the Pulumi projects in `PROD_GRAFANA_PROJECTS`
-(`infra/packages/shared/src/grafana_telemetry.ts`). Task definitions call the shared
-`withTelemetry(serviceName, containers)` helper, which supplies the Datadog agent,
+do the prod services of the Pulumi projects set to `true` in
+`PROD_GRAFANA_PROJECTS` (`infra/packages/shared/src/grafana_telemetry.ts`). Task
+definitions call the shared `withTelemetry(serviceName, containers)` helper, which supplies the Datadog agent,
 FireLens router, Alloy sidecar, and Grafana environment variable together. Alloy
 labels everything it sends with the Pulumi stack (`deployment.environment` `dev`
 or `prod`).
@@ -999,9 +999,16 @@ smallest first, and check before each one:
   402 MiB. Fargate sizes the task from the reservation alone, so `unfurl-service`,
   `static-file-service` and `lexical-service` need a larger task first.
 
-A merged list change reaches prod with the next published release, or for one
-project with *Deploy Service (Generic)*. To stop a project's copy, remove it from
-the list and deploy it the same way; its Datadog export never changes.
+A merged list change reaches prod with the next published release that contains
+it, or for one project with *Deploy Service (Generic)* with `prod` selected. The
+job finishes before ECS does: wait for the service's new revision to reach steady
+state (a failed one rolls back on its own), then check that Datadog and Grafana
+both receive the service before adding another.
+
+To stop a project's copy, set its entry to `false` and deploy it the same way; its
+Datadog export never changes. Delete the entry, which revokes the task execution
+role's access to the token, only once the revision without Alloy is steady: ECS
+can't start a replacement task of the Alloy revision without it.
 
 The earlier `image-proxy-service` canary verified Ohio ingestion; it used the
 superseded collector-in-front-of-Datadog design. The current design keeps
