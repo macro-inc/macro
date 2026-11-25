@@ -807,7 +807,7 @@ fn sync_pages_merge_into_records_screens_loaded() {
 }
 
 #[test]
-fn a_sync_page_for_another_viewer_resets_the_cache_and_keeps_its_lane_state() {
+fn a_sync_page_for_another_viewer_resets_the_cache_and_ends_the_run() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
         screen_load(&mut engine, "someone-else").await;
@@ -818,37 +818,37 @@ fn a_sync_page_for_another_viewer_resets_the_cache_and_keeps_its_lane_state() {
             json!({"kind": "hydrate"}),
         )]);
         let mut run = start(&mut engine, &plan).await;
+        let hooks = Hooks::default();
         // Pages are tagged `viewer`, not the bound identity.
-        let applied = run_stream(
-            &mut engine,
-            &mut run,
-            &ndjson(&[soup_page("tasks", 0, &[2, 3], Some("c1"))]),
-        )
-        .await
+        run.push_bytes(&ndjson(&[
+            soup_page("tasks", 0, &[2, 3], Some("c1")),
+            soup_page("tasks", 1, &[4], None),
+            lane_done("tasks", 2, 3),
+        ]))
         .unwrap();
-        let [SyncApplied::Hydrated { result, .. }] = applied.as_slice() else {
-            panic!("expected one hydrated page, got {applied:?}");
+        let applied = engine.sync_apply_next(&mut run, &hooks).await.unwrap();
+        let Some(SyncApplied::Hydrated { result, .. }) = applied else {
+            panic!("expected a hydrated page, got {applied:?}");
         };
         assert!(result.write_result.reset);
+        // The page stays.
         assert_eq!(
             present(&engine, &[task_key(1), task_key(2), task_key(3)]).await,
             [false, true, true]
         );
-        let state = engine.sync_lane_states().await.unwrap();
-        assert_eq!((state[0].pages, state[0].items), (1, 2));
-        assert!(state[0].resume.is_some());
-
-        // The reset was the run's own: it carries on in the cache it rebound.
-        let stream = ndjson(&[
-            soup_page("tasks", 1, &[4], None),
-            lane_done("tasks", 2, 3),
-            end("complete"),
-        ]);
-        run_stream(&mut engine, &mut run, &stream).await.unwrap();
-        assert_eq!(run.finish(1.0).unwrap().reason, SyncRunReason::Complete);
-        let state = &engine.sync_lane_states().await.unwrap()[0];
-        assert_eq!((state.pages, state.items), (2, 3));
-        assert!(state.completed_at.is_some());
+        // The run was planned from the other account's lane state, so it
+        // saves none and ends; the next run plans from the empty cache.
+        assert!(engine.sync_lane_states().await.unwrap().is_empty());
+        let next = engine.sync_apply_next(&mut run, &hooks).await;
+        assert!(
+            matches!(
+                next,
+                Err(SyncWriteError::Stream(SyncStreamError::Superseded))
+            ),
+            "expected a superseded run, got {next:?}"
+        );
+        assert_eq!(present(&engine, &[task_key(4)]).await, [false]);
+        assert!(engine.sync_lane_states().await.unwrap().is_empty());
     });
 }
 

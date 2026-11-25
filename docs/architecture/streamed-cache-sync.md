@@ -303,12 +303,16 @@ Rules:
   in-memory reset epoch, renewed by `clear`, an account reset (a response for
   another account) and `external_reset`; `sync_begin` records it, and once it
   changes the run's next frame fails with `SyncStreamError::Superseded`
-  without touching the cache. A reset made by the run's own page (a cache
-  bound to an older account before the run began) moves the run to the new
-  epoch. Hosts report the failure as `aborted`. The browser worker also fences
-  each write on the authority generation the run began under, and aborts the
-  run on `clear` and on a permission transition that changes the generation;
-  the browser engine drops its run on `clear`, `physicalReset` and `close`.
+  without touching the cache. `sync_begin` also records the authority
+  generation (a run begun before the cache had one adopts the first), so a
+  permission transition supersedes the run the same way, on every host. A
+  reset made by the run's own page (a cache bound to an older account before
+  the run began) keeps the page but saves no lane state, and the run ends at
+  its next frame: its request was planned from the lane state the reset
+  wiped, and the next run plans from the empty cache. Hosts report the
+  failure as `aborted`. The browser worker also aborts the run on `clear`,
+  and the browser engine drops its run on `clear`, `physicalReset` and
+  `close`.
 - A run does not write back over an edit confirmed after it began. A page can
   be read on the server before the user's edit and applied after it (the host
   reads ahead while the cache writes, and the second pass lists a year of mail

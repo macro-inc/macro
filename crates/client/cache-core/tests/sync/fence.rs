@@ -84,6 +84,54 @@ fn a_run_begun_before_an_external_reset_writes_nothing_after_it() {
 }
 
 #[test]
+fn a_run_begun_before_an_authority_transition_writes_nothing_after_it() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let before = engine.current_authority("session").await.unwrap();
+        let mut run = start(&mut engine, &tasks_plan()).await;
+        run_stream(
+            &mut engine,
+            &mut run,
+            &ndjson(&[soup_page("tasks", 0, &[2], Some("c1"))]),
+        )
+        .await
+        .unwrap();
+
+        // A permission change retires records under a new generation.
+        let after = engine
+            .begin_authority_transition("session", before.generation, "denied".into(), true)
+            .await
+            .unwrap();
+        assert_ne!(after.generation, before.generation);
+        superseded(
+            run_stream(
+                &mut engine,
+                &mut run,
+                &ndjson(&[soup_page("tasks", 1, &[3], None), lane_done("tasks", 2, 2)]),
+            )
+            .await,
+        );
+        assert_eq!(present(&engine, &[task_key(3)]).await, [false]);
+    });
+}
+
+#[test]
+fn a_run_begun_before_the_cache_had_an_authority_adopts_its_first() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut run = start(&mut engine, &tasks_plan()).await;
+        engine.current_authority("session").await.unwrap();
+        let stream = ndjson(&[
+            soup_page("tasks", 0, &[2], None),
+            lane_done("tasks", 1, 1),
+            end("complete"),
+        ]);
+        run_stream(&mut engine, &mut run, &stream).await.unwrap();
+        assert_eq!(present(&engine, &[task_key(2)]).await, [true]);
+    });
+}
+
+#[test]
 fn a_run_begun_after_a_clear_applies() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

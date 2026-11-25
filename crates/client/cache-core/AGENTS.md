@@ -112,11 +112,12 @@ eviction and reset make it miss. A miss requires full registration and never reu
   a page read before the edit writes the old state back. The fence records
   only while a run lives (its `fence_token`), so it holds nothing between
   runs.
-- A sync run applies frames only under the reset epoch `sync_begin` recorded;
-  renew `Engine::reset_epoch` on every path that wipes or rebinds the cache
-  (`clear`, `external_reset`, which the account-reset branch of hydration
-  calls) and move the run to the new epoch only after a reset its own page
-  made. A frame is a bounded amount of work, not one write.
+- A sync run applies frames only under the reset epoch and authority
+  generation `sync_begin` recorded; renew `Engine::reset_epoch` on every path
+  that wipes or rebinds the cache (`clear`, `external_reset`, which the
+  account-reset branch of hydration calls). A reset its own page made ends
+  the run too, without saving that lane's state. A frame is a bounded amount
+  of work, not one write.
 - A complete membership listing that names a key no scope lane holds clears
   the scope lanes' `watermark` and `completedAt` once every scope lane has
   completed, so the next run fetches them whole (catch-up passes never return

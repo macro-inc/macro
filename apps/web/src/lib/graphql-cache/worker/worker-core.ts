@@ -45,7 +45,6 @@ import {
 } from '../telemetry';
 import { cacheDatabaseIdentity } from './coordinator-protocol';
 import {
-  abortedError,
   CacheSyncDriver,
   type SyncAppliedWire,
   type SyncEngine,
@@ -309,8 +308,6 @@ export class CacheWorkerCore {
   private readonly drainWaiters = new Set<() => void>();
   private resetRequiredReported = false;
   private executingAuthority: string | undefined;
-  /** The authority generation the sync run in progress writes under. */
-  private syncAuthority: string | undefined;
   private hotCapacity: number | undefined;
   private readonly ports = new Set<PortLike>();
   private readonly telemetry: CacheTelemetryRecorderLike;
@@ -1005,14 +1002,13 @@ export class CacheWorkerCore {
   }
 
   /**
-   * One step of a sync run. The run writes under the authority generation it
-   * began in, like a hydrate under its captured stamp: a write once the
-   * authority changed (a clear, a permission transition, another account)
-   * fails the run as `aborted`. Its pages may switch identity themselves, so
-   * the authority is read again after each write and the run follows it.
-   * Only `begin` and `apply` touch the authority: the other steps write no
-   * records, and `finish` and `abort` must still end the engine's run when
-   * the authority cannot be read.
+   * One step of a sync run. The engine fences the run itself: once the
+   * authority generation it began under changes (a clear, a permission
+   * transition, another account, including its own page's), its next write
+   * fails as `aborted`. Here `begin` and `apply` only keep the published
+   * authority current, reading it again after each write. The other steps
+   * write no records, and `finish` and `abort` must still end the engine's
+   * run when the authority cannot be read.
    */
   private async runSyncTask(task: SyncTask): Promise<unknown> {
     const engine = this.requireEngine();
@@ -1023,12 +1019,7 @@ export class CacheWorkerCore {
     if (this.executingAuthority !== authority.generation)
       this.push({ kind: 'authority-changed', authority });
     this.executingAuthority = authority.generation;
-    if (task.step === 'begin') {
-      this.syncAuthority = authority.generation;
-      return await task.run(engine);
-    }
-    if (authority.generation !== this.syncAuthority)
-      throw abortedError('the cache authority changed during the sync run');
+    if (task.step === 'begin') return await task.run(engine);
 
     let result: unknown;
     let after: CacheAuthority;
@@ -1043,7 +1034,6 @@ export class CacheWorkerCore {
     if (after.generation !== this.executingAuthority)
       this.push({ kind: 'authority-changed', authority: after });
     this.executingAuthority = after.generation;
-    this.syncAuthority = after.generation;
     return result;
   }
 

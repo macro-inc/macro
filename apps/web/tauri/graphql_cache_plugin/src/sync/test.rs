@@ -394,7 +394,7 @@ fn a_membership_lane_deletes_members_the_server_no_longer_lists() {
 }
 
 #[test]
-fn a_page_for_another_account_publishes_its_new_authority_generation() {
+fn a_page_for_another_account_publishes_its_new_authority_and_ends_the_run() {
     let handle = engine();
     block_on(handle.write(crate::engine::WriteRequest {
         origin_op_id: None,
@@ -427,8 +427,16 @@ fn a_page_for_another_account_publishes_its_new_authority_generation() {
 
     let outcome = block_on(runs.start(handle.downgrade(), args(), publish));
 
+    // The run was planned from the other account's lane state, so it ends
+    // after the page that rebound the cache.
     assert!(
-        matches!(outcome, SyncRunOutcome::Completed(_)),
+        matches!(
+            outcome,
+            SyncRunOutcome::Failed {
+                failure: SyncFailure::Aborted,
+                ..
+            }
+        ),
         "{outcome:?}"
     );
     let event = received.try_recv().unwrap();

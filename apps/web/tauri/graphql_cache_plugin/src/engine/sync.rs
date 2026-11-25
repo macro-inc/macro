@@ -214,8 +214,8 @@ impl WeakEngineHandle {
         let applied = engine.sync_apply_next(run, hooks).await;
         // A page for another account resets the cache under a new authority
         // generation. Publish it before giving the engine back, as hydration
-        // does, so no later notification goes out ahead of it. The run
-        // carries no generation of its own, so only a change is published.
+        // does, so no later notification goes out ahead of it. The engine
+        // ends the run at its next frame; only a change is published here.
         if let Some(listener) = &self.authority_listener
             && let Some(current) = engine.authority_snapshot()
             && generation != Some(current.generation)
@@ -224,8 +224,9 @@ impl WeakEngineHandle {
         }
         let applied = match applied {
             Ok(applied) => applied,
-            // The cache was cleared or reset under the run (logout, another
-            // account): the run stops without writing, as on a stop.
+            // The cache was cleared, reset or given a new authority generation
+            // under the run (logout, another account, a permission change):
+            // the run stops without writing, as on a stop.
             Err(SyncWriteError::Stream(SyncStreamError::Superseded)) => {
                 return Err(SyncFailure::Aborted.into());
             }

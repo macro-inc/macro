@@ -5,8 +5,13 @@
 //! deletes unlisted members in chunks of `DELETE_CHUNK`.
 //!
 //! A run only applies frames to the cache it began against: `sync_begin`
-//! records the engine's reset epoch, and `sync_apply_next` fails with
-//! [`SyncStreamError::Superseded`] once a clear or reset renewed it.
+//! records the engine's reset epoch and authority generation, and
+//! `sync_apply_next` fails with [`SyncStreamError::Superseded`] once a clear,
+//! a reset or an authority transition (another account, a permission change)
+//! renewed either. Every host gets the same rule. A page that itself resets
+//! the cache (a page for another account) is written, but saves no lane
+//! state, and the run ends at its next frame: its request was planned from
+//! the lane state the reset wiped.
 //!
 //! A page can be read on the server before an edit and applied after the
 //! edit's confirmation (the host reads ahead while the cache writes), so a
@@ -235,6 +240,10 @@ impl<S: SyncStorage + CalendarRangeStorage> Engine<S> {
         started_at_ms: f64,
     ) -> Result<SyncRun, SyncWriteError<S::Error, Infallible>> {
         let reset_epoch = self.reset_epoch;
+        let authority = self
+            .authority_generation()
+            .await
+            .map_err(SyncWriteError::Engine)?;
         let saved = self.sync_lane_states().await?;
         let coverage = match args.calendar {
             Some(_) => self
@@ -246,6 +255,7 @@ impl<S: SyncStorage + CalendarRangeStorage> Engine<S> {
         };
         let mut run = SyncRun::new(args, &saved, &coverage, started_at_ms)?;
         run.reset_epoch = reset_epoch;
+        run.authority = authority;
         let (fence, token) = self.sync_fence.begin();
         run.fence = fence;
         run.fence_token = Some(token);
@@ -254,6 +264,15 @@ impl<S: SyncStorage + CalendarRangeStorage> Engine<S> {
 }
 
 impl<S: SyncStorage> Engine<S> {
+    /// The authority generation a run applies under; `None` before the cache
+    /// has one.
+    async fn authority_generation(&self) -> Result<Option<uuid::Uuid>, EngineError<S::Error>> {
+        Ok(self
+            .stored_authority()
+            .await?
+            .map(|authority| authority.generation))
+    }
+
     /// Keeps a sync run begun before now from writing these records back: the
     /// host changed them outside the cache's writes (an edit made through
     /// REST). Unlike [`Engine::invalidate_keys`] it touches nothing else, and
@@ -292,7 +311,8 @@ where
     /// and a calendar lane commits its coverage with the lowest watermark.
     ///
     /// Fails with [`SyncStreamError::Superseded`], before touching the cache,
-    /// once the cache was cleared or reset after the run began.
+    /// once the cache was cleared, reset or given a new authority generation
+    /// after the run began, including by the run's own page.
     pub async fn sync_apply_next<H: SyncHooks<S>>(
         &mut self,
         run: &mut SyncRun,
@@ -300,6 +320,19 @@ where
     ) -> Result<Option<SyncApplied>, SyncWriteError<S::Error, H::Error>> {
         if run.reset_epoch != self.reset_epoch {
             return Err(SyncWriteError::Stream(SyncStreamError::Superseded));
+        }
+        // A cache with no authority yet gets its first one from the host
+        // (`current_authority`), not from a transition; the run adopts it.
+        let authority = self
+            .authority_generation()
+            .await
+            .map_err(SyncWriteError::Engine)?;
+        match run.authority {
+            None => run.authority = authority,
+            Some(_) if run.authority != authority => {
+                return Err(SyncWriteError::Stream(SyncStreamError::Superseded));
+            }
+            Some(_) => {}
         }
         self.sync_fence.forget_before(run.fence);
         let Some(frame) = run.pending.pop_front() else {
@@ -515,9 +548,14 @@ where
                 }
                 .map_err(SyncWriteError::Engine)?;
                 // The page's own account switch reset a cache bound to another
-                // account: the run carries on in the cache it just rebound.
+                // account. The page stays, but the run was planned from the
+                // old account's lane state: it saves none and ends at its next
+                // frame, and the next run plans from the empty cache.
                 if result.write_result.reset {
-                    run.reset_epoch = self.reset_epoch;
+                    return Ok(SyncApplied::Hydrated {
+                        lane: lane.id,
+                        result,
+                    });
                 }
                 let (row, members) = advance(self.stored_lane::<H::Error>(&lane).await?);
                 self.storage

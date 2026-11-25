@@ -4296,33 +4296,6 @@ describe('CacheWorkerCore', () => {
       expect(messages).toContainEqual(aborted);
     });
 
-    it('writes nothing once the authority changed since the run began', async () => {
-      let generation = TEST_AUTHORITY_GENERATION;
-      const engine = {
-        ...idleSyncEngine(),
-        currentAuthority: async (identity: string) => ({
-          ...testAuthority(identity),
-          generation,
-        }),
-        syncFeed: vi.fn(async () => {
-          // Another request retired the generation meanwhile.
-          generation = '00000000-0000-4000-8000-000000000099';
-          return 1;
-        }),
-      };
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(async () => new Response('{}\n'))
-      );
-      const { core, port, messages } = await startedCore(engine);
-
-      await core.handleRequest(port, { id: 2, kind: 'sync-start', args });
-
-      expect(messages).toContainEqual(aborted);
-      expect(engine.syncApplyNext).not.toHaveBeenCalled();
-      expect(engine.syncAbort).toHaveBeenCalledOnce();
-    });
-
     it('drops the engine run when the authority cannot be read for a write', async () => {
       let readable = true;
       const engine = {
