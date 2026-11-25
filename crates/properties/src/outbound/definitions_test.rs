@@ -15,7 +15,7 @@ pub(super) fn user_1() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap()
 }
 
-fn user_2() -> MacroUserIdStr<'static> {
+pub(super) fn user_2() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|user2@test.com").unwrap()
 }
 

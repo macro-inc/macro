@@ -3,7 +3,7 @@
 //! internal failure, and a replayed add answers with the option it made. The
 //! router answers these errors with 409 and 400 (`inbound::axum_router` tests).
 
-use super::definitions_test::user_1;
+use super::definitions_test::{user_1, user_2};
 use super::properties_pg_repo::PropertiesPgRepo;
 use super::query_error::{DEFINITION_NAME_INDEXES, OPTION_VALUE_INDEXES};
 use crate::domain::error::PropertiesErr;
@@ -262,6 +262,39 @@ async fn a_delete_after_its_definition_went_is_told_the_option_lives_on(pool: Po
     );
     let err = service
         .delete_property_option(&user_1(), None, gone.id, Uuid::now_v7())
+        .await
+        .unwrap_err();
+    assert!(matches!(err, PropertiesErr::NotFound), "{err:?}");
+}
+
+/// A delete is told an option lives on only when the caller can see where:
+/// another account's option answers as gone, whatever definition is named.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn a_delete_of_someone_elses_option_is_told_it_is_gone(pool: Pool<Postgres>) {
+    let service = service(pool);
+    let theirs = service
+        .create_property_definition(&user_2(), None, &select("Rank", &["High"]))
+        .await
+        .unwrap();
+    let option = Uuid::now_v7();
+    service
+        .add_property_option_with_id(&user_2(), None, theirs.id, option, &add("Low"))
+        .await
+        .unwrap();
+    let mine = service
+        .create_property_definition(&user_1(), None, &select("Phase", &["Lead"]))
+        .await
+        .unwrap();
+    let err = service
+        .delete_property_option(&user_1(), None, mine.id, option)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, PropertiesErr::OptionNotFound), "{err:?}");
+    let err = service
+        .delete_property_option(&user_1(), None, Uuid::now_v7(), option)
         .await
         .unwrap_err();
     assert!(matches!(err, PropertiesErr::NotFound), "{err:?}");

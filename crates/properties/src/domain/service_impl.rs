@@ -414,13 +414,43 @@ where
     }
 
     /// Why an option delete found nothing under the definition it named:
-    /// `gone` when the option no longer exists, or
-    /// [`PropertiesErr::OptionInAnotherDefinition`] when it lives on under
-    /// another definition (a promoted tag keeps its id), which a delete sent
-    /// again after a lost reply must not take for its own deletion.
+    /// [`PropertiesErr::OptionInAnotherDefinition`] when `found` lives on
+    /// under another definition the caller can see (a promoted tag keeps its
+    /// id), which a delete sent again after a lost reply must not take for its
+    /// own deletion; otherwise `gone`, so a caller learns nothing of options
+    /// it cannot see.
+    async fn elsewhere_or(
+        &self,
+        found: Option<PropertyOption>,
+        user_id: &MacroUserIdStr<'_>,
+        team_id: Option<Uuid>,
+        gone: PropertiesErr,
+    ) -> Result<PropertiesErr, PropertiesErr>
+    where
+        anyhow::Error: From<R::Err>,
+    {
+        let Some(option) = found else {
+            return Ok(gone);
+        };
+        let visible = self
+            .repository
+            .get_property_definition_with_owner(option.property_definition_id, user_id, team_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .is_some();
+        Ok(if visible {
+            PropertiesErr::OptionInAnotherDefinition
+        } else {
+            gone
+        })
+    }
+
+    /// [`Self::elsewhere_or`] for an option read again now.
     async fn missing_option(
         &self,
         option_id: Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        team_id: Option<Uuid>,
         gone: PropertiesErr,
     ) -> Result<PropertiesErr, PropertiesErr>
     where
@@ -431,11 +461,7 @@ where
             .get_property_option(option_id)
             .await
             .map_err(anyhow::Error::from)?;
-        Ok(if found.is_some() {
-            PropertiesErr::OptionInAnotherDefinition
-        } else {
-            gone
-        })
+        self.elsewhere_or(found, user_id, team_id, gone).await
     }
 
     /// Resolve the personal tag definition that owns `option_id`, rejecting
@@ -1766,17 +1792,14 @@ where
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
+        let team_id = team_id_from_receipt(team);
         match self
-            .owned_modifiable_definition(
-                property_definition_id,
-                user_id,
-                team_id_from_receipt(team),
-            )
+            .owned_modifiable_definition(property_definition_id, user_id, team_id)
             .await
         {
             Err(PropertiesErr::NotFound) => {
                 return Err(self
-                    .missing_option(option_id, PropertiesErr::NotFound)
+                    .missing_option(option_id, user_id, team_id, PropertiesErr::NotFound)
                     .await?);
             }
             other => other?,
@@ -1790,7 +1813,14 @@ where
             .ok_or(PropertiesErr::OptionNotFound)?;
 
         if option.property_definition_id != property_definition_id {
-            return Err(PropertiesErr::OptionInAnotherDefinition);
+            return Err(self
+                .elsewhere_or(
+                    Some(option),
+                    user_id,
+                    team_id,
+                    PropertiesErr::OptionNotFound,
+                )
+                .await?);
         }
 
         let Some(mutations) = self
@@ -1801,7 +1831,7 @@ where
         else {
             // Moved (a promotion) or deleted since it was read.
             return Err(self
-                .missing_option(option_id, PropertiesErr::OptionNotFound)
+                .missing_option(option_id, user_id, team_id, PropertiesErr::OptionNotFound)
                 .await?);
         };
 

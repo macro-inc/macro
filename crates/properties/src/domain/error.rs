@@ -27,9 +27,9 @@ pub enum PropertiesErr {
     #[error("Property option not found")]
     OptionNotFound,
 
-    /// The option exists, under another definition than the one named (a
-    /// promoted tag keeps its id) - maps to 404 like [`Self::OptionNotFound`],
-    /// but the option is not gone.
+    /// The option exists under another definition than the one named, one the
+    /// caller can see (a promoted tag keeps its id) - maps to 404 like
+    /// [`Self::OptionNotFound`], but the option is not gone.
     #[error("Property option not found")]
     OptionInAnotherDefinition,
 

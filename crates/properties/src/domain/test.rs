@@ -1149,8 +1149,10 @@ async fn property_option_event_delete_not_found_outcome_publishes_nothing() {
     assert!(event_broker.events().is_empty());
 }
 
-#[tokio::test]
-async fn a_delete_whose_option_moves_before_it_runs_is_told_it_lives_on() {
+/// Deletes an option that a promotion moves to another definition between
+/// the delete's read and its scoped delete; `owns_new_home` says whether the
+/// caller can see the definition it moved to.
+async fn delete_after_a_move(owns_new_home: bool) -> Result<(), PropertiesErr> {
     let property_definition_id = Uuid::from_u128(0xD5);
     let option_id = Uuid::from_u128(0xD6);
     let definition = property_definition_for_event(
@@ -1166,14 +1168,20 @@ async fn a_delete_whose_option_moves_before_it_runs_is_told_it_lives_on() {
         PropertyOptionValue::String("Shared".to_string()),
         None,
     );
-    // A promotion moves it to the team's definition between the read and the delete.
     let moved = PropertyOption {
         property_definition_id: Uuid::from_u128(0xD7),
         ..option.clone()
     };
 
     let mut repo = MockPropertiesRepo::new();
-    expect_owned_modifiable_definition(&mut repo, definition);
+    let named = definition.clone();
+    repo.expect_get_property_definition()
+        .return_once(move |_| Box::pin(async move { Ok(Some(named)) }));
+    repo.expect_get_property_definition_with_owner()
+        .returning(move |id, _, _| {
+            let owned = (id == property_definition_id || owns_new_home).then(|| definition.clone());
+            Box::pin(async move { Ok(owned) })
+        });
     let mut reads = vec![moved, option];
     repo.expect_get_property_option().returning(move |_| {
         let read = reads.pop();
@@ -1187,12 +1195,26 @@ async fn a_delete_whose_option_moves_before_it_runs_is_told_it_lives_on() {
     let result = service
         .delete_property_option(&caller_user_id(), None, property_definition_id, option_id)
         .await;
+    assert!(event_broker.events().is_empty());
+    result
+}
 
+#[tokio::test]
+async fn a_delete_whose_option_moves_before_it_runs_is_told_it_lives_on() {
+    let result = delete_after_a_move(true).await;
     assert!(
         matches!(result, Err(PropertiesErr::OptionInAnotherDefinition)),
         "{result:?}"
     );
-    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn a_delete_whose_option_moves_out_of_sight_is_told_it_is_gone() {
+    let result = delete_after_a_move(false).await;
+    assert!(
+        matches!(result, Err(PropertiesErr::OptionNotFound)),
+        "{result:?}"
+    );
 }
 
 #[tokio::test]
