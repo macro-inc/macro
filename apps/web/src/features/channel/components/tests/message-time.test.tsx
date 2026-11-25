@@ -39,3 +39,9 @@ it('catches up with the day when a tab whose timers were held shows again', () =
 
   expect(container.textContent).toBe(`Yesterday at ${timeAlone}`);
 });
+
+it('shows nothing for a comment with no time', () => {
+  const { container } = render(() => <MessageTime at="" />);
+
+  expect(container.textContent).toBe('');
+});
