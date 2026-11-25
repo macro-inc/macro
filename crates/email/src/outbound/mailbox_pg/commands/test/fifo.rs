@@ -1,6 +1,64 @@
 use super::*;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_locked_command_predecessor_blocks_its_successor_before_lease_commit(db: PgPool) {
+    let (sync, repo, work, thread) = setup(&db).await;
+    let messages = repo
+        .mailbox_action_messages(work.mailbox.link_id, thread)
+        .await
+        .unwrap();
+    let first = repo
+        .enqueue_mailbox_action(
+            work.mailbox.link_id,
+            owner(),
+            &MailboxAction::Read(true),
+            &MailboxAction::Read(true).targets(&messages),
+        )
+        .await
+        .unwrap();
+    let second = repo
+        .enqueue_mailbox_action(
+            work.mailbox.link_id,
+            owner(),
+            &MailboxAction::Flagged(true),
+            &MailboxAction::Flagged(true).targets(&messages),
+        )
+        .await
+        .unwrap();
+
+    // The earlier claimer holds the row before its lease is visible.
+    let mut held = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_mailbox_commands WHERE id=$1 FOR UPDATE",
+        first
+    )
+    .fetch_one(&mut *held)
+    .await
+    .unwrap();
+    let claim = sync.claim_command(Uuid::now_v7()).await.unwrap();
+    assert!(claim.into_lease().is_none());
+    held.rollback().await.unwrap();
+
+    let first_lease = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    assert_eq!(first_lease.id, first);
+    sync.finish_command(&first_lease, CommandCompletion::Succeeded)
+        .await
+        .unwrap();
+    let second_lease = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    assert_eq!(second_lease.id, second);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_held_successor_claim_cannot_roll_back_a_fenced_finish(db: PgPool) {
     let (sync, repo, work, thread) = setup(&db).await;
     let messages = repo

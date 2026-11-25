@@ -654,24 +654,6 @@ export type BackfillJobStatus = 'Init' | 'InProgress' | 'Complete' | 'Cancelled'
 export type BackfillStatus = 'progress' | 'complete' | 'failed';
 
 /**
- * Exact mailbox credential binding, authorized by the email domain.
- */
-export type Binding = {
-    /**
-     * Credential generation.
-     */
-    grantGeneration: number;
-    /**
-     * Mailbox link.
-     */
-    linkId: string;
-    /**
-     * Synchronization generation.
-     */
-    syncGeneration: number;
-};
-
-/**
  * Request to block a sender.
  */
 export type BlockSenderRequest = {
@@ -1954,29 +1936,6 @@ export type MessageReadReceipt = {
      * Counted pixel fetches.
      */
     open_count: number;
-};
-
-/**
- * Fenced wakeup or credential-health update for the email domain.
- */
-export type Notification = {
-    /**
-     * Exact mailbox binding that produced the change.
-     */
-    binding: Binding;
-    /**
-     * A confirmed provider refusal; never inferred from a saved-password or KMS failure.
-     */
-    credentialsRejected: boolean;
-    mailboxIssue?: null | MailboxIssue;
-    /**
-     * Optional for old senders; monotonic within this exact binding.
-     */
-    revision?: number | null;
-    /**
-     * Durable retry guidance; absent on normal wakeups and older notifications.
-     */
-    syncRetryAt?: string | null;
 };
 
 export type ParsedMessage = {
@@ -4171,24 +4130,6 @@ export type HealthHandlerResponses = {
 };
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
-
-export type ImapNotificationData = {
-    body: Notification;
-    path?: never;
-    query?: never;
-    url: '/internal/imap/notifications';
-};
-
-export type ImapNotificationErrors = {
-    401: unknown;
-    503: unknown;
-};
-
-export type ImapNotificationResponses = {
-    204: void;
-};
-
-export type ImapNotificationResponse = ImapNotificationResponses[keyof ImapNotificationResponses];
 
 export type GetReadReceiptPixelData = {
     body?: never;

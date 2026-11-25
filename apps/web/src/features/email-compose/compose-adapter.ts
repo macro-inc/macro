@@ -292,6 +292,7 @@ export function createEmailComposeContext(): EmailComposeContext {
                 dismissStyle: isDraftRecovery ? 'icon' : undefined,
                 replace: options.replace,
                 onDismiss: options.onDismiss,
+                onUserDismiss: options.onUserDismiss,
               }
             );
           }

@@ -33,11 +33,13 @@ import {
 import type {
   ListLinksResponse,
   ResyncResponse,
+  UserProvider,
 } from '@service-email/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import type { DialogHandle } from '@ui';
 import { err, okAsync, ResultAsync } from 'neverthrow';
 import { batch, createMemo, createSignal, getOwner } from 'solid-js';
+import { match } from 'ts-pattern';
 import { inboxAuthorizationUrl } from './consent';
 import {
   announceAlreadyConnected,
@@ -47,7 +49,7 @@ import {
   INBOX_IDENTITY_CONFLICT_MESSAGE,
   type InboxAddition,
 } from './link-outcome';
-import { type EmailProvider, selectEmailProvider } from './ProviderDialog';
+import { selectEmailProvider } from './ProviderDialog';
 import { rememberInboxLinkReturn } from './return-layout';
 import { requestShareInboxConfirmation } from './share-conflict';
 
@@ -261,7 +263,7 @@ const TOO_MANY_PENDING_LINKS_MESSAGE =
 
 type AddInboxOptions = {
   scopes?: ConsentScopes;
-  provider?: EmailProvider;
+  provider?: UserProvider;
   reconnectLinkId?: string;
   emailAddress?: string;
 };
@@ -440,27 +442,34 @@ export function useAddInboxFlow() {
         return pending;
       });
       const result = await connection;
-      if (!isCurrentQueryAccount(viewer)) return;
-      if (result === 'payment_required') showPaywall(PaywallKey.MULTI_INBOX);
-      if (typeof result === 'object' && result.type === 'connected') {
-        invalidateEmailLinks();
-        await invalidateUserInfo();
-        toast.success(
-          options?.reconnectLinkId ? 'Inbox reconnected' : 'Inbox connected'
-        );
-      }
-      if (result === 'GMAIL' || result === 'OUTLOOK') {
-        return connectInbox({
-          provider: result,
-          emailAddress: options?.emailAddress,
-        });
-      }
+      if (!isCurrentQueryAccount(viewer) || !result) return;
+      await match(result)
+        .with({ type: 'payment_required' }, () => {
+          showPaywall(PaywallKey.MULTI_INBOX);
+        })
+        .with({ type: 'connected' }, async () => {
+          invalidateEmailLinks();
+          await invalidateUserInfo();
+          toast.success(
+            options?.reconnectLinkId ? 'Inbox reconnected' : 'Inbox connected'
+          );
+        })
+        .with({ type: 'oauth' }, ({ provider, emailAddress }) =>
+          connectInbox(
+            { provider, emailAddress: options?.emailAddress },
+            emailAddress
+          )
+        )
+        .exhaustive();
     } finally {
       chooser?.close();
     }
   };
 
-  const connectInbox = async (options?: AddInboxOptions): Promise<void> => {
+  const connectInbox = async (
+    options?: AddInboxOptions,
+    setupLoginHint?: string
+  ): Promise<void> => {
     const viewer = currentQueryAccount();
     const scopes = options?.scopes ?? 'gmail';
     let connectingImap: Promise<void> | undefined;
@@ -481,13 +490,15 @@ export function useAddInboxFlow() {
     if (provider === 'IMAP')
       return connectingImap ?? connectImap(viewer, options);
     const addition = await plainAddition(provider, scopes, options);
+    // The form can suggest a sign-in address without targeting an existing inbox.
+    const loginHint = setupLoginHint ?? options?.emailAddress;
     if (isNativeMobilePlatform()) {
       await startNativeFlow(
         scopes,
         provider,
         addition,
         options?.reconnectLinkId,
-        options?.emailAddress
+        loginHint
       );
       return;
     }
@@ -512,7 +523,7 @@ export function useAddInboxFlow() {
       });
       const authorizationUrl = inboxAuthorizationUrl(
         result.value.authorization_url,
-        options?.emailAddress
+        loginHint
       );
       if (desktop) {
         await Telemetry.span('email.link.open_browser', async (span) => {
@@ -536,7 +547,7 @@ export function useAddInboxFlow() {
       toast.failure('Failed to start inbox connection');
     }
   };
-  return connectInbox;
+  return (options?: AddInboxOptions) => connectInbox(options);
 }
 
 /**

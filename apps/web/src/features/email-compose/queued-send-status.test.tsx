@@ -199,7 +199,13 @@ it('says why a send made on another device failed', async () => {
 });
 
 it('explains a failure before delivery and offers cancellation for recovery', async () => {
-  showStatus('FAILED');
+  const [threadId, setThreadId] = createSignal('thread');
+  mocks.intents = [queuedIntent('FAILED')];
+  render(() => <QueuedSendStatus threadId={threadId()} />);
+  expect(screen.getByRole('status').textContent).toContain('Message not sent');
+  setThreadId('another-thread');
+  expect(screen.queryByRole('status')).toBeNull();
+  setThreadId('thread');
   expect(screen.getByRole('status').textContent).toContain('Message not sent');
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   await waitFor(() => expect(mocks.cancel).toHaveBeenCalledOnce());

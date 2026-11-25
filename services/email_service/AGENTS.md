@@ -450,6 +450,7 @@ Missing or failed reads preserve the single-command writer.
   credentials use 422, DNS/TCP/TLS use 502, and a bounded timeout uses 504.
   Map errors exhaustively to `ImapConnectionErrorCode` and regenerate the web
   and SDK schemas when it changes. Return only closed domain messages.
+  Keep the authenticated IMAP notification callback out of the public spec.
 
 IMAP discovery/connect request identities deserialize as EmailStr before domain
 admission. Discovery forwards the validated ownership-checked address, while persisted

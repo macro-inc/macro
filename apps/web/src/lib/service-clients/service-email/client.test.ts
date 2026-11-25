@@ -105,7 +105,7 @@ it.each([
 });
 
 it.each([
-  ['message', () => emailClient.getMessage({ message_id: 'message-1' })],
+  ['attachment', () => emailClient.getAttachmentUrl({ id: 'attachment-1' })],
   ['source', () => emailClient.getMessageEml({ message_id: 'message-1' })],
 ])(
   'describes unsupported content on the %s path without provider text',
@@ -131,6 +131,26 @@ it.each([
       );
   }
 );
+
+it.each([
+  ['message detail', () => emailClient.getMessage({ message_id: 'message-1' })],
+  [
+    'send request',
+    () => emailClient.sendMessage({ message: { subject: 'Synthetic send' } }),
+  ],
+])('leaves a generic 413 on the %s path', async (_, request) => {
+  fetchWithToken.mockImplementationOnce(async (_input, options) => {
+    const failure = await options.errorResponseFilter(
+      new Response(null, { status: 413 })
+    );
+    return err([
+      failure ?? { code: 'HTTP_ERROR', message: 'HTTP error! status: 413' },
+    ]);
+  });
+
+  const result = await request();
+  expect(result._unsafeUnwrapErr()[0].message).toBe('HTTP error! status: 413');
+});
 
 it('retries a busy label action once after the capped retry delay', async () => {
   vi.useFakeTimers();

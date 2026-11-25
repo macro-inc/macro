@@ -95,10 +95,6 @@ export default {
   close: 'Close',
   saveSettings: 'Save settings',
   gmailExtensions: 'Gmail extensions',
-  bytes: {
-    one: '{{count}} byte',
-    other: '{{count}} bytes',
-  },
   setupInstructions: '{{provider}} setup instructions',
   mailProvider: 'Mail provider',
   unsyncedFolders: {

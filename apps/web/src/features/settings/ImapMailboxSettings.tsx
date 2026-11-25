@@ -3,11 +3,11 @@ import { beginInteraction, TraceFlow, useFlow } from '@app/observability/flow';
 import { startUiOperation } from '@app/observability/ui-operation';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { humanFileSize } from '@core/util/humanFileSize';
 import type { Span } from '@macro-inc/observability';
 import {
   currentQueryAccount,
   isCurrentQueryAccount,
-  queryAccountSession,
 } from '@queries/auth/account-scope';
 import {
   getImapMailboxSettings,
@@ -95,9 +95,7 @@ function VerifiedFeatures(props: { features: ServerFeatures }) {
         {(limit) => (
           <div>
             <dt class="font-medium">{t('imap.messageLimit')}</dt>
-            <dd class="text-ink-muted">
-              {t('imap.bytes', { count: limit() })}
-            </dd>
+            <dd class="text-ink-muted">{humanFileSize(limit(), false)}</dd>
           </div>
         )}
       </Show>
@@ -135,12 +133,7 @@ function SettingsDialog(props: {
 
   onCleanup(() => controller.abort());
   createEffect(() => {
-    if (
-      !viewer ||
-      viewer.session !== queryAccountSession() ||
-      !isCurrentQueryAccount(viewer)
-    )
-      props.close();
+    if (!isCurrentQueryAccount(viewer)) props.close();
   });
   function current() {
     return !controller.signal.aborted && isCurrentQueryAccount(viewer);

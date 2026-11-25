@@ -2312,6 +2312,7 @@ holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide
   separate account/session cache variant from signed approval links.
   Route app-level Add another inbox through the same chooser and replace it
   with the IMAP form in one handoff.
+  Carry the address entered in the IMAP form into the provider's OAuth hint.
 
 - Use the shared SecretInput with autocomplete off for IMAP/SMTP and keep
   the credential form marked ph-no-capture.

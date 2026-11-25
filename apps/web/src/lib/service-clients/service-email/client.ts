@@ -160,7 +160,15 @@ async function imapConnectionError(response: Response) {
   };
 }
 
-/** Keep unsupported content and mailbox contention out of generic server errors. */
+async function messageDownloadError(response: Response) {
+  if (response.status !== 413) return;
+  return {
+    code: 'HTTP_ERROR' as const,
+    message: 'This message is too large to open in Macro (over 25 MB).',
+  };
+}
+
+/** Surface mailbox contention and replay only explicitly fixed-state requests. */
 async function emailRequest<T extends ObjectLike | Uint8Array>(
   url: string,
   init?: SafeFetchInit,
@@ -181,12 +189,6 @@ async function emailRequest<T extends ObjectLike | Uint8Array>(
           return {
             code: 'HTTP_ERROR' as const,
             message: 'Mailbox is busy, try again.',
-          };
-        }
-        if (response.status === 413) {
-          return {
-            code: 'HTTP_ERROR' as const,
-            message: 'This message is too large to open in Macro (over 25 MB).',
           };
         }
         // Let the shared fetch preserve its status classification and retry policy.
@@ -427,7 +429,7 @@ export const emailClient = {
   async getMessageEml(args: { message_id: string }) {
     return emailRequest<Uint8Array<ArrayBuffer>>(
       `/email/messages/${args.message_id}/eml`,
-      { method: 'GET' }
+      { method: 'GET', errorResponseFilter: messageDownloadError }
     );
   },
   async getUserLabels() {
@@ -774,6 +776,7 @@ export const emailClient = {
     return (
       await emailFetch<GetAttachmentResponse>(`/email/attachments/${id}`, {
         method: 'GET',
+        errorResponseFilter: messageDownloadError,
       })
     ).map((result) => result);
   },

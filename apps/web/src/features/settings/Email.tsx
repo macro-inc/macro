@@ -20,7 +20,6 @@ import {
 } from '@core/email-link/consent';
 import { mailboxSizeGuidance } from '@core/email-link/mailbox-health';
 import { OutlookBetaBadge } from '@core/email-link/OutlookBetaBadge';
-import type { EmailProvider } from '@core/email-link/ProviderDialog';
 import { fireAndForget } from '@core/util/fireAndForget';
 import GmailIcon from '@icon/gmail-color.svg';
 import OutlookIcon from '@icon/outlook-color.svg';
@@ -42,6 +41,7 @@ import { useRemoveInboxMutation } from '@queries/email/link';
 import {
   type Link as EmailLink,
   SyncStatus,
+  type UserProvider,
 } from '@service-email/generated/schemas';
 import { cn, Dialog, Panel, Tooltip } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
@@ -61,12 +61,12 @@ import { clearSignatureState } from './SignatureSection';
  * Outlook checks that new connections are open first. Repeated clicks while a
  * connection is starting are ignored.
  */
-export function useConnectInbox(): (provider?: EmailProvider) => void {
+export function useConnectInbox(): (provider?: UserProvider) => void {
   const startAddInbox = useAddInboxFlow();
   // Not a disabled state: disabling the opener drops focus to <body>, which
   // is where closing the provider chooser would then return it.
   let addingInbox = false;
-  const connectEmail = (provider?: EmailProvider) =>
+  const connectEmail = (provider?: UserProvider) =>
     Telemetry.span('email.link.connect', async (span) => {
       span.setAttr('email.link.provider', provider ?? 'choose');
       try {

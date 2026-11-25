@@ -10,7 +10,6 @@ import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   currentQueryAccount,
   isCurrentQueryAccount,
-  queryAccountSession,
 } from '@queries/auth/account-scope';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import {
@@ -20,6 +19,7 @@ import {
 } from '@queries/email/imap';
 import type { Discovery, Endpoint } from '@service-email/generated/schemas';
 import { ImapConnectionErrorCode } from '@service-email/generated/schemas/imapConnectionErrorCode';
+import { UserProvider } from '@service-email/generated/schemas/userProvider';
 import {
   Button,
   Checkbox,
@@ -45,20 +45,32 @@ import { match } from 'ts-pattern';
 
 type ConnectOutcome =
   | { type: 'connected'; linkId: string }
-  | 'payment_required'
-  | 'GMAIL'
-  | 'OUTLOOK';
+  | { type: 'payment_required' }
+  | {
+      type: 'oauth';
+      provider: Exclude<UserProvider, typeof UserProvider.IMAP>;
+      emailAddress: string;
+    };
 
 function consentProvider(steer: Discovery['steer']) {
   return match(steer ?? undefined)
     .with(
       'gmail',
-      () => ({ code: 'GMAIL', name: 'Google', capability: 'gmail' }) as const
+      () =>
+        ({
+          code: UserProvider.GMAIL,
+          name: 'Google',
+          capability: 'gmail',
+        }) as const
     )
     .with(
       'outlook',
       () =>
-        ({ code: 'OUTLOOK', name: 'Microsoft', capability: 'outlook' }) as const
+        ({
+          code: UserProvider.OUTLOOK,
+          name: 'Microsoft',
+          capability: 'outlook',
+        }) as const
     )
     .with('none', () => undefined)
     .with(undefined, () => undefined)
@@ -290,11 +302,7 @@ function ConnectForm(props: ImapConnectProps) {
   });
 
   createEffect(() => {
-    if (
-      !viewer ||
-      viewer.session !== queryAccountSession() ||
-      !isCurrentQueryAccount(viewer)
-    ) {
+    if (!isCurrentQueryAccount(viewer)) {
       controller?.abort();
       clearPasswords();
       props.onOpenChange(false);
@@ -423,7 +431,7 @@ function ConnectForm(props: ImapConnectProps) {
         return;
       }
       const refusal = connectionRefusal(imapRefusalCode(result.error));
-      if (refusal.requiresPayment) props.onResult('payment_required');
+      if (refusal.requiresPayment) props.onResult({ type: 'payment_required' });
       else setError(refusal.message);
 
       // A definitive refusal starts a new verification on the next submit.
@@ -561,7 +569,13 @@ function ConnectForm(props: ImapConnectProps) {
                     <Button
                       type="button"
                       variant="primary"
-                      onClick={() => props.onResult(provider().code)}
+                      onClick={() =>
+                        props.onResult({
+                          type: 'oauth',
+                          provider: provider().code,
+                          emailAddress: email().trim(),
+                        })
+                      }
                     >
                       {t('imap.continueWith', { provider: provider().name })}
                     </Button>
@@ -765,7 +779,7 @@ export async function openImapConnection(
     }
     const event = await closed;
     const completedLinkId =
-      typeof outcome === 'object' ? outcome.linkId : linkId;
+      outcome?.type === 'connected' ? outcome.linkId : linkId;
     if (completedLinkId) lifecycle.setAttr('email.link_id', completedLinkId);
     lifecycle.setAttr(
       'dialog.close_reason',

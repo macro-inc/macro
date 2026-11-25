@@ -29,7 +29,7 @@ const snapshot = {
     idle: true,
     uidPlus: true,
     smtpUtf8: true,
-    sendLimitBytes: 5000000,
+    sendLimitBytes: 36700160,
   },
   imap: {
     host: 'imap.example.net',
@@ -101,7 +101,7 @@ it('keeps Inbox included and drops the extra watch when its folder is excluded',
   expect(watched.textContent).toContain('Review');
   expect(screen.getByText('Outside the latest sync')).toBeTruthy();
   expect(screen.getByText('IDLE, UIDPLUS, SMTPUTF8')).toBeTruthy();
-  expect(screen.getByText('5,000,000 bytes')).toBeTruthy();
+  expect(screen.getByText('35 MiB')).toBeTruthy();
   expect(screen.queryByLabelText('Sync Inbox')).toBeNull();
   expect(screen.queryByLabelText(/password/i)).toBeNull();
   fireEvent.keyDown(

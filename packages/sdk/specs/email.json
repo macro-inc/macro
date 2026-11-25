@@ -4256,33 +4256,6 @@
         }
       }
     },
-    "/internal/imap/notifications": {
-      "post": {
-        "tags": ["crate::api::internal::imap"],
-        "operationId": "imap_notification",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Notification"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": ""
-          },
-          "401": {
-            "description": ""
-          },
-          "503": {
-            "description": ""
-          }
-        }
-      }
-    },
     "/opens/{token}": {
       "get": {
         "tags": ["email"],
@@ -5704,28 +5677,6 @@
         "type": "string",
         "description": "Progress/terminal state of a backfill job for [`RefreshEmailEvent::Backfill`].",
         "enum": ["progress", "complete", "failed"]
-      },
-      "Binding": {
-        "type": "object",
-        "description": "Exact mailbox credential binding, authorized by the email domain.",
-        "required": ["linkId", "syncGeneration", "grantGeneration"],
-        "properties": {
-          "grantGeneration": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Credential generation."
-          },
-          "linkId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Mailbox link."
-          },
-          "syncGeneration": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Synchronization generation."
-          }
-        }
       },
       "BlockSenderRequest": {
         "type": "object",
@@ -7861,42 +7812,6 @@
             "format": "int32",
             "description": "Counted pixel fetches.",
             "minimum": 0
-          }
-        }
-      },
-      "Notification": {
-        "type": "object",
-        "description": "Fenced wakeup or credential-health update for the email domain.",
-        "required": ["binding", "credentialsRejected"],
-        "properties": {
-          "binding": {
-            "$ref": "#/components/schemas/Binding",
-            "description": "Exact mailbox binding that produced the change."
-          },
-          "credentialsRejected": {
-            "type": "boolean",
-            "description": "A confirmed provider refusal; never inferred from a saved-password or KMS failure."
-          },
-          "mailboxIssue": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/MailboxIssue",
-                "description": "Separate sync health, cleared after a complete successful snapshot."
-              }
-            ]
-          },
-          "revision": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "Optional for old senders; monotonic within this exact binding."
-          },
-          "syncRetryAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "description": "Durable retry guidance; absent on normal wakeups and older notifications."
           }
         }
       },

@@ -52,7 +52,7 @@ export function announceQueuedSend(options: {
   ) => {
     const persistent = noticeOptions?.persistent ?? false;
     try {
-      const shown = notices.feedback[tone](message, {
+      const shown: number | undefined = notices.feedback[tone](message, {
         ...noticeOptions,
         // Another send's notice with the same text is a different notice.
         stack: true,
@@ -62,6 +62,13 @@ export function announceQueuedSend(options: {
           notice = undefined;
           if (persistent) progressDismissed = true;
         },
+        onUserDismiss:
+          tone === 'failure' && persistent
+            ? () => {
+                // Record dismissal for this attempt before the toast region can remount.
+                if (shown !== undefined) notices.feedback.dismiss(shown);
+              }
+            : undefined,
       });
       notice = shown;
     } catch (error) {
@@ -79,7 +86,7 @@ export function announceQueuedSend(options: {
     notice = undefined;
     if (withdrawn != null) notices.feedback.dismiss(withdrawn);
   };
-  // Terminal notices use normal expiry; later progress never takes them back.
+  // Later progress cannot replace a terminal notice.
   const finish = (
     tone: 'success' | 'failure' | 'alert',
     message: string,
@@ -171,11 +178,10 @@ export function announceQueuedSend(options: {
       .with({ state: 'failed' }, () => {
         finished = true;
         finish('failure', 'Email failed to send', {
-          // Durable recovery remains in the conversation and Drafts. Keeping
-          // this toast persistent makes it resurface when its page returns.
+          // Keep the failure visible until the reader can act on it.
           subtext:
             'See the conversation or Drafts for the reason and recovery options.',
-          persistent: false,
+          persistent: true,
         });
         options.onUndelivered?.();
       })

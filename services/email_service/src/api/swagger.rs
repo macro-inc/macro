@@ -69,7 +69,6 @@ use utoipa::OpenApi;
         crate::api::read_receipts::pixel,
         crate::api::read_receipts::thread,
         health::health_handler,
-        crate::api::internal::imap::handler,
         crate::api::imap::suggestion,
         crate::api::imap::discover,
         crate::api::imap::connect,

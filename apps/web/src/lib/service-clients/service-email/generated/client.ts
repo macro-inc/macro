@@ -64,7 +64,6 @@ import type {
   MailboxOperation,
   MailboxSettingsOperation,
   MessageOperationResponse,
-  Notification,
   ParsedMessage,
   PatchSettingsRequest,
   PatchSettingsResponse,
@@ -4531,60 +4530,6 @@ export const healthHandler = async (
     status: res.status,
     headers: res.headers,
   } as healthHandlerResponse;
-};
-
-export type imapNotificationResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type imapNotificationResponse401 = {
-  data: void;
-  status: 401;
-};
-
-export type imapNotificationResponse503 = {
-  data: void;
-  status: 503;
-};
-
-export type imapNotificationResponseSuccess = imapNotificationResponse204 & {
-  headers: Headers;
-};
-export type imapNotificationResponseError = (
-  | imapNotificationResponse401
-  | imapNotificationResponse503
-) & {
-  headers: Headers;
-};
-
-export type imapNotificationResponse =
-  | imapNotificationResponseSuccess
-  | imapNotificationResponseError;
-
-export const getImapNotificationUrl = () => {
-  return `/internal/imap/notifications`;
-};
-
-export const imapNotification = async (
-  notification: Notification,
-  options?: RequestInit
-): Promise<imapNotificationResponse> => {
-  const res = await fetch(getImapNotificationUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(notification),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: imapNotificationResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as imapNotificationResponse;
 };
 
 /**

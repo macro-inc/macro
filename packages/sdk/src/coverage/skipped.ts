@@ -266,8 +266,6 @@ export const emailExcluded = [
   'getImapMailboxSettings',
   'updateImapMailboxSettings',
   'imapDiscover',
-  // Internal authenticated wakeup from imap_service to email_service.
-  'imapNotification',
   'imapSuggestion',
   'initUser',
   'listBackfillGmail',

@@ -407,4 +407,4 @@ the complete wire types.
 The owner-only account configuration routes `getImapMailboxSettings` and
 `updateImapMailboxSettings` share the existing settings exclusion. The generated
 client includes these operations, which read server usernames or change folder routing.
-The internal IMAP service callback `imapNotification` is also excluded.
+The internal IMAP service callback is omitted from the public OpenAPI and SDK.

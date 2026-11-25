@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
+import type { UserProvider } from '@service-email/generated/schemas/userProvider';
 import {
   Button,
   Dialog,
@@ -19,15 +20,13 @@ import {
 } from 'solid-js';
 import { OutlookBetaBadge } from './OutlookBetaBadge';
 
-export type EmailProvider = 'GMAIL' | 'OUTLOOK' | 'IMAP';
-
 /**
  * Shared provider choice for onboarding, empty states and additional inboxes.
  * Outlook appears only when the server offers it to this user.
  */
 export function EmailProviderDialog(
   props: ManagedDialogProps & {
-    onSelect: (provider: EmailProvider) => void;
+    onSelect: (provider: UserProvider) => void;
     disabled?: boolean;
     outlookAvailable: boolean;
     gmailAvailable?: boolean;
@@ -130,7 +129,7 @@ export function EmailProviderDialog(
 /** Shared loading/error handling for settings, onboarding and another account. */
 export function EmailProviderSelectionDialog(
   props: ManagedDialogProps & {
-    onSelect: (provider: EmailProvider) => void;
+    onSelect: (provider: UserProvider) => void;
     mailOnly: boolean;
     disabled?: boolean;
   }
@@ -156,7 +155,7 @@ export function EmailProviderSelectionDialog(
     // A failed or pending read never authorizes a provider. IMAP keeps its
     // explicit chooser and server-confirmation flow even when it is alone.
     if (!offered || (props.mailOnly && offered.imap)) return;
-    const choices: EmailProvider[] = [];
+    const choices: UserProvider[] = [];
     if (offered.gmail !== false) choices.push('GMAIL');
     if (offered.outlook) choices.push('OUTLOOK');
     const [single] = choices;
@@ -189,10 +188,10 @@ export function EmailProviderSelectionDialog(
 export async function selectEmailProvider(
   owner: Owner | null,
   mailOnly = true,
-  onSelection?: (provider: EmailProvider, dialog: DialogHandle) => void
-): Promise<EmailProvider | undefined> {
+  onSelection?: (provider: UserProvider, dialog: DialogHandle) => void
+): Promise<UserProvider | undefined> {
   const lifecycle = Telemetry.span('email.providers.choose');
-  let selected: EmailProvider | undefined;
+  let selected: UserProvider | undefined;
   try {
     const handle = lifecycle.run(() =>
       openDialog(

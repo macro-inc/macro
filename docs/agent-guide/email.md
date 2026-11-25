@@ -148,6 +148,8 @@ instead of guessing that a password was wrong.
 **Connect new** and **Add another inbox** open the provider chooser immediately.
 Selecting **Other email (IMAP / SMTP)** replaces the chooser with the server
 form. Cancel or close the form to return to the settings surface.
+When the form offers Google or Microsoft consent, the provider receives the
+address entered in the form as its sign-in hint.
 If providers cannot load, **Try again** retries the read without starting an
 OAuth flow. Check that retry restores the offered providers and that calendar
 connections never offer IMAP.
@@ -2162,9 +2164,10 @@ IMAP send refusals identify sender, recipient or message refusal when the server
 provides that evidence. A recipient refusal names the address from the already
 loaded message; no accepted recipient receives the body after another RCPT is
 refused. The send is marked failed, with details in the conversation or Drafts,
-and requires a deliberate recovery. The failure toast expires normally; the
-conversation and Drafts keep the failure and recovery actions. Returning from
-another conversation must not reveal an indefinitely persistent failure toast.
+and requires a deliberate recovery. The failure toast has no automatic timeout.
+Close it or swipe it away on a phone to dismiss it for that send attempt.
+The conversation and Drafts keep the failure details and recovery actions when
+the toast is out of view, including on a phone with one visible toast slot.
 A local queued-send timer must never say
 Delivery unconfirmed before a provider outcome. Reconnect uses the Reconnect
 action; server fields stack at full dialog width and port choices name SSL/TLS

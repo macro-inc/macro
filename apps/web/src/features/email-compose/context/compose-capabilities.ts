@@ -471,6 +471,8 @@ export interface ComposeNoticeOptions {
   stack?: boolean;
   /** Runs once the notice closes, however it closes. */
   onDismiss?: () => void;
+  /** Runs when the user explicitly dismisses a persistent failure. */
+  onUserDismiss?: () => void;
   /** `kind` picks the action's icon; actions default to undo. */
   actions?: {
     label: string;

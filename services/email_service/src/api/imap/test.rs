@@ -3,6 +3,16 @@ use imap_service_client::Error;
 use utoipa::OpenApi;
 
 #[test]
+fn public_spec_omits_internal_imap_notifications() {
+    assert!(
+        !crate::ApiDoc::openapi()
+            .paths
+            .paths
+            .contains_key("/internal/imap/notifications")
+    );
+}
+
+#[test]
 fn public_connection_refusals_expose_a_closed_code_schema() {
     let spec = serde_json::to_value(crate::ApiDoc::openapi()).unwrap();
     let schemas = &spec["components"]["schemas"];

@@ -99,7 +99,7 @@ it('resolves a payment refusal for the paywall and clears the password', async (
   fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
 
   await vi.waitFor(() =>
-    expect(onResult).toHaveBeenCalledWith('payment_required')
+    expect(onResult).toHaveBeenCalledWith({ type: 'payment_required' })
   );
   expect(password).toHaveProperty('value', '');
 });
@@ -390,25 +390,36 @@ it('keeps reconnect secrets empty and forgets an unselected outgoing password', 
   expect(mail.connect).not.toHaveBeenCalled();
 });
 
-it('steers Google-hosted mail to OAuth without collecting a password', async () => {
-  mail.discover.mockResolvedValue(ok({ steer: 'gmail', provider: 'Google' }));
-  const result = vi.fn();
-  render(() => (
-    <ImapConnectDialog
-      open
-      onOpenChange={() => {}}
-      onResult={result}
-      emailAddress="owner@example.com"
-    />
-  ));
-  const google = await screen.findByRole('button', {
-    name: 'Continue with Google',
-  });
-  expect(screen.queryByLabelText('Password or app password')).toBeNull();
-  fireEvent.click(google);
-  expect(result).toHaveBeenCalledWith('GMAIL');
-  expect(mail.connect).not.toHaveBeenCalled();
-});
+it.each([
+  { steer: 'gmail', provider: 'GMAIL', name: 'Google' },
+  { steer: 'outlook', provider: 'OUTLOOK', name: 'Microsoft' },
+])(
+  'steers $name mail to OAuth using the entered address',
+  async ({ steer, provider, name }) => {
+    mail.discover.mockResolvedValue(ok({ steer, provider: name }));
+    const result = vi.fn();
+    render(() => (
+      <ImapConnectDialog open onOpenChange={() => {}} onResult={result} />
+    ));
+
+    fireEvent.input(screen.getByLabelText('Email address'), {
+      target: { value: 'entered@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Find settings' }));
+    const oauth = await screen.findByRole('button', {
+      name: `Continue with ${name}`,
+    });
+    expect(screen.queryByLabelText('Password or app password')).toBeNull();
+    fireEvent.click(oauth);
+
+    expect(result).toHaveBeenCalledWith({
+      type: 'oauth',
+      provider,
+      emailAddress: 'entered@example.com',
+    });
+    expect(mail.connect).not.toHaveBeenCalled();
+  }
+);
 
 it('keeps an existing Google IMAP reconnect on its bound password flow', async () => {
   mail.discover.mockResolvedValue(

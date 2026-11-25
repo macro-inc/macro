@@ -568,7 +568,7 @@ export const send = {
       surface: 'SC-18',
       fn: ['F-135'],
       state:
-        'persistent toast: Email failed to send — Open its conversation or Drafts and choose Cancel to recover the draft. (dismiss: Maybe later)',
+        'persistent toast: Email failed to send — See the conversation or Drafts for the reason and recovery options. (dismiss: close or swipe)',
       trigger: 'send attempt failed',
       source: [
         'src/features/email-compose/primitives/queued-send-notice.ts',
