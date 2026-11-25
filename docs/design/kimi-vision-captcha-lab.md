@@ -102,7 +102,9 @@ Browser Tests job.
 
 In run 1 Kimi K3 reasoned by default and used up the 64-token cap, so every
 reply had no content: five closed failures, no planner retry and no click.
-With reasoning off, 15 of 15 were solved. Run 1's five records were deleted
-when run 2 reused their directory; their outcome is reported here from the
-run's console output.
+With reasoning off, 15 of 15 were solved. Run 1's five JSON records were
+deleted when run 2 reused their directory. Its console output and one
+record's failure detail (`choices[0].message.content` was null), copied
+verbatim from the session transcript, are kept with the local proof as
+`live-kimi-run1-console.txt`.
 Results describe this fixture only, not any third-party CAPTCHA.
