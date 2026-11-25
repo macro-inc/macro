@@ -305,8 +305,8 @@ export interface ChannelWrites {
   unstoredReplies: (channelId: string, rootId: string) => Message[];
   /**
    * The host is retiring and will settle nothing more: fail every write still
-   * waiting for the queue, as a storage reset does, instead of leaving it
-   * pending for good.
+   * waiting for the queue, as a queue reset does when the queue cannot be
+   * read, instead of leaving it pending for good.
    */
   retire(): void;
   /** The host's database is back after an outage: hands over the writes it kept. */
