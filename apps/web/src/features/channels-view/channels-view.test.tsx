@@ -36,6 +36,8 @@ const mocks = vi.hoisted(() => ({
   >(() => true),
   sectionsEnabled: (): boolean => true,
   sectionsLoading: (): boolean => false,
+  redesignEnabled: (): boolean => false,
+  redesignLoading: (): boolean => false,
   tab: (): ChannelsTab => 'browse',
   active: (): boolean => true,
   searchOpen: (): boolean => false,
@@ -248,6 +250,11 @@ vi.mock('./components/rail/next/mobile/MobileSectionsView', () => ({
 vi.mock('./components/rail/ChannelsRail', () => ({
   ChannelsRail: () => <div data-testid="desktop-rail" />,
 }));
+vi.mock('./redesign/views/ChannelSidebarDesktop', () => ({
+  ChannelSidebarDesktop: () => (
+    <div data-testid="channel-sidebar-redesign-desktop" />
+  ),
+}));
 vi.mock('@channel/Channel/channel-entity', () => ({
   useChannelByIdQuery: mocks.selectedQuery,
 }));
@@ -271,6 +278,8 @@ vi.mock('./channels-view-context', () => ({
     tab: () => (mocks.sectionsEnabled() ? 'browse' : mocks.tab()),
     sectionsEnabled: () => mocks.sectionsEnabled(),
     sectionsLoading: () => mocks.sectionsLoading(),
+    redesignEnabled: () => mocks.redesignEnabled(),
+    redesignLoading: () => mocks.redesignLoading(),
     threadsChannelId: () => undefined,
     setTab: vi.fn(),
     setSelectedChannel: mocks.selectChannel,
@@ -360,6 +369,8 @@ beforeEach(() => {
   mocks.selectChannel.mockReset().mockReturnValue(true);
   mocks.sectionsEnabled = () => true;
   mocks.sectionsLoading = () => false;
+  mocks.redesignEnabled = () => false;
+  mocks.redesignLoading = () => false;
   mocks.tab = () => 'browse';
   mocks.favoriteIds = () => [];
   mocks.active = () => true;
@@ -990,5 +1001,12 @@ describe('channel selection loading and recovery', () => {
     render(() => <ChannelsView />);
     expect(screen.getByText('Select a conversation')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
+  it('mounts the redesigned desktop sidebar when enableChannelSidebarRedesign is active', () => {
+    mocks.redesignEnabled = () => true;
+    render(() => <ChannelsView />);
+    expect(screen.getByTestId('channel-sidebar-redesign-desktop')).toBeTruthy();
+    expect(screen.queryByTestId('desktop-rail')).toBeNull();
   });
 });

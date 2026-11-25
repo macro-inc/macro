@@ -15,6 +15,7 @@ import { channelDetailRoute, channelsSplitRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
+  enableChannelSidebarRedesign,
   enableChannelThreadsPreview,
   enableChatSidebarSections,
 } from '@core/constant/featureFlags';
@@ -68,6 +69,9 @@ export type ChannelsViewContext = {
   /** Whether the redesigned desktop sections are enabled. */
   sectionsEnabled: Accessor<boolean>;
   sectionsLoading: Accessor<boolean>;
+  /** Whether the first-principles channel sidebar redesign is enabled. */
+  redesignEnabled?: Accessor<boolean>;
+  redesignLoading?: Accessor<boolean>;
   selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
   /** Set by a selection with `focusComposer`; any other selection clears it. */
   composerFocusRequest: Accessor<ComposerFocusRequest | undefined>;
@@ -145,6 +149,8 @@ export const [ChannelsViewProvider, useChannelsView] =
       const [search, setSearch] = createSearchParams(channelsSearch);
       const sectionsFlag = useFeatureFlag(enableChatSidebarSections);
       const sectionsEnabled = () => sectionsFlag().enabled;
+      const redesignFlag = useFeatureFlag(enableChannelSidebarRedesign);
+      const redesignEnabled = () => redesignFlag().enabled;
       const threadsFlag = useFeatureFlag(enableChannelThreadsPreview);
       const threadsEnabled = () => threadsFlag().enabled;
       const selectPreview = createPreviewSelectionGuard();
@@ -283,9 +289,11 @@ export const [ChannelsViewProvider, useChannelsView] =
         composerFocusRequest,
         sectionsEnabled,
         sectionsLoading: () => sectionsFlag().loading,
+        redesignEnabled,
+        redesignLoading: () => redesignFlag().loading,
         threadsEnabled,
         tab: () => {
-          if (sectionsEnabled()) return 'browse';
+          if (sectionsEnabled() && !redesignEnabled()) return 'browse';
           return state.tab === 'threads' && !threadsEnabled()
             ? 'browse'
             : state.tab;

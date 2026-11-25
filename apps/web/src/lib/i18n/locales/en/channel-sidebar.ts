@@ -149,6 +149,13 @@ export default {
   organizeExistingSection: 'Move to {{name}}',
   organizeJevCostNote: 'Classified {{count}} channels (~{{cost}})',
 
+  // Context menu actions
+  contextOpenInSplit: 'Open in new split',
+  contextPinToTop: 'Pin to top',
+  contextUnpinFromTop: 'Unpin from Pinned',
+  contextMuteChannel: 'Mute channel',
+  contextUnmuteChannel: 'Unmute channel',
+
   // Keyboard footer hints
   footerHintJump: 'sections',
   footerHintSwitch: 'jump',

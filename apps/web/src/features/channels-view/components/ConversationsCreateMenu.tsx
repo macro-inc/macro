@@ -18,6 +18,7 @@ export function ConversationsCreateMenu(props: {
   presentation?: 'sidebar' | 'toolbar';
   onCreateSection?: () => void;
   sectionDisabledReason?: string;
+  showCreateSection?: boolean;
 }) {
   const sections = useFeatureFlag(enableChatSidebarSections);
   const label = () => t('channelSections.createChannelOrDirectMessage');
@@ -72,7 +73,12 @@ export function ConversationsCreateMenu(props: {
             {t('channelSections.newDirectMessage')}
           </Dropdown.Item>
         </Dropdown.Group>
-        <Show when={sections().enabled && props.onCreateSection}>
+        <Show
+          when={
+            (props.showCreateSection || sections().enabled) &&
+            props.onCreateSection
+          }
+        >
           <Dropdown.Group>
             <Dropdown.Item
               disabledReason={props.sectionDisabledReason}
