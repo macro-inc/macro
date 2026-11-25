@@ -195,10 +195,13 @@ impl screen::tunnel::GuestExec for Operator {
         use hosted_runtimes::domain::ports::{Fleet as _, FleetError as _};
         use screen::tunnel::{GuestProgram, TunnelError};
         Box::pin(async move {
-            let fleet = self
-                .fleet_of(computer)
+            let (fleet, image) = self
+                .fleet_and_image_of(computer)
                 .await
                 .map_err(|error| TunnelError::Unreachable(error.to_string()))?;
+            if let Some(image) = image {
+                tracing::Span::current().record("computer.guest.image", image.as_str());
+            }
             let process = fleet.exec(computer, argv).await.map_err(|error| {
                 if error.is_missing() {
                     TunnelError::ComputerOff

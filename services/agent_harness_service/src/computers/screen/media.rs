@@ -14,7 +14,8 @@ use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use tokio::sync::{Notify, mpsc, watch};
 
 use super::rfb::{GateError, RfbGate};
-use super::tunnel::{GuestPort, GuestTunnel, TunnelError};
+use super::telemetry::{RelayProgress, RelayStage};
+use super::tunnel::{GuestPort, GuestTunnel, TunnelError, TunnelRole};
 
 /// Bytes read from the guest at a time.
 const READ_CHUNK: usize = 64 * 1024;
@@ -62,6 +63,7 @@ pub struct MediaContext {
     /// Notified when the driver's input reached the guest through the
     /// media (raw RFB), which keeps the lease alive.
     pub activity: Arc<Notify>,
+    pub(super) progress: Arc<RelayProgress>,
 }
 
 /// How a media path ended.
@@ -111,9 +113,13 @@ impl ScreenMedia for VncMedia {
                 mut from_viewer,
                 driving,
                 activity,
-                ..
+                progress,
             } = context;
-            let stream = tunnel.open(computer_id, GuestPort::Rfb).await?;
+            progress.advance(RelayStage::FleetExec);
+            let stream = tunnel
+                .open(computer_id, GuestPort::Rfb, TunnelRole::Relay)
+                .await?;
+            progress.advance(RelayStage::ShellMarker);
             let (mut guest_reader, mut guest_writer) = tokio::io::split(stream);
             let mut gate = RfbGate::new();
             let mut server = gate.server_filter();
@@ -121,10 +127,16 @@ impl ScreenMedia for VncMedia {
             // up the guest's frames, never its own input on the way in.
             let to_the_viewer = async {
                 let mut buffer = vec![0u8; READ_CHUNK];
+                let mut first_guest_byte = true;
+                let mut first_passed = true;
                 loop {
                     let read = guest_reader.read(&mut buffer).await?;
                     if read == 0 {
                         return Ok(MediaEnd::GuestClosed);
+                    }
+                    if first_guest_byte {
+                        first_guest_byte = false;
+                        progress.advance(RelayStage::FirstGuestByte);
                     }
                     let passed = server.filter(
                         buffer.get(..read).unwrap_or_default(),
@@ -132,6 +144,10 @@ impl ScreenMedia for VncMedia {
                     )?;
                     if passed.is_empty() {
                         continue;
+                    }
+                    if first_passed {
+                        first_passed = false;
+                        progress.advance(RelayStage::RfbGate);
                     }
                     if to_viewer
                         .send(ToViewer::Binary(Bytes::from(passed)))

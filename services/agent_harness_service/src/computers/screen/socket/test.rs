@@ -2,6 +2,7 @@ use std::convert::Infallible;
 
 use computer_screen::domain::models::Driver;
 
+use super::super::tunnel::TunnelExited;
 use super::*;
 
 #[tokio::test(start_paused = true)]
@@ -95,7 +96,7 @@ fn a_stopped_computer_is_off_whatever_broke() {
 #[test]
 fn a_running_computer_whose_tunnel_failed_says_so() {
     for failure in [
-        MediaError::Tunnel(TunnelError::Failed("OCI runtime exec failed".to_owned())),
+        MediaError::Tunnel(TunnelError::MissingMarker),
         MediaError::Tunnel(TunnelError::Unreachable("host agent down".to_owned())),
         MediaError::Io(std::io::Error::other(TunnelExited::Code(1))),
     ] {
@@ -183,6 +184,7 @@ impl GuestTunnel for SilentXvnc {
         &self,
         _computer: ComputerId,
         _port: GuestPort,
+        _role: TunnelRole,
     ) -> Pin<
         Box<
             dyn Future<Output = Result<super::super::tunnel::GuestStream, TunnelError>> + Send + '_,
@@ -289,6 +291,7 @@ mod over_the_wire {
             &self,
             _computer: ComputerId,
             _port: GuestPort,
+            _role: TunnelRole,
         ) -> Pin<Box<dyn Future<Output = Result<GuestStream, TunnelError>> + Send + '_>> {
             let xvnc = Arc::clone(&self.0);
             Box::pin(async move {
@@ -461,6 +464,7 @@ mod over_the_wire {
                 let deps = SocketDeps {
                     screens: Arc::clone(&screens),
                     tunnel,
+                    macrod_connection: Arc::new(|_| None),
                     waker: Arc::new(AwakeComputer),
                     media: Arc::new(VncMedia),
                     viewers: Arc::clone(&viewers),
@@ -474,7 +478,10 @@ mod over_the_wire {
                     shutdown: CancellationToken::new(),
                 };
                 let grant = grant.clone();
-                async move { upgrade.on_upgrade(move |socket| serve(socket, grant, deps, None)) }
+                async move {
+                    let span = session_span(&grant, None, None);
+                    upgrade.on_upgrade(move |socket| serve(socket, grant, deps, span))
+                }
             }
         };
         let app = axum::Router::new().route("/ws", axum::routing::get(route));
@@ -743,6 +750,7 @@ mod over_the_wire {
             &self,
             _computer: ComputerId,
             _port: GuestPort,
+            _role: TunnelRole,
         ) -> Pin<Box<dyn Future<Output = Result<GuestStream, TunnelError>> + Send + '_>> {
             Box::pin(async move {
                 let (harness_end, guest_end) = tokio::io::duplex(1 << 16);
@@ -785,6 +793,7 @@ mod over_the_wire {
                 let deps = SocketDeps {
                     screens: Arc::clone(&screens),
                     tunnel: Arc::new(FloodTunnel),
+                    macrod_connection: Arc::new(|_| None),
                     waker: Arc::new(AwakeComputer),
                     media: Arc::new(VncMedia),
                     viewers: Arc::new(Viewers::default()),
@@ -797,7 +806,10 @@ mod over_the_wire {
                     shutdown: CancellationToken::new(),
                 };
                 let grant = grant("alice", Mode::View);
-                async move { upgrade.on_upgrade(move |socket| serve(socket, grant, deps, None)) }
+                async move {
+                    let span = session_span(&grant, None, None);
+                    upgrade.on_upgrade(move |socket| serve(socket, grant, deps, span))
+                }
             }
         };
         let app = axum::Router::new().route("/ws", axum::routing::get(route));
@@ -868,6 +880,7 @@ mod over_the_wire {
             &self,
             _computer: ComputerId,
             _port: GuestPort,
+            _role: TunnelRole,
         ) -> Pin<Box<dyn Future<Output = Result<GuestStream, TunnelError>> + Send + '_>> {
             Box::pin(async move {
                 let (harness_end, mut guest_end) = tokio::io::duplex(64);
@@ -944,6 +957,7 @@ mod over_the_wire {
             &self,
             _computer: ComputerId,
             _port: GuestPort,
+            _role: TunnelRole,
         ) -> Pin<Box<dyn Future<Output = Result<GuestStream, TunnelError>> + Send + '_>> {
             let answer = Arc::clone(&self.0);
             Box::pin(async move {
@@ -989,6 +1003,7 @@ mod over_the_wire {
             &self,
             _computer: ComputerId,
             _port: GuestPort,
+            _role: TunnelRole,
         ) -> Pin<Box<dyn Future<Output = Result<GuestStream, TunnelError>> + Send + '_>> {
             let guest = Arc::clone(&self.0);
             Box::pin(async move {
@@ -1409,7 +1424,10 @@ impl futures::Sink<Message> for NeverReady {
 
 #[tokio::test(start_paused = true)]
 async fn a_viewer_that_takes_nothing_for_the_send_timeout_counts_as_gone() {
-    let (outbox, _writer) = Outbox::start(NeverReady);
+    let (outbox, _writer) = Outbox::start(
+        NeverReady,
+        Arc::new(RelayProgress::new(tracing::Span::none())),
+    );
     outbox
         .push_control(Message::Text(Utf8Bytes::from_static("{}")))
         .unwrap();
@@ -1425,7 +1443,10 @@ async fn media_resumes_as_soon_as_a_stalled_viewer_reads_again() {
     use futures::{SinkExt as _, StreamExt as _};
 
     let (viewer, mut reads) = futures::channel::mpsc::channel::<Message>(0);
-    let (outbox, _writer) = Outbox::start(viewer.sink_map_err(axum::Error::new));
+    let (outbox, _writer) = Outbox::start(
+        viewer.sink_map_err(axum::Error::new),
+        Arc::new(RelayProgress::new(tracing::Span::none())),
+    );
     while outbox.has_room_for_media() {
         outbox
             .push_media(Message::Binary(axum::body::Bytes::from_static(b"frame")))
@@ -1442,7 +1463,10 @@ async fn media_resumes_as_soon_as_a_stalled_viewer_reads_again() {
 
 #[tokio::test(start_paused = true)]
 async fn a_burst_of_control_messages_never_ends_a_slow_viewer() {
-    let (outbox, _writer) = Outbox::start(NeverReady);
+    let (outbox, _writer) = Outbox::start(
+        NeverReady,
+        Arc::new(RelayProgress::new(tracing::Span::none())),
+    );
     while outbox.has_room_for_media() {
         outbox
             .push_media(Message::Binary(axum::body::Bytes::from_static(b"frame")))
@@ -1455,4 +1479,45 @@ async fn a_burst_of_control_messages_never_ends_a_slow_viewer() {
             .push_control(Message::Text(Utf8Bytes::from_static("{}")))
             .unwrap();
     }
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_relay_counts_only_completed_binary_socket_writes() {
+    let spans = crate::test_spans::exported_spans();
+    let span = tracing::info_span!(
+        "test.screen.socket_write",
+        screen.relay.stage = Empty,
+        screen.relay.close_reason = Empty,
+    );
+    let progress = Arc::new(RelayProgress::new(span));
+    let (viewer, mut reads) = futures::channel::mpsc::channel::<Message>(0);
+    let (outbox, writer) =
+        Outbox::start(viewer.sink_map_err(axum::Error::new), Arc::clone(&progress));
+    outbox
+        .push_control(Message::Text(Utf8Bytes::from_static("{}")))
+        .unwrap();
+    outbox
+        .push_media(Message::Binary(axum::body::Bytes::from_static(b"rfb")))
+        .unwrap();
+    drop(outbox);
+
+    assert!(matches!(reads.next().await, Some(Message::Text(_))));
+    assert!(matches!(reads.next().await, Some(Message::Binary(_))));
+    assert!(reads.next().await.is_none());
+    assert_eq!(writer.await.unwrap(), 3);
+    drop(RelayOutcome {
+        progress: &progress,
+        reason: CloseReason::Eof,
+    });
+    drop(progress);
+
+    let spans = spans.exporter.get_finished_spans().unwrap();
+    let span = spans
+        .iter()
+        .find(|span| span.name == "test.screen.socket_write")
+        .unwrap();
+    assert!(span.attributes.iter().any(|attribute| {
+        attribute.key.as_str() == "screen.relay.stage"
+            && attribute.value.as_str() == "first_socket_write"
+    }));
 }

@@ -72,18 +72,17 @@ async fn the_tunnel_runs_socat_to_the_port_with_nodelay() {
     let (exec, mut guest, _exit) = FakeExec::new();
     guest.write_all(READY).await.unwrap();
     let _stream = FleetTunnel::new(exec.clone(), TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
         .await
         .unwrap();
 
     assert_eq!(
         exec.calls(),
         vec![vec![
-            "sh".to_owned(),
+            "bash".to_owned(),
             "-c".to_owned(),
-            r#"printf 'macro-screen-tunnel-ready %s\n' "$$" && exec socat -t 1 STDIO "TCP:127.0.0.1:$1,nodelay""#
-                .to_owned(),
-            "sh".to_owned(),
+            TUNNEL_SCRIPT.to_owned(),
+            "bash".to_owned(),
             "5901".to_owned(),
         ]]
     );
@@ -97,7 +96,7 @@ async fn only_what_follows_the_ready_line_is_media() {
         .await
         .unwrap();
     let mut stream = FleetTunnel::new(exec, TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
         .await
         .unwrap();
 
@@ -116,15 +115,12 @@ async fn a_fleet_error_instead_of_the_ready_line_is_never_media() {
     drop(guest);
 
     let Err(error) = FleetTunnel::new(exec, TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
         .await
     else {
         panic!("the tunnel did not start");
     };
-    let TunnelError::Failed(output) = error else {
-        panic!("not a failed tunnel: {error:?}");
-    };
-    assert!(output.starts_with("OCI runtime exec failed"), "{output}");
+    assert!(matches!(error, TunnelError::MissingMarker));
 }
 
 #[tokio::test]
@@ -138,9 +134,9 @@ async fn a_ready_line_without_a_pid_is_refused() {
 
     assert!(matches!(
         FleetTunnel::new(exec, TaskTracker::new())
-            .open(COMPUTER, GuestPort::Rfb)
+            .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
             .await,
-        Err(TunnelError::Failed(_))
+        Err(TunnelError::MissingMarker)
     ));
 }
 
@@ -149,7 +145,7 @@ async fn a_tunnel_whose_socat_fails_reads_as_an_error_not_the_end() {
     let (exec, mut guest, exit) = FakeExec::new();
     guest.write_all(READY).await.unwrap();
     let mut stream = FleetTunnel::new(exec, TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
         .await
         .unwrap();
     // socat couldn't connect: no output, exit 1.
@@ -158,7 +154,10 @@ async fn a_tunnel_whose_socat_fails_reads_as_an_error_not_the_end() {
 
     let mut buffer = [0u8; 16];
     let error = stream.read(&mut buffer).await.unwrap_err();
-    assert!(TunnelExited::is(&error), "{error}");
+    assert!(matches!(
+        TunnelExited::from_io(&error),
+        Some(TunnelExited::Code(1))
+    ));
 }
 
 #[tokio::test]
@@ -169,7 +168,7 @@ async fn a_tunnel_that_exits_cleanly_is_the_port_closing() {
         .await
         .unwrap();
     let mut stream = FleetTunnel::new(exec.clone(), TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
         .await
         .unwrap();
     drop(guest);
@@ -188,7 +187,7 @@ async fn a_closed_session_whose_tunnel_lingers_kills_it() {
     let (exec, mut guest, _exit) = FakeExec::new();
     guest.write_all(READY).await.unwrap();
     let stream = FleetTunnel::new(exec.clone(), TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
         .await
         .unwrap();
     let called = exec.called.notified();
@@ -218,7 +217,7 @@ async fn a_tunnel_whose_exec_ended_but_whose_program_may_not_is_killed_too() {
     let (exec, mut guest, exit) = FakeExec::new();
     guest.write_all(READY).await.unwrap();
     let stream = FleetTunnel::new(exec.clone(), TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
         .await
         .unwrap();
     let called = exec.called.notified();
@@ -306,4 +305,102 @@ fn the_kill_spares_a_pid_the_guest_gave_another_program() {
     );
     other.kill().unwrap();
     other.wait().unwrap();
+}
+
+#[tokio::test]
+async fn the_relay_records_where_the_guest_stream_ended() {
+    use super::super::media::{DrivingUntil, MediaContext, ScreenMedia, ToViewer, VncMedia};
+    use super::super::telemetry::{CloseReason, RelayOutcome, RelayProgress};
+    use tokio::sync::{mpsc, watch};
+
+    let spans = crate::test_spans::exported_spans();
+    for (stdout, code, stage, reason, relayed) in [
+        (&b"exec failed\n"[..], 1, "fleet_exec", "exec_failed", false),
+        (&READY[..], 127, "shell_marker", "helper_missing", false),
+        (&READY[..], 111, "shell_marker", "connect_refused", false),
+        (
+            &b"macro-screen-tunnel-ready 4242\n\x00nvalid RFB\n"[..],
+            0,
+            "first_guest_byte",
+            "parser_error",
+            false,
+        ),
+        (
+            &b"macro-screen-tunnel-ready 4242\nRFB 003.008\n"[..],
+            0,
+            "rfb_gate",
+            "eof",
+            true,
+        ),
+    ] {
+        let (exec, mut guest, exit) = FakeExec::new();
+        guest.write_all(stdout).await.unwrap();
+        drop(guest);
+        exit.send(code).unwrap();
+
+        let span = tracing::info_span!(
+            "test.screen.relay",
+            fixture = reason,
+            screen.relay.stage = tracing::field::Empty,
+            screen.relay.close_reason = tracing::field::Empty,
+        );
+        let (to_viewer, mut viewer) = mpsc::channel(1);
+        let (_input, from_viewer) = mpsc::channel(1);
+        let (_lease, driving) = watch::channel(DrivingUntil::default());
+        let progress = Arc::new(RelayProgress::new(span.clone()));
+        let tasks = TaskTracker::new();
+        let run = VncMedia.run(MediaContext {
+            computer_id: COMPUTER,
+            tunnel: Arc::new(FleetTunnel::new(exec, tasks.clone())),
+            to_viewer,
+            from_viewer,
+            driving,
+            activity: Arc::new(Notify::new()),
+            progress: Arc::clone(&progress),
+        });
+
+        let result = run.instrument(span).await;
+        {
+            let _outcome = RelayOutcome {
+                progress: &progress,
+                reason: CloseReason::from(&result),
+            };
+        }
+        drop(progress);
+        tasks.close();
+        tasks.wait().await;
+
+        if relayed {
+            let Some(ToViewer::Binary(bytes)) = viewer.recv().await else {
+                panic!("the guest's RFB version never reached the viewer");
+            };
+            assert_eq!(&bytes[..], b"RFB 003.008\n");
+        }
+        assert!(viewer.recv().await.is_none());
+
+        let exported = spans.exporter.get_finished_spans().unwrap();
+        let matching: Vec<_> = exported
+            .iter()
+            .filter(|span| {
+                span.name == "test.screen.relay"
+                    && span
+                        .attributes
+                        .iter()
+                        .any(|attr| attr.key.as_str() == "fixture" && attr.value.as_str() == reason)
+            })
+            .collect();
+        assert_eq!(matching.len(), 1);
+        for (key, value) in [
+            ("screen.relay.stage", stage),
+            ("screen.relay.close_reason", reason),
+        ] {
+            let fields: Vec<_> = matching[0]
+                .attributes
+                .iter()
+                .filter(|attr| attr.key.as_str() == key)
+                .map(|attr| attr.value.as_str())
+                .collect();
+            assert_eq!(fields, [value]);
+        }
+    }
 }

@@ -21,14 +21,15 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 use tracing::field::Empty;
 
-use super::Screens;
 use super::media::{
     DrivingUntil, FromViewer, MediaContext, MediaEnd, MediaError, MediaRun, ScreenMedia, ToViewer,
 };
 use super::rfb::{InputEvent, RfbInjector};
+use super::telemetry::{CloseReason, RelayOutcome, RelayProgress, RelayStage};
 use super::tunnel::{
-    ComputerPower, GuestPort, GuestTunnel, ScreenWaker, TunnelError, TunnelExited, Woken,
+    ComputerPower, GuestPort, GuestTunnel, ScreenWaker, TunnelError, TunnelRole, Woken,
 };
+use super::{MacrodConnection, Screens};
 
 #[cfg(test)]
 mod test;
@@ -219,6 +220,7 @@ pub struct SocketDeps {
     pub tunnel: Arc<dyn GuestTunnel>,
     pub waker: Arc<dyn ScreenWaker>,
     pub media: Arc<dyn ScreenMedia>,
+    pub macrod_connection: MacrodConnection,
     pub viewers: Arc<Viewers>,
     pub reauthorize: Reauthorize,
     /// How often access is checked again and the socket marked seen:
@@ -257,6 +259,7 @@ struct MediaSlot {
 struct Ending {
     reason: EndReason,
     error: Option<(ErrorCode, String)>,
+    close_reason: CloseReason,
 }
 
 impl Ending {
@@ -264,18 +267,18 @@ impl Ending {
         Self {
             reason,
             error: None,
+            close_reason: reason.into(),
         }
     }
 }
 
-/// Serve one viewer until it stops, the computer goes, access ends or the
-/// process shuts down. The lease outlives the socket by its grace.
-pub async fn serve(
-    socket: WebSocket,
-    grant: ScreenGrant,
-    deps: SocketDeps,
-    traceparent: Option<String>,
-) {
+/// Start the session trace at redemption, before the WebSocket upgrades.
+pub(super) fn session_span(
+    grant: &ScreenGrant,
+    traceparent: Option<&str>,
+    attempt: Option<(uuid::Uuid, std::num::NonZeroU32)>,
+) -> tracing::Span {
+    let journey = attempt.map(|(id, _)| id.to_string());
     let span = tracing::info_span!(
         "computer.screen.session",
         computer.id = %grant.computer_id,
@@ -284,13 +287,41 @@ pub async fn serve(
         screen.transport = %grant.transport,
         screen.surface = %grant.surface,
         screen.mode = %grant.mode,
+        screen.journey.id = journey.as_deref(),
+        screen.attempt = attempt.map(|(_, number)| i64::from(number.get())),
+        screen.role = TunnelRole::Relay.as_ref(),
+        screen.relay.stage = Empty,
+        screen.relay.close_reason = Empty,
+        screen.bytes_written = Empty,
+        macrod.connection.epoch = Empty,
         screen.end_reason = Empty,
         screen.bytes_to_viewer = Empty,
         screen.bytes_from_viewer = Empty,
         otel.status_code = Empty,
     );
     // The socket continues the ticket request's trace.
-    hosted_runtimes::domain::telemetry::attach(&span, traceparent.as_deref());
+    hosted_runtimes::domain::telemetry::attach(&span, traceparent);
+    tracing::info!(parent: &span, "computer.screen.ticket_redeemed");
+    span
+}
+
+pub(super) fn upgrade_failed(span: tracing::Span) {
+    span.record("otel.status_code", "ERROR");
+    let progress = RelayProgress::new(span);
+    drop(RelayOutcome {
+        progress: &progress,
+        reason: CloseReason::SocketError,
+    });
+}
+
+/// Serve one viewer until it stops, the computer goes, access ends or the
+/// process shuts down. The lease outlives the socket by its grace.
+pub(super) async fn serve(
+    socket: WebSocket,
+    grant: ScreenGrant,
+    deps: SocketDeps,
+    span: tracing::Span,
+) {
     tracing::Instrument::instrument(serve_in_span(socket, grant, deps, span.clone()), span).await;
 }
 
@@ -300,12 +331,18 @@ async fn serve_in_span(
     deps: SocketDeps,
     span: tracing::Span,
 ) {
+    let progress = Arc::new(RelayProgress::new(span.clone()));
+    progress.advance(RelayStage::SocketUpgraded);
+    let mut outcome = RelayOutcome {
+        progress: &progress,
+        reason: CloseReason::Canceled,
+    };
     let session = match deps.screens.open_session(&grant).await {
         Ok(session) => session,
         Err(ScreenError::TooManySockets) => {
             span.record("screen.end_reason", EndReason::Error.as_ref());
             let (sink, _) = socket.split();
-            let (outbox, writer) = Outbox::start(sink);
+            let (outbox, writer) = Outbox::start(sink, Arc::clone(&progress));
             let _ = send(
                 &outbox,
                 &ServerMessage::Error {
@@ -323,11 +360,13 @@ async fn serve_in_span(
             .await;
             drop(outbox);
             let _ = writer.await;
+            outcome.reason = CloseReason::SessionError;
             return;
         }
         Err(error) => {
             tracing::error!(error = ?error, "could not open the screen audit row");
             span.record("otel.status_code", "ERROR");
+            outcome.reason = CloseReason::SessionError;
             return;
         }
     };
@@ -340,10 +379,12 @@ async fn serve_in_span(
         bytes_to_viewer: 0,
         bytes_from_viewer: 0,
         waking: false,
+        progress: Arc::clone(&progress),
     };
     let (sink, receiver) = socket.split();
-    let (outbox, writer) = Outbox::start(sink);
+    let (outbox, writer) = Outbox::start(sink, Arc::clone(&progress));
     let ending = connection.run(&outbox, receiver).await;
+    outcome.reason = ending.close_reason;
 
     if let Some((code, message)) = &ending.error {
         let _ = send(
@@ -366,8 +407,14 @@ async fn serve_in_span(
     drop(outbox);
 
     span.record("screen.end_reason", ending.reason.as_ref());
-    span.record("screen.bytes_to_viewer", connection.bytes_to_viewer);
-    span.record("screen.bytes_from_viewer", connection.bytes_from_viewer);
+    span.record(
+        "screen.bytes_to_viewer",
+        i64::try_from(connection.bytes_to_viewer).unwrap_or(i64::MAX),
+    );
+    span.record(
+        "screen.bytes_from_viewer",
+        i64::try_from(connection.bytes_from_viewer).unwrap_or(i64::MAX),
+    );
     if ending.reason == EndReason::Error {
         span.record("otel.status_code", "ERROR");
     }
@@ -385,7 +432,9 @@ async fn serve_in_span(
             |error| tracing::error!(error = ?error, "could not close the screen audit row"),
         )
         .ok();
-    let _ = writer.await;
+    if let Ok(written) = writer.await {
+        span.record("screen.bytes_written", written);
+    }
 }
 
 type Receiver = futures::stream::SplitStream<WebSocket>;
@@ -429,7 +478,10 @@ struct Outbox {
 
 impl Outbox {
     /// Write to `sink` from a task of its own, until the outbox is dropped.
-    fn start<Sink>(mut sink: Sink) -> (Self, tokio::task::JoinHandle<()>)
+    fn start<Sink>(
+        mut sink: Sink,
+        progress: Arc<RelayProgress>,
+    ) -> (Self, tokio::task::JoinHandle<i64>)
     where
         Sink: futures::Sink<Message> + Unpin + Send + 'static,
     {
@@ -447,10 +499,15 @@ impl Outbox {
         );
         let writer = tokio::spawn(
             async move {
+                let mut written = 0i64;
                 while let Some(outgoing) = pending.recv().await {
                     let (message, is_media) = match outgoing {
                         Outgoing::Media(message) => (message, true),
                         Outgoing::Control(message) => (message, false),
+                    };
+                    let media_bytes = match &message {
+                        Message::Binary(bytes) => i64::try_from(bytes.len()).unwrap_or(i64::MAX),
+                        _ => 0,
                     };
                     let sent = tokio::time::timeout(SEND_TIMEOUT, sink.send(message)).await;
                     if is_media {
@@ -462,19 +519,22 @@ impl Outbox {
                         writer_control.fetch_sub(1, Ordering::SeqCst);
                     }
                     match sent {
-                        Ok(Ok(())) => {}
-                        Ok(Err(_)) => {
-                            writer_stalled.cancel();
-                            return;
+                        Ok(Ok(())) => {
+                            if is_media && media_bytes > 0 {
+                                if written == 0 {
+                                    progress.advance(RelayStage::FirstSocketWrite);
+                                }
+                                written = written.saturating_add(media_bytes);
+                            }
                         }
-                        Err(_) => {
-                            tracing::info!("a screen viewer stopped reading");
+                        Ok(Err(_)) | Err(_) => {
                             writer_stalled.cancel();
-                            return;
+                            return written;
                         }
                     }
                 }
                 let _ = tokio::time::timeout(SEND_TIMEOUT, sink.close()).await;
+                written
             }
             .in_current_span(),
         );
@@ -531,6 +591,7 @@ struct Connection {
     bytes_from_viewer: u64,
     /// Whether the computer is being woken; said in every `state`.
     waking: bool,
+    progress: Arc<RelayProgress>,
 }
 
 impl Connection {
@@ -548,6 +609,7 @@ impl Connection {
             from_viewer: from_viewer_receiver,
             driving: driving.clone(),
             activity: Arc::clone(activity),
+            progress: Arc::clone(&self.progress),
         });
         MediaSlot {
             run,
@@ -690,6 +752,7 @@ impl Connection {
         if self.state(sender, lease.as_ref(), surface).await.is_err() {
             return Ending::plain(EndReason::Stopped);
         }
+        self.progress.advance(RelayStage::Wake);
         match self.wake(sender, lease.as_ref(), surface).await {
             Ok(Ok(_)) => {}
             Ok(Err(error)) => {
@@ -697,6 +760,10 @@ impl Connection {
                 return Ending::plain(EndReason::ComputerOff);
             }
             Err(_) => return Ending::plain(EndReason::Stopped),
+        }
+        if let Some(epoch) = (self.deps.macrod_connection)(self.grant.harness_id) {
+            tracing::Span::current()
+                .record("macrod.connection.epoch", tracing::field::display(epoch));
         }
         let mut media = self.start_media(&driving, &activity);
 
@@ -735,16 +802,21 @@ impl Connection {
                 }
 
                 // The viewer stopped reading, or its connection broke.
-                () = sender.stalled.cancelled() => return Ending::plain(EndReason::Stopped),
+                () = sender.stalled.cancelled() => return Ending {
+                    close_reason: CloseReason::SocketError,
+                    ..Ending::plain(EndReason::Stopped)
+                },
 
                 ended = run => {
-                    return match media_ending(ended) {
+                    let close_reason = CloseReason::from(&ended);
+                    let ending = match media_ending(ended) {
                         Ok(ending) => ending,
                         Err(stopped) => {
                             let power = self.deps.waker.power(computer).await;
                             stopped_short_ending(stopped, power)
                         }
                     };
+                    return Ending { close_reason, ..ending };
                 }
 
                 // The viewer read media again: the branch below runs again.
@@ -776,12 +848,17 @@ impl Connection {
                     return Ending {
                         reason: EndReason::Error,
                         error: Some((ErrorCode::TunnelFailed, "the computer's screen stopped taking input".to_owned())),
+                        close_reason: CloseReason::Timeout,
                     };
                 }
 
                 incoming = receiver.next(), if waiting_input.is_none() => {
                     let text = match incoming {
-                        None | Some(Err(_)) | Some(Ok(Message::Close(_))) => return Ending::plain(EndReason::Stopped),
+                        None | Some(Ok(Message::Close(_))) => return Ending::plain(EndReason::Stopped),
+                        Some(Err(_)) => return Ending {
+                            close_reason: CloseReason::SocketError,
+                            ..Ending::plain(EndReason::Stopped)
+                        },
                         Some(Ok(Message::Binary(bytes))) => {
                             self.bytes_from_viewer += bytes.len() as u64;
                             if let Err(mpsc::error::TrySendError::Full(FromViewer::Binary(bytes))) =
@@ -1138,8 +1215,14 @@ pub(super) async fn connect_injector(
     tunnel: Arc<dyn GuestTunnel>,
     computer: ComputerId,
 ) -> Result<RfbInjector, String> {
-    let opening =
-        tokio::spawn(async move { tunnel.open(computer, GuestPort::Rfb).await }.in_current_span());
+    let opening = tokio::spawn(
+        async move {
+            tunnel
+                .open(computer, GuestPort::Rfb, TunnelRole::Input)
+                .await
+        }
+        .in_current_span(),
+    );
     let stream = opening
         .await
         .map_err(|_| "the computer's display did not open".to_owned())?
@@ -1217,17 +1300,14 @@ fn media_ending(ended: Result<MediaEnd, MediaError>) -> Result<Ending, StoppedSh
         Err(MediaError::Tunnel(TunnelError::ComputerOff)) => {
             Ok(Ending::plain(EndReason::ComputerOff))
         }
-        Err(MediaError::Tunnel(error @ (TunnelError::Unreachable(_) | TunnelError::Failed(_)))) => {
-            tracing::warn!(error = %error, "the screen tunnel failed");
-            Err(StoppedShort::TunnelFailed)
-        }
-        Err(MediaError::Io(error)) => {
-            tracing::warn!(error = %error, tunnel_exited = TunnelExited::is(&error), "the screen tunnel broke");
-            Err(StoppedShort::TunnelFailed)
-        }
+        Err(MediaError::Tunnel(
+            TunnelError::Unreachable(_) | TunnelError::MissingMarker | TunnelError::Timeout,
+        ))
+        | Err(MediaError::Io(_)) => Err(StoppedShort::TunnelFailed),
         Err(MediaError::Gate(error)) => Ok(Ending {
             reason: EndReason::Error,
             error: Some((ErrorCode::BadMessage, error.to_string())),
+            close_reason: CloseReason::ParserError,
         }),
     }
 }
@@ -1254,6 +1334,7 @@ fn stopped_short_ending(
                 ErrorCode::SourceUnavailable,
                 "the computer's screen closed".to_owned(),
             )),
+            close_reason: CloseReason::Eof,
         },
         StoppedShort::TunnelFailed => Ending {
             reason: EndReason::Error,
@@ -1261,6 +1342,7 @@ fn stopped_short_ending(
                 ErrorCode::TunnelFailed,
                 "could not reach the computer's screen".to_owned(),
             )),
+            close_reason: CloseReason::ExitUnknown,
         },
     }
 }

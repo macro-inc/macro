@@ -2157,7 +2157,7 @@ pub async fn run() -> anyhow::Result<()> {
         authorization: MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     });
     let gateway_state = RuntimeGatewayState::new(
-        runtimes,
+        Arc::clone(&runtimes),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     // Served to the app by `POST /agent-mode-choice` for the composer's Auto mode.
@@ -2345,6 +2345,10 @@ pub async fn run() -> anyhow::Result<()> {
                 computer_tasks.clone(),
             )),
             waker: Arc::clone(operator) as _,
+            macrod_connection: {
+                let runtimes = Arc::clone(&runtimes);
+                Arc::new(move |harness| runtimes.connection_of(harness))
+            },
             medias: computers::screen::ScreenMedias {
                 vnc: Arc::new(computers::screen::media::VncMedia),
             },
