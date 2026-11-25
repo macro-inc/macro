@@ -101,7 +101,7 @@ export interface ChannelPrewarmDeps {
   host: ChannelPrewarmHost;
   runtime: Pick<
     ChannelSyncRuntime,
-    'mark' | 'noteStoredSeq' | 'noteServerRead' | 'ensureCurrent'
+    'epoch' | 'noteServerRead' | 'ensureCurrent'
   >;
   touches: ChannelTouches;
   /** The channels to keep ready, in warming order, asked within `span`. */
@@ -139,7 +139,7 @@ const warmChannel = (
 ): Effect.Effect<ChannelResult> =>
   Effect.tryPromise({
     try: async (signal) => {
-      const mark = deps.runtime.mark(channelId);
+      const epoch = deps.runtime.epoch();
       const loaded = await parent.run(() =>
         loadChannelPage(
           {
@@ -153,19 +153,15 @@ const warmChannel = (
         )
       );
       if (loaded === 'unsupported') return 'unsupported' as const;
-      const stored = await loaded.stored;
       // Not stored: the next pass reads it again, under the new session.
-      if (stored.kind !== 'stored') return 'failed' as const;
-      const seq = stored.seq;
+      if ((await loaded.stored) === 'session-changed') return 'failed' as const;
       if (loaded.source === 'server') {
         deps.runtime.noteServerRead(channelId, {
-          seq,
           readSeq: loaded.readSeq,
-          mark,
+          epoch,
         });
         return 'fetched' as const;
       }
-      deps.runtime.noteStoredSeq(channelId, seq, mark);
       // After awaits: the catch-up joins the pass's trace again. One a new
       // connection ended is asked once more: a reconnect catches up only the
       // channels on screen. Ended twice, the next pass warms it.

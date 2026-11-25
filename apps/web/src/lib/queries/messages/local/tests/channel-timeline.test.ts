@@ -150,10 +150,9 @@ function fakeRuntime() {
         return () => listeners.delete(listener);
       }
     ),
-    noteStoredSeq: vi.fn(),
     noteServerRead: vi.fn(),
     ensureCurrent: vi.fn(async () => 'current' as const),
-    mark: () => ({ epoch: 3, seq: null }),
+    epoch: () => 3,
     changed: () => {
       for (const listener of listeners) listener('changed');
     },
@@ -315,10 +314,6 @@ describe('createLocalChannelTimeline', () => {
     expect(timeline.hasNewer()).toBe(false);
     expect(fetchPage).not.toHaveBeenCalled();
     await waitFor(() => vi.mocked(runtime.ensureCurrent).mock.calls.length > 0);
-    expect(runtime.noteStoredSeq).toHaveBeenCalledWith(CHANNEL_ID, '7', {
-      epoch: 3,
-      seq: null,
-    });
     expect(runtime.open).toHaveBeenCalledWith(CHANNEL_ID);
     // One touch, no other write.
     expect(host.commits).toEqual([
@@ -653,9 +648,8 @@ describe('createLocalChannelTimeline', () => {
       () => vi.mocked(runtime.noteServerRead).mock.calls.length > 0
     );
     expect(runtime.noteServerRead).toHaveBeenCalledWith(CHANNEL_ID, {
-      seq: '9',
       readSeq: '9',
-      mark: { epoch: 3, seq: null },
+      epoch: 3,
     });
 
     mounted.addRow(graphqlMessage(3));
@@ -695,9 +689,8 @@ describe('createLocalChannelTimeline', () => {
     });
     expect(fetchPage).toHaveBeenCalledTimes(2);
     expect(runtime.noteServerRead).toHaveBeenCalledWith(CHANNEL_ID, {
-      seq: '9',
       readSeq: '9',
-      mark: { epoch: 3, seq: null },
+      epoch: 3,
     });
     // The reload never blanks the window it shows.
     expect(shown.slice(shown.indexOf(2))).not.toContain(0);
@@ -817,7 +810,7 @@ describe('createLocalChannelTimeline', () => {
         vi.fn()
       ),
     }));
-    await waitFor(() => vi.mocked(runtime.noteStoredSeq).mock.calls.length > 0);
+    await waitFor(() => vi.mocked(runtime.ensureCurrent).mock.calls.length > 0);
     away = true;
     const page = timeline.loadOlder();
     await waitFor(() => timeline.entries().length === 2);
@@ -871,7 +864,7 @@ describe('createLocalChannelTimeline', () => {
         vi.fn()
       ),
     }));
-    await waitFor(() => vi.mocked(runtime.noteStoredSeq).mock.calls.length > 0);
+    await waitFor(() => vi.mocked(runtime.ensureCurrent).mock.calls.length > 0);
     const page = timeline.loadOlder();
     await waitFor(() => olderReads === 1);
 
@@ -1116,7 +1109,7 @@ describe('createLocalChannelTimeline', () => {
         vi.fn()
       ),
     }));
-    await waitFor(() => vi.mocked(runtime.noteStoredSeq).mock.calls.length > 0);
+    await waitFor(() => vi.mocked(runtime.ensureCurrent).mock.calls.length > 0);
     away = true;
     const page = timeline.loadOlder();
     await asked.promise;
@@ -1206,27 +1199,6 @@ describe('createLocalChannelTimeline', () => {
       expect.arrayContaining(shown.filter((id) => id !== gone.id))
     );
     expect(timeline.isMissingTarget()).toBe(false);
-    dispose();
-  });
-
-  it('tells the runtime the lowest sequence a reread of its window found', async () => {
-    const { timeline, host, runtime, dispose } = mount({ rows: messages(2) });
-    await waitFor(() => timeline.entries().length === 2);
-    const seqs = ['6', '5'];
-    const read = host.channelTimeline;
-    host.channelTimeline = async (args) => {
-      const result = await read(args);
-      return result.kind === 'page'
-        ? { ...result, seq: seqs.shift() ?? '7' }
-        : result;
-    };
-    runtime.changed();
-    await waitFor(() => seqs.length < 2);
-    await waitFor(() => vi.mocked(runtime.noteStoredSeq).mock.calls.length > 1);
-    expect(runtime.noteStoredSeq).toHaveBeenLastCalledWith(CHANNEL_ID, '6', {
-      epoch: 3,
-      seq: null,
-    });
     dispose();
   });
 

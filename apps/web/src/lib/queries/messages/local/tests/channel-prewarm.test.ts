@@ -36,11 +36,11 @@ const load = vi.mocked(loadChannelPage);
 
 const page = (
   source: 'device' | 'server',
-  seq: string | null = '5'
+  readSeq = '5'
 ): LoadedChannelPage => ({
   page: { entries: [], olderCursor: null, newerCursor: null },
-  stored: Promise.resolve({ kind: 'stored', seq }),
-  ...(source === 'server' ? { source, readSeq: seq ?? '0' } : { source }),
+  stored: Promise.resolve('held'),
+  ...(source === 'server' ? { source, readSeq } : { source }),
 });
 
 function deps(
@@ -57,8 +57,7 @@ function deps(
     })
   );
   const runtime = {
-    mark: vi.fn(() => ({ epoch: 3, seq: null })),
-    noteStoredSeq: vi.fn(),
+    epoch: vi.fn(() => 3),
     noteServerRead: vi.fn(),
     ensureCurrent: vi.fn(async () => 'current' as const),
   };
@@ -100,13 +99,8 @@ describe('runChannelPrewarmPass', () => {
       { channelId: 'held', limit: PREWARM_PAGE_SIZE },
     ]);
     expect(runtime.noteServerRead).toHaveBeenCalledWith('fresh', {
-      seq: '9',
       readSeq: '9',
-      mark: { epoch: 3, seq: null },
-    });
-    expect(runtime.noteStoredSeq).toHaveBeenCalledWith('held', '4', {
       epoch: 3,
-      seq: null,
     });
     expect(runtime.ensureCurrent).toHaveBeenCalledTimes(1);
     expect(runtime.ensureCurrent).toHaveBeenCalledWith('held');

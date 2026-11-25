@@ -81,11 +81,9 @@ export function createChannelStream(
     result: OperationResult<ChannelTimelineUpdatesSubscription>
   ) => {
     const metadata = normalizedCacheResultMetadata(result);
-    const outcome =
-      metadata?.source === 'live-network'
-        ? await metadata.channelCommit
-        : undefined;
-    runtime.onFrame(frame, outcome);
+    // Told once the device has stored it, or has not.
+    if (metadata?.source === 'live-network') await metadata.channelCommit;
+    runtime.onFrame(frame);
   };
 
   const onResult = (

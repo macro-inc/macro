@@ -37,19 +37,21 @@ with the watermark after it.
   covered page is read by key (`readRecordsByKeys`); a miss fetches
   `ChannelTimeline`. Threads do the same per root (`channel-thread.ts`,
   `ChannelThread`, coverage with `threadRootId`).
-- Follow: one runtime per host (`channel-sync-runtime.ts`). It knows each
-  channel's watermark and whether the channel is `current`: the device holds
-  every change announced while the socket stayed connected. A gap or a
-  reconnect makes a channel not current; one on screen then catches up through
-  `channelChanges` after a jittered debounce, one off screen when it is opened
-  or prewarmed. A failed catch-up, or one that keeps ending behind, is tried
-  again after a wait that doubles (`CATCH_UP_RETRY_MS` to
-  `CATCH_UP_RETRY_MAX_MS`), which a frame or a reconnect cuts short. Only an
-  acknowledgement that fits what was known may set `current`; a watermark known
-  too high costs one request, which the engine answers `gap` with its own.
-  Take `mark()` before each read and report its sequence with it: a read begun
-  before the device was found to hold less (another tab's older page or reset,
-  an eviction) proves nothing.
+- Follow: one runtime per host (`channel-sync-runtime.ts`). A channel is
+  current while the socket is connected and the device's watermark has reached
+  both the newest sequence the server said it was at and the newest frame since
+  the socket connected. Only the device says where its watermark is: the
+  runtime reads it (one local request) after every change of a channel on
+  screen, and never takes it from an acknowledgement or a view's read, which
+  may be older than what another tab did since. Behind, a channel on screen
+  catches up through `channelChanges` after a jittered debounce, one off screen
+  when it is opened or prewarmed. A failed catch-up, or one that keeps ending
+  behind, is tried again after a wait that doubles (`CATCH_UP_RETRY_MS` to
+  `CATCH_UP_RETRY_MAX_MS`), which a frame or a reconnect cuts short. Take
+  `epoch()` before a server read and report it with the sequence the server
+  read at (`noteServerRead`): a read sent over another connection proves
+  nothing. `tests/channel-sync-convergence.test.ts` runs all of it in random
+  orders; change the rules only with it passing.
 - Views read again when the host reports a change of the channel
   (`onChannelChanged`, every tab's, through the runtime's `onChanged`). A view's
   own store is reported to it too, so a device that keeps losing what a view
@@ -61,7 +63,8 @@ with the watermark after it.
   writes no TanStack message cache (the channel lists in Soup's cache are still
   stamped), and a REST one keeps the app's defaults. A channel a
   view on screen reads over REST keeps its writes on REST (`keepChannelOnRest`),
-  as does a message with an anchor.
+  as does a message with an anchor; not one whose only REST view is a thread of
+  more than `MAX_THREAD_PAGES` pages.
 - Outage: while the host is `paused` (or being proven readable again after it
   answered, or was away, before: `sessionChannelHost` in `channel-flag.ts`),
   open channels keep what they show, new ones load from the server unheld, and
@@ -124,7 +127,8 @@ lost; of those the server refused, only sends and deletes answered
   that ended: it never rejects, since a loader that moved on leaves it
   unawaited. A thread is shown once its pages are stored or were refused.
 - When the cache refuses a read because the session changed after it was sent,
-  the view reads again under the new one (`cacheSessionChanged`). A bare commit
+  the view reads again under the new one (`cacheSessionChanged`), and a query
+  refused before it answered is sent again (`queryChannelNetwork`). A bare commit
   (`channelTimelineCommit`, the touch) takes the `cacheSessionGeneration`
   captured before its read.
 - A timeline read touches a channel at most every 6 hours (`CHANNEL_TOUCH_INTERVAL_MS`),

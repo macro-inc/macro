@@ -104,14 +104,13 @@ function runtime() {
         return () => listeners.delete(listener);
       }
     ),
-    noteStoredSeq: vi.fn(),
     noteServerRead: vi.fn(),
     ensureCurrent: vi.fn(async () => {
       inTrace.push(trace.depth > 0);
       return 'current' as const;
     }),
     inTrace,
-    mark: () => ({ epoch: 0, seq: null }),
+    epoch: () => 0,
     change: () => {
       for (const listener of listeners) listener('changed');
     },
@@ -133,7 +132,7 @@ describe('loadChannelThread', () => {
       fetchPage,
     });
 
-    expect(loaded).toMatchObject({ source: 'device', seq: '7' });
+    expect(loaded).toMatchObject({ source: 'device' });
     if (loaded === 'unsupported') throw new Error('unexpected');
     expect(loaded.thread.replies.map((reply) => reply.id)).toEqual([
       first.id,
@@ -154,7 +153,7 @@ describe('loadChannelThread', () => {
 
     expect(loaded).toMatchObject({
       source: 'server',
-      seq: '12',
+      stored: 'held',
       readSeq: '12',
     });
     expect(await commitsOf(fetchPage)).toEqual([
@@ -192,8 +191,7 @@ describe('loadChannelThread', () => {
 
     expect(loaded).toMatchObject({
       source: 'server',
-      seq: null,
-      sessionChanged: true,
+      stored: 'session-changed',
     });
   });
 
@@ -277,10 +275,6 @@ describe('createLocalChannelThread', () => {
     );
     await vi.waitFor(() => expect(thread.replies()).toHaveLength(2));
     expect(sync.open).toHaveBeenCalledWith(CHANNEL_ID);
-    expect(sync.noteStoredSeq).toHaveBeenCalledWith(CHANNEL_ID, '7', {
-      epoch: 0,
-      seq: null,
-    });
     expect(sync.ensureCurrent).toHaveBeenCalledWith(CHANNEL_ID);
     // The catch-up after the device read is part of the open's trace.
     expect(sync.inTrace).toEqual([true]);
@@ -313,7 +307,7 @@ describe('createLocalChannelThread', () => {
         () => undefined
       ),
     }));
-    await vi.waitFor(() => expect(sync.noteStoredSeq).toHaveBeenCalled());
+    await vi.waitFor(() => expect(sync.ensureCurrent).toHaveBeenCalled());
     const lost = Promise.withResolvers<never>();
     vi.spyOn(host, 'channelTimeline').mockReturnValueOnce(lost.promise);
     sync.change();
@@ -358,9 +352,8 @@ describe('createLocalChannelThread', () => {
     await vi.waitFor(() => expect(fetchPage).toHaveBeenCalled());
     await vi.waitFor(() =>
       expect(sync.noteServerRead).toHaveBeenCalledWith(CHANNEL_ID, {
-        seq: '12',
         readSeq: '12',
-        mark: { epoch: 0, seq: null },
+        epoch: 0,
       })
     );
     expect(thread.replies()).toHaveLength(2);
@@ -460,35 +453,6 @@ describe('createLocalChannelThread', () => {
     answer.reject(new Error('refused'));
     await vi.waitFor(() => expect(thread.error()).toBeDefined());
     expect(thread.thread()).toBeUndefined();
-    dispose();
-  });
-
-  it('tells the runtime what the device holds each time it reads it', async () => {
-    let seq = '7';
-    const host = fakeHost(
-      () => devicePage([channelMessageKey(first.id)], { seq }),
-      { records: [root, first] }
-    );
-    const sync = runtime();
-    const dispose = createRoot((dispose) => {
-      createLocalChannelThread(
-        { host, runtime: sync, fetchPage: serverThread() },
-        CHANNEL_ID,
-        () => ROOT_ID,
-        () => true,
-        () => undefined
-      );
-      return dispose;
-    });
-    await vi.waitFor(() => expect(sync.noteStoredSeq).toHaveBeenCalled());
-    seq = '5';
-    sync.change();
-    await vi.waitFor(() =>
-      expect(sync.noteStoredSeq).toHaveBeenLastCalledWith(CHANNEL_ID, '5', {
-        epoch: 0,
-        seq: null,
-      })
-    );
     dispose();
   });
 

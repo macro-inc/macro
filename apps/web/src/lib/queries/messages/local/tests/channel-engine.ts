@@ -24,7 +24,6 @@ export function channelEngine(initial: string | null) {
   const removed = new Map<string, bigint>();
   const commits: ChannelCommitArgs[] = [];
   const listeners = new Set<(change: ChannelChange) => void>();
-  let heads = 0;
 
   const push = (kind: ChannelChange['kind']) => {
     for (const listener of [...listeners])
@@ -98,7 +97,6 @@ export function channelEngine(initial: string | null) {
 
   const host = {
     async channelTimeline() {
-      heads += 1;
       const seq = watermark?.toString() ?? null;
       return devicePage([], { covered: seq !== null, seq });
     },
@@ -127,7 +125,6 @@ export function channelEngine(initial: string | null) {
     /** Pushes a change of the channel another tab made. */
     push,
     /** How often the device was asked for its watermark. */
-    heads: () => heads,
     listeners: () => listeners.size,
     seq: () => watermark?.toString() ?? null,
     setSeq(seq: string | null) {

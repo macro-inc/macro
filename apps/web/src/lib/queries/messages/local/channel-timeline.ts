@@ -28,12 +28,10 @@ import {
   type DeviceRead,
   type LoadedChannelPage,
   loadChannelPage,
+  type PageStored,
   readDeviceChannelPage,
 } from './channel-pages';
-import type {
-  ChannelReadMark,
-  ChannelSyncRuntime,
-} from './channel-sync-runtime';
+import type { ChannelSyncRuntime } from './channel-sync-runtime';
 
 /** Entries a page asks for, as the REST timeline does. */
 export const CHANNEL_PAGE_LIMIT = 50;
@@ -48,12 +46,7 @@ export const PAGE_RETRY_MAX_MS = 60_000;
 
 export type ChannelTimelineRuntime = Pick<
   ChannelSyncRuntime,
-  | 'open'
-  | 'onChanged'
-  | 'noteStoredSeq'
-  | 'noteServerRead'
-  | 'ensureCurrent'
-  | 'mark'
+  'open' | 'onChanged' | 'noteServerRead' | 'ensureCurrent' | 'epoch'
 >;
 
 export interface ChannelTimelineDeps extends ChannelPageDeps {
@@ -208,23 +201,9 @@ function mergeEntries(
   );
 }
 
-type Reread = {
-  /** The lowest watermark read; undefined when the device answered none. */
-  seq: string | null | undefined;
-} & (
+type Reread =
   | { kind: 'page'; entries: ChannelPageEntry[]; olderCursor: string | null }
-  | { kind: 'lost' }
-);
-
-/** The lower of two watermarks; none set is the lowest. */
-function lowerSeq(
-  left: string | null | undefined,
-  right: string | null
-): string | null {
-  if (left === undefined) return right;
-  if (left === null || right === null) return null;
-  return BigInt(left) <= BigInt(right) ? left : right;
-}
+  | { kind: 'lost' };
 
 /**
  * Reads the window again from the device, newest first, from its upper end
@@ -243,7 +222,6 @@ async function rereadWindow(
   }
 ): Promise<Reread> {
   const collected: ChannelPageEntry[] = [];
-  let seq: string | null | undefined;
   const read = async (
     request: Omit<ChannelPageRequest, 'channelId' | 'limit'>
   ): Promise<ChannelPage | undefined> => {
@@ -257,8 +235,6 @@ async function rereadWindow(
     } catch {
       return undefined;
     }
-    if (result.kind === 'page' || result.kind === 'miss')
-      seq = lowerSeq(seq, result.seq);
     return result.kind === 'page' ? result.page : undefined;
   };
   const reachedOldest = (page: ChannelPage) =>
@@ -272,7 +248,7 @@ async function rereadWindow(
   } else if (window.anchorId !== undefined) {
     first = await read({ aroundMessageId: window.anchorId });
   }
-  if (!first) return { kind: 'lost', seq };
+  if (!first) return { kind: 'lost' };
   collected.push(...first.entries);
 
   // Newer than the anchor, up to the window's newest entry.
@@ -284,7 +260,7 @@ async function rereadWindow(
     newer.newerCursor < window.newest
   ) {
     const next = await read({ after: newer.newerCursor });
-    if (!next) return { kind: 'lost', seq };
+    if (!next) return { kind: 'lost' };
     collected.push(...next.entries);
     newer = next;
   }
@@ -292,7 +268,7 @@ async function rereadWindow(
   let older = first;
   while (!reachedOldest(older) && older.olderCursor !== null) {
     const next = await read({ before: older.olderCursor });
-    if (!next) return { kind: 'lost', seq };
+    if (!next) return { kind: 'lost' };
     collected.push(...next.entries);
     older = next;
   }
@@ -308,7 +284,6 @@ async function rereadWindow(
   );
   return {
     kind: 'page',
-    seq,
     entries: kept,
     olderCursor: window.reachesStart ? null : (kept.at(-1)?.sortKey ?? null),
   };
@@ -436,29 +411,21 @@ export function createLocalChannelTimeline(
     stopPageRetry('newer', true);
   });
 
-  /**
-   * Follows what the page's store step learns of the device: whether it now
-   * holds the page, or the cache session changed before it could store it.
-   */
+  /** How storing the page ended, once the runtime knows of the read. */
   const settle = async (
     loaded: LoadedChannelPage,
-    mark: ChannelReadMark,
+    epoch: number,
     token: number
-  ): Promise<'held' | 'unheld' | 'session-changed'> => {
+  ): Promise<PageStored> => {
     const stored = await loaded.stored;
-    if (stored.kind !== 'stored') return stored.kind;
-    const seq = stored.seq;
+    if (stored === 'session-changed') return stored;
     if (token !== loadToken) return 'unheld';
-    if (loaded.source === 'device') {
-      deps.runtime.noteStoredSeq(channelId, seq, mark);
-      return 'held';
-    }
+    if (loaded.source === 'device') return stored;
     deps.runtime.noteServerRead(channelId, {
-      seq,
       readSeq: loaded.readSeq,
-      mark,
+      epoch,
     });
-    return seq === null ? 'unheld' : 'held';
+    return stored;
   };
 
   /**
@@ -467,12 +434,12 @@ export function createLocalChannelTimeline(
    */
   const settleUnlessAborted = async (
     loaded: LoadedChannelPage,
-    mark: ChannelReadMark,
+    epoch: number,
     token: number,
     signal: AbortSignal
   ) => {
     try {
-      return await untilAborted(settle(loaded, mark, token), signal);
+      return await untilAborted(settle(loaded, epoch, token), signal);
     } catch (error) {
       if (signal.aborted) return 'aborted';
       throw error;
@@ -598,13 +565,13 @@ export function createLocalChannelTimeline(
   /** Settles every page a window loaded: held when the device holds each. */
   const settleWindow = async (
     pages: readonly LoadedChannelPage[],
-    mark: ChannelReadMark,
+    epoch: number,
     token: number,
     signal: AbortSignal
   ) => {
     const outcomes: Awaited<ReturnType<typeof settleUnlessAborted>>[] = [];
     for (const page of pages)
-      outcomes.push(await settleUnlessAborted(page, mark, token, signal));
+      outcomes.push(await settleUnlessAborted(page, epoch, token, signal));
     const ended = (['aborted', 'session-changed'] as const).find((outcome) =>
       outcomes.includes(outcome)
     );
@@ -667,7 +634,7 @@ export function createLocalChannelTimeline(
         unstored: { older: null, newer: null },
         pageFailed: { older: false, newer: false },
       });
-    const mark = deps.runtime.mark(channelId);
+    const epoch = deps.runtime.epoch();
     let loaded: LoadedChannelPage[] | 'unsupported';
     try {
       loaded = await readWindowPages(around, reach, signal);
@@ -722,7 +689,7 @@ export function createLocalChannelTimeline(
     // Pages can load from here on, while the window is still storing.
     const givenUpBefore = givenUp;
     // Going to the live end waits for the window that replaced this one.
-    const settled = await settleWindow(loaded, mark, token, signal);
+    const settled = await settleWindow(loaded, epoch, token, signal);
     if (settled === 'aborted' || token !== loadToken) return;
     if (settled === 'session-changed') {
       // The new session can store what the old one could not.
@@ -758,7 +725,6 @@ export function createLocalChannelTimeline(
     const token = loadToken;
     const merged = merges;
     const live = state.newerCursor === null;
-    const mark = deps.runtime.mark(channelId);
     const result = await rereadWindow(deps.host, channelId, {
       oldest: state.entries.at(-1)?.sortKey,
       reachesStart: state.olderCursor === null,
@@ -766,9 +732,6 @@ export function createLocalChannelTimeline(
       live,
       anchorId: anchorId ?? middleMessageId(state.entries),
     });
-    // Another tab may have lowered what the device holds.
-    if (result.seq !== undefined)
-      deps.runtime.noteStoredSeq(channelId, result.seq, mark);
     if (token !== loadToken) return;
     // A page merged in meanwhile is not in what was read: read again.
     if (merged !== merges) {
@@ -846,7 +809,7 @@ export function createLocalChannelTimeline(
     signal: AbortSignal,
     merged: () => void
   ) => {
-    const mark = deps.runtime.mark(channelId);
+    const epoch = deps.runtime.epoch();
     // A window loaded since aborts the read too: a device read may not
     // answer an abort, and the next page waits for this one to end.
     const loaded = await untilAborted(
@@ -881,7 +844,7 @@ export function createLocalChannelTimeline(
       })
     );
     // A window loaded since aborts the wait, so paging in it starts at once.
-    const settled = await settleUnlessAborted(loaded, mark, token, signal);
+    const settled = await settleUnlessAborted(loaded, epoch, token, signal);
     return settled === 'aborted' || token !== loadToken ? 'stale' : settled;
   };
 

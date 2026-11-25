@@ -78,19 +78,13 @@ export interface ChannelPage {
 }
 
 /**
- * What storing a page left on the device: the sequence it holds for the
- * channel (null when it does not hold the page), or that the cache session
- * changed first and the page must be read again.
+ * Whether the device holds the page now, or the cache session changed before
+ * it could store it and the page must be read again.
  */
-export type PageStored =
-  | { kind: 'stored'; seq: string | null }
-  | { kind: 'session-changed' };
+export type PageStored = 'held' | 'unheld' | 'session-changed';
 export type LoadedChannelPage = {
   page: ChannelPage;
-  /**
-   * The change sequence the device holds for the channel once the page is
-   * stored: at once for a device page. Never rejects.
-   */
+  /** How storing the page ended: at once for a device page. Never rejects. */
   stored: Promise<PageStored>;
 } & (
   | { source: 'device' }
@@ -268,8 +262,8 @@ function cacheArgs(request: ChannelPageRequest): ChannelTimelineCacheArgs {
 }
 
 export type DeviceRead =
-  | { kind: 'page'; page: ChannelPage; seq: string | null }
-  | { kind: 'miss'; seq: string | null }
+  | { kind: 'page'; page: ChannelPage }
+  | { kind: 'miss' }
   | { kind: 'unsupported' }
   // The host failed or timed out; says nothing about what the device holds.
   | { kind: 'failed' };
@@ -281,9 +275,9 @@ export async function readDeviceChannelPage(
 ): Promise<DeviceRead> {
   const result = await host.channelTimeline(cacheArgs(request));
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
-  if (!result.covered) return { kind: 'miss', seq: result.seq };
+  if (!result.covered) return { kind: 'miss' };
   const records = await readTimelineRecords(host, result.keys);
-  if (!records) return { kind: 'miss', seq: result.seq };
+  if (!records) return { kind: 'miss' };
   return {
     kind: 'page',
     page: {
@@ -291,7 +285,6 @@ export async function readDeviceChannelPage(
       olderCursor: result.olderCursor,
       newerCursor: result.newerCursor,
     },
-    seq: result.seq,
   };
 }
 
@@ -455,7 +448,7 @@ async function loadPage(
       return {
         page: device.page,
         source: 'device',
-        stored: Promise.resolve({ kind: 'stored', seq: device.seq }),
+        stored: Promise.resolve('held'),
       };
     }
   }
@@ -511,7 +504,7 @@ async function loadPage(
     return {
       page: fetched.read.page,
       source: 'device',
-      stored: Promise.resolve({ kind: 'stored', seq: fetched.read.seq }),
+      stored: Promise.resolve('held'),
     };
   }
   const { page, cached } = fetched;
@@ -548,18 +541,18 @@ async function loadPage(
 /** How a store ended. Failures other than a session change are reported here. */
 function pageStored(result: ChannelStoreResult, span: Span): PageStored {
   if (result.stored) {
-    const seq = result.outcome?.seq ?? null;
-    span.setAttr('page.stored', seq === null ? 'unheld' : 'held');
-    return { kind: 'stored', seq };
+    const stored = typeof result.outcome?.seq === 'string' ? 'held' : 'unheld';
+    span.setAttr('page.stored', stored);
+    return stored;
   }
   if (cacheSessionChanged(result.error)) {
     span.setAttr('page.stored', 'session-changed');
-    return { kind: 'session-changed' };
+    return 'session-changed';
   }
   span.setAttr('page.stored', 'failed');
   span.error(result.error);
   Telemetry.error(result.error, { surface: 'channel-local-sync' });
-  return { kind: 'stored', seq: null };
+  return 'unheld';
 }
 
 // A message's own fields, without its thread and call: a reply the device

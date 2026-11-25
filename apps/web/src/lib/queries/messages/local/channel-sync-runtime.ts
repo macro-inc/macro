@@ -1,4 +1,5 @@
-import type { CacheHost, ChannelCommitOutcome } from '@graphql-cache/index';
+import { fireAndForget } from '@core/util/fireAndForget';
+import type { CacheHost } from '@graphql-cache/index';
 import {
   type Span,
   Telemetry,
@@ -11,7 +12,6 @@ import * as Exit from 'effect/Exit';
 import * as Fiber from 'effect/Fiber';
 import * as Scope from 'effect/Scope';
 import * as Semaphore from 'effect/Semaphore';
-import { match } from 'ts-pattern';
 import type { ChannelStoreResult } from './channel-network';
 
 export type ChannelChangesPage = ChannelChangesQuery['user']['channelChanges'];
@@ -73,29 +73,29 @@ export type ChannelCatchUpOutcome =
 type CatchUpReason = 'gap' | 'reconnect' | 'open';
 
 type ChannelState = {
-  /** The device's watermark: undefined until read, null when none is set. */
+  /** The device's watermark when last read; null when none is set. */
   seq: bigint | null | undefined;
+  /** Counts what may have moved the watermark: the device's changes and frames. */
+  moves: number;
+  /** `moves` when the read that answered `seq` began. */
+  readAt: number;
+  /** A read of the watermark is out, to be done again if it moved meanwhile. */
+  checking: boolean;
   /**
-   * How often the device was found to hold less than was known. A read or a
-   * catch-up begun before the last one proves nothing.
+   * The newest sequence the server said it was at, asked since the socket
+   * connected: every later change arrives as a frame.
    */
-  doubts: number;
-  /**
-   * The replacement this runtime is storing, with the epoch it began in. The
-   * next reset the host tells of is its own.
-   */
-  replacing?: { epoch: number };
-  /** Proven current while the socket has stayed connected. */
-  current: boolean;
+  serverSeq: bigint | undefined;
+  /** The newest frame seen since the socket connected, held or not. */
+  seenSeq: bigint | undefined;
+  /** A frame came: a catch-up it asks for does not wait out a retry's delay. */
+  framed: boolean;
   /** One catch-up at a time. */
   lock: Semaphore.Semaphore;
   /** Views showing the channel; only they are caught up after a gap. */
   views: number;
-  /**
-   * The newest frame seen since the socket connected, held or not: a server
-   * read older than it missed a change, so it cannot prove the channel current.
-   */
-  seenSeq: bigint | undefined;
+  /** A catch-up holds the channel. */
+  running: boolean;
   /**
    * The scheduled catch-up that has not taken the channel yet, and while it
    * waits out its delay, when (`Date.now()`) it starts.
@@ -117,30 +117,17 @@ type ChannelState = {
  */
 export type ChannelViewChange = 'changed' | 'reset' | 'resumed';
 
-/** Where a channel stood when a read of it began, to judge the answer by. */
-export interface ChannelReadMark {
-  /** Changes when the socket drops or connects, and with the channel's doubts. */
-  epoch: number;
-  /** The watermark known then. */
-  seq: bigint | null | undefined;
-}
-
-/** A server read whose answer the device stored. */
+/** A read the server answered. */
 export interface ChannelServerRead {
-  /** The device's watermark after it stored the read. */
-  seq: string | null;
   /** The sequence the server read at. */
   readSeq: string;
-  /** `mark()` when the request was sent. */
-  mark: ChannelReadMark;
+  /** `epoch()` when the request was sent. */
+  epoch: number;
 }
 
 export interface ChannelSyncRuntime {
-  /**
-   * A pushed frame and what storing it came to; undefined when the device did
-   * not store it.
-   */
-  onFrame(frame: ChannelFrame, outcome: ChannelCommitOutcome | undefined): void;
+  /** A pushed frame, once the device stored it or refused to. */
+  onFrame(frame: ChannelFrame): void;
   /** The socket or the stream dropped: nothing held is current any more. */
   onDisconnected(): void;
   /** The stream is live again: catch up the channels on screen. */
@@ -149,15 +136,9 @@ export interface ChannelSyncRuntime {
   connected(): boolean;
   /** A view opened the channel; returns its release. */
   open(channelId: string): () => void;
-  /** Where the channel stands, taken before each read of it. */
-  mark(channelId: string): ChannelReadMark;
-  /** The watermark a device read begun at `mark` came with. */
-  noteStoredSeq(
-    channelId: string,
-    seq: string | null,
-    mark: ChannelReadMark
-  ): void;
-  /** A server read landed: the channel is current if no change can be missing. */
+  /** Changes when the socket drops or connects; taken before a server read. */
+  epoch(): number;
+  /** A server read of the channel was answered. */
   noteServerRead(channelId: string, read: ChannelServerRead): void;
   /** Catches the channel up unless it is current; resolves when done. */
   ensureCurrent(channelId: string): Promise<ChannelCatchUpOutcome>;
@@ -178,18 +159,6 @@ export interface ChannelSyncRuntime {
   dispose(): void;
 }
 
-/** What the device held of a channel, dropped: it is read again when needed. */
-function forgetState(state: ChannelState): void {
-  state.seq = undefined;
-  doubt(state);
-}
-
-/** The device holds less than was known, whatever a read out now says. */
-function doubt(state: ChannelState): void {
-  state.current = false;
-  state.doubts += 1;
-}
-
 function parseSeq(seq: string | null): bigint | null {
   if (seq === null) return null;
   try {
@@ -199,24 +168,35 @@ function parseSeq(seq: string | null): bigint | null {
   }
 }
 
+/** Whether the watermark was read after everything that may have moved it. */
+function fresh(state: ChannelState): boolean {
+  return state.readAt === state.moves;
+}
+
+/** Whether the device, at `seq`, may lack a change. */
+function lacks(state: ChannelState, seq: bigint): boolean {
+  if (state.serverSeq === undefined || seq < state.serverSeq) return true;
+  return state.seenSeq !== undefined && seq < state.seenSeq;
+}
+
 /**
  * Keeps the device's channel copies current for one signed-in session.
  *
  * The engine decides what each answer may store and where the channel's
  * watermark stands after it; the runtime decides when to ask the server for
- * the changes the device lacks. A frame that continues the watermark needs no
- * request. One past a gap, and a reconnect, leave the channel not current: a
- * channel on screen then catches up through `channelChanges` after a short,
+ * the changes the device lacks. A channel is current while the socket is
+ * connected and the watermark has reached both the sequence the server said
+ * it was at and the newest frame since. A frame that continues the watermark
+ * needs no request. One past a gap, and a reconnect, leave the channel behind:
+ * a channel on screen then catches up through `channelChanges` after a short,
  * jittered debounce, one off screen when it is opened. While the socket stays
  * connected a caught-up channel is current, so opening it again asks the
  * server nothing.
  *
- * Acknowledgements may arrive in another order than the device stored them
- * in, so the watermark known here can be too high. That costs nothing: a
- * catch-up asked from too high is refused as a gap and goes on from the
- * device's own. Only `current` must never be wrong, so it is set only by an
- * acknowledgement that fits what was known before it, and nothing begun before
- * the device was found to hold less than was known sets it.
+ * Acknowledgements may arrive in another order than the device stored them in,
+ * and another tab may lower the watermark at any time, so the watermark is
+ * never taken from one: it is read from the device, again after each change
+ * the device tells of, and that read decides.
  */
 export function createChannelSyncRuntime(
   deps: ChannelSyncDeps
@@ -234,11 +214,15 @@ export function createChannelSyncRuntime(
     if (!state) {
       state = {
         seq: undefined,
-        doubts: 0,
-        current: false,
+        moves: 1,
+        readAt: 0,
+        checking: false,
+        serverSeq: undefined,
+        seenSeq: undefined,
+        framed: false,
         lock: Semaphore.makeUnsafe(1),
         views: 0,
-        seenSeq: undefined,
+        running: false,
         scheduled: new Set(),
         opens: new Set(),
         misses: 0,
@@ -259,26 +243,10 @@ export function createChannelSyncRuntime(
   };
 
   const stopChanges = deps.host.onChannelChanged(({ channelId, kind }) => {
-    if (kind === 'changed') {
-      notify(channelId, 'changed');
-      return;
-    }
     const state = channels.get(channelId);
-    if (state) {
-      if (kind === 'reset' && state.replacing) {
-        state.doubts += 1;
-        state.replacing.epoch += 1;
-        state.replacing = undefined;
-      } else {
-        forgetState(state);
-        // What replaced it may be older than what was shown.
-        if (isConnected) scheduleCatchUp(channelId, 'gap');
-      }
-    }
-    notify(channelId, 'reset');
+    if (state) moved(channelId, state);
+    notify(channelId, kind === 'changed' ? 'changed' : 'reset');
   });
-
-  const epochOf = (state: ChannelState) => socketEpoch + state.doubts;
 
   /**
    * Runs `effect` in the runtime's scope and returns its own fiber, so an
@@ -288,20 +256,72 @@ export function createChannelSyncRuntime(
   const fork = <A>(effect: Effect.Effect<A, unknown>) =>
     Effect.runSync(effect.pipe(Effect.forkIn(scope)));
 
-  /** Reads the watermark once per channel and session. */
-  const learnSeq = Effect.fn('channel.sync.learn_seq')(function* (
-    channelId: string,
-    state: ChannelState
-  ) {
-    if (state.seq !== undefined) return state.seq;
-    const head = yield* Effect.tryPromise(() =>
-      deps.host.channelTimeline({ channelId, limit: 1 })
-    );
-    // Learned from an acknowledgement meanwhile, which is newer.
-    if (state.seq === undefined)
-      state.seq = head.kind === 'page' ? parseSeq(head.seq) : null;
-    return state.seq;
-  });
+  /** Asks the device for the channel's watermark. */
+  const readSeq = async (channelId: string, state: ChannelState) => {
+    const { moves } = state;
+    const head = await deps.host.channelTimeline({ channelId, limit: 1 });
+    const seq = head.kind === 'page' ? parseSeq(head.seq) : null;
+    // Answered after a read that began later.
+    if (moves >= state.readAt) {
+      state.readAt = moves;
+      state.seq = seq;
+    }
+    return seq;
+  };
+
+  const isBehind = (state: ChannelState) =>
+    typeof state.seq === 'bigint' && lacks(state, state.seq);
+
+  const isCurrent = (state: ChannelState) =>
+    isConnected &&
+    fresh(state) &&
+    typeof state.seq === 'bigint' &&
+    !lacks(state, state.seq);
+
+  /** Reads the watermark of a channel on screen, which catches up if behind. */
+  const check = async (channelId: string, state: ChannelState) => {
+    if (state.checking || state.views === 0) return;
+    state.checking = true;
+    do {
+      let failed = false;
+      try {
+        if (!fresh(state)) await readSeq(channelId, state);
+      } catch {
+        // The catch-up asks the device again, and reports what it answers.
+        failed = true;
+      }
+      // A running catch-up looks for itself when it ends.
+      if (isConnected && !state.running) {
+        const soon = state.framed || !state.pending;
+        state.framed = false;
+        if (soon && (failed || isBehind(state)))
+          scheduleCatchUp(channelId, 'gap');
+      }
+      if (failed) break;
+    } while (!disposed && state.views > 0 && !fresh(state));
+    state.checking = false;
+  };
+
+  /** What the device held may be gone, and what came meanwhile lost. */
+  const forget = (state: ChannelState) => {
+    state.moves += 1;
+    state.serverSeq = undefined;
+    // A read out over an engine that is gone may never be answered.
+    state.checking = false;
+  };
+
+  /** Something may have moved the channel's watermark. */
+  const moved = (channelId: string, state: ChannelState) => {
+    state.moves += 1;
+    fireAndForget(check(channelId, state), 'channel-sync');
+  };
+
+  /** The server said, asked in `epoch`, that the channel is at `seq`. */
+  const heard = (state: ChannelState, seq: bigint | null, epoch: number) => {
+    if (seq === null || !isConnected || epoch !== socketEpoch) return;
+    if (state.serverSeq === undefined || seq > state.serverSeq)
+      state.serverSeq = seq;
+  };
 
   /** Waits for the device, in a child span that says how long it took. */
   const storedIn = (
@@ -348,11 +368,14 @@ export function createChannelSyncRuntime(
   ) => {
     const state = stateOf(channelId);
     const finished = Exit.isSuccess(exit);
-    if (finished && (state.current || exit.value === 'not-held')) {
+    // Moved since it looked: look again.
+    if (!fresh(state)) fireAndForget(check(channelId, state), 'channel-sync');
+    // Not what it answered: the device may have got the channel since.
+    if (finished && !isBehind(state)) {
       state.misses = 0;
       return;
     }
-    if (!isConnected || state.current || state.pending !== undefined) return;
+    if (!isConnected || state.pending !== undefined) return;
     if (!finished && Cause.hasInterruptsOnly(exit.cause)) return;
     const wait = Math.min(
       CATCH_UP_RETRY_MS * 2 ** state.misses,
@@ -381,7 +404,12 @@ export function createChannelSyncRuntime(
       }),
       (span) =>
         catchUpIn(span, channelId, reason).pipe(
-          Effect.onExit((exit) => Effect.sync(() => settled(channelId, exit)))
+          Effect.onExit((exit) =>
+            Effect.sync(() => {
+              stateOf(channelId).running = false;
+              settled(channelId, exit);
+            })
+          )
         ),
       (span, exit) =>
         Effect.sync(() => {
@@ -394,23 +422,22 @@ export function createChannelSyncRuntime(
         })
     );
 
-  /** Whether the device holds every change announced since `epoch` began. */
-  const caughtUp = (state: ChannelState, seq: bigint, epoch: number) =>
-    isConnected &&
-    epoch === epochOf(state) &&
-    (state.seenSeq === undefined || state.seenSeq <= seq);
-
   const catchUpIn = Effect.fn('channel.catch_up')(function* (
     span: Span,
     channelId: string,
     reason: CatchUpReason
   ) {
     const state = stateOf(channelId);
+    state.running = true;
     span.setAttr('channel.id', channelId);
     span.setAttr('catch_up.reason', reason);
-    let epoch = epochOf(state);
-    const from = yield* learnSeq(channelId, state);
+    const epoch = socketEpoch;
+    const watermark = Effect.tryPromise(() => readSeq(channelId, state)).pipe(
+      Effect.timeout(CATCH_UP_PAGE_BUDGET_MS)
+    );
+    const from = yield* watermark;
     if (from === null) return 'not-held' as const;
+    if (isConnected && !lacks(state, from)) return 'current' as const;
     let after = from;
     let changes = 0;
     for (let page = 1; page <= MAX_CHANGE_PAGES; page += 1) {
@@ -433,23 +460,16 @@ export function createChannelSyncRuntime(
         delta.messages.length +
         delta.activities.length +
         delta.removedIds.length;
-      const seq = parseSeq(outcome.seq);
-      state.seq = seq;
+      if (!delta.hasMore) heard(state, parseSeq(delta.seq), epoch);
+      const gap = outcome.outcome === 'gap';
+      const seq =
+        gap || !delta.hasMore ? yield* watermark : parseSeq(outcome.seq);
       // Gone meanwhile (evicted or reset): nothing to catch up.
-      if (seq === null) {
-        state.current = false;
-        return 'not-held' as const;
-      }
+      if (seq === null) return 'not-held' as const;
       after = seq;
       // The device is behind where this page starts: a read lowered it
       // meanwhile. Read again from where it is.
-      if (outcome.outcome === 'gap') {
-        state.current = false;
-        epoch = epochOf(state);
-        continue;
-      }
-      if (delta.hasMore) continue;
-      state.current = caughtUp(state, seq, epoch);
+      if (gap || delta.hasMore) continue;
       span.setAttr('catch_up.pages', page);
       span.setAttr('catch_up.changes', changes);
       return changes > 0 || seq !== from
@@ -458,25 +478,14 @@ export function createChannelSyncRuntime(
     }
     // Too far behind to replay: what the device holds is replaced by the
     // latest page, and the views read the channel again.
-    const replacing = { epoch };
-    state.replacing = replacing;
     const outcome = yield* Effect.gen(function* () {
       const latest = yield* Effect.tryPromise((signal) =>
         span.run(() => deps.replaceWithLatest(channelId, signal))
       );
       return yield* storedIn(span, 'reset', latest.stored);
-    }).pipe(
-      Effect.timeout(CATCH_UP_PAGE_BUDGET_MS),
-      Effect.onExit((exit) =>
-        Effect.sync(() => {
-          if (Exit.isFailure(exit) && state.replacing === replacing)
-            state.replacing = undefined;
-        })
-      )
-    );
-    const seq = parseSeq(outcome.seq);
-    state.seq = seq;
-    state.current = seq !== null && caughtUp(state, seq, replacing.epoch);
+    }).pipe(Effect.timeout(CATCH_UP_PAGE_BUDGET_MS));
+    heard(state, parseSeq(outcome.seq), epoch);
+    yield* watermark;
     return 'reset' as const;
   });
 
@@ -491,7 +500,7 @@ export function createChannelSyncRuntime(
       .withPermits(1)(
         Effect.suspend(() => {
           started?.();
-          return state.current && isConnected
+          return isCurrent(state)
             ? Effect.succeed('current' as ChannelCatchUpOutcome)
             : catchUp(channelId, reason, trace);
         })
@@ -556,55 +565,22 @@ export function createChannelSyncRuntime(
     state.pendingAt = undefined;
   };
 
-  /** Changes may be missing: the channel catches up, or will when opened. */
-  const behind = (channelId: string, state: ChannelState) => {
-    state.current = false;
-    scheduleCatchUp(channelId, 'gap');
-  };
-
   return {
-    onFrame(frame, outcome) {
+    onFrame(frame) {
       if (disposed) return;
       const seq = parseSeq(frame.seq);
       if (seq === null) return;
       const state = stateOf(frame.channelId);
       if (state.seenSeq === undefined || seq > state.seenSeq)
         state.seenSeq = seq;
-      const known = state.seq;
-      const after = outcome ? parseSeq(outcome.seq) : undefined;
-      if (typeof known === 'bigint' && known >= seq) {
-        // The device is past this frame already, unless it says otherwise.
-        if (outcome?.outcome !== 'gap') return;
-        doubt(state);
-      }
-      match(outcome?.outcome)
-        .with('applied', 'stale', () => {
-          state.seq = after;
-          // A frame further on than the known watermark: the two were
-          // acknowledged out of order, and the device may be at either.
-          if (typeof known === 'bigint' && known + 1n < seq)
-            behind(frame.channelId, state);
-        })
-        .with('gap', () => {
-          state.seq = after;
-          behind(frame.channelId, state);
-        })
-        .with('unheld', () => {
-          // Nothing held, so nothing to keep current; unless a read has set
-          // the watermark since, which then lacks this frame.
-          if (typeof known === 'bigint') behind(frame.channelId, state);
-          else state.seq = after;
-        })
-        .with(undefined, () => {
-          if (known !== null) behind(frame.channelId, state);
-        })
-        .exhaustive(() => behind(frame.channelId, state));
+      state.framed = true;
+      moved(frame.channelId, state);
     },
     onDisconnected() {
       isConnected = false;
       socketEpoch += 1;
       for (const state of channels.values()) {
-        state.current = false;
+        state.serverSeq = undefined;
         state.seenSeq = undefined;
         // The reconnect, or the next open, asks again.
         endScheduled(state);
@@ -621,15 +597,11 @@ export function createChannelSyncRuntime(
         endScheduled(state);
         for (const open of state.opens) Effect.runFork(Fiber.interrupt(open));
         state.misses = 0;
-        if (state.views > 0 && state.seq !== null)
-          scheduleCatchUp(channelId, 'reconnect');
+        scheduleCatchUp(channelId, 'reconnect');
       }
     },
     connected: () => isConnected,
-    mark(channelId) {
-      const state = stateOf(channelId);
-      return { epoch: epochOf(state), seq: state.seq };
-    },
+    epoch: () => socketEpoch,
     open(channelId) {
       const state = stateOf(channelId);
       state.views += 1;
@@ -640,54 +612,10 @@ export function createChannelSyncRuntime(
         state.views -= 1;
       };
     },
-    noteStoredSeq(channelId, seq, mark) {
-      const state = stateOf(channelId);
-      if (mark.epoch !== epochOf(state)) {
-        // Read before the device changed under it: learned again when asked.
-        if (typeof state.seq !== 'bigint') state.seq = undefined;
-        return;
-      }
-      const read = parseSeq(seq);
-      const known = state.seq;
-      const lowered =
-        typeof mark.seq === 'bigint' && (read === null || read < mark.seq);
-      if (lowered) {
-        // Another tab stored a page read at an older sequence, or evicted it.
-        doubt(state);
-        state.seq = read;
-        if (read !== null && isConnected) scheduleCatchUp(channelId, 'gap');
-        return;
-      }
-      // Moved since the read began: what moved it is newer.
-      if (typeof known === 'bigint' && (read === null || read < known)) return;
-      // Frames stored but not yet acknowledged here put the device ahead.
-      if (!state.current) state.seq = read;
-    },
     noteServerRead(channelId, read) {
       const state = stateOf(channelId);
-      const known = state.seq;
-      const seq = parseSeq(read.seq);
-      const readSeq = parseSeq(read.readSeq);
-      state.seq = seq;
-      if (seq === null || readSeq === null) {
-        doubt(state);
-        return;
-      }
-      const fits = typeof known !== 'bigint' || known === seq;
-      // Unmoved: the frames past it are on their way.
-      if (state.current && known === seq) return;
-      // Read while frames were flowing: every later change arrives as one,
-      // unless one already went by while the device held nothing, or the
-      // device kept an older watermark, with changes since then to replay.
-      if (fits && readSeq <= seq && caughtUp(state, seq, read.mark.epoch)) {
-        state.current = true;
-        return;
-      }
-      if (typeof known === 'bigint' && seq < known) doubt(state);
-      else state.current = false;
-      // Not sooner than a retry already waiting: a read says nothing of
-      // whether the server can answer now.
-      if (isConnected && !state.pending) scheduleCatchUp(channelId, 'gap');
+      heard(state, parseSeq(read.readSeq), read.epoch);
+      fireAndForget(check(channelId, state), 'channel-sync');
     },
     ensureCurrent(channelId) {
       if (disposed) return Promise.resolve('skipped');
@@ -724,12 +652,12 @@ export function createChannelSyncRuntime(
       };
     },
     forgetAll() {
-      for (const state of channels.values()) forgetState(state);
+      for (const state of channels.values()) forget(state);
     },
     resumed() {
       if (disposed) return;
       for (const [channelId, state] of channels) {
-        forgetState(state);
+        forget(state);
         state.misses = 0;
         if (state.views === 0) continue;
         scheduleCatchUp(channelId, 'reconnect');

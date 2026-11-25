@@ -97,10 +97,10 @@ describe('createChannelStream', () => {
 
     stored.resolve(outcome);
     await vi.advanceTimersByTimeAsync(0);
-    expect(runtime.onFrame).toHaveBeenCalledWith(update, outcome);
+    expect(runtime.onFrame).toHaveBeenCalledWith(update);
   });
 
-  it('hands on a frame the cache did not store, without an outcome', async () => {
+  it('hands on a frame the cache did not store', async () => {
     const { client, emit } = fakeClient();
     const runtime = fakeRuntime();
     createChannelStream(client as never, runtime);
@@ -112,7 +112,7 @@ describe('createChannelStream', () => {
     });
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(runtime.onFrame).toHaveBeenCalledWith(update, undefined);
+    expect(runtime.onFrame).toHaveBeenCalledWith(update);
   });
 
   it('continues the channel from the change before a frame', () => {

@@ -133,7 +133,7 @@ describe('loadChannelPage', () => {
       keyOf(newer),
       keyOf(older),
     ]);
-    expect(await loaded.stored).toEqual({ kind: 'stored', seq: '7' });
+    expect(await loaded.stored).toBe('held');
     expect(requests()).toBe(2);
     expect(fetchPage).not.toHaveBeenCalled();
   });
@@ -263,7 +263,7 @@ describe('loadChannelPage', () => {
 
     // Another read left the device behind this page.
     stored.resolve(applied('8'));
-    expect(await loaded.stored).toEqual({ kind: 'stored', seq: '8' });
+    expect(await loaded.stored).toBe('held');
     expect(host.commits).toEqual([]);
     expect(commits).toEqual([
       {
@@ -293,15 +293,15 @@ describe('loadChannelPage', () => {
     expect(loaded.source).toBe('server');
     expect(loaded.page.entries).toHaveLength(2);
     expect(commits).toHaveLength(1);
-    expect(await loaded.stored).toEqual({ kind: 'stored', seq: null });
+    expect(await loaded.stored).toBe('unheld');
   });
 
   it.each([
-    ['failed', new Error('write lost'), { kind: 'stored', seq: null }],
+    ['failed', new Error('write lost'), 'unheld'],
     [
       'met a new cache session',
       new StaleCacheAuthorityError(),
-      { kind: 'session-changed' },
+      'session-changed',
     ],
   ])(
     'settles a page whose store %s without rejecting',
@@ -321,7 +321,7 @@ describe('loadChannelPage', () => {
       // A loader that moved on never reads it: it must not reject unhandled.
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(await loaded.stored).toEqual(outcome);
+      expect(await loaded.stored).toBe(outcome);
     }
   );
 

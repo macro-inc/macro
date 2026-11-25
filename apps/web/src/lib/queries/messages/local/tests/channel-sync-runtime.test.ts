@@ -8,7 +8,6 @@ import {
   CATCH_UP_RETRY_MAX_MS,
   CATCH_UP_RETRY_MS,
   type ChannelChangesPage,
-  type ChannelReadMark,
   type ChannelSyncRuntime,
   createChannelSyncRuntime,
   MAX_CHANGE_PAGES,
@@ -47,12 +46,16 @@ function setup(
   const engine = channelEngine(initial);
   // Answers the device refuses to store, each taken once.
   const refusals: unknown[] = [];
+  // Acknowledgements kept back after the device stored, each once.
+  const late: Promise<void>[] = [];
   const store = async (
     apply: () => ChannelCommitOutcome
   ): Promise<ChannelStoreResult> => {
     const error = refusals.shift();
     if (error !== undefined) return { stored: false, error };
-    return { stored: true, outcome: apply() };
+    const outcome = apply();
+    await late.shift();
+    return { stored: true, outcome };
   };
   const fetch = vi.fn(
     async (_channelId: string, after: string, signal: AbortSignal) => {
@@ -101,24 +104,17 @@ function setup(
       watermark: { kind: 'advance', from: String(seq - 1) },
       removedIds,
     });
-    runtime.onFrame({ channelId: CHANNEL_ID, seq: String(seq) }, outcome);
+    runtime.onFrame({ channelId: CHANNEL_ID, seq: String(seq) });
     return outcome;
   };
+  /** Another tab stores a page the server read at `seq`. */
+  const lower = (seq: string) =>
+    engine.apply({ channelId: CHANNEL_ID, seq, watermark: { kind: 'lower' } });
   /** A page the server read at `readSeq`, stored by the device. */
-  const read = (
-    readSeq: string,
-    mark: ChannelReadMark = runtime.mark(CHANNEL_ID)
-  ) => {
-    const { seq } = engine.apply({
-      channelId: CHANNEL_ID,
-      seq: readSeq,
-      watermark: { kind: 'lower' },
-    });
-    runtime.noteServerRead(CHANNEL_ID, { seq, readSeq, mark });
+  const read = (readSeq: string, epoch = runtime.epoch()) => {
+    lower(readSeq);
+    runtime.noteServerRead(CHANNEL_ID, { readSeq, epoch });
   };
-  /** A read of the device, begun and answered at once. */
-  const deviceRead = (seq: string | null) =>
-    runtime.noteStoredSeq(CHANNEL_ID, seq, runtime.mark(CHANNEL_ID));
   return {
     engine,
     runtime,
@@ -126,10 +122,11 @@ function setup(
     asked,
     replaceWithLatest,
     refusals,
+    late,
     changed,
     frame,
     read,
-    deviceRead,
+    lower,
   };
 }
 
@@ -166,12 +163,9 @@ describe('frames', () => {
   });
 
   it('catches up a channel on screen past a gap', async () => {
-    const { engine, runtime, asked, frame, deviceRead } = setup('5', () =>
-      changes(9)
-    );
+    const { engine, runtime, asked, frame } = setup('5', () => changes(9));
     runtime.onConnected();
     runtime.open(CHANNEL_ID);
-    deviceRead('5');
 
     expect(frame(9).outcome).toBe('gap');
     await debounced();
@@ -203,15 +197,13 @@ describe('frames', () => {
   });
 
   it('asks nothing for frames of a channel the device does not hold', async () => {
-    const { engine, runtime, fetch, frame } = setup(null);
+    const { runtime, fetch, frame } = setup(null);
     runtime.onConnected();
     runtime.open(CHANNEL_ID);
     frame(8);
     frame(9);
     await debounced();
     expect(fetch).not.toHaveBeenCalled();
-    // What the frames answered says it: the device is not asked for it.
-    expect(engine.heads()).toBe(0);
   });
 
   it('catches up when a read set the watermark before an unheld frame was told', async () => {
@@ -228,7 +220,7 @@ describe('frames', () => {
     });
     expect(outcome.outcome).toBe('unheld');
     read('7');
-    runtime.onFrame({ channelId: CHANNEL_ID, seq: '8' }, outcome);
+    runtime.onFrame({ channelId: CHANNEL_ID, seq: '8' });
     await debounced();
     expect(asked()).toEqual(['7']);
     frame(9);
@@ -239,28 +231,27 @@ describe('frames', () => {
     const { runtime, asked } = setup('5', () => changes(6));
     runtime.onConnected();
     runtime.open(CHANNEL_ID);
-    runtime.onFrame({ channelId: CHANNEL_ID, seq: '6' }, undefined);
+    runtime.onFrame({ channelId: CHANNEL_ID, seq: '6' });
     await debounced();
     expect(asked()).toEqual(['5']);
   });
 
-  it('does not trust a channel whose frames were acknowledged out of order', async () => {
+  it('asks nothing for frames acknowledged in another order than stored', async () => {
     const { runtime, asked, engine } = setup('5');
     runtime.onConnected();
     runtime.open(CHANNEL_ID);
     await runtime.ensureCurrent(CHANNEL_ID);
 
-    const [first, second] = [6, 7].map((seq) =>
+    for (const seq of [6, 7])
       engine.apply({
         channelId: CHANNEL_ID,
         seq: String(seq),
         watermark: { kind: 'advance', from: String(seq - 1) },
-      })
-    );
-    runtime.onFrame({ channelId: CHANNEL_ID, seq: '7' }, second);
-    runtime.onFrame({ channelId: CHANNEL_ID, seq: '6' }, first);
+      });
+    runtime.onFrame({ channelId: CHANNEL_ID, seq: '7' });
+    runtime.onFrame({ channelId: CHANNEL_ID, seq: '6' });
     await debounced();
-    expect(asked()).toEqual(['5', '7']);
+    expect(asked()).toEqual(['5']);
     await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
   });
 });
@@ -286,10 +277,10 @@ describe('server reads', () => {
   it('does not trust a read sent before the connection', async () => {
     const { runtime, asked, read } = setup(null, () => changes(8));
     runtime.onConnected();
-    const mark = runtime.mark(CHANNEL_ID);
+    const epoch = runtime.epoch();
     runtime.onDisconnected();
     runtime.onConnected();
-    read('8', mark);
+    read('8', epoch);
     await runtime.ensureCurrent(CHANNEL_ID);
     expect(asked()).toEqual(['8']);
   });
@@ -321,33 +312,30 @@ describe('server reads', () => {
     await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
   });
 
-  it("catches up when a device read finds another tab's page lowered it", async () => {
-    const { runtime, asked, engine, deviceRead } = setup('8', () => changes(8));
+  it("catches up what another tab's page lowered", async () => {
+    const { engine, runtime, asked, lower } = setup('8', () => changes(8));
     runtime.onConnected();
     runtime.open(CHANNEL_ID);
     await runtime.ensureCurrent(CHANNEL_ID);
-
-    // Ahead is a frame stored but not yet told: still current.
-    deviceRead('9');
-    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
-
-    engine.setSeq('6');
-    deviceRead('6');
+    lower('6');
     await debounced();
     expect(asked()).toEqual(['8', '6']);
+    expect(engine.seq()).toBe('8');
   });
 
-  it('asks nothing for a device read a frame overtook', async () => {
-    const { runtime, asked, frame } = setup('8');
+  it("stays current when another tab's frame is stored before it is told", async () => {
+    const { engine, runtime, asked } = setup('8');
     runtime.onConnected();
     runtime.open(CHANNEL_ID);
     await runtime.ensureCurrent(CHANNEL_ID);
-    const mark = runtime.mark(CHANNEL_ID);
-    frame(9);
-    runtime.noteStoredSeq(CHANNEL_ID, '8', mark);
+    engine.apply({
+      channelId: CHANNEL_ID,
+      seq: '9',
+      watermark: { kind: 'advance', from: '8' },
+    });
     await debounced();
-    expect(asked()).toEqual(['8']);
     await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+    expect(asked()).toEqual(['8']);
   });
 
   it('catches up an open channel another tab replaced with an older page', async () => {
@@ -362,18 +350,16 @@ describe('server reads', () => {
     expect(engine.seq()).toBe('10');
   });
 
-  it.each(['reset', 'evicted'] as const)(
-    'does not trust a read the device was %s under',
-    async (kind) => {
-      const { engine, runtime, asked, read } = setup('8', () => changes(8));
-      runtime.onConnected();
-      const mark = runtime.mark(CHANNEL_ID);
-      engine.push(kind);
-      read('8', mark);
-      await runtime.ensureCurrent(CHANNEL_ID);
-      expect(asked()).toEqual(['8']);
-    }
-  );
+  it('does not trust a read the device was reset under', async () => {
+    const { engine, runtime, asked } = setup('8', () => changes(8));
+    runtime.onConnected();
+    const epoch = runtime.epoch();
+    engine.apply({ channelId: CHANNEL_ID, seq: '7', reset: true });
+    runtime.noteServerRead(CHANNEL_ID, { readSeq: '8', epoch });
+    await runtime.ensureCurrent(CHANNEL_ID);
+    expect(asked()).toEqual(['7']);
+    expect(engine.seq()).toBe('8');
+  });
 
   it('does not trust a catch-up the device was reset under', async () => {
     const answer = Promise.withResolvers<ChannelChangesPage>();
@@ -392,23 +378,158 @@ describe('server reads', () => {
     expect(engine.seq()).toBe('10');
   });
 
-  it('believes a gap below the sequence it remembers', async () => {
-    const { engine, runtime, asked, read } = setup('12', () => changes(12));
+  it('catches up an open channel another tab fills', async () => {
+    const { engine, runtime, asked, lower } = setup(null, () => changes(7));
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('not-held');
+    await debounced();
+    lower('6');
+    await debounced();
+    expect(asked()).toEqual(['6']);
+    expect(engine.seq()).toBe('7');
+  });
+
+  it('is not stranded by a late word that the device held nothing', async () => {
+    const answer = Promise.withResolvers<ChannelChangesPage>();
+    const ack = Promise.withResolvers<void>();
+    const { engine, runtime, asked, late } = setup('7', () => answer.promise);
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    const first = runtime.ensureCurrent(CHANNEL_ID);
+    await settled();
+    late.push(ack.promise);
+    engine.setSeq(null);
+    engine.push('evicted');
+    answer.resolve(changes(7));
+    await settled();
+    engine.apply({ channelId: CHANNEL_ID, seq: '6', reset: true });
+    ack.resolve();
+    await first;
+    await debounced();
+    expect(asked()).toEqual(['7', '6']);
+    expect(engine.seq()).toBe('7');
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+  });
+
+  it('asks nothing for a gap told once it was filled', async () => {
+    const { runtime, asked } = setup('5');
     runtime.onConnected();
     runtime.open(CHANNEL_ID);
     await runtime.ensureCurrent(CHANNEL_ID);
-    // An acknowledgement from before the device was lowered arrives after.
-    read('12');
-    engine.setSeq('10');
-    const outcome = engine.apply({
-      channelId: CHANNEL_ID,
-      seq: '12',
-      watermark: { kind: 'advance', from: '11' },
-    });
-    expect(outcome.outcome).toBe('gap');
-    runtime.onFrame({ channelId: CHANNEL_ID, seq: '12' }, outcome);
+    runtime.onFrame({ channelId: CHANNEL_ID, seq: '4' });
     await debounced();
-    expect(asked()).toEqual(['12', '10']);
+    expect(asked()).toEqual(['5']);
+  });
+
+  it('catches up what was lowered while the device read of a later change was out', async () => {
+    const { engine, runtime, asked, lower } = setup('8', () => changes(8));
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    // The first read of the two answers with what it found before the second.
+    const answer = Promise.withResolvers<void>();
+    const read = engine.host.channelTimeline;
+    vi.spyOn(engine.host, 'channelTimeline').mockImplementationOnce(
+      async () => {
+        const head = await read();
+        await answer.promise;
+        return head;
+      }
+    );
+    engine.push('changed');
+    await settled();
+    lower('6');
+    answer.resolve();
+    await debounced();
+    expect(asked()).toEqual(['8', '6']);
+  });
+
+  it('catches up a channel the device got while it answered that it held none', async () => {
+    const { engine, runtime, asked, lower } = setup(null, () => changes(7));
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    const answer = Promise.withResolvers<void>();
+    const read = engine.host.channelTimeline;
+    vi.spyOn(engine.host, 'channelTimeline').mockImplementationOnce(
+      async () => {
+        const head = await read();
+        await answer.promise;
+        return head;
+      }
+    );
+    const open = runtime.ensureCurrent(CHANNEL_ID);
+    await settled();
+    lower('6');
+    await settled();
+    answer.resolve();
+    await expect(open).resolves.toBe('not-held');
+    await debounced();
+    expect(asked()).toEqual(['6']);
+    expect(engine.seq()).toBe('7');
+  });
+
+  it('looks again when the device failed to say what it holds as a catch-up ended', async () => {
+    const { engine, runtime, asked, lower } = setup('8', (after) =>
+      changes(after === '8' ? 8 : 9)
+    );
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    const answer = Promise.withResolvers<void>();
+    const read = engine.host.channelTimeline;
+    const heads = vi
+      .spyOn(engine.host, 'channelTimeline')
+      // Where the catch-up starts, the change it stores, and where it ends.
+      .mockImplementationOnce(read)
+      .mockImplementationOnce(read)
+      .mockImplementationOnce(async () => {
+        const head = await read();
+        await answer.promise;
+        return head;
+      })
+      .mockRejectedValueOnce(new Error('device busy'));
+    const open = runtime.ensureCurrent(CHANNEL_ID);
+    await settled();
+    expect(heads).toHaveBeenCalledTimes(3);
+    lower('6');
+    await settled();
+    expect(heads).toHaveBeenCalledTimes(4);
+    answer.resolve();
+    await open;
+    await debounced();
+    expect(asked()).toEqual(['8', '6']);
+  });
+
+  it('catches up after a failed read of the device', async () => {
+    const { engine, runtime, asked, lower } = setup('8', () => changes(8));
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    vi.spyOn(engine.host, 'channelTimeline').mockRejectedValueOnce(
+      new Error('device busy')
+    );
+    lower('6');
+    await debounced();
+    expect(asked()).toEqual(['8', '6']);
+  });
+
+  it('does not trust a catch-up the device stored before a frame found it lower', async () => {
+    const ack = Promise.withResolvers<void>();
+    const { engine, runtime, asked, late, frame, lower } = setup('10', () =>
+      changes(12)
+    );
+    runtime.onConnected();
+    runtime.open(CHANNEL_ID);
+    late.push(ack.promise);
+    const first = runtime.ensureCurrent(CHANNEL_ID);
+    await settled();
+    expect(engine.seq()).toBe('12');
+    lower('8');
+    expect(frame(12).outcome).toBe('gap');
+    ack.resolve();
+    await first;
+    await debounced();
+    expect(asked()).toEqual(['10', '8']);
     expect(engine.seq()).toBe('12');
   });
 });
@@ -624,10 +745,9 @@ describe('catch-up', () => {
 
 describe('connections', () => {
   it('catches up the channels on screen after a reconnect', async () => {
-    const { runtime, asked, deviceRead } = setup('5', () => changes(8));
+    const { runtime, asked } = setup('5', () => changes(8));
     runtime.onConnected();
     runtime.open(CHANNEL_ID);
-    deviceRead('5');
     runtime.onDisconnected();
     runtime.onConnected();
     await debounced();

@@ -80,7 +80,7 @@ it('keeps a cold page, its request and its store in one trace', async () => {
     { channelId: CHANNEL_ID, limit: 50 }
   );
   if (loaded === 'unsupported') throw new Error('unexpected');
-  expect(await loaded.stored).toEqual({ kind: 'stored', seq: '9' });
+  expect(await loaded.stored).toBe('held');
 
   const spans = exporter.getFinishedSpans();
   const page = spans.find((span) => span.name === 'channel.timeline_page');
@@ -194,10 +194,12 @@ it('runs a catch-up, its requests and its stores in a span under the open that a
     messages: [],
     activities: [],
   };
+  let seq = '5';
   const runtime = createChannelSyncRuntime({
-    host: fakeHost(() => devicePage([], { covered: true, seq: '5' })),
+    host: fakeHost(() => devicePage([], { covered: true, seq })),
     fetchChanges: async () => {
       requestSpan = trace.getActiveSpan()?.spanContext().spanId;
+      seq = '9';
       return {
         page,
         stored: Promise.resolve({ stored: true, outcome: applied('9') }),
@@ -286,10 +288,9 @@ async function readPageAgain(
   const runtime: ChannelTimelineRuntime = {
     open: vi.fn(() => () => {}),
     onChanged: vi.fn(() => () => {}),
-    noteStoredSeq: vi.fn(),
     noteServerRead: vi.fn(),
     ensureCurrent: vi.fn(async () => 'current' as const),
-    mark: () => ({ epoch: 3, seq: null }),
+    epoch: () => 3,
   };
   let dispose = () => {};
   const timeline = createRoot((disposeRoot) => {
