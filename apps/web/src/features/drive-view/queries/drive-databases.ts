@@ -24,6 +24,8 @@ export function selectDriveDatabases(
     return [];
   if (location.kind === 'folder' && !location.id) return [];
 
+  const hasExplicitCreatorFilter =
+    (selection.facets['created-by']?.length ?? 0) > 0;
   const search = selection.search.trim().toLocaleLowerCase();
   return listed.flatMap(({ database, grant }) => {
     if (database.trashed_at || hidden.has(database.id)) return [];
@@ -39,6 +41,7 @@ export function selectDriveDatabases(
       location.kind === 'tab' &&
       location.tab === 'owned' &&
       scope === 'default' &&
+      !hasExplicitCreatorFilter &&
       database.owner_id !== userId
     )
       return [];

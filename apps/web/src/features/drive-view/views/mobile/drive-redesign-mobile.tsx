@@ -38,6 +38,7 @@ import {
   isCurrentQueryAccount,
 } from '@queries/auth/account-scope';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
+import { Key } from '@solid-primitives/keyed';
 import { Button, cn, confirmDialog, Tabs } from '@ui';
 import {
   type Accessor,
@@ -51,7 +52,6 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { ActiveFilterChips } from '../../components/redesign/active-filter-chips';
 import {
   DriveContentSkeleton,
   DriveRedesignEmptyState,
@@ -81,6 +81,7 @@ import {
   useDriveDisplayItems,
 } from '../shared/use-drive-display-items';
 import { DriveRedesignMobileFilterDrawer } from './drive-redesign-mobile-filter-drawer';
+import { DriveMobileFilterStrip } from './drive-redesign-mobile-filter-strip';
 import { DriveRedesignMobileItemSheet } from './drive-redesign-mobile-item-sheet';
 import { DriveRedesignMobileSidebar } from './drive-redesign-mobile-sidebar';
 
@@ -932,36 +933,52 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                       </nav>
                     </Show>
 
-                    {/* My Drive Browse / All files segmented pill */}
+                    {/* Compact horizontally-scrollable Ask AI + filter pills */}
+                    <Show when={!isTrash() && !isStarred()}>
+                      <DriveMobileFilterStrip />
+                    </Show>
+
+                    {/* My Drive Browse / All files segmented pill + New button (also inside folders) */}
                     <Show
                       when={
-                        display.isMyDriveRoot() &&
-                        !display.isSearching() &&
-                        !display.hasFilters()
+                        (!isTrash() &&
+                          !isStarred() &&
+                          Boolean(activeFolderId())) ||
+                        (display.isMyDriveRoot() &&
+                          !display.isSearching() &&
+                          !display.hasFilters())
                       }
                     >
                       <div class="flex items-center gap-2">
-                        <Tabs
-                          touch="pill"
-                          size="sm"
-                          aria-label={t('drive.rootModeLabel')}
-                          value={preferences.rootMode()}
-                          onChange={(value) =>
-                            preferences.setRootMode(
-                              value as DriveRootBrowseMode
-                            )
+                        <Show
+                          when={
+                            display.isMyDriveRoot() &&
+                            !display.isSearching() &&
+                            !display.hasFilters()
                           }
-                          options={[
-                            {
-                              value: 'browse',
-                              label: t('drive.browseMode'),
-                            },
-                            {
-                              value: 'all',
-                              label: t('drive.allFilesMode'),
-                            },
-                          ]}
-                        />
+                        >
+                          <Tabs
+                            touch="pill"
+                            size="sm"
+                            aria-label={t('drive.rootModeLabel')}
+                            value={preferences.rootMode()}
+                            onChange={(value) =>
+                              preferences.setRootMode(
+                                value as DriveRootBrowseMode
+                              )
+                            }
+                            options={[
+                              {
+                                value: 'browse',
+                                label: t('drive.browseMode'),
+                              },
+                              {
+                                value: 'all',
+                                label: t('drive.allFilesMode'),
+                              },
+                            ]}
+                          />
+                        </Show>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1000,11 +1017,6 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                         </div>
                       )}
                     </Show>
-
-                    <ActiveFilterChips
-                      chips={display.activeFilterChips()}
-                      onClearAll={state.clearFilters}
-                    />
                   </div>
                 }
               >
@@ -1108,17 +1120,17 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                                 {t('drive.folders')}
                               </h2>
                               <div class="grid grid-cols-2 gap-2.5">
-                                <For each={splitBands().folders}>
+                                <Key each={splitBands().folders} by="id">
                                   {(row) => (
                                     <MobileDriveGridCard
-                                      row={row}
+                                      row={row()}
                                       onActivate={(entity, event) =>
                                         actions.openEntity(entity, event)
                                       }
                                       onOpenSheet={setSheetEntity}
                                     />
                                   )}
-                                </For>
+                                </Key>
                               </div>
                             </section>
                           </Show>
@@ -1131,17 +1143,17 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                                 </h2>
                               </Show>
                               <div class="grid grid-cols-2 gap-2.5">
-                                <For each={splitBands().files}>
+                                <Key each={splitBands().files} by="id">
                                   {(row) => (
                                     <MobileDriveGridCard
-                                      row={row}
+                                      row={row()}
                                       onActivate={(entity, event) =>
                                         actions.openEntity(entity, event)
                                       }
                                       onOpenSheet={setSheetEntity}
                                     />
                                   )}
-                                </For>
+                                </Key>
                               </div>
                             </section>
                           </Show>
@@ -1209,17 +1221,17 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                           <Show
                             when={display.isRecentTab()}
                             fallback={
-                              <For each={display.items()}>
+                              <Key each={display.items()} by="id">
                                 {(row) => (
                                   <MobileDriveListRow
-                                    row={row}
+                                    row={row()}
                                     onActivate={(entity, event) =>
                                       actions.openEntity(entity, event)
                                     }
                                     onOpenSheet={setSheetEntity}
                                   />
                                 )}
-                              </For>
+                              </Key>
                             }
                           >
                             <For each={recentGroups()}>
@@ -1234,17 +1246,17 @@ export function DriveRedesignMobileWorkspace(props: { tour?: JSX.Element }) {
                                           ? t('drive.bucketThisWeek')
                                           : t('drive.bucketEarlier')}
                                   </div>
-                                  <For each={group.items}>
+                                  <Key each={group.items} by="id">
                                     {(row) => (
                                       <MobileDriveListRow
-                                        row={row}
+                                        row={row()}
                                         onActivate={(entity, event) =>
                                           actions.openEntity(entity, event)
                                         }
                                         onOpenSheet={setSheetEntity}
                                       />
                                     )}
-                                  </For>
+                                  </Key>
                                 </section>
                               )}
                             </For>

@@ -21,6 +21,7 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from '@components/app/split-layout/context';
+import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
 import {
   attachGlobalDOMScope,
@@ -60,6 +61,12 @@ import type {
   DriveListSource,
   DriveSidebarSource,
 } from '../context/drive-source';
+import {
+  isDriveModifiedPreset,
+  matchesDateRange,
+  modifiedPresetRange,
+  resolveCreatorOptionIds,
+} from '../core/drive-filters';
 import type { DriveTrashItem } from '../core/drive-trash';
 import type { DriveState } from '../core/types';
 import { createDriveInlineEdit } from '../primitives/drive-inline-edit';
@@ -96,7 +103,7 @@ if (params.get('theme') === 'dark') {
 const ALICE_ID = 'user-alice';
 const BOB_ID = 'user-bob';
 
-const NOW = new Date('2026-11-25T10:00:00Z');
+const NOW = new Date();
 const minsAgo = (m: number) =>
   new Date(NOW.getTime() - m * 60_000).toISOString();
 
@@ -229,6 +236,15 @@ function makeInitialDocs(): EntityData[] {
       updatedAt: minsAgo(22),
       createdAt: minsAgo(140),
     },
+    {
+      type: 'document',
+      id: 'doc-agent-summary',
+      name: 'Daily Research Digest.md',
+      fileType: 'md',
+      ownerId: 'macro|research-agent@seed.macro.local',
+      updatedAt: minsAgo(3),
+      createdAt: minsAgo(30),
+    },
   ];
 
   // 40 archive documents inside Quarterly Archive to test large folder handling.
@@ -317,24 +333,62 @@ function DriveRedesignFixture() {
     expandedFolderIds: [],
   });
 
+  const AGENT_ID = 'macro|research-agent@seed.macro.local';
+  const [askAiCalls, setAskAiCalls] = createSignal(0);
+
   const matchesFilters = (
     entity: EntityData,
     term: string,
-    typeFilter: readonly string[]
+    facets: DriveState['facets']
   ): boolean => {
     if (term && !entity.name.toLocaleLowerCase().includes(term)) return false;
-    if (typeFilter.length === 0) return true;
-    if (entity.type !== 'document') return false;
-    const ft = (entity.fileType ?? '').toLowerCase();
-    return (
-      (typeFilter.includes('file-pdf') && ft === 'pdf') ||
-      (typeFilter.includes('doc-markdown') && ft === 'md')
+    const typeFilter = facets.type ?? [];
+    if (typeFilter.length > 0) {
+      if (entity.type !== 'document') return false;
+      const ft = (entity.fileType ?? '').toLowerCase();
+      const matchedType =
+        (typeFilter.includes('file-pdf') && ft === 'pdf') ||
+        (typeFilter.includes('doc-markdown') && ft === 'md');
+      if (!matchedType) return false;
+    }
+    const creatorFilter = facets['created-by'] ?? [];
+    if (creatorFilter.length > 0) {
+      const allowed = new Set(
+        creatorFilter.flatMap((id) =>
+          resolveCreatorOptionIds(id, {
+            userId: ALICE_ID,
+            myAgentIds: [AGENT_ID],
+            teamAgentIds: [AGENT_ID],
+          })
+        )
+      );
+      if (
+        !('ownerId' in entity) ||
+        !entity.ownerId ||
+        !allowed.has(entity.ownerId)
+      ) {
+        return false;
+      }
+    }
+    const modifiedFilter = (facets.modified ?? []).filter(
+      isDriveModifiedPreset
     );
+    if (modifiedFilter.length > 0) {
+      const matchedModified = modifiedFilter.some((preset) =>
+        matchesDateRange(
+          'updatedAt' in entity ? entity.updatedAt : undefined,
+          modifiedPresetRange(preset)
+        )
+      );
+      if (!matchedModified) return false;
+    }
+    return true;
   };
 
   const candidatesForLocation = (
     location: DriveState['location'],
-    hasTypeFilter: boolean
+    hasTypeFilter: boolean,
+    hasCreatorFilter: boolean
   ): EntityData[] => {
     if (location.kind === 'folder' && location.id) {
       const childFolders = hasTypeFilter
@@ -354,9 +408,9 @@ function DriveRedesignFixture() {
       );
     }
     if (location.tab === 'owned') {
-      return docs().filter(
-        (doc) => 'ownerId' in doc && doc.ownerId === ALICE_ID
-      );
+      return hasCreatorFilter
+        ? docs()
+        : docs().filter((doc) => 'ownerId' in doc && doc.ownerId === ALICE_ID);
     }
     if (location.tab === 'recent') return docs().slice(0, 8);
     return [];
@@ -369,8 +423,13 @@ function DriveRedesignFixture() {
   ): DriveListItem[] => {
     const term = search.trim().toLocaleLowerCase();
     const typeFilter = facets.type ?? [];
-    return candidatesForLocation(location, typeFilter.length > 0)
-      .filter((entity) => matchesFilters(entity, term, typeFilter))
+    const creatorFilter = facets['created-by'] ?? [];
+    return candidatesForLocation(
+      location,
+      typeFilter.length > 0,
+      creatorFilter.length > 0
+    )
+      .filter((entity) => matchesFilters(entity, term, facets))
       .map((entity) => ({ kind: 'entity' as const, id: entity.id, entity }));
   };
 
@@ -739,6 +798,9 @@ function DriveRedesignFixture() {
     canMutateEntity: (entity) =>
       !('ownerId' in entity) || entity.ownerId === ALICE_ID,
     openFolderInNewSplit: () => {},
+    askAi: async () => {
+      setAskAiCalls((count) => count + 1);
+    },
   };
 
   const actions: DriveHostActions = {
@@ -807,222 +869,262 @@ function DriveRedesignFixture() {
   return (
     <QueryClientProvider client={queryClient}>
       <UserContextProvider>
-        <SplitRouter.Root router={router}>
-          <SplitRouter.Scope pane={router.panes()[0]!}>
-            <TagSetsProvider tagSets={() => []}>
-              <DragDropProvider>
-                <DragDropSensors />
-                <KnownFoldersProvider value={knownFolders}>
-                  <SplitPanelContext.Provider value={panel}>
-                    <DriveProvider
-                      value={{
-                        state,
-                        source,
-                        list,
-                        sidebar,
-                        actions,
-                        tutorials: () => [],
-                      }}
-                    >
-                      <DriveRedesignProvider
+        <EmailLinksContextProvider>
+          <SplitRouter.Root router={router}>
+            <SplitRouter.Scope pane={router.panes()[0]!}>
+              <TagSetsProvider tagSets={() => []}>
+                <DragDropProvider>
+                  <DragDropSensors />
+                  <KnownFoldersProvider value={knownFolders}>
+                    <SplitPanelContext.Provider value={panel}>
+                      <DriveProvider
                         value={{
-                          preferences,
-                          inlineEdit,
-                          inspector,
-                          undo,
-                          trash: trashSource,
-                          host,
-                          createFolderContents,
-                          inspectedEntity,
-                          setInspectedEntity,
-                          selectedEntities,
-                          setSelectedEntities,
-                          clearActiveSelection: () => clearSelectionHandler?.(),
-                          registerClearSelection: (handler) => {
-                            clearSelectionHandler = handler;
-                            return () => {
-                              if (clearSelectionHandler === handler) {
-                                clearSelectionHandler = undefined;
-                              }
-                            };
-                          },
-                          focusSearch: () => focusSearchHandler?.(),
-                          registerFocusSearch: (handler) => {
-                            focusSearchHandler = handler;
-                            return () => {
-                              if (focusSearchHandler === handler) {
-                                focusSearchHandler = undefined;
-                              }
-                            };
-                          },
+                          state,
+                          source,
+                          list,
+                          sidebar,
+                          actions,
+                          tutorials: () => [],
                         }}
                       >
-                        <div
-                          ref={(el) => attachGlobalDOMScope(el)}
-                          class="flex h-screen w-screen overflow-hidden bg-page text-ink"
+                        <DriveRedesignProvider
+                          value={{
+                            preferences,
+                            inlineEdit,
+                            inspector,
+                            undo,
+                            trash: trashSource,
+                            host,
+                            agents: {
+                              myAgents: () => [
+                                {
+                                  userId: AGENT_ID,
+                                  teamId: 'team-1',
+                                  name: 'Research Agent',
+                                  createdBy: ALICE_ID,
+                                  createdAt: minsAgo(500),
+                                  jobDescription: 'Research',
+                                  personality: 'Direct',
+                                  status: 'running',
+                                },
+                              ],
+                              teamAgents: () => [
+                                {
+                                  userId: AGENT_ID,
+                                  teamId: 'team-1',
+                                  name: 'Research Agent',
+                                  createdBy: ALICE_ID,
+                                  createdAt: minsAgo(500),
+                                  jobDescription: 'Research',
+                                  personality: 'Direct',
+                                  status: 'running',
+                                },
+                              ],
+                              myAgentIds: () => [AGENT_ID],
+                              teamAgentIds: () => [AGENT_ID],
+                              hasTeamAgents: () => true,
+                            },
+                            createFolderContents,
+                            inspectedEntity,
+                            setInspectedEntity,
+                            selectedEntities,
+                            setSelectedEntities,
+                            clearActiveSelection: () =>
+                              clearSelectionHandler?.(),
+                            registerClearSelection: (handler) => {
+                              clearSelectionHandler = handler;
+                              return () => {
+                                if (clearSelectionHandler === handler) {
+                                  clearSelectionHandler = undefined;
+                                }
+                              };
+                            },
+                            focusSearch: () => focusSearchHandler?.(),
+                            registerFocusSearch: (handler) => {
+                              focusSearchHandler = handler;
+                              return () => {
+                                if (focusSearchHandler === handler) {
+                                  focusSearchHandler = undefined;
+                                }
+                              };
+                            },
+                          }}
                         >
                           <div
-                            id="fixture-main"
-                            ref={attachSplit}
-                            class="flex size-full min-h-0 min-w-0 flex-1 overflow-hidden"
+                            ref={(el) => attachGlobalDOMScope(el)}
+                            data-ask-ai-calls={askAiCalls()}
+                            class="flex h-screen w-screen overflow-hidden bg-page text-ink"
                           >
-                            <Show
-                              when={isMobileFixture}
-                              fallback={
-                                <ViewShell.Root
-                                  contentLayout="collection"
-                                  asidePreferenceKey="documents"
-                                  aside={{ preserveDuringResize: false }}
-                                  main={{ preferredWidth: 680 }}
-                                >
-                                  <ViewShell.Aside>
-                                    <nav
-                                      aria-label="Drive views"
-                                      class="flex h-full flex-col gap-1 border-r border-edge-muted bg-panel p-3 text-sm"
-                                    >
-                                      <button
-                                        type="button"
-                                        class="rounded-lg px-2.5 py-1.5 text-left hover:bg-hover"
-                                        onClick={() => state.selectTab('owned')}
-                                      >
-                                        My Drive
-                                      </button>
-                                      <button
-                                        type="button"
-                                        class="rounded-lg px-2.5 py-1.5 text-left hover:bg-hover"
-                                        onClick={() =>
-                                          state.selectTab('recent')
-                                        }
-                                      >
-                                        Recent
-                                      </button>
-                                      <button
-                                        type="button"
-                                        class="rounded-lg px-2.5 py-1.5 text-left hover:bg-hover"
-                                        onClick={() =>
-                                          state.selectTab('shared')
-                                        }
-                                      >
-                                        Shared with me
-                                      </button>
-                                      <button
-                                        type="button"
-                                        class="rounded-lg px-2.5 py-1.5 text-left hover:bg-hover"
-                                        onClick={() =>
-                                          state.selectTab('starred')
-                                        }
-                                      >
-                                        Starred
-                                      </button>
-                                      <button
-                                        type="button"
-                                        class="rounded-lg px-2.5 py-1.5 text-left hover:bg-hover"
-                                        onClick={() => state.selectTab('trash')}
-                                      >
-                                        Trash
-                                      </button>
-                                      <div class="mt-3 px-2.5 text-xs font-semibold text-ink-muted">
-                                        Folders
-                                      </div>
-                                      <For
-                                        each={folders().filter(
-                                          (f) =>
-                                            !f.parentId && f.userId === ALICE_ID
-                                        )}
-                                      >
-                                        {(folder) => (
-                                          <button
-                                            type="button"
-                                            class="rounded-lg px-2.5 py-1.5 text-left hover:bg-hover"
-                                            onClick={() =>
-                                              state.selectFolder(folder.id)
-                                            }
-                                          >
-                                            {folder.name}
-                                          </button>
-                                        )}
-                                      </For>
-                                    </nav>
-                                  </ViewShell.Aside>
-                                  <CollectionPanes
-                                    hasDetail={false}
-                                    list={
-                                      <div class="flex size-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface">
-                                        <DriveRedesignHeader
-                                          onStartInlineFolder={
-                                            startInlineFolder
-                                          }
-                                        />
-                                        <ViewShell.Content>
-                                          <div class="flex size-full min-h-0 min-w-0 flex-row overflow-hidden">
-                                            <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                                              <Switch>
-                                                <Match when={isTrash()}>
-                                                  <DriveRedesignTrash />
-                                                </Match>
-                                                <Match when={isStarred()}>
-                                                  <DriveRedesignStarred />
-                                                </Match>
-                                                <Match
-                                                  when={
-                                                    preferences.viewMode() ===
-                                                      'columns' && !isRecent()
-                                                  }
-                                                >
-                                                  <DriveRedesignColumns />
-                                                </Match>
-                                                <Match
-                                                  when={
-                                                    preferences.viewMode() ===
-                                                    'grid'
-                                                  }
-                                                >
-                                                  <DriveRedesignGrid
-                                                    onStartInlineFolder={
-                                                      startInlineFolder
-                                                    }
-                                                  />
-                                                </Match>
-                                                <Match when={true}>
-                                                  <DriveRedesignList
-                                                    onStartInlineFolder={
-                                                      startInlineFolder
-                                                    }
-                                                  />
-                                                </Match>
-                                              </Switch>
-                                            </div>
-                                            <Show
-                                              when={!isTrash() && !isStarred()}
-                                            >
-                                              <DriveRedesignInspector />
-                                            </Show>
-                                          </div>
-                                        </ViewShell.Content>
-                                      </div>
-                                    }
-                                  >
-                                    {null}
-                                  </CollectionPanes>
-                                </ViewShell.Root>
-                              }
+                            <div
+                              id="fixture-main"
+                              ref={attachSplit}
+                              class="flex size-full min-h-0 min-w-0 flex-1 overflow-hidden"
                             >
-                              <DriveRedesignMobileWorkspace />
-                            </Show>
+                              <Show
+                                when={isMobileFixture}
+                                fallback={
+                                  <ViewShell.Root
+                                    contentLayout="collection"
+                                    asidePreferenceKey="documents"
+                                    aside={{ preserveDuringResize: false }}
+                                    main={{ preferredWidth: 680 }}
+                                  >
+                                    <ViewShell.Aside>
+                                      <nav
+                                        aria-label="Drive views"
+                                        class="flex h-full flex-col gap-1 border-r border-edge-muted bg-panel p-3 text-sm"
+                                      >
+                                        <button
+                                          type="button"
+                                          class="rounded-lg px-2.5 py-1.5 text-left hover:bg-hover"
+                                          onClick={() =>
+                                            state.selectTab('owned')
+                                          }
+                                        >
+                                          My Drive
+                                        </button>
+                                        <button
+                                          type="button"
+                                          class="rounded-lg px-2.5 py-1.5 text-left hover:bg-hover"
+                                          onClick={() =>
+                                            state.selectTab('recent')
+                                          }
+                                        >
+                                          Recent
+                                        </button>
+                                        <button
+                                          type="button"
+                                          class="rounded-lg px-2.5 py-1.5 text-left hover:bg-hover"
+                                          onClick={() =>
+                                            state.selectTab('shared')
+                                          }
+                                        >
+                                          Shared with me
+                                        </button>
+                                        <button
+                                          type="button"
+                                          class="rounded-lg px-2.5 py-1.5 text-left hover:bg-hover"
+                                          onClick={() =>
+                                            state.selectTab('starred')
+                                          }
+                                        >
+                                          Starred
+                                        </button>
+                                        <button
+                                          type="button"
+                                          class="rounded-lg px-2.5 py-1.5 text-left hover:bg-hover"
+                                          onClick={() =>
+                                            state.selectTab('trash')
+                                          }
+                                        >
+                                          Trash
+                                        </button>
+                                        <div class="mt-3 px-2.5 text-xs font-semibold text-ink-muted">
+                                          Folders
+                                        </div>
+                                        <For
+                                          each={folders().filter(
+                                            (f) =>
+                                              !f.parentId &&
+                                              f.userId === ALICE_ID
+                                          )}
+                                        >
+                                          {(folder) => (
+                                            <button
+                                              type="button"
+                                              class="rounded-lg px-2.5 py-1.5 text-left hover:bg-hover"
+                                              onClick={() =>
+                                                state.selectFolder(folder.id)
+                                              }
+                                            >
+                                              {folder.name}
+                                            </button>
+                                          )}
+                                        </For>
+                                      </nav>
+                                    </ViewShell.Aside>
+                                    <CollectionPanes
+                                      hasDetail={false}
+                                      list={
+                                        <div class="flex size-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface">
+                                          <DriveRedesignHeader
+                                            onStartInlineFolder={
+                                              startInlineFolder
+                                            }
+                                          />
+                                          <ViewShell.Content>
+                                            <div class="flex size-full min-h-0 min-w-0 flex-row overflow-hidden">
+                                              <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                                                <Switch>
+                                                  <Match when={isTrash()}>
+                                                    <DriveRedesignTrash />
+                                                  </Match>
+                                                  <Match when={isStarred()}>
+                                                    <DriveRedesignStarred />
+                                                  </Match>
+                                                  <Match
+                                                    when={
+                                                      preferences.viewMode() ===
+                                                        'columns' && !isRecent()
+                                                    }
+                                                  >
+                                                    <DriveRedesignColumns />
+                                                  </Match>
+                                                  <Match
+                                                    when={
+                                                      preferences.viewMode() ===
+                                                      'grid'
+                                                    }
+                                                  >
+                                                    <DriveRedesignGrid
+                                                      onStartInlineFolder={
+                                                        startInlineFolder
+                                                      }
+                                                    />
+                                                  </Match>
+                                                  <Match when={true}>
+                                                    <DriveRedesignList
+                                                      onStartInlineFolder={
+                                                        startInlineFolder
+                                                      }
+                                                    />
+                                                  </Match>
+                                                </Switch>
+                                              </div>
+                                              <Show
+                                                when={
+                                                  !isTrash() && !isStarred()
+                                                }
+                                              >
+                                                <DriveRedesignInspector />
+                                              </Show>
+                                            </div>
+                                          </ViewShell.Content>
+                                        </div>
+                                      }
+                                    >
+                                      {null}
+                                    </CollectionPanes>
+                                  </ViewShell.Root>
+                                }
+                              >
+                                <DriveRedesignMobileWorkspace />
+                              </Show>
+                            </div>
+                            <div data-testid="opened-log" class="sr-only">
+                              {openedLog().join('|')}
+                            </div>
+                            <ImperativeDialogHost />
                           </div>
-                          <div data-testid="opened-log" class="sr-only">
-                            {openedLog().join('|')}
-                          </div>
-                          <ImperativeDialogHost />
-                        </div>
-                      </DriveRedesignProvider>
-                    </DriveProvider>
-                  </SplitPanelContext.Provider>
-                </KnownFoldersProvider>
-              </DragDropProvider>
-            </TagSetsProvider>
-          </SplitRouter.Scope>
-        </SplitRouter.Root>
+                        </DriveRedesignProvider>
+                      </DriveProvider>
+                    </SplitPanelContext.Provider>
+                  </KnownFoldersProvider>
+                </DragDropProvider>
+              </TagSetsProvider>
+            </SplitRouter.Scope>
+          </SplitRouter.Root>
+        </EmailLinksContextProvider>
       </UserContextProvider>
     </QueryClientProvider>
   );

@@ -21,6 +21,8 @@ export function selectDriveForms(
   )
     return [];
   if (location.kind === 'folder' && !location.id) return [];
+  const hasExplicitCreatorFilter =
+    (selection.facets['created-by']?.length ?? 0) > 0;
   const search = selection.search.trim().toLocaleLowerCase();
   return listed.flatMap(({ form, access }) => {
     if (form.isHiddenInDrive) return [];
@@ -35,6 +37,7 @@ export function selectDriveForms(
       location.kind === 'tab' &&
       location.tab === 'owned' &&
       scope === 'default' &&
+      !hasExplicitCreatorFilter &&
       form.ownerId !== userId
     )
       return [];

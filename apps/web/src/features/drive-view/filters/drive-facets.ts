@@ -10,6 +10,15 @@ import {
 } from '@app/features/soup/filters';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
 import type { EntityData, EntityWithProperties } from '@entity';
+import {
+  DRIVE_MODIFIED_PRESETS,
+  type DriveCreatorResolutionContext,
+  type DriveModifiedPresetId,
+  isDriveModifiedPreset,
+  matchesDateRange,
+  modifiedPresetRange,
+  resolveCreatorOptionIds,
+} from '../core/drive-filters';
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'] as const;
 const VIDEO_EXTENSIONS = [
@@ -27,7 +36,11 @@ const VIDEO_EXTENSIONS = [
   'threegp',
 ] as const;
 
-export type DriveFacetContext = TagFacetContext;
+export type DriveFacetContext = TagFacetContext &
+  DriveCreatorResolutionContext & {
+    /** Anchor timestamp (start of local day) for relative Modified presets. */
+    now?: Date;
+  };
 export type DriveFacetEntity = EntityWithProperties<EntityData>;
 
 type DriveFacetOption = FacetOption<DriveFacetEntity, DriveFacetContext>;
@@ -190,17 +203,73 @@ export function driveSearchFileTypes(
   return [...new Set(fileTypes)];
 }
 
-function creatorOption(id: string): DriveFacetOption {
+function creatorOption(
+  id: string,
+  context: DriveFacetContext
+): DriveFacetOption {
+  const ownerIds = resolveCreatorOptionIds(id, context);
+  if (ownerIds.length === 0) {
+    return {
+      id,
+      clause: {
+        df: clause.eq('documentId', NIL_UUID),
+        cf: clause.eq('chatId', NIL_UUID),
+        pf: clause.eq('folderId', NIL_UUID),
+      },
+      predicate: () => false,
+    };
+  }
+  const ownerSet = new Set(ownerIds);
   return {
     id,
     clause: {
-      df: clause.eq('documentOwnerId', id),
-      cf: clause.eq('chatOwnerId', id),
-      pf: clause.eq('folderOwnerId', id),
+      df:
+        ownerIds.length === 1
+          ? clause.eq('documentOwnerId', ownerIds[0])
+          : clause.or(...ownerIds.map((o) => clause.eq('documentOwnerId', o))),
+      cf:
+        ownerIds.length === 1
+          ? clause.eq('chatOwnerId', ownerIds[0])
+          : clause.or(...ownerIds.map((o) => clause.eq('chatOwnerId', o))),
+      pf:
+        ownerIds.length === 1
+          ? clause.eq('folderOwnerId', ownerIds[0])
+          : clause.or(...ownerIds.map((o) => clause.eq('folderOwnerId', o))),
     },
-    predicate: (entity) => entity.ownerId === id,
+    predicate: (entity) =>
+      Boolean(entity.ownerId && ownerSet.has(entity.ownerId)),
   };
 }
+
+function entityModifiedTimestamp(
+  entity: DriveFacetEntity
+): string | Date | number | null | undefined {
+  if (entity.type === 'database' || entity.type === 'form') {
+    return entity.updatedAt ?? entity.createdAt;
+  }
+  return entity.updatedAt ?? entity.createdAt;
+}
+
+function modifiedOption(
+  id: string,
+  context: DriveFacetContext
+): DriveFacetOption | undefined {
+  if (!isDriveModifiedPreset(id)) return undefined;
+  const range = modifiedPresetRange(id as DriveModifiedPresetId, context.now);
+  return {
+    id,
+    clause: {
+      df: clause.eq('documentUpdatedAt', range),
+      cf: clause.eq('chatUpdatedAt', range),
+      pf: clause.eq('folderUpdatedAt', range),
+      ef: clause.eq('emailUpdatedAt', range),
+    },
+    predicate: (entity) =>
+      matchesDateRange(entityModifiedTimestamp(entity), range),
+  };
+}
+
+export { DRIVE_MODIFIED_PRESETS };
 
 export const DRIVE_FACETS: Facet<
   DriveFacetEntity,
@@ -214,6 +283,7 @@ export const DRIVE_FACETS: Facet<
     options: TYPE_OPTIONS,
   },
   { id: 'created-by', mode: 'or', options: creatorOption },
+  { id: 'modified', mode: 'or', options: modifiedOption },
   {
     id: TAG_FACET_ID,
     mode: 'or',

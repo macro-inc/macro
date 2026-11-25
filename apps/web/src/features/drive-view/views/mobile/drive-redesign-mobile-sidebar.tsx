@@ -6,7 +6,6 @@ import {
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { t } from '@app/lib/i18n';
 import { useFavoriteDisplayName } from '@app/util/favorites';
-import { EntityRowIcon } from '@entity';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import FolderPlusIcon from '@icon/system/regular/folder-plus.svg';
@@ -69,7 +68,6 @@ export function DriveRedesignMobileSidebar(props: { onNavigate?: () => void }) {
   const [myFoldersOpen, setMyFoldersOpen] = createSignal(true);
   const [sharedFoldersOpen, setSharedFoldersOpen] = createSignal(true);
   const [favoritesOpen, setFavoritesOpen] = createSignal(true);
-  const [databasesOpen, setDatabasesOpen] = createSignal(true);
 
   const foldersById = createMemo(() => {
     const map = new Map<string, DriveFolderMetadata>();
@@ -382,45 +380,6 @@ export function DriveRedesignMobileSidebar(props: { onNavigate?: () => void }) {
                       favorite={favorite}
                       onNavigate={props.onNavigate}
                     />
-                  )}
-                </For>
-              </ViewSidebar.Nav>
-            </CollapsibleSection.Content>
-          </CollapsibleSection.Root>
-        </Show>
-
-        {/* Databases */}
-        <Show when={sidebar.databases().length > 0}>
-          <CollapsibleSection.Root
-            sectionId="mobile-databases"
-            sectionLabel={t('drive.databases')}
-            open={databasesOpen()}
-            onOpenChange={setDatabasesOpen}
-          >
-            <CollapsibleSection.Header>
-              <CollapsibleSection.Trigger>
-                <span class="min-w-0 truncate">{t('drive.databases')}</span>
-                <CollapsibleSection.Indicator />
-              </CollapsibleSection.Trigger>
-            </CollapsibleSection.Header>
-            <CollapsibleSection.Content>
-              <ViewSidebar.Nav aria-label={t('drive.databases')}>
-                <For each={sidebar.databases()}>
-                  {(database) => (
-                    <ViewSidebar.Item
-                      title={database.name}
-                      onClick={(event) => {
-                        actions.openShortcut(database, event);
-                        props.onNavigate?.();
-                      }}
-                    >
-                      <ViewSidebar.Icon>
-                        <span class="size-4">
-                          <EntityRowIcon entity={database} />
-                        </span>
-                      </ViewSidebar.Icon>
-                      <span class="truncate">{database.name}</span>
-                    </ViewSidebar.Item>
                   )}
                 </For>
               </ViewSidebar.Nav>

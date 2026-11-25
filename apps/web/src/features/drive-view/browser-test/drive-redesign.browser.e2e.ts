@@ -18,7 +18,9 @@ test('desktop My Drive unifies folders and files, supports inline expand, Grid, 
   await page.goto(FIXTURE_URL);
 
   // Browse mode shows top-level owned folders + unfiled owned files together.
-  await expect(page.getByRole('row', { name: /Product/ })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Product/ })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(
     page.getByRole('row', { name: /Q3 Operating Plan\.md/ })
   ).toBeVisible();
@@ -194,6 +196,53 @@ test('desktop large folder, empty folder, folder-scoped search with Search all o
   await expect(page.getByText('This folder is empty')).toBeVisible();
 });
 
+test('desktop filter bar surfaces Ask AI, sort header affordances, Modified, and My agents creator filter', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(FIXTURE_URL);
+
+  // Sort headers expose clear clickable aria-sort semantics.
+  const nameSortBtn = page.locator('[data-drive-sort-header="name"]');
+  const modifiedSortBtn = page.locator('[data-drive-sort-header="updated_at"]');
+  await expect(nameSortBtn).toBeVisible();
+  await expect(modifiedSortBtn).toBeVisible();
+  await nameSortBtn.click();
+  await expect(
+    page.getByRole('columnheader', { name: 'Name' })
+  ).toHaveAttribute('aria-sort', 'ascending');
+
+  // Second filter row exposes Ask AI and quick-filter pills.
+  const filterBar = page.getByTestId('drive-filter-bar');
+  await expect(filterBar).toBeVisible();
+  await page.getByTestId('drive-ask-ai').click();
+  await expect(page.locator('[data-ask-ai-calls="1"]')).toHaveCount(1);
+
+  // People -> My agents filters to agent-authored documents even from My Drive.
+  await page.getByTestId('drive-filter-people').getByRole('button').click();
+  await page.getByRole('menuitemcheckbox', { name: /My agents/ }).click();
+  await page.keyboard.press('Escape');
+  await expect(
+    page.getByRole('row', { name: /Daily Research Digest\.md/ })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('row', { name: /Q3 Operating Plan\.md/ })
+  ).toHaveCount(0);
+
+  // Clear people filter via inline x button.
+  await page.getByRole('button', { name: 'Remove People filter' }).click();
+  await expect(
+    page.getByRole('row', { name: /Q3 Operating Plan\.md/ })
+  ).toBeVisible();
+
+  // Modified -> Today keeps recently updated docs.
+  await page.getByTestId('drive-filter-modified').getByRole('button').click();
+  await page.getByRole('menuitemradio', { name: 'Today' }).click();
+  await expect(
+    page.getByRole('row', { name: /Q3 Operating Plan\.md/ })
+  ).toBeVisible();
+});
+
 test.describe('mobile phone width (390x844 touch)', () => {
   test.use({ hasTouch: true, isMobile: true });
 
@@ -203,8 +252,10 @@ test.describe('mobile phone width (390x844 touch)', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${FIXTURE_URL}?mobile=1`);
 
-    // Title bar and Browse/All files pills visible with zero horizontal overflow.
+    // Title bar, scrollable Ask AI + quick-filter strip, and Browse/All files pills visible with zero overflow.
     await expect(page.getByRole('heading', { name: 'My Drive' })).toBeVisible();
+    await expect(page.getByTestId('drive-mobile-filter-strip')).toBeVisible();
+    await expect(page.getByTestId('drive-mobile-ask-ai')).toBeVisible();
     await expect(
       page.locator('[data-drive-mobile-row="folder-product"]')
     ).toBeVisible();

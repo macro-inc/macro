@@ -23,9 +23,10 @@ import {
 import { useDatabasesQuery } from '@queries/storage/databases';
 import { useFormsQuery } from '@queries/storage/forms';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
+import { startOfDay } from 'date-fns';
 import { type Accessor, createMemo } from 'solid-js';
 import type { DriveListSource, DriveSelection } from '../context/drive-source';
-import { DRIVE_FACETS } from '../filters/drive-facets';
+import { DRIVE_FACETS, type DriveFacetContext } from '../filters/drive-facets';
 import { selectDriveDatabases } from './drive-databases';
 import { hiddenFormDatabases, selectDriveForms } from './drive-forms';
 import { buildDriveQuery } from './drive-query';
@@ -47,7 +48,7 @@ function driveInsertFilter(current: DriveSelection): SoupApiItemFilter {
 function driveItemFilter(
   current: DriveSelection,
   viewer: string | undefined,
-  context: ReturnType<typeof createTagFacetContext>
+  context: DriveFacetContext
 ): SoupApiItemFilter {
   return (item) => {
     if (!isDisplayableSoupItem(item)) return false;
@@ -66,6 +67,8 @@ export function createDriveDataSource(options: {
   databasesEnabled: Accessor<boolean>;
   formsEnabled: Accessor<boolean>;
   userId: Accessor<string | undefined>;
+  myAgentIds?: Accessor<readonly string[]>;
+  teamAgentIds?: Accessor<readonly string[]>;
   tagSets: Accessor<readonly TagSetResponse[]>;
   tagSetsReady: Accessor<boolean>;
   notificationSource: NotificationSource;
@@ -109,9 +112,15 @@ export function createDriveDataSource(options: {
       ? selectDriveForms(formsQuery.data, selection(), userId())
       : [];
 
-  const facetContext = createMemo(() =>
-    createTagFacetContext(options.tagSets())
-  );
+  const todayAnchor = startOfDay(new Date());
+
+  const facetContext = createMemo<DriveFacetContext>(() => ({
+    ...createTagFacetContext(options.tagSets()),
+    userId: userId(),
+    myAgentIds: options.myAgentIds?.(),
+    teamAgentIds: options.teamAgentIds?.(),
+    now: todayAnchor,
+  }));
 
   const facetsReady = () =>
     tagFacetReady(selection().facets, options.tagSetsReady());

@@ -53,6 +53,7 @@ import {
   createDriveList,
   parseDriveListSnapshot,
 } from './primitives/drive-list';
+import { createOptimisticFoldersController } from './primitives/drive-optimistic-folders';
 import {
   createDriveRouteState,
   createDriveViewState,
@@ -60,6 +61,7 @@ import {
 } from './primitives/drive-route-state';
 import { createDriveState } from './primitives/drive-state';
 import { createDriveViewPreferences } from './primitives/drive-view-preferences';
+import { useDriveAgents } from './primitives/use-drive-agents';
 import { createDriveDataSource } from './queries/drive-data-source';
 import { createDriveFolderContentsSource } from './queries/drive-folder-contents';
 import { createDriveSidebarSource } from './queries/drive-sidebar-source';
@@ -105,10 +107,18 @@ function DriveComposition(props: { route: DriveRouteState }) {
   };
   const searchText = () => viewState().search;
   const selection = () => ({ ...viewState(), search: searchText() });
-  const sidebar = createDriveSidebarSource({
+  const rawSidebar = createDriveSidebarSource({
     databasesEnabled: () => true,
     formsEnabled: () => true,
   });
+  const optimisticFolders = createOptimisticFoldersController(
+    rawSidebar.folders
+  );
+  const sidebar = {
+    ...rawSidebar,
+    folders: optimisticFolders.folders,
+  };
+  const agents = useDriveAgents(userId);
   // Rows show their folder's path from the folders the sidebar already holds.
   const knownFolders = createMemo(
     () =>
@@ -130,6 +140,8 @@ function DriveComposition(props: { route: DriveRouteState }) {
       databasesEnabled: () => true,
       formsEnabled: () => true,
       userId,
+      myAgentIds: agents.myAgentIds,
+      teamAgentIds: agents.teamAgentIds,
       tagSets,
       tagSetsReady,
       notificationSource,
@@ -263,6 +275,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
       folders: sidebar.folders,
       items: source.items,
       baseActions: actions,
+      optimisticFolders,
     });
     const [inspectedEntity, setInspectedEntity] = createSignal<
       EntityData | undefined
@@ -292,6 +305,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
           undo,
           trash,
           host,
+          agents,
           createFolderContents,
           inspectedEntity,
           setInspectedEntity,

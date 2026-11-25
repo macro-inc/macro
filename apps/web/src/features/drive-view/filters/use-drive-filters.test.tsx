@@ -26,6 +26,7 @@ vi.mock('@property/tags/use-tag-filter-group', () => ({
 }));
 vi.mock('@core/user/use-contact-filter-options', () => ({
   useContactFilterOptions: vi.fn(),
+  useContactFilterLabels: () => () => new Map(),
 }));
 vi.mock('@ui', async () => ({
   ...(await import('@ui/components/Badge')),
@@ -88,6 +89,7 @@ it.each(['pointer', 'keyboard'])(
         <ListFilterDropdown
           groups={filters.groups()}
           isSelected={filters.isSelected}
+          selectedIds={filters.selectedIds}
           onSelectionChange={filters.setSelected}
         />
       );

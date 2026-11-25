@@ -20,6 +20,7 @@ import PencilIcon from '@icon/system/regular/pencil-line.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
+import { Key } from '@solid-primitives/keyed';
 import { Button, cn, Tooltip } from '@ui';
 import {
   createEffect,
@@ -222,25 +223,28 @@ function MillerColumnPane(props: {
               }
             >
               <ul class="flex flex-col gap-0.5">
-                <For each={items()}>
+                <Key each={items()} by="id">
                   {(entity) => {
-                    const isFolder = entity.type === 'project';
+                    const isFolder = () => entity().type === 'project';
                     const isActiveFolder = () =>
-                      isFolder && props.selectedChildFolderId === entity.id;
+                      isFolder() && props.selectedChildFolderId === entity().id;
                     const isActiveFile = () =>
-                      !isFolder && props.selectedFileId === entity.id;
-                    const rowDropTarget = isFolder
-                      ? props.createDropTarget?.(() => entity.id)
+                      !isFolder() && props.selectedFileId === entity().id;
+                    const rowDropTarget = isFolder()
+                      ? props.createDropTarget?.(() => entity().id)
                       : undefined;
                     const attachDrag = createEntityDraggable({
-                      entity,
+                      get entity() {
+                        return entity();
+                      },
                       splitId: props.splitId,
                       instanceKey: `column-${props.folderId ?? 'root'}`,
                     });
                     const isRenamingHere = () => {
                       const target = inlineEdit.renaming();
                       return (
-                        target?.surface === 'columns' && target.id === entity.id
+                        target?.surface === 'columns' &&
+                        target.id === entity().id
                       );
                     };
 
@@ -253,7 +257,7 @@ function MillerColumnPane(props: {
                           }}
                           role="button"
                           tabIndex={0}
-                          data-drive-column-item={entity.id}
+                          data-drive-column-item={entity().id}
                           aria-current={
                             isActiveFolder() || isActiveFile()
                               ? 'true'
@@ -268,53 +272,66 @@ function MillerColumnPane(props: {
                               'bg-accent/18 outline-2 -outline-offset-2 outline-accent'
                           )}
                           onClick={() => {
-                            if (isFolder) props.onSelectFolder(entity.id);
-                            else props.onSelectFile(entity);
+                            const current = entity();
+                            if (current.type === 'project') {
+                              props.onSelectFolder(current.id);
+                            } else {
+                              props.onSelectFile(current);
+                            }
                           }}
                           onDblClick={(event) => {
-                            if (!isFolder) props.onOpenFile(entity, event);
+                            const current = entity();
+                            if (current.type !== 'project') {
+                              props.onOpenFile(current, event);
+                            }
                           }}
                           onKeyDown={(event) => {
+                            const current = entity();
                             if (event.key === 'Enter') {
                               event.preventDefault();
                               event.stopPropagation();
-                              if (isFolder) props.onSelectFolder(entity.id);
-                              else props.onOpenFile(entity);
+                              if (current.type === 'project') {
+                                props.onSelectFolder(current.id);
+                              } else {
+                                props.onOpenFile(current);
+                              }
                             } else if (event.key === ' ') {
                               event.preventDefault();
                               event.stopPropagation();
-                              if (!isFolder) props.onSelectFile(entity);
-                              props.onPreviewEntity(entity);
+                              if (current.type !== 'project') {
+                                props.onSelectFile(current);
+                              }
+                              props.onPreviewEntity(current);
                             }
                           }}
                         >
                           <span class="flex size-4 shrink-0 items-center justify-center">
-                            <EntityRowIcon entity={entity} />
+                            <EntityRowIcon entity={entity()} />
                           </span>
                           <Show
                             when={isRenamingHere()}
                             fallback={
                               <Tooltip
-                                label={entity.name}
+                                label={entity().name}
                                 class="min-w-0 flex-1"
                               >
                                 <span class="min-w-0 flex-1 truncate">
-                                  {entity.name}
+                                  {entity().name}
                                 </span>
                               </Tooltip>
                             }
                           >
                             <InlineNameInput
-                              initialValue={entity.name}
-                              isFolder={isFolder}
+                              initialValue={entity().name}
+                              isFolder={isFolder()}
                               ariaLabel={t('drive.renameInputLabel', {
-                                name: entity.name,
+                                name: entity().name,
                               })}
                               disabled={inlineEdit.isPending()}
                               onCommit={(nextName) =>
                                 inlineEdit.runCommit(async () => {
                                   await host.renameEntityInline(
-                                    entity,
+                                    entity(),
                                     nextName
                                   );
                                 })
@@ -322,7 +339,7 @@ function MillerColumnPane(props: {
                               onCancel={inlineEdit.cancelRename}
                             />
                           </Show>
-                          <Show when={isFolder}>
+                          <Show when={isFolder()}>
                             <CaretRightIcon
                               class="size-3 shrink-0 text-ink-subtle"
                               aria-hidden="true"
@@ -332,7 +349,7 @@ function MillerColumnPane(props: {
                       </li>
                     );
                   }}
-                </For>
+                </Key>
               </ul>
             </Show>
             <Show when={folderSource.isLoadingMore()}>

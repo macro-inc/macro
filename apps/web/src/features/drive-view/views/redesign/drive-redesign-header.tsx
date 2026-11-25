@@ -24,8 +24,8 @@ import SortDescIcon from '@icon/system/regular/sort-descending.svg';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { Button, ButtonGroup, Dropdown, Tabs } from '@ui';
-import { createMemo, For, onCleanup, Show, Suspense } from 'solid-js';
-import { ActiveFilterChips } from '../../components/redesign/active-filter-chips';
+import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import { DriveDesktopFilterBar } from '../../components/redesign/drive-filter-bar';
 import {
   type RedesignBreadcrumbSegment,
   RedesignBreadcrumbs,
@@ -40,7 +40,6 @@ import {
 import { folderAncestors } from '../../core/folder-tree';
 import { DRIVE_SORT_OPTIONS, type DriveSort } from '../../core/types';
 import { DriveRedesignCreateMenu } from '../../drive-redesign-create-menu';
-import { DriveFilterMenu } from '../drive-filter-menu';
 import {
   folderToProjectEntity,
   useDriveDisplayItems,
@@ -59,6 +58,7 @@ export function DriveRedesignHeader(props: {
   });
 
   let focusSearchFn: (() => void) | undefined;
+  const [typeFilterOpen, setTypeFilterOpen] = createSignal(false);
 
   onCleanup(
     registerFocusSearch(() => {
@@ -175,6 +175,14 @@ export function DriveRedesignHeader(props: {
       description: t('drive.searchDrivePlaceholder'),
       run: () => {
         focusSearchFn?.();
+        return true;
+      },
+    },
+    filter: {
+      description: t('drive.viewOptions'),
+      run: () => {
+        if (!showFilters()) return false;
+        setTypeFilterOpen(true);
         return true;
       },
     },
@@ -339,14 +347,6 @@ export function DriveRedesignHeader(props: {
           </div>
         }
       >
-        <Show when={showFilters()}>
-          <HeaderActionGroup label={t('drive.viewOptions')} size="md">
-            <Suspense>
-              <DriveFilterMenu grouped />
-            </Suspense>
-          </HeaderActionGroup>
-        </Show>
-
         <Show when={showViewModeControls()}>
           <HeaderActionGroup label={t('drive.viewModeLabel')} size="md">
             <ButtonGroup.Button
@@ -500,9 +500,9 @@ export function DriveRedesignHeader(props: {
       </Show>
 
       <Show when={showFilters()}>
-        <ActiveFilterChips
-          chips={display.activeFilterChips()}
-          onClearAll={state.clearFilters}
+        <DriveDesktopFilterBar
+          typeOpen={typeFilterOpen()}
+          onTypeOpenChange={setTypeFilterOpen}
         />
       </Show>
     </>

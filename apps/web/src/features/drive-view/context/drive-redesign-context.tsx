@@ -5,6 +5,7 @@ import type { DriveInlineEditState } from '../primitives/drive-inline-edit';
 import type { DriveInspectorState } from '../primitives/drive-inspector';
 import type { DriveUndoManager } from '../primitives/drive-undo';
 import type { DriveViewPreferences } from '../primitives/drive-view-preferences';
+import type { DriveAgentsInfo } from '../primitives/use-drive-agents';
 import type { DriveTrashSource } from '../queries/drive-trash';
 import type { DriveListSource } from './drive-source';
 
@@ -51,6 +52,12 @@ export type DriveRedesignHostActions = {
   canMutateEntity: (entity: EntityData) => boolean;
   /** Opens a folder in a new split when available. */
   openFolderInNewSplit: (folder: ProjectEntity) => void;
+  /** Opens Macro AI contextualized to selected items, active folder, or search query. */
+  askAi: (context?: {
+    selected?: readonly EntityData[];
+    folder?: ProjectEntity;
+    searchQuery?: string;
+  }) => Promise<void>;
 };
 
 export type DriveRedesignContextValue = {
@@ -60,6 +67,8 @@ export type DriveRedesignContextValue = {
   undo: DriveUndoManager;
   trash: DriveTrashSource;
   host: DriveRedesignHostActions;
+  /** Viewer's team agent teammates for People/Agent filters. */
+  agents?: DriveAgentsInfo;
   /** Creates a live folder contents source for inline expansion & Miller columns. */
   createFolderContents: (folderId: Accessor<string | null>) => DriveListSource;
   /** Currently inspected entity (derived from list/grid/column focus or selection). */

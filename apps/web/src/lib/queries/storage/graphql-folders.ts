@@ -49,7 +49,7 @@ export function createGraphqlFoldersQuery(): GraphqlFoldersQuery {
     client: getGraphqlSoupClient(),
     variables: {},
     requestPolicy: 'cache-and-network',
-    keepPreviousData: false,
+    keepPreviousData: true,
     select: selectFolders,
   }));
 
