@@ -7,6 +7,7 @@ import Check from '@icon/system/regular/check.svg';
 import Search from '@icon/system/regular/magnifying-glass.svg';
 import Squares from '@icon/system/regular/squares-four.svg';
 import X from '@icon/system/regular/x.svg';
+import { Key } from '@solid-primitives/keyed';
 import { Button, Input } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, onCleanup, onMount, Show } from 'solid-js';
@@ -25,6 +26,12 @@ import type { createModelSelectorNavigation } from '../../primitives/model-selec
 import { ModelSelectorIdentity } from './model-selector-identity';
 
 type Navigation = ReturnType<typeof createModelSelectorNavigation>;
+
+const AGENT_GROUP_LABELS = {
+  builtin: 'agentControls.builtInAgents',
+  personal: 'agentWork.yourAgents',
+  connection: 'agentControls.needsConnection',
+} as const;
 
 /** Shared catalog body; desktop and phone own their separate overlay lifecycles. */
 export function ModelSelectionList(props: {
@@ -462,14 +469,14 @@ export function ModelSelectionList(props: {
                 </ModelSelectionSection>
               )}
             </Show>
-            <For each={filtered().allProviders}>
+            <Key each={filtered().allProviders} by="label">
               {(group) => (
                 <ModelSelectionSection
-                  title={group.label}
+                  title={group().label}
                   mobile={props.mobile}
                 >
                   <ModelRows
-                    models={group.options}
+                    models={group().options}
                     mobile={props.mobile}
                     selected={
                       state.suggestedSelected !== false
@@ -481,7 +488,7 @@ export function ModelSelectionList(props: {
                   />
                 </ModelSelectionSection>
               )}
-            </For>
+            </Key>
           </div>
         </Show>
         <Show when={nav.page() === 'agents'}>
@@ -489,7 +496,7 @@ export function ModelSelectionList(props: {
             <For each={agentPickerGroups(filtered().agents)}>
               {(group) => (
                 <ModelSelectionSection
-                  title={group.label}
+                  title={t(AGENT_GROUP_LABELS[group.id])}
                   mobile={props.mobile}
                 >
                   <For each={group.agents}>
@@ -547,14 +554,14 @@ export function ModelSelectionList(props: {
                 </ModelSelectionSection>
               )}
             </Show>
-            <For each={agentModels().allProviders}>
+            <Key each={agentModels().allProviders} by="label">
               {(group) => (
                 <ModelSelectionSection
-                  title={group.label}
+                  title={group().label}
                   mobile={props.mobile}
                 >
                   <ModelRows
-                    models={group.options}
+                    models={group().options}
                     mobile={props.mobile}
                     selected={state.model}
                     disabled={state.disabled}
@@ -562,7 +569,7 @@ export function ModelSelectionList(props: {
                   />
                 </ModelSelectionSection>
               )}
-            </For>
+            </Key>
           </div>
         </Show>
         <Show when={noMatches()}>

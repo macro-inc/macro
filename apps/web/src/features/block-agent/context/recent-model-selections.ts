@@ -18,10 +18,13 @@ function modelIds(value: unknown): string[] {
 /** Opaque catalog IDs only; unavailable models are filtered by the current catalog. */
 export function createRecentModelSelections(userId: string | undefined) {
   const storage = createUserScopedStorage('agent-model-recent-v1');
+  let lastObserved: string | null | undefined;
   const [ids, setIds] = makePersistedState(createSignal<string[]>([]), {
     storages: {
-      restore: () =>
-        userId ? modelIds(JSON.parse(storage.read(userId) ?? '[]')) : [],
+      restore: () => {
+        lastObserved = userId ? storage.read(userId) : null;
+        return modelIds(JSON.parse(lastObserved ?? '[]'));
+      },
       write: (value) => {
         if (userId) storage.write(userId, JSON.stringify(value));
       },
@@ -31,8 +34,15 @@ export function createRecentModelSelections(userId: string | undefined) {
     if (!userId) return;
     try {
       const stored = storage.read(userId);
-      if (stored === null) return;
+      // Failed writes leave storage unchanged; do not replay stale history
+      // over selections made in this mounted selector.
+      if (stored === lastObserved) return;
+      if (stored === null) {
+        lastObserved = stored;
+        return;
+      }
       const restored = modelIds(JSON.parse(stored));
+      lastObserved = stored;
       setIds((previous) => modelIds([...restored, ...previous]));
     } catch {
       // A malformed value must not discard the working in-memory selection.
