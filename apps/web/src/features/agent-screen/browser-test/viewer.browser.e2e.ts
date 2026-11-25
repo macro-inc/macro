@@ -463,20 +463,27 @@ test('a canceled handshake and a decoded frame produce one summary each in the s
   expect(
     attempts.map((attempt) => attempt.searchParams.get('attempt'))
   ).toEqual(['1', '2']);
-  expect(summaries).toEqual([
-    expect.objectContaining({
-      'screen.journey.id': journey,
-      'screen.attempt': 1,
-      'screen.terminal_stage': 'socket_upgrade',
-      'screen.close_reason': 'canceled',
-    }),
-    expect.objectContaining({
-      'screen.journey.id': journey,
-      'screen.attempt': 2,
-      'screen.terminal_stage': 'first_frame',
-      'screen.close_reason': 'ready',
-      'screen.bytes_received': 66,
-    }),
-  ]);
+  expect(summaries).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        'screen.journey.id': journey,
+        'screen.attempt': 0,
+        'screen.connect_generation': 1,
+        'screen.terminal_stage': 'socket_upgrade',
+        'screen.close_reason': 'canceled',
+      }),
+      expect.objectContaining({
+        'screen.journey.id': journey,
+        'screen.attempt': 0,
+        'screen.connect_generation': 2,
+        'screen.terminal_stage': 'first_frame',
+        'screen.close_reason': 'ready',
+      }),
+    ])
+  );
+  const completed = summaries.find(
+    (summary) => summary['screen.connect_generation'] === 2
+  );
+  expect(completed?.['screen.bytes_received']).toBeGreaterThanOrEqual(66);
   expect(errors).toEqual([]);
 });

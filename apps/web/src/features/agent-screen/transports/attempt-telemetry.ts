@@ -1,5 +1,6 @@
 import type { Span } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
+import { BOOT_TIMEOUT_MS } from '../core/screen-status';
 import type { ScreenClientEndReason, ScreenEndReason } from './types';
 
 type Stage =
@@ -14,6 +15,7 @@ type CloseReason =
   | 'ticket_failed'
   | 'socket_error'
   | 'parser_error'
+  | 'protocol_error'
   | 'timeout'
   | 'shutdown'
   | 'computer_off'
@@ -45,11 +47,14 @@ export function viewerAttempt(span: Span, journey: string, number: number) {
   let finished = false;
   let received = 0;
   let sent = 0;
-  // A silent guest can leave the socket open. Bound the telemetry wait
-  // independently of the viewer's reconnect and wake behavior.
-  const deadline = setTimeout(() => finish('timeout'), 90_000);
+  // A silent guest can leave the socket open. Give the viewer the full
+  // boot window plus time for ticket, socket, and handshake setup.
+  const deadline = setTimeout(
+    () => finish('timeout'),
+    BOOT_TIMEOUT_MS + 30_000
+  );
   span.setAttr('screen.journey.id', journey);
-  span.setAttr('screen.attempt', number);
+  span.setAttr('screen.connect_generation', number);
   span.setAttr('screen.role', 'viewer');
 
   function finish(reason: CloseReason) {

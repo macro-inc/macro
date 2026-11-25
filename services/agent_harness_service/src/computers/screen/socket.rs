@@ -288,8 +288,8 @@ pub(super) fn session_span(
         screen.surface = %grant.surface,
         screen.mode = %grant.mode,
         screen.journey.id = journey.as_deref(),
-        screen.attempt = attempt.map(|(_, number)| i64::from(number.get())),
-        screen.role = TunnelRole::Relay.as_ref(),
+        screen.connect_generation = attempt.map(|(_, number)| i64::from(number.get())),
+        screen.role = "relay",
         screen.relay.stage = Empty,
         screen.relay.close_reason = Empty,
         screen.bytes_written = Empty,
@@ -335,7 +335,7 @@ async fn serve_in_span(
     progress.advance(RelayStage::SocketUpgraded);
     let mut outcome = RelayOutcome {
         progress: &progress,
-        reason: CloseReason::Canceled,
+        reason: CloseReason::Aborted,
     };
     let session = match deps.screens.open_session(&grant).await {
         Ok(session) => session,

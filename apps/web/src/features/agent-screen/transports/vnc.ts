@@ -261,6 +261,10 @@ async function connectVnc(
           messages = filter.push(new Uint8Array(message.data));
         } catch (error) {
           // A stream the filter can't frame can't be trusted past this point.
+          // The rejected bytes can include guest-controlled content.
+          Telemetry.error('VNC client message framing failed', {
+            'screen.transport': 'vnc',
+          });
           trace?.finish('parser_error');
           reject(error);
           // `close` forgets readiness: an established session reports its
@@ -281,7 +285,7 @@ async function connectVnc(
       } else if (message.type === 'firstFrame') {
         trace?.milestone('first_frame');
       } else if (message.type === 'disconnected') {
-        if (!message.clean) trace?.finish('parser_error');
+        if (!message.clean) trace?.finish('protocol_error');
         // Before the handshake finished this is a failed connect, reported
         // by the rejection; after it, the socket's close reports the end.
         reject(new Error('RFB handshake failed'));

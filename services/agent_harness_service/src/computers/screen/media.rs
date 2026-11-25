@@ -117,7 +117,11 @@ impl ScreenMedia for VncMedia {
             } = context;
             progress.advance(RelayStage::FleetExec);
             let stream = tunnel
-                .open(computer_id, GuestPort::Rfb, TunnelRole::Relay)
+                .open(
+                    computer_id,
+                    GuestPort::Rfb,
+                    TunnelRole::Relay(Arc::clone(&progress)),
+                )
                 .await?;
             progress.advance(RelayStage::ShellMarker);
             let (mut guest_reader, mut guest_writer) = tokio::io::split(stream);

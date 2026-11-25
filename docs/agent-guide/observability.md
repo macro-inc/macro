@@ -25,11 +25,13 @@ attribute.
 ## VNC viewer attempts
 
 Find `computer.screen.connect` by `screen.journey.id` and compare
-`screen.attempt` across reconnects. The span records `screen.terminal_stage`
+`screen.connect_generation` across reconnects. The browser's `screen.attempt`
+retains the retry counter used for backoff. The span records `screen.terminal_stage`
 and `screen.close_reason` once, at the first decoded frame or when setup ends.
 Use the ticket trace to find the corresponding `computer.screen.session` relay
 span. Its `screen.relay.stage` and `screen.relay.close_reason` identify guest
-or socket failures. `screen.bytes_written` counts binary bytes after a
+or socket failures. An `aborted` relay stopped before its task recorded an
+ordinary end. `screen.bytes_written` counts binary bytes after a
 successful socket write. The `computer.screen.tunnel` child identifies the
 guest image and the relay or input role. The session's
 `macrod.connection.epoch` identifies a runtime connection observed on that

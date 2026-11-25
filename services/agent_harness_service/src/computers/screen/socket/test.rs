@@ -365,6 +365,8 @@ mod over_the_wire {
         /// Access lookups fail instead of answering.
         lookups_fail: Arc<AtomicBool>,
         address: std::net::SocketAddr,
+        journey: uuid::Uuid,
+        finished: Arc<Notify>,
     }
 
     fn grant(user: &str, mode: Mode) -> ScreenGrant {
@@ -449,7 +451,10 @@ mod over_the_wire {
         let allowed = Arc::new(AtomicBool::new(true));
         let lookups_fail = Arc::new(AtomicBool::new(false));
         let viewers = Arc::new(Viewers::default());
+        let journey = uuid::Uuid::new_v4();
+        let finished = Arc::new(Notify::new());
         let route = {
+            let finished = Arc::clone(&finished);
             let screens = Arc::clone(&screens);
             let xvnc = Arc::clone(&xvnc);
             let allowed = Arc::clone(&allowed);
@@ -478,9 +483,14 @@ mod over_the_wire {
                     shutdown: CancellationToken::new(),
                 };
                 let grant = grant.clone();
+                let finished = Arc::clone(&finished);
                 async move {
-                    let span = session_span(&grant, None, None);
-                    upgrade.on_upgrade(move |socket| serve(socket, grant, deps, span))
+                    let span =
+                        session_span(&grant, None, Some((journey, std::num::NonZeroU32::MIN)));
+                    upgrade.on_upgrade(move |socket| async move {
+                        serve(socket, grant, deps, span).await;
+                        finished.notify_one();
+                    })
                 }
             }
         };
@@ -494,7 +504,74 @@ mod over_the_wire {
             allowed,
             lookups_fail,
             address,
+            journey,
+            finished,
         }
+    }
+
+    fn assert_relay_summary(journey: uuid::Uuid, expected_stage: &str, expected_reason: &str) {
+        let spans = crate::test_spans::exported_spans()
+            .exporter
+            .get_finished_spans()
+            .unwrap();
+        let journey = journey.to_string();
+        let matching: Vec<_> = spans
+            .iter()
+            .filter(|span| {
+                span.name == "computer.screen.session"
+                    && span.attributes.iter().any(|attribute| {
+                        attribute.key.as_str() == "screen.journey.id"
+                            && attribute.value.as_str() == journey
+                    })
+            })
+            .collect();
+        assert_eq!(matching.len(), 1);
+        for (key, expected) in [
+            ("screen.connect_generation", "1"),
+            ("screen.relay.stage", expected_stage),
+            ("screen.relay.close_reason", expected_reason),
+        ] {
+            let values: Vec<_> = matching[0]
+                .attributes
+                .iter()
+                .filter(|attribute| attribute.key.as_str() == key)
+                .map(|attribute| attribute.value.as_str())
+                .collect();
+            assert_eq!(values, [expected]);
+        }
+    }
+
+    #[test]
+    fn a_failed_upgrade_emits_one_relay_summary() {
+        crate::test_spans::exported_spans();
+        let journey = uuid::Uuid::new_v4();
+        let span = session_span(
+            &grant("viewer", Mode::View),
+            None,
+            Some((journey, std::num::NonZeroU32::MIN)),
+        );
+        upgrade_failed(span);
+        assert_relay_summary(journey, "ticket_redeemed", "socket_error");
+    }
+
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_successful_socket_emits_one_relay_summary_after_stop(pool: PgPool) {
+        crate::test_spans::exported_spans();
+        let rig = rig(pool, grant("viewer", Mode::View)).await;
+        let mut client = connect(&rig).await;
+        control_of(&mut client, "state").await;
+        loop {
+            if let ClientFrame::Binary(bytes) = client.next().await.unwrap().unwrap() {
+                assert!(bytes.starts_with(b"RFB 003.008\n"));
+                break;
+            }
+        }
+        send(&mut client, serde_json::json!({"type": "stop"})).await;
+        assert_eq!(control_of(&mut client, "ended").await["reason"], "stopped");
+        tokio::time::timeout(Duration::from_secs(5), rig.finished.notified())
+            .await
+            .unwrap();
+        assert_relay_summary(rig.journey, "first_socket_write", "canceled");
     }
 
     type Client = tokio_tungstenite::WebSocketStream<

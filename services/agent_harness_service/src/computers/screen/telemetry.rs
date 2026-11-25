@@ -15,6 +15,7 @@ pub(super) enum RelayStage {
     SocketUpgraded,
     Wake,
     FleetExec,
+    WaitingForShellMarker,
     ShellMarker,
     FirstGuestByte,
     RfbGate,
@@ -25,12 +26,14 @@ pub(super) enum RelayStage {
 #[strum(serialize_all = "snake_case")]
 pub(super) enum CloseReason {
     Canceled,
+    Aborted,
     ComputerOff,
     AccessRevoked,
     Shutdown,
     Idle,
     SocketError,
     ExecFailed,
+    MarkerMissing,
     HelperMissing,
     ConnectRefused,
     Timeout,
@@ -61,9 +64,9 @@ impl From<&Result<MediaEnd, MediaError>> for CloseReason {
             Ok(MediaEnd::GuestClosed) => Self::Eof,
             Err(MediaError::Gate(_)) => Self::ParserError,
             Err(MediaError::Tunnel(error)) => match error {
-                TunnelError::ComputerOff
-                | TunnelError::Unreachable(_)
-                | TunnelError::MissingMarker => Self::ExecFailed,
+                TunnelError::ComputerOff => Self::ComputerOff,
+                TunnelError::Unreachable(_) => Self::ExecFailed,
+                TunnelError::MissingMarker => Self::MarkerMissing,
                 TunnelError::Timeout => Self::Timeout,
             },
             Err(MediaError::Io(error)) => match TunnelExited::from_io(error) {
@@ -77,7 +80,7 @@ impl From<&Result<MediaEnd, MediaError>> for CloseReason {
 }
 
 /// The media reader and socket writer report milestones on the session span.
-pub(super) struct RelayProgress {
+pub struct RelayProgress {
     stage: Mutex<Option<RelayStage>>,
     span: Span,
 }

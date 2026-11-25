@@ -15,6 +15,7 @@ const READY: &[u8] = b"macro-screen-tunnel-ready 4242\n";
 /// exits); every later one (a kill) exits at once. It records each argv.
 struct FakeExec {
     tunnel: Mutex<Option<(DuplexStream, oneshot::Receiver<i32>)>>,
+    failure: Mutex<Option<TunnelError>>,
     calls: Mutex<Vec<Vec<String>>>,
     called: Notify,
 }
@@ -25,6 +26,7 @@ impl FakeExec {
         let (exit, exited) = oneshot::channel();
         let exec = Arc::new(Self {
             tunnel: Mutex::new(Some((stdout, exited))),
+            failure: Mutex::new(None),
             calls: Mutex::new(Vec::new()),
             called: Notify::new(),
         });
@@ -47,8 +49,12 @@ impl GuestExec for FakeExec {
             .unwrap()
             .push(argv.iter().map(|arg| (*arg).to_owned()).collect());
         self.called.notify_waiters();
+        let failure = self.failure.lock().unwrap().take();
         let tunnel = self.tunnel.lock().unwrap().take();
         Box::pin(async move {
+            if let Some(failure) = failure {
+                return Err(failure);
+            }
             let Some((stdout, exited)) = tunnel else {
                 // A kill: nothing to say, done at once.
                 return Ok(GuestProgram {
@@ -72,7 +78,7 @@ async fn the_tunnel_runs_socat_to_the_port_with_nodelay() {
     let (exec, mut guest, _exit) = FakeExec::new();
     guest.write_all(READY).await.unwrap();
     let _stream = FleetTunnel::new(exec.clone(), TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Input)
         .await
         .unwrap();
 
@@ -96,7 +102,7 @@ async fn only_what_follows_the_ready_line_is_media() {
         .await
         .unwrap();
     let mut stream = FleetTunnel::new(exec, TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Input)
         .await
         .unwrap();
 
@@ -115,7 +121,7 @@ async fn a_fleet_error_instead_of_the_ready_line_is_never_media() {
     drop(guest);
 
     let Err(error) = FleetTunnel::new(exec, TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Input)
         .await
     else {
         panic!("the tunnel did not start");
@@ -134,7 +140,7 @@ async fn a_ready_line_without_a_pid_is_refused() {
 
     assert!(matches!(
         FleetTunnel::new(exec, TaskTracker::new())
-            .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
+            .open(COMPUTER, GuestPort::Rfb, TunnelRole::Input)
             .await,
         Err(TunnelError::MissingMarker)
     ));
@@ -145,7 +151,7 @@ async fn a_tunnel_whose_socat_fails_reads_as_an_error_not_the_end() {
     let (exec, mut guest, exit) = FakeExec::new();
     guest.write_all(READY).await.unwrap();
     let mut stream = FleetTunnel::new(exec, TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Input)
         .await
         .unwrap();
     // socat couldn't connect: no output, exit 1.
@@ -168,7 +174,7 @@ async fn a_tunnel_that_exits_cleanly_is_the_port_closing() {
         .await
         .unwrap();
     let mut stream = FleetTunnel::new(exec.clone(), TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Input)
         .await
         .unwrap();
     drop(guest);
@@ -187,7 +193,7 @@ async fn a_closed_session_whose_tunnel_lingers_kills_it() {
     let (exec, mut guest, _exit) = FakeExec::new();
     guest.write_all(READY).await.unwrap();
     let stream = FleetTunnel::new(exec.clone(), TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Input)
         .await
         .unwrap();
     let called = exec.called.notified();
@@ -217,7 +223,7 @@ async fn a_tunnel_whose_exec_ended_but_whose_program_may_not_is_killed_too() {
     let (exec, mut guest, exit) = FakeExec::new();
     guest.write_all(READY).await.unwrap();
     let stream = FleetTunnel::new(exec.clone(), TaskTracker::new())
-        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Relay)
+        .open(COMPUTER, GuestPort::Rfb, TunnelRole::Input)
         .await
         .unwrap();
     let called = exec.called.notified();
@@ -314,11 +320,51 @@ async fn the_relay_records_where_the_guest_stream_ended() {
     use tokio::sync::{mpsc, watch};
 
     let spans = crate::test_spans::exported_spans();
-    for (stdout, code, stage, reason, relayed) in [
-        (&b"exec failed\n"[..], 1, "fleet_exec", "exec_failed", false),
-        (&READY[..], 127, "shell_marker", "helper_missing", false),
-        (&READY[..], 111, "shell_marker", "connect_refused", false),
+    for (failure, stdout, code, stage, reason, relayed) in [
         (
+            Some(TunnelError::Unreachable(
+                "test fleet unavailable".to_owned(),
+            )),
+            &b""[..],
+            1,
+            "fleet_exec",
+            "exec_failed",
+            false,
+        ),
+        (
+            Some(TunnelError::ComputerOff),
+            &b""[..],
+            1,
+            "fleet_exec",
+            "computer_off",
+            false,
+        ),
+        (
+            None,
+            &b"exec failed\n"[..],
+            1,
+            "waiting_for_shell_marker",
+            "marker_missing",
+            false,
+        ),
+        (
+            None,
+            &READY[..],
+            127,
+            "shell_marker",
+            "helper_missing",
+            false,
+        ),
+        (
+            None,
+            &READY[..],
+            111,
+            "shell_marker",
+            "connect_refused",
+            false,
+        ),
+        (
+            None,
             &b"macro-screen-tunnel-ready 4242\n\x00nvalid RFB\n"[..],
             0,
             "first_guest_byte",
@@ -326,6 +372,7 @@ async fn the_relay_records_where_the_guest_stream_ended() {
             false,
         ),
         (
+            None,
             &b"macro-screen-tunnel-ready 4242\nRFB 003.008\n"[..],
             0,
             "rfb_gate",
@@ -334,6 +381,7 @@ async fn the_relay_records_where_the_guest_stream_ended() {
         ),
     ] {
         let (exec, mut guest, exit) = FakeExec::new();
+        *exec.failure.lock().unwrap() = failure;
         guest.write_all(stdout).await.unwrap();
         drop(guest);
         exit.send(code).unwrap();
@@ -402,5 +450,44 @@ async fn the_relay_records_where_the_guest_stream_ended() {
                 .collect();
             assert_eq!(fields, [value]);
         }
+    }
+}
+
+#[test]
+fn the_relay_shell_turns_helper_failures_into_statuses() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let bin = tempfile::tempdir().unwrap();
+    let path = std::env::var_os("PATH").unwrap();
+    let bash = std::env::split_paths(&path)
+        .map(|path| path.join("bash"))
+        .find(|path| path.is_file())
+        .expect("the relay requires bash");
+
+    for expected in [127, 111] {
+        if expected == 111 {
+            let helper = bin.path().join("socat");
+            let script = format!(
+                "#!{}\nprintf '%s\\n' 'socat[1] E TCP:127.0.0.1:5901: Connection refused' >&2\nexit 1\n",
+                bash.display()
+            );
+            std::fs::write(&helper, script).unwrap();
+            std::fs::set_permissions(helper, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+
+        let output = std::process::Command::new(&bash)
+            .args(["-c", TUNNEL_SCRIPT, "bash", "5901"])
+            .env("PATH", bin.path())
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(expected));
+        assert!(output.stderr.is_empty());
+        let marker = std::str::from_utf8(&output.stdout).unwrap();
+        assert!(
+            marker
+                .strip_prefix("macro-screen-tunnel-ready ")
+                .and_then(|pid| pid.strip_suffix('\n'))
+                .is_some_and(|pid| pid.parse::<u32>().is_ok())
+        );
     }
 }

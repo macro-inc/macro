@@ -15,6 +15,8 @@ use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite};
 use tokio_util::task::TaskTracker;
 use tracing::Instrument as _;
 
+use super::telemetry::{RelayProgress, RelayStage};
+
 #[cfg(test)]
 mod test;
 
@@ -62,13 +64,20 @@ pub enum TunnelError {
 }
 
 /// Why the tunnel was opened.
-#[derive(Debug, Clone, Copy, strum::AsRefStr)]
-#[strum(serialize_all = "snake_case")]
 pub enum TunnelRole {
     /// Relays VNC traffic between the guest and a viewer.
-    Relay,
+    Relay(Arc<RelayProgress>),
     /// Sends typed input to the guest through a separate RFB connection.
     Input,
+}
+
+impl TunnelRole {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Relay(_) => "relay",
+            Self::Input => "input",
+        }
+    }
 }
 
 /// Opens [`GuestStream`]s. Object-safe (`Arc<dyn GuestTunnel>`), hence the
@@ -353,7 +362,7 @@ impl GuestTunnel for FleetTunnel {
             "computer.screen.tunnel",
             computer.id = %computer,
             computer.screen.port = port.name(),
-            screen.role = role.as_ref(),
+            screen.role = role.name(),
             computer.guest.image = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
         );
@@ -370,6 +379,9 @@ impl GuestTunnel for FleetTunnel {
                     .inspect_err(|_| {
                         tracing::Span::current().record("otel.status_code", "ERROR");
                     })?;
+                if let TunnelRole::Relay(progress) = &role {
+                    progress.advance(RelayStage::WaitingForShellMarker);
+                }
                 // Nothing reaches the viewer until the tunnel says it runs.
                 let pid = ready(&mut process.stdout).await.inspect_err(|_| {
                     tracing::Span::current().record("otel.status_code", "ERROR");

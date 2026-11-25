@@ -396,6 +396,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     connectSpan.setAttr('harness.id', options.harnessId);
     connectSpan.setAttr('screen.transport', transportKind);
     connectSpan.setAttr('screen.mode', mode);
+    connectSpan.setAttr('screen.attempt', attempt);
     const trace = viewerAttempt(connectSpan, journey, current);
     activeAttempt = trace;
     if (booting()) connectSpan.setAttr('screen.booting', true);
