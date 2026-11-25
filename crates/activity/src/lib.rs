@@ -31,8 +31,9 @@ pub use domain::events::{ActivityMacroEvent, ActivityTopicEvent, ActivityWireRow
 pub use domain::models::{
     AccessRequest, Action, ActionDecodeError, ActionTag, Activity, ActivityRecord, ActivitySource,
     Actor, AppearanceChange, AppearanceUpdate, Attribution, CallStart, CommonAction,
-    DomainActivity, EntityType, Ingest, InitiativeTaskChange, NON_TOUCH_ACTION_TAGS,
-    ParticipantChange, PropertyChange, RecordedAction, TimeLog, TimeLogSource, VIEW_ACTION_TAGS,
+    DomainActivity, DroppedPropertyValue, EntityType, Ingest, InitiativeTaskChange,
+    MergedRecordName, NON_TOUCH_ACTION_TAGS, ParticipantChange, PropertyChange, RecordMerge,
+    RecordedAction, TimeLog, TimeLogSource, VIEW_ACTION_TAGS,
     activity_id, event_time,
 };
 pub use domain::overview::{
