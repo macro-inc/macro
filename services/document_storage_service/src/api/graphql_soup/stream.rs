@@ -4,8 +4,11 @@
 //! 426,
 //! limits each user to one open stream and each task to
 //! [`MAX_STREAMS_PER_TASK`] open streams that take turns on [`PAGE_SLOTS`]
-//! pages at once, and runs every page through the Soup schema with the same
+//! pages at once, keeps each user to a budget across streams and tasks
+//! ([`budget`]), and runs every page through the Soup schema with the same
 //! request context as `POST /soup/graphql`.
+
+mod budget;
 
 use super::{ContextScope, graphql_query_context_data, opaque_viewer_id, telemetry};
 use crate::api::context::{ApiContext, AuthorizationService};
@@ -16,6 +19,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::Cached;
+use budget::{Admission, SyncStreamBudget};
 use calendar_events::domain::models::OccurrenceRange;
 use complete_graph::{GraphqlRequestParts, MAIL_CACHE_PROFILE_HEADER, MailCacheProfile};
 use futures::StreamExt as _;
@@ -30,6 +34,7 @@ use soup_sync_stream::{
 use std::{
     convert::Infallible,
     sync::{Arc, LazyLock},
+    time::Duration,
 };
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
@@ -101,6 +106,20 @@ pub(super) async fn sync_stream_handler(
         }
         Err(error) => return (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
     };
+    let budget = SyncStreamBudget::new(state.sync_stream_budget.clone());
+    if let Admission::Refused { retry_after } =
+        budget.admit(acting_user.macro_user_id.as_ref()).await
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(
+                header::RETRY_AFTER,
+                retry_after.as_secs().max(1).to_string(),
+            )],
+            "this user's Soup sync stream budget is spent; retry later",
+        )
+            .into_response();
+    }
     let Some(active) = ACTIVE_STREAMS.try_acquire(acting_user.macro_user_id.clone()) else {
         return (
             StatusCode::CONFLICT,
@@ -135,6 +154,7 @@ pub(super) async fn sync_stream_handler(
         viewer_id: opaque_viewer_id(acting_user),
         lane_lists: graphql_soup::SoupLaneLists::default(),
         turns: PAGE_TURNS.stream(acting_user.macro_user_id.clone()),
+        budget,
         _active: active,
         _slot: slot,
     };
@@ -163,6 +183,8 @@ struct SchemaPageExecutor {
     lane_lists: graphql_soup::SoupLaneLists,
     /// This stream's turns on [`PAGE_TURNS`].
     turns: StreamTurns<MacroUserIdStr<'static>>,
+    /// The user's budget across streams, charged with each page's time.
+    budget: SyncStreamBudget<rate_limit::RedisRateLimitAdapter<redis::Client>>,
     _active: ActiveStreamGuard<MacroUserIdStr<'static>>,
     /// This stream's slot of [`STREAM_SLOTS`], released with the body.
     _slot: OwnedSemaphorePermit,
@@ -199,5 +221,9 @@ impl PageExecutor for SchemaPageExecutor {
         })
         .await;
         serde_json::to_value(&response)
+    }
+
+    async fn charge(&self, ran: Duration) -> bool {
+        self.budget.charge(self.macro_user_id.as_ref(), ran).await
     }
 }

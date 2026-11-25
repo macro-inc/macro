@@ -1119,6 +1119,9 @@ async fn run_server() -> anyhow::Result<()> {
             redis: redis_client.clone(),
         },
     };
+    let sync_stream_budget = RedisRateLimitAdapter {
+        redis: redis_client.clone(),
+    };
     let call_service = Arc::new(call_service_builder.with_start_limiter(
         call::inbound::axum_router::RateLimitedCallStarts(call_public_rate_limiter.clone()),
     ));
@@ -3048,6 +3051,7 @@ async fn run_server() -> anyhow::Result<()> {
         call_state,
         call_webhook_state,
         call_public_rate_limiter,
+        sync_stream_budget,
         webhook_state,
         sse_stream_state,
         call_internal_state,

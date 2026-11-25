@@ -123,6 +123,15 @@ Pages run like this:
 - 409 when the user already has a stream open on this server task; 503 with
   `Retry-After` when the task already holds its most open streams
   (`MAX_STREAMS_PER_TASK`).
+- 429 with `Retry-After` when the user's budget across streams and tasks is
+  spent (`stream/budget.rs` in DSS, counted in Redis through
+  `crates/rate_limit`): 10 stream starts a minute, and 30 minutes of page
+  execution time an hour, waits for a turn excluded. Each page's time is
+  charged after it runs; a page that does not fit ends its stream with
+  `deadline` (lanes resume from their last `resume`) and takes what is left,
+  so the next start is refused until the hour's window ends. When Redis cannot
+  answer, streams run: the budget guards cost, not access. It applies in
+  every environment.
 - Open streams take turns. A task runs at most `PAGE_SLOTS` pages at once,
   whatever the number of open streams, and a freed slot goes to the waiting
   stream whose user's pages took the least time in the last 5 minutes (summed
@@ -420,8 +429,9 @@ before (`unsupportedWhenRefused` in `sync/host.ts`). A lane that fails is re-run
 the next one. A first-pass stream the server ended early (`deadline`) is
 resumed until the pass completes, and only then does the second pass start.
 A stream that fails is retried five times with backoff; a busy server (409,
-429 or 503) is instead asked again every 30 s for as long as it stays busy,
-without spending those retries.
+429 or 503) is instead asked again after its `Retry-After` (30 s when it gives
+none, at most an hour) for as long as it stays busy, without spending those
+retries.
 
 A sync whose stream used up its retries stops and waits
 (`sync/resume.ts`), then runs again from the state saved in the cache, as

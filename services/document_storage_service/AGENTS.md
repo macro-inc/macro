@@ -34,7 +34,10 @@ threads, pins, recents, notifications, folders, activity.
   their paged Soup and calendar queries with the `/soup/graphql` request
   context and writes NDJSON; 426 for a body whose sync protocol it does not
   speak; one open stream per user per task (409)
-  and at most `MAX_STREAMS_PER_TASK` open per task (503 with `Retry-After`).
+  and at most `MAX_STREAMS_PER_TASK` open per task (503 with `Retry-After`);
+  a per-user budget across tasks in Redis (`stream/budget.rs`: stream starts
+  per minute, page time per hour; 429 with `Retry-After`, open when Redis is
+  down).
   Open streams take turns on `PAGE_SLOTS` pages at once, so the number of
   streams does not change what they ask of the database. Lanes, planning,
   lane loop, turns and wire format: `crates/soup_sync_stream`.

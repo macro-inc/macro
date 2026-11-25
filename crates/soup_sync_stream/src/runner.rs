@@ -78,6 +78,15 @@ pub trait PageExecutor: Send + Sync + 'static {
         request: Request,
         budget: PageBudget,
     ) -> impl Future<Output = Result<Value, Self::Error>> + Send;
+
+    /// Charges `ran`, the time a page executed (its wait for a turn
+    /// excluded), to whatever budget the user has across streams. `false`
+    /// ends the stream with `deadline` after that page: its lanes resume from
+    /// their last `resume` in a later stream. Nothing is charged by default.
+    fn charge(&self, ran: Duration) -> impl Future<Output = bool> + Send {
+        let _ = ran;
+        async { true }
+    }
 }
 
 /// Why a lane failed, sent as the `laneError` message. Server-chosen text only.
@@ -154,6 +163,8 @@ struct Runner<E> {
     deadline: Instant,
     /// When the stream began waiting for the turn it has yet to get.
     waiting_since: Option<Instant>,
+    /// The user's budget across streams ran out: no further page starts.
+    out_of_budget: bool,
     finished: bool,
     telemetry: StreamTelemetry,
 }
@@ -170,6 +181,7 @@ impl<E: PageExecutor> Runner<E> {
             max_pages: plan.max_pages,
             deadline: Instant::now() + STREAM_DEADLINE,
             waiting_since: None,
+            out_of_budget: false,
             finished: false,
             telemetry,
         }
@@ -202,6 +214,11 @@ impl<E: PageExecutor> Runner<E> {
         if Instant::now() >= self.deadline {
             return self.finish(EndReason::Deadline);
         }
+        if self.out_of_budget {
+            // Its lanes pick up from their last `resume` in a later stream.
+            self.telemetry.out_of_budget = true;
+            return self.finish(EndReason::Deadline);
+        }
 
         let waiting_since = *self.waiting_since.get_or_insert_with(Instant::now);
         let Ok(turn) = tokio::time::timeout(WAITING_INTERVAL, self.executor.turn()).await else {
@@ -232,6 +249,7 @@ impl<E: PageExecutor> Runner<E> {
             otel.status_code = Empty,
             otel.status_description = Empty,
         );
+        let started = Instant::now();
         let executed = tokio::time::timeout(
             PAGE_TIMEOUT,
             self.executor
@@ -239,6 +257,9 @@ impl<E: PageExecutor> Runner<E> {
                 .instrument(span.clone()),
         )
         .await;
+        if !self.executor.charge(started.elapsed()).await {
+            self.out_of_budget = true;
+        }
         let response = match executed {
             Ok(Ok(response)) => response,
             Ok(Err(error)) => {
@@ -487,6 +508,8 @@ struct StreamTelemetry {
     /// Time the stream's pages spent waiting for their turn.
     waited: Duration,
     failed_lanes: u32,
+    /// The stream ended because the user's budget ran out.
+    out_of_budget: bool,
     end: Option<EndReason>,
 }
 
@@ -506,6 +529,7 @@ impl StreamTelemetry {
             "sync.end_reason" = Empty,
             "sync.failed_lanes" = Empty,
             "sync.last_failed_lane" = Empty,
+            "sync.out_of_budget" = Empty,
             otel.status_code = Empty,
             otel.status_description = Empty,
         );
@@ -516,6 +540,7 @@ impl StreamTelemetry {
             bytes: 0,
             waited: Duration::ZERO,
             failed_lanes: 0,
+            out_of_budget: false,
             end: None,
         }
     }
@@ -557,6 +582,7 @@ impl Drop for StreamTelemetry {
         self.span.record("sync.items", span_number(self.items));
         self.span.record("sync.bytes", span_number(self.bytes));
         self.span.record("sync.wait_ms", millis(self.waited));
+        self.span.record("sync.out_of_budget", self.out_of_budget);
         self.span
             .record("sync.failed_lanes", i64::from(self.failed_lanes));
         let end_reason: &'static str = self.end.map_or(INTERRUPTED, <&'static str>::from);

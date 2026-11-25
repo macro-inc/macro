@@ -1048,3 +1048,73 @@ fn the_encoding_fallback_matches_an_end_error_frame() {
         END_ERROR_LINE
     );
 }
+
+/// Runs a [`ScriptedExecutor`]'s pages until its budget allows no more.
+#[derive(Clone)]
+struct BudgetedExecutor {
+    inner: ScriptedExecutor,
+    /// Pages the budget allows; the charge for the last one fails.
+    pages_allowed: Arc<Mutex<u32>>,
+    charged: Arc<Mutex<Vec<Duration>>>,
+}
+
+impl PageExecutor for BudgetedExecutor {
+    type Error = FakeError;
+    type Turn = ();
+
+    async fn turn(&self) {}
+
+    async fn execute(&self, request: Request, budget: PageBudget) -> Result<Value, FakeError> {
+        self.inner.execute(request, budget).await
+    }
+
+    async fn charge(&self, ran: Duration) -> bool {
+        self.charged.lock().unwrap().push(ran);
+        let mut allowed = self.pages_allowed.lock().unwrap();
+        *allowed = allowed.saturating_sub(1);
+        *allowed > 0
+    }
+}
+
+#[tokio::test]
+async fn a_stream_ends_with_deadline_once_the_users_budget_runs_out() {
+    let page = |cursor: &str| {
+        Ok(
+            json!({ "data": { "user": { "id": "u", "soup": { "items": [{ "id": cursor }], "nextCursor": cursor } } } }),
+        )
+    };
+    let executor = BudgetedExecutor {
+        inner: ScriptedExecutor::new(vec![page("c1"), page("c2"), page("c3")]),
+        pages_allowed: Arc::new(Mutex::new(2)),
+        charged: Arc::default(),
+    };
+    let plan = test_plan(json!({
+        "lanes": [{
+            "id": "tasks",
+            "query": SOUP_QUERY,
+            "variables": { "input": { "initial": { "limit": 1, "expand": false, "emailView": "ALL" } } },
+            "paging": "soup"
+        }]
+    }));
+
+    let frames = run(plan, executor.clone()).await;
+
+    // Both pages the budget paid for are sent, each with its resume point;
+    // the stream then ends as at its deadline, and the lane resumes later.
+    let pages = frames
+        .iter()
+        .filter_map(|frame| match frame {
+            Frame::Page { resume, .. } => Some(resume.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(pages, vec![resume("c1", 1), resume("c2", 2)]);
+    assert_eq!(
+        frames.last(),
+        Some(&Frame::End {
+            reason: EndReason::Deadline
+        })
+    );
+    assert_eq!(executor.charged.lock().unwrap().len(), 2);
+    assert_eq!(executor.inner.calls().len(), 2);
+}

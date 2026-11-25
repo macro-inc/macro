@@ -1145,6 +1145,8 @@ pub(crate) struct ApiContext {
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
     pub call_public_rate_limiter: DssWebhookRateLimiter,
+    /// Redis counters behind each user's streamed sync budget.
+    pub sync_stream_budget: rate_limit::RedisRateLimitAdapter<redis::Client>,
     pub webhook_state: DssWebhookState,
     pub sse_stream_state: DssSseStreamState,
     pub call_internal_state: DssCallInternalState,
