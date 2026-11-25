@@ -102,11 +102,10 @@ describe('connect-app chip', () => {
         />
       </AppConnectionContext.Provider>
     ));
-    expect(
-      screen
-        .getByRole('button', { name: 'Connect Linear' })
-        .hasAttribute('disabled')
-    ).toBe(true);
+    const chip = screen.getByRole('button', { name: 'Connect Linear' });
+    expect(chip.hasAttribute('disabled')).toBe(true);
+    // A dead chip that looks live reads as a broken button.
+    expect(chip.className).toContain('disabled:opacity-50');
     expect(connect).not.toHaveBeenCalled();
   });
 
