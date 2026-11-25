@@ -35,6 +35,8 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
   let keepRunning = false;
   /** Cues waiting to start plus tones still sounding. */
   let busy = 0;
+  /** Suspends not yet settled; the context may still report "running". */
+  let suspending = 0;
 
   function audioContext(): AudioContext | undefined {
     if (disposed) return undefined;
@@ -119,12 +121,21 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
    * cue sounds or while its owner keeps it ready for the next one.
    */
   function release() {
-    if (keepRunning || busy > 0 || !context || context.state === 'closed') {
-      return;
-    }
+    if (disposed || keepRunning || busy > 0 || !context) return;
+    if (context.state === 'closed') return;
     // Suspending a suspended context is a no-op, and an unlock still settling
     // resumes first, so this always ends suspended.
-    fireAndForget(context.suspend(), 'audio-suspend');
+    fireAndForget(suspend(context), 'audio-suspend');
+  }
+
+  /** WebKit reports "running" until a suspend settles, so track it here. */
+  async function suspend(current: AudioContext): Promise<void> {
+    suspending += 1;
+    try {
+      await current.suspend();
+    } finally {
+      suspending -= 1;
+    }
   }
 
   /** Keep the context running between cues, or suspend it once it is idle. */
@@ -145,7 +156,11 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
     // Start both gated APIs before awaiting either: syncOutput starts the
     // chosen speaker's element synchronously. "interrupted" also needs resume
     // on Safari after the OS temporarily takes the audio device.
-    const resume = current.state === 'running' ? undefined : current.resume();
+    // A suspend still settling would win over a skipped resume.
+    const resume =
+      current.state === 'running' && suspending === 0
+        ? undefined
+        : current.resume();
     await Promise.all([resume, syncOutput()]);
   }
 

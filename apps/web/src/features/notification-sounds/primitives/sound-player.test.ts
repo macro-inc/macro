@@ -198,3 +198,40 @@ it('starts the speaker a call chooses after audio was unlocked', async () => {
   expect(play).toHaveBeenCalledTimes(1);
   expect(setSinkId).toHaveBeenCalledWith('speaker-1');
 });
+
+/** WebKit changes `state` only when a suspend or resume settles, in order. */
+class QueuedStateAudioContext extends FakeAudioContext {
+  private queue = Promise.resolve();
+
+  override resume() {
+    this.queue = this.queue.then(() => {
+      this.state = 'running';
+    });
+    return this.queue;
+  }
+
+  override suspend() {
+    this.queue = this.queue.then(() => {
+      this.state = 'suspended';
+    });
+    return this.queue;
+  }
+}
+
+it('resumes for a cue that arrives while a suspend is still settling', async () => {
+  vi.stubGlobal('AudioContext', QueuedStateAudioContext);
+  const player = createSoundPlayer();
+  await player.play('chime', 1);
+  const [context] = contexts;
+  const resume = vi.spyOn(context as FakeAudioContext, 'resume');
+
+  // The last tone ends and a suspend starts; the next cue lands before it
+  // settles, while the context still reports "running".
+  endTones();
+  expect(context?.state).toBe('running');
+  await player.play('chime', 1);
+
+  expect(resume).toHaveBeenCalled();
+  expect(context?.state).toBe('running');
+  expect(oscillators.length).toBeGreaterThan(0);
+});

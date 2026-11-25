@@ -1,6 +1,12 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { type Accessor, createEffect, createSignal, on } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import type { SoundPlayer } from './sound-player';
 
 const isPageVisible = () => document.visibilityState !== 'hidden';
@@ -23,6 +29,8 @@ export function createSoundUnlock(
   makeEventListener(window, 'pageshow', syncVisible);
 
   createEffect(() => player.setKeepRunning(wanted() && visible()));
+  // The notification player outlives this owner; leave it free to suspend.
+  onCleanup(() => player.setKeepRunning(false));
 
   const unlock = () => fireAndForget(player.unlock(), 'audio-unlock');
 
