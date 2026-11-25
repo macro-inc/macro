@@ -175,8 +175,8 @@ response, whether that binding resolved or not.
 Settling a create moves the shadows of the writes queued after it to the key
 the server gave the record while their sources keep the local key, so a tier
 follows the alias settlement stored from one to the other, and keeps the
-alias, coalescing UUID and deletion tombstone of each record the queue names,
-as the engine's own snapshot retirement does. The stored schema
+alias, coalescing UUID and deletion tombstone of every record it drops, named
+by a queued write or not, as the engine's own snapshot retirement does. The stored schema
 is the incoming one plus the definitions it removed that kept records may still
 hold, so a later build that adds a field back with another shape drops the old
 values instead of reading them as the new type. A cache stored before schema 13
