@@ -36,6 +36,8 @@ export function createBillingLab(initial: ScenarioId) {
   const [failNext, setFailNext] = createSignal(false);
   const [notice, setNotice] = createSignal('');
   const [limitOpen, setLimitOpen] = createSignal(false);
+  const [cycleDialogPlan, setCycleDialogPlan] =
+    createSignal<PaidPlanTier | null>(null);
   const [payment, setPayment] = createSignal<LabPayment>();
   const [events, setEvents] = createSignal<
     { id: number; at: string; label: string }[]
@@ -62,6 +64,7 @@ export function createBillingLab(initial: ScenarioId) {
     setPending(false);
     setFailNext(false);
     setLimitOpen(false);
+    setCycleDialogPlan(null);
     setPayment(undefined);
     setEvents([]);
     setNotice('');
@@ -243,6 +246,8 @@ export function createBillingLab(initial: ScenarioId) {
     events,
     limitOpen,
     setLimitOpen,
+    cycleDialogPlan,
+    setCycleDialogPlan,
     payment,
     setPayment,
     billing,

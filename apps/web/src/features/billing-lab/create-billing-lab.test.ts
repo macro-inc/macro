@@ -169,4 +169,13 @@ describe('billing lab actions', () => {
     expect(lab.state().usedCents).toBe(0);
     expect(lab.payment()).toBeUndefined();
   });
+
+  it('opens and resets the billing-cycle dialog state when changing scenarios', () => {
+    const lab = createBillingLab('pro');
+    expect(lab.cycleDialogPlan()).toBeNull();
+    lab.setCycleDialogPlan('business');
+    expect(lab.cycleDialogPlan()).toBe('business');
+    lab.selectScenario('free');
+    expect(lab.cycleDialogPlan()).toBeNull();
+  });
 });
