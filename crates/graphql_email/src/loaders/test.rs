@@ -417,6 +417,21 @@ async fn rejects_oversized_batches_without_calling_the_reader() {
 }
 
 #[tokio::test]
+async fn an_operation_over_the_thread_limit_fails_through_the_data_loader() {
+    let reader = RecordingReader::default();
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let loader = email_content_loader(user_id, reader.clone(), EmailContentLimits::PER_OPERATION);
+    let loads = (0..=EmailContentLimits::PER_OPERATION.max_keys)
+        .map(|index| loader.load_one(key(index)))
+        .collect::<Vec<_>>();
+
+    let results = futures::future::join_all(loads).await;
+
+    assert!(results.iter().all(Result::is_err));
+    assert_eq!(reader.calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn rejects_excessive_requested_messages_without_calling_the_reader() {
     let reader = RecordingReader::default();
     let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();

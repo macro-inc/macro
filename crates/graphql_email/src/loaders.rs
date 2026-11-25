@@ -922,8 +922,9 @@ where
     }
 }
 
-/// Build an email-content DataLoader scoped to the requesting user, capped at
-/// `limits` per batch.
+/// Build an email-content DataLoader scoped to the requesting user. A batch
+/// over `limits` fails whole: the loader takes no `max_batch_size`, which
+/// would split an oversized operation into batches that each pass.
 pub fn email_content_loader<R>(
     user_id: MacroUserIdStr<'static>,
     reader: R,
@@ -936,7 +937,6 @@ where
         EmailContentLoader::new(user_id, reader, limits),
         spawn_in_current_span,
     )
-    .max_batch_size(limits.max_keys)
 }
 
 #[cfg(test)]
