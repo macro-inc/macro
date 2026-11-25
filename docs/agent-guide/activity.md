@@ -36,6 +36,11 @@ that an initial visit resolves entity names in both the feed and Most active,
 then reload and scroll through another page. Preview loading and live name
 updates should keep the page responsive without repeatedly fetching previews.
 
+Company pages show the same Activity section in their side panel. A company
+merge leaves one entry there on the company that stays ("merged Old Co into
+this"), with the team-visible values it dropped listed under it; each merge
+keeps its own line. Companies are not in the Activity screen's feeds.
+
 Activity refreshes live after recorded actions. With two pages loaded, make an
 action in another tab and verify the feed retains its page-boundary rows while
 the action count and heatmap update. An open entity activity panel should also

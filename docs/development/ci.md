@@ -61,11 +61,12 @@ for it too, with the nightly run in place of the sweep; its report names the
 failed scenarios, and the run's log has each one's error.
 
 The CAPTCHA vision lab's browser tests (`captcha_vision_lab.yml`) are not in
-`PR CI` either, because they stall at random on the runners. They run nightly
-at 06:00 UTC, on pushes to `main` that change `packages/captcha-vision-lab`,
-and by hand (`gh workflow run captcha_vision_lab.yml --ref <branch>`), and post
-no alert: a failure is a red run. Their workflow's module says what they need
-to gate again.
+`PR CI` either, because they stalled at random on the runners while Bun drove
+Chromium. They run nightly at 06:00 UTC, on pushes to `main` that change
+`packages/captcha-vision-lab`, and by hand
+(`gh workflow run captcha_vision_lab.yml --ref <branch>`), and post no alert: a
+failure is a red run. Their workflow's module says what they need to gate
+again.
 
 ### When an email end-to-end alert fires
 

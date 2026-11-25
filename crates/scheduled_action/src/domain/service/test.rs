@@ -2233,3 +2233,35 @@ async fn only_a_person_makes_a_routine_write_as_them() {
         ActionPolicyError::OwnerIdentityNeedsPerson,
     );
 }
+
+#[tokio::test]
+async fn email_label_triggers_need_their_own_rollout() {
+    let enabled = service(true);
+    let mut config = configuration(true);
+    config.trigger = serde_json::from_value(json!({
+        "type": "events",
+        "filters": [{ "events": ["email.labeled"], "labels": [Uuid::now_v7()] }],
+    }))
+    .unwrap();
+    let labels_off = ScheduledActionServiceImpl::new(
+        enabled.repo.clone(),
+        enabled.executor.clone(),
+        enabled.dispatcher_tx.clone(),
+        grants(&enabled.repo),
+    )
+    .with_event_routines(crate::domain::event_runs::test_support::EmailLabelsOff);
+    assert_policy(
+        labels_off
+            .create_action(&user_principal(), config.clone())
+            .await,
+        ActionPolicyError::EmailLabelsDisabled,
+    );
+    labels_off
+        .create_action(&user_principal(), configuration(true))
+        .await
+        .unwrap();
+    enabled
+        .create_action(&user_principal(), config)
+        .await
+        .unwrap();
+}

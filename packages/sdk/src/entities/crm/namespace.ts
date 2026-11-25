@@ -10,6 +10,7 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { CrmEmailPrivacyNamespace } from '../crm-email-privacy/email-privacy';
+import { CrmMergeNamespace } from '../crm-merges/merges';
 import type { Document } from '../documents/document';
 import type { SearchOpts } from '../search/options';
 import { Team } from '../teams/team';
@@ -41,12 +42,16 @@ export class CrmNamespace {
   /** Your email contribution. */
   readonly emailPrivacy: CrmEmailPrivacyNamespace;
 
+  /** Merging duplicate companies into one. */
+  readonly merges: CrmMergeNamespace;
+
   /** Pipelines, their records and sharing settings. */
   readonly pipelines: PipelineNamespace;
 
   constructor(private readonly client: MacroClient) {
     this.pipelines = new PipelineNamespace(client);
     this.emailPrivacy = new CrmEmailPrivacyNamespace(client);
+    this.merges = new CrmMergeNamespace(client);
   }
 
   /**

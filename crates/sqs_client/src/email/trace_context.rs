@@ -1,4 +1,5 @@
-//! Optional W3C context for email backfill jobs, including retries and fan-out.
+//! Optional W3C context for email backfill jobs, including retries and fan-out,
+//! and for Gmail inbox sync and operation notifications.
 
 use opentelemetry::trace::TraceContextExt as _;
 use std::collections::HashMap;
@@ -36,7 +37,7 @@ pub fn adopt(span: &tracing::Span, traceparent: Option<&str>) {
     }
 }
 
-pub(super) fn attribute() -> Option<aws_sdk_sqs::types::MessageAttributeValue> {
+pub(crate) fn attribute() -> Option<aws_sdk_sqs::types::MessageAttributeValue> {
     current().and_then(|value| {
         aws_sdk_sqs::types::MessageAttributeValue::builder()
             .data_type("String")

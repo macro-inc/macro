@@ -1,7 +1,16 @@
 import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createOpenTracker } from '@core/internal/open-tracker';
-import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  Match,
+  onCleanup,
+  Show,
+  Suspense,
+  Switch,
+  untrack,
+} from 'solid-js';
 import { CompanyDiscussionSection } from '../company-discussion-section';
 import { CrmAccessFallback } from '../components/access-denied';
 import { CrmListSkeleton } from '../components/list-state';
@@ -41,6 +50,8 @@ type CompanyProps = {
   headerToggle?: boolean;
   onOpenContact?: (contact: CompanyContact) => void;
   onOpenPipeline?: (pipelineId: string) => void;
+  /** Shows the company `companyId` was merged into, under its own id. */
+  onMerged?: (survivorId: string) => void;
 };
 
 export function Company(props: CompanyProps) {
@@ -80,7 +91,23 @@ function CompanyContent(props: CompanyProps) {
   const listsEnabled = context.listsEnabled();
   const { company, query } = useCompanyQuery(() => props.companyId);
   usePending('crm.record', () => query.isLoading);
-  createOpenTracker('company', () => company()?.id);
+  // Its sections read by the shown id, which a merged company no longer has.
+  createEffect(() => {
+    const current = company();
+    if (current && current.id.toLowerCase() !== props.companyId.toLowerCase())
+      untrack(() => props.onMerged?.(current.id));
+  });
+  // A merged company's open is recorded by the page it moves to.
+  createOpenTracker(
+    'company',
+    () => {
+      const id = company()?.id;
+      return id?.toLowerCase() === props.companyId.toLowerCase()
+        ? id
+        : undefined;
+    },
+    { ownBlock: true }
+  );
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
     (): CrmRecordScope | undefined => {
@@ -169,6 +196,12 @@ function CompanyContent(props: CompanyProps) {
       >
         <CompanySharingSection company={company()} />
       </SidePanel.Section>
+      <Suspense>
+        <context.RecordActivity
+          record={{ type: 'company', id: props.companyId }}
+          order={RECORD_PANEL_ORDER.activity}
+        />
+      </Suspense>
       <SidePanel.Section
         id="company-references"
         title="References"

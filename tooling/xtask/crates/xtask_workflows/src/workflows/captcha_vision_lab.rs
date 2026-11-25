@@ -2,17 +2,16 @@
 //! (`packages/captcha-vision-lab`), browser tests included. Generated into
 //! `captcha_vision_lab.yml`.
 //!
-//! It is not part of `PR CI`, so `CI gate` does not wait for it: its browser
-//! sessions stall at random on the runners, and it failed over half of the
-//! pull request runs it was in, whatever they changed. `Browser Tests` keeps
-//! the lab's checks that start no browser (`web_app_check_main.rs`). This runs
-//! nightly on `main`, on pushes to `main` that change the lab, and on a branch
-//! by hand (`workflow_dispatch`).
+//! It is not part of `PR CI`, so `CI gate` does not wait for it: while Bun drove
+//! Chromium, its browser sessions stalled at random on the runners, and it
+//! failed pull requests whatever they changed. `Browser Tests` keeps the lab's
+//! checks that start no browser (`web_app_check_main.rs`). This runs nightly on
+//! `main`, on pushes to `main` that change the lab, and on a branch by hand
+//! (`workflow_dispatch`).
 //!
-//! The browser tests go back into `Browser Tests` once the lab no longer drives
-//! Chromium from Bun, whose pipe to it is what stalls, and this has passed 20
-//! runs in a row: at that count a suite still failing one run in seven would
-//! show it 19 times in 20.
+//! Node drives Chromium now. The browser tests go back into `Browser Tests`
+//! once they have passed 20 runs in a row that way: at that count a suite still
+//! failing one run in seven would show it 19 times in 20.
 
 use gh_workflow::{
     Event, Job, Level, Permissions, Push, Run, Schedule, Step, Workflow, WorkflowDispatch,

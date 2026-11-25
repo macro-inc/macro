@@ -4,6 +4,19 @@ import {
   type ListView,
 } from '@app/constants/list-views';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
+import {
+  NO_SEARCH_OPERATOR_NAMES,
+  type SearchOperatorLookup,
+  searchOperatorFilters,
+  searchOperatorQuery,
+  searchTagOperator,
+  withSearchOperatorQuery,
+} from '@app/features/next-soup/core/search-operator-filters';
+import {
+  type SearchOperatorBinding,
+  searchBindingsIn,
+  searchQueryParts,
+} from '@app/features/next-soup/core/search-operators';
 import { SEARCH_INDEX_SEEDS } from '@app/features/next-soup/core/search-query';
 import {
   createSoupState,
@@ -154,6 +167,8 @@ type SoupViewInitializeOptions = {
   initialQuery?: Query;
   initialClientFilters?: SetPredicatesInput<string>;
   initialSearchText?: string;
+  /** What the opener's tokens in `initialSearchText` stand for, by id. */
+  initialSearchBindings?: SearchOperatorBinding[];
   /** Explicit navigation state (for example a shared view) wins over storage. */
   preferInitialFilters?: boolean;
   disableLocalSearch?: boolean;
@@ -180,12 +195,24 @@ export interface SoupViewContextValues {
   initialize: (options?: SoupViewInitializeOptions) => void;
   source: DataSource<EntityData>;
   searchText: Accessor<string>;
+  /** Search has nothing to search for yet, such as an operator half typed. */
+  searchAwaitingInput: Accessor<boolean>;
   setSearchText: (value: string) => void;
+  /** What openers' tokens in the Search query stand for, by id. */
+  searchBindings: Accessor<SearchOperatorBinding[]>;
+  setSearchBindings: (bindings: SearchOperatorBinding[]) => void;
   searchPaused: Accessor<boolean>;
   setSearchPaused: Setter<boolean>;
   featuredIds: Accessor<string[]>;
   /** Search's other matching chats, waiting behind one row under its best matches. */
   moreChatCount: Accessor<number>;
+  /**
+   * Gives the view what typed operator names reach; the Search field, the
+   * only place they are typed, provides it while it is mounted.
+   */
+  provideOperatorLookup: (
+    lookup: Accessor<SearchOperatorLookup> | undefined
+  ) => void;
   showMoreChats: () => void;
   items: Accessor<SoupEntity[]>;
   rows: Accessor<SoupRow[]>;
@@ -504,7 +531,26 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   };
 
   const tagFilter = createTagFilter(queryFilters);
-  const filterByTag = (optionId: string) => tagFilter.onChange([optionId]);
+  const filterByTag = (optionId: string) => {
+    if (activeListView() !== 'search') {
+      tagFilter.onChange([optionId]);
+      return;
+    }
+    // The Search view's query holds its filters as typed operators. A tag
+    // outside the person's tag sets can't be filtered by, as elsewhere.
+    const label = tagFilter.optionsById().get(optionId)?.label;
+    const propertyId = tagFilter.defByOption().get(optionId);
+    if (!label || !propertyId) return;
+    const { text, bindings } = searchTagOperator({
+      label,
+      propertyId,
+      optionId,
+    });
+    batch(() => {
+      setSearchBindings([...searchBindings(), ...bindings]);
+      setSearchText([searchText().trim(), text].filter(Boolean).join(' '));
+    });
+  };
 
   const [searchPaused, setSearchPaused] = createSignal(false);
   const sourceSearchPaused = createMemo(
@@ -600,12 +646,14 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
           persistedActiveTabs()[view] ??
           activeTab()
       );
+      // Search holds its filters as typed operators, as initialize keeps it.
+      const restoresFilters = view !== 'search';
       const query =
-        entryState && 'search.filters' in entryState
+        !restoresFilters || (entryState && 'search.filters' in entryState)
           ? undefined
           : persistedQueryFor(view, tabId);
       const predicates =
-        entryState && 'search.predicates' in entryState
+        !restoresFilters || (entryState && 'search.predicates' in entryState)
           ? undefined
           : persistedPredicatesFor(view, tabId);
 
@@ -800,33 +848,107 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     return next;
   };
 
-  const soupBody = createMemo(() =>
-    compileToAst(applyViewFilters(queryFilters.state))
-  );
-  // Server-side filters change the result set without touching the client
-  // predicates or sort, so they release held row positions too.
-  soup.positions.scopeTo(soupBody);
-
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
     default: props.initialSearchText ?? '',
   });
 
+  // The Search view's query holds its filters as typed operators. The search
+  // service reads them beside a word; a query of operators alone, which it
+  // refuses, lists through this view's feed with the filters they set.
+  // An opener's tokens the field can't search by name stand for ids.
+  const [searchBindings, setSearchBindings] = useEntryState<
+    SearchOperatorBinding[]
+  >('search.bindings', { default: [] });
+  // A token edited or removed lets go of its ids for good.
+  createEffect(
+    on(searchText, (text) => {
+      const kept = searchBindingsIn(text, searchBindings());
+      if (kept.length !== searchBindings().length) setSearchBindings(kept);
+    })
+  );
+  const searchParts = createMemo(() =>
+    activeListView() === 'search'
+      ? searchQueryParts(searchText(), searchBindings())
+      : undefined
+  );
+  const [operatorLookup, setOperatorLookup] = createSignal<
+    Accessor<SearchOperatorLookup> | undefined
+  >();
+  const provideOperatorLookup = (
+    lookup: Accessor<SearchOperatorLookup> | undefined
+  ) => setOperatorLookup(() => lookup);
+  const operatorFilters = createMemo(() => {
+    const parts = searchParts();
+    const lookup = operatorLookup();
+    if (!parts || parts.read.operators === 0 || !lookup) return undefined;
+    return searchOperatorFilters(parts.read, lookup());
+  });
+  // The feed can't check channel senders or call speakers, the only senders
+  // `from:` names here, so a sender alone waits for a word rather than
+  // listing every channel.
+  const listsOperators = () =>
+    searchParts()?.serviceText === '' &&
+    operatorFilters() !== undefined &&
+    !searchParts()?.read.groups.some((group) => group.name === 'from');
+  // Bound tokens are left out of the service's text and go with the request
+  // as filters by id, which it joins with the operators it reads.
+  const boundFilters = createMemo(() => {
+    const parts = searchParts();
+    if (!parts || parts.bound.groups.length === 0) return undefined;
+    // Bound values are ids; only names typed beside them need the lookup.
+    const lookup = operatorLookup();
+    return searchOperatorFilters(
+      parts.bound,
+      lookup ? lookup() : NO_SEARCH_OPERATOR_NAMES
+    );
+  });
+
+  const soupBody = createMemo(() => {
+    const operators = listsOperators() ? operatorFilters() : undefined;
+    const state = operators
+      ? withSearchOperatorQuery(
+          queryFilters.state,
+          searchOperatorQuery(operators)
+        )
+      : queryFilters.state;
+    return compileToAst(applyViewFilters(state));
+  });
+  // Server-side filters change the result set without touching the client
+  // predicates or sort, so they release held row positions too.
+  soup.positions.scopeTo(soupBody);
+
   const search = createSearchState({
     surface: () => activeListView() ?? 'soup',
     soup,
-    filters: () => applyViewFilters(queryFilters.state),
+    filters: () => {
+      const bound = boundFilters();
+      return applyViewFilters(
+        bound
+          ? withSearchOperatorQuery(
+              queryFilters.state,
+              searchOperatorQuery(bound)
+            )
+          : queryFilters.state
+      );
+    },
     assignees: assigneeFilter,
     disableLocalSearch: () => config().disableLocalSearch ?? false,
     searchPaused: sourceSearchPaused,
     searchText,
     setSearchText,
+    serviceText: () => searchParts()?.serviceText ?? searchText(),
+    nameText: () => searchParts()?.nameText ?? searchText(),
+    operatorIndexes: () => operatorFilters()?.indexes,
   });
 
   // Search lists nothing until there is something to search for.
   const searchAwaitingInput = () =>
     activeListView() === 'search' &&
     searchAwaitsInput({
-      text: searchText(),
+      // Half-typed operators alone search for nothing yet.
+      text: listsOperators()
+        ? searchText()
+        : (searchParts()?.serviceText ?? searchText()),
       state: queryFilters.state,
       activeFilterIds: soup.predicates.activeIds(),
       assigneeCount: assigneeFilter().length,
@@ -874,9 +996,18 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
           },
           preferInitialFilters: options.preferInitialFilters,
         });
-        queryFilters.replace(filters.query ?? null);
-        soup.predicates.set(filters.predicates ?? {});
+        // Search holds its filters as typed operators, so only its preset
+        // applies: filters an older entry or session picked would be hidden
+        // from its field.
+        const preset = view === 'search' ? getViewPreset('search') : undefined;
+        queryFilters.replace(
+          preset ? (preset.filters ?? null) : (filters.query ?? null)
+        );
+        soup.predicates.set(
+          preset ? (preset.clientFilters ?? {}) : (filters.predicates ?? {})
+        );
         setSearchText(options.initialSearchText ?? '');
+        setSearchBindings(options.initialSearchBindings ?? []);
         setEnabled(true);
       });
     } finally {
@@ -1128,9 +1259,24 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
         ? admittedByStatusFilter().ids
         : new Set<string>();
 
+    const operators = operatorFilters();
+    if (operators?.matchesNothing) return [];
+    const operatorPredicates = (operators?.indexes ?? []).flatMap((id) =>
+      soup.predicates.available.filter((candidate) => candidate.id === id)
+    );
+
     const next = [];
     for (const entity of transformed) {
       if (!soup.predicates.test(entity, ctx)) {
+        continue;
+      }
+      // The types `type:` and the other operators leave are alternatives.
+      if (
+        operatorPredicates.length > 0 &&
+        !operatorPredicates.some((candidate) =>
+          candidate.predicate(entity, ctx)
+        )
+      ) {
         continue;
       }
       if (!entityMatchesReadFilter(entity, statusFilter, homeView, admitted)) {
@@ -1178,7 +1324,8 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     );
     const fold =
       chatsShownFor() !== search.localSearchText() &&
-      !soup.predicates.orIds().some((id) => id in SEARCH_INDEX_SEEDS);
+      !soup.predicates.orIds().some((id) => id in SEARCH_INDEX_SEEDS) &&
+      operatorFilters()?.indexes?.length !== 1;
     if (!fold)
       return {
         ...featureSearchResults(
@@ -1643,11 +1790,15 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     items,
     rows: soup.rows,
     searchText: search.searchText,
+    searchAwaitingInput,
     setSearchText: search.setSearchText,
+    searchBindings,
+    setSearchBindings,
     searchPaused: sourceSearchPaused,
     setSearchPaused,
     featuredIds,
     moreChatCount,
+    provideOperatorLookup,
     showMoreChats,
     isSearchServiceLoading: search.isSearchServiceLoading,
     isLocalSearchSettling: search.isLocalSearchSettling,

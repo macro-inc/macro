@@ -2,23 +2,37 @@
 
 ## Search
 
-Sidebar `Search` button → `/app/search` with a focused query box. Until you type
-or add a filter, desktop Search lists nothing and shows its empty state, which
-points to `⌘K` (Ctrl+K elsewhere) for the command menu. Results
-(led by a `Best Matches` group) filter live as you type; no Enter needed. `Ctrl+K` is
-usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
+Sidebar `Search` button → `/app/search` with a focused query box. Until you type,
+desktop Search lists nothing and shows its empty state, which points to `⌘K`
+(Ctrl+K elsewhere) for the command menu. Results (led by a `Best Matches` group)
+filter live as you type; no Enter needed. `Ctrl+K` is usually faster for
+jump-to-entity; `/` opens workspace search when no editor is focused.
+
+The field holds the whole search: there is no filter row. Filters are typed as
+operators, the search service's (`type:task`, `status:in_progress`,
+`priority:high`, `assignee:me`, `author:`, `tag:`, `inbox:`, `in:#channel`,
+`from:` beside `type:channel` or `type:call`) and Mail's (`subject:`,
+`is:unread`, `in:inbox`); `OR` between two of the same operator joins them. The
+field draws every whole operator in the accent colour and offers operator
+names, then their values (types, statuses, priorities, `me` and people, the
+person's tags, inboxes and channels), under it as they are typed: arrow keys
+move, Tab or Enter writes the row, Escape hides them. With words beside them the
+service reads the operators; operators alone (`assignee:me`) list through the
+view's feed with the filters they set. Opening Search on a tag writes `tag:`, a
+Command K category writes `type:`, the universal input writes its extracted
+filters as operators, and clicking a tag on a Search result adds `tag:`.
 
 `Best Matches` are the three best name matches, listed before the search service
 answers: one-to-one DMs whose person matches first, then by how well the name
 matches (whole name, first word, start of a word, inside a word), with group
 chats after other kinds. The other matching chats fold behind an `N more chats`
 row under them, which lists them in place (Enter or a click) until the text
-changes; other name matches start `More Results`. A Search narrowed to one Type
-lists every match without folding. They obey the Type filter and tags like the
-rows below them, and featured documents and tasks show the same properties.
-They are not listed while the search is scoped to a channel, a sender, or a
-task facet (status, priority, assignee, created by), which name matches cannot
-be checked against. Other list views (Home, Chat, Drive) still feature every
+changes; other name matches start `More Results`. A search narrowed to one type
+by `type:` lists every match without folding. They match the query's words
+only and follow `type:`; they are not listed while another operator narrows the
+search (a status, a tag, a channel, a sender), which name matches cannot be
+checked against. Featured documents and tasks show the same properties as the
+rows below them. Other list views (Home, Chat, Drive) still feature every
 name match under `Featured Results`.
 
 Routines are found by name in a typed `Ctrl+K` **All** query, in touch Search's
@@ -27,24 +41,33 @@ come from the routines list (Quick Access `routine` bucket), not the search
 service, and open the routine in the Agents workspace. They stay out of the
 empty recency list and out of Home, Drive and Tasks searches.
 
-Desktop filter chips use one compact control size for values, match mode, and
-clear actions. Labels and controls stay vertically centered inside a frame that
-grows to fit them, rather than clipping taller segments.
+The universal input's search filter chips use one compact control size for
+values, match mode, and clear actions. Labels and controls stay vertically
+centered inside a frame that grows to fit them, rather than clipping taller
+segments.
 
 On touch devices, the dock's **Search** button opens a persistent **Search…**
-input in `/app/search`. It starts in **All** with Command Menu-style Quick Access
-name search. Categories are **All, Email, Agents, Files, Tasks, Projects, Channels,
-People** in a horizontal pill row at the top, below the status-bar safe area;
-the query input stays in the bottom dock. Each filter row reads and updates its
-own Search history entry, including while another entry is in front. Projects respects its feature flag.
-Categories filter entities directly,
-independently of view tabs, mailbox selections, and saved facets. Commands and
-creation shortcuts are excluded. Empty queries show recent entities.
-Typed **All** and **People** name searches also find known teammates before their
-first DM, with or without CRM. Existing one-to-one DMs replace person rows while
+input in `/app/search`. It starts with Command Menu-style Quick Access name
+search across every kind. The field is the whole search, as on desktop: it
+draws typed operators and reads them by the same rules. Starters **From, Type,
+Tag, Date, Unread** sit in a horizontal pill row at the top, below the
+status-bar safe area; the query input stays in the bottom dock. A starter writes
+its operator at the end of the field (`from:`, `type:`, `tag:`, `newer_than:`)
+and lists its suggestions in place of the results; Date offers spans and a
+picked date, and Unread toggles `is:unread`. Once the text sets an operator, its
+pill shows the value (You, Tasks, a tag, Last 7 days) and tapping it again edits
+it. Each starter row reads and updates its own Search history entry, including
+while another entry is in front. Name results follow `type:` alone; any other
+operator, Mail's among them, lists full text, which sends operators beside a
+word to the search service and lists operators alone through the feed. Typed
+operators don't count toward the length that turns a search into a composer
+draft. Commands and creation shortcuts are excluded. Empty queries show recent
+entities.
+Typed name searches also find known teammates and projects before their first
+DM, with or without CRM. Existing one-to-one DMs replace person rows while
 preserving name/email matches; selecting a person opens their DM, which the
-first message creates when there isn't one yet. Verify both
-categories with a teammate who has no conversation or CRM record.
+first message creates when there isn't one yet. Verify it with a teammate who
+has no conversation or CRM record.
 Conversation search here, in Command K, and in the Chat sidebar matches participants
 in any order, separated by spaces or commas, with name prefixes allowed. Naming
 exactly its participants ranks a conversation after exact names, above a larger
@@ -150,8 +173,7 @@ The task Assignee facet reuses selected-first ordering when opening the picker,
 with you, Unassigned and team members before available agents, and the
 **Search assignees...** placeholder.
 Rows stay in place while selecting or deselecting. Existing selected outsiders
-remain removable, but contact discovery is not available. Desktop chips and the
-mobile filter drawer share this behavior.
+remain removable, but contact discovery is not available.
 Created by, channel senders, and call speakers retain their existing people pools.
 The shared global-search filters and results update live above the bar. Open a
 filtered result directly; there is no separate Search submit action.

@@ -1,5 +1,7 @@
 import { UNKNOWN_CACHE_GENERATION } from '@graphql-cache/generation-mirror';
+import { CacheUnavailableError } from '@graphql-cache/host/worker-host';
 import {
+  type CacheHost,
   type CalendarRangeCacheArgs,
   validateRecordSelectionKeys,
 } from '@graphql-cache/index';
@@ -32,6 +34,7 @@ import { attendee, graphqlEvent, graphqlOccurrence } from './fixtures';
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: vi.fn(),
+  getGraphqlSoupCacheHost: vi.fn(),
 }));
 
 const DISPOSITION = 'normalizedCacheMutationDisposition';
@@ -1385,6 +1388,332 @@ describe('executeGraphqlCreate', () => {
     expect(isCalendarEventCreating(clientId)).toBe(false);
     expect(createdCalendarEventId(clientId)).toBe('server-4');
     untrack();
+  });
+
+  describe('a create that settles while the cache is paused', () => {
+    const PAUSED = new CacheUnavailableError(
+      'the cache lock is held',
+      false,
+      'owner-lock-timeout',
+      'operation'
+    );
+
+    function trackedHost(
+      readRecordsByKeys: CacheHost['readRecordsByKeys'] = () =>
+        Promise.reject(PAUSED)
+    ) {
+      const host = {
+        settle: (_settlement: MutationSettlement) => {},
+        ownerReady: () => {},
+        readRecordsByKeys: vi.fn(readRecordsByKeys),
+      };
+      const untrack = trackCalendarCreateSettlements({
+        onMutationSettled: (callback) => {
+          host.settle = callback;
+          return () => {};
+        },
+        onOwnerReady: (callback) => {
+          host.ownerReady = callback;
+          return () => {
+            host.ownerReady = () => {};
+          };
+        },
+        readRecordsByKeys: (args) => host.readRecordsByKeys(args),
+      });
+      return { host, untrack };
+    }
+
+    const landedAs =
+      (
+        serverId: string,
+        mutationUuid: string
+      ): CacheHost['readRecordsByKeys'] =>
+      async () => ({
+        revision: '1' as never,
+        records: [
+          {
+            recordKey: `GraphqlCalendarEvent:${serverId}`,
+            record: { id: serverId },
+            identity: { pending: false, mutationUuid },
+          },
+        ],
+      });
+
+    async function settledWhilePaused(
+      settle: (settlement: MutationSettlement) => void
+    ): Promise<string> {
+      const { event } = await executeGraphqlCreate(
+        {
+          title: 'Offsite',
+          time: {
+            kind: 'allDay',
+            startDate: '2026-11-28',
+            endDate: '2026-11-29',
+          },
+        },
+        fakeClient('queued').client
+      );
+      if (!event) throw new Error('queued create did not return an event');
+      settle({
+        mutationUuid: event.id,
+        transactionId: 'tx-1',
+        status: 'committed',
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return event.id;
+    }
+
+    it('lands once the cache serves again', async () => {
+      const { host, untrack } = trackedHost();
+      const localId = await settledWhilePaused(host.settle);
+      expect(isCalendarEventCreating(localId)).toBe(true);
+
+      host.readRecordsByKeys.mockImplementation(landedAs('server-9', localId));
+      host.ownerReady();
+      await vi.waitFor(() =>
+        expect(createdCalendarEventId(localId)).toBe('server-9')
+      );
+      expect(isCalendarEventCreating(localId)).toBe(false);
+      untrack();
+    });
+
+    it('lands from the host that replaces the paused one', async () => {
+      const { host, untrack } = trackedHost();
+      const localId = await settledWhilePaused(host.settle);
+      untrack();
+
+      const next = trackedHost(landedAs('server-10', localId));
+      await vi.waitFor(() =>
+        expect(createdCalendarEventId(localId)).toBe('server-10')
+      );
+      next.untrack();
+    });
+
+    it('lands from the host that replaces one that fails while it is asked', async () => {
+      const { host, untrack } = trackedHost();
+      const localId = await settledWhilePaused(host.settle);
+      let fail: (error: Error) => void = () => {};
+      host.readRecordsByKeys.mockImplementation(
+        () =>
+          new Promise((_, reject) => {
+            fail = reject;
+          })
+      );
+      host.ownerReady();
+      untrack();
+      const next = trackedHost(landedAs('server-12', localId));
+      fail(new Error('cache coordinator transport failed'));
+
+      await vi.waitFor(() =>
+        expect(createdCalendarEventId(localId)).toBe('server-12')
+      );
+      next.untrack();
+    });
+
+    it('is not landed by a host that is no longer tracked', async () => {
+      const { host, untrack } = trackedHost();
+      const localId = await settledWhilePaused(host.settle);
+      host.readRecordsByKeys.mockImplementation(landedAs('server-13', localId));
+      host.ownerReady();
+      untrack();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(createdCalendarEventId(localId)).toBeUndefined();
+      trackedHost(landedAs('server-13', localId)).untrack();
+    });
+
+    it('is asked for again by an edit it refuses', async () => {
+      const { host, untrack } = trackedHost();
+      const localId = await settledWhilePaused(host.settle);
+      host.readRecordsByKeys.mockImplementation(landedAs('server-17', localId));
+      const edit = () =>
+        executeGraphqlUpdate(
+          fakeHost(graphqlEvent(), []),
+          { eventId: localId, patch: { title: 'Later' } },
+          fakeClient('queued').client
+        );
+
+      await expect(edit()).rejects.toThrow('still being created');
+      await vi.waitFor(() =>
+        expect(createdCalendarEventId(localId)).toBe('server-17')
+      );
+      untrack();
+    });
+
+    it('is told of once when two reads find it', async () => {
+      const { host, untrack } = trackedHost();
+      const localId = await settledWhilePaused(host.settle);
+      const landed = vi.fn();
+      const stop = onCalendarEventCreated(landed);
+      host.readRecordsByKeys.mockImplementation(landedAs('server-14', localId));
+      host.ownerReady();
+      host.ownerReady();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(landed).toHaveBeenCalledExactlyOnceWith(localId, 'server-14');
+      stop();
+      untrack();
+    });
+
+    it.each([
+      { asked: 'cannot answer', current: true },
+      { asked: 'is gone', current: false },
+    ])(
+      'stays pending when its own answer came without content and the cache $asked',
+      async ({ current }) => {
+        const { host, untrack } = trackedHost();
+        const { calls, client } = fakeClient('committed');
+        const retired = {
+          ...client,
+          mutation: (...args: Parameters<Client['mutation']>) => {
+            const source = client.mutation(...args);
+            return {
+              toPromise: async () => ({
+                ...(await source.toPromise()),
+                data: undefined,
+              }),
+            };
+          },
+        } as unknown as Client;
+
+        const created = await executeGraphqlCreate(
+          {
+            title: 'Offsite',
+            time: {
+              kind: 'allDay',
+              startDate: '2026-11-28',
+              endDate: '2026-11-29',
+            },
+          },
+          retired,
+          current ? host : undefined
+        );
+        expect(created).toEqual({ outcome: { kind: 'committed' } });
+        const localId = calls[0]?.optimistic.uuid ?? '';
+        expect(isCalendarEventCreating(localId)).toBe(true);
+        await expect(
+          executeGraphqlUpdate(
+            fakeHost(undefined, []),
+            { eventId: localId, patch: { title: 'Renamed' } },
+            client
+          )
+        ).rejects.toMatchObject({ code: 'not_found' });
+
+        host.readRecordsByKeys.mockImplementation(
+          landedAs('server-15', localId)
+        );
+        host.ownerReady();
+        await vi.waitFor(() =>
+          expect(createdCalendarEventId(localId)).toBe('server-15')
+        );
+        expect(isCalendarEventCreating(localId)).toBe(false);
+        untrack();
+      }
+    );
+
+    /** A client whose answer waits for `answer`. */
+    function heldClient({ client }: ReturnType<typeof fakeClient>) {
+      let answer = () => {};
+      const answered = new Promise<void>((resolve) => {
+        answer = resolve;
+      });
+      const held = {
+        ...client,
+        mutation: (...args: Parameters<Client['mutation']>) => {
+          const source = client.mutation(...args);
+          return {
+            toPromise: async () => {
+              await answered;
+              return source.toPromise();
+            },
+          };
+        },
+      } as unknown as Client;
+      return { client: held, answer: () => answer() };
+    }
+
+    it('is forgotten when its own call fails after it', async () => {
+      const { host, untrack } = trackedHost();
+      const fake = fakeClient('failed');
+      const held = heldClient(fake);
+      const created = executeGraphqlCreate(
+        {
+          title: 'Offsite',
+          time: {
+            kind: 'allDay',
+            startDate: '2026-11-28',
+            endDate: '2026-11-29',
+          },
+        },
+        held.client
+      );
+      await vi.waitFor(() => expect(fake.calls).toHaveLength(1));
+      host.settle({
+        mutationUuid: fake.calls[0]?.optimistic.uuid ?? '',
+        transactionId: 'tx-1',
+        status: 'committed',
+      });
+      held.answer();
+      await expect(created).rejects.toBeInstanceOf(CalendarMutationError);
+
+      host.readRecordsByKeys.mockClear();
+      host.ownerReady();
+      expect(host.readRecordsByKeys).not.toHaveBeenCalled();
+      untrack();
+    });
+
+    it('lands once its own call turns out to be queued', async () => {
+      const { host, untrack } = trackedHost(async () => ({
+        revision: '1' as never,
+        records: [],
+      }));
+      const fake = fakeClient('queued');
+      const held = heldClient(fake);
+      const created = executeGraphqlCreate(
+        {
+          title: 'Offsite',
+          time: {
+            kind: 'allDay',
+            startDate: '2026-11-28',
+            endDate: '2026-11-29',
+          },
+        },
+        held.client
+      );
+      await vi.waitFor(() => expect(fake.calls).toHaveLength(1));
+      const localId = fake.calls[0]?.optimistic.uuid ?? '';
+      host.settle({
+        mutationUuid: localId,
+        transactionId: 'tx-1',
+        status: 'committed',
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(isCalendarEventCreating(localId)).toBe(true);
+
+      host.readRecordsByKeys.mockImplementation(landedAs('server-16', localId));
+      held.answer();
+      await created;
+      await vi.waitFor(() =>
+        expect(createdCalendarEventId(localId)).toBe('server-16')
+      );
+      expect(isCalendarEventCreating(localId)).toBe(false);
+      untrack();
+    });
+
+    it('is asked for once', async () => {
+      const { host, untrack } = trackedHost();
+      const localId = await settledWhilePaused(host.settle);
+      host.readRecordsByKeys.mockImplementation(landedAs('server-11', localId));
+      host.ownerReady();
+      await vi.waitFor(() =>
+        expect(createdCalendarEventId(localId)).toBe('server-11')
+      );
+      host.readRecordsByKeys.mockClear();
+
+      host.ownerReady();
+      expect(host.readRecordsByKeys).not.toHaveBeenCalled();
+      untrack();
+    });
   });
 
   it('sends a write addressed to a created event’s local id to the id it landed under', async () => {

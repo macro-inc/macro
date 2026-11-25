@@ -229,16 +229,25 @@ where
         .await?)
     }
 
-    /// The records the ids name now, in order: a merged company's old id names
-    /// the company it was merged into. Grants nothing.
+    /// The records the ids name now, in order: a merged company's or
+    /// contact's old id names the record it was merged into. Grants nothing.
     async fn current_records(&self, records: &[Uuid]) -> Result<Vec<Uuid>, WorkflowError> {
         if records.is_empty() {
             return Ok(Vec::new());
         }
-        let merged = self.access.merged_crm_company_ids(records).await?;
+        let (companies, contacts) = futures::try_join!(
+            self.access.merged_crm_company_ids(records),
+            self.access.merged_crm_contact_ids(records),
+        )?;
         Ok(records
             .iter()
-            .map(|id| merged.get(id).copied().unwrap_or(*id))
+            .map(|id| {
+                companies
+                    .get(id)
+                    .or_else(|| contacts.get(id))
+                    .copied()
+                    .unwrap_or(*id)
+            })
             .collect())
     }
 

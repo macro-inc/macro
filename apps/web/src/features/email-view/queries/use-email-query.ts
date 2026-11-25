@@ -24,6 +24,10 @@ import {
   type WithNotification,
 } from '@entity';
 import {
+  useEmailInboxLabels,
+  useEmailLabelsFetched,
+} from '@queries/email/label-names';
+import {
   createLocalDraftSource,
   localDraftEntities,
 } from '@queries/email/local-draft-source';
@@ -257,9 +261,14 @@ export function useEmailDataSource(
     if (searchesFocus()) return focus.threadIds();
     return [];
   };
+  const labelsFetched = useEmailLabelsFetched();
+  // A search sends ticked labels by name, so it waits for the label list.
+  const searchLabelsReady = () =>
+    labelsFetched() || (state.facets.labels ?? []).length === 0;
   const searchScopeReady = () => scopeThreadIds() !== undefined;
+  const searchReady = () => searchScopeReady() && searchLabelsReady();
   const filtersReady = () =>
-    tagsReady() && (!state.search.trim() || searchScopeReady());
+    tagsReady() && (!state.search.trim() || searchReady());
   const enabled = () => (options.enabled?.() ?? true) && tagsReady();
   const listEnabled = () =>
     enabled() &&
@@ -278,10 +287,15 @@ export function useEmailDataSource(
         ? 'all'
         : (emailSearchScopeTab(state.searchScope) ?? 'all'),
   });
+  const inboxLabels = useEmailInboxLabels();
+  const labelNames = createMemo(
+    () => new Map(inboxLabels().map((label) => [label.id, label.storedName]))
+  );
   const searchContext = (): EmailSearchContext => ({
     ...searchQueryContext(),
     scope: state.searchScope,
     scopeThreadIds: scopeThreadIds(),
+    labelNames: labelNames(),
   });
   const query = useSoupAstItemsQuery(queryArgs, () => ({
     enabled: listEnabled(),
@@ -322,7 +336,7 @@ export function useEmailDataSource(
   const search = createSearchState({
     surface: () => 'email',
     text: () => (canSearchEmailTab(state.tab) ? state.search : ''),
-    enabled: () => enabled() && searchScopeReady(),
+    enabled: () => enabled() && searchReady(),
     disableLocalSearch: () => true,
     buildRequest: (request) =>
       buildEmailSearchRequest(searchContext(), request),
@@ -402,7 +416,7 @@ export function useEmailDataSource(
   const matchesOtherFacets = (email: EmailEntity) =>
     testFacets(
       search.isSearching() && search.usesServiceSearch()
-        ? facetsLeftToClient(state.facets)
+        ? facetsLeftToClient(state.facets, labelNames())
         : { ...state.facets, read: [] },
       EMAIL_FACETS,
       email,
