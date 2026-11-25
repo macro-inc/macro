@@ -1,6 +1,7 @@
 import {
   createFileDownload,
   type DownloadSource,
+  startFileDownload,
 } from '@core/util/createFileDownload';
 import { err, ok } from 'neverthrow';
 import { createRoot, createSignal } from 'solid-js';
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   ios: vi.fn(),
   hasIos: vi.fn(),
   custom: vi.fn(),
+  dismiss: vi.fn(),
   success: vi.fn(),
   failure: vi.fn(),
 }));
@@ -36,6 +38,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
     success: mocks.success,
     failure: mocks.failure,
     custom: mocks.custom,
+    dismiss: mocks.dismiss,
   },
 }));
 
@@ -248,6 +251,33 @@ describe('file download lifecycle', () => {
     expect(load).toHaveBeenCalledTimes(1);
     expect(mocks.ios).not.toHaveBeenCalled();
     expect(mocks.success).not.toHaveBeenCalled();
+  });
+
+  it('lets a one-off download save from its ready notice after activation expired', async () => {
+    mocks.platform = 'ios';
+    mocks.hasIos.mockResolvedValue(false);
+    const share = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', {
+      canShare: () => true,
+      share,
+      userActivation: { isActive: false },
+    });
+    mocks.custom.mockReturnValue(7);
+    const load = vi.fn(async () => ok({ blob: new Blob(['report']) }));
+
+    await startFileDownload({ id: 'attachment', name: 'report.pdf', load });
+
+    expect(share).not.toHaveBeenCalled();
+    const [config, options] = mocks.custom.mock.calls[0];
+    expect(config.title).toBe('File ready — tap Save file');
+    const [save] = config.actions;
+    expect(save.label).toBe('Save file');
+    save.onClick();
+    expect(share).toHaveBeenCalledTimes(1);
+    expect(share.mock.calls[0][0].files[0].name).toBe('report.pdf');
+    await vi.waitFor(() => expect(mocks.dismiss).toHaveBeenCalledWith(7));
+    expect(load).toHaveBeenCalledTimes(1);
+    options.onDismiss();
   });
 
   it('allows retry after a network failure', async () => {

@@ -2037,7 +2037,9 @@ bound to the same controller. Call recording menus use the same controller. The 
 (`makeDownloadAction`) and email attachment chips run a one-off download
 through `startFileDownload`, under a root of its own, because choosing a
 context-menu item disposes the menu's owner; they show no progress, Cancel or
-Retry, and a prepared Web Share file is not kept for another tap. An email
+Retry. When their Web Share file is ready only after the tap's activation
+expired, the ready notice carries Save file (or Share) itself and the root
+stays alive until that notice closes. An email
 attachment's signed URL is on the attachments CloudFront host, which the
 native HTTP scope does not list, so `emailAttachmentDownloadSource` reads it
 with `webviewFetch`; the bucket's CORS rules answer the app origins.

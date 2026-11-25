@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { exportAndroidFileWithProgress } from '@core/mobile/exportAndroidFileWithProgress';
 import { exportIosFile, hasIosFileExport } from '@core/mobile/iosFiles';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import type { ResultError } from '@core/util/result';
 import { downloadFile } from '@filesystem/download';
@@ -27,8 +28,22 @@ export type DownloadSource = {
   }) => Promise<Result<{ blob: Blob; name?: string }, ResultError<string>[]>>;
 };
 
+type FileDownloadOptions = {
+  /**
+   * For a download with no control of its own to tap again: when the file
+   * is prepared after the browser's user activation has expired, its ready
+   * notice carries the Save file (or Share) action itself. `onClosed` runs
+   * once that notice closes, however it closes.
+   */
+  readyNotice?: { onClosed: () => void };
+};
+
+/** How long a ready notice with its own action stays up. */
+const READY_NOTICE_MS = 30_000;
+
 export function createFileDownload(
-  source: Accessor<DownloadSource | undefined>
+  source: Accessor<DownloadSource | undefined>,
+  options?: FileDownloadOptions
 ) {
   const [phase, setPhase] = createSignal<
     'idle' | 'loading' | 'ready' | 'saving' | 'error'
@@ -177,6 +192,15 @@ export function createFileDownload(
     }
   };
 
+  let readyNoticeOpen = false;
+  const handOffFromNotice = async (
+    nextAction: 'save' | 'share',
+    notice: number
+  ) => {
+    await handOff(nextAction);
+    toast.dismiss(notice);
+  };
+
   const handOffWhenReady = async (nextAction: 'save' | 'share') => {
     const usesWebShare =
       !nativeIos &&
@@ -190,12 +214,40 @@ export function createFileDownload(
         return;
       }
       if (!navigator.userActivation?.isActive) {
-        toast.custom({
-          title:
-            nextAction === 'share'
-              ? 'File ready — tap Share'
-              : 'File ready — tap Save file',
-        });
+        const title =
+          nextAction === 'share'
+            ? 'File ready — tap Share'
+            : 'File ready — tap Save file';
+        if (!options?.readyNotice) {
+          toast.custom({ title });
+          return;
+        }
+        const { onClosed } = options.readyNotice;
+        readyNoticeOpen = true;
+        const notice = toast.custom(
+          {
+            title,
+            actions: [
+              {
+                label: nextAction === 'share' ? 'Share' : 'Save file',
+                // The tap's own activation reaches the share sheet before
+                // the handler's first await.
+                onClick: () =>
+                  fireAndForget(
+                    handOffFromNotice(nextAction, notice),
+                    'file-download'
+                  ),
+              },
+            ],
+          },
+          {
+            duration: READY_NOTICE_MS,
+            onDismiss: () => {
+              readyNoticeOpen = false;
+              onClosed();
+            },
+          }
+        );
         return;
       }
     }
@@ -297,6 +349,8 @@ export function createFileDownload(
     name,
     progress,
     canOfferShare,
+    /** Whether a ready notice with its own action is still showing. */
+    readyNoticeOpen: () => readyNoticeOpen,
   };
 }
 
@@ -307,14 +361,18 @@ export type FileDownloadController = ReturnType<typeof createFileDownload>;
  * for an action with no control to bind it to. The controller cancels its
  * transfer when its owner is disposed, and choosing a menu item disposes the
  * menu it sits in. Resolves once the file is handed off or its failure is
- * reported.
+ * reported; a file that is ready only after the tap's activation expired
+ * stays prepared until its ready notice, which carries the action, closes.
  */
 export async function startFileDownload(source: DownloadSource) {
   await createRoot(async (dispose) => {
+    const download = createFileDownload(() => source, {
+      readyNotice: { onClosed: dispose },
+    });
     try {
-      await createFileDownload(() => source).start();
+      await download.start();
     } finally {
-      dispose();
+      if (!download.readyNoticeOpen()) dispose();
     }
   });
 }

@@ -393,7 +393,9 @@ like the action below but shows no progress, Cancel or Retry.
   for another attempt and does not report success.
 - Installed iOS binaries without the optional file-export bridge use the system
   share sheet for saving too. After a slow preparation, tap **Save file** to open
-  it, then choose Save to Files or another available system action. The dedicated
+  it, then choose Save to Files or another available system action. An email
+  attachment chip has no button of its own to tap again, so its **File ready**
+  notice carries the **Save file** button. The dedicated
   save picker becomes available when the new native binary ships.
 - Change files or close the viewer during preparation: the old request must stop
   and must not save a late response. Close the expanded viewer with Escape and
