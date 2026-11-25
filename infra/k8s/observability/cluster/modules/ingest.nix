@@ -169,6 +169,7 @@ in
           from = [ (workload.pods { "app.kubernetes.io/name" = "edge"; }) ];
           ports = workload.tcpPorts [ 4318 ];
         }
+        workload.scrapedByNodeAlloy
       ];
       # Loki OTLP, Mimir remote write, Tempo OTLP gRPC.
       egress = [
