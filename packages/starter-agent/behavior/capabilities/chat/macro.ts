@@ -17,6 +17,8 @@ export type Line = {
   readonly sender_id: string;
   readonly at: string;
   readonly text: string;
+  /** Changed after it was posted; absent when the source can't tell. */
+  readonly edited?: boolean;
 };
 
 export type EmailLine = {
@@ -243,6 +245,7 @@ export const sdkChat = ({
       sender_id: author.id,
       at: await message.createdAt(),
       text: await message.content(),
+      edited: (await message.editedAt()) !== undefined,
     };
   };
   return {

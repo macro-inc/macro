@@ -59,6 +59,13 @@ test("the agent's own mailbox sends only through its capability", () => {
       old_string: 'a',
       new_string: 'b',
     }),
+    run(
+      "export async function main({ context }) { await context.disk.write(context.join(context.state.run('mailbox'), 'drafts', 'x.json'), '{}'); }"
+    ),
+    run(
+      'export async function main({ context }) { const dir = context.state.run("mailbox"); return dir; }'
+    ),
+    bash('cd state/run/mailbox && cat > drafts/x.json'),
     // Reading the mailbox around the capability, too: it hands out the SDK's handles.
     run(
       'export async function main({ context }) { return (await context.macro()).agentMailbox.messages(); }'

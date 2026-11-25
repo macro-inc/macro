@@ -1,8 +1,10 @@
 /**
  * The agent's email, as one object of operations. It holds the mailbox port
- * and the drafts in its closure, so what the context gives a script can
- * read the mailbox and draft, but can send only an approved draft: there is
- * no send without the approval check on the context.
+ * and the drafts in its closure, so `context.mailbox` can read the mailbox
+ * and draft, and its only send runs the approval check. That is all it
+ * guarantees: a script still has `context.macro` and the disk, which the
+ * no-email guard covers only by text, and the server doesn't yet check the
+ * approval itself.
  */
 import type { Trace } from '../../agent/claude.ts';
 import type { Chat } from '../chat/macro.ts';
@@ -10,6 +12,7 @@ import {
   type Content,
   canonical,
   decide,
+  looksLikeFingerprintLine,
   refusalText,
   shownText,
 } from './approval.ts';
@@ -78,6 +81,26 @@ const addresses = (name: string, values: readonly string[]): string[] => {
   if (bad !== -1)
     throw new Error(`${name}: entry ${bad + 1} is not an email address`);
   return [...values];
+};
+
+/** A body, checked: it may not carry a line that reads as a draft's fingerprint. */
+const body = (value: string): string => {
+  const text = nonEmpty('text', value);
+  if (looksLikeFingerprintLine.test(text))
+    throw new Error(
+      'text: may not contain a "Draft <id> · <fingerprint>" line'
+    );
+  return text;
+};
+
+/** A received message's subject as a reply's: one line, never empty, with Re:. */
+const replySubject = (subject: string): string => {
+  const line = subject
+    .replace(new RegExp(control, 'g'), ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (line === '') return 'Re: (no subject)';
+  return /^re:/i.test(line) ? line : `Re: ${line}`;
 };
 
 const oneLine = (name: string, value: string): string => {
@@ -162,7 +185,7 @@ export const email = ({
         to: recipients,
         cc: copied,
         subject: oneLine('subject', subject),
-        text: nonEmpty('text', text),
+        text: body(text),
       });
     },
     draftReply: async ({ messageId, text }) => {
@@ -178,8 +201,10 @@ export const email = ({
         kind: 'reply',
         to: [original.untrusted.from],
         cc: [],
-        subject: oneLine('subject', original.untrusted.subject),
-        text: nonEmpty('text', text),
+        // The provider sets the reply's real subject; this is what it is
+        // expected to be.
+        subject: replySubject(original.untrusted.subject),
+        text: body(text),
         replyTo: original.id,
       });
     },
@@ -244,6 +269,7 @@ export const email = ({
           at: draft.at,
         });
         span.set('mailbox.outcome', 'sent');
+        await drafts.prune();
         return sent;
       }),
   };

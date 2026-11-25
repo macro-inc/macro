@@ -42,6 +42,10 @@ const sends: readonly RegExp[] = [
   /\bsdkMailbox\b|\bdraftStore\b/,
   /capabilities\/mailbox\/(macro|drafts|service)(\.ts)?\b/,
   /\/mailbox\/drafts\b/,
+  // The mailbox area's state, however its path is built or reached.
+  // (Tool input is checked as JSON, where a double quote is escaped.)
+  /\.run\(\s*\\?['"`]mailbox\\?['"`]\s*\)/,
+  /\brun\/mailbox\b/,
 ];
 
 /** Tools that only read files: naming the mailbox's code there sends nothing. */

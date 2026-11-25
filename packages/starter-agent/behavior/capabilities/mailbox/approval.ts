@@ -47,9 +47,20 @@ export const canonical = (content: Content): string =>
     content.replyTo ?? null,
   ]);
 
-/** How the fingerprint appears in the DM, so a send can find it. */
+/** How the fingerprint appears in the DM: it names the draft, so a thread approves one draft. */
 export const fingerprintLine = (draftId: string, fingerprint: string) =>
   `Draft ${draftId} · ${fingerprint}`;
+
+/** A line that looks like a draft's fingerprint line, which a body may not carry. */
+export const looksLikeFingerprintLine =
+  /^\s*>?\s*Draft [0-9a-f-]{36} · [0-9a-f]{64}\s*$/im;
+
+/** The body, quoted line by line, so nothing in it reads as a header line of the draft. */
+const quoted = (text: string): string =>
+  text
+    .split('\n')
+    .map((line) => (line === '' ? '>' : `> ${line}`))
+    .join('\n');
 
 /** The DM that shows a draft to the owner. */
 export const shownText = (
@@ -63,17 +74,26 @@ export const shownText = (
     `To send it exactly as it is, reply "${approveWord}" in this thread. To change anything, tell me and I will draft it again; anything you reply here other than "${approveWord}" stops this draft.`,
     '',
     `To: ${draft.to.join(', ')}`,
+    ...(draft.kind === 'reply'
+      ? [
+          '(or to the address their email asked replies to go to, its Reply-To, if it set one)',
+        ]
+      : []),
     ...(draft.cc.length === 0 ? [] : [`Cc: ${draft.cc.join(', ')}`]),
     `Subject: ${draft.subject}`,
     '',
-    draft.text,
+    quoted(draft.text),
     '',
     fingerprintLine(draft.id, fingerprint),
   ].join('\n');
 
+/** Text as Macro hands it back: line endings and the ends may differ from what was posted. */
+const settled = (text: string): string => text.replace(/\r\n?/g, '\n').trim();
+
 export type Refusal =
   | 'owner-changed'
   | 'not-shown'
+  | 'edited'
   | 'expired'
   | 'not-in-thread'
   | 'not-owner'
@@ -90,6 +110,8 @@ export const refusalText: Readonly<Record<Refusal, string>> = {
     'this draft was shown to someone who is no longer your owner: draft it again',
   'not-shown':
     "this draft's DM isn't yours or doesn't show this content: draft it again",
+  edited:
+    "this draft's DM was edited after it was posted, so what your owner approved can't be known: draft it again",
   expired: 'this draft is more than a day old: draft it again',
   'not-in-thread':
     "approvalMessageId isn't a reply in the thread of this draft's DM",
@@ -102,8 +124,9 @@ export const refusalText: Readonly<Record<Refusal, string>> = {
 /**
  * Whether `approvalMessageId` approves sending `draft`: the latest message
  * of the current owner in the thread of the DM that showed it, saying an
- * approve word, while that DM (posted by the agent, carrying the draft's
- * fingerprint) is less than a day old. The DM names the draft's id, so an
+ * approve word, while that DM (posted by the agent, never edited, and
+ * showing exactly this draft as `shownText` renders it) is less than a day
+ * old. The DM names the draft's id, so an
  * approval in its thread can approve no other draft.
  */
 export const decide = ({
@@ -134,9 +157,11 @@ export const decide = ({
     root === undefined ||
     root.id !== draft.shown.messageId ||
     root.sender_id !== me ||
-    !root.text.includes(fingerprintLine(draft.id, fingerprint))
+    settled(root.text) !== settled(shownText(draft, fingerprint))
   )
     return refused('not-shown');
+  // Macro marks an edit; one it can't report counts as one.
+  if (root.edited !== false) return refused('edited');
   if (expired(root.at, now)) return refused('expired');
   const approval = replies.find(({ id }) => id === approvalMessageId);
   if (approval === undefined) return refused('not-in-thread');

@@ -123,15 +123,17 @@ The hosted agent's `mailbox` capability
 (`packages/starter-agent/behavior/capabilities/mailbox`) is how an agent
 teammate uses it: its address, its messages, and drafts.
 
-- A draft is shown to the agent's owner in a DM whose text carries the
-  draft's id and a SHA-256 fingerprint of its recipients, subject, body and
-  reply target. Drafts are kept in the agent's run state for a day; a sent
-  one keeps only what went out.
+- A draft is shown to the agent's owner in a DM: recipients, subject, the
+  body quoted line by line (so it can't pose as a header line), and a last
+  line with the draft's id and a SHA-256 fingerprint of its content. A body
+  may not carry such a line. Drafts are kept in the agent's run state for a
+  day; a sent one keeps only what went out.
 - `sendMyEmail` or `replyToMyEmail` sends only when the given message is
-  the current owner's latest reply in that DM's thread, says "send", the
-  thread's root is the agent's own message showing the draft's current
-  fingerprint, and the DM is less than a day old. The owner's reply is the
-  `confirmation`, and the send's idempotency key is derived from it.
+  the current owner's latest reply in that DM's thread and says "send", and
+  the thread's root is the agent's own, never edited message whose text is
+  exactly the draft as it renders now, less than a day old. The owner's
+  reply is the `confirmation`, and the send's idempotency key is derived
+  from it.
 - A reply to the mailbox's own sent message is refused (it would go to that
   message's recipients); a reply to inbound mail goes where the provider
   sends replies, which may honor a `Reply-To` the draft doesn't show.
