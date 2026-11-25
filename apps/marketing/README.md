@@ -399,12 +399,17 @@ meta-ads repository's tutorial sets, taken at about 1000×600 in dark mode at 2x
 and stored as WebP in `src/features/marketing/assets/screens/`. Register each
 capture in `core/feature-screens.ts` with its alt text and an optional `focus`
 rectangle (capture pixels) that `FeatureScreenshot` outlines in the app accent.
-These screens have no light counterpart yet: the tutorial sets they come from
-build against older app revisions, so they stay dark on the light palette, on
-their wallpaper stage or, on pages without one, a solid dark mat
-(`--feature-screenshot-stage`). Recapture them in the app's light theme from
-those sets, at the same sizes so each `focus` rectangle still lines up, then
-render both with the `palette-dark-only` / `palette-light-only` classes.
+These screens have no light counterpart yet, and an exact one cannot be
+regenerated from what is committed: the fixture changes and capture steps used
+for them were never checked in. The committed tutorial sets show different
+people and data than the screens do, and several no longer run against the app
+revision of that time. They stay dark on the light palette, on their wallpaper
+stage or, on pages without one, a solid dark mat (`--feature-screenshot-stage`).
+To add light versions, re-take each screen in both palettes from a committed
+script: drive the fixture to the state, capture the dark frame, switch the app's
+theme in the same page (`applyTheme('Macro Light')`) and capture again, so both
+frames share one layout and one `focus` rectangle. Then render the pair with the
+`palette-dark-only` / `palette-light-only` classes.
 On feature pages with their own hero palette, the screen sits on a toned `TutorialWallpaper` stage (varied per section with a subtle dark atmospheric scrim and grain); pages without a dedicated feature palette keep the flat 50% `#101010` stage.
 On phones the canvas is up to 640px wide, sized so the focus fits, and scrolls sideways starting on it.
 When the focus is too wide for that (about 580 capture pixels or more), add a
