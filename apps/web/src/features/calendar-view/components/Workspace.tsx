@@ -93,6 +93,12 @@ function CalendarPages() {
   );
   const useNarrowDayHeaders = () =>
     viewportSize.width !== null && !breakpoints.fullDayHeaders();
+  const pageIsInert = (id: CalendarPageId) => {
+    if (!calendarPager.isActive(id)) return true;
+    if (isMobile() && calendarPager.periodView() === 'dayGridMonth')
+      return false;
+    return calendarPager.pager.phase() !== 'idle';
+  };
   let resizeFrame: number | undefined;
 
   createEffect(
@@ -148,7 +154,7 @@ function CalendarPages() {
         >
           <For each={calendarPager.pager.pages()}>
             {(page) => (
-              <SnapPager.Page page={page}>
+              <SnapPager.Page page={page} inert={pageIsInert(page.key)}>
                 <CalendarPeriodPage
                   id={page.key}
                   useNarrowDayHeaders={useNarrowDayHeaders()}

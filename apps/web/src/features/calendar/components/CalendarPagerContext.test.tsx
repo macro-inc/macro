@@ -186,7 +186,7 @@ afterEach(() => {
 
 describe('continuous virtual calendar track', () => {
   it.each([-1, 1])(
-    'recycles seven real grids through thirty moving pages in direction %s',
+    'recycles seven logical pages through thirty moving periods in direction %s',
     async (direction) => {
       const { pager, viewport, pages } = mountCalendar('dayGridMonth');
       const base = viewport.scrollLeft;
@@ -209,9 +209,9 @@ describe('continuous virtual calendar track', () => {
           Array.from({ length: 7 }, (_, index) => direction * step - 3 + index)
         );
         for (const slot of slots) {
-          expect(pages.get(slot.key)?.calendar.getDate().getMonth()).toBe(
-            new Date(2026, 10 + slot.position(), 1).getMonth()
-          );
+          expect(
+            pager().pageDateInfo(slot.key).view.currentStart.getMonth()
+          ).toBe(new Date(2026, 10 + slot.position(), 1).getMonth());
         }
         expect(viewport.scrollLeft).toBe(left);
         expect(pager().pager.phase()).not.toBe('idle');
@@ -289,14 +289,14 @@ describe('continuous virtual calendar track', () => {
   });
 
   it('does not depend on occurrence readiness when assigning a destination', () => {
-    const { pager, calendar } = mountCalendar('timeGridDay', {
+    const { pager } = mountCalendar('timeGridDay', {
       date: new Date(2026, 10, 1),
       scrollTop: 0,
       loading: true,
     });
     pager().gotoDate(new Date(2026, 11, 20));
     expect(pager().navigationDate()).toEqual(new Date(2026, 11, 20));
-    expect(calendar().getDate().getDate()).toBe(20);
+    expect(pager().activeDateInfo().start.getDate()).toBe(20);
     expect(pager().activeData()?.isLoading()).toBe(true);
   });
 
@@ -317,12 +317,12 @@ describe('continuous virtual calendar track', () => {
 
 describe('calendar navigation and vertical state', () => {
   it('jumps to a date and scrolls Today without losing its time request', async () => {
-    const { pager, calendar, scrollToTime } = mountCalendar();
+    const { pager, scrollToTime } = mountCalendar();
     pager().gotoDate(new Date(2027, 0, 14));
-    expect(calendar().getDate().getFullYear()).toBe(2027);
+    expect(pager().activeDateInfo().view.currentStart.getFullYear()).toBe(2027);
     pager().navigateToToday();
     await vi.advanceTimersByTimeAsync(32);
-    expect(calendar().getDate().getMonth()).toBe(10);
+    expect(pager().activeDateInfo().view.currentStart.getMonth()).toBe(10);
     expect(scrollToTime).toHaveBeenCalledWith({ minutes: 765 });
   });
   it('cancels a pending Today scroll when another date is selected', async () => {
@@ -387,18 +387,19 @@ describe('deferred layout and native date requests', () => {
   ] as const)(
     'retains the exact selected date in an adjacent %s',
     async (view, date) => {
-      const { pager, calendar } = mountCalendar(view);
+      const { pager } = mountCalendar(view);
       pager().navigateToDate(date);
       await vi.advanceTimersByTimeAsync(400);
       expect(pager().navigationDate()).toEqual(date);
-      expect(calendar().getDate()).toEqual(date);
+      expect(pager().activeDateInfo().start <= date).toBe(true);
+      expect(pager().activeDateInfo().end > date).toBe(true);
     }
   );
   it('starts a three-day date selection at the exact selected day', () => {
-    const { pager, calendar } = mountCalendar('timeGridThreeDay');
+    const { pager } = mountCalendar('timeGridThreeDay');
     pager().navigateToDate(new Date(2026, 10, 5));
     expect(pager().navigationDate()).toEqual(new Date(2026, 10, 5));
-    expect(calendar().getDate().getDate()).toBe(5);
+    expect(pager().activeDateInfo().start.getDate()).toBe(5);
   });
   it('keeps a saved hour until initially hidden grids acquire geometry', () => {
     const { pager, pages, revealGrids } = mountCalendar('timeGridDay', {
@@ -419,7 +420,7 @@ describe('deferred layout and native date requests', () => {
   });
 
   it('retains the last date picked during native momentum without moving the track', async () => {
-    const { pager, viewport, calendar } = mountCalendar('dayGridMonth');
+    const { pager, viewport } = mountCalendar('dayGridMonth');
     const left = viewport.scrollLeft + 70;
     viewport.scrollLeft = left;
     viewport.dispatchEvent(new Event('scroll'));
@@ -428,7 +429,7 @@ describe('deferred layout and native date requests', () => {
     expect(viewport.scrollLeft).toBe(left);
     await vi.advanceTimersByTimeAsync(800);
     expect(pager().navigationDate()).toEqual(new Date(2028, 2, 1));
-    expect(calendar().getDate().getFullYear()).toBe(2028);
+    expect(pager().activeDateInfo().view.currentStart.getFullYear()).toBe(2028);
   });
 });
 

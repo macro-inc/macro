@@ -565,10 +565,7 @@ export function SnapPagerViewport(props: SnapPagerViewportProps) {
         'snap-pager-locked': controller.locked(),
       }}
     >
-      <div
-        class="snap-pager-rail"
-        style={{ '--snap-origin': controller.trackOrigin() }}
-      >
+      <div class="snap-pager-rail">
         <div class="snap-pager-markers" aria-hidden="true">
           <For each={snapMarkers}>
             {(index) => (
@@ -588,6 +585,8 @@ export function SnapPagerViewport(props: SnapPagerViewportProps) {
 export type SnapPagerPageProps = ParentProps<{
   page: SnapPage;
   class?: string;
+  /** Override interaction ownership for a read-only page projection. */
+  inert?: boolean;
 }>;
 
 export function SnapPagerPage(props: SnapPagerPageProps) {
@@ -595,9 +594,17 @@ export function SnapPagerPage(props: SnapPagerPageProps) {
   return (
     <div
       class={`snap-pager-page ${props.class ?? ''}`}
-      style={{ '--snap-page-position': props.page.position() }}
+      style={{
+        left: `calc(${1000 + props.page.position() - controller.trackOrigin()} * 100% / 2001)`,
+        // Adjacent pages stay fully laid out throughout a swipe. Far recycled
+        // slots retain their DOM without forcing an invisible subtree layout.
+        'content-visibility':
+          Math.abs(props.page.position() - controller.fractionalPosition()) > 2
+            ? 'hidden'
+            : 'visible',
+      }}
       aria-hidden={props.page.key !== controller.activePage()}
-      inert={props.page.key !== controller.activePage()}
+      inert={props.inert ?? props.page.key !== controller.activePage()}
     >
       {props.children}
     </div>

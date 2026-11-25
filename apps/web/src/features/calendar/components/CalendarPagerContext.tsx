@@ -1,8 +1,7 @@
 import { beginInteraction } from '@app/observability/flow';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { isMobile } from '@core/mobile/isMobile';
-import type { Calendar, DatesSetArg } from '@fullcalendar/core';
-import { Telemetry } from '@macro-inc/observability';
+import type { Calendar } from '@fullcalendar/core';
 import { createSnapPager } from '@ui/components/SnapPager/SnapPager';
 import {
   differenceInCalendarDays,
@@ -18,10 +17,14 @@ import {
   createSignal,
   on,
   onCleanup,
+  onMount,
   type ParentProps,
-  untrack,
 } from 'solid-js';
-import { calendarPageRange } from '../core/page-range';
+import {
+  type CalendarPageDateInfo,
+  calendarPageDateInfo,
+  calendarPageRange,
+} from '../core/page-range';
 import type { CalendarOccurrenceData } from '../hooks/use-calendar-occurrence-data';
 import type { CalendarEvent, CalendarGridPeriodView } from '../types';
 import { timeGridScroller } from '../utils/time-grid-scroller';
@@ -40,7 +43,7 @@ interface PageMovement {
 interface CalendarPageHandle {
   id: CalendarPageId;
   api: Accessor<Calendar | undefined>;
-  dateInfo: Accessor<DatesSetArg | undefined>;
+  dateInfo: Accessor<CalendarPageDateInfo | undefined>;
   element: Accessor<HTMLDivElement | undefined>;
   data: CalendarOccurrenceData;
   teamEvents?: Accessor<CalendarEvent[]>;
@@ -63,11 +66,6 @@ const shiftedDateForView = (
   return shifted;
 };
 
-const navigateCalendar = (api: Calendar, view: string, date: Date) => {
-  if (api.view.type !== view) api.changeView(view, date);
-  else api.gotoDate(date);
-};
-
 interface CalendarPagerContextProps extends ParentProps {
   [key: string]: unknown;
   initialView: CalendarGridPeriodView;
@@ -88,8 +86,12 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     equals: false,
   });
   const handles = new Map<CalendarPageId, CalendarPageHandle>();
-  const rendered = new Map<CalendarPageId, string>();
   const periodView = () => props.initialView;
+  const [now, setNow] = createSignal(new Date());
+  onMount(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    onCleanup(() => window.clearInterval(timer));
+  });
   let sharedScrollTop = props.initialScrollTop;
   let scrollViewportSize: { width: number; height: number } | undefined;
   let pendingDate: Date | undefined;
@@ -119,7 +121,6 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   };
   const activePage = createMemo(() => pageHandle(activePageId()));
   const activeData = createMemo(() => activePage()?.data);
-  const activeDateInfo = createMemo(() => activePage()?.dateInfo());
   const dateAt = (position: number) =>
     shiftedDateForView(
       anchor().date,
@@ -129,9 +130,14 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   const activeDate = () => dateAt(pager.position());
   // Navigation and heading follow the viewport centre, not a settled anchor.
   const navigationDate = activeDate;
-  const isChangingView = () => activeDateInfo()?.view.type !== periodView();
   const pageDate = (id: CalendarPageId) => dateAt(pager.pages()[id].position());
-  const signature = (date: Date) => `${periodView()}:${date.getTime()}`;
+  const pageDateInfo = (id: CalendarPageId) =>
+    calendarPageDateInfo(pageDate(id), periodView(), {
+      weekStartsOn: props.weekStartsOn() === 1 ? 1 : 0,
+      showWeekends: props.showWeekends(),
+      phone: isMobile(),
+    });
+  const activeDateInfo = createMemo(() => pageDateInfo(activePageId()));
   const preloadRange = (position: number) =>
     calendarPageRange(dateAt(position), periodView(), {
       weekStartsOn: props.weekStartsOn() === 1 ? 1 : 0,
@@ -180,42 +186,6 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     }
   };
 
-  function synchronizePages(force = false) {
-    for (const page of pager.pages()) {
-      const handle = handles.get(page.key);
-      if (!handle) continue;
-      const date = pageDate(page.key);
-      const key = signature(date);
-      if (!force && rendered.get(page.key) === key) continue;
-      const api = handle.api();
-      if (!api) continue;
-      // Publish the signature first: datesSet can synchronously notify Solid.
-      rendered.set(page.key, key);
-      const span = Telemetry.span('calendar.page.reassign', {
-        sampling: 'perf',
-      });
-      span.setAttr('calendar.view', periodView());
-      try {
-        span.run(() => {
-          api.batchRendering(() => navigateCalendar(api, periodView(), date));
-          const scroller = timeGridScroller(handle.element());
-          if (scroller && sharedScrollTop !== undefined)
-            scroller.scrollTop = sharedScrollTop;
-        });
-      } finally {
-        span.end();
-      }
-    }
-  }
-
-  // Computed work runs with slot assignment before DOM paint. No idle queue or
-  // settlement gate can leave a recycled slot showing its previous dates.
-  createComputed(() => {
-    pager.pages().forEach((page) => page.position());
-    anchor();
-    periodView();
-    untrack(() => synchronizePages());
-  });
   createComputed(
     on(pager.position, (position, previous) => {
       if (previous === undefined || previous === position) return;
@@ -223,26 +193,20 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     })
   );
 
-  const initialDateFor = (id: CalendarPageId) => {
-    const date = pageDate(id);
-    rendered.set(id, signature(date));
-    return date;
-  };
+  const initialDateFor = pageDate;
   const registerPage = (handle: CalendarPageHandle) => {
     handles.set(handle.id, handle);
     notifyRegistry();
-    synchronizePages();
     return () => {
       if (handles.get(handle.id) !== handle) return;
       handles.delete(handle.id);
-      rendered.delete(handle.id);
       notifyRegistry();
     };
   };
 
   createEffect(
     on(
-      () => [activePage()?.element(), activeDateInfo()],
+      () => [activePage()?.element(), activePage()?.api(), activeDateInfo()],
       () => {
         const scroller = timeGridScroller(activePage()?.element());
         if (!scroller) return;
@@ -288,11 +252,11 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
       todayFrame = undefined;
       const now = todayTarget;
       if (!now) return;
-      activePage()
-        ?.api()
-        ?.scrollToTime({
-          minutes: Math.max(0, now.getHours() * 60 + now.getMinutes() - 60),
-        });
+      const api = activePage()?.api();
+      if (!api) return;
+      api.scrollToTime({
+        minutes: Math.max(0, now.getHours() * 60 + now.getMinutes() - 60),
+      });
       copyScrollPosition();
       todayTarget = undefined;
     });
@@ -363,22 +327,18 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     props.onNavigate();
     props.onViewChange(view);
   };
-  createEffect(
-    on(
-      [periodView, props.showWeekends, props.weekStartsOn],
-      (_value, previous) => {
-        if (previous) synchronizePages(true);
-      }
-    )
-  );
+  createEffect(() => {
+    activePage()?.api();
+    if (todayTarget && pager.phase() === 'idle') scrollToToday();
+  });
   onCleanup(() => {
     if (todayFrame !== undefined) cancelAnimationFrame(todayFrame);
   });
 
   return {
     pager,
+    now,
     periodView,
-    isChangingView,
     activePageId,
     activePage,
     activeData,
@@ -386,6 +346,8 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     activeDate,
     navigationDate,
     activeTeamEvents: () => activePage()?.teamEvents?.() ?? [],
+    pageDate,
+    pageDateInfo,
     pageRange: (id: CalendarPageId) =>
       preloadRange(pager.pages()[id].position()),
     preloadRange,

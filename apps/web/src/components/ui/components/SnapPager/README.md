@@ -26,6 +26,8 @@ Controller: `pages`, `activePage`, `position`, `fractionalPosition`,
 `goTo`, `reset`, `locked`, `setLocked`, `resize`, and `attachViewport`.
 Page descriptors expose a stable `key` and a changing logical `position`.
 `trackOrigin` places slots on the physical track.
+`Page.inert` optionally overrides interaction ownership for decorative projections.
+Keep static page content inert throughout movement; enable only settled controls.
 
 - Native touch and desktop trackpad gestures use the same snap track. Stationary
   snap markers retain their DOM identity while the seven mounted slots are
@@ -33,6 +35,9 @@ Page descriptors expose a stable `key` and a changing logical `position`.
 - `fractionalPosition` follows the viewport continuously; `position` rounds to
   the nearest page. Assign content from `page.position()` without waiting for
   settlement. `nativeScrolling()` stays true until a native gesture is idle.
+- Slot positions use direct offsets, not inherited CSS custom properties. Pages
+  farther than two viewports retain their DOM under `content-visibility: hidden`;
+  adjacent pages are laid out before they enter the viewport.
 - Buttons and keyboard use `next`, `previous`, or relative `goTo`. The first
   command scrolls smoothly; rapid commands advance immediately. Commands during
   native scrolling wait until native motion ends. `targetPosition` includes them.
@@ -43,5 +48,5 @@ Page descriptors expose a stable `key` and a changing logical `position`.
   when only the caller has a deferred date request. Settlement callbacks can
   replace or reset navigation; stale continuations do not run afterward.
 - Locking disables paging. Unlocking realigns after native motion ends.
-- The fixed snap markers add 2,001 lightweight DOM nodes. Browser layout and
-  paint costs and caller-owned calendar retarget costs need separate measurement.
+- The fixed snap markers add 2,001 lightweight DOM nodes. Measure slot updates,
+  natural frames, and caller-owned interactive promotion/demotion separately.

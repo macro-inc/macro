@@ -37,7 +37,7 @@
     clip-path: polygon(0 0, 100% 50%, 0 100%);
   }
 
-  html[data-touch-device="true"] .calendar-view .fc .calendar-now-axis-indicator {
+  html[data-touch-device="true"] .calendar-view :is(.fc, .calendar-light-grid) .calendar-now-axis-indicator {
     visibility: hidden;
   }
 
@@ -67,7 +67,7 @@
   }
 
   /* The external gutter exposes the centered midnight label above the card. */
-  html[data-touch-device="true"] .calendar-view .fc .fc-timegrid-slots tbody tr:first-child .fc-timegrid-slot-label-cushion {
+  html[data-touch-device="true"] .calendar-view :is(.fc, .calendar-light-grid) .fc-timegrid-slots tbody tr:first-child .fc-timegrid-slot-label-cushion {
     transform: translateY(-50%);
   }
 

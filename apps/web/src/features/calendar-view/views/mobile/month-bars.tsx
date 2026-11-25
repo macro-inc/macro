@@ -1,5 +1,6 @@
 import { calendarSelectionToEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
+import type { CalendarPageDateInfo } from '@app/features/calendar/core/page-range';
 import { createLocalToday } from '@app/features/calendar/primitives/create-local-today';
 import type {
   CalendarEvent,
@@ -7,7 +8,6 @@ import type {
 } from '@app/features/calendar/types';
 import { getCalendarSupportedRange } from '@app/features/calendar/utils/calendar-supported-range';
 import { beginInteraction } from '@app/observability/flow';
-import type { DatesSetArg } from '@fullcalendar/core';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { addDays } from 'date-fns';
 import { batch, createEffect, createMemo, createSignal } from 'solid-js';
@@ -28,7 +28,7 @@ import {
 import { createPhoneMonth } from '../../primitives/create-phone-month';
 
 export function PhoneMonthBars(props: {
-  range: DatesSetArg | undefined;
+  range: CalendarPageDateInfo | undefined;
   initialDate: Date;
   events: CalendarEvent[];
   showWeekends: boolean;
