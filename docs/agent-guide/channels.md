@@ -2184,9 +2184,10 @@ Behind `enable-channel-sidebar-redesign`, the Chat sidebar separates **triage**
 from **navigation** and **personal organization** from **shared team structure**:
 
 - **Top lenses (`All` / `Focus` / `Support` / `Threads`)**: `All` is a
-  deduplicated spatial map where every joined channel appears once (Personal
-  sections win over Team sections, and Ungrouped `Channels` lists only channels
-  not already placed in a section). `Focus` surfaces what needs you (`Direct &
+  deduplicated spatial map where every joined channel appears once across
+  sections (Personal sections win over Team sections, and Ungrouped `Channels`
+  lists only channels not already placed in a section; `Pinned` sits above as an
+  optional quick-access shortcut strip). `Focus` surfaces what needs you (`Direct &
   @mentions`, `Support waiting`, `Active unreads`, and collapsed `Automated &
   FYI`) with one-click `Mark read` and `Mark all read`. `Support` auto-activates
   when the workspace has customer support channels (smart rule or `Macro Support

@@ -993,6 +993,23 @@ export function ChannelSidebarMobileView() {
                         })}
                       </button>
                     </Show>
+                    <Show
+                      when={
+                        ws.prefs.prefs.dmExpandedAll &&
+                        ws.prefs.prefs.dmWindowLimit !== 'all' &&
+                        ws.dmWindow().totalFilteredCount >
+                          ws.prefs.prefs.dmWindowLimit
+                      }
+                    >
+                      <button
+                        type="button"
+                        data-mobile-dm-show-less=""
+                        class="mx-2 min-h-10 rounded-lg bg-surface-2 px-3 text-left text-xs font-medium text-ink-muted"
+                        onClick={() => ws.prefs.setDmExpandedAll(false)}
+                      >
+                        {t('channelSidebar.dmShowLess')}
+                      </button>
+                    </Show>
                   </section>
 
                   {/* Personal Sections */}

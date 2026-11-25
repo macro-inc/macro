@@ -265,8 +265,12 @@ test.describe('Channel Sidebar Redesign — Phone (390px touch)', () => {
     );
     expect(overflow).toBeLessThanOrEqual(1);
 
-    // Bounded DM window on All tab + Agents filter
+    // Bounded DM window on All tab + expand & collapse right inside All + Agents filter
     const dmSec = mobile.locator('[data-mobile-dm-section]');
+    await expect(dmSec.locator('[data-mobile-row]')).toHaveCount(7);
+    await dmSec.locator('[data-mobile-dm-show-more]').click();
+    await expect(dmSec.locator('[data-mobile-row]')).toHaveCount(35);
+    await dmSec.locator('[data-mobile-dm-show-less]').click();
     await expect(dmSec.locator('[data-mobile-row]')).toHaveCount(7);
     await dmSec.locator('[data-mobile-dm-filter="agents"]').click();
     await expect(dmSec.locator('[data-mobile-row]')).toHaveCount(6);
