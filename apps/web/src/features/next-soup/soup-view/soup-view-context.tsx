@@ -1261,7 +1261,8 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     );
     const fold =
       chatsShownFor() !== search.localSearchText() &&
-      !soup.predicates.orIds().some((id) => id in SEARCH_INDEX_SEEDS);
+      !soup.predicates.orIds().some((id) => id in SEARCH_INDEX_SEEDS) &&
+      operatorFilters()?.indexes?.length !== 1;
     if (!fold)
       return {
         ...featureSearchResults(

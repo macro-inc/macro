@@ -17,6 +17,8 @@ import { markdownToSearchText } from '@macro-inc/lexical-core/utils/parsers';
 import { cn, Hotkey } from '@ui';
 import {
   $getRoot,
+  $getSelection,
+  $isRangeSelection,
   $selectAll,
   COMMAND_PRIORITY_HIGH,
   KEY_ARROW_DOWN_COMMAND,
@@ -267,9 +269,17 @@ export function SearchbarInput(
     const row = operatorRows()[index];
     if (!row) return;
     const next = completeSearchOperator(markdown(), row);
-    editor.controls.setMarkdown(next);
-    publish(next);
-    editor.controls.getLexical().update(() => $getRoot().selectEnd());
+    // Markdown drops trailing whitespace, so the space after a whole
+    // operator is typed at the caret.
+    editor.controls.setMarkdown(next.trimEnd());
+    publish(next.trimEnd());
+    editor.controls.getLexical().update(() => {
+      $getRoot().selectEnd();
+      const selection = $getSelection();
+      if (next.endsWith(' ') && $isRangeSelection(selection)) {
+        selection.insertText(' ');
+      }
+    });
   };
   const hasContent = () => !!markdown().trim();
   createEffect(
