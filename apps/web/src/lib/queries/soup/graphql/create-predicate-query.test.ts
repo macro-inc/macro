@@ -387,7 +387,7 @@ it('skips entityFilter reads when cache-change hints prove the observation uncha
   expect(state.requests).toHaveLength(2);
 
   // A generation reset clears the observation proof; later hints must not suppress reads.
-  state.generations.forEach((cb) => cb({ storage: 'reset' }));
+  state.generations.forEach((cb) => cb({ storage: 'reset', queue: 'reset' }));
   expect(state.requests).toHaveLength(3);
   state.requests[2].resolve({ ...snapshot(), revision: revision('5') });
   await flush();
