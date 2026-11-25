@@ -2667,6 +2667,55 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   );
 
+  it('decides whether its answer is fresh when a disabled list is enabled', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockReturnValue({
+      initial: { limit: 50, sortMethod: 'UPDATED_AT' },
+    });
+    const policies = () =>
+      fake.executions.map((execution) => execution.context.requestPolicy);
+    try {
+      const first = createRoot((dispose) => {
+        createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true, staleTime: 60_000 })
+        );
+        return dispose;
+      });
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      first();
+      // Mounted while the answer is fresh, but not reading yet.
+      const [enabled, setEnabled] = createSignal(false);
+      const dispose = createRoot((dispose) => {
+        createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: enabled(), staleTime: 60_000 })
+        );
+        return dispose;
+      });
+      // A write while it waits: the cached page may be older than the server.
+      await refreshActiveGraphqlSoupQueries();
+      setEnabled(true);
+      expect(policies()).toEqual(['cache-and-network', 'cache-and-network']);
+      // Its own answer is fresh now, but a list that reads the network keeps
+      // that policy, and so the pages it loaded.
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      setEnabled(false);
+      setEnabled(true);
+      expect(policies()).not.toContain('cache-first');
+      dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps loaded channel pages registered for retry after a transient refresh failure', async () => {
     vi.useFakeTimers();
     const visibility = vi

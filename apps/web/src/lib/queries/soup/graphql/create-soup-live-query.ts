@@ -109,6 +109,9 @@ export type SoupLiveQueryOptions = {
   staleTime?: number;
 };
 
+/** Whether a list may take its cached first page, for one input and client. */
+type FreshDecision = { key: string; client: object; fresh: boolean };
+
 const SOUP_DOCUMENTS = {
   'channel-list': ChannelListSoupDocument,
   preview: SoupPreviewPageDocument,
@@ -192,16 +195,31 @@ export function createSoupLiveQuery(
     JSON.stringify([options().projection, firstPageInput()])
   );
   const staleTime = createMemo(() => options().staleTime);
-  // Decided once per list and client: a policy change discards loaded pages.
-  const answeredFresh = createMemo(() => {
+  const fetches = createMemo(() => {
+    const queryOptions = options();
+    return (
+      queryOptions.enabled !== false &&
+      !queryOptions.localOnly &&
+      networkInput() !== undefined
+    );
+  });
+  // Decided per list and client when it starts to fetch, since a write while
+  // it waited disabled may have made the answer stale. A list reading the
+  // network keeps that policy: a policy change discards loaded pages.
+  const freshDecision = createMemo((previous?: FreshDecision) => {
     const key = inputKey();
     const freshFor = staleTime();
     const client = getGraphqlSoupClient();
-    return untrack(
+    if (!fetches()) return previous;
+    const same = previous?.key === key && previous.client === client;
+    if (same && !previous.fresh) return previous;
+    const fresh = untrack(
       () =>
         freshFor !== undefined && soupNetworkAnswerFresh(client, key, freshFor)
     );
+    return same && previous.fresh === fresh ? previous : { key, client, fresh };
   });
+  const answeredFresh = () => freshDecision()?.fresh ?? false;
   type ServerProjection = {
     pageParams: readonly (string | null)[];
     records: Accessor<GraphqlSoupItem[]>;
@@ -456,10 +474,7 @@ export function createSoupLiveQuery(
         hasSoupPage(lastPage)
           ? (lastPage.user.soup.nextCursor ?? undefined)
           : undefined,
-      enabled:
-        queryOptions.enabled !== false &&
-        !queryOptions.localOnly &&
-        networkInput() !== undefined,
+      enabled: fetches(),
       requestPolicy: queryOptions.networkPaused
         ? 'cache-only'
         : answeredFresh()
