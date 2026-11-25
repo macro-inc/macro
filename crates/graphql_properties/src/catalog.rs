@@ -286,7 +286,6 @@ fn catalog_error(err: PropertiesErr) -> async_graphql::Error {
         PropertiesErr::ReservedName(_) => Some("RESERVED_NAME"),
         PropertiesErr::DuplicateDefinitionName => Some("NAME_TAKEN"),
         PropertiesErr::DuplicateOptionValue => Some("OPTION_VALUE_TAKEN"),
-        PropertiesErr::ConflictingTeamLabel(_) => Some("TEAM_LABEL_TAKEN"),
         _ => None,
     };
     let code = match &err {
