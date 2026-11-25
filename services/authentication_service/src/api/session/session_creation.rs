@@ -4,6 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use tracing::field::Empty;
 use utoipa::ToSchema;
 
 use crate::api::{
@@ -49,13 +50,15 @@ pub struct SessionCreationResponse {
             (status = 500, body = ErrorResponse),
         )
     )]
-#[tracing::instrument(name = "auth.session_code.mint", skip_all)]
+#[tracing::instrument(name = "auth.session_code.mint", skip_all, fields(outcome = Empty))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     token_context: Extension<TokenContext>,
     Json(request): Json<SessionCreationRequest>,
 ) -> Result<Response, Response> {
+    let span = tracing::Span::current();
     let challenge = CodeChallenge::parse(&request.challenge).map_err(|e| {
+        span.record("outcome", "invalid_challenge");
         (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
@@ -74,6 +77,7 @@ pub async fn handler(
         )
         .await
         .map_err(|e| {
+            span.record("outcome", "store_failed");
             tracing::error!(
                 auth_handoff_failure = "session_code_store_failed",
                 error = ?e,
@@ -88,5 +92,6 @@ pub async fn handler(
                 .into_response()
         })?;
 
+    span.record("outcome", "minted");
     Ok(Json(SessionCreationResponse { session_code }).into_response())
 }
