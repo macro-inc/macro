@@ -4,8 +4,8 @@ use entity_access::domain::models::ViewAccessLevel;
 
 use crate::domain::{
     models::{
-        EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, MAX_PREVIEW_PAGE, PreviewCursorPage,
-        PreviewCursorQuery, PreviewView, PreviewViewStandardLabel, UserProvider,
+        EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, MAX_PREVIEW_PAGE,
+        PreviewCursorPage, PreviewCursorQuery, PreviewView, PreviewViewStandardLabel, UserProvider,
     },
     ports::EmailRepo,
 };
