@@ -350,10 +350,9 @@ function Fixture() {
   // As the app's route: the list or the topic is in the URL, so Back changes
   // it too.
   const [search, setSearch] = createSignal(location.search);
+  const params = () => new URLSearchParams(search());
   const list = () =>
-    FOR_YOU_LISTS.find(
-      (name) => name === new URLSearchParams(search()).get('list')
-    ) ?? 'today';
+    FOR_YOU_LISTS.find((name) => name === params().get('list')) ?? 'today';
   const at = (shown: { list?: ForYouList; topic?: string }) => {
     const url = new URL(location.href);
     url.searchParams.delete('list');
@@ -400,9 +399,9 @@ function Fixture() {
           <div ref={attachHotkeys} class="flex min-h-0 flex-1">
             <ForYouView
               feed={feed}
-              list={list()}
+              list={params().has('topic') ? 'today' : list()}
               onSelectList={(next) => go({ list: next })}
-              topicKey={new URLSearchParams(search()).get('topic') ?? undefined}
+              topicKey={params().get('topic') ?? undefined}
               onSelectTopic={(topic) => go({ topic })}
               routines={routines}
               parts={PARTS}

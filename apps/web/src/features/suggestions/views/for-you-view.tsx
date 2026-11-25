@@ -12,7 +12,6 @@ import {
   type Accessor,
   createEffect,
   createMemo,
-  createSignal,
   createUniqueId,
   For,
   Match,
@@ -139,29 +138,10 @@ export function ForYouView(props: {
   onRetry(): void;
 }) {
   const view = () => props.feed.view(props.list);
-  // One shown that stops grouping rows leaves the list shown until it is chosen
-  // again: rows that bring it back don't take the page over. One never shown
-  // is shown once the feed has it, since a cached feed may be from before it.
-  const [lostTopicKey, setLostTopicKey] = createSignal<string>();
+  // Undefined while the one asked for groups nothing: the list is shown.
   const topic = () =>
-    props.topicKey === lostTopicKey()
-      ? undefined
-      : props.feed.topics().find((other) => other.key === props.topicKey);
+    props.feed.topics().find((other) => other.key === props.topicKey);
   const shownTopicKey = createMemo(() => topic()?.key);
-  createEffect(
-    on(
-      () => props.topicKey,
-      () => setLostTopicKey(undefined),
-      { defer: true }
-    )
-  );
-  createEffect(
-    on(shownTopicKey, (key, before) => {
-      const kind = view().kind;
-      const known = kind === 'rows' || kind === 'empty';
-      if (known && !key && before === props.topicKey) setLostTopicKey(before);
-    })
-  );
   const groups = () => props.feed.groups(props.list, topic());
   const name = () => {
     const shown = topic();
@@ -387,7 +367,6 @@ export function ForYouView(props: {
   };
   const selectTopic = (key: string) => {
     if (key === topic()?.key) scroller?.scrollTo({ top: 0 });
-    setLostTopicKey(undefined);
     props.onSelectTopic(key);
   };
 

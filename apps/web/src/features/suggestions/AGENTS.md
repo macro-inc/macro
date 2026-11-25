@@ -146,9 +146,8 @@ only, behind `enable-suggestions`.
   Today is one flat list. The sidebar lists the same topics with how many of
   their rows wait; choosing one (`?topic=`, which replaces `?view=`) shows its
   rows alone, its name as the page's and its reason in place of the date. One
-  that groups nothing falls back to Today, and is shown once the feed has it: a
-  cached feed may lack a new topic. One that was shown and stopped grouping
-  stays away until it is chosen again. A reason is shown as
+  that groups nothing shows Today for as long as that holds: the URL keeps it,
+  since a cached feed may lack a new topic. A reason is shown as
   written or not at all: never build one here.
 - Where topics group rows, a topic's hue tints its rows' tiles in every list
   and its square in the sidebar, and other rows' tiles are neutral. Hues are
