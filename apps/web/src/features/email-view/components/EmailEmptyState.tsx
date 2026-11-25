@@ -196,6 +196,40 @@ export function EmailEmptyState(props: {
         />
       </Match>
 
+      <Match when={searchText()}>
+        {(search) => (
+          <EmptyStatePanel
+            centered
+            graphic={EmptyStateNoSearchMatchGraphic}
+            title={
+              searchedView()
+                ? `No results for "${search()}" in ${searchedView()}`
+                : `No results for "${search()}"`
+            }
+            description={
+              searchedView()
+                ? 'Search all mail by removing the filter, or try a different query.'
+                : 'Search covers subjects, senders, and message content in all mail except Spam and Trash. Try a different query.'
+            }
+            documentationUrl={`${DOCS_BASE}/product/search`}
+          />
+        )}
+      </Match>
+
+      <Match when={filtersChanged()}>
+        <EmptyStatePanel
+          centered
+          graphic={EmptyStateNoFilterMatchGraphic}
+          title="No email matching the filters"
+          description="Try adjusting or clearing your filters to see more results."
+        >
+          <FilteredHiddenBanner
+            hasHiddenItems={false}
+            onClearFilters={clearFilters}
+          />
+        </EmptyStatePanel>
+      </Match>
+
       <Match when={blockedInbox()}>
         {(inbox) => (
           <div class="h-full w-full" role="status" aria-live="polite">
@@ -236,40 +270,6 @@ export function EmailEmptyState(props: {
             </div>
           </EmptyStatePanel>
         </div>
-      </Match>
-
-      <Match when={searchText()}>
-        {(search) => (
-          <EmptyStatePanel
-            centered
-            graphic={EmptyStateNoSearchMatchGraphic}
-            title={
-              searchedView()
-                ? `No results for "${search()}" in ${searchedView()}`
-                : `No results for "${search()}"`
-            }
-            description={
-              searchedView()
-                ? 'Search all mail by removing the filter, or try a different query.'
-                : 'Search covers subjects, senders, and message content in all mail except Spam and Trash. Try a different query.'
-            }
-            documentationUrl={`${DOCS_BASE}/product/search`}
-          />
-        )}
-      </Match>
-
-      <Match when={filtersChanged()}>
-        <EmptyStatePanel
-          centered
-          graphic={EmptyStateNoFilterMatchGraphic}
-          title="No email matching the filters"
-          description="Try adjusting or clearing your filters to see more results."
-        >
-          <FilteredHiddenBanner
-            hasHiddenItems={false}
-            onClearFilters={clearFilters}
-          />
-        </EmptyStatePanel>
       </Match>
 
       <Match when={tabCopy(state.tab)}>

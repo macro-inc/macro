@@ -289,7 +289,7 @@ describe.each([
       await screen.findByRole('button', { name: 'Other email (IMAP / SMTP)' })
     );
     fireEvent.input(await screen.findByLabelText('Email address'), {
-      target: { value: 'mailbox@example.com' },
+      target: { value: 'sender@example.com' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Find settings' }));
     const password = await screen.findByLabelText('Password or app password');

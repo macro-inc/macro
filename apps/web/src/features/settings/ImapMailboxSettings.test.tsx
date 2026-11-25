@@ -85,6 +85,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it.each([
+  ['https://mail.example.net/setup', true],
+  ['http://mail.example.net/setup', false],
+])('links to HTTPS setup instructions only (%s)', async (helpUrl, linked) => {
+  api.read.mockResolvedValue(ok({ ...snapshot, helpUrl }));
+  render(() => (
+    <ImapMailboxSettings
+      linkId="owned"
+      emailAddress="owner@example.net"
+      onReconnect={() => {}}
+    />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Server settings' }));
+  await screen.findByText('35 MiB');
+  const link = screen.queryByRole('link', { name: /setup instructions/i });
+  expect(link?.getAttribute('href') ?? null).toBe(linked ? helpUrl : null);
+});
+
 it('keeps Inbox included and drops the extra watch when its folder is excluded', async () => {
   api.update.mockResolvedValue(ok(snapshot));
   render(() => (

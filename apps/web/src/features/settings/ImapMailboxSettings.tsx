@@ -1,6 +1,7 @@
 import { formatLocale, type TranslationKey, t } from '@app/lib/i18n';
 import { beginInteraction, TraceFlow, useFlow } from '@app/observability/flow';
 import { startUiOperation } from '@app/observability/ui-operation';
+import { imapHelpUrl } from '@core/email-link/help-url';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { humanFileSize } from '@core/util/humanFileSize';
@@ -236,8 +237,8 @@ function SettingsDialog(props: {
   function changeRole(id: string, role: string) {
     setRoles((previous) => {
       const next = { ...previous };
-      if (selectableRoles.some((r) => r === role))
-        next[id] = role as FolderRole;
+      const selected = selectableRoles.find((option) => option === role);
+      if (selected) next[id] = selected;
       else delete next[id];
       return next;
     });
@@ -319,7 +320,7 @@ function SettingsDialog(props: {
                   {(features) => <VerifiedFeatures features={features()} />}
                 </Show>
 
-                <Show when={data().helpUrl}>
+                <Show when={imapHelpUrl(data().helpUrl)}>
                   {(url) => (
                     <a
                       class="self-start text-sm underline"

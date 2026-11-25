@@ -5,6 +5,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { EmailEmptyState } from './EmailEmptyState';
 
 const fixture = vi.hoisted(() => ({
+  search: '',
+  filtered: false,
   selected: undefined as string[] | undefined,
   links: [] as {
     id: string;
@@ -35,10 +37,12 @@ vi.mock('../email-view-context', () => ({
         return fixture.selected;
       },
       tab: 'important',
-      search: '',
+      get search() {
+        return fixture.search;
+      },
     },
-    parsedSearch: () => ({ query: '' }),
-    filtersChanged: () => false,
+    parsedSearch: () => ({ query: fixture.search }),
+    filtersChanged: () => fixture.filtered,
   }),
 }));
 vi.mock('@ui', () => ({
@@ -58,9 +62,39 @@ vi.mock('@ui', () => ({
 }));
 afterEach(() => {
   cleanup();
+  fixture.search = '';
+  fixture.filtered = false;
   fixture.selected = undefined;
   fixture.links = [];
 });
+
+it.each([
+  { status: 'SYNCING', issue: undefined, search: 'quarterly', filtered: false },
+  { status: 'ERROR', issue: 'snapshot_too_large', search: '', filtered: true },
+])(
+  'keeps an active search or filter actionable during $status',
+  ({ status, issue, search, filtered }) => {
+    fixture.search = search;
+    fixture.filtered = filtered;
+    fixture.links = [
+      {
+        id: 'selected',
+        is_sync_active: true,
+        needs_reauth: false,
+        sync_status: status,
+        mailbox_issue: issue,
+      },
+    ];
+    render(() => <EmailEmptyState onConnect={vi.fn()} />);
+    expect(
+      screen.getByRole('heading', {
+        name: filtered
+          ? 'No email matching the filters'
+          : 'No results for "quarterly"',
+      })
+    ).toBeDefined();
+  }
+);
 
 it('shows first-sync progress instead of Inbox zero and settles without remounting', async () => {
   const [status, setStatus] = createSignal('SYNCING');
