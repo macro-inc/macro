@@ -210,7 +210,11 @@ export function createSearchState(options: CreateSearchStateOptions) {
     const service = serviceSearchResults();
     const merged = [...service, ...local];
 
-    if (merged.length === 0 && previous.length > 0 && text() !== localText()) {
+    if (
+      merged.length === 0 &&
+      previous.length > 0 &&
+      nameText() !== localText()
+    ) {
       return previous;
     }
 
@@ -231,7 +235,8 @@ export function createSearchState(options: CreateSearchStateOptions) {
     ];
   }, []);
 
-  const isLocalSearchSettling = () => isSearching() && text() !== localText();
+  const isLocalSearchSettling = () =>
+    isSearching() && nameText() !== localText();
 
   const isSearchServiceLoading = () => {
     if (!isSearching() || !validateSearchServiceText(text())) return false;
