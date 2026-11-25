@@ -58,8 +58,8 @@ fewer than 200 messages ready to import; until then its enumerate spans read
 Messages backed off after their own failures don't count. Every other folder
 claim of a sync loop takes the longest-due importing folder first, so a walk
 reads its next page soon after its import has room however late the polls
-run; the other claims take the longest-due folder of either kind, so polls
-keep at least half the claims. Enumerate spans name the claim in
+run; the other claims take the longest-due folder of either kind, where
+importing folders and polls compete by how long they have been due. Enumerate spans name the claim in
 `@outlook.claim` (`import_first`, `longest_due`, `live_pass`). A new import's Inbox
 round is due first and its Sent round next, so their pages are read before
 the other folders', which Graph lists alphabetically (Archive, Deleted Items).

@@ -578,18 +578,22 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
     /// Process one bounded provider page. Notifications only make streams due;
     /// periodic polling recovers missed, duplicate and out-of-order notifications.
     ///
-    /// Every other turn takes the longest-due import round first, the others
-    /// the longest-due folder of either kind (`ClaimTurns`). An import round
+    /// Every other turn that claims a mail folder takes the longest-due import
+    /// round first, the others the longest-due folder of either kind
+    /// (`ClaimTurns`); a turn that claims a live pass counts as neither. An
+    /// import round
     /// that waits for room in its mailbox's import (paced, or refused by the
     /// request gate) reads nothing, so the claim moves on to the next due
     /// stream of the same claim. A waiting round is due again seconds later:
     /// without moving on, a large mailbox's waiting rounds would take the
     /// turns every other mailbox's new mail needs.
     pub async fn enumerate_once(&self) -> Result<bool, MailboxError> {
-        let folder_claim = self.turns.next();
+        // Chosen at the turn's first mail folder claim and kept for its
+        // retries, so a live pass doesn't use up an import-first turn.
+        let mut folder_claim = None;
         for _ in 0..PACED_CLAIMS_PER_TURN {
             let Some((lease, claim)) = self
-                .claim_folder_stream(folder_claim)
+                .claim_folder_stream(&mut folder_claim)
                 .await
                 .map_err(|error| claim_failed("enumerate", error))?
             else {
@@ -608,7 +612,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
     /// New mail goes first: a due live pass is claimed before any folder.
     async fn claim_folder_stream(
         &self,
-        folder_claim: StreamClaim,
+        folder_claim: &mut Option<StreamClaim>,
     ) -> Result<Option<(StreamLease, StreamClaim)>, MailboxError> {
         if self.live_pass.enabled()
             && let Some(lease) = self
@@ -618,11 +622,12 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         {
             return Ok(Some((lease, StreamClaim::LivePass)));
         }
+        let claim = *folder_claim.get_or_insert_with(|| self.turns.next());
         Ok(self
             .repo
-            .claim_stream(macro_uuid::generate_uuid_v7(), folder_claim)
+            .claim_stream(macro_uuid::generate_uuid_v7(), claim)
             .await?
-            .map(|lease| (lease, folder_claim)))
+            .map(|lease| (lease, claim)))
     }
 
     /// A failure leaves the folder as it was before the switch: its new mail

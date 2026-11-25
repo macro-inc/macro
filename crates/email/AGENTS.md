@@ -674,15 +674,18 @@ tools — hexagonal, heavily feature-gated.
   import, and any message that waited for room, behind its whole backlog.
   Gmail's backfill lists its next page behind the threads it queued for the
   same reason. Live folder streams are never paced.
-  Every other `enumerate_once` turn of a sync loop claims the longest-due
-  import round first, or the longest-due folder when no round is due
-  (`StreamClaim::ImportFirst`); the other turns claim the longest-due folder
-  of either kind (`LongestDue`). `domain/mailbox/claim.rs`'s `ClaimTurns`
-  counts the turns, and `IMPORT_FIRST_EVERY` is the cap. Polls of every
-  finished folder share the sync loops and run minutes late, and a round that
-  waited behind them read a page only every few minutes while its import sat
-  empty; half the turns keep an import reading once its mailbox has room,
-  whatever the line's length, and leave polls at least the other half. The
+  Every other mail folder claim of a sync loop takes the longest-due import
+  round first, or the longest-due folder when no round is due
+  (`StreamClaim::ImportFirst`); the other claims take the longest-due folder
+  of either kind (`LongestDue`), where rounds and polls compete by how long
+  they have been due. `domain/mailbox/claim.rs`'s `ClaimTurns` counts the
+  claims (a turn that claims a live pass counts none), and
+  `IMPORT_FIRST_EVERY` caps the rounds' head start. Polls of every finished
+  folder share the sync loops and run minutes late, and a round that waited
+  behind them read a page only every few minutes while its import sat empty;
+  the import-first claims keep an import reading once its mailbox has room,
+  whatever the line's length, and the cap keeps a large import from taking
+  every claim. The
   import round comes off the partial index
   `email_sync_streams_import_round_claim`; keep its predicate and the query's
   identical, or each claim reads every due finished folder. Enumerate spans

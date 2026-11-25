@@ -5,6 +5,7 @@
 
 use super::retries::{Provider, sync};
 use crate::domain::mailbox::claim::StreamClaim;
+use crate::domain::mailbox::live_pass::LiveImportPass;
 use crate::domain::mailbox::{MailboxSyncRepository, StreamLease};
 use crate::outbound::mailbox_pg::PgMailboxSync;
 use email_api_client::domain::models::{FolderRole, MailFolder, ProviderId};
@@ -125,6 +126,61 @@ async fn a_sync_loop_reads_an_import_round_first_every_other_turn(db: PgPool) {
     }
 
     assert_eq!(read, [importing, oldest, importing, older]);
+}
+
+/// The `mail_folder` stream of `link`.
+async fn folder_stream(db: &PgPool, link: Uuid) -> Uuid {
+    sqlx::query_scalar!(
+        "SELECT id FROM email_sync_streams WHERE link_id = $1 AND kind = 'mail_folder'",
+        link
+    )
+    .fetch_one(db)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_live_pass_claim_leaves_the_import_first_turn_to_the_next_folder_claim(db: PgPool) {
+    let importing = mailbox(&db, "importing@example.com", false, 0.0).await;
+    let polled = mailbox(&db, "polled@example.com", true, 1800.0).await;
+    // The importing folder's live pass, due longest of all.
+    let live = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,next_run_at,import_started_at)
+        VALUES ($1,$2,1,'mail_folder_live','folder',true,now() - interval '1 hour',now() - interval '1 hour')
+    "#,
+        live,
+        importing
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let round = folder_stream(&db, importing).await;
+    let poll = folder_stream(&db, polled).await;
+    let repo = PgMailboxSync::new(db.clone());
+    let switch = LiveImportPass::default();
+    switch.set(true);
+    let service = sync(
+        &repo,
+        Provider::paging(vec![checkpoint(), next_page(), checkpoint()]),
+    )
+    .with_live_import_pass(switch);
+
+    let mut read = Vec::new();
+    for _ in 0..3 {
+        assert!(service.enumerate_once().await.unwrap());
+        read.push(
+            sqlx::query_scalar!(
+                "SELECT id FROM email_sync_streams ORDER BY lease_started_at DESC NULLS LAST LIMIT 1"
+            )
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+        );
+    }
+
+    assert_eq!(read, [live, round, poll]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

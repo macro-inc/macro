@@ -26,22 +26,23 @@ impl StreamClaim {
     }
 }
 
-/// One turn in this many claims import rounds first. Polls of every finished
-/// folder of every mailbox share the sync loops and run minutes late, so a
-/// round that waited behind them read a page only every few minutes while
-/// its import sat empty. Taking a round first on every other turn keeps an
-/// import reading as soon as its mailbox has room, whatever the line's
-/// length, and leaves polls at least the other half: without a cap, a mailbox
-/// with hundreds of rounds due again every 10 s would take every turn. It
-/// matches the loop's one folder claim per message read.
+/// One mail folder claim in this many takes import rounds first. Polls of
+/// every finished folder of every mailbox share the sync loops and run
+/// minutes late, so a round that waited behind them read a page only every
+/// few minutes while its import sat empty. Taking a round first on every
+/// other claim keeps an import reading as soon as its mailbox has room,
+/// whatever the line's length; on the other claims rounds compete with polls
+/// by how long they have been due, so their head start is capped: without
+/// the cap, a mailbox with hundreds of rounds due again every 10 s would
+/// take every claim. It matches the loop's one folder claim per message read.
 const IMPORT_FIRST_EVERY: u32 = 2;
 
-/// One sync loop's turns, for the mail folder claim each one makes.
+/// One sync loop's mail folder claims, for which rule each one follows.
 #[derive(Debug, Default)]
 pub struct ClaimTurns(AtomicU32);
 
 impl ClaimTurns {
-    /// The mail folder claim of the next turn; the first turn takes import
+    /// The rule of the loop's next mail folder claim; the first takes import
     /// rounds first.
     pub fn next(&self) -> StreamClaim {
         let turn = self.0.fetch_add(1, Ordering::Relaxed);
