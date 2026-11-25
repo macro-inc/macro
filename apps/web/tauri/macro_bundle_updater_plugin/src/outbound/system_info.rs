@@ -74,8 +74,13 @@ pub(crate) fn bundle_storage_dir<R: Runtime>(
     #[cfg(any(target_os = "ios", target_os = "android"))]
     std::fs::create_dir_all(&path)?;
     // Android app backups are turned off in the manifest's backup rules.
+    // On iOS, setting the backup-exclusion attribute can fail transiently while
+    // the device is locked or backgrounded; treat it as best-effort so bundle
+    // startup, reload acknowledgements, and updates are never blocked by it.
     #[cfg(target_os = "ios")]
-    exclude_from_backup(&path)?;
+    if let Err(error) = exclude_from_backup(&path) {
+        tracing::warn!(%error, "Failed to exclude OTA bundle directory from backup");
+    }
     Ok(path)
 }
 

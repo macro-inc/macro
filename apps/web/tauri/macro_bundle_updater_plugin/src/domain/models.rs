@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use strum::IntoStaticStr;
 use thiserror::Error;
 use tokio::sync::mpsc::{Receiver, channel};
@@ -22,6 +22,52 @@ pub(crate) enum BundleRoot {
     Embedded,
     /// Serve files from an applied OTA directory.
     Ota(PathBuf),
+}
+
+/// Format a bundle directory path for persistence inside `cache_dir`.
+///
+/// Storing the relative directory name (e.g. `"0"`) keeps persisted markers valid
+/// when iOS relocates the app's data container UUID on App Store or TestFlight
+/// updates. Paths outside `cache_dir` fall back to their full representation.
+pub(crate) fn format_persisted_bundle_path(cache_dir: &Path, bundle_dir: &Path) -> String {
+    if let Ok(relative) = bundle_dir.strip_prefix(cache_dir) {
+        let mut components = relative.components();
+        if let (Some(Component::Normal(name)), None) = (components.next(), components.next()) {
+            return name.to_string_lossy().into_owned();
+        }
+    }
+    bundle_dir.to_string_lossy().into_owned()
+}
+
+/// Resolve a persisted bundle path marker against `cache_dir`.
+///
+/// Returns `(primary, relocated_fallback)`.
+/// - Relative markers must be a single normal directory name (rejecting path traversal).
+/// - Legacy absolute markers pointing at an older iOS container UUID return their
+///   stored path as `primary` and `Some(cache_dir.join(numeric_name))` as fallback.
+pub(crate) fn resolve_persisted_bundle_path(
+    cache_dir: &Path,
+    raw: &str,
+) -> Option<(PathBuf, Option<PathBuf>)> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let stored = Path::new(trimmed);
+    if stored.is_relative() {
+        let mut components = stored.components();
+        return match (components.next(), components.next()) {
+            (Some(Component::Normal(name)), None) => Some((cache_dir.join(name), None)),
+            _ => None,
+        };
+    }
+
+    let relocated = (stored.parent() != Some(cache_dir))
+        .then(|| stored.file_name().and_then(|name| name.to_str()))
+        .flatten()
+        .filter(|name| name.parse::<u64>().is_ok())
+        .map(|name| cache_dir.join(name));
+    Some((stored.to_path_buf(), relocated))
 }
 
 impl BundleRoot {
@@ -70,8 +116,23 @@ impl BundleRoot {
             return (Self::Embedded, read);
         }
 
-        // Preserve compatibility with the original absolute-path marker.
-        let path = PathBuf::from(contents.trim());
+        let Some((path, relocated_fallback)) = resolve_persisted_bundle_path(cache_dir, &contents)
+        else {
+            tracing::warn!(
+                raw = %contents.trim(),
+                "Persisted bundle root is invalid; clearing stale bundle_root file"
+            );
+            if let Err(e) = fs.remove_file(&persist_path).await {
+                tracing::debug!("Failed to remove stale bundle_root file: {e}");
+            }
+            let read = SavedSelectionRead {
+                selection: SavedSelection::Ota,
+                rejection: Some(BundleRejection::EntrypointUnreadable),
+                read_error: Some(std::io::ErrorKind::InvalidInput),
+            };
+            return (Self::Uninitialized, read);
+        };
+
         let index = path.join("index.html");
         match fs.read_to_string(&index).await {
             Ok(_) => {
@@ -84,6 +145,33 @@ impl BundleRoot {
                 (Self::Ota(path), read)
             }
             Err(e) => {
+                if e.kind() == std::io::ErrorKind::NotFound
+                    && let Some(relocated) = relocated_fallback
+                    && fs
+                        .read_to_string(&relocated.join("index.html"))
+                        .await
+                        .is_ok()
+                {
+                    tracing::info!(
+                        old_path = ?path,
+                        new_path = ?relocated,
+                        "Relocated legacy persisted bundle root after container move"
+                    );
+                    let root = Self::Ota(relocated);
+                    if let Err(err) = root.persist(cache_dir, fs).await {
+                        tracing::debug!(
+                            error = %err,
+                            "Failed to rewrite relocated bundle_root as relative path"
+                        );
+                    }
+                    let read = SavedSelectionRead {
+                        selection: SavedSelection::Ota,
+                        rejection: None,
+                        read_error: None,
+                    };
+                    return (root, read);
+                }
+
                 tracing::warn!(
                     error_kind = ?e.kind(),
                     "Persisted bundle root {path:?} missing index.html at {index:?}"
@@ -110,9 +198,11 @@ impl BundleRoot {
         let persist_path = cache_dir.join(BUNDLE_ROOT_FILE);
         match self {
             Self::Ota(root) => {
-                tracing::debug!("Persisting bundle root {root:?} to {persist_path:?}");
-                fs.write(&persist_path, root.to_string_lossy().as_bytes())
-                    .await
+                let stored = format_persisted_bundle_path(cache_dir, root);
+                tracing::debug!(
+                    "Persisting bundle root {root:?} as {stored:?} to {persist_path:?}"
+                );
+                fs.write(&persist_path, stored.as_bytes()).await
             }
             Self::Embedded => {
                 fs.create_dir_all(cache_dir).await?;

@@ -5,6 +5,7 @@ use crate::domain::{
         AppInfo, BundleAction, BundleManifest, BundleRoot, ClearRequiredStatus, CompletedStatus,
         NativeUpdateRequiredStatus, ProgressPercentage, Target, UnzipRequest, UnzipStatus,
         UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateGranted, UpdateStatus,
+        format_persisted_bundle_path, resolve_persisted_bundle_path,
     },
     ports::{AutoUpdateService, FsRepo, SystemQuery, TaskSpawner, UpdateRepo},
     startup::{BundleRejection, BundleStartup, StartupSelection},
@@ -576,11 +577,9 @@ async fn persist_pending_bundle(
     cache_dir: &Path,
     bundle_dir: &Path,
 ) -> Result<(), std::io::Error> {
-    fs.write(
-        &cache_dir.join(PENDING_BUNDLE_ROOT_FILE),
-        bundle_dir.to_string_lossy().as_bytes(),
-    )
-    .await
+    let stored = format_persisted_bundle_path(cache_dir, bundle_dir);
+    fs.write(&cache_dir.join(PENDING_BUNDLE_ROOT_FILE), stored.as_bytes())
+        .await
 }
 
 async fn clear_pending_bundle(fs: &impl FsRepo, cache_dir: &Path) -> Result<(), std::io::Error> {
@@ -897,9 +896,24 @@ impl<Fs: FsRepo> Service<Fs> {
                 .await;
         };
 
-        let bundle_dir = PathBuf::from(contents.trim());
-        self.restore_completed_bundle_dir(cache_dir, native_build, bundle_dir)
+        let Some((bundle_dir, relocated_fallback)) =
+            resolve_persisted_bundle_path(cache_dir, &contents)
+        else {
+            let _ = self.clear_pending_bundle(cache_dir).await;
+            return false;
+        };
+        if self
+            .restore_completed_bundle_dir(cache_dir, native_build, bundle_dir)
             .await
+        {
+            return true;
+        }
+        if let Some(relocated) = relocated_fallback {
+            return self
+                .restore_completed_bundle_dir(cache_dir, native_build, relocated)
+                .await;
+        }
+        false
     }
 
     async fn restore_latest_completed_download(
@@ -2086,7 +2100,7 @@ mod tests {
             fs.read_to_string(&cache_dir.join(PENDING_BUNDLE_ROOT_FILE))
                 .await
                 .unwrap(),
-            bundle_dir.to_string_lossy()
+            "0"
         );
     }
 
