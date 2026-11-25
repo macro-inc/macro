@@ -75,6 +75,28 @@ describe('CoordinatorGenerations', () => {
     expect(await page.pick()).toBe(3);
   });
 
+  it('leaves an attempt alone that began before its list of locks came', async () => {
+    const page = newPage();
+    const { query } = navigator.locks;
+    const asked = Promise.withResolvers<void>();
+    navigator.locks.query = async () => {
+      const held = await query();
+      await asked.promise;
+      return held;
+    };
+    running = [3];
+    const late = page.pick();
+    page.endAttempt();
+    navigator.locks.query = query;
+    running = [3, 7];
+    expect(await page.pick()).toBe(7);
+
+    asked.resolve();
+    await late;
+    running = [];
+    expect(await page.pick()).toBe(7);
+  });
+
   it('starts a generation when none answered and none runs', async () => {
     const page = await unansweredPage();
     expect(await page.renameUnanswered(false)).toBe(true);

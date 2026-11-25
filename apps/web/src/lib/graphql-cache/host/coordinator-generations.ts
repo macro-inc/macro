@@ -45,8 +45,9 @@ export class CoordinatorGenerations {
 
   /** The newest one that runs, or else the last this page knew. */
   async pick(): Promise<number> {
-    const started = this.started;
+    const { started, attempt } = this;
     const newest = (await this.running())?.at(-1);
+    if (attempt !== this.attempt) return this.current;
     this.current =
       started === undefined
         ? (newest ?? this.current)
