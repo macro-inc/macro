@@ -363,7 +363,8 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
     record.responseModel = planned.responseModel;
 
     if (planned.decision.kind === 'abort') {
-      return finish('aborted', planned.decision.reason);
+      // The abort's reason is model output: record that it aborted, not why.
+      return finish('aborted', 'model_aborted');
     }
     const label = planned.decision.label;
     if (!labels.includes(label)) {

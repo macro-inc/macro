@@ -225,4 +225,21 @@ describe('a lab run with the Kimi adapter on the stand-in', () => {
     expect(record.actions).toHaveLength(0);
     expect(lab.stats().submissions).toBe(0);
   });
+
+  test('an abort takes no action and its text is not recorded', async () => {
+    lab = createLab();
+    standIn = startStandIn(() =>
+      completion('{"abort":"model text that must not be kept"}')
+    );
+
+    const record = await run(
+      kimiPlanner({ baseUrl: standIn.baseUrl, apiKey: 'stand-in-key' })
+    );
+
+    expect(record.outcome).toBe('aborted');
+    expect(record.detail).toBe('model_aborted');
+    expect(JSON.stringify(record)).not.toContain('must not be kept');
+    expect(record.actions).toHaveLength(0);
+    expect(lab.stats().submissions).toBe(0);
+  });
 });
