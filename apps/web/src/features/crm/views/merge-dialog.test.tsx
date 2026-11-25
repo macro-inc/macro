@@ -781,3 +781,20 @@ it('says a failed search failed, with Retry, instead of no one matching', async 
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   expect(fixture.retry).toHaveBeenCalled();
 });
+
+it('keeps the matches it has when a later page fails, with Retry beside them', async () => {
+  fixture.searched = [
+    { id: 'old-pat', name: 'Pat Leigh', email: 'pleigh@acme.example.com' },
+  ];
+  fixture.searchError = new Error('next page failed');
+  fixture.commands = { review: vi.fn(), commit: vi.fn() };
+  open([PAT_L], 'contact');
+
+  fireEvent.input(screen.getByLabelText('Search people'), {
+    target: { value: 'pat le' },
+  });
+  expect(screen.getByText('Pat Leigh')).toBeTruthy();
+  expect(screen.getByText('Couldn’t search people.')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  expect(fixture.retry).toHaveBeenCalled();
+});

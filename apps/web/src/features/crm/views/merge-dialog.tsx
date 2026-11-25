@@ -652,28 +652,9 @@ function PickStep(props: {
         </p>
       </Show>
       <Show
-        when={matches().length > 0 || source.loading()}
+        when={matches().length > 0 || source.loading() || source.failed()}
         fallback={
-          <Show
-            when={source.failed()}
-            fallback={
-              <p class="text-sm text-ink-muted">{props.copy.noMatches()}</p>
-            }
-          >
-            <div
-              class="flex items-center gap-2 text-sm text-ink-muted"
-              role="alert"
-            >
-              <span>{t('crm.mergeSearchFailed')}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => fireAndForget(source.retry(), 'crm')}
-              >
-                {t('common.retry')}
-              </Button>
-            </div>
-          </Show>
+          <p class="text-sm text-ink-muted">{props.copy.noMatches()}</p>
         }
       >
         <div class="flex flex-col gap-1">
@@ -698,7 +679,22 @@ function PickStep(props: {
           </For>
         </div>
       </Show>
-      <Show when={source.hasMore()}>
+      <Show when={source.failed()}>
+        <div
+          class="flex items-center gap-2 text-sm text-ink-muted"
+          role="alert"
+        >
+          <span>{t('crm.mergeSearchFailed')}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => fireAndForget(source.retry(), 'crm')}
+          >
+            {t('common.retry')}
+          </Button>
+        </div>
+      </Show>
+      <Show when={source.hasMore() && !source.failed()}>
         <Button
           variant="ghost"
           size="sm"
