@@ -40,7 +40,8 @@ function transitionTo(
  */
 export function createCalendarLoadingTransition(
   onPhaseChange?: (phase: CalendarLoadingPhase) => void,
-  minimumVisibleMs = SKELETON_MIN_VISIBLE_MS
+  minimumVisibleMs = SKELETON_MIN_VISIBLE_MS,
+  showDelayMs = SKELETON_SHOW_DELAY_MS
 ) {
   const machine = createSolidMachine<
     LoadingState,
@@ -52,7 +53,11 @@ export function createCalendarLoadingTransition(
       hidden: {
         on: (_state, event) => {
           if (event.t === 'load-started') {
-            return transitionTo({ t: 'waiting' });
+            return transitionTo(
+              showDelayMs === 0
+                ? { t: 'visible', visibleSince: event.now, loading: true }
+                : { t: 'waiting' }
+            );
           }
 
           if (event.t === 'reset') {
@@ -130,7 +135,7 @@ export function createCalendarLoadingTransition(
           }
           lastFrameAt = now;
 
-          if (waitedMs >= SKELETON_SHOW_DELAY_MS) {
+          if (waitedMs >= showDelayMs) {
             dispatch({ t: 'delay-elapsed', now: Date.now() });
             return;
           }

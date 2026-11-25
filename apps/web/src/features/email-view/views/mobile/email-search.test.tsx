@@ -10,6 +10,7 @@ import {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 beforeEach(() => {
   localStorage.clear();
@@ -179,6 +180,33 @@ it('remembers the search on Search, before its results arrive', () => {
     'budget',
     'invoice',
   ]);
+});
+
+it('opens Search tips from the empty field, where typed text gets its X', () => {
+  // jsdom has neither ResizeObserver nor scrolling; the sheet uses both.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  vi.stubGlobal('scrollTo', vi.fn());
+  const { field } = renderPage();
+  field.focus();
+  expect(screen.queryByRole('button', { name: 'Clear search' })).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Search tips' }));
+  expect(screen.getByText('has:attachment')).toBeTruthy();
+  expect(screen.getByText('With attachments')).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: 'All search operators' })
+  ).toBeTruthy();
+
+  fireEvent.input(field, { target: { value: 'budget' } });
+  expect(screen.queryByRole('button', { name: 'Search tips' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Clear search' })).toBeTruthy();
 });
 
 it('keeps the keyboard up for the Enter that commits a composition', () => {

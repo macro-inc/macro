@@ -3,11 +3,10 @@ import { onElementConnect } from '@core/util/onElementConnect';
 import CheckIcon from '@icon/system/regular/check.svg';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
-import { Button, cn, Item, Spinner, ToggleSwitch, Tooltip } from '@ui';
+import { Button, cn, Item, Spinner, ToggleSwitch } from '@ui';
 import {
   createContext,
   createEffect,
-  createSignal,
   type JSX,
   Match,
   onCleanup,
@@ -16,15 +15,25 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { match } from 'ts-pattern';
 import type { SuggestionItemParts } from '../context/suggestions-source';
 import { type FeedEntry, savedRoutineId } from '../core/lists';
 import { doneWhenTakenUp, type Suggestion } from '../core/suggestion';
+import type { TopicHue } from '../core/topics';
+import { Cut } from './cut';
 import { suggestionLook } from './suggestion-tile';
+import { topicLook } from './topic-look';
 import { ageLabel } from './waiting';
 
 export type SuggestionRowProps = {
   entry: FeedEntry;
   parts: SuggestionItemParts;
+  /**
+   * The colour of the topic it is grouped under, or `none` for a row under
+   * none where others are; absent where nothing is grouped, and its kind
+   * colours its tile.
+   */
+  hue?: TopicHue | 'none';
   /** Whether a turned-on row's saved routine is on; undefined while unknown. */
   routineEnabled?: boolean;
   /** Take it up: run it, open its chat or item, or turn its routine on. */
@@ -43,46 +52,6 @@ export type SuggestionRowProps = {
   onRoutineEnabled(enabled: boolean): void;
 };
 
-/**
- * One line of text, cut where the row ends; pointing at a cut line shows all
- * of it. The child is the line itself, and it or a part of it does the
- * cutting (`truncate`).
- */
-function Cut(props: { children: JSX.Element }) {
-  // The line's whole text while some of it is cut off; undefined otherwise.
-  const [whole, setWhole] = createSignal<string>();
-
-  return (
-    <Tooltip.Root>
-      <Tooltip.Trigger
-        as="span"
-        class="flex min-w-0"
-        onPointerEnter={(event: PointerEvent & { currentTarget: Element }) => {
-          const line = event.currentTarget.firstElementChild;
-          const cut =
-            !!line &&
-            [line, ...line.querySelectorAll('*')].some(
-              (part) => part.scrollWidth > part.clientWidth
-            );
-          setWhole(cut ? (line.textContent ?? undefined) : undefined);
-        }}
-      >
-        {props.children}
-      </Tooltip.Trigger>
-      {/* Measured as the pointer arrives, before the tooltip's delay ends. */}
-      <Show when={whole()}>
-        {(text) => (
-          <Tooltip.Portal>
-            <Tooltip.Content>
-              <span class="block max-w-80 text-left">{text()}</span>
-            </Tooltip.Content>
-          </Tooltip.Portal>
-        )}
-      </Show>
-    </Tooltip.Root>
-  );
-}
-
 /** A row's second line: smaller and dimmer than its title, on one line. */
 function RowLine(props: { class?: string; children: JSX.Element }) {
   return (
@@ -99,10 +68,17 @@ function RowLine(props: { class?: string; children: JSX.Element }) {
   );
 }
 
-/** A 32px tile: the kind's glyph on its colour, or how the row stands. */
-function RowTile(props: { entry: FeedEntry }) {
+/** A 32px tile: the kind's glyph on its topic's colour or its own, or how the row stands. */
+function RowTile(props: { entry: FeedEntry; hue?: TopicHue | 'none' }) {
   const look = () => suggestionLook(props.entry.suggestion);
-  const neutral = 'bg-hover text-ink-muted';
+  // A row still to do or under way has its topic's colour or its kind's; one
+  // that settled, or that has no topic where others do, is neutral.
+  const hue = () =>
+    match(props.entry.state)
+      .with('markedDone', 'done', 'dismissed', () => 'none' as const)
+      .with('open', 'running', 'routineOn', () => props.hue ?? 'kind')
+      .with('failed', 'finished', () => undefined)
+      .exhaustive();
 
   return (
     <Item.Media
@@ -110,25 +86,18 @@ function RowTile(props: { entry: FeedEntry }) {
         'size-8 self-center rounded-lg',
         props.entry.state === 'failed' && 'bg-failure/15 text-failure',
         props.entry.state === 'finished' && 'bg-success/15 text-success',
-        (props.entry.state === 'markedDone' ||
-          props.entry.state === 'done' ||
-          props.entry.state === 'dismissed') &&
-          neutral,
-        (props.entry.state === 'open' ||
-          props.entry.state === 'running' ||
-          props.entry.state === 'routineOn') &&
-          look().fill
+        match(hue())
+          .with(undefined, () => undefined)
+          .with('none', () => 'bg-hover text-ink-muted')
+          .with('kind', () => cn(look().fill, look().tint))
+          .otherwise((topic) => topicLook(topic).tile)
       )}
       aria-hidden="true"
       data-suggestion-tile
     >
-      <Switch
-        fallback={
-          <Dynamic component={look().icon} class={cn('size-4', look().tint)} />
-        }
-      >
+      <Switch fallback={<Dynamic component={look().icon} class="size-4" />}>
         <Match when={props.entry.state === 'running'}>
-          <Spinner size="sm" decorative class={cn('size-4', look().tint)} />
+          <Spinner size="sm" decorative class="size-4" />
         </Match>
         <Match when={props.entry.state === 'failed'}>
           <WarningCircleIcon class="size-4" />
@@ -748,7 +717,7 @@ export function SuggestionRow(props: SuggestionRowProps) {
         data-suggestion-settled={settled() ? '' : undefined}
         class="group/suggestion h-14 border-0 px-4 py-2 has-focus-visible:bg-hover not-touch:hover:bg-hover"
       >
-        <RowTile entry={props.entry} />
+        <RowTile entry={props.entry} hue={props.hue} />
         <Item.Content class="gap-0.5">
           <Show
             when={pressAction(props)}

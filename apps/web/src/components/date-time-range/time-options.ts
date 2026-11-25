@@ -1,6 +1,7 @@
 import { formatLocalDate, parseLocalDate } from '@core/util/local-date';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { minutesInDay, minutesInHour } from 'date-fns/constants';
+import { type ClockDisplayFormat, formatClockTime } from './clock-format';
 
 /** Granularity of every time picker. */
 const SLOT_MINUTES = 15;
@@ -10,21 +11,6 @@ const SLOT_MINUTES = 15;
  * short of a full day, so a same-start end time is never listed twice.
  */
 const MAX_RANGE_MINUTES = minutesInDay - SLOT_MINUTES;
-
-const timeLabelFormatters = new Map<boolean | undefined, Intl.DateTimeFormat>();
-
-/** Clock labels on a 12-hour (`true`) or 24-hour (`false`) clock, else the locale's. */
-function timeLabelFormatter(hour12: boolean | undefined) {
-  const cached = timeLabelFormatters.get(hour12);
-  if (cached) return cached;
-  const formatter = new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-    ...(hour12 === undefined ? {} : { hour12 }),
-  });
-  timeLabelFormatters.set(hour12, formatter);
-  return formatter;
-}
 
 /** One selectable clock time in a time picker. */
 export interface TimeOption {
@@ -63,19 +49,18 @@ export function parseTimeValue(value: string): number | undefined {
 /** Localized clock label for an `HH:mm` value. */
 export function formatTimeValue(
   value: string,
-  hour12?: boolean
+  format?: ClockDisplayFormat
 ): string | undefined {
   const minutesOfDay = parseTimeValue(value);
   if (minutesOfDay === undefined) return undefined;
-  return timeLabelFormatter(hour12).format(
-    new Date(
-      2000,
-      0,
-      1,
-      Math.floor(minutesOfDay / minutesInHour),
-      minutesOfDay % minutesInHour
-    )
+  const date = new Date(
+    2000,
+    0,
+    1,
+    Math.floor(minutesOfDay / minutesInHour),
+    minutesOfDay % minutesInHour
   );
+  return formatClockTime(date, format);
 }
 
 /** `30min`, `1h`, `1h 15min` — Google Calendar's compact duration. */
@@ -89,37 +74,40 @@ export function formatDuration(minutes: number): string {
 function timeOption(
   minutesOfDay: number,
   dayOffset: number,
-  hour12: boolean | undefined,
-  detail?: string
+  detail?: string,
+  format?: ClockDisplayFormat
 ) {
   const value = timeValue(minutesOfDay);
   return {
     id: optionId(dayOffset, value),
     value,
-    label: formatTimeValue(value, hour12) ?? value,
+    label: formatTimeValue(value, format) ?? value,
     dayOffset,
     ...(detail ? { detail } : {}),
   };
 }
 
-function quarterHours(hour12: boolean | undefined): TimeOption[] {
+function createDayTimeOptions(format?: ClockDisplayFormat): TimeOption[] {
   return Array.from({ length: minutesInDay / SLOT_MINUTES }, (_, index) =>
-    timeOption(index * SLOT_MINUTES, 0, hour12)
+    timeOption(index * SLOT_MINUTES, 0, undefined, format)
   );
 }
 
-/** Every quarter-hour in a day, used wherever no start anchors the choice. */
-export const DAY_TIME_OPTIONS: TimeOption[] = quarterHours(undefined);
-
+export const DAY_TIME_OPTIONS = createDayTimeOptions();
 const DAY_TIME_OPTIONS_BY_CLOCK = {
-  12: quarterHours(true),
-  24: quarterHours(false),
+  true: createDayTimeOptions(true),
+  false: createDayTimeOptions(false),
+  '12-hour': createDayTimeOptions('12-hour'),
+  '24-hour': createDayTimeOptions('24-hour'),
 };
 
-/** `DAY_TIME_OPTIONS` on a 12-hour (`true`) or 24-hour (`false`) clock. */
-export function dayTimeOptions(hour12?: boolean): TimeOption[] {
-  if (hour12 === undefined) return DAY_TIME_OPTIONS;
-  return DAY_TIME_OPTIONS_BY_CLOCK[hour12 ? 12 : 24];
+/** Stable quarter-hour choices in the requested display format. */
+export function dayTimeOptions(format?: ClockDisplayFormat): TimeOption[] {
+  if (typeof format === 'boolean')
+    return DAY_TIME_OPTIONS_BY_CLOCK[format ? 'true' : 'false'];
+  return format === undefined
+    ? DAY_TIME_OPTIONS
+    : DAY_TIME_OPTIONS_BY_CLOCK[format];
 }
 
 /**
@@ -129,10 +117,12 @@ export function dayTimeOptions(hour12?: boolean): TimeOption[] {
  */
 export function endTimeOptions(
   startTime: string,
-  hour12?: boolean
+  format?: ClockDisplayFormat
 ): TimeOption[] {
   const startMinutes = parseTimeValue(startTime);
-  if (startMinutes === undefined) return dayTimeOptions(hour12);
+  if (startMinutes === undefined) {
+    return format === undefined ? DAY_TIME_OPTIONS : dayTimeOptions(format);
+  }
 
   const options: TimeOption[] = [];
   for (
@@ -145,8 +135,8 @@ export function endTimeOptions(
       timeOption(
         total % minutesInDay,
         Math.floor(total / minutesInDay),
-        hour12,
-        formatDuration(duration)
+        formatDuration(duration),
+        format
       )
     );
   }
@@ -219,7 +209,7 @@ export function matchTypedTime(
 export function typedTimeOption(
   options: TimeOption[],
   text: string,
-  hour12?: boolean
+  format?: ClockDisplayFormat
 ): TimeOption | undefined {
   const matched = matchTypedTime(options, text);
   if (matched) return matched;
@@ -229,7 +219,9 @@ export function typedTimeOption(
   const [soonest] = typedTimeCandidates(text).sort(
     (left, right) => after(left) - after(right)
   );
-  return soonest === undefined ? undefined : timeOption(soonest, 0, hour12);
+  return soonest === undefined
+    ? undefined
+    : timeOption(soonest, 0, undefined, format);
 }
 
 /**

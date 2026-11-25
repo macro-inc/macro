@@ -48,7 +48,9 @@ can't infer need types.
   its code, the offending line and `at main.ts:<line>:<column>`. A member an
   SDK class or interface doesn't have (TS2339; a near miss is TS2551 with the
   checker's own suggestion) is followed by the members it has, inherited ones
-  included (`sdk_members`).
+  included (`sdk_members`). A string literal an SDK string union doesn't
+  take (TS2322, or TS2345 for an argument) is followed by the union's values
+  (`sdk_string_literals`), since the checker names only the alias.
 - The checker is busy (every slot and queue place taken) or fails: the run
   fails (`Limit` or `Internal`) and doesn't run unchecked.
 - A check inside the run counts against the run's deadline and is cancelled

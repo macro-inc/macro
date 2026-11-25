@@ -26,7 +26,7 @@ spec:
     metadata:
       annotations:
         checksum/config: 0e83658f9309cf2f8f80548544f3e697e2396c52873c6d8ade16db393d1e4089
-        checksum/provisioning: e9a448cbecd09b3e718696a770c8973aa6602b4cca5852934cbdd388607fb405
+        checksum/provisioning: 430db35f1cd2bdfd0cb01dedaa78bae7ce32a0a6d277599987d0b66bc06e56c3
         checksum/sc-dashboard-provider-config: e70bf6a851099d385178a76de9757bb0bef8299da6d8443602590e44f05fdf24
         kubectl.kubernetes.io/default-container: grafana
       labels:
@@ -147,6 +147,9 @@ spec:
             - mountPath: /etc/grafana/dashboards/macro
               name: grafana-dashboards-macro
               readOnly: true
+            - mountPath: /etc/grafana/dashboards/macro-agents
+              name: grafana-dashboards-macro-agents
+              readOnly: true
             - mountPath: /etc/grafana/dashboards/macro-ci
               name: grafana-dashboards-macro-ci
               readOnly: true
@@ -224,6 +227,9 @@ spec:
         - configMap:
             name: grafana-dashboards-macro
           name: grafana-dashboards-macro
+        - configMap:
+            name: grafana-dashboards-macro-agents
+          name: grafana-dashboards-macro-agents
         - configMap:
             name: grafana-dashboards-macro-ci
           name: grafana-dashboards-macro-ci

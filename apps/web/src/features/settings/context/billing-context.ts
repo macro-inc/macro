@@ -1,9 +1,11 @@
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import type { Accessor } from 'solid-js';
 import type { PaidPlanTier, PlanTier } from '../../paywall/plans';
 
 /** Billing presentation capabilities, supplied by the app or the local sandbox. */
 export type BillingContext = {
   tier: Accessor<PlanTier>;
+  interval?: Accessor<BillingInterval | undefined>;
   renewalDate: Accessor<string | undefined>;
   subscriptionStatusFailed?: Accessor<boolean>;
   refreshStatus?: () => void;
@@ -20,7 +22,7 @@ export type BillingContext = {
   canManageSubscription: Accessor<boolean>;
   canChangePlan: Accessor<boolean>;
   changingPlan: Accessor<boolean>;
-  checkout: (plan: PaidPlanTier) => Promise<void>;
+  checkout: (plan: PaidPlanTier, interval: BillingInterval) => Promise<void>;
   changePlan: (plan: PaidPlanTier) => Promise<void>;
   manage: () => Promise<void>;
   openTeamSettings?: () => void;

@@ -10,6 +10,12 @@ const entry = vi.hoisted(() => ({
   replace: vi.fn(),
   navigate: vi.fn(),
   comment: undefined as string | undefined,
+  link: { section: '' },
+  setLink: vi.fn(),
+}));
+
+vi.mock('@app/lib/split-router', () => ({
+  createSearchParams: () => [entry.link, entry.setLink],
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
@@ -90,6 +96,8 @@ afterEach(() => {
   entry.replace.mockReset();
   entry.navigate.mockReset();
   entry.comment = undefined;
+  entry.link = { section: '' };
+  entry.setLink.mockReset();
 });
 
 it('shows the company a merged one went into in place of it', () => {
@@ -157,4 +165,24 @@ it('opens another company previewed in the same entry on its overview', () => {
 it('opens a company on its overview when its entry holds no section', () => {
   render(() => <CompanyBlockAdapter />);
   expect(screen.getByText('Showing overview')).toBeTruthy();
+});
+
+it('opens on the section a link names, once, then takes it out of the URL', () => {
+  entry.link = { section: 'team' };
+  render(() => <CompanyBlockAdapter />);
+  expect(screen.getByText('Showing team')).toBeTruthy();
+  expect(entry.setLink).toHaveBeenCalledExactlyOnceWith(
+    { section: '' },
+    { history: 'replace' }
+  );
+});
+
+it('opens on its overview when a link names no company section', () => {
+  entry.link = { section: 'unknown' };
+  render(() => <CompanyBlockAdapter />);
+  expect(screen.getByText('Showing overview')).toBeTruthy();
+  expect(entry.setLink).toHaveBeenCalledWith(
+    { section: '' },
+    { history: 'replace' }
+  );
 });

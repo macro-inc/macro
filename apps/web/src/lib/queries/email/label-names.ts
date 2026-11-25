@@ -15,7 +15,12 @@ export type LabelNames = {
 };
 
 /** A label of one of the viewer's inboxes, as their label list holds it. */
-type InboxLabel = { id: string; linkId: string; name: string };
+type InboxLabel = {
+  id: string;
+  linkId: string;
+  name: string;
+  labelListVisibility?: string;
+};
 
 /** A label as a thread or a row carries it. */
 type CarriedLabel = {
@@ -105,6 +110,10 @@ export function useEmailLabelNames(enabled: Accessor<boolean> = () => true) {
 export type InboxLabelEntry = ShownLabel & {
   /** The name its provider gave it ("Customers/Larkspur"), which search matches. */
   storedName: string;
+  /** Its parents' names and its own, outermost first. */
+  path: string[];
+  /** Whether Gmail shows it in its own label list. */
+  listed: boolean;
 };
 
 /**
@@ -126,6 +135,8 @@ export function inboxLabelsOf(
       name: leaf,
       fullName: formatLabelPath(path),
       storedName: label.name,
+      path,
+      listed: label.labelListVisibility !== 'LabelHide',
     }))
   );
 }

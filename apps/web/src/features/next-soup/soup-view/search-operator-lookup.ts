@@ -1,4 +1,5 @@
 import type { SearchOperatorLookup } from '@app/features/next-soup/core/search-operator-filters';
+import { nameAsTyped } from '@app/features/next-soup/core/search-operators';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { useMailAccountsQuery } from '@queries/email/mail-accounts';
@@ -9,7 +10,7 @@ import type { createTagFilter } from './filters-bar/tag-filter-state';
 /**
  * What the names typed into Search operators reach, from what the app
  * already holds for the Search filters: the caller's tag options, their
- * inboxes, and the named channels they are in. Names match ignoring case,
+ * inboxes, and the channels and DMs they are in. Names match ignoring case,
  * the whole name, as the search service matches them.
  */
 export function createSearchOperatorLookup(
@@ -17,8 +18,8 @@ export function createSearchOperatorLookup(
 ): Accessor<SearchOperatorLookup> {
   const userId = useUserId();
   const linksQuery = useMailAccountsQuery();
-  // The channel bucket leaves DMs out, as `in:#` does.
-  const channels = useQuickAccess().useList('channel').items;
+  // A DM goes by the other person's name, as the channel list shows it.
+  const channels = useQuickAccess().useList('channel', 'dm').items;
 
   return createMemo(() => {
     const tags = tagFilter.options();
@@ -31,7 +32,8 @@ export function createSearchOperatorLookup(
         const wanted = name.toLowerCase();
         return tags.flatMap((option) => {
           const propertyId = tagSets.get(option.id);
-          return option.label.toLowerCase() === wanted && propertyId
+          return nameAsTyped(option.label).toLowerCase() === wanted &&
+            propertyId
             ? [{ propertyId, optionId: option.id }]
             : [];
         });

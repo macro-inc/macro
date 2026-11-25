@@ -1,3 +1,4 @@
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   MoveEntitiesDocument,
   SaveEmailDraftDocument,
@@ -36,6 +37,7 @@ import {
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
 import { createUrqlQuery } from '../../urql-solid/create-urql-query';
+import { TRACE_PARENT_CONTEXT_KEY } from '../../urql-solid/trace-parent-exchange';
 import { StaleCacheAuthorityError } from '../authority';
 import { CacheNavigationError } from '../host/navigation-error';
 import { createRetirableCacheHost } from '../host/retirable-host';
@@ -303,7 +305,7 @@ function makeFakeHost(): FakeHost {
       queue.length = 0;
       nextTransaction = 0;
       readResult = { kind: 'miss' };
-      host.pushGeneration({ storage: 'reset' });
+      host.pushGeneration({ storage: 'reset', queue: 'reset' });
     },
     reads: [],
     writes: [],
@@ -5382,11 +5384,34 @@ describe('normalizedCacheExchange', () => {
         vi.restoreAllMocks();
       });
 
+      it('commits a mutation in flight when a reset database keeps its queue', async () => {
+        const { ops, network, forwarded } = controlledQueryHarness(host);
+        const data = { setEntityProperty: { id: 'in-flight' } };
+        ops.next(makeMutationOp(1, data));
+        await vi.advanceTimersByTimeAsync(1);
+        expect(forwarded).toHaveLength(1);
+
+        host.pushGeneration({ storage: 'reset', queue: 'preserved' });
+        await vi.advanceTimersByTimeAsync(1);
+        network.next(queryResult(forwarded[0], data));
+        await vi.advanceTimersByTimeAsync(300_000);
+
+        expect(host.commits).toEqual([
+          {
+            transactionId: '1',
+            query: stringifyDocument(MUTATION),
+            data,
+          },
+        ]);
+        expect(host.claims).toEqual(['1']);
+        expect(forwarded).toHaveLength(1);
+      });
+
       it('backs off empty cache wakeups while offline without spinning', async () => {
         vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
         const claim = vi.spyOn(host, 'claimNextMutation');
         const { forwarded } = harness(host);
-        host.pushGeneration({ storage: 'reset' });
+        host.pushGeneration({ storage: 'reset', queue: 'reset' });
         await vi.advanceTimersByTimeAsync(1_000);
         expect(claim).toHaveBeenCalledOnce();
         expect(host.claims).toEqual([]);
@@ -5423,14 +5448,15 @@ describe('normalizedCacheExchange', () => {
               await ready.promise;
               return await claimNext(...args);
             });
-          if (wake === 'restore') host.pushGeneration({ storage: 'preserved' });
+          if (wake === 'restore')
+            host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
           if (wake === 'online') events.dispatchEvent(new Event('online'));
           await vi.advanceTimersByTimeAsync(wake === 'poll' ? 30_000 : 0);
           const claimsBeforeReady = claim.mock.calls.length;
           await vi.advanceTimersByTimeAsync(5_000);
           // BFCache readiness conservatively invalidates the local epoch even
           // when the durable database (including this queued head) survived.
-          host.pushGeneration({ storage: 'reset' });
+          host.pushGeneration({ storage: 'reset', queue: 'reset' });
           const readyAt = Date.now();
           ready.resolve();
           await vi.advanceTimersByTimeAsync(1);
@@ -5552,7 +5578,8 @@ describe('normalizedCacheExchange', () => {
             const sendsBeforeWake = forwarded.length;
             await vi.advanceTimersByTimeAsync(100);
             if (wake === 'online') events.dispatchEvent(new Event('online'));
-            else host.pushGeneration({ storage: 'preserved' });
+            else
+              host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
             deferring.resolve();
             await vi.advanceTimersByTimeAsync(1);
@@ -5583,7 +5610,7 @@ describe('normalizedCacheExchange', () => {
           .spyOn(host, 'claimNextMutation')
           .mockResolvedValue(undefined);
         await vi.advanceTimersByTimeAsync(100);
-        host.pushGeneration({ storage: 'preserved' });
+        host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
         await vi.advanceTimersByTimeAsync(0);
         expect(claim).toHaveBeenCalledOnce();
         await vi.advanceTimersByTimeAsync(1_000);
@@ -5608,7 +5635,7 @@ describe('normalizedCacheExchange', () => {
           expect(claim).toHaveBeenCalledOnce();
 
           if (restoreWhilePending) {
-            host.pushGeneration({ storage: 'preserved' });
+            host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
             expect(claim).toHaveBeenCalledOnce();
           }
@@ -5616,7 +5643,7 @@ describe('normalizedCacheExchange', () => {
           await vi.advanceTimersByTimeAsync(1);
           if (!restoreWhilePending) {
             expect(forwarded).toHaveLength(0);
-            host.pushGeneration({ storage: 'preserved' });
+            host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
           }
 
@@ -5657,14 +5684,14 @@ describe('normalizedCacheExchange', () => {
           const claimsBeforeRestore = claim.mock.calls.length;
 
           if (restoreWhilePending) {
-            host.pushGeneration({ storage: 'preserved' });
+            host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
             expect(claim).toHaveBeenCalledTimes(claimsBeforeRestore);
           }
           pendingCommit.reject(new CacheNavigationError());
           await vi.advanceTimersByTimeAsync(1);
           if (!restoreWhilePending) {
-            host.pushGeneration({ storage: 'preserved' });
+            host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
           }
 
@@ -6067,7 +6094,7 @@ describe('normalizedCacheExchange', () => {
       const enqueue = host.enqueueOptimisticMutation.bind(host);
       host.enqueueOptimisticMutation = async (args, claim) => {
         const queued = await enqueue(args, claim);
-        host.pushGeneration({ storage: 'reset' });
+        host.pushGeneration({ storage: 'reset', queue: 'reset' });
         return queued;
       };
       const { ops, results, forwarded } = harness(host);
@@ -6233,7 +6260,8 @@ describe('normalizedCacheExchange', () => {
         const enqueueAttempts = vi.fn(async () => {
           if (enqueueAttempts.mock.calls.length < refusedAt)
             throw new Error('a patch no longer fits');
-          if (storageChanges) host.pushGeneration({ storage: 'reset' });
+          if (storageChanges)
+            host.pushGeneration({ storage: 'reset', queue: 'reset' });
           throw refusal;
         });
         host.enqueueOptimisticMutation = enqueueAttempts;
@@ -6689,6 +6717,225 @@ describe('normalizedCacheExchange', () => {
         expect(results[0]?.data).toBe(data);
       }
     );
+
+    it('enqueues, attempts and sends a traced optimistic mutation in its trace', async () => {
+      const parent = { run: <T>(work: () => T) => work() };
+      const enqueued: unknown[] = [];
+      const sent: Array<{ mode: string; parent: unknown }> = [];
+      let inAttempt = false;
+      const fetchedInAttempt: boolean[] = [];
+      const { ops, forwarded } = harness(host, undefined, {
+        mutationQueueTelemetry: {
+          ...NOOP_MUTATION_QUEUE_TELEMETRY,
+          enqueue: (item) => {
+            enqueued.push(item.parent);
+            return NOOP_MUTATION_QUEUE_TELEMETRY.enqueue(item);
+          },
+          attempt: () => ({
+            run: (send) => {
+              inAttempt = true;
+              try {
+                return send();
+              } finally {
+                inAttempt = false;
+              }
+            },
+            sent: (mode, sentParent) => sent.push({ mode, parent: sentParent }),
+            finish: () => undefined,
+          }),
+        },
+      });
+      const base = makeMutationOp(30, optimistic);
+
+      ops.next(
+        makeOperation(base.kind, base, {
+          ...base.context,
+          [TRACE_PARENT_CONTEXT_KEY]: parent,
+          fetch: async () => {
+            fetchedInAttempt.push(inAttempt);
+            return new Response('{}');
+          },
+        })
+      );
+      await tick();
+
+      expect(enqueued).toEqual([parent]);
+      expect(sent).toEqual([{ mode: 'live', parent }]);
+      const mutation = forwarded.find((op) => op.kind === 'mutation');
+      await mutation?.context.fetch?.('http://test');
+      expect(fetchedInAttempt).toEqual([true]);
+    });
+
+    describe('a traced mutation without optimism', () => {
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      const deletion = {
+        __typename: 'GraphqlCacheDeletion',
+        graphqlTypeName: 'GraphqlSoupDocument',
+        entityId: 'document-1',
+      };
+      const update = {
+        __typename: 'SoupUpdated',
+        item: {
+          __typename: 'GraphqlSoupDocument',
+          id: 'document-1',
+          displayName: 'Renamed',
+        },
+      };
+      const data = {
+        renameEntities: {
+          results: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              effects: [deletion, update],
+            },
+          ],
+        },
+      };
+
+      /** Spans by name, each with its parent, attributes and work done in it. */
+      function recordSpans() {
+        const active: string[] = [];
+        const within = <T>(name: string, work: () => T): T => {
+          active.push(name);
+          try {
+            return work();
+          } finally {
+            active.pop();
+          }
+        };
+        const spans: Array<{
+          name: string;
+          parent: string | undefined;
+          attributes: Record<string, unknown>;
+        }> = [];
+        const open = (name: string, parent: string | undefined): Span => {
+          const attributes: Record<string, unknown> = {};
+          spans.push({ name, parent, attributes });
+          return {
+            setAttr: (key: string, value: unknown) => {
+              attributes[key] = value;
+            },
+            span: (child: string) => open(child, name),
+            run: <T>(work: () => T) => within(name, work),
+            event: () => undefined,
+            error: () => undefined,
+            end: () => undefined,
+            traceparent: () => undefined,
+            injectTraceHeaders: () => undefined,
+          } as unknown as Span;
+        };
+        vi.spyOn(Telemetry, 'span').mockImplementation(((
+          name: string,
+          operation?: (span: Span) => Promise<unknown>
+        ) => {
+          const span = open(name, active.at(-1));
+          return operation ? operation(span) : span;
+        }) as never);
+        const parent = {
+          run: <T>(work: () => T) => within('entity.trash', work),
+        };
+        return { spans, parent, active };
+      }
+
+      it('applies its cache writes as one phase of the caller’s trace', async () => {
+        const { spans, parent, active } = recordSpans();
+        const writtenIn: Array<string | undefined> = [];
+        const write = host.writeQuery.bind(host);
+        vi.spyOn(host, 'writeQuery').mockImplementation(async (args) => {
+          writtenIn.push(active.at(-1));
+          return await write(args);
+        });
+        const remove = host.deleteRecords.bind(host);
+        vi.spyOn(host, 'deleteRecords').mockImplementation(async (...args) => {
+          writtenIn.push(active.at(-1));
+          return await remove(...args);
+        });
+        const base = makeRenameMutationOp(20);
+        const { ops, results } = harness(
+          host,
+          (op) => (op.kind === 'mutation' ? { data } : {}),
+          { deletedRecordKeys: () => ['GraphqlSoupDocument:document-2'] }
+        );
+
+        ops.next(
+          makeOperation(base.kind, base, {
+            ...base.context,
+            [TRACE_PARENT_CONTEXT_KEY]: parent,
+          })
+        );
+        await tick();
+
+        expect(results[0]?.data).toBe(data);
+        expect(spans).toEqual([
+          {
+            name: 'graphql.mutation.cache_effects',
+            parent: 'entity.trash',
+            attributes: {
+              'graphql.operation.name': 'RenameEntities',
+              'cache.effect_count': 2,
+              'cache.deleted_record_count': 1,
+              'cache.effects_applied': true,
+            },
+          },
+          {
+            name: 'graphql.mutation.cache_delete',
+            parent: 'graphql.mutation.cache_effects',
+            attributes: {},
+          },
+          {
+            name: 'graphql.mutation.cache_write',
+            parent: 'graphql.mutation.cache_effects',
+            attributes: {},
+          },
+        ]);
+        // Each host call starts in its phase, so its own spans nest there.
+        expect(writtenIn).toEqual([
+          'graphql.mutation.cache_delete',
+          'graphql.mutation.cache_write',
+          'graphql.mutation.cache_effects',
+        ]);
+      });
+
+      it('marks the phase when a cache write fails, and still answers', async () => {
+        const { spans, parent } = recordSpans();
+        vi.spyOn(host, 'writeQuery').mockRejectedValue(new Error('engine'));
+        const base = makeRenameMutationOp(21);
+        const { ops, results } = harness(host, (op) =>
+          op.kind === 'mutation' ? { data } : {}
+        );
+
+        ops.next(
+          makeOperation(base.kind, base, {
+            ...base.context,
+            [TRACE_PARENT_CONTEXT_KEY]: parent,
+          })
+        );
+        await tick();
+
+        expect(results[0]?.data).toBe(data);
+        expect(spans[0]?.attributes).toMatchObject({
+          'cache.effects_applied': false,
+          'cache.failure': expect.any(String),
+        });
+      });
+
+      it('opens no span for a mutation whose caller named no trace', async () => {
+        const { spans } = recordSpans();
+        const { ops, results } = harness(host, (op) =>
+          op.kind === 'mutation' ? { data } : {}
+        );
+
+        ops.next(makeRenameMutationOp(22));
+        await tick();
+
+        expect(results[0]?.data).toBe(data);
+        expect(host.cacheActions).toHaveLength(2);
+        expect(spans).toEqual([]);
+      });
+    });
 
     it('skips stale explicit effects and revalidations for a superseded commit', async () => {
       const deletion = {

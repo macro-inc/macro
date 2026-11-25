@@ -13,6 +13,7 @@ mod channel_timeline;
 mod hydration_scope;
 mod mail_projection;
 mod people;
+mod queue_salvage;
 mod schema_change;
 mod schema_cost;
 
@@ -2767,9 +2768,13 @@ async fn move_opfs_pair(from: &str, to: &str) {
 }
 
 async fn queue_one_mutation(engine: &CacheEngine) {
+    queue_mutation(engine, "00000000-0000-4000-8000-000000000011").await;
+}
+
+async fn queue_mutation(engine: &CacheEngine, uuid: &str) {
     resolved(engine.enqueue_optimistic_mutation(
         None,
-        "00000000-0000-4000-8000-000000000011".into(),
+        uuid.into(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_variables()),
@@ -3036,12 +3041,13 @@ async fn idle_checkpoint_copies_a_due_wal_once_and_keeps_reads() {
             copied = Some(result);
             break;
         }
-        // Below 500 frames nothing is copied.
+        // The browser connection copies its own WAL: nothing below 4,000
+        // frames, in COMMIT or here.
         assert_eq!(result["backfilledFrames"], 0);
-        assert!(result["walFrames"].as_u64().unwrap() < 500);
+        assert!(result["walFrames"].as_u64().unwrap() < 4_000);
     }
-    let copied = copied.expect("the WAL reached 500 frames");
-    assert!(copied["walFrames"].as_u64().unwrap() >= 500);
+    let copied = copied.expect("the WAL reached 4,000 frames");
+    assert!(copied["walFrames"].as_u64().unwrap() >= 4_000);
     assert_eq!(copied["backfilledFrames"], copied["walFrames"]);
 
     // Nothing new since the copy: the next call skips it.

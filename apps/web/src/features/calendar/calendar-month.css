@@ -1,0 +1,39 @@
+html[data-touch-device="true"] .calendar-view-content.phone-month-content {
+  padding-bottom: 0;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day {
+  border: 0 solid var(--fc-border-color);
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+
+/* Only date-cell boundaries divide Month; its internal content has no subgrid. */
+.calendar-view .fc .fc-dayGridMonth-view :is(.fc-daygrid-day-frame, .fc-daygrid-day-top, .fc-daygrid-day-events) {
+  border: 0;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view tr > .fc-daygrid-day:last-child {
+  border-right-width: 0;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view tbody > tr:last-child > .fc-daygrid-day {
+  border-bottom-width: 0;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-scrollgrid-section-header > * {
+  border-bottom-width: 0;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-col-header-cell {
+  border-bottom: 0;
+  text-align: start;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-col-header-cell-cushion {
+  padding: 0.5rem 0.625rem;
+}
+
+.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day.fc-day-today .fc-daygrid-day-number::before {
+  border-radius: 9999px;
+}

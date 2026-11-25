@@ -468,7 +468,8 @@ struct BegunOptimisticWrite {
 pub const IDENTITY_META_KEY: &str = "__meta:identity";
 /// Account identity field in the stored witness.
 pub const IDENTITY_VALUE_FIELD: &str = "identity";
-const STORAGE_GENERATION_META_KEY: &str = "__meta:storage-generation";
+/// Stored marker of one database's data, which no other database carries.
+pub const STORAGE_GENERATION_META_KEY: &str = "__meta:storage-generation";
 const STORAGE_GENERATION_VALUE_FIELD: &str = "generation";
 /// Prefix of the engine's own metadata keys, which no entity key can carry.
 const METADATA_KEY_PREFIX: &str = "__meta:";

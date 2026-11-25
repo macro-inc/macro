@@ -74,7 +74,6 @@ use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, ContainerSender, MockContainerManager};
 use crate::testing::helpers::egress::{EgressProvisionerMock, test_egress};
-use crate::testing::helpers::mentions::PromptMentionsMock;
 use crate::testing::helpers::notifier::NotifierMock;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::ReplicaId;
@@ -309,7 +308,6 @@ type TestHarness = AgentHarnessService<
     PromptComposerMock,
     EgressProvisionerMock,
     RecordingLifecyclePublisher,
-    PromptMentionsMock,
     NotifierMock,
 >;
 
@@ -479,20 +477,7 @@ fn harness_with_signals(
     prompt_context: PromptContextMock,
     prompt_composer: PromptComposerMock,
 ) -> (TestBench, TurnSignals) {
-    harness_with_mentions(prompt_context, prompt_composer, PromptMentionsMock::new())
-}
-
-fn harness_with_mentions(
-    prompt_context: PromptContextMock,
-    prompt_composer: PromptComposerMock,
-    mentions: PromptMentionsMock,
-) -> (TestBench, TurnSignals) {
-    harness_with_policies_and_mentions(
-        prompt_context,
-        prompt_composer,
-        KindDefaultPolicies,
-        mentions,
-    )
+    harness_with_policy(prompt_context, prompt_composer, KindDefaultPolicies)
 }
 
 fn harness_with_policy(
@@ -500,26 +485,11 @@ fn harness_with_policy(
     prompt_composer: PromptComposerMock,
     permission_policies: impl crate::domain::ports::PermissionPolicySource,
 ) -> (TestBench, TurnSignals) {
-    harness_with_policies_and_mentions(
-        prompt_context,
-        prompt_composer,
-        permission_policies,
-        PromptMentionsMock::new(),
-    )
-}
-
-fn harness_with_policies_and_mentions(
-    prompt_context: PromptContextMock,
-    prompt_composer: PromptComposerMock,
-    permission_policies: impl crate::domain::ports::PermissionPolicySource,
-    mentions: PromptMentionsMock,
-) -> (TestBench, TurnSignals) {
     harness_with_ports(
         prompt_context,
         prompt_composer,
         permission_policies,
         HarnessDefaultCodingAgents,
-        mentions,
         EgressProvisionerMock::new(),
     )
 }
@@ -531,7 +501,6 @@ fn harness_with_egress(egress: EgressProvisionerMock) -> (TestBench, TurnSignals
         PromptComposerMock::default(),
         KindDefaultPolicies,
         HarnessDefaultCodingAgents,
-        PromptMentionsMock::new(),
         egress,
     )
 }
@@ -542,7 +511,6 @@ fn harness_with_coding_choice(chosen: bool) -> (TestBench, TurnSignals) {
         PromptComposerMock::default(),
         KindDefaultPolicies,
         ChosenCodingAgents(chosen),
-        PromptMentionsMock::new(),
         EgressProvisionerMock::new(),
     )
 }
@@ -552,7 +520,6 @@ fn harness_with_ports(
     prompt_composer: PromptComposerMock,
     permission_policies: impl crate::domain::ports::PermissionPolicySource,
     coding_agents: impl crate::domain::ports::CodingAgentSource,
-    mentions: PromptMentionsMock,
     egress: EgressProvisionerMock,
 ) -> (TestBench, TurnSignals) {
     harness_with_ports_and_journal(
@@ -560,7 +527,6 @@ fn harness_with_ports(
         prompt_composer,
         permission_policies,
         coding_agents,
-        mentions,
         egress,
         None,
     )
@@ -571,7 +537,6 @@ fn harness_with_ports_and_journal(
     prompt_composer: PromptComposerMock,
     permission_policies: impl crate::domain::ports::PermissionPolicySource,
     coding_agents: impl crate::domain::ports::CodingAgentSource,
-    mentions: PromptMentionsMock,
     egress: EgressProvisionerMock,
     journal: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
 ) -> (TestBench, TurnSignals) {
@@ -580,7 +545,6 @@ fn harness_with_ports_and_journal(
         prompt_composer,
         permission_policies,
         coding_agents,
-        mentions,
         egress,
         journal,
         None,
@@ -598,7 +562,6 @@ fn harness_with_journal_and_policy(
     prompt_composer: PromptComposerMock,
     permission_policies: impl crate::domain::ports::PermissionPolicySource,
     coding_agents: impl crate::domain::ports::CodingAgentSource,
-    mentions: PromptMentionsMock,
     egress: EgressProvisionerMock,
     journal: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
     policy: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
@@ -653,7 +616,6 @@ fn harness_with_journal_and_policy(
         ),
         lifecycle.clone(),
         crate::domain::pending::PendingCommands::new(),
-        mentions,
         notifier.clone(),
     );
     let service = match journal {
@@ -738,7 +700,6 @@ fn harness_sharing_repo_with_bindings(
         }),
         RecordingLifecyclePublisher::new(),
         crate::domain::pending::PendingCommands::new(),
-        PromptMentionsMock::new(),
         NotifierMock::new(),
     );
     turn_observer.bind(NoOpTurnObserver);
@@ -3417,7 +3378,6 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         .with_managed_bot(inmem_bot),
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),
-        crate::domain::ports::NoPromptMentions,
         crate::domain::ports::NoopAgentSessionNotifier,
     );
 
@@ -3998,7 +3958,6 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
         },
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),
-        crate::domain::ports::NoPromptMentions,
         crate::domain::ports::NoopAgentSessionNotifier,
     );
 
@@ -4052,7 +4011,6 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
         },
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),
-        crate::domain::ports::NoPromptMentions,
         crate::domain::ports::NoopAgentSessionNotifier,
     );
     let session = service
@@ -4186,135 +4144,30 @@ mod lifecycle_events {
         );
     }
 
+    /// A person named in a prompt is who the agent should work with, not
+    /// someone to tell: the mention reaches the agent and notifies nobody.
     #[tokio::test]
-    async fn a_prompt_naming_others_publishes_mentioned_without_its_author() {
-        let mentions = PromptMentionsMock::new();
-        let reviewer = MacroUserIdStr::try_from_email("reviewer@macro.com").unwrap();
-        let ((service, _, containers, _, _), turns) = harness_with_mentions(
-            PromptContextMock::default(),
-            PromptComposerMock::default(),
-            mentions.clone(),
-        );
+    async fn a_prompt_naming_someone_reaches_the_agent_and_notifies_nobody() {
+        let ((service, _, containers, _, _), turns) =
+            harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
         let id = AgentSessionId::new();
-        let _container = live_session(&service, &containers, id).await;
+        let container = live_session(&service, &containers, id).await;
         turns.lifecycle_published(4).await;
-        // The author names themself and a reviewer; only the reviewer is news.
-        mentions.mentions(vec![staff_sender(), reviewer.clone()]);
+        let notified_before = turns.notifier.notified().len();
+        let prompt = r#"Find time with <m-user-mention>{"userId":"macro|reviewer@macro.com"}</m-user-mention>"#;
 
-        service
-            .execute(
-                id,
-                HarnessCommand::Deliver(forward_message("@reviewer look")),
-            )
-            .await
-            .expect("the prompt is accepted");
-        turns.lifecycle_published(6).await;
-
-        let events = turns.lifecycle();
-        let origin = forward_message("")
-            .announce
-            .expect("a channel prompt announces");
-        assert!(
-            matches!(
-                &events[4..6],
-                [Lifecycle::Mentioned(mentioned), Lifecycle::TurnStarted(_)]
-                    if mentioned.identity.session_id == id
-                        && mentioned.mentioned_by == Some(staff_sender())
-                        && mentioned.mentioned == vec![reviewer.clone()]
-                        && mentioned.origin_message_id == Some(origin.message_id)
-            ),
-            "mentioned is published on accept, before the turn starts: {events:#?}"
-        );
-        assert_eq!(
-            mentions.prompts().last(),
-            Some(&"@reviewer look".to_owned())
-        );
-        // The channel message that carried the prompt already notified the
-        // reviewer of the mention; the session does not tell them twice.
-        let notified = turns.notifier.notified();
-        assert!(
-            !notified
-                .iter()
-                .any(|notification| matches!(notification, PlannedNotification::Mentioned(_))),
-            "no mention notification for a prompt posted as a message: {notified:#?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn a_prompt_from_the_session_view_notifies_the_people_it_names() {
-        let mentions = PromptMentionsMock::new();
-        let reviewer = MacroUserIdStr::try_from_email("reviewer@macro.com").unwrap();
-        let ((service, _, containers, _, _), turns) = harness_with_mentions(
-            PromptContextMock::default(),
-            PromptComposerMock::default(),
-            mentions.clone(),
-        );
-        let id = AgentSessionId::new();
-        let _container = live_session(&service, &containers, id).await;
-        turns.lifecycle_published(4).await;
-        mentions.mentions(vec![reviewer.clone()]);
-
-        // Typed into the session view: no message spoke for it anywhere.
+        // Typed into the session view by someone who can edit it.
         service
             .execute(
                 id,
                 HarnessCommand::Deliver(DeliverAction::prompt(
-                    AgentAction::prompt("@reviewer look"),
+                    AgentAction::prompt(prompt),
                     Some(staff_sender()),
                     None,
                 )),
             )
             .await
             .expect("the prompt is accepted");
-        turns.lifecycle_published(6).await;
-
-        let events = turns.lifecycle();
-        assert!(
-            matches!(
-                &events[4..6],
-                [Lifecycle::Mentioned(mentioned), Lifecycle::TurnStarted(_)]
-                    if mentioned.mentioned == vec![reviewer.clone()]
-                        && mentioned.origin_message_id.is_none()
-            ),
-            "mentioned is published without an origin message: {events:#?}"
-        );
-        // Beside whatever the first turn settled with: exactly one mention.
-        let notified = turns.notifier.notified();
-        let mentions_sent: Vec<_> = notified
-            .iter()
-            .filter_map(|notification| match notification {
-                PlannedNotification::Mentioned(notify) => Some(notify),
-                _ => None,
-            })
-            .collect();
-        assert!(
-            matches!(
-                mentions_sent.as_slice(),
-                [notify]
-                    if notify.recipients == vec![reviewer.clone()]
-                        && notify.metadata.session.session_id == id.as_uuid()
-            ),
-            "one mention notification for the reviewer: {notified:#?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn a_prompt_naming_only_its_author_publishes_nothing() {
-        let mentions = PromptMentionsMock::new();
-        mentions.mentions(vec![staff_sender()]);
-        let ((service, _, containers, _, _), turns) = harness_with_mentions(
-            PromptContextMock::default(),
-            PromptComposerMock::default(),
-            mentions,
-        );
-        let id = AgentSessionId::new();
-        let _container = live_session(&service, &containers, id).await;
-        turns.lifecycle_published(4).await;
-
-        service
-            .execute(id, HarnessCommand::Deliver(forward_message("note to self")))
-            .await
-            .expect("the prompt is accepted");
         turns.lifecycle_published(5).await;
 
         assert!(
@@ -4322,42 +4175,18 @@ mod lifecycle_events {
                 turns.lifecycle().as_slice(),
                 [.., Lifecycle::TurnStarted(_)]
             ),
-            "no mentioned event: {:#?}",
-            turns.lifecycle()
-        );
-    }
-
-    #[tokio::test]
-    async fn a_mention_lookup_failure_never_holds_up_the_prompt() {
-        let mentions = PromptMentionsMock::new();
-        mentions.fails("lexical service unreachable");
-        let ((service, _, containers, _, _), turns) = harness_with_mentions(
-            PromptContextMock::default(),
-            PromptComposerMock::default(),
-            mentions,
-        );
-        let id = AgentSessionId::new();
-        let container = live_session(&service, &containers, id).await;
-        turns.lifecycle_published(4).await;
-
-        service
-            .execute(id, HarnessCommand::Deliver(forward_message("@someone")))
-            .await
-            .expect("the prompt is accepted despite the failure");
-        turns.lifecycle_published(5).await;
-
-        assert!(
-            matches!(
-                turns.lifecycle().as_slice(),
-                [.., Lifecycle::TurnStarted(_)]
-            ),
-            "the turn starts and nothing about mentions is published: {:#?}",
+            "the prompt starts a turn and publishes nothing about who it names: {:#?}",
             turns.lifecycle()
         );
         assert_eq!(
-            prompts(&container.agent()).len(),
-            2,
-            "the prompt reached the agent"
+            turns.notifier.notified().len(),
+            notified_before,
+            "nobody is notified on accepting the prompt"
+        );
+        assert_eq!(
+            prompts(&container.agent()).last(),
+            Some(&vec![ContentBlock::from(prompt)]),
+            "the agent reads the mention"
         );
     }
 

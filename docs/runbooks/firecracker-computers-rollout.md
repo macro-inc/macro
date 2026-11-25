@@ -137,8 +137,11 @@ not shared across `zfs send`.
   inputs: the immutable version, the `main` commit it is built from, the
   computer ids, batch size, idle wait and reconnect timeout). It builds
   `.#macro-box-firecracker`, publishes the files with their SHA-256 to the Nix
-  cache bucket, and records the upgrade from the in-VPC migrator runner. The
-  harness's upgrade pass stages the image on each host (checked by hash),
+  cache bucket, and builds the rollout CLI. The in-VPC migrator runner verifies
+  the CLI's checksum and uses it to record the upgrade.
+  Subsequent rollouts of the same version and source commit reuse its
+  published manifest. The harness's upgrade pass stages the image on each
+  host (checked by hash),
   then gives each idle computer (no agent turn under way or queued, no screen
   open; terminal shells are not seen) a fresh
   system disk of it with its own `/home` and identity, a batch at a time. A
@@ -149,13 +152,11 @@ not shared across `zfs send`.
   forced. Hibernated computers are skipped. Two hours after the idle
   deadline whatever is unfinished stops: waiting computers are skipped, and
   one still mid-upgrade is logged for an operator.
-- **The agent runtime ships in the image**: an agent teammate runs
-  `packages/muppet` and its dependencies from the image's
-  `macro-agent-runtime` (`nix/macro-box/_agent-runtime.nix`). A harness deploy
-  changes only the starter agent it seeds into a new agent's repository, so a
-  muppet change reaches agents only through a new image: release
-  `packages/starter-agent` and the image together (a starter-agent `bun.lock`
-  the image doesn't match fails the agent's boot).
+- **The image supplies the baseline runtime**: an agent teammate starts
+  with the image's `macro-agent-runtime`. An eligible dev teammate can
+  select a service-only bundle as described below. A harness deploy updates
+  the starter seeded for new agents; existing behavior code changes through
+  the agent's own land.
 - **What persists**: the system disk is replaced on upgrade. `/home`, macrod and
   harnessd state and docker data live on the state disk and survive; `/etc`,
   `/root` and anything added to `/nix` do not (there is no `/nix` overlay yet).
@@ -168,6 +169,91 @@ not shared across `zfs send`.
   upgrade back to the previous version (one the workflow published): each computer gets its previous system
   disk itself back (it is kept until the next upgrade). Nothing deletes
   goldens or images on a host yet.
+
+### Service-only runtime updates in dev
+
+Dispatch **Agent runtime rollout** from `main` with `environment=dev`, one
+computer ID and a full commit SHA on `main`. The workflow publishes the
+`macro-agent-runtime` built with that commit's pinned Bun lock. Its version
+is the commit SHA. The immutable manifest records the archive SHA-256, the
+Muppet API level and the package versions. The in-VPC runner submits the
+request to dev Postgres, and the harness controller runs the fixed updater
+on the selected Firecracker guest. Wait for the migration and every dev
+controller replica's deployment before dispatching. An unfinished request
+holds that computer against image upgrades and moves. Fleet reconcile and
+power effects consult the hold before starting work.
+
+The guest image must include the updater, and the live behavior must provide
+the Muppet maintenance and readiness contract. The updater refuses an
+inactive, crash-looping or unreceipted baseline, including an old starter
+that has never reported readiness for this invocation. Repair the baseline's
+chat startup before requesting an update. The updater checks the live HEAD,
+last-good, Muppet API and direct dependency fields against the bundle and
+the image rollback runtime. The bundle changes only the selected runtime
+and the target of the workspace's `node_modules` symlink. The workspace
+keeps its own Bun lock.
+
+The dispatcher continues work already admitted while fencing new wakes. Chat
+replays queued input from its persisted cursor and inbox. A firing left
+pending in a maintenance handoff replays for the same scheduled occurrence.
+A live drain waits for admitted schedule handlers and their persisted completion.
+If a completion write fails, the invocation cannot acknowledge a drain. An
+unplanned interruption before acknowledgement can redeliver the occurrence.
+Ordinary restarts keep the scheduler's existing policy. A timeout releases the fence on the same process.
+Unknown event sources make an invocation ineligible for a drain.
+
+After switching the pointer, the updater restarts `macro-agent.service` and
+waits for a receipt for the new systemd invocation, exact behavior revision
+and requested version/digest. That receipt uses the normal `markHealthy`
+check, which requires an open `macro.events.listen` stream and a successful
+`macro.users.me` round trip. The updater releases queued work after the
+receipt, or restores and checks the prior runtime. These receipts depend on the
+selected behavior cooperating. The agent's UID can forge a receipt for its
+own guest. Recovery releases a stranded fence and retries from the journal,
+including after a guest reboot. The controller confirms the guest journal
+has settled before accepting a terminal result. A lost or interrupted
+response retains its lease for a bounded retry. The overall deadline stops
+new attempts. After three failed settlement probes past the deadline, the
+controller records `needs_operator` and logs a warning. The computer stays
+held against moves, power actions, reconcile and new runtime updates. Team
+release is refused while a runtime update is pending or needs operator
+recovery. Automatic hold clearance requires a successful upgrade to a
+different approved image on a running, idle guest with macrod connected.
+
+If the guest is ineligible for an image upgrade, use manual host recovery.
+After the guest's root helper `macro-agent-runtime-update status` reports
+settlement and the agent is ready, clear the exact hold in dev Postgres.
+Set the `computer_id` and `request_id` psql variables to the affected UUIDs
+and confirm the statement returns one row.
+
+```sql
+UPDATE agent_runtime_update
+SET cleared_at = now()
+WHERE id = :'request_id'::uuid
+  AND computer_id = :'computer_id'::uuid
+  AND outcome = 'needs_operator'
+  AND cleared_at IS NULL
+RETURNING id, computer_id, cleared_at;
+```
+
+Service updates leave macrod and the guest running. Cached bundles
+accumulate between reboots. Automatic pruning runs only at boot when the
+agent cgroup is empty, since a child can survive a service restart.
+
+If `agent.env` changes during the candidate restart or readiness wait, the
+path unit's restart helper can time out after 20 seconds waiting for the
+pause/restart lock. In that case the new enrollment, credentials, or
+telemetry settings take effect on the next agent service restart.
+
+The workflow reports `applied`, `refused`, `rolled_back`,
+`rollback_failed`, `expired` or `needs_operator`. Use `journalctl -u macro-agent.service -u
+macro-agent-runtime-update.service -u macro-agent-runtime-recover.service`
+on the guest for invocation and rollback details. For emergency recovery on
+an approved dev guest, the root command
+`macro-agent-runtime-update restore-image` clears the bundle selection and
+restarts only the agent service. This can interrupt the unhealthy agent.
+Check that the new invocation logs its startup and becomes ready before
+trying another update.
 
 ## 5. Incus teardown
 

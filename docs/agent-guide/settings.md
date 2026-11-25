@@ -267,19 +267,20 @@ people keep their two initials. Agents have no picture editor. Under the sizes, 
 what Add charges for: "Its own computer, always on. $X/month is added to your
 team subscription, prorated for the rest of this billing period. The agent's
 seat costs nothing extra." (for an included size, "Nothing is added to your
-team subscription…"). Voice and role come later, and the agent asks what to take
-on once it is online.
+team subscription…"). Voice and role come later. Once online, the agent uses
+its invite name and asks what to take on.
 
 Sizes come from the same catalog and prices as Buy a computer
 (sold-out sizes are disabled and marked **Sold out**; Add with every size sold
-out says so under the sizes and sends nothing). The agent's seat is
-included, so the button reads **Add <name> · $X/month** (or **Add Agent ·
-$X/month** before a name). A long name shortens with an ellipsis inside the Add label; the price stays whole.
-Add is always enabled: with no name it marks the name field invalid, says
+out says so under the sizes and sends nothing). The submit button reads
+**Add agent · $X/month** when it will buy a paid size and
+**Add agent** when there is no price to show. The price updates when the size
+changes. The agent name stays in the name field.
+Pressing **Add agent** with no name marks the name field invalid, says
 "Give your agent a name to continue.", and moves the caret there; a name too
 long is marked the same way; either sends nothing. Adding calls
 `POST /team_agents` with `jobDescription` and `personality` empty, then waits
-in the dialog (**Adding <name>…**) reading
+in the dialog (**Add agent** with a spinner) reading
 `GET /team_agents` every 500 ms until the agent reports itself online, and
 closes into the agent's DM, where it has said hi; no toast. Past five seconds
 it closes into the DM anyway, where the banner says it is still being set up
@@ -287,13 +288,13 @@ and its Members row shows the setup step. Every failure stays in the dialog
 with the name and size kept: a declined card (402 `payment_declined`;
 nothing was bought) with **Update card** (Settings → Billing; the name and size are kept in
 the tab's sessionStorage, so the next Invite an agent for that team starts
-from them until the agent is added or Cancel is pressed) and **Try again ·
+from them until the agent is added or Cancel is pressed) and **Add agent ·
 $X/month**, which sends a new purchase key; no room for the size (409
 `no_room`, checked before any charge), which marks the size sold out and picks
-the next one on sale; a computer that didn't start, whose **Retry** is the
+the next one on sale; a computer that didn't start, whose **Add agent** is the
 computer's own retry (`POST /team/computers/{id}/retry`, no new charge); and a
 second failed start, which the server undoes (computer released, charge
-refunded, agent taken back), with **Retry** buying afresh. Other refusals
+refunded, agent taken back), with **Add agent** buying afresh. Other refusals
 (a trial, an invite already in flight, a failed workspace) show in place.
 The new agent appears in **Team → Members** as its own row (name, **Agent**
 tag) with a status on the summary line where a person's role and plan are: **Setting up** with a spinner while its
@@ -471,7 +472,11 @@ there instead.
 On desktop release builds, **Desktop App → Updates → Desktop app update** shows native update
 progress, with **Restart to update** once an update is ready. While preparing to restart, the popover can't be dismissed and its
 action is disabled. Restart waits for pending canvas/PDF saves and
-local persistence; active calls, uploads, and imports must finish first. A ready
+local persistence; active calls, uploads, and imports must finish first. It also
+waits up to 10 seconds for the deployed web bundle to download, so the new
+version can open on it instead of asking for another restart; if the download
+takes longer or a check is already queued, it restarts without it and the new
+version may still offer **Update ready**. A ready
 update also installs on normal app quit. Closing a window only triggers
 installation if it exits the app. Browser, mobile, and development builds do not
 show this native updater row.
@@ -755,21 +760,34 @@ Reference captures from the isolated billing fixture: [returning customer](media
 and [subscription recovery](media/billing/subscription-recovery.png). These show
 phone-width layouts; payment-provider interactions are covered separately.
 
-`Get Max` keeps standard paid terms and never offers a trial. A Pro trial that
-upgrades to Max is charged today; the card says `Charged today. The Pro trial ends.`
-A paid Pro upgrade stays prorated for the rest of the period. Prices read `/ month` for solo users and
-`per seat / month` for team accounts. Each card puts its button beside the price when wide enough and below
-the price when narrow. Free lists 2 connected email accounts; Pro and Max list
-unlimited connected email accounts. Pro users see a Max card (`Upgrade to Max`); Max
-users keep their current plan. Cards appear only for users who can
+`Get Business` and `Get Max` keep standard paid terms and never offer a trial. A
+Pro trial that upgrades to Business or Max is charged today; the card says
+`Charged today. The Pro trial ends.` A paid upgrade stays prorated for the rest
+of the period. Before a first purchase, Business ($80/mo) and Max ($200/mo)
+cards display the annual rate with the monthly rate noted (`$90 monthly` /
+`$220 monthly`), and clicking `Get Business` or `Get Max` opens a compact
+billing-cycle dialog (centered modal on desktop, bottom drawer on mobile) to
+choose Annual (default) or Monthly before Stripe Checkout; Pro is $40 monthly
+and skips the dialog. After purchase, cards price at the subscription's own
+interval, and an annual subscription offers no Pro card. Each paid card names
+its service (`Self-serve` for Pro, `White-glove onboarding` for Business and
+Max). Prices read `/ month` for solo users and `per seat / month` for team
+accounts, with `, billed annually` on annual prices. Each card puts its button
+beside the price when wide enough and below the price when narrow. Free lists 2
+connected email accounts; Pro and Max list unlimited connected email accounts.
+Each card lists its active routine limit: 10 on Free, 1,000 on Pro, 3,000 on
+Business, and 10,000 on Max. Pro users see Business and Max cards
+(`Upgrade to Business`, `Upgrade to Max`), Business users a Max card, and Max
+users keep their current plan; a card for a cheaper plan reads `Switch to …`. Cards appear only for users who can
 manage their subscription. Team-paid members see no plan options, including
 on Free seats. Member options stay hidden until the billing summary confirms
 they pay for their own seat. On a team, a plan change moves only the viewer's
-own seat. Max lists "10x more AI usage than Pro". Usage controls live in Usage.
+own seat. Business lists "3x more AI usage than Pro" and its security, billing
+and onboarding benefits; Max lists "10x more AI usage than Pro". Usage controls live in Usage.
 The upgrade modal and Billing use the same plan cards and benefits, including
 the same flag-gated AI usage label and responsive card layout. The modal offers
-Pro and Max to Free accounts, only Max to Pro accounts, and no upgrade cards to
-Max accounts. Cards in the modal show benefits without purchase buttons. The footer’s
+Pro, Business and Max to Free accounts, Business and Max to Pro accounts, Max
+to Business accounts, and no upgrade cards to Max accounts. Cards in the modal show benefits without purchase buttons. The footer’s
 `Manage plan` closes the modal and opens Billing settings, where checkout and
 plan changes take place. Team-paid members see a message
 to contact their team owner. Plan options wait for the billing summary and team
@@ -777,7 +795,7 @@ lookup; failed lookups show `Try again` rather than guessed upgrade options.
 
 On a local HMR dev server, `Preview billing & paywall` opens an opt-in preview in
 Billing. Choose Solo, a team-paid member, a self-paying member, or a team owner,
-and Free, Pro, or Max. `Permissions, loading, and feature states` exposes the
+and Free, Pro, Business, or Max. `Permissions, loading, and feature states` exposes the
 billing summary status, billing permission, active/trialing license, Pro trial
 eligibility, AI usage flag, and pending plan actions. The preview uses the real Billing UI with local
 fixtures; checkout, plan changes, Manage, and Team settings only show preview
@@ -789,19 +807,20 @@ the signed-in account. State is not persisted and resets on leaving Billing.
 These controls are excluded from deployed builds, including dev.macro.com.
 
 Billing shows the current billing period end and any scheduled downgrade date.
-Max stays active until renewal; **Keep Max plan** cancels a pending downgrade
-without resetting usage. Failed renewal-detail reads offer **Try again**.
+The current plan stays active until renewal; **Keep <plan> plan** cancels a
+pending downgrade without resetting usage. Failed renewal-detail reads offer **Try again**.
 Team members who cannot manage billing see the notice without its action.
 
 `Team → Members` (`/app/settings/team-members`; every row, owner, admin,
 member or agent, is the picture, name, email, one summary line (role, then the
 seat's plan on a paid team) and a ⋯ holding what the viewer can change: a menu
 on desktop and a sheet on touch, like Machines. Admins/owners move a seat
-between Pro and Max under the ⋯'s **Plan**; Max upgrades are immediate and prorated, except the first Max seat on a
-trialing team, which ends the trial and bills Max for a new cycle today.
-Pro downgrades start at renewal, and the row's summary says **Pro at renewal**
-until then.
-**Keep Max** appears in the ⋯ only for a confirmed pending downgrade and cancels it;
+between Pro, Business and Max under the ⋯'s **Plan**, each described by its AI
+usage; upgrades are immediate and prorated, except the first Business or Max
+seat on a trialing team, which ends the trial and bills a new cycle today.
+Downgrades start at renewal, and the row's summary says **<plan> at renewal**
+until then. An annual team has no Pro seats: members joining it start on Business.
+**Keep <plan>** appears in the ⋯ only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
 scheduled plans show no retry notice). CRM (for owners and admins while
 `enable-crm-member-access-changes` is on, **Who can use CRM** first: each person's

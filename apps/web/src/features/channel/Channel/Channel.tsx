@@ -331,9 +331,6 @@ export function Channel(props: ChannelProps) {
     channelId: props.channelId,
     ready: () =>
       !callPanel && !isTouchDevice() && threadListNavigation() !== undefined,
-    unread: unread.notifications,
-    unreadStatus: unread.notificationsStatus,
-    retryUnread: unread.retryNotifications,
     pane: threadListContainerEl,
     goToMessage: (threadId, replyId) => goToMessage(threadId, replyId),
   });
@@ -985,12 +982,7 @@ export function Channel(props: ChannelProps) {
                       <div
                         class={cn(
                           'relative flex-1 min-h-0',
-                          callPanel && '[container-type:size]',
-                          // Contains layout, so only while its checks may show.
-                          !callPanel &&
-                            !isTouchDevice() &&
-                            notificationGutter.flagOn() &&
-                            '@container/channel-pane'
+                          callPanel && '[container-type:size]'
                         )}
                         ref={setThreadListContainerEl}
                       >
@@ -1125,9 +1117,6 @@ export function Channel(props: ChannelProps) {
                                               hideTriggeredBy={
                                                 !!channel()?.agentDm
                                               }
-                                              gutter={notificationGutter.threadGutter(
-                                                item.id
-                                              )}
                                               data={m}
                                               parent={() => ({
                                                 type: 'channel',

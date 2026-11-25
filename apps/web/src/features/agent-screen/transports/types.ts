@@ -8,6 +8,8 @@
  * generated OpenAPI types once its screen routes are published.
  */
 
+import type { ViewerAttempt } from './attempt-telemetry';
+
 export type ScreenTransportKind = 'vnc';
 
 /** View needs `View` on the computer; drive needs `Manage`. */
@@ -191,6 +193,7 @@ export interface ScreenTransport {
     element: HTMLElement,
     ticket: ScreenTicketGrant,
     handlers: ScreenSessionHandlers,
-    signal: AbortSignal
+    signal: AbortSignal,
+    trace?: ViewerAttempt
   ): Promise<ScreenSession>;
 }

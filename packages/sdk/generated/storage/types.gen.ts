@@ -568,12 +568,6 @@ export type AgentSessionLifecycleEvent = {
      */
     metadata: InputReceivedMetadata;
 } | {
-    event_type: 'agent_session.mentioned';
-    /**
-     * A prompt named other users who can open the session.
-     */
-    metadata: SessionMentionedMetadata;
-} | {
     event_type: 'agent_session.stopped';
     /**
      * The session's live actor is gone.
@@ -14896,8 +14890,7 @@ export type MeetingsResponse = {
 };
 
 /**
- * People under different records share an address; merging would file
- * two people with one address under the same record.
+ * Why a merge can't go ahead until someone changes the records.
  */
 export type MergeBlock = {
     kind: 'same_address_people';
@@ -14905,6 +14898,12 @@ export type MergeBlock = {
      * Every person involved, archived ones too.
      */
     people: Array<SameAddressPerson>;
+} | {
+    kind: 'different_companies';
+    /**
+     * The people who would change company.
+     */
+    people: Array<OtherCompanyPerson>;
 };
 
 /**
@@ -16487,6 +16486,28 @@ export type OptionRename = {
      * The new label.
      */
     to: string;
+};
+
+/**
+ * A person a contact merge would move to another company.
+ */
+export type OtherCompanyPerson = {
+    /**
+     * The company it is filed under.
+     */
+    companyId: string;
+    /**
+     * That company's name, as listings show it.
+     */
+    companyName: string;
+    /**
+     * Contact id.
+     */
+    contactId: string;
+    /**
+     * Contact name, when it has one.
+     */
+    name?: string | null;
 };
 
 /**
@@ -19753,34 +19774,6 @@ export type SessionIdentity = {
      * nothing and read as a person.
      */
     source?: SessionSource;
-};
-
-/**
- * A prompt named other users who can open the session. Published when the
- * prompt is accepted, not when it is answered: "come look at this" should
- * not wait for the turn.
- */
-export type SessionMentionedMetadata = {
-    /**
-     * The action carrying the prompt.
-     */
-    action_id: AgentActionId;
-    /**
-     * The session.
-     */
-    identity: SessionIdentity;
-    /**
-     * The users named, already narrowed to those who can open the session
-     * and never including the author.
-     */
-    mentioned: Array<MacroUserIdStr>;
-    mentioned_by?: null | MacroUserIdStr;
-    /**
-     * The channel or document message the prompt was posted as, when it
-     * arrived from a thread rather than the session view. That message
-     * already notified the users it named when it was posted.
-     */
-    origin_message_id?: string | null;
 };
 
 /**

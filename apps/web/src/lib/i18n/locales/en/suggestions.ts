@@ -9,6 +9,8 @@ export default {
   routineIdeas: 'Ideas',
   newIdea: 'New idea',
   yourRoutines: 'Your routines',
+  topicsLabel: 'Topics',
+  everythingElse: 'Everything else',
   badgeRunning: 'Running',
   badgeFailed: 'Failed',
   run: 'Run',

@@ -11,6 +11,9 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.wasm_prefetch_compile',
   'graphql_cache.wasm_instantiate',
   'graphql_cache.schema_init',
+  'graphql_cache.queue_read',
+  'graphql_cache.recovery_wipe',
+  'graphql_cache.queue_import',
   'graphql_cache.db_ready',
   'graphql_cache.host_ready',
   'graphql_cache.registration_retry',
@@ -97,6 +100,18 @@ export const CACHE_SCHEMA_RESET_REASONS = [
 ] as const;
 export type CacheSchemaResetReason =
   (typeof CACHE_SCHEMA_RESET_REASONS)[number];
+
+/** What became of the mutations a wiped database queued: `none` without any,
+ * `kept` with every one queued under its own ID, `partial` with some lost or
+ * queued under new IDs, and none of them otherwise. */
+export const CACHE_QUEUE_OUTCOMES = [
+  'none',
+  'kept',
+  'partial',
+  'unreadable',
+  'abandoned',
+] as const;
+export type CacheQueueOutcome = (typeof CACHE_QUEUE_OUTCOMES)[number];
 
 export const CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY = [
   'available',
@@ -315,6 +330,9 @@ export type CacheTelemetryObservation = {
   schemaRetiredOverlays?: number;
   /** How long the open spent bringing its records to the schema. */
   schemaAdoptMs?: number;
+  queueOutcome?: CacheQueueOutcome;
+  queueKept?: number;
+  queueDropped?: number;
   queueDiagnosticsAvailability?: CacheQueueDiagnosticsAvailability;
   revisionCategory?: CacheRevisionCategory;
   resetAttempt?: 'wipe-before-open';
@@ -457,6 +475,16 @@ function sanitizeObservation(
       : {}),
     ...(boundedNumber(input.schemaAdoptMs, 3_600_000) !== undefined
       ? { schemaAdoptMs: boundedNumber(input.schemaAdoptMs, 3_600_000) }
+      : {}),
+    ...(input.queueOutcome !== undefined &&
+    CACHE_QUEUE_OUTCOMES.includes(input.queueOutcome)
+      ? { queueOutcome: input.queueOutcome }
+      : {}),
+    ...(boundedNumber(input.queueKept) !== undefined
+      ? { queueKept: boundedNumber(input.queueKept) }
+      : {}),
+    ...(boundedNumber(input.queueDropped) !== undefined
+      ? { queueDropped: boundedNumber(input.queueDropped) }
       : {}),
     ...(input.queueDiagnosticsAvailability !== undefined &&
     CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY.includes(
@@ -947,6 +975,9 @@ export function isCacheTelemetryObservation(
       'schemaIncompleteDocuments',
       'schemaRetiredOverlays',
       'schemaAdoptMs',
+      'queueOutcome',
+      'queueKept',
+      'queueDropped',
       'queueDiagnosticsAvailability',
       'revisionCategory',
       'resetAttempt',

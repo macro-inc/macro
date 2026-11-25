@@ -61,6 +61,10 @@ with their `email_links` row; `user_id` and `list_key` on them repeat the link's
 owner and provider on purpose, so reads never join `email_links`. List rows have no
 foreign key: the contacts worker removes them on account deletion.
 
+`agent_runtime_update` stores leased dev operator requests for one
+Firecracker teammate. Unfinished rows hold the computer and keep the
+presigned download URL, which is cleared when an outcome is written.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,

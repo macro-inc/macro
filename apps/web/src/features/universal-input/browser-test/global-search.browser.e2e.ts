@@ -287,3 +287,21 @@ test('keeps Search facet text centered and unclipped inside each segment', async
     filters.getByText('Any priority', { exact: true })
   ).toBeVisible();
 });
+
+test('keeps typing in Search for in place while a sender is unresolved', async ({
+  page,
+}) => {
+  const dialog = await compose(page, 'search messages from Pat about budget');
+  await expect(
+    dialog.getByText('Choose a specific person or channel for Pat').first()
+  ).toBeVisible();
+  const query = dialog.getByRole('textbox', {
+    name: 'Search for',
+    exact: true,
+  });
+  await expect(query).toHaveText('budget');
+  await query.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' plan', { delay: 80 });
+  await expect(query).toHaveText('budget plan');
+});

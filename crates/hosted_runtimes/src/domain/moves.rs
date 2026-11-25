@@ -256,17 +256,25 @@ pub trait ComputerMoves: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Computers on `host` (as source or target) that an open move holds
-    /// ([`MoveStage::holds_computer`]), or an image upgrade has under way
-    /// ([`crate::domain::image_upgrade::ComputerUpgradeState::holds_computer`]).
+    /// ([`MoveStage::holds_computer`]), an image upgrade has under way
+    /// ([`crate::domain::image_upgrade::ComputerUpgradeState::holds_computer`]),
+    /// or a service-only runtime update holds.
     fn held_on(
         &self,
         host: HostId,
     ) -> impl Future<Output = Result<std::collections::HashSet<ComputerId>, Self::Err>> + Send;
 
-    /// Whether an open move, or an image upgrade under way, holds the
-    /// computer.
+    /// Whether a move, image upgrade or runtime update holds the computer.
     fn held(&self, computer_id: ComputerId)
     -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Check competing holds for an image replacement, allowing image recovery.
+    fn held_for_image(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send {
+        self.held(computer_id)
+    }
 
     /// Run a leased fleet effect again at `run_after` without counting an
     /// attempt (its computer is held by a move).

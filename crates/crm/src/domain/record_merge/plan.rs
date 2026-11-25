@@ -10,9 +10,10 @@ use uuid::Uuid;
 
 use super::{
     DroppedValue, FieldConflict, MergeBlock, MergeError, MergePreview, MergeRecordType,
-    MergeTargets, SameAddressPerson, SharingRulesChoice,
+    MergeTargets, OtherCompanyPerson, SameAddressPerson, SharingRulesChoice,
 };
 use crate::domain::email_rules::{EmailInclusionRule, EmailRuleDefinitionError, EmailRuleSet};
+use crate::domain::generic_email_domains::is_personal_email_domain;
 
 /// Who can see a property's values on a record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -224,6 +225,49 @@ pub fn same_address_block(people: &[FiledPerson]) -> Option<MergeBlock> {
         }));
     }
     (!blocking.is_empty()).then_some(MergeBlock::SameAddressPeople { people: blocking })
+}
+
+/// A contact as a contact merge finds it, for the company rule.
+#[derive(Debug, Clone)]
+pub struct MergingContact {
+    /// Contact id.
+    pub contact_id: Uuid,
+    /// Contact name, when it has one.
+    pub name: Option<String>,
+    /// The company it is filed under, with its name.
+    pub company: Option<(Uuid, String)>,
+    /// Every address it holds, lowercased.
+    pub addresses: Vec<String>,
+}
+
+/// The contact that stays keeps its company, so a person merged away from
+/// another company changes company. As a contact edit may, that needs
+/// personal-provider addresses: anyone holding a work address, or none at
+/// all, blocks the merge until their companies are merged.
+pub fn different_companies_block(
+    survivor: &MergingContact,
+    sources: &[MergingContact],
+) -> Option<MergeBlock> {
+    let survivor_company = survivor.company.as_ref().map(|(id, _)| *id);
+    let people: Vec<OtherCompanyPerson> = sources
+        .iter()
+        .filter_map(|source| {
+            let (company_id, company_name) = source.company.as_ref()?;
+            let personal_only = !source.addresses.is_empty()
+                && source.addresses.iter().all(|address| {
+                    address
+                        .rsplit_once('@')
+                        .is_some_and(|(_, domain)| is_personal_email_domain(domain))
+                });
+            (Some(*company_id) != survivor_company && !personal_only).then(|| OtherCompanyPerson {
+                contact_id: source.contact_id,
+                name: source.name.clone(),
+                company_id: *company_id,
+                company_name: company_name.clone(),
+            })
+        })
+        .collect();
+    (!people.is_empty()).then_some(MergeBlock::DifferentCompanies { people })
 }
 
 /// The preview's revision: a digest of everything the review shows, plus facts

@@ -48,4 +48,26 @@ describe('mobile search session', () => {
     state.searchFullText();
     expect(state.mode()).toBe('name');
   });
+  it("keeps an opener's bindings until their token is edited, and starts it as a search", () => {
+    const binding = {
+      token: 'tag:"🎉"',
+      tags: [{ propertyId: 'prop-1', optionId: 'opt-1' }],
+    };
+    const opened = createMobileSearchSession({
+      query: 'tag:"🎉" the quarterly planning review notes for launch',
+      mode: 'name',
+      bindings: [binding],
+      universalInputActive: false,
+    });
+    // Words past the composer length stay a search the opener asked for.
+    expect(opened.universalInputActive()).toBe(false);
+    expect(opened.bindings()).toEqual([binding]);
+    opened.setQuery('tag:"🎉" launch');
+    expect(opened.bindings()).toEqual([binding]);
+    expect(createMobileSearchSession(opened.snapshot()).bindings()).toEqual([
+      binding,
+    ]);
+    opened.setQuery('tag:"🎉x" launch');
+    expect(opened.bindings()).toEqual([]);
+  });
 });

@@ -15,6 +15,7 @@ import {
 const telemetry = vi.hoisted(() => {
   type Recorded = {
     name: string;
+    /** The trace context the span was opened in. */
     parent: string | undefined;
     attributes: Record<string, unknown>;
     events: string[];
@@ -22,11 +23,11 @@ const telemetry = vi.hoisted(() => {
     ended: boolean;
   };
   const spans: Recorded[] = [];
-  let running: Recorded | undefined;
+  const active: string[] = [];
   const makeSpan = (name: string) => {
     const recorded: Recorded = {
       name,
-      parent: running?.name,
+      parent: active.at(-1),
       attributes: {},
       events: [],
       errors: [],
@@ -41,12 +42,11 @@ const telemetry = vi.hoisted(() => {
       event: (event: string) => recorded.events.push(event),
       error: (error: unknown) => recorded.errors.push(error),
       run: <T>(work: () => T) => {
-        const outer = running;
-        running = recorded;
+        active.push(recorded.name);
         try {
           return work();
         } finally {
-          running = outer;
+          active.pop();
         }
       },
       end: () => {
@@ -56,6 +56,7 @@ const telemetry = vi.hoisted(() => {
   };
   return {
     spans,
+    active,
     warn: vi.fn(),
     info: vi.fn(),
     span: vi.fn(
@@ -196,6 +197,37 @@ describe('recoverySkipReason', () => {
 });
 
 describe('createMutationQueueTelemetry', () => {
+  it('opens a live attempt and its enqueue in the trace the caller named', () => {
+    const parent = {
+      run: <T>(work: () => T): T => {
+        telemetry.active.push('entity.move');
+        try {
+          return work();
+        } finally {
+          telemetry.active.pop();
+        }
+      },
+    };
+    const queue = create();
+    queue.enqueue({ uuid: 'item-1', operationName: 'MoveEntities', parent });
+    const live = queue.attempt(claimed());
+    live.sent('live', parent);
+    live.finish('committed');
+    const replay = queue.attempt(claimed({ transactionId: '8' }));
+    replay.sent('replay');
+    replay.finish('committed');
+
+    expect(
+      telemetry.spans
+        .filter((span) => span.name !== 'graphql.mutation_queue.loaded')
+        .map(({ name, parent }) => ({ name, parent }))
+    ).toEqual([
+      { name: 'graphql.mutation_queue.enqueue', parent: 'entity.move' },
+      { name: 'graphql.mutation_queue.attempt', parent: 'entity.move' },
+      { name: 'graphql.mutation_queue.attempt', parent: undefined },
+    ]);
+  });
+
   it('records one attempt span with ids, counts, and outcome only', () => {
     const queue = create();
     queue
@@ -259,6 +291,57 @@ describe('createMutationQueueTelemetry', () => {
         events: [],
       },
     ]);
+  });
+
+  it("records the native engine's wait and hold for the enqueue and commit", () => {
+    const queue = create();
+    queue
+      .enqueue({ uuid: 'item-1', operationName: 'RenameEntities' })
+      .persisted({
+        transactionId: '7',
+        replaced: false,
+        claimed: true,
+        linkPatchesDegraded: false,
+        engine: { lockWaitMs: 4_100, lockHoldMs: 6 },
+      });
+    queue.attempt(claimed()).finish('committed', {
+      commitMs: 2_300,
+      commitEngine: { lockWaitMs: 2_250, lockHoldMs: 9 },
+    });
+
+    const enqueue = telemetry.spans.find(
+      (span) => span.name === 'graphql.mutation_queue.enqueue'
+    );
+    expect(enqueue?.attributes).toMatchObject({
+      'mutation_queue.enqueue.engine_lock_wait_ms': 4_100,
+      'mutation_queue.enqueue.engine_lock_hold_ms': 6,
+    });
+    const attempt = telemetry.spans.find(
+      (span) => span.name === 'graphql.mutation_queue.attempt'
+    );
+    expect(attempt?.attributes).toMatchObject({
+      'mutation_queue.commit_ms': 2_300,
+      'mutation_queue.commit.engine_lock_wait_ms': 2_250,
+      'mutation_queue.commit.engine_lock_hold_ms': 9,
+    });
+  });
+
+  it('records no engine timing where the engine sends none', () => {
+    const queue = create();
+    queue
+      .enqueue({ uuid: 'item-1', operationName: 'SaveEmailDraft' })
+      .persisted({
+        transactionId: '7',
+        replaced: false,
+        claimed: true,
+        linkPatchesDegraded: false,
+      });
+    queue.attempt(claimed()).finish('committed', { commitMs: 4 });
+
+    const keys = telemetry.spans.flatMap((span) =>
+      Object.keys(span.attributes)
+    );
+    expect(keys.filter((key) => key.includes('engine_lock'))).toEqual([]);
   });
 
   it('replaces an operation name that is not an identifier', () => {

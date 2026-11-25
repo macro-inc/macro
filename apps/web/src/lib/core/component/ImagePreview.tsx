@@ -1,3 +1,4 @@
+import { DialogClosesOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { internalDrag } from '@core/directive/internalDragState';
 
 false && internalDrag;
@@ -147,6 +148,7 @@ export function ImagePreview(props: ImagePreviewProps) {
 
   return (
     <Dialog modal={true}>
+      <DialogClosesOnNavigation />
       <div class="flex group relative">
         <Show when={props.variant !== 'small'}>
           <div class="group-hover:visible invisible absolute top-2 right-2 bg-surface rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">

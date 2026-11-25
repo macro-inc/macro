@@ -39,7 +39,10 @@ import {
   getErrorMessage,
   withDraftSteps,
 } from '../core/routine-draft';
-import { describeTrigger } from '../core/routine-triggers';
+import {
+  describeTrigger,
+  summarizeTriggerLabels,
+} from '../core/routine-triggers';
 import { type RunItem, runStartLine } from '../core/run-start';
 import { describeHistoryStep, stepsForRun } from '../core/step-history';
 import {
@@ -111,12 +114,16 @@ function subRoutineItems(
   return children
     .filter((child) => isFinished(child) === finished)
     .toSorted((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-    .map((child) => ({
-      id: child.id,
-      name: child.name,
-      when: (child.draft?.triggers ?? []).map(describeTrigger).join(' · '),
-      state: state(child),
-    }));
+    .map((child) => {
+      const labels = (child.draft?.triggers ?? []).map(describeTrigger);
+      return {
+        id: child.id,
+        name: child.name,
+        when: summarizeTriggerLabels(labels),
+        whenDetails: labels.join('\n'),
+        state: state(child),
+      };
+    });
 }
 
 export function RoutineDetailView(props: {

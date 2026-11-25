@@ -5,7 +5,7 @@ use super::*;
 const LABEL_QUERY: &str = "query Label { user { id runtimeLabel } }";
 
 /// The bundled schema with a `runtimeLabel` of `declared` on users.
-fn labelled(declared: &str) -> std::sync::Arc<cache_core::meta::Schema> {
+pub(super) fn labelled(declared: &str) -> std::sync::Arc<cache_core::meta::Schema> {
     cache_core::meta::Schema::from_sdl(&format!(
         "{}\nextend type GraphqlUser {{ runtimeLabel: {declared} }}",
         cache_core::meta::BUNDLED_SCHEMA_SDL
@@ -15,14 +15,15 @@ fn labelled(declared: &str) -> std::sync::Arc<cache_core::meta::Schema> {
 
 /// Sets the worker's schema; `None` puts back the bundled one the other
 /// tests open with.
-fn set_worker_schema(schema: Option<std::sync::Arc<cache_core::meta::Schema>>) {
+pub(super) fn set_worker_schema(schema: Option<std::sync::Arc<cache_core::meta::Schema>>) {
     RUNTIME_SCHEMA.with(|slot| *slot.borrow_mut() = schema);
 }
 
 async fn open(scope: &str) -> (CacheEngine, CacheOpenOutcome, JsSchemaChange) {
-    open_cache_inner(scope.into(), None, false, None, false)
+    let (engine, outcome, _, change) = open_cache_inner(scope.into(), None, false, None, false)
         .await
-        .expect("open cache")
+        .expect("open cache");
+    (engine, outcome, change)
 }
 
 async fn write_label(engine: &CacheEngine) {

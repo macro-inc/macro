@@ -379,8 +379,8 @@ pub mod test_hooks {
 
     /// Makes the next schema adoption on this thread fail as one in a
     /// corrupt file does, so the caller must replace the file. Only other
-    /// crates' tests use it.
-    #[cfg(feature = "migration-test-hooks")]
+    /// crates' tests and this crate's use it.
+    #[cfg(any(test, feature = "migration-test-hooks"))]
     pub fn corrupt_next_adoption() {
         CORRUPT_ADOPTION.with(|corrupt| corrupt.set(true));
     }

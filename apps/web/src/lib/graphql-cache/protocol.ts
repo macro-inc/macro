@@ -950,7 +950,15 @@ export type WriteResult = CacheChangeHints & {
    * reset the cache, and from a host without channel commits.
    */
   channel?: ChannelCommitOutcome;
+  /**
+   * How long a queued mutation's enqueue or commit waited for the native
+   * engine and then held it. Absent from the browser engine and older binaries.
+   */
+  engine?: EngineLockTiming;
 };
+
+/** A native engine command's wait for the engine lock and its hold of it. */
+export type EngineLockTiming = { lockWaitMs: number; lockHoldMs: number };
 
 /**
  * Result of installing an optimistic layer. `changed`/`affectedOps` reflect

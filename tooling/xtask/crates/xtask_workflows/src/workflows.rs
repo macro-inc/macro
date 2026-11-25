@@ -13,6 +13,7 @@
 #[rustfmt::skip]
 pub mod actions;
 mod actionlint;
+mod agent_runtime_rollout;
 mod alert_native_build_failures;
 mod android_apk_on_release;
 mod android_build;
@@ -66,6 +67,7 @@ mod deploy_website;
 mod desktop_check;
 mod desktop_qa_macos;
 mod desktop_release_watch;
+mod desktop_windows;
 mod email_e2e;
 mod email_e2e_alert;
 mod email_e2e_browser;
@@ -205,6 +207,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "desktop_qa_macos",
         file_name: "desktop_qa_macos.yml",
         render_yaml: || render_gh_workflow(desktop_qa_macos::desktop_qa_macos)(),
+    },
+    WorkflowFile {
+        slug: "desktop_windows",
+        file_name: "desktop_windows.yml",
+        render_yaml: || render_gh_workflow(desktop_windows::desktop_windows_smoke)(),
     },
     WorkflowFile {
         slug: "desktop_release_watch",
@@ -537,6 +544,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || {
             render_gh_workflow(export_datadog_observability::export_datadog_observability)()
         },
+    },
+    WorkflowFile {
+        slug: "agent_runtime_rollout",
+        file_name: "agent-runtime-rollout.yml",
+        render_yaml: || render_gh_workflow(agent_runtime_rollout::agent_runtime_rollout)(),
     },
     WorkflowFile {
         slug: "firecracker_image_rollout",

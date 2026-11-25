@@ -25,6 +25,7 @@ export type FromVncFrame =
   | { type: 'send'; data: ArrayBuffer }
   /** The RFB handshake finished; the picture follows. */
   | { type: 'connected' }
+  | { type: 'firstFrame' }
   | { type: 'disconnected'; clean: boolean }
   | { type: 'size'; width: number; height: number }
   | { type: 'snapshot'; id: number; bitmap: ImageBitmap | null };

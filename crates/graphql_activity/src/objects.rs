@@ -91,7 +91,7 @@ pub enum GraphqlActivityAction {
     TaskRemoved(GraphqlActivityTaskRemoved),
     /// Time was logged on the entity (a task).
     TimeLogged(GraphqlActivityTimeLogged),
-    /// Other records were merged into the entity (a CRM company).
+    /// Other records were merged into the entity (a CRM company or person).
     RecordMerged(GraphqlActivityRecordMerged),
     /// An action outside this deployment's vocabulary, carried through raw.
     Unknown(GraphqlActivityUnknownAction),

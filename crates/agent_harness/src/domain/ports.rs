@@ -261,51 +261,6 @@ pub trait UserTimeZones: Send + Sync + 'static {
     ) -> impl Future<Output = Option<String>> + Send;
 }
 
-/// Who a prompt names, made able to open the session it is for.
-///
-/// Mentioning someone in a prompt is an invitation: when the author can
-/// drive the session (edit access), everyone they name is granted edit
-/// access too, so the notification that follows leads somewhere they can
-/// act. An author who cannot drive the session amplifies nobody - only the
-/// people who could already open it are returned. The author is never in
-/// the answer.
-pub trait PromptMentions: Send + Sync + 'static {
-    /// The users `prompt_markdown` mentions who can now open `session_id`.
-    fn share_with_mentioned<'a>(
-        &'a self,
-        session_id: AgentSessionId,
-        actor: Option<&'a MacroUserIdStr<'static>>,
-        prompt_markdown: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>>;
-}
-
-impl<Mentions: PromptMentions + ?Sized> PromptMentions for Arc<Mentions> {
-    fn share_with_mentioned<'a>(
-        &'a self,
-        session_id: AgentSessionId,
-        actor: Option<&'a MacroUserIdStr<'static>>,
-        prompt_markdown: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>> {
-        (**self).share_with_mentioned(session_id, actor, prompt_markdown)
-    }
-}
-
-/// A [`PromptMentions`] that finds nobody and shares with nobody: tests and
-/// tooling that never notify.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct NoPromptMentions;
-
-impl PromptMentions for NoPromptMentions {
-    fn share_with_mentioned<'a>(
-        &'a self,
-        _session_id: AgentSessionId,
-        _actor: Option<&'a MacroUserIdStr<'static>>,
-        _prompt_markdown: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>> {
-        Box::pin(async { Ok(Vec::new()) })
-    }
-}
-
 /// Delivers the notifications a lifecycle fact warrants to whoever sends
 /// them on. Object-safe and held erased, like the lifecycle publisher.
 pub trait AgentSessionNotifier: Send + Sync + 'static {

@@ -53,10 +53,12 @@ import {
 } from '@urql/core';
 import { type DocumentNode, Kind, parse } from 'graphql';
 import { match } from 'ts-pattern';
+import { mutationTraceParentOf } from '../../urql-solid/trace-parent-exchange';
 import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import type { CacheHost } from '../host/types';
 import {
   type ClaimedMutation,
+  type CommitOptimisticWriteResult,
   type EnqueueOptimisticMutationResult,
   LOCAL_COMMIT_FAILED,
   type MutationClaim,
@@ -677,7 +679,7 @@ export function createMutationQueueRunner(
       liveQueuedOps.delete(claimed.transactionId);
       live.resolveRoute(undefined);
       markSent();
-      attemptTelemetry.sent('live');
+      attemptTelemetry.sent('live', mutationTraceParentOf(live.operation));
       forward(
         withQueueRequestTimeout(withQueueAttempt(live.operation, attempt))
       );
@@ -1308,15 +1310,28 @@ export function createMutationQueueRunner(
           typeof op.context.cacheSessionGeneration === 'string'
             ? op.context.cacheSessionGeneration
             : UNKNOWN_CACHE_GENERATION;
-        const committed = await host.commitOptimisticWrite(
-          attempt.transactionId,
-          claim,
-          {
-            ...deps.cacheDocument(op),
-            data: result.data,
-            generation: snapshotGeneration,
-          }
-        );
+        const commitStartedAt = Date.now();
+        let committed: CommitOptimisticWriteResult;
+        try {
+          committed = await host.commitOptimisticWrite(
+            attempt.transactionId,
+            claim,
+            {
+              ...deps.cacheDocument(op),
+              data: result.data,
+              generation: snapshotGeneration,
+            }
+          );
+        } catch (error) {
+          // A commit that failed after a long wait still says how long.
+          details = { ...details, commitMs: Date.now() - commitStartedAt };
+          throw error;
+        }
+        const commitTiming = {
+          commitMs: Date.now() - commitStartedAt,
+          commitEngine: committed.engine,
+        };
+        details = { ...details, ...commitTiming };
         if (!transition(attempt, forgetConfirmed)) return detachedResult();
         settled = true;
         const cacheErrors = [...(committed.identityErrors ?? [])];
@@ -1354,7 +1369,11 @@ export function createMutationQueueRunner(
             ? 'superseded'
             : 'permanently-failed';
           outcome = replacementTransactionId ? 'superseded' : 'rolled-back';
-          details = { failure: 'local', errorCode: LOCAL_COMMIT_FAILED };
+          details = {
+            ...commitTiming,
+            failure: 'local',
+            errorCode: LOCAL_COMMIT_FAILED,
+          };
           if (!replacementTransactionId) {
             fireAndForget(
               deps.revalidate(committed.revalidations ?? [], op),

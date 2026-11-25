@@ -17,6 +17,7 @@ mod page_retention;
 mod permission_retirement;
 mod predicate_cost;
 mod projection_writes;
+mod schema_salvage;
 mod schema_store;
 mod search_bucket_cost;
 mod search_options;
@@ -1995,6 +1996,7 @@ struct FaultIo {
     fault: Arc<AtomicU8>,
     /// Reads from every file, so a test can tell a cached page from a read one.
     reads: Arc<AtomicU64>,
+    database_writes: Arc<AtomicU64>,
 }
 
 impl FaultIo {
@@ -2003,6 +2005,7 @@ impl FaultIo {
             inner: MemoryIO::new(),
             fault: Arc::new(AtomicU8::new(IoFault::None as u8)),
             reads: Arc::new(AtomicU64::new(0)),
+            database_writes: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -2028,6 +2031,11 @@ impl FaultIo {
     fn reads(&self) -> u64 {
         self.reads.load(Ordering::SeqCst)
     }
+
+    /// Writes to main database files rather than WALs.
+    fn database_writes(&self) -> u64 {
+        self.database_writes.load(Ordering::SeqCst)
+    }
 }
 
 impl Clock for FaultIo {
@@ -2051,6 +2059,7 @@ impl IO for FaultIo {
             fault: self.fault.clone(),
             database: !path.ends_with("-wal"),
             reads: self.reads.clone(),
+            database_writes: self.database_writes.clone(),
             inner: self.inner.open_file(path, flags, direct)?,
         }))
     }
@@ -2086,6 +2095,7 @@ struct FaultFile {
     /// The main database file rather than its WAL.
     database: bool,
     reads: Arc<AtomicU64>,
+    database_writes: Arc<AtomicU64>,
     inner: Arc<dyn File>,
 }
 
@@ -2144,6 +2154,9 @@ impl File for FaultFile {
         if self.take(IoFault::StorageFull) {
             return Err(CompletionError::IOError(std::io::ErrorKind::StorageFull, "write").into());
         }
+        if self.database {
+            self.database_writes.fetch_add(1, Ordering::SeqCst);
+        }
         self.inner.pwrite(pos, buffer, completion)
     }
 
@@ -2158,6 +2171,9 @@ impl File for FaultFile {
         }
         if self.take(IoFault::StorageFull) {
             return Err(CompletionError::IOError(std::io::ErrorKind::StorageFull, "writev").into());
+        }
+        if self.database {
+            self.database_writes.fetch_add(1, Ordering::SeqCst);
         }
         self.inner.pwritev(pos, buffers, completion)
     }

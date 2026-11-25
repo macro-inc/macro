@@ -45,6 +45,7 @@ import { gitCommand } from './behavior/capabilities/heartbeat/repository.ts';
 import { markHealthy } from './behavior/capabilities/heartbeat/restart.ts';
 import { ensureSchedules } from './behavior/capabilities/heartbeat/schedules.ts';
 import { macroKey } from './behavior/context/index.ts';
+import { reportRuntimeReady } from './behavior/context/runtime-maintenance.ts';
 import {
   configured,
   exitCodes,
@@ -187,16 +188,17 @@ const run = async (): Promise<void> => {
           // Built, credentials read, presence open, sources started and chat
           // hearing Macro: a healthy boot, so the launcher's rollback starts
           // from this HEAD. One that can't hear in time exits, as a failed boot.
-          await phase('agent.start.healthy', () =>
-            markHealthy({
+          await phase('agent.start.healthy', async () => {
+            await markHealthy({
               git: (args) =>
                 base.shell.run(gitCommand('git', base.config.root, args)),
               disk: base.disk,
               file: files.lastGood,
               listening: assistant.decorations.chat.listening,
               deadline: () => Bun.sleep(listeningDeadlineMs),
-            })
-          );
+            });
+            await reportRuntimeReady();
+          });
           // Wrapped, so the start's span ends here instead of awaiting the loop.
           return { running: started };
         },

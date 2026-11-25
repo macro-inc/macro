@@ -26,6 +26,7 @@ vi.mock('../worker/coordinator-page-adapter', () => ({
 
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
+  type CacheQueueState,
   type EngineOpenOutcome,
 } from '../worker/coordinator-protocol';
 import { WorkerRestartedError } from '../worker/effect-worker-transport';
@@ -165,9 +166,12 @@ class FakePageAdapter {
 
   replace(
     ownerEpoch: number,
-    openOutcome: EngineOpenOutcome = 'opened-existing'
+    openOutcome: EngineOpenOutcome = 'opened-existing',
+    queue: CacheQueueState = openOutcome === 'opened-existing'
+      ? 'preserved'
+      : 'reset'
   ): void {
-    this.options.onEngineReplaced?.(ownerEpoch, openOutcome);
+    this.options.onEngineReplaced?.(ownerEpoch, openOutcome, queue);
   }
 
   protocolError(error: Error): void {
@@ -330,6 +334,112 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('reports readiness once the engine opens, without starting it', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    expect(host.isReady?.()).toBe(false);
+    let opened = false;
+    const ready = host.whenReady?.().then(() => {
+      opened = true;
+    });
+    await Promise.resolve();
+    expect(opened).toBe(false);
+    expect(lastAdapter?.requests ?? []).toEqual([]);
+    // The first request starts initialization; readiness follows the handshake.
+    await host.currentStorageGeneration();
+    await ready;
+    expect(opened).toBe(true);
+    expect(host.isReady?.()).toBe(true);
+    await expect(host.whenReady?.()).resolves.toBeUndefined();
+    host.dispose();
+  });
+
+  it('settles readiness waiters when initialization fails', async () => {
+    vi.useFakeTimers();
+    configureAdapter = (fake) => {
+      fake.errors.set('init', 'OPFS initialization failed');
+    };
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+      onInitializationError: () => undefined,
+    });
+    const ready = host.whenReady?.();
+    const read = expect(
+      host.readQuery({ query: 'query Read { user }' })
+    ).rejects.toThrow('OPFS initialization failed');
+    await vi.runAllTimersAsync();
+    await read;
+    await expect(ready).resolves.toBeUndefined();
+    expect(host.isReady?.()).toBe(false);
+    host.dispose();
+  });
+
+  it('settles readiness waiters when the host is disposed first', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const ready = host.whenReady?.();
+    host.dispose();
+    await expect(ready).resolves.toBeUndefined();
+    expect(host.isReady?.()).toBe(false);
+  });
+
+  it('reports a paused engine as not ready until a later engine opens', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    expect(host.isReady?.()).toBe(true);
+    const adapter = requireAdapter();
+
+    adapter.unavailable('recovery fails', 'recovery-failed');
+    expect(host.paused).toBe(true);
+    // Writes now reject rather than wait: the engine is not open.
+    expect(host.isReady?.()).toBe(false);
+    let opened = false;
+    const ready = host.whenReady?.().then(() => {
+      opened = true;
+    });
+    await Promise.resolve();
+    expect(opened).toBe(false);
+
+    adapter.ignoredKinds.add('init');
+    adapter.replace(2, 'opened-existing', 'preserved');
+    const init = await vi.waitFor(() => {
+      const request = adapter.requests.at(-1);
+      expect(request?.kind).toBe('init');
+      return request;
+    });
+    expect(opened).toBe(false);
+    adapter.respond(init?.id ?? -1, null);
+
+    await ready;
+    expect(host.paused).toBe(false);
+    expect(host.isReady?.()).toBe(true);
+    host.dispose();
+  });
+
+  it('settles readiness waiters when a recovery listener throws', async () => {
+    const onAvailable = vi.fn(() => {
+      throw new Error('a recovery listener failed');
+    });
+    const host = createWorkerCacheHost({ scope: 'scope-1', onAvailable });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.unavailable('recovery fails', 'recovery-failed');
+    const ready = host.whenReady?.();
+
+    adapter.ignoredKinds.add('init');
+    adapter.replace(2, 'opened-existing', 'preserved');
+    const init = await vi.waitFor(() => {
+      const request = adapter.requests.at(-1);
+      expect(request?.kind).toBe('init');
+      return request;
+    });
+    adapter.respond(init?.id ?? -1, null);
+
+    await vi.waitFor(() => expect(onAvailable).toHaveBeenCalledOnce());
+    await expect(ready).resolves.toBeUndefined();
+    expect(host.isReady?.()).toBe(true);
+    host.dispose();
+  });
+
   it('notifies generation subscribers only when a live cache change resets storage', async () => {
     const host = createWorkerCacheHost({ scope: 'scope-1' });
     await host.currentStorageGeneration();
@@ -345,7 +455,10 @@ describe('createWorkerCacheHost', () => {
       revision: INITIAL_CACHE_REVISION,
       reset: true,
     });
-    expect(changed).toHaveBeenCalledExactlyOnceWith({ storage: 'reset' });
+    expect(changed).toHaveBeenCalledExactlyOnceWith({
+      storage: 'reset',
+      queue: 'reset',
+    });
     unsubscribe();
     requireAdapter().push({
       kind: 'cache-changed',
@@ -1534,6 +1647,7 @@ describe('createWorkerCacheHost', () => {
     await host.currentRevision();
     expect(generations).toHaveBeenCalledExactlyOnceWith({
       storage: 'preserved',
+      queue: 'preserved',
     });
     host.dispose();
   });
@@ -1819,14 +1933,16 @@ describe('createWorkerCacheHost', () => {
   });
 
   it.each([
-    ['opened-existing', 'preserved'],
-    ['opened-new', 'reset'],
-    ['reset-incompatible', 'reset'],
-    ['reset-corrupt', 'reset'],
-    ['reset-storage-uncertain', 'reset'],
+    ['opened-existing', 'preserved', 'preserved'],
+    ['opened-existing', 'preserved', 'reset'],
+    ['opened-new', 'reset', 'reset'],
+    ['reset-incompatible', 'reset', 'reset'],
+    ['reset-corrupt', 'reset', 'preserved'],
+    ['reset-storage-uncertain', 'reset', 'reset'],
+    ['reset-storage-uncertain', 'reset', 'preserved'],
   ] as const)(
-    'invalidates engine dependencies but reports %s storage as %s',
-    async (openOutcome, storage) => {
+    'invalidates engine dependencies but reports %s storage as %s with its queue %s',
+    async (openOutcome, storage, queue) => {
       const host = createWorkerCacheHost({ scope: 'scope-1' });
       const generations = vi.fn();
       const affected = vi.fn();
@@ -1834,9 +1950,9 @@ describe('createWorkerCacheHost', () => {
       host.onOpsAffected(affected);
       await host.readQuery({ opKey: 7, query: 'query Seven { seven }' });
       const adapter = requireAdapter();
-      adapter.replace(2, openOutcome);
+      adapter.replace(2, openOutcome, queue);
       await vi.waitFor(() => expect(affected).toHaveBeenCalledWith([7]));
-      expect(generations).toHaveBeenCalledExactlyOnceWith({ storage });
+      expect(generations).toHaveBeenCalledExactlyOnceWith({ storage, queue });
       expect(adapter.requests.filter((r) => r.kind === 'init')).toHaveLength(2);
       adapter.replace(2, 'reset-corrupt');
       adapter.replace(1, 'reset-corrupt');
@@ -2191,6 +2307,41 @@ describe('createWorkerCacheHost', () => {
     expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
     host.dispose();
   });
+
+  it.each([
+    [['preserved', 'preserved'], 'preserved'],
+    [['reset', 'preserved'], 'reset'],
+    [['preserved', 'reset'], 'reset'],
+  ] as const)(
+    'tells of two engines that opened during an outage, with their queues %s, as one whose queue was %s',
+    async ([first, second], queue) => {
+      const host = createWorkerCacheHost({ scope: 'scope-1' });
+      const generations = vi.fn();
+      host.onCacheGenerationChanged(generations);
+      await host.currentRevision();
+      const adapter = requireAdapter();
+
+      adapter.unavailable('recovery fails', 'recovery-failed');
+      adapter.ignoredKinds.add('init');
+      adapter.replace(2, 'reset-storage-uncertain', first);
+      adapter.replace(3, 'opened-existing', second);
+      expect(generations).not.toHaveBeenCalled();
+      const init = await vi.waitFor(() => {
+        const request = adapter.requests.at(-1);
+        expect(request?.kind).toBe('init');
+        return request;
+      });
+      adapter.respond(init?.id ?? -1, null);
+
+      await vi.waitFor(() =>
+        expect(generations).toHaveBeenCalledExactlyOnceWith({
+          storage: 'reset',
+          queue,
+        })
+      );
+      host.dispose();
+    }
+  );
 
   it('tells of a settlement while paused, and reports its owner ready once it can be read', async () => {
     const host = createWorkerCacheHost({ scope: 'scope-1' });
@@ -2840,7 +2991,10 @@ describe('createWorkerCacheHost', () => {
       const replacement = requireAdapter();
       expect(replacement).not.toBe(old);
       expect(affected).toHaveBeenLastCalledWith([7]);
-      expect(generations).toHaveBeenLastCalledWith({ storage: 'reset' });
+      expect(generations).toHaveBeenLastCalledWith({
+        storage: 'reset',
+        queue: 'reset',
+      });
       expect(host.clientId).toBe(CLIENT_ID);
       expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
       expect(replacement.options.scope).toBe('scope-1');
