@@ -57,7 +57,8 @@ export function PropertyEntityRow(props: {
         role={props.inSheet ? 'checkbox' : undefined}
         aria-checked={props.inSheet ? props.selected : undefined}
         tabIndex={props.inSheet ? 0 : undefined}
-        class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
+        // The virtualizer takes pointer events off its rows while it scrolls.
+        class="pointer-events-auto group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
         classList={{
           'bg-hover': props.highlighted,
         }}

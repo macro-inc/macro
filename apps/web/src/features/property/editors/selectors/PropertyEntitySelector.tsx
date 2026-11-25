@@ -747,7 +747,14 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   // Scroll the selected row into view during keyboard navigation
   createEffect(() => {
     const index = selectedIndex();
-    if (keyboardMode()) list?.scrollToIndex(index, { align: 'nearest' });
+    if (!keyboardMode() || !scrollContainerRef) return;
+    const row = scrollContainerRef.querySelector<HTMLDivElement>(
+      `[data-entity-index="${index}"]`
+    );
+    if (row) return row.scrollIntoView({ block: 'nearest' });
+    // Wrapping around an end lands on a row that isn't mounted.
+    scrollContainerRef.scrollIntoView({ block: 'nearest' });
+    list?.scrollToIndex(index, { align: 'nearest' });
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -860,7 +867,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                 'max-height': fills() ? undefined : `${MAX_LIST_HEIGHT}px`,
               }}
               class={cn(
-                'overflow-y-auto overflow-x-hidden overscroll-none scrollbar-hidden',
+                'overflow-y-auto overflow-x-hidden touch:overscroll-none scrollbar-hidden',
                 fills() && 'min-h-0 flex-1'
               )}
             >

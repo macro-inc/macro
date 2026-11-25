@@ -211,7 +211,7 @@ function DatabaseList(props: {
         fallback={<p class="px-1 text-sm text-ink-muted">No databases found</p>}
       >
         <RadioGroup
-          class="min-h-0 overflow-y-auto overscroll-none text-sm text-ink not-touch:max-h-48"
+          class="min-h-0 overflow-y-auto touch:overscroll-none text-sm text-ink not-touch:max-h-48"
           // Cleared, no database is picked.
           value={props.value?.id ?? ''}
           onChange={(id) => props.onInput({ type: 'database', id })}
@@ -232,7 +232,8 @@ function DatabaseList(props: {
               <div class="flex pb-2">
                 <RadioGroup.Item
                   value={database.id}
-                  class="min-w-0 flex-1 touch:min-h-11"
+                  // The virtualizer takes pointer events off its rows while it scrolls.
+                  class="pointer-events-auto min-w-0 flex-1 touch:min-h-11"
                 >
                   <RadioGroup.ItemControl />
                   <RadioGroup.ItemLabel class="flex min-w-0 flex-1 items-center gap-1.5 self-stretch">
