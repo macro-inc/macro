@@ -909,10 +909,12 @@ link in a row and in an unfolded stack; the Signal suite's
 Search snippets are a picture of the message too: `SearchContent`
 (`features/entity/extractors-search`), which every snippet renders through
 (channel message search rows, a result's Show more hits, the agent Search
-card), is `inert`, so pressing a link in one opens the result; a highlight
-splits a URL, so a live link opened only its first part. Run
+card), is `inert`, and so is a result's highlighted name (`EntityTitle`,
+which renders markdown only for a search result with a name highlight), so
+pressing a link in either opens the result; a highlight splits a URL, so a
+live link opened only its first part. Run
 `bunx playwright test --config src/features/entity/browser-test/playwright.config.ts search-snippet.browser.e2e.ts`,
-which presses a snippet's link on desktop and taps it on phone.
+which presses a snippet's or title's link on desktop and taps it on phone.
 
 A swipe row folds only what is inside it: draw a row's divider inside its
 `SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line
