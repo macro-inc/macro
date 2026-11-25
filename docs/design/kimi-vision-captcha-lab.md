@@ -124,24 +124,45 @@ calls and actions. CI runs them in the Browser Tests job.
 
 ### Families
 
-2026-11-25, `accounts/fireworks/models/kimi-k3` on Fireworks, the families
-branch, 10 attempts per family (one model call and one action each):
+2026-11-25, `accounts/fireworks/models/kimi-k3` on Fireworks, 10 attempts
+per family, one model call and one action each. Run B is the current code
+(uncompressed images, the three-minute deadline, server-side text checks);
+run A was the first families code.
 
-| Family | Attempts | Solved | Incorrect | `model_error` | Planner latency (median, range) | Tokens per call |
+Run B:
+
+| Family | Attempts | Solved | Incorrect | Other | Planner latency (median, range) | Tokens per call |
+| --- | --- | --- | --- | --- | --- | --- |
+| relation | 10 | 10 | 0 | 0 | 2.3 s, 1.2–5.0 s | 707–727 |
+| count | 10 | 7 | 3 | 0 | 0.97 s, 0.88–1.1 s | 749 |
+| order | 10 | 9 | 0 | 1 `action_error` | 1.6 s, 1.2–3.8 s | 652 |
+| transcription | 10 | 7 | 3 | 0 | 1.3 s, 1.0–2.4 s | 339 |
+| rotation | 10 | 10 | 0 | 0 | 1.5 s, 1.1–3.2 s | 551 |
+
+43 of 50 solved. The order `action_error` timed out after 30 s reading
+the page before the planner call (no planner call, no action); the
+attempt is kept as a failure.
+
+Run A:
+
+| Family | Attempts | Solved | Incorrect | Other | Planner latency (median, range) | Tokens per call |
 | --- | --- | --- | --- | --- | --- | --- |
 | relation | 10 | 10 | 0 | 0 | 1.08 s, 0.77–26.7 s | 685–728 |
-| count | 10 | 8 | 2 | 0 | 0.86 s, 0.76–0.98 s | 749 |
+| count | 11 | 8 | 2 | 1 lost (timeout) | 0.86 s, 0.76–0.98 s | 749 |
 | order | 10 | 10 | 0 | 0 | 1.09 s, 1.02–1.78 s | 652 |
 | transcription | 10 | 6 | 4 | 0 | 0.95 s, 0.88–1.07 s | 339 |
 | rotation | 10 | 10 | 0 | 0 | 0.96 s, 0.92–1.04 s | 551 |
 
-44 of 50 solved. Transcription misread one or two of five distorted digits
-in four attempts; count picked a wrong tile twice. One relation call took
-26.7 s. A first run of all families stopped making progress on its 16th
-challenge (the sixth count attempt) and was killed after 13 minutes with
-no browser process left; it wrote no record for that attempt, and the
-remaining count, order, transcription and rotation attempts were run
-afterwards. These are small samples on this fixture only.
+44 of 51 solved. The first all-family run of run A stopped making progress
+on its 16th challenge (the sixth count attempt): after 13 minutes with no
+browser process left it was killed and wrote no record. It is counted here
+as a lost (timeout) trial; the three-minute deadline added since then ends
+such an attempt as a recorded `timeout`. Its cause is not proven; the most
+likely one, an unbounded request forwarded to the lab, is now bounded.
+
+Across both runs transcription misread one or two of five digits in 7 of
+20 attempts and count picked a wrong tile in 5 of 21. These are small
+samples on this fixture only.
 
 ### Shapes quiz (first PR)
 
