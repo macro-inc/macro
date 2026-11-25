@@ -285,7 +285,13 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   (`is_program_run`) and agent accounts, checks the rollout and the harness
   (`View` to watch, `Manage` to drive; `access.rs` adapts both, and people's
   names, to the domain's ports), limits tickets per person, and mints a
-  single-use 60 s ticket;
+  single-use 60 s ticket.
+  The existing `computer.screen.session` span records relay progress and a
+  bounded close reason. It joins the ticket trace and carries the browser's
+  journey and attempt number where supplied. The `computer.screen.tunnel`
+  child distinguishes relay and input and records the guest image when
+  resolved. The session records the local macrod connection epoch separately
+  when the runtime is registered on this replica.
   `GET /computers/{harness_id}/screen/ws?ticket=` redeems it and runs the
   socket (`socket.rs`): binary frames are raw RFB both ways, text frames JSON
   control (`takeOver`, `handBack`, `input`, `visibility`, `stop`; server
@@ -330,8 +336,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   this socket's unexpired drive; each send is bounded by the lease's end). A drive that ends in the middle of the guest's
   clipboard ends the socket rather than pass the rest. Xvnc is reached only by a `socat`
   tunnel over `tunnel.rs` `GuestExec` (the operator's `Fleet::exec`,
-  implemented in `computers.rs`): nothing before its ready line is media,
-  and a tunnel still running 2 s after its session closed is killed (on the
+  implemented in `computers.rs`). The Bash wrapper marks the helper pid
+  before it starts, and maps a refused loopback connection to a reserved
+  exit status. Only RFB bytes follow the marker on stdout. A tunnel still
+  running 2 s after its session closed is killed (on the
   computer tasks' tracker, only if the pid is still that socat). When
   media stops short, the operator says whether the computer runs, which
   picks `computerOff` or a named error (`tunnelFailed`, `sourceUnavailable`).

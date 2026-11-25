@@ -37,7 +37,8 @@ read it before changing behaviour.
   the operator drives: a `FirecrackerFleet` per host row with an endpoint,
   or the local Docker home host).
 - `src/domain/operator/`: `hosts.rs` (home registration, per-host fleets,
-  reconcile) and `effects.rs` (the effect pass: each host's effects in lease
+  reconcile, and the guest image from the same fleet lookup for tracing)
+  and `effects.rs` (the effect pass: each host's effects in lease
   order, `max_concurrent_starts` at a time).
 - `src/domain/overcommit.rs` (+ `overcommit/`): pure per-host capacity,
   admission (allocation + fresh memory report + pending starts), relief
