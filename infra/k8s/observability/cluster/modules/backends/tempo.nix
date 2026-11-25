@@ -79,6 +79,12 @@ in
           podSecurityContext = shared.podSecurityContext 1000;
           securityContext = shared.containerSecurityContext;
           structuredConfig = {
+            # The chart's 4 MiB is less than a distributor may take in (below);
+            # it forwards what it took in to each ingester in one message.
+            server = {
+              grpc_server_max_recv_msg_size = 16777216;
+              grpc_server_max_send_msg_size = 16777216;
+            };
             inherit (host.tempo) query_frontend;
             ingester.max_block_duration = host.tempo.ingester.max_block_duration;
             compactor.compaction = {

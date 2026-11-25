@@ -23,12 +23,18 @@ data:
       output { traces = [otelcol.processor.transform.root.input] }
     }
 
-    // The root span carries its service's name, so a trace is charged to it.
+    // The root span carries its service's name, so a trace is charged to it. What a
+    // sender put there is dropped first.
     otelcol.processor.transform "root" {
       error_mode = "ignore"
       trace_statements {
+        context = "resource"
+        statements = [`delete_key(attributes, "macro.sampling.root")`]
+      }
+      trace_statements {
         context = "span"
         statements = [
+          `delete_key(attributes, "macro.sampling.root")`,
           `set(attributes["macro.sampling.root"], "other") where IsRootSpan()`,
           `set(attributes["macro.sampling.root"], resource.attributes["service.name"]) where IsRootSpan() and IsMatch(resource.attributes["service.name"], "^(agent-harness-service|authentication-service|calendar-service|github-actions|cloud-storage-service|connection-gateway|contacts-service|convert-service|email-focus-worker|email-service|notification-service|search-processing-service|static-file-service|sync-service|web-app)$")`,
         ]

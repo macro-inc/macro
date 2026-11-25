@@ -242,8 +242,8 @@ its trace ID, over the headless Service's DNS. Each replica:
   later follows a kept trace; one of a dropped trace is judged again, so a late
   error is still kept (that part of the trace only);
 - caps each service within each group of policies, in spans a second. A trace
-  is charged to the service of its root span, or to every service in it when
-  the root never arrives. A service over its cap loses traces while the others
+  is charged to the service of its root span, or to every named service in it
+  when the root never arrives. A service over its cap loses traces while the others
   keep theirs. Services named in `policies.nix` have their own; the rest share
   `other`. Perf and Outlook traces have one cap each, shared by all. The caps
   bound what is stored, not what is held: spans of every service wait in the
