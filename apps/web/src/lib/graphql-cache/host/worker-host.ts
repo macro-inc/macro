@@ -1218,12 +1218,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     if (stopPing || lastHeardAt >= quietSince) return;
     const asked = adapter;
     if (!asked?.ping()) return;
-    const settled = Promise.withResolvers<void>();
-    pinged = settled.promise;
+    let settle = () => {};
+    pinged = new Promise((resolve) => {
+      settle = resolve;
+    });
     const end = () => {
       stopPing = undefined;
       pinged = undefined;
-      settled.resolve();
+      settle();
     };
     const cancel = visibleTimeout(() => {
       end();
