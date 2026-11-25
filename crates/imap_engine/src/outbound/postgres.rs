@@ -693,6 +693,6 @@ impl Repository for PgRepository {
 }
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 mod storage;

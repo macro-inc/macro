@@ -311,3 +311,174 @@ async fn stalled_envelopes_share_one_budget_and_do_not_start_a_short_retry() {
         );
     }
 }
+
+#[sqlx::test(migrations = false)]
+async fn reconnect_during_smtp_data_preserves_unknown_without_a_second_delivery(
+    pool: sqlx::PgPool,
+) {
+    use crate::{
+        domain::service::{Engine, VerificationScopeKey, test::TestCipher},
+        outbound::postgres::{PgRepository, test::schema},
+    };
+    use std::sync::Arc;
+
+    schema(&pool).await;
+    let (transport, credentials, socket, listener) = pooled_connection().await;
+    let old = credentials.binding.unwrap();
+    let next = Binding {
+        sync_generation: old.sync_generation + 1,
+        grant_generation: old.grant_generation + 1,
+        ..old
+    };
+    let other = uuid::Uuid::now_v7();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (id, macro_id, provider)
+        VALUES
+            ($1, 'macro|owner@example.net', 'IMAP'),
+            ($2, 'macro|other@example.net', 'GMAIL')
+        "#,
+        old.link_id,
+        other,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repository = Arc::new(PgRepository::new(pool.clone()));
+    async fn promote(repository: &PgRepository, binding: Binding) {
+        let id = uuid::Uuid::now_v7();
+        let owner = "macro|owner@example.net";
+        repository
+            .put_verification(VerifiedAccount {
+                verification: Verification {
+                    id,
+                    expires_at: Utc::now() + chrono::Duration::minutes(15),
+                },
+                user_id: owner.into(),
+                ciphertext: vec![1],
+                consumed_by: None,
+            })
+            .await
+            .unwrap();
+        repository
+            .connect(binding, owner, vec![1], id)
+            .await
+            .unwrap();
+    }
+    promote(&repository, old).await;
+
+    let engine = Arc::new(Engine::new(
+        VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
+        repository.clone(),
+        Arc::new(TestCipher),
+        Arc::new(transport),
+        tokio_util::task::TaskTracker::new(),
+        tokio_util::sync::CancellationToken::new(),
+    ));
+    let draft: Draft = serde_json::from_value(
+        engine
+            .execute(
+                old,
+                Operation::CreateDraft {
+                    input: DraftInput {
+                        correlation: uuid::Uuid::now_v7(),
+                        revision: 1,
+                        reply_to: None,
+                        content: serde_json::json!({
+                            "message_id": "reconnect@example.net",
+                            "message": {
+                                "link_id": old.link_id, "subject": "Synthetic reconnect",
+                                "to": [{"email": "recipient@example.net"}],
+                                "body_text": "Synthetic body",
+                            },
+                            "from": {"email": "owner@example.net"},
+                        }),
+                    },
+                },
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+
+    let (data_received, data) = tokio::sync::oneshot::channel();
+    let (disconnect, disconnected) = tokio::sync::oneshot::channel();
+    let peer = tokio::spawn(async move {
+        let mut peer = BufReader::new(socket);
+        for expected in [
+            "RSET\r\n",
+            "MAIL FROM:<owner@example.net>\r\n",
+            "RCPT TO:<recipient@example.net>\r\n",
+            "DATA\r\n",
+        ] {
+            let mut command = String::new();
+            assert!(peer.read_line(&mut command).await.unwrap() > 0);
+            assert_eq!(command, expected);
+            let reply: &[u8] = if expected == "DATA\r\n" {
+                b"354 continue\r\n"
+            } else {
+                b"250 ready\r\n"
+            };
+            peer.get_mut().write_all(reply).await.unwrap();
+        }
+        let mut mime = String::new();
+        loop {
+            let mut line = String::new();
+            assert!(peer.read_line(&mut line).await.unwrap() > 0);
+            if line == ".\r\n" {
+                break;
+            }
+            mime.push_str(&line);
+        }
+        assert!(mime.contains("Synthetic body"));
+        data_received.send(()).unwrap();
+        // Losing the final SMTP response leaves delivery ambiguous.
+        disconnected.await.unwrap();
+    });
+    let initial = tokio::spawn({
+        let engine = engine.clone();
+        let id = draft.id.clone();
+        async move { engine.execute(old, Operation::Submit { id }).await }
+    });
+    timeout(Duration::from_secs(10), data)
+        .await
+        .unwrap()
+        .unwrap();
+
+    promote(&repository, next).await;
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            sync_generation = 2,
+            grant_generation = 2
+        WHERE
+            id = $1
+        "#,
+        old.link_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let retry = engine.execute(next, Operation::Submit { id: draft.id });
+    let reply = timeout(Duration::from_secs(10), async {
+        tokio::select! {
+            biased;
+            accepted = listener.accept() => panic!("an SMTP reconnect attempted a second delivery: {accepted:?}"),
+            reply = retry => reply,
+        }
+    })
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        serde_json::from_value::<SubmissionOutcome>(reply).unwrap(),
+        SubmissionOutcome::Unknown,
+    );
+    disconnect.send(()).unwrap();
+    peer.await.unwrap();
+    // An old worker cannot persist a result after its generation is replaced.
+    assert_eq!(initial.await.unwrap(), Err(Error::Conflict));
+}

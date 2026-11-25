@@ -41,7 +41,7 @@ async fn saturated_loaders_leave_two_connections_after_the_configuration_listene
     dedicated.close().await;
 }
 
-async fn schema(pool: &PgPool) {
+pub(crate) async fn schema(pool: &PgPool) {
     sqlx::raw_sql(include_str!("test_schema.sql"))
         .execute(pool)
         .await

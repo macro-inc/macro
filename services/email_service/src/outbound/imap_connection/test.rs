@@ -305,3 +305,235 @@ async fn verified_reconnect_clears_old_health_without_replacing_the_link(db: PgP
 }
 
 mod recovery;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reconnect_during_unknown_submission_reconciles_without_another_submit(db: PgPool) {
+    use crate::outbound::email_api::imap::ImapMailboxGateway;
+    use axum::{Json, Router, extract::State, http::HeaderMap, routing::post};
+    use email::{
+        domain::{
+            mailbox::{
+                MailboxError,
+                drafts::{
+                    MailboxDraftService,
+                    models::{
+                        DraftCheckpoint, DraftClaimMode, DraftFile, DraftLease, DraftStage,
+                        PreparedDraft,
+                    },
+                    ports::{DraftMaterializer, DraftRepository},
+                },
+            },
+            models::{ResolvedDraftInput, UpsertedContacts, UserProvider},
+            ports::EmailRepo,
+        },
+        outbound::{EmailPgRepo, mailbox_pg::PgMailboxSync},
+    };
+    use email_api_client::domain::models::ProviderId;
+    use imap_service_client::{Draft, ImapServiceClient, Operation, SubmissionOutcome};
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+        time::Duration,
+    };
+    use tokio::sync::Notify;
+
+    struct FrozenDraft;
+    impl DraftMaterializer for FrozenDraft {
+        async fn prepare_draft(&self, _: &DraftLease) -> Result<PreparedDraft, MailboxError> {
+            panic!("the original frozen checkpoint must survive reconnect")
+        }
+
+        async fn draft_file_bytes(
+            &self,
+            _: &DraftLease,
+            _: &DraftFile,
+        ) -> Result<Vec<u8>, MailboxError> {
+            panic!("this draft has no attachments")
+        }
+    }
+
+    struct Transport {
+        old_binding: String,
+        started: Notify,
+        release: Notify,
+        submits: AtomicUsize,
+    }
+    async fn provider(
+        State(transport): State<Arc<Transport>>,
+        headers: HeaderMap,
+        Json(operation): Json<Operation>,
+    ) -> Json<serde_json::Value> {
+        let old = headers["x-mailbox-binding"] == transport.old_binding.as_str();
+        match operation {
+            Operation::GetDraft { id } => Json(serde_json::json!(Draft {
+                id,
+                conversation_id: "conversation".into(),
+                version: "v1".into(),
+                is_draft: old,
+                app_revision: 1,
+                content_fingerprint: "frozen-content".into(),
+            })),
+            Operation::Submit { .. } => {
+                transport.submits.fetch_add(1, Ordering::AcqRel);
+                assert!(old, "replacement coordinator attempted to resubmit");
+                transport.started.notify_one();
+                transport.release.notified().await;
+                Json(serde_json::json!(SubmissionOutcome::Unknown))
+            }
+            operation => panic!("unexpected mock operation: {operation:?}"),
+        }
+    }
+
+    let actor = owner(&db).await;
+    let repo = PgImapConnections(db.clone());
+    let verification = Verification {
+        id: Uuid::from_u128(3),
+        expires_at: chrono::Utc::now() + chrono::Duration::minutes(15),
+    };
+    let initial = repo
+        .reserve(&actor, "owner", &input(2), &verification)
+        .await
+        .unwrap();
+    let link = repo
+        .activate(&repo.lease(&initial).await.unwrap())
+        .await
+        .unwrap();
+    let thread = Uuid::now_v7();
+    let message = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_threads (id,link_id) VALUES ($1,$2)",
+        thread,
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let draft: ResolvedDraftInput = serde_json::from_value(serde_json::json!({
+        "db_id": message, "thread_db_id": thread, "subject": "Synthetic draft",
+        "body_text": "Synthetic body", "to": [], "cc": [], "bcc": [], "actor_id": actor.as_ref()
+    }))
+    .unwrap();
+    EmailPgRepo::new(db.clone())
+        .insert_message(
+            &draft,
+            &UpsertedContacts {
+                from_contact_id: None,
+                recipients: vec![],
+            },
+            link,
+            None,
+            true,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+    let sync = PgMailboxSync::new(db.clone()).with_provider(UserProvider::Imap);
+    let lease = sync
+        .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    let prepared = serde_json::from_value(serde_json::json!({
+        "request": {
+            "message": { "db_id": message, "link_id": link, "subject": "Synthetic draft" },
+            "from": { "email": "owner@example.com", "name": null, "photo_url": null }
+        },
+        "files": [], "removals": []
+    }))
+    .unwrap();
+    let checkpoint = DraftCheckpoint {
+        revision: lease.revision,
+        actor_id: actor.as_ref().to_owned(),
+        prepared,
+        stage: DraftStage::Ready,
+        stage_started_at: chrono::Utc::now(),
+        submission_started: false,
+        local_contention_retries: 0,
+        send_rejection_reason: None,
+        send_refusal: None,
+        draft: Some(email_api_client::domain::models::ProviderDraft {
+            id: ProviderId::new("a").unwrap(),
+            conversation_id: ProviderId::new("conversation").unwrap(),
+            version: Some("v1".into()),
+            is_draft: true,
+            app_revision: Some(1),
+            content_fingerprint: Some("frozen-content".into()),
+            field_digests: Default::default(),
+        }),
+        completed_files: 0,
+        completed_removals: 0,
+        transfer: None,
+    };
+    sync.checkpoint_draft(&lease, &checkpoint).await.unwrap();
+    let owner = actor.as_ref();
+    sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id) VALUES ($1,$2,now(),$3)",link,message,owner).execute(&db).await.unwrap();
+    sync.release_draft(&lease, 0).await.unwrap();
+
+    let transport = Arc::new(Transport {
+        old_binding: format!(
+            "{}.{}",
+            initial.binding.sync_generation, initial.binding.grant_generation
+        ),
+        started: Notify::new(),
+        release: Notify::new(),
+        submits: AtomicUsize::new(0),
+    });
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .unwrap();
+    let addr = listener.local_addr().unwrap();
+    let transport_clone = transport.clone();
+    let http = tokio::spawn(async move {
+        axum::serve(
+            listener,
+            Router::new()
+                .route("/internal/v1/accounts/{id}/operations", post(provider))
+                .with_state(transport_clone),
+        )
+        .await
+        .unwrap();
+    });
+
+    let gateway = ImapMailboxGateway {
+        client: ImapServiceClient::new(format!("http://{addr}"), "synthetic-key".into()).unwrap(),
+        health: sync.clone(),
+    };
+    let old_worker = MailboxDraftService::new(sync.clone(), gateway.clone(), FrozenDraft);
+    let running = tokio::spawn(async move { old_worker.execute_once().await });
+    tokio::time::timeout(Duration::from_secs(10), transport.started.notified())
+        .await
+        .unwrap();
+
+    let mut reconnect = input(4);
+    reconnect.link_id = Some(link);
+    let fresh = repo
+        .reserve(&actor, "owner", &reconnect, &verification)
+        .await
+        .unwrap();
+    repo.activate(&repo.lease(&fresh).await.unwrap())
+        .await
+        .unwrap();
+    assert_ne!(
+        initial.binding.sync_generation,
+        fresh.binding.sync_generation
+    );
+
+    let replacement_worker = MailboxDraftService::new(sync, gateway, FrozenDraft);
+    assert!(replacement_worker.execute_once().await.unwrap());
+    let sent = sqlx::query_scalar!(
+        "SELECT sent FROM email_scheduled_messages WHERE message_id = $1",
+        message
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(sent);
+    transport.release.notify_one();
+    let _ = running.await.unwrap();
+    assert_eq!(transport.submits.load(Ordering::Acquire), 1);
+    http.abort();
+}
