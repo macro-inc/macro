@@ -10,6 +10,11 @@ declare global {
 /** Each search row, the link its snippet shows, and what pressing it opens. */
 const ROWS = [
   { section: 'list-narrow', href: 'https://app', opens: 'row-narrow' },
+  {
+    section: 'list-single-line',
+    href: 'https://app',
+    opens: 'row-single-line',
+  },
   { section: 'list-wide', href: 'https://app', opens: 'row-wide' },
   { section: 'content-hit', href: 'https://docs', opens: 'content-hit' },
 ];
@@ -47,15 +52,23 @@ function snippetLink(page: Page, row: (typeof ROWS)[number]) {
 }
 
 /** Where a user would press a row's snippet link: the middle of the part of
- * its text the row shows (a narrow row cuts the snippet off). */
+ * its text the row shows. Fails unless that point presses the link or the
+ * snippet around it, not something laid over the row. */
 async function pressPoint(page: Page, row: (typeof ROWS)[number]) {
-  const link = await snippetLink(page, row).boundingBox();
+  const link = snippetLink(page, row);
+  const box = await link.boundingBox();
   const shown = await page.getByTestId(row.section).boundingBox();
-  if (!link || !shown) throw new Error('link not laid out');
-  const left = Math.max(link.x, shown.x);
-  const right = Math.min(link.x + link.width, shown.x + shown.width);
+  if (!box || !shown) throw new Error('link not laid out');
+  const left = Math.max(box.x, shown.x);
+  const right = Math.min(box.x + box.width, shown.x + shown.width);
   if (right <= left) throw new Error('link not shown');
-  return { x: (left + right) / 2, y: link.y + link.height / 2 };
+  const point = { x: (left + right) / 2, y: box.y + box.height / 2 };
+  const pressesSnippet = await link.evaluate((anchor, { x, y }) => {
+    const target = document.elementFromPoint(x, y);
+    return !!target && (target === anchor || target.contains(anchor));
+  }, point);
+  if (!pressesSnippet) throw new Error('the press point misses the snippet');
+  return point;
 }
 
 const opened = (page: Page) => page.getByLabel('Opened');

@@ -61,10 +61,12 @@ const contentHit: ContentHitData = {
 function Fixture() {
   const [opened, setOpened] = createSignal<string[]>([]);
   const record = (what: string) => setOpened((all) => [...all, what]);
+  // Under 512px rows are narrow; phone search lists single-line rows.
   const lists = [
-    { name: 'narrow', width: 'w-80' },
-    { name: 'wide', width: 'w-[900px]' },
-  ];
+    { name: 'narrow', width: 'w-[480px]', layout: 'inbox' },
+    { name: 'single-line', width: 'w-[480px]', layout: 'single-line' },
+    { name: 'wide', width: 'w-[900px]', layout: 'inbox' },
+  ] as const;
 
   return (
     <main class="flex flex-col gap-6 bg-page p-8 text-ink">
@@ -77,7 +79,7 @@ function Fixture() {
               ref={setRef}
               class={list.width}
             >
-              <ListLayoutProvider ref={ref} narrowLayout="inbox">
+              <ListLayoutProvider ref={ref} narrowLayout={list.layout}>
                 <ListEntity
                   entity={message}
                   onClick={() => record(`row-${list.name}`)}
