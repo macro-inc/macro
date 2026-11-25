@@ -324,7 +324,8 @@ fn import(
 ) -> Result<QueueImport, TursoStorageError> {
     let marker = import_marker(connection)?;
     if holds(connection, queue, marker)? {
-        if marker.is_none_or(|marker| marker.id != queue.id) {
+        let own = marker.filter(|marker| marker.id == queue.id);
+        if own.is_none() {
             // Still known when every write of it is settled.
             ImportMarker {
                 id: queue.id,
@@ -333,7 +334,7 @@ fn import(
             .save(connection)?;
         }
         return Ok(QueueImport {
-            complete: queue.complete,
+            complete: queue.complete && own.is_none_or(|own| own.complete),
             ..QueueImport::default()
         });
     }

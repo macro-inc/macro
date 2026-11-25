@@ -686,6 +686,20 @@ fn a_queue_that_lost_its_ids_says_so_after_another_wipe() {
 }
 
 #[test]
+fn a_queue_held_already_says_what_its_import_lost() {
+    block_on(async {
+        let mut storage = fresh();
+        enqueue(&mut storage, "First").await;
+        let queue = carried(&storage);
+        let mut served = fresh();
+        enqueue(&mut served, "Second").await;
+        assert!(!served.import_queue(&queue, 0).unwrap().complete);
+        // Its engine died before it could tell.
+        assert!(!served.import_queue(&queue, 0).unwrap().complete);
+    });
+}
+
+#[test]
 fn a_queue_not_imported_yet_survives_another_wipe() {
     block_on(async {
         let mut storage = fresh();
