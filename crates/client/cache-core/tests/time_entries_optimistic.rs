@@ -133,6 +133,7 @@ async fn enqueue(
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 identity_bindings: &[],
                 uuid,
@@ -330,8 +331,8 @@ async fn parent_records(engine: &mut Engine<InMemoryStorage>) -> usize {
         .len()
 }
 
-/// The web reads the parent first and sends the list patch only when the
-/// page is cached: a record-rooted patch on a missing page fails the enqueue.
+/// The web omits the list patch when the page is absent. The engine also skips
+/// an absent record-rooted page rather than rejecting the valid command.
 #[test]
 fn a_task_whose_entries_were_never_read_queues_a_log_without_the_list_link() {
     block_on(async {
@@ -353,10 +354,11 @@ fn a_task_whose_entries_were_never_read_queues_a_log_without_the_list_link() {
             .unwrap();
         assert_eq!(parent_records(&mut engine).await, 0);
 
-        let refused = engine
+        let skipped = engine
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     identity_bindings: &[],
                     uuid: NEW_ENTRY,
@@ -369,8 +371,15 @@ fn a_task_whose_entries_were_never_read_queues_a_log_without_the_list_link() {
                     created_at_ms: 1,
                 },
             )
-            .await;
-        assert!(refused.is_err());
+            .await
+            .unwrap()
+            .0;
+        assert_eq!(parent_records(&mut engine).await, 0);
+        let token = claim(&mut engine).await;
+        engine
+            .rollback_optimistic_write(skipped, token)
+            .await
+            .unwrap();
 
         let txn = enqueue(
             &mut engine,

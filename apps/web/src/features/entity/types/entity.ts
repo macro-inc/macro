@@ -268,6 +268,9 @@ export type BaseDocumentEntity = EntityBase & {
   projectId?: string;
   subType?: SubType;
   properties?: SoupProperty[];
+  /** Batched authoritative dependency facts from GraphQL. */
+  isBlocked?: boolean;
+  openBlockerIds?: readonly string[];
 };
 
 export type TaskEntity = EntityBase & {
@@ -275,6 +278,9 @@ export type TaskEntity = EntityBase & {
   fileType: 'md';
   subType: { type: 'task'; is_completed?: boolean };
   projectId?: string;
+  /** Batched authoritative dependency facts from GraphQL. */
+  isBlocked?: boolean;
+  openBlockerIds?: readonly string[];
 };
 
 export type SnippetEntity = EntityBase & {

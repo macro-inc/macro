@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT neighbor.id AS \"id!\" FROM unnest($1::uuid[]) requested(task_id)\n            CROSS JOIN LATERAL (\n                SELECT blocker_task_id AS id FROM task_dependency_edges WHERE dependent_task_id = requested.task_id\n                UNION ALL\n                SELECT dependent_task_id AS id FROM task_dependency_edges WHERE blocker_task_id = requested.task_id\n            ) neighbor",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1ee00e10c50e62ef0978178c3457bdc682baa45484e6acde93641ff00176dee5"
+}

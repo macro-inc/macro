@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id)\n         SELECT requested.assignment_id, requested.entity_id, 'TASK', $2\n         FROM unnest($1::text[], $3::uuid[]) requested(entity_id, assignment_id)\n         WHERE EXISTS (SELECT 1 FROM entity_properties existing\n             WHERE existing.entity_id = requested.entity_id AND existing.entity_type = 'TASK')\n         ON CONFLICT (entity_id, entity_type, property_definition_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3dd38b6a818c39f00342a81ce46d2b6cad3c730ca2e52fd5cce6916e44f6b186"
+}

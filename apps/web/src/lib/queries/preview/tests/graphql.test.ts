@@ -178,6 +178,7 @@ describe('GraphQL item previews', () => {
       fileType: 'md',
       subType: null,
       properties: [],
+      taskDependencies: null,
       viewerPermission: {
         __typename: 'GraphqlAccessLevelPermission',
         accessLevel: 'EDIT',

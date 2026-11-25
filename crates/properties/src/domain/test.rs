@@ -5,6 +5,7 @@ mod initiatives;
 mod options_batch;
 mod project_agents;
 mod start_and_due;
+mod task_dependency_receipts;
 mod time_logged;
 
 use super::service_impl::PropertiesServiceImpl;
@@ -1547,6 +1548,21 @@ fn create_mock_permission_service() -> MockPermissionService {
             Box::pin(async move { Ok(receipt) })
         });
     perm_checker
+        .expect_mint_document_edit_receipts()
+        .returning(|_, ids| {
+            let receipts = ids
+                .iter()
+                .map(|id| {
+                    EditReceipt::dangerously_assert_authenticated_user(
+                        caller_user_id(),
+                        &id.to_string(),
+                        entity_access::domain::models::EntityType::Document,
+                    )
+                })
+                .collect();
+            Box::pin(async move { Ok(receipts) })
+        });
+    perm_checker
 }
 
 #[tokio::test]
@@ -1822,8 +1838,8 @@ async fn entity_property_event_task_permission_and_transaction_failures_publish_
     permission_repo.expect_link_parent_task().times(0);
     let mut permission_service = MockPermissionService::new();
     permission_service
-        .expect_mint_edit_receipt()
-        .return_once(|_, _, _| Box::pin(async { Err(anyhow!("permission denied")) }));
+        .expect_mint_document_edit_receipts()
+        .return_once(|_, _| Box::pin(async { Err(anyhow!("permission denied")) }));
     let permission_broker = RecordingEventBroker::default();
     let service = PropertiesServiceImpl::new(
         permission_repo,
@@ -1954,8 +1970,8 @@ async fn test_link_parent_task_requires_edit_on_parent() {
 
     let mut perm_service = MockPermissionService::new();
     perm_service
-        .expect_mint_edit_receipt()
-        .returning(|_, _, _| Box::pin(async { Err(anyhow!("Access denied")) }));
+        .expect_mint_document_edit_receipts()
+        .returning(|_, _| Box::pin(async { Err(anyhow!("Access denied")) }));
 
     let service =
         PropertiesServiceImpl::new(repo, Some(perm_service), None::<MockNotificationService>);
@@ -2169,8 +2185,8 @@ async fn test_link_subtasks_requires_edit_on_subtasks() {
 
     let mut perm_service = MockPermissionService::new();
     perm_service
-        .expect_mint_edit_receipt()
-        .returning(|_, _, _| Box::pin(async { Err(anyhow!("Access denied")) }));
+        .expect_mint_document_edit_receipts()
+        .returning(|_, _| Box::pin(async { Err(anyhow!("Access denied")) }));
 
     let service =
         PropertiesServiceImpl::new(repo, Some(perm_service), None::<MockNotificationService>);
@@ -3501,7 +3517,7 @@ async fn entity_properties_cleared_event_publishes_once_for_authenticated_and_in
             .withf(|entity| {
                 entity.entity_id == "doc1" && entity.entity_type == EntityType::Document
             })
-            .return_once(|_| Box::pin(async { Ok(()) }));
+            .return_once(|_| Box::pin(async { Ok(vec![]) }));
         let event_broker = RecordingEventBroker::default();
         let service = service_with_event_broker(repo, event_broker.clone());
 
@@ -3523,6 +3539,59 @@ async fn entity_properties_cleared_event_publishes_once_for_authenticated_and_in
             })
         );
     }
+}
+
+#[tokio::test]
+async fn entity_properties_cleanup_publishes_surviving_task_receipts() {
+    let survivor = Uuid::now_v7().to_string();
+    let deleted = Uuid::now_v7().to_string();
+    let previous_value = Some(PropertyValue::EntityRef(vec![
+        models_properties::EntityReference::new(deleted.clone(), EntityType::Task),
+    ]));
+    let mut receipt = entity_property_mutation(
+        &survivor,
+        EntityType::Task,
+        SystemPropertyKey::DEPENDS_ON_UUID,
+        None,
+    );
+    receipt.previous_value = previous_value;
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_document_sub_types()
+        .return_once(|_| Box::pin(async { Ok(HashMap::new()) }));
+    repo.expect_delete_entity_properties()
+        .return_once(|_| Box::pin(async move { Ok(vec![receipt]) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+    service
+        .delete_entity_properties(&EditReceipt::dangerously_assert_internal_user(
+            &deleted,
+            AccessEntityType::Document,
+        ))
+        .await
+        .unwrap();
+    let published = event_broker.events();
+    assert_eq!(published.len(), 2);
+    assert_eq!(published[0].key, survivor);
+    assert_eq!(
+        published[0].envelope["event_type"],
+        "entity_property.updated"
+    );
+    assert_eq!(published[0].envelope["metadata"]["entity_type"], "TASK");
+    assert_eq!(
+        published[0].envelope["metadata"]["value"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        published[0].envelope["metadata"]["previous_value"],
+        serde_json::json!({
+            "type": "EntityReference", "value": [{"entity_id": deleted, "entity_type": "TASK"}]
+        })
+    );
+    assert_eq!(published[1].key, deleted);
+    assert_eq!(
+        published[1].envelope["event_type"],
+        "entity_properties.cleared"
+    );
 }
 
 #[tokio::test]
@@ -4804,4 +4873,32 @@ async fn get_or_create_option_rejects_unowned_definition() {
         )
         .await;
     assert!(matches!(result, Err(PropertiesErr::NotFound)));
+}
+
+#[tokio::test]
+async fn blocked_completion_preserves_typed_storage_rejection_without_publishing() {
+    let definition_id = SystemPropertyKey::STATUS_UUID;
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition().return_once(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(definition_id, false))) })
+    });
+    repo.expect_upsert_entity_property()
+        .return_once(|_, _, _, _| {
+            Box::pin(async {
+                Err(anyhow::Error::new(PropertiesErr::TaskCompletionBlocked)
+                    .context("atomic completion admission failed"))
+            })
+        });
+    let broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, broker.clone());
+    let result = service
+        .set_entity_property_with_effects(
+            &edit_receipt("doc1", EntityType::Document),
+            definition_id,
+            None,
+            None,
+        )
+        .await;
+    assert!(matches!(result, Err(PropertiesErr::TaskCompletionBlocked)));
+    assert!(broker.events().is_empty());
 }

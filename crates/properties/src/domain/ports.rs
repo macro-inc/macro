@@ -29,6 +29,22 @@ use super::model::{
     UpdatePropertyOptionOutcome, ViewReceipt,
 };
 
+/// Outcome of an atomic task dependency replacement.
+#[derive(Debug)]
+pub enum TaskDependencyLinkOutcome {
+    /// The requested property now reflects the persisted edges.
+    Updated(
+        EntityPropertyMutationSnapshot,
+        Vec<EntityPropertyMutationSnapshot>,
+    ),
+    /// The relationship changed after authorization; retry with fresh permissions.
+    Stale,
+    /// The requested edge forms a dependency cycle.
+    Cycle,
+    /// An endpoint lacks its required task property assignment.
+    MissingTask,
+}
+
 /// Repository trait for property operations.
 ///
 /// This trait abstracts the database layer, allowing for different implementations
@@ -264,6 +280,8 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     /// If the property doesn't exist, it will be created and attached to the entity.
     /// If it exists, the value will be updated. Returns the persisted
     /// assignment together with the pre-write value.
+    /// Task completion must reject unfinished dependencies when the owning team's
+    /// completion policy is enabled, in the same transaction as persistence.
     fn upsert_entity_property(
         &self,
         entity_id: &str,
@@ -346,6 +364,23 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         subtask_ids: Vec<Uuid>,
     ) -> impl Future<Output = Result<Option<EntityProperty>, Self::Err>> + Send;
 
+    /// Read current endpoints for authorization of both additions and removals.
+    fn task_dependency_targets(
+        &self,
+        task_id: Uuid,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+
+    /// Replace a task's dependencies or dependents using the complete expected snapshot.
+    /// The repository serializes writers and checks the snapshot and cycles.
+    fn link_task_dependencies(
+        &self,
+        task_id: Uuid,
+        property_definition_id: Uuid,
+        expected: Vec<Uuid>,
+        desired: Vec<Uuid>,
+    ) -> impl Future<Output = Result<TaskDependencyLinkOutcome, Self::Err>> + Send;
+
     /// Get a property value for a specific entity and property definition.
     /// Returns `None` if the property is not attached to the entity.
     fn get_entity_property_value(
@@ -422,7 +457,9 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     fn delete_entity_properties(
         &self,
         entity_reference: &EntityReference,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<
+        Output = Result<Vec<crate::domain::model::EntityPropertyMutationSnapshot>, Self::Err>,
+    > + Send;
 
     /// Resolve document subtype facts in one batch.
     ///
@@ -490,6 +527,14 @@ pub trait PermissionService: Send + Sync + 'static {
         entity_id: &str,
         entity_type: AccessEntityType,
     ) -> impl Future<Output = Result<EditReceipt, Self::Err>> + Send;
+
+    /// Mint edit receipts for every document, preserving each actual permission level.
+    /// Errors if any document is omitted or lacks edit access.
+    fn mint_document_edit_receipts<'a>(
+        &self,
+        user_id: &MacroUserIdStr<'a>,
+        document_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<EditReceipt>, Self::Err>> + Send;
 
     /// Grant edit permissions to users for a task.
     /// This is used when task assignees are updated to ensure they can edit the task.

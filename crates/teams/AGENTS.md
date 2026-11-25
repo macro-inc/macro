@@ -11,7 +11,7 @@ event contract (schema, sanitization, delivery semantics).
 
 - `src/domain/team_service.rs`: the main service — creation, invites,
   membership, role changes, auto-join-domain toggle. Team-wide settings
-  (default link share, interface language) are fields on `PatchTeamRequest`.
+  (default link share, interface language, and blocked-task completion policy) are fields on `PatchTeamRequest`.
 - `src/domain/team_service/invite_link.rs`: the team's shareable invite link
   (`TeamInviteLinkService`) — who may see, create, reset, or turn it off, and
   joining through it via the same direct-join path as domain auto-join.

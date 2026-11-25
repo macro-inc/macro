@@ -498,6 +498,8 @@ where
             RegisteredWorkSubscriptionRoot::default(),
         ),
     )
+    // Authored operations peak at depth 10; retain headroom without unbounded nesting.
+    .limit_depth(32)
     .finish()
 }
 
@@ -841,6 +843,15 @@ where
     /// Stable id of the authenticated user.
     async fn id(&self) -> async_graphql::ID {
         async_graphql::ID(self.user_id.to_string())
+    }
+
+    /// Authorized dependency facts for a bounded page of task search results.
+    async fn task_dependency_states(
+        &self,
+        ctx: &Context<'_>,
+        task_ids: Vec<ID>,
+    ) -> async_graphql::Result<Vec<graphql_properties::GraphqlTaskDependencyState>> {
+        graphql_properties::load_task_dependency_batch(ctx, task_ids).await
     }
 
     /// A page filtered and ordered across the entire authorized table.

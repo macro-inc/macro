@@ -37,7 +37,7 @@ async fn pr_update_targets_exact_records_and_deduplicated_linked_sessions() {
     let service = flaky_service(0);
     let commits = AtomicUsize::new(0);
     assert!(matches!(
-        process_event(&service, &sessions, &event, || {
+        process_event(&service, &sessions, &NoNeighbors, &event, || {
             commits.fetch_add(1, Ordering::SeqCst);
         })
         .await,
@@ -71,7 +71,7 @@ async fn exhausted_session_lookup_retries_still_publish_pr_records_before_commit
         .map(|id| update(EntityType::ForeignEntity, id))
         .collect::<Vec<_>>();
 
-    let outcome = process_event(&service, &sessions, &event, || {
+    let outcome = process_event(&service, &sessions, &NoNeighbors, &event, || {
         assert_eq!(sessions.keys.lock().unwrap().len(), MAX_NOTIFY_ATTEMPTS);
         assert_eq!(*service.patches.lock().unwrap(), expected);
         commits.fetch_add(1, Ordering::SeqCst);
@@ -99,7 +99,7 @@ async fn transient_session_lookup_failures_publish_records_and_sessions_once() {
         SoupRealtimePatch::for_entity(Patch::Updated(sessions.session.clone())),
     ];
 
-    let outcome = process_event(&service, &sessions, &event, || {
+    let outcome = process_event(&service, &sessions, &NoNeighbors, &event, || {
         assert_eq!(*service.patches.lock().unwrap(), expected);
         commits.fetch_add(1, Ordering::SeqCst);
     })
@@ -121,7 +121,7 @@ async fn cancellation_during_session_lookup_backoff_leaves_event_uncommitted() {
     let service = flaky_service(0);
     let commits = AtomicUsize::new(0);
     {
-        let process = process_event(&service, &sessions, &event, || {
+        let process = process_event(&service, &sessions, &NoNeighbors, &event, || {
             commits.fetch_add(1, Ordering::SeqCst);
         });
         tokio::pin!(process);

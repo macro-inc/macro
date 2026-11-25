@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT requested.task_id AS \"task_id!\",\n                ARRAY(SELECT blocker_task_id FROM task_dependency_edges\n                    WHERE dependent_task_id = requested.task_id ORDER BY blocker_task_id) AS \"blocker_ids!\",\n                ARRAY(SELECT dependent_task_id FROM task_dependency_edges\n                    WHERE blocker_task_id = requested.task_id ORDER BY dependent_task_id) AS \"dependent_ids!\",\n                ARRAY(SELECT blocker_id FROM task_open_blockers(ARRAY[requested.task_id])\n                    ORDER BY blocker_id) AS \"open_blocker_ids!\"\n               FROM unnest($1::uuid[]) requested(task_id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "task_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "blocker_ids!",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 2,
+        "name": "dependent_ids!",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 3,
+        "name": "open_blocker_ids!",
+        "type_info": "UuidArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "8303397ecea7ac54e4342c89b65fe1c29a54e3edc6736fc5a7e5f9fffef938e9"
+}

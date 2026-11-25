@@ -254,6 +254,12 @@ const SETTINGS: Setting[] = [
     keywords: 'access public private permission',
   },
   {
+    tab: 'Team',
+    title: 'Prevent completing blocked tasks',
+    target: 'Prevent completing blocked tasks',
+    keywords: 'task depends blocking status completed',
+  },
+  {
     tab: 'Tags',
     title: 'Personal tags',
     target: 'Personal',

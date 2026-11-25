@@ -58,6 +58,7 @@ async fn predicted_item(mutation: &str, operation: &str, response_key: &str) -> 
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 identity_bindings: &[],
                 uuid: "11111111-1111-4111-8111-111111111111",

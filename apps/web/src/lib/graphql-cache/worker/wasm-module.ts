@@ -1,3 +1,4 @@
+import type { TaskDependencyRecipe } from '../authority.generated';
 import type {
   ContactReconcile,
   ContactSnapshot,
@@ -223,7 +224,8 @@ export interface CacheEngine {
     leaseExpiresAtMs: number,
     clientMetadata: Record<string, unknown> | undefined,
     uncertainCalendarEventKeys: string[] | undefined,
-    generation: string | undefined
+    generation: string | undefined,
+    taskDependencyRecipe?: TaskDependencyRecipe
   ): Promise<EnqueueOptimisticMutationResult>;
   inspectQueryVariants(
     query: string,

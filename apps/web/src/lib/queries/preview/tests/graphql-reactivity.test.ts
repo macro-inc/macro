@@ -67,6 +67,7 @@ describe('GraphQL preview hover reactivity', () => {
       fileType: 'md',
       subType: { __typename: 'GraphqlTaskSubType', isCompleted: false },
       properties: [],
+      taskDependencies: null,
       viewerPermission: {
         __typename: 'GraphqlAccessLevelPermission',
         accessLevel: 'EDIT',

@@ -36,6 +36,7 @@ impl<S: Storage> Engine<S> {
             );
             source.mutation_data = Json::Object(Default::default());
             source.link_patches.clear();
+            source.task_dependency_recipe = None;
             // Revalidation descriptors perform fresh authorized reads. Retain
             // them so settlement repairs parent edges whose copied recipe retired.
             source.projection_mutations.clear();

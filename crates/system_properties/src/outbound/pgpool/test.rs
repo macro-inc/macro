@@ -82,10 +82,10 @@ async fn initiative_initialization_preserves_values_and_folder_namespace(
 
 /// Helper to count task properties
 async fn count_task_properties(pool: &Pool<Postgres>, entity_id: &str) -> i64 {
-    sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM entity_properties WHERE entity_id = $1 AND entity_type = 'TASK'",
+    sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM entity_properties WHERE entity_id = $1 AND entity_type = 'TASK'"#,
+        entity_id,
     )
-    .bind(entity_id)
     .fetch_one(pool)
     .await
     .unwrap()
@@ -96,13 +96,16 @@ async fn get_task_property_values(
     pool: &Pool<Postgres>,
     entity_id: &str,
 ) -> Vec<(Uuid, Option<serde_json::Value>)> {
-    sqlx::query_as::<_, (Uuid, Option<serde_json::Value>)>(
+    sqlx::query!(
         "SELECT property_definition_id, values FROM entity_properties WHERE entity_id = $1 AND entity_type = 'TASK' ORDER BY property_definition_id",
+        entity_id,
     )
-    .bind(entity_id)
     .fetch_all(pool)
     .await
     .unwrap()
+    .into_iter()
+    .map(|row| (row.property_definition_id, row.values))
+    .collect()
 }
 
 // ============================================================================
@@ -258,9 +261,9 @@ async fn test_copy_task_properties_empty_source(pool: Pool<Postgres>) -> anyhow:
     // Copy from empty source - should still create system properties with null values
     repo.copy_task_properties(from_task_id, to_task_id).await?;
 
-    // Should have 10 system properties with null values
+    // Should have 11 system properties with null values
     let count = count_task_properties(&pool, to_task_id).await;
-    assert_eq!(count, 10, "Should have 10 system task properties");
+    assert_eq!(count, 11, "Should have 11 system task properties");
 
     // All values should be null
     let properties = get_task_property_values(&pool, to_task_id).await;
@@ -286,13 +289,11 @@ async fn test_copy_task_properties_with_existing_properties(
     // Copy properties (source has 2 system + 2 custom properties from fixture)
     repo.copy_task_properties(from_task_id, to_task_id).await?;
 
-    // Destination should have 12 properties:
-    // - 4 copied (Status, Priority, Custom Notes, Custom Tags)
-    // - 8 null system properties backfilled
+    // Destination has 4 copied values and 9 null system properties.
     let count = count_task_properties(&pool, to_task_id).await;
     assert_eq!(
-        count, 12,
-        "Should have 12 properties (4 copied + 8 backfilled)"
+        count, 13,
+        "Should have 13 properties (4 copied + 9 backfilled)"
     );
 
     // Check that status was copied with correct SelectOption value
@@ -472,11 +473,11 @@ async fn test_copy_task_properties_idempotent(pool: Pool<Postgres>) -> anyhow::R
     repo.copy_task_properties(from_task_id, to_task_id).await?;
     repo.copy_task_properties(from_task_id, to_task_id).await?;
 
-    // Should still have exactly 10 properties
+    // Should still have exactly 11 properties
     let count = count_task_properties(&pool, to_task_id).await;
     assert_eq!(
-        count, 10,
-        "Should have exactly 10 properties after idempotent copies"
+        count, 11,
+        "Should have exactly 11 properties after idempotent copies"
     );
 
     Ok(())
@@ -613,6 +614,93 @@ async fn project_membership_reads_the_project_property(pool: Pool<Postgres>) -> 
         ]
     );
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn copying_a_task_does_not_copy_dependency_values(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let source = uuid::Uuid::now_v7().to_string();
+    let destination = uuid::Uuid::now_v7().to_string();
+    let blocker = uuid::Uuid::now_v7();
+    sqlx::query!("INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id) VALUES ($1, $2, 'TASK', $3)", uuid::Uuid::now_v7(), blocker.to_string(), SystemPropertyKey::STATUS_UUID).execute(&pool).await?;
+    sqlx::query!(
+        "INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+         VALUES ($1, $2, 'TASK', $3, $4)",
+        uuid::Uuid::now_v7(), source, SystemPropertyKey::DEPENDS_ON_UUID,
+        serde_json::json!({"type": "EntityReference", "value": [{"entity_type": "TASK", "entity_id": blocker.to_string()}]})
+    ).execute(&pool).await?;
+
+    PgSystemPropertiesRepository::new(pool.clone())
+        .copy_task_properties(&source, &destination)
+        .await?;
+    let value = sqlx::query_scalar!(
+        "SELECT values FROM entity_properties WHERE entity_id = $1 AND entity_type = 'TASK'
+         AND property_definition_id = $2",
+        destination,
+        SystemPropertyKey::DEPENDS_ON_UUID
+    )
+    .fetch_optional(&pool)
+    .await?;
+    assert_eq!(value, Some(None));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn task_status_policy_rejection_is_typed_and_retained_completion_succeeds(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team = uuid::Uuid::now_v7();
+    let user = uuid::Uuid::now_v7();
+    sqlx::query!("INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, 'owner@example.com', 'owner@example.com', 'cus_placeholder')", user).execute(&pool).await?;
+    sqlx::query!("INSERT INTO \"User\" (id, email, macro_user_id) VALUES ('macro|owner@example.com', 'owner@example.com', $1)", user).execute(&pool).await?;
+    sqlx::query!("INSERT INTO team (id, name, owner_id, prevent_completing_blocked_tasks) VALUES ($1, 'Test team', 'macro|owner@example.com', TRUE)", team).execute(&pool).await?;
+    let a = uuid::Uuid::now_v7();
+    let b = uuid::Uuid::now_v7();
+    for task in [a, b] {
+        sqlx::query!("INSERT INTO \"Document\" (id, name, owner) VALUES ($1, 'Test task', 'macro|owner@example.com')", task.to_string()).execute(&pool).await?;
+        sqlx::query!("INSERT INTO entity (id, entity_type, owner_type, owner_id) VALUES ($1, 'document', 'team', $2)", task, team.to_string()).execute(&pool).await?;
+        for definition in [
+            SystemPropertyKey::DEPENDS_ON_UUID,
+            SystemPropertyKey::BLOCKING_UUID,
+            SystemPropertyKey::STATUS_UUID,
+        ] {
+            sqlx::query!("INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id) VALUES ($1, $2, 'TASK', $3)", uuid::Uuid::now_v7(), task.to_string(), definition).execute(&pool).await?;
+        }
+    }
+    sqlx::query!(
+        "UPDATE entity_properties SET values = $1 WHERE entity_id = $2 AND property_definition_id = $3",
+        serde_json::json!({"type": "EntityReference", "value": [{"entity_type": "TASK", "entity_id": b.to_string()}]}),
+        a.to_string(), SystemPropertyKey::DEPENDS_ON_UUID,
+    ).execute(&pool).await?;
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let error = repo
+        .update_task_status(&a.to_string(), StatusOption::Completed)
+        .await
+        .unwrap_err();
+    assert!(matches!(error, SystemPropertyError::TaskCompletionBlocked));
+    repo.update_task_status(&b.to_string(), StatusOption::Completed)
+        .await?;
+    repo.update_task_status(&a.to_string(), StatusOption::Completed)
+        .await?;
+    repo.update_task_status(&b.to_string(), StatusOption::InProgress)
+        .await?;
+    repo.update_task_status(&a.to_string(), StatusOption::Completed)
+        .await?;
+    let value = sqlx::query_scalar!(
+        "SELECT values FROM entity_properties WHERE entity_id = $1 AND property_definition_id = $2",
+        a.to_string(),
+        SystemPropertyKey::STATUS_UUID,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        value,
+        Some(
+            serde_json::json!({"type": "SelectOption", "value": [StatusOption::Completed.uuid()]})
+        )
+    );
     Ok(())
 }
 

@@ -30,5 +30,7 @@ bookkeeping (no seat counts, no subscription backfill, no paying check). */
   language?: TeamLanguage;
   name: string;
   owner_id: string;
+  /** Whether tasks owned by this team cannot complete while blocked. */
+  prevent_completing_blocked_tasks: boolean;
   slug: string;
 }

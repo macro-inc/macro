@@ -22,6 +22,7 @@ pub mod record_merge;
 pub mod tag_promotion_queries;
 #[cfg(test)]
 mod tag_promotion_test;
+pub mod task_dependency_queries;
 pub mod task_property_queries;
 #[cfg(test)]
 pub mod test;
@@ -34,3 +35,6 @@ pub mod database_cell_writer;
 
 /// Transactional database option writer.
 pub mod database_option_writer;
+
+/// Indexed task dependency read model.
+pub mod task_dependency_state;

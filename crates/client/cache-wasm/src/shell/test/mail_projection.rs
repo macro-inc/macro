@@ -36,6 +36,7 @@ fn enqueue(engine: &CacheEngine, generation: Option<String>) -> js_sys::Promise 
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
         generation,
+        JsValue::UNDEFINED,
     )
 }
 

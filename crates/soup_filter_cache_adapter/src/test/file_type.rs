@@ -256,6 +256,7 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
             .begin_optimistic_write_with_projections(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-0000-0000-000000000100",
                     query: RENAME,

@@ -237,6 +237,7 @@ fn native_generation_boundary_rejects_old_writes_but_settles_authored_commands()
                     100,
                     None,
                     vec![],
+                    None,
                 )
                 .await
                 .unwrap();

@@ -16,7 +16,7 @@ import {
   usePatchTeamMutation,
 } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
-import { Button, Dialog, Panel, Tabs, Tooltip } from '@ui';
+import { Button, Dialog, Panel, Tabs, ToggleSwitch, Tooltip } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import {
   SettingsCard,
@@ -407,6 +407,23 @@ export function TeamGeneral(props: { team: TeamSummary }) {
                       patchTeamMutation.isPending || teamQuery.isLoading,
                   }))}
                   onChange={handleChangeDefaultLinkShare}
+                />
+              </SettingsRow>
+              <SettingsRow label="Prevent completing blocked tasks">
+                <ToggleSwitch
+                  size="md"
+                  checked={
+                    teamQuery.data?.team.prevent_completing_blocked_tasks ??
+                    false
+                  }
+                  disabled={patchTeamMutation.isPending || teamQuery.isLoading}
+                  onChange={(enabled) =>
+                    patchTeamMutation.mutate({
+                      teamId: props.team.id,
+                      request: { prevent_completing_blocked_tasks: enabled },
+                    })
+                  }
+                  aria-label="Prevent completing blocked tasks"
                 />
               </SettingsRow>
             </Show>

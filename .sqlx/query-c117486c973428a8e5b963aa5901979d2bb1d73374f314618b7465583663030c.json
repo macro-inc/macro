@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                SELECT 1 FROM unnest($1::uuid[], $2::uuid[]) input(dependent, blocker)\n                JOIN task_dependency_edges edge\n                  ON edge.dependent_task_id = input.blocker\n                 AND edge.blocker_task_id = input.dependent\n            ) AS \"cycle!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "cycle!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c117486c973428a8e5b963aa5901979d2bb1d73374f314618b7465583663030c"
+}

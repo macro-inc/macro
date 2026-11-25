@@ -9,6 +9,7 @@ mod pass_reads;
 mod people;
 mod retirement;
 mod staged_hydrate;
+mod task_dependency;
 pub use hydration::HydrationScope;
 pub use pass_reads::{PassReadSet, PassReads};
 pub use staged_hydrate::StagedHydrate;
@@ -361,6 +362,8 @@ pub enum RollbackOptimisticWriteResult {
 
 /// Borrowed inputs for atomically beginning one optimistic mutation.
 pub struct BeginOptimisticWrite<'a> {
+    /// Authored task relationship assignment, without copied neighborhood state.
+    pub task_dependency_recipe: Option<&'a crate::task_dependency::TaskDependencyRecipe>,
     /// Opaque durable client correlation, never sent to the server.
     pub client_metadata: Option<&'a Json>,
     /// Local entities whose IDs must be resolved from the committed response.
@@ -760,6 +763,19 @@ impl<S: Storage> Engine<S> {
             }
             for projection in &mut source.projection_mutations {
                 identity::remap_projection(projection, &identities);
+            }
+            if let Some(recipe) = &source.task_dependency_recipe {
+                source.mutation_data = self
+                    .replay_task_dependency(
+                        recipe,
+                        &source.mutation_data,
+                        &queued.mutation.request.query,
+                        queued.mutation.request.operation_name.as_deref(),
+                        &variables,
+                        &layers,
+                        staged,
+                    )
+                    .await?;
             }
             let document = Self::document(&mut self.docs, &queued.mutation.request.query)?;
             let operation =
@@ -2324,6 +2340,7 @@ impl<S: Storage> Engine<S> {
         self.ensure_revision_can_advance()?;
         let mut live_projection_keys = live_query::projection_keys(&self.optimistic);
         let BeginOptimisticWrite {
+            task_dependency_recipe,
             client_metadata,
             uuid: _,
             query,
@@ -2399,6 +2416,7 @@ impl<S: Storage> Engine<S> {
             IdentityState::NotHydrated | IdentityState::Missing => None,
         };
         let source = OptimisticSource {
+            task_dependency_recipe: task_dependency_recipe.cloned(),
             client_metadata: client_metadata.cloned(),
             identity_bindings: identity_bindings.to_vec(),
             mutation_data: data.clone(),

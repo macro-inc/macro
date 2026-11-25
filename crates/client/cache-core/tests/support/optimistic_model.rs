@@ -485,6 +485,7 @@ impl<S: Storage, R: FnMut(&S) -> S> Scenario<S, R> {
                     .begin_optimistic_write(
                         None,
                         BeginOptimisticWrite {
+                            task_dependency_recipe: None,
                             client_metadata: None,
                             uuid: &pending.uuid,
                             query: pending.query(),

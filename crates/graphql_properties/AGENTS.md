@@ -1,5 +1,7 @@
 # graphql_properties
 
+- Keep `GraphqlTaskDependencyState` flat with canonical task IDs; `load_dependent_tasks` authorizes the root and one hop through the same request loader and visibility budget.
+
 ## What it is
 
 Shared infrastructure for features that attach custom properties to entities
@@ -18,6 +20,12 @@ edge.
 - `src/mutations.rs`: `PropertiesMutationRoot` — setting/clearing a property
   value on an entity.
 - `src/loaders.rs`: `EntityPropertiesLoader` batching.
+- `src/task_dependencies.rs`: request-scoped task dependency facts; `setTaskProperty` returns the edited assignment and reciprocal normalized state. Search hydrates at most 500 task IDs per request; realtime uses independent related-task patches, and incomplete mutation effects trigger a scoped repair.
+- Task mutations retain actual reciprocal IDs from the committed domain outcome; pre/post reads alone miss concurrently removed neighbors.
+- Pass blocker view receipts to the properties domain's `visible_state` projection; preserve aggregate `isBlocked` and opaque membership while redacting individual inaccessible-blocker facts.
+- Share at most 1000 blocker visibility checks and one five-second read deadline across the request's loader batches; unverified blockers retain canonical aggregate state but expose no individual facts. Never expose a hidden-open subgroup flag.
+- Map wrapped `PropertiesErr::DependencyContended` to `DEPENDENCY_BUSY` with `retryable: true`; the web queue retries idempotent `SetTaskProperty` twice.
+- Map `PropertiesErr::TaskCompletionBlocked` through wrapped report contexts for task, generic property, and option writes; include `TASK_BLOCKED` and the task ID when available, never classify display text.
 
 ## Scope
 

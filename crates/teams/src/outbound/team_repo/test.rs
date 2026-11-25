@@ -1512,6 +1512,7 @@ async fn test_patch_team_normalizes_slug_to_screaming_snake_case(
         user_role_updates: None,
         default_link_share: None,
         language: None,
+        prevent_completing_blocked_tasks: None,
     };
 
     team_repo.patch_team(&team_id, &req).await?;
@@ -1543,6 +1544,7 @@ async fn test_patch_team_rejects_invalid_slug_without_updating_name(
         user_role_updates: None,
         default_link_share: None,
         language: None,
+        prevent_completing_blocked_tasks: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1573,6 +1575,7 @@ async fn test_patch_team_rejects_too_long_slug(pool: Pool<Postgres>) -> anyhow::
         user_role_updates: None,
         default_link_share: None,
         language: None,
+        prevent_completing_blocked_tasks: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1602,6 +1605,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         user_role_updates: None,
         default_link_share: Some(Some(LinkShare::Public)),
         language: None,
+        prevent_completing_blocked_tasks: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1615,6 +1619,7 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         user_role_updates: None,
         default_link_share: None,
         language: None,
+        prevent_completing_blocked_tasks: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1628,11 +1633,53 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         user_role_updates: None,
         default_link_share: Some(None),
         language: None,
+        prevent_completing_blocked_tasks: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
     assert_eq!(team.team.default_link_share(), None);
 
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn blocked_task_completion_preference_round_trip(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repository = TeamRepositoryImpl::new(pool);
+    let team_id = uuid::Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let initial = repository.get_team_by_id(&team_id).await?;
+    let owner = MacroUserIdStr::parse_from_str(initial.team.owner_id())?;
+    assert!(
+        !repository
+            .get_team_by_id(&team_id)
+            .await?
+            .team
+            .prevent_completing_blocked_tasks()
+    );
+
+    for enabled in [true, false] {
+        let request: PatchTeamRequest = serde_json::from_value(serde_json::json!({
+            "prevent_completing_blocked_tasks": enabled
+        }))?;
+        repository.patch_team(&team_id, &request).await?;
+        assert_eq!(
+            repository
+                .get_team_by_id(&team_id)
+                .await?
+                .team
+                .prevent_completing_blocked_tasks(),
+            enabled
+        );
+
+        let omitted: PatchTeamRequest = serde_json::from_str("{}")?;
+        repository.patch_team(&team_id, &omitted).await?;
+        assert_eq!(
+            repository.get_user_teams(&owner).await?[0].prevent_completing_blocked_tasks(),
+            enabled
+        );
+    }
     Ok(())
 }
 

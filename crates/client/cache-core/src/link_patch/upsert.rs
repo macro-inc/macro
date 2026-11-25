@@ -37,6 +37,16 @@ pub(super) fn resolve(
         .match_field
         .as_ref()
         .ok_or(LinkPatchError::WrongShape)?;
+    // A task response can contain several assignments of the same definition.
+    // Prefer the declared identity; only discover a replacement when absent.
+    if response.get(entity_key).is_some_and(|record| {
+        record
+            .fields
+            .get(field)
+            .is_some_and(|value| cache_scalar_equals(value, equals))
+    }) {
+        return Ok(Some(entity_key.clone()));
+    }
     let typename = entity_key.as_ref().split_once(':').map(|(name, _)| name);
     let matches: Vec<_> = response
         .iter()

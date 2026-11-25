@@ -55,7 +55,7 @@ async function lead(tab: Tab): Promise<{ leadership: Promise<unknown> }> {
 }
 
 /** Whether every lock in `names` is free, asked as a lane's first run asks. */
-function free(names: readonly string[]): Promise<boolean> {
+async function free(names: readonly string[]): Promise<boolean> {
   const [first, ...rest] = names;
   if (first === undefined) return Promise.resolve(true);
   return navigator.locks.request(first, { ifAvailable: true }, (lock) =>

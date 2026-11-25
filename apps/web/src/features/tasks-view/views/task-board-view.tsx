@@ -2,10 +2,14 @@ import { TaskTimerCount } from '@app/features/time-tracking/task-timer-count';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { TaskBlockedBadge } from '@entity/components/TaskBlockedBadge';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
-import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@property/identifiers';
 import type { Property } from '@property/types';
 import { formatStartDueCompact, startDueOf } from '@property/utils/start-due';
 import { hasValue, isDateProperty } from '@property/utils/typeGuards';
@@ -246,6 +250,15 @@ export function TaskBoardView(props: {
           {renderProperty(task, readOnly, SYSTEM_PROPERTY_IDS.ASSIGNEES, true)}
         </div>
       </TaskBoard.CardHeader>
+      <TaskBlockedBadge
+        blocked={task().isBlocked}
+        completed={
+          task().completed ??
+          (task().statusId
+            ? task().statusId === PROPERTY_OPTION_IDS.STATUS.COMPLETED
+            : task().subtypeCompleted === true)
+        }
+      />
       <TaskBoard.CardFields>
         <div data-kanban-no-drag class="contents">
           <For each={cardPropertyIds()}>

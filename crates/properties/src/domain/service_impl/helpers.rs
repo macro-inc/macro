@@ -61,9 +61,11 @@ pub fn reject_derived_property(property_id: Uuid) -> Result<(), PropertiesErr> {
 
 /// Check if a property can be attached to the given entity type.
 pub fn is_property_applicable_to(property_id: Uuid, entity_type: EntityType) -> bool {
-    // Task-only properties: Parent Task, Subtasks, Project and Time logged
+    // Task-only properties: hierarchy, dependencies, Project and Time logged
     if property_id == SystemPropertyKey::PARENT_TASK_UUID
         || property_id == SystemPropertyKey::SUBTASKS_UUID
+        || property_id == SystemPropertyKey::DEPENDS_ON_UUID
+        || property_id == SystemPropertyKey::BLOCKING_UUID
         || property_id == SystemPropertyKey::PROJECT_UUID
         || property_id == SystemPropertyKey::TIME_LOGGED_UUID
     {

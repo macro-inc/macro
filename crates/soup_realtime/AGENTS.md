@@ -22,6 +22,7 @@ tasks itself.
 - `src/outbound/kafka_publisher.rs`, `entity_access.rs`, `agent_sessions.rs`:
   the Kafka and access-expansion adapters; `entity_access.rs` makes one
   `EntityAudienceLookup` call per entity type in a batch.
+- `src/inbound/kafka_consumer/task_dependencies.rs` + `src/outbound/task_dependency_neighbors.rs`: task status and lifecycle fanout, 500-ID neighbor batches, and each neighbor's own access source. Current relationship writers publish reciprocal events; only legacy relationship events expand again.
 
 ## Scope
 
@@ -61,6 +62,7 @@ tasks itself.
   it uncommitted for redelivery, so downstream consumers must tolerate
   duplicate patches. The Soup-topic receiver (`SoupRealtimeConsumerService::run`)
   instead returns after five failed receives for its supervisor to restart.
+- Document Updated fanout requests explicit task roots through the neighbor port; the properties adapter checks subtype in the same indexed statement. Missing subtype does not qualify. Keep the original document patch, add only neighbors, and leave deletion/property fanout unfiltered.
 - Property definition/option lifecycle events are intentionally ignored; they
   don't identify every affected entity.
 - Channel threads use their containing channel as the access source.
@@ -101,4 +103,4 @@ tasks itself.
 
 ## Related
 
-- `README.md` (same content as above, kept for non-agent readers)
+- `README.md`: concise architecture and delivery overview.

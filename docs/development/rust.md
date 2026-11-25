@@ -30,6 +30,8 @@ unit tests. Standalone pure-logic crates need no database setup.
 - **Cursor Cloud:** use [the Cloud entry points](cursor-cloud.md), not the local
   stack TUI. Run `bash .cursor/infra.sh` before DB-backed tests.
 
+On hosts with RAM-backed `/tmp`, keep `TMPDIR`, `CARGO_TARGET_DIR`, and large build logs on disk; delete only temporary files whose ownership you have verified.
+
 ## Build and check
 
 | Command | Purpose |

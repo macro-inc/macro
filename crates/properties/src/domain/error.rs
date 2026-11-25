@@ -11,6 +11,14 @@ pub(crate) struct InvalidStoredPropertyValue;
 /// Domain error type for property operations.
 #[derive(Debug, Error)]
 pub enum PropertiesErr {
+    /// Concurrent dependency work rolled back; retry the idempotent request.
+    #[error("Task dependencies changed; retry")]
+    DependencyContended,
+
+    /// Atomic storage admission rejected a blocked task's completion.
+    #[error("Task is blocked")]
+    TaskCompletionBlocked,
+
     /// Validation errors (includes property not found) - maps to 400
     #[error("{0}")]
     Validation(String),
@@ -64,9 +72,18 @@ pub enum PropertiesErr {
 
     /// Repository/database errors - maps to 500
     #[error(transparent)]
-    Repo(#[from] anyhow::Error),
+    Repo(anyhow::Error),
 
     /// Permission service is not configured
     #[error("permission service is not configured")]
     PermissionServiceNotConfigured,
+}
+
+impl From<anyhow::Error> for PropertiesErr {
+    fn from(error: anyhow::Error) -> Self {
+        match error.downcast::<Self>() {
+            Ok(error) => error,
+            Err(error) => Self::Repo(error),
+        }
+    }
 }

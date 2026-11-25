@@ -307,6 +307,7 @@ fn optimistic_records_explicitly_overlay_the_durable_search_projection() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000020",
                     query: RENAME,

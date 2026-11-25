@@ -82,6 +82,21 @@ where
     type InitiativeEdges = SoupInitiativeEdges;
     type CrmRecordEdges = SoupCrmRecordEdges;
     type DocumentEdges = SoupDocumentEdges;
+    type TaskDependencyState = graphql_properties::GraphqlTaskDependencyState;
+
+    async fn resolve_task_dependencies(
+        ctx: &Context<'_>,
+        task_id: Uuid,
+    ) -> async_graphql::Result<Option<Self::TaskDependencyState>> {
+        graphql_properties::load_task_dependencies(ctx, task_id).await
+    }
+
+    async fn resolve_dependent_tasks(
+        ctx: &Context<'_>,
+        task_id: Uuid,
+    ) -> async_graphql::Result<Vec<Self::TaskDependencyState>> {
+        graphql_properties::load_dependent_tasks(ctx, task_id).await
+    }
 
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
         Self {

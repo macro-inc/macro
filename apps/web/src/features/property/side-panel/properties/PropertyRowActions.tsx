@@ -2,6 +2,7 @@ import PushPinIcon from '@icon/system/regular/push-pin.svg';
 import PushPinSlashIcon from '@icon/system/regular/push-pin-slash.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Button } from '@ui';
 import {
@@ -43,6 +44,12 @@ type PropertyRowActionsProps = {
 const PropertyRowActionsContext =
   createContext<PropertyRowActionsContextValue>();
 
+const TASK_STATE_DEFINITION_IDS = new Set<string>([
+  SYSTEM_PROPERTY_IDS.STATUS,
+  SYSTEM_PROPERTY_IDS.DEPENDS_ON,
+  SYSTEM_PROPERTY_IDS.BLOCKING,
+]);
+
 export function isPendingProperty(property: Property): boolean {
   return property.propertyId.startsWith('pending:');
 }
@@ -71,11 +78,22 @@ function PropertyRowActionsProvider(props: PropertyRowActionsProps) {
     Boolean(
       props.onPropertyPinned && ctx.onPropertyUnpinned && ctx.pinnedPropertyIds
     );
-  const canRemove = () =>
-    props.canRemoveFromEntity &&
-    ctx.canEdit &&
-    !props.property.isMetadata &&
-    (isPendingProperty(props.property) || Boolean(ctx.removeProperty));
+  const canRemove = () => {
+    // Task state stays attached. Relationship editors clear values through the
+    // atomic task mutation, which includes reciprocal cache effects.
+    if (
+      ctx.entityType === 'TASK' &&
+      TASK_STATE_DEFINITION_IDS.has(props.property.propertyDefinitionId)
+    ) {
+      return false;
+    }
+    return (
+      props.canRemoveFromEntity &&
+      ctx.canEdit &&
+      !props.property.isMetadata &&
+      (isPendingProperty(props.property) || Boolean(ctx.removeProperty))
+    );
+  };
   const canPin = () =>
     panelCanPin() &&
     !props.property.isMetadata &&

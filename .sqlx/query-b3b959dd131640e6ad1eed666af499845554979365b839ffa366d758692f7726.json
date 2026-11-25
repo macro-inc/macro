@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM task_dependency_edges WHERE blocker_task_id = $1 AND dependent_task_id = ANY($2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b3b959dd131640e6ad1eed666af499845554979365b839ffa366d758692f7726"
+}

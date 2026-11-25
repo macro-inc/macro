@@ -59,6 +59,7 @@ it('sends observer annotations without changing the caller request options', asy
     const outgoing = new Headers(request.headers);
     outgoing.set('x-retirement-signal', '1');
     request.headers = outgoing;
+    return undefined;
   });
   try {
     await platformFetch('https://gateway.example/storage', init);
@@ -104,6 +105,7 @@ it('preserves inherited and non-enumerable fetch options in the observer copy', 
     const outgoing = new Headers(request.headers);
     outgoing.set('x-retirement-signal', '1');
     request.headers = outgoing;
+    return undefined;
   });
   try {
     await platformFetch('https://gateway.example/storage', init);

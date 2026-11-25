@@ -92,3 +92,28 @@ fn test_count_occurrences() {
         ]
     );
 }
+
+#[tokio::test]
+async fn failed_property_cleanup_keeps_deletion_and_acknowledgement_pending() {
+    for failure in ["Task dependencies changed; retry", "database unavailable"] {
+        let completed = std::cell::Cell::new(false);
+        let result = super::handle::complete_after_property_cleanup(
+            async { Err(anyhow::anyhow!(failure)) },
+            async {
+                completed.set(true);
+                Ok(())
+            },
+        )
+        .await;
+        assert!(result.is_err());
+        assert!(!completed.get());
+    }
+    let completed = std::cell::Cell::new(false);
+    super::handle::complete_after_property_cleanup(async { Ok(()) }, async {
+        completed.set(true);
+        Ok(())
+    })
+    .await
+    .unwrap();
+    assert!(completed.get());
+}

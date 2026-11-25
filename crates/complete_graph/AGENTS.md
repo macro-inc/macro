@@ -1,5 +1,7 @@
 # complete_graph — schema conventions
 
+- Keep task dependency states non-recursive and compose document `dependentTasks` through the shared properties helper; schema depth is capped at 32 (139 authored operations peaked at depth 10).
+
 ## What it is
 
 Part of the web client's shared infrastructure: this crate composes the
@@ -114,6 +116,7 @@ The exported `static_assets/schema.graphql` feeds both the client codegen
 (`apps/web && bun gen-graphql`) and the cache metadata codegen. Additive changes
 keep persisted client caches; a change that makes stored records unsafe needs a
 bump of `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in `crates/client/cache-schema/src/lib.rs`.
+- `GraphqlTaskDependencyState.id` is the task's canonical ID. Query and task-property mutation responses share this normalized record; dependency assignment values remain ordinary `GraphqlProperty` records.
 
 Email send admission, cancellation and status are exposed by `graphql_email`;
 `agentSessionActivityAppended` checks session view access as the log subscription does and filters correlated activity rows by the session bound in `agent_correlations`. Its first empty frame confirms listening, so clients refetch REST history to close the handoff gap. A lagging stream errors so clients refetch again.

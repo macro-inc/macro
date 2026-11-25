@@ -273,6 +273,7 @@ fn optimistic_bucket_moves_overlay_storage_matches_through_settlement() {
                 .begin_optimistic_write(
                     None,
                     BeginOptimisticWrite {
+                        task_dependency_recipe: None,
                         client_metadata: None,
                         uuid: "00000000-0000-4000-8000-000000000001",
                         query: mutation,

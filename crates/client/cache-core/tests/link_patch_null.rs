@@ -1,7 +1,8 @@
 //! Optional null parents do not invalidate mutations; malformed shapes still do.
 
 use cache_core::link_patch::{
-    LinkOperation, LinkPatchError, LinkPathSegment, OptimisticLinkPatch, apply_link_patches,
+    LinkOperation, LinkPatchError, LinkPathSegment, OptimisticLinkPatch, RecordRoot,
+    apply_link_patches,
 };
 use cache_core::value::{CacheValue, EntityKey, Record};
 use std::collections::{BTreeMap, HashMap};
@@ -102,6 +103,50 @@ fn strict_patch_still_rejects_scalar_parents_and_null_target_lists() {
             ),
             Err(LinkPatchError::WrongShape)
         );
+        assert_eq!(effective, before);
+        assert!(updates.is_empty());
+    }
+}
+
+#[test]
+fn strict_record_patch_skips_missing_parents_and_fields_without_task_recipes() {
+    let parent = EntityKey("GraphqlSoupEmailThread:thread".into());
+    let patch = OptimisticLinkPatch {
+        query: "fragment ThreadMessages on GraphqlSoupEmailThread { messages { id } }".into(),
+        record_root: Some(RecordRoot {
+            fragment_name: "ThreadMessages".into(),
+            entity_key: parent.clone(),
+        }),
+        operation_name: None,
+        variables_json: "{}".into(),
+        path: vec![LinkPathSegment::Field {
+            field: "messages".into(),
+        }],
+        operation: LinkOperation::Remove {
+            entity_key: EntityKey("GraphqlSoupEmailMessage:draft".into()),
+        },
+    };
+    for record in [
+        None,
+        Some(Record {
+            fields: BTreeMap::from([("id".into(), CacheValue::String("thread".into()))]),
+        }),
+    ] {
+        let mut effective = HashMap::new();
+        if let Some(record) = record {
+            effective.insert(parent.clone(), record);
+        }
+        let before = effective.clone();
+        let mut updates = BTreeMap::new();
+        let applied = apply_link_patches(
+            cache_core::meta::bundled_schema_ref(),
+            &mut effective,
+            &mut updates,
+            std::slice::from_ref(&patch),
+            false,
+        )
+        .unwrap();
+        assert!(!applied);
         assert_eq!(effective, before);
         assert!(updates.is_empty());
     }

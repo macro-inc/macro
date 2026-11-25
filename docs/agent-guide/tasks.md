@@ -3,6 +3,19 @@
 On touch, **Show sidebar** stays on the left while **Search** and **Filters** float on the right over the full-height list with a list-local top fade. The initial chrome inset, tutorial, warning rows, and touch column headings scroll with the tasks. Above 720px on touch, the task or project list remains left of an empty or selected detail preview. At every touch width, Show sidebar opens navigation (task views, projects, saved views) in a sheet; there are no view pills.
 Search uses the same 40px glass island as Filters. Tasks and Projects lists reserve the greater of the bottom safe area and floating controls, plus 16px, so the final row can scroll fully clear of them.
 
+## Dependencies and blocked tasks
+
+- Edit **Depends On** to choose prerequisite tasks, or **Blocking** to choose tasks that depend on the current task. Both directions use the existing task picker in the properties panel.
+- Adding or removing a link updates both tasks immediately. Failed writes roll back both sides. Editing either direction requires edit access to added and removed tasks only. Retained inaccessible tasks do not prevent unrelated edits.
+- Status, Depends On, and Blocking stay attached to tasks and do not offer **Remove from entity**. Clear relationship values through the task picker instead; custom properties retain their removal action.
+- A task shows **Blocked** while it is not Completed and at least one existing prerequisite is not Completed. Completed tasks hide the badge; Canceled prerequisites still block. Completing or reopening a prerequisite updates the dependent tasks.
+- Desktop rows, phone rows, and board cards share the Blocked badge. Task details show status icons only for accessible prerequisites; unavailable tasks reveal no name or individual completion state. The task's aggregate Blocked state remains visible across prerequisite access boundaries.
+- Team admins can enable **Prevent completing blocked tasks** in **Settings → Team → General**. The default is off. When enabled, completion is rejected by every backend Status writer; **Open blocker** opens an unfinished prerequisite in the app's split layout after rollback, without reloading the page.
+- Self-dependencies and direct two-task cycles are rejected; longer cycles are allowed. Deleted prerequisites no longer block a task; losing access hides their details without changing the dependency.
+- If unreadable prerequisites prevent proving an optimistic unblock, the badge stays conservative until the authoritative response arrives. The team completion guard still uses the full canonical dependency graph, not the viewer's redacted prerequisite list.
+
+Search keeps its original result order and index-based filter membership while refreshing dependency and Status assignments; unrelated properties stay intact. If dependency enrichment fails, search rows remain available without enrichment badges. Primary search failures still show the normal list error. A later successful dependency refresh restores badges.
+
 ## Surface
 
 The main Tasks list (List layout, not project or CRM task lists) starts with the Tasks `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows, so list keyboard focus skips it.

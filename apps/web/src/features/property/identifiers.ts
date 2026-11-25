@@ -25,6 +25,8 @@ export const SYSTEM_PROPERTY_IDS = {
   START_DATE: '00000001-0000-0000-0000-000000000015',
   /** Minutes logged on a task: the sum of its time entries, written only by them. */
   TIME_LOGGED: '00000001-0000-0000-0000-000000000016',
+  /** Tasks that depend on this task; inverse of Depends On. */
+  BLOCKING: '00000001-0000-0000-0000-000000000017',
 } as const;
 
 /** Stable option IDs, kept independent of UI/block registries for tooling. */

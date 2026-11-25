@@ -554,7 +554,7 @@ fn document_favorite_optimism_survives_without_restoring_the_old_mixed_list() {
         engine
             .begin_optimistic_write_with_projections(
                 None,
-                BeginOptimisticWrite {
+                BeginOptimisticWrite { task_dependency_recipe: None,
                     uuid: &Uuid::now_v7().to_string(),
                     client_metadata: Some(&json!({"intent":"favorite document"})),
                     query: mutation,
@@ -664,7 +664,7 @@ fn authored_inspection_recovers_legacy_draft_without_exposing_its_thread_snapsho
         use cache_core::engine::BeginOptimisticWrite;
         use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
         let mut engine = Engine::new(InMemoryStorage::new());
-        let (id, _) = engine.begin_optimistic_write(None, BeginOptimisticWrite { uuid: &Uuid::now_v7().to_string(), client_metadata: None, query: "mutation SaveEmailDraft($input: Input!) { saveEmailDraft(input:$input) { draft { id subject linkId attachmentsDraft { id fileName s3Key } } thread { __typename id name } } }", operation_name: Some("SaveEmailDraft"), variables: json!({"input":{"draftId":"draft","subject":"authored subject","bodyText":"authored reply"}}).as_object().unwrap(), data: &json!({"saveEmailDraft":{"draft":{"id":"draft","subject":"copied draft","linkId":"mailbox","attachmentsDraft":[{"id":"file","fileName":"draft.txt","s3Key":"object"}]},"thread":{"__typename":"GraphqlSoupEmailThread","id":"thread","name":"private thread"}}}), link_patches: &[], revalidations: &[], identity_bindings: &[], created_at_ms: 1 }).await.unwrap();
+        let (id, _) = engine.begin_optimistic_write(None, BeginOptimisticWrite { task_dependency_recipe: None, uuid: &Uuid::now_v7().to_string(), client_metadata: None, query: "mutation SaveEmailDraft($input: Input!) { saveEmailDraft(input:$input) { draft { id subject linkId attachmentsDraft { id fileName s3Key } } thread { __typename id name } } }", operation_name: Some("SaveEmailDraft"), variables: json!({"input":{"draftId":"draft","subject":"authored subject","bodyText":"authored reply"}}).as_object().unwrap(), data: &json!({"saveEmailDraft":{"draft":{"id":"draft","subject":"copied draft","linkId":"mailbox","attachmentsDraft":[{"id":"file","fileName":"draft.txt","s3Key":"object"}]},"thread":{"__typename":"GraphqlSoupEmailThread","id":"thread","name":"private thread"}}}), link_patches: &[], revalidations: &[], identity_bindings: &[], created_at_ms: 1 }).await.unwrap();
         let claim = engine
             .claim_next_mutation(MutationClaimRequest {
                 owner: "departed-page".into(),

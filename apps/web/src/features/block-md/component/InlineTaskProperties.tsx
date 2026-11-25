@@ -31,6 +31,7 @@ import {
   formatStartDue,
   startDueOf,
 } from '@property/utils/start-due';
+import { TaskDependencyDetail } from '@property/views/task-dependency-detail';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { isTemporaryGraphqlProperty } from '@queries/properties/graphql-optimistic';
 import { useTagsQuery } from '@queries/properties/tags';
@@ -315,6 +316,9 @@ export function InlineTaskProperties() {
                 <ProgressChip stats={progressStats()} />
               </Show>
             )}
+          </Show>
+          <Show when={documentKind === 'task'}>
+            <TaskDependencyDetail taskId={blockId} />
           </Show>
           <Modals />
         </PropertiesProvider>

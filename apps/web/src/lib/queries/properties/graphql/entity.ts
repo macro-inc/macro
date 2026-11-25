@@ -31,6 +31,7 @@ import {
   SetEntityPropertyDocument,
   type SetEntityPropertyMutation,
   type SetEntityPropertyMutationVariables,
+  SetTaskPropertyDocument,
   type SoupEntityInput,
 } from '@service-storage/graphql/generated/graphql';
 import {
@@ -51,6 +52,11 @@ import {
 import { buildOptimisticSetEntityProperty } from '../graphql-optimistic';
 import { buildPropertyAssignmentLinks } from './assignment-links';
 import { observePropertyMutationSettlements } from './mutation-settlements';
+import {
+  isTaskDependencyProperty,
+  repairTaskDependencies,
+  taskDependencyRecipe,
+} from './task-dependencies';
 
 /** Builds the input used to load one entity's properties. */
 export function buildEntityPropertiesInput(
@@ -490,20 +496,58 @@ async function sendEntityPropertyMutation(
     },
   };
 
-  const mutationResult = await (args.optimisticProperty
-    ? executeOptimisticMutation(
-        client,
-        mutation,
-        variables,
-        { setEntityProperty: args.optimisticProperty },
-        {
-          ...args.optimisticCache,
-          authorizationEpoch,
-          uuid: entityPropertyOptimisticMutationUuid(args),
-          onEnqueued,
-        }
-      ).toPromise()
-    : client.mutation(mutation, variables, context).toPromise());
+  const taskProperty =
+    (input.entityType === 'TASK' || input.entityType === 'DOCUMENT') &&
+    isTaskDependencyProperty(args.propertyDefinitionId);
+  let mutationResult: OperationResult<
+    SetEntityPropertyMutation,
+    SetEntityPropertyMutationVariables
+  >;
+  if (taskProperty && args.optimisticProperty) {
+    const result = await executeOptimisticMutation(
+      client,
+      SetTaskPropertyDocument,
+      variables,
+      { setTaskProperty: { property: args.optimisticProperty } },
+      {
+        ...args.optimisticCache,
+        taskDependencyRecipe: taskDependencyRecipe(
+          input.entityId,
+          args.optimisticProperty
+        ),
+        authorizationEpoch,
+        uuid: entityPropertyOptimisticMutationUuid(args),
+        onEnqueued,
+      }
+    ).toPromise();
+    if (
+      result.data?.setTaskProperty.effectsComplete === false &&
+      cacheSessionGeneration.isCurrent(authorizationEpoch)
+    ) {
+      await repairTaskDependencies(client, input.entityId);
+    }
+    mutationResult = {
+      ...result,
+      data: result.data
+        ? { setEntityProperty: result.data.setTaskProperty.property }
+        : undefined,
+    };
+  } else {
+    mutationResult = await (args.optimisticProperty
+      ? executeOptimisticMutation(
+          client,
+          mutation,
+          variables,
+          { setEntityProperty: args.optimisticProperty },
+          {
+            ...args.optimisticCache,
+            authorizationEpoch,
+            uuid: entityPropertyOptimisticMutationUuid(args),
+            onEnqueued,
+          }
+        ).toPromise()
+      : client.mutation(mutation, variables, context).toPromise());
+  }
   const disposition = mutationDisposition(mutationResult);
   if (
     disposition.kind === 'queued' &&
@@ -750,5 +794,12 @@ export function mapGraphqlEntityProperties(
 ): SoupProperty[] | undefined {
   const entity = data?.user?.soupEntity;
   if (entity === undefined) return undefined;
-  return mapGraphqlProperties(entity?.id === entityId ? entity.properties : []);
+  if (entity?.id !== entityId) return mapGraphqlProperties([]);
+  const taskProperties =
+    entity.__typename === 'GraphqlSoupDocument'
+      ? entity.taskDependencies?.properties
+      : undefined;
+  return taskProperties
+    ? mapGraphqlProperties(entity.properties, taskProperties)
+    : mapGraphqlProperties(entity.properties);
 }

@@ -1155,7 +1155,8 @@ export class CacheWorkerCore {
             request.leaseExpiresAtMs,
             request.clientMetadata,
             request.uncertainCalendarEventKeys,
-            request.generation
+            request.generation,
+            request.taskDependencyRecipe
           );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);

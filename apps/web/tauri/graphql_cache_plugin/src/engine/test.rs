@@ -610,6 +610,7 @@ fn optimistic_layer_commits_durably() {
         1_000,
         Some(serde_json::json!({"draftRevision": 10})),
         vec![],
+        None,
     ))
     .unwrap();
     assert_eq!(optimistic.result.affected_ops, vec!["client:1".to_string()]);
@@ -688,6 +689,7 @@ fn rollback_drops_optimistic_contribution() {
         1_000,
         None,
         vec![],
+        None,
     ))
     .unwrap();
     let InitialMutationClaimWire::Claimed { mutation: claimed } = optimistic.initial_claim else {

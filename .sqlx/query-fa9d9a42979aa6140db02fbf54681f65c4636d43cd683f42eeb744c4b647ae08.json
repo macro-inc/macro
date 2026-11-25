@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id)\n         SELECT $1, $2, 'TASK', $3 WHERE EXISTS (\n             SELECT 1 FROM entity_properties WHERE entity_id = $2 AND entity_type = 'TASK')\n         ON CONFLICT (entity_id, entity_type, property_definition_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fa9d9a42979aa6140db02fbf54681f65c4636d43cd683f42eeb744c4b647ae08"
+}

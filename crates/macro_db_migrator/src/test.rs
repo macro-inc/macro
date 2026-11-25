@@ -1,3 +1,4 @@
+mod task_dependencies;
 use super::MACRO_DB_MIGRATIONS;
 use sqlx::{PgPool, migrate::Migrator};
 use std::borrow::Cow;

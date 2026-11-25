@@ -57,6 +57,16 @@ pub trait EntityPropertyWriter: Send + Sync + 'static {
         value: Option<SetPropertyValue>,
     ) -> impl Future<Output = Result<EntityPropertyWithDefinition, rootcause::Report>> + Send;
 
+    /// Set a task property and return the transaction's actual reciprocal endpoints.
+    fn set_task_property(
+        &self,
+        task_id: Uuid,
+        property_definition_id: Uuid,
+        value: Option<SetPropertyValue>,
+    ) -> impl Future<
+        Output = Result<properties::domain::model::EntityPropertyMutation, rootcause::Report>,
+    > + Send;
+
     /// Apply option add/remove deltas across one entity's multi-select
     /// properties, returning each touched property as committed.
     ///
@@ -94,6 +104,14 @@ impl EntityPropertyWriter for NoOpEntityPropertyWriter {
         Err(rootcause::report!("property writer is not configured"))
     }
 
+    async fn set_task_property(
+        &self,
+        _task_id: Uuid,
+        _property_definition_id: Uuid,
+        _value: Option<SetPropertyValue>,
+    ) -> Result<properties::domain::model::EntityPropertyMutation, rootcause::Report> {
+        Err(rootcause::report!("property writer is not configured"))
+    }
     async fn update_entity_property_options(
         &self,
         _entity_type: model_entity::EntityType,
@@ -181,6 +199,28 @@ where
             .map_err(|err| rootcause::report!(err))?)
     }
 
+    async fn set_task_property(
+        &self,
+        task_id: Uuid,
+        property_definition_id: Uuid,
+        value: Option<SetPropertyValue>,
+    ) -> Result<properties::domain::model::EntityPropertyMutation, rootcause::Report> {
+        let access = self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                &self.user_id,
+                None,
+                &task_id.to_string(),
+                model_entity::EntityType::Document,
+            )
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        Ok(self
+            .properties_service
+            .set_entity_property_with_effects(&access, property_definition_id, value, None)
+            .await
+            .map_err(|error| rootcause::report!(error))?)
+    }
     async fn update_entity_property_options(
         &self,
         entity_type: model_entity::EntityType,
@@ -463,6 +503,16 @@ impl GraphqlSetPropertyValue {
     }
 }
 
+/// Committed task properties and dependency facts for every affected endpoint.
+#[derive(async_graphql::SimpleObject)]
+struct TaskPropertyEffects {
+    /// The assignment directly edited by the caller.
+    property: GraphqlProperty,
+    /// Authoritative normalized task facts, including reciprocal assignments.
+    tasks: Vec<crate::task_dependencies::GraphqlTaskDependencyState>,
+    /// False means the write committed but dependency facts need a scoped reload.
+    effects_complete: bool,
+}
 /// Mutations for assigning and updating entity properties.
 #[Object]
 impl<T> PropertiesMutationRoot<T>
@@ -498,6 +548,7 @@ where
         input: SetEntityPropertyInput,
     ) -> async_graphql::Result<GraphqlProperty> {
         let writer = ctx.data::<T>()?;
+        let task_id = Uuid::parse_str(&input.entity_id).ok();
         let property_definition_id =
             parse_id(input.property_definition_id, "propertyDefinitionId")?;
         let value = input
@@ -513,9 +564,79 @@ where
                 value,
             )
             .await
-            .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+            .map_err(|error| crate::task_dependencies::task_property_error(error, task_id))?;
 
         Ok(GraphqlProperty::new(property))
+    }
+
+    /// Set a task property and return all dependency effects in one cache transaction.
+    #[tracing::instrument(name = "tasks.property.set", skip_all, fields(task_id = tracing::field::Empty), err(Debug))]
+    async fn set_task_property(
+        &self,
+        ctx: &Context<'_>,
+        input: SetEntityPropertyInput,
+    ) -> async_graphql::Result<TaskPropertyEffects> {
+        use crate::task_dependencies::TaskDependencyLoader;
+        use async_graphql::dataloader::DataLoader;
+        if input.entity_type != GraphqlPropertyTargetEntityType::Document {
+            return Err(async_graphql::Error::new("Expected a task document"));
+        }
+        let task_id = Uuid::parse_str(&input.entity_id)
+            .map_err(|_| async_graphql::Error::new("Invalid task ID"))?;
+        tracing::Span::current().record("task_id", tracing::field::display(task_id));
+        let definition_id = parse_id(input.property_definition_id, "propertyDefinitionId")?;
+        if !matches!(
+            definition_id,
+            system_properties::SystemPropertyKey::STATUS_UUID
+                | system_properties::SystemPropertyKey::DEPENDS_ON_UUID
+                | system_properties::SystemPropertyKey::BLOCKING_UUID
+        ) {
+            return Err(async_graphql::Error::new(
+                "Expected a task dependency or Status property",
+            ));
+        }
+        let loader = ctx.data::<DataLoader<TaskDependencyLoader>>()?;
+        let before = loader
+            .load_one(task_id)
+            .await
+            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        let value = input
+            .value
+            .map(GraphqlSetPropertyValue::try_into_model)
+            .transpose()?;
+        let mut ids = vec![task_id];
+        if let Some(before) = before {
+            ids.extend(before.facts.blocker_ids);
+            ids.extend(before.facts.dependent_ids);
+        }
+        if let Some(SetPropertyValue::MultiEntityReference { references }) = &value {
+            ids.extend(
+                references
+                    .iter()
+                    .filter_map(|reference| Uuid::parse_str(&reference.entity_id).ok()),
+            );
+        }
+        let writer = ctx.data::<T>()?;
+        let mutation = writer
+            .set_task_property(task_id, definition_id, value)
+            .await
+            .map_err(|error| crate::task_dependencies::task_property_error(error, Some(task_id)))?;
+        ids.extend(mutation.affected_task_ids);
+        let property = mutation.property;
+        let effects =
+            crate::task_dependencies::load_task_property_effects(loader, task_id, ids).await;
+        let (tasks, effects_complete) = match effects {
+            Ok(tasks) => (tasks, true),
+            Err(error) => {
+                tracing::warn!(task_id = %task_id, error = ?error, "task property committed; dependency hydration failed");
+                (Vec::new(), false)
+            }
+        };
+        Ok(TaskPropertyEffects {
+            property: GraphqlProperty::new(property),
+            tasks,
+            effects_complete,
+        })
     }
 
     /// Add and remove options across one entity's multi-select properties.
@@ -530,6 +651,7 @@ where
         input: UpdateEntityPropertyOptionsInput,
     ) -> async_graphql::Result<Vec<GraphqlProperty>> {
         let writer = ctx.data::<T>()?;
+        let task_id = Uuid::parse_str(&input.entity_id).ok();
         let updates = input
             .properties
             .into_iter()
@@ -543,11 +665,14 @@ where
                 updates,
             )
             .await
-            .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+            .map_err(|error| crate::task_dependencies::task_property_error(error, task_id))?;
 
         Ok(properties.into_iter().map(GraphqlProperty::new).collect())
     }
 }
+
+#[cfg(test)]
+mod test;
 
 #[cfg(test)]
 mod tests {
@@ -607,6 +732,26 @@ mod tests {
             *self.write.lock().expect("capture mutex poisoned") =
                 Some((entity_type, entity_id, property_definition_id, value));
             Ok(self.property.clone())
+        }
+
+        async fn set_task_property(
+            &self,
+            task_id: Uuid,
+            property_definition_id: Uuid,
+            value: Option<SetPropertyValue>,
+        ) -> Result<properties::domain::model::EntityPropertyMutation, rootcause::Report> {
+            let property = self
+                .set_entity_property(
+                    model_entity::EntityType::Document,
+                    task_id.to_string(),
+                    property_definition_id,
+                    value,
+                )
+                .await?;
+            Ok(properties::domain::model::EntityPropertyMutation {
+                property,
+                affected_task_ids: Vec::new(),
+            })
         }
 
         async fn update_entity_property_options(

@@ -115,6 +115,100 @@
       ],
       "title": "CacheAuthority",
       "type": "object"
+    },
+    "TaskDependencyRecipe": {
+      "$defs": {
+        "TaskDependencyChange": {
+          "description": "Only dependency and completion assignments affect the reciprocal graph.",
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "description": "Replace the edited task's prerequisites.",
+              "properties": {
+                "kind": {
+                  "const": "dependsOn",
+                  "type": "string"
+                },
+                "targetIds": {
+                  "description": "Complete authored prerequisite set.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind",
+                "targetIds"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Replace the edited task's dependents.",
+              "properties": {
+                "kind": {
+                  "const": "blocking",
+                  "type": "string"
+                },
+                "targetIds": {
+                  "description": "Complete authored dependent set.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind",
+                "targetIds"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Replace the edited task's status options.",
+              "properties": {
+                "kind": {
+                  "const": "status",
+                  "type": "string"
+                },
+                "optionIds": {
+                  "description": "Complete authored option set.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "kind",
+                "optionIds"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "One task property assignment, without copied neighborhood records.",
+      "properties": {
+        "change": {
+          "$ref": "#/$defs/TaskDependencyChange",
+          "description": "Authored property assignment."
+        },
+        "taskId": {
+          "description": "Edited task's stable ID.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "taskId",
+        "change"
+      ],
+      "title": "TaskDependencyRecipe",
+      "type": "object"
     }
   }
 }

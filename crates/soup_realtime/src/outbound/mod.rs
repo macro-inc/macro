@@ -13,3 +13,7 @@ pub mod soup_consumer;
 /// Session dependencies for PR updates.
 #[cfg(feature = "outbound")]
 pub mod agent_sessions;
+
+/// Task dependency neighbors from the properties read model.
+#[cfg(feature = "outbound")]
+pub mod task_dependency_neighbors;

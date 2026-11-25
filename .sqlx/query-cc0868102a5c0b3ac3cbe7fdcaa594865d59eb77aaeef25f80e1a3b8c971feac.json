@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM unnest($1::uuid[]) endpoint(id)\n                WHERE (SELECT count(*) FROM (\n                    SELECT 1 FROM task_dependency_edges WHERE dependent_task_id = endpoint.id LIMIT 1000\n                ) edges) >= 1000) AS \"full!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "full!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cc0868102a5c0b3ac3cbe7fdcaa594865d59eb77aaeef25f80e1a3b8c971feac"
+}

@@ -6,7 +6,7 @@ mod test;
 use anyhow::Context as _;
 use models_properties::service::{entity_property::EntityProperty, property_value::PropertyValue};
 use models_properties::{EntityReference, EntityType};
-use sqlx::{PgExecutor, Pool, Postgres};
+use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use super::query_error::PropertyQueryError;
@@ -682,19 +682,86 @@ pub async fn delete_entity_property(
     Ok(())
 }
 
-/// Deletes all properties attached to an entity.
-#[tracing::instrument(skip(executor))]
+/// Delete assignments and capture surviving dependency endpoints before cascades
+/// erase the edges needed to identify them. Return receipts only after commit.
+#[tracing::instrument(skip_all, fields(entity_id = tracing::field::Empty, entity_type = ?entity_reference.entity_type), err)]
 pub async fn delete_entity_properties(
-    executor: impl PgExecutor<'_>,
+    pool: &Pool<Postgres>,
     entity_reference: &EntityReference,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<EntityPropertyMutationSnapshot>> {
+    // Canonical documents use both legacy DOCUMENT and task-specific storage.
+    // The document subtype can already be gone when a cleanup job is redelivered.
+    let document_namespaces = matches!(
+        entity_reference.entity_type,
+        EntityType::Document | EntityType::Task
+    );
+    let entity_id = Uuid::parse_str(&entity_reference.entity_id).ok();
+    if let Some(entity_id) = entity_id {
+        tracing::Span::current().record("entity_id", tracing::field::display(entity_id));
+    }
+    let task_id = entity_id.filter(|_| document_namespaces);
+    let mut tx = pool.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '10s'")
+        .execute(&mut *tx)
+        .await?;
+    if let Some(task_id) = task_id {
+        let discovered = super::task_dependency_queries::neighbors(&mut tx, task_id).await?;
+        super::task_dependency_queries::lock_cleanup_endpoints(&mut tx, task_id, &discovered)
+            .await?;
+    }
+    let before = sqlx::query!(
+        r#"SELECT target.id AS "id!", target.values FROM (
+            SELECT blocking_property_id AS id FROM task_dependency_edges WHERE dependent_task_id = $1
+            UNION
+            SELECT dependent_property_id AS id FROM task_dependency_edges WHERE blocker_task_id = $1
+        ) reciprocal
+        CROSS JOIN LATERAL (SELECT id, entity_id, values FROM entity_properties
+            WHERE id = reciprocal.id LIMIT 1) target
+        WHERE target.entity_id <> $2"#,
+        task_id,
+        entity_reference.entity_id,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
     sqlx::query!(
-        "DELETE FROM entity_properties WHERE entity_id = $1 AND entity_type = $2",
+        "DELETE FROM entity_properties WHERE entity_id = $1 AND (entity_type = $2 OR ($3 AND entity_type IN ('DOCUMENT', 'TASK')))",
         entity_reference.entity_id,
         entity_reference.entity_type as _,
+        document_namespaces,
     )
-    .execute(executor)
+    .execute(&mut *tx)
     .await?;
-
-    Ok(())
+    let ids = before.iter().map(|row| row.id).collect::<Vec<_>>();
+    let after = sqlx::query!(
+        r#"SELECT id, entity_id, entity_type AS "entity_type: EntityType",
+            property_definition_id, created_at, updated_at, values
+            FROM entity_properties WHERE id = ANY($1)"#,
+        &ids
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    let mut previous = before
+        .into_iter()
+        .map(|row| (row.id, row.values))
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut reciprocal = Vec::with_capacity(after.len());
+    for row in after {
+        reciprocal.push(EntityPropertyMutationSnapshot {
+            property: EntityProperty {
+                id: row.id,
+                entity_id: row.entity_id,
+                entity_type: row.entity_type,
+                property_definition_id: row.property_definition_id,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            },
+            value: decode_stored_property_value(row.values)?,
+            // Previous metadata must not prevent cleanup from repairing legacy data.
+            previous_value: decode_stored_property_value(previous.remove(&row.id).flatten())
+                .ok()
+                .flatten(),
+        });
+    }
+    tx.commit().await?;
+    Ok(reciprocal)
 }

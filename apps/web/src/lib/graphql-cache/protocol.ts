@@ -1,3 +1,4 @@
+import type { TaskDependencyRecipe } from './authority.generated';
 /** Explicit local entities resolved atomically from a committed mutation response. */
 export type IdentityBindingWire = {
   deleteRecord?: boolean;
@@ -899,6 +900,7 @@ export type CacheRequest = {
       operationName?: string;
       variables?: Record<string, unknown>;
       data: unknown;
+      taskDependencyRecipe?: TaskDependencyRecipe;
       linkPatches?: OptimisticLinkPatchWire[];
       revalidations?: QueryRevalidationWire[];
       clientMetadata?: Record<string, unknown>;

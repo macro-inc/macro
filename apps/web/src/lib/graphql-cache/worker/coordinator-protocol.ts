@@ -1,3 +1,4 @@
+import { TaskDependencyRecipeSchema } from '../authority.generated';
 import {
   isPeopleContextUpdate,
   isPeopleReferenceRequest,
@@ -672,11 +673,15 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'identityBindings',
           'uncertainCalendarEventKeys',
           'clientMetadata',
+          'taskDependencyRecipe',
           'createdAtMs',
           'owner',
           'nowMs',
           'leaseExpiresAtMs',
         ]) &&
+        (value.taskDependencyRecipe === undefined ||
+          TaskDependencyRecipeSchema.safeParse(value.taskDependencyRecipe)
+            .success) &&
         (value.uncertainCalendarEventKeys === undefined ||
           (Array.isArray(value.uncertainCalendarEventKeys) &&
             value.uncertainCalendarEventKeys.length <= 256 &&

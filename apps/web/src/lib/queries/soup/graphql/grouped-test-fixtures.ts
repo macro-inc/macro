@@ -6,6 +6,7 @@ export function groupedDocument(
 ): Extract<SoupItemFieldsFragment, { __typename: 'GraphqlSoupDocument' }> {
   return {
     __typename: 'GraphqlSoupDocument',
+    taskDependencies: null,
     appearance: null,
     id,
     entityType: 'DOCUMENT',

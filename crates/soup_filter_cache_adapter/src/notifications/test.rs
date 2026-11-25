@@ -146,6 +146,7 @@ async fn mark_done<S: cache_core::predicate::PredicateIndexStorage>(
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 uuid,
                 query: UPDATE,

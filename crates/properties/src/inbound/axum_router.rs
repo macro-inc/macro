@@ -105,11 +105,14 @@ pub type PropertyTeamExtractor<A, Auth> = OptionalMacroUserTeamExtractorV2<Membe
 /// Map a domain [`PropertiesErr`] to the HTTP status code it represents.
 pub fn properties_err_status(e: &PropertiesErr) -> StatusCode {
     match e {
-        PropertiesErr::Validation(_) => StatusCode::BAD_REQUEST,
+        PropertiesErr::Validation(_) | PropertiesErr::TaskCompletionBlocked => {
+            StatusCode::BAD_REQUEST
+        }
         PropertiesErr::NotFound
         | PropertiesErr::OptionNotFound
         | PropertiesErr::EntityPropertyNotFound => StatusCode::NOT_FOUND,
-        PropertiesErr::DuplicateOptionValue
+        PropertiesErr::DependencyContended
+        | PropertiesErr::DuplicateOptionValue
         | PropertiesErr::ConflictingTeamLabel(_)
         | PropertiesErr::ReservedName(_) => StatusCode::CONFLICT,
         PropertiesErr::PermissionDenied

@@ -7,6 +7,9 @@ query EntityProperties($input: SoupEntityInput!) {
     soupEntity(input: $input) {
       __typename
       id
+      ... on GraphqlSoupDocument {
+        taskDependencies { ...TaskDependencyStateFields }
+      }
       properties {
         ...SoupPropertyFields
       }
@@ -23,6 +26,9 @@ query GroupEntityProperties($input: GroupedSoupInput!) {
         items {
           __typename
           id
+          ... on GraphqlSoupDocument {
+            taskDependencies { ...TaskDependencyStateFields }
+          }
           properties {
             ...SoupPropertyFields
           }

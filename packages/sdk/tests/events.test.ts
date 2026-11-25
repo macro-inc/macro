@@ -143,15 +143,18 @@ describe('MacroEvents', () => {
     // A stream that stays open, as Macro's does between events.
     const server = Bun.serve({
       port: 0,
-      fetch: () =>
-        new Response(
+      fetch: (request) => {
+        if (new URL(request.url).pathname !== '/webhook/events/stream')
+          return new Response(null, { status: 404 });
+        return new Response(
           new ReadableStream({
             start(controller) {
               controller.enqueue(new TextEncoder().encode(sseBody(created)));
             },
           }),
           { headers: { 'content-type': 'text/event-stream' } },
-        ),
+        );
+      },
     });
     const unhandled: unknown[] = [];
     const record = (reason: unknown) => unhandled.push(reason);
@@ -192,7 +195,9 @@ describe('MacroEvents', () => {
     // shutting down does; the next one delivers the event sent after it.
     const server = Bun.serve({
       port: 0,
-      fetch: () => {
+      fetch: (request) => {
+        if (new URL(request.url).pathname !== '/webhook/events/stream')
+          return new Response(null, { status: 404 });
         connections += 1;
         const first = connections === 1;
         return new Response(
@@ -258,6 +263,8 @@ describe('MacroEvents', () => {
     const server = Bun.serve({
       port: 0,
       fetch: (request) => {
+        if (new URL(request.url).pathname !== '/webhook/events/stream')
+          return new Response(null, { status: 404 });
         requests.push({
           url: request.url,
           lastEventId: request.headers.get('last-event-id'),
@@ -343,7 +350,9 @@ describe('MacroEvents', () => {
     let connections = 0;
     const server = Bun.serve({
       port: 0,
-      fetch: () => {
+      fetch: (request) => {
+        if (new URL(request.url).pathname !== '/webhook/events/stream')
+          return new Response(null, { status: 404 });
         connections += 1;
         if (connections === 1)
           return eventStream(sseBody(createdFor('before')), true);
@@ -384,10 +393,12 @@ describe('MacroEvents', () => {
 
   test('a stream that ends at once, with no event, backs off longer each time', async () => {
     const at: number[] = [];
+    const opened = Promise.withResolvers<void>();
     const server = Bun.serve({
       port: 0,
-      fetch: () => {
-        at.push(Date.now());
+      fetch: (request) => {
+        if (new URL(request.url).pathname !== '/webhook/events/stream')
+          return new Response(null, { status: 404 });
         return eventStream('', true);
       },
     });
@@ -397,8 +408,14 @@ describe('MacroEvents', () => {
         hosts: { storage: `http://localhost:${server.port}` },
       });
       macro.events.on('document.created', () => undefined);
-      const stop = await macro.events.listen();
-      while (at.length < 3) await Bun.sleep(100);
+      // Count SDK reconnects, not transport retries below the fetch boundary.
+      const stop = await macro.events.listen({
+        onOpen: () => {
+          at.push(Date.now());
+          if (at.length === 3) opened.resolve();
+        },
+      });
+      await opened.promise;
       stop();
 
       const [first = 0, second = 0, third = 0] = at;
@@ -411,11 +428,14 @@ describe('MacroEvents', () => {
   test('a handler that throws is reported, and the stream goes on', async () => {
     const server = Bun.serve({
       port: 0,
-      fetch: () =>
-        eventStream(
+      fetch: (request) => {
+        if (new URL(request.url).pathname !== '/webhook/events/stream')
+          return new Response(null, { status: 404 });
+        return eventStream(
           `${sseBody(createdFor('bad'))}${sseBody(createdFor('good'))}`,
           false,
-        ),
+        );
+      },
     });
     try {
       const macro = new Macro({

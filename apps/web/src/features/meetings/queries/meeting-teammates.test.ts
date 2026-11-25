@@ -31,6 +31,7 @@ function roster(ids: string[]): TeamWithMembers {
       slug: 'design',
       owner_id: alice,
       allow_non_admin_invites: true,
+      prevent_completing_blocked_tasks: false,
       crm_enabled: false,
       enterprise: false,
     },

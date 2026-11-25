@@ -34,6 +34,7 @@ use models_properties::service::property_option::{PropertyOption, PropertyOption
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityReference, EntityType};
 use system_properties::{StatusOption, SystemPropertyKey};
+use tracing::Instrument;
 use uuid::Uuid;
 
 use super::error::{InvalidStoredPropertyValue, PropertiesErr};
@@ -645,7 +646,7 @@ where
     }
 
     #[tracing::instrument(
-        skip(self, access, source),
+        skip(self, access, value, source),
         fields(
             entity_id = %access.entity_id(),
             entity_type = ?access.entity_type(),
@@ -661,6 +662,20 @@ where
         value: Option<SetPropertyValue>,
         source: Option<PropertyChangeSource>,
     ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
+        Ok(self
+            .set_entity_property_with_effects(access, property_definition_id, value, source)
+            .await?
+            .property)
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn set_entity_property_with_effects(
+        &self,
+        access: &EditReceipt,
+        property_definition_id: Uuid,
+        value: Option<SetPropertyValue>,
+        source: Option<PropertyChangeSource>,
+    ) -> Result<super::model::EntityPropertyMutation, PropertiesErr> {
         reject_derived_property(property_definition_id)?;
         require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
@@ -740,27 +755,54 @@ where
         // primary entity's canonical assignment from that transaction.
         if matches!(
             property_definition_id,
-            SystemPropertyKey::PARENT_TASK_UUID | SystemPropertyKey::SUBTASKS_UUID
+            SystemPropertyKey::PARENT_TASK_UUID
+                | SystemPropertyKey::SUBTASKS_UUID
+                | SystemPropertyKey::DEPENDS_ON_UUID
+                | SystemPropertyKey::BLOCKING_UUID
         ) && entity_type == EntityType::Task
         {
-            let property = self
-                .handle_task_relationship_property(access, property_definition_id, value)
-                .await?;
+            // Keep this large relationship future out of the generic setter's
+            // state machine, which also owns date ordering and derived writes.
+            let change = Box::pin(self.handle_task_relationship_property(
+                access,
+                property_definition_id,
+                value,
+            ))
+            .await?;
+            let mut affected_task_ids = change
+                .reciprocal
+                .iter()
+                .filter_map(|snapshot| Uuid::parse_str(&snapshot.property.entity_id).ok())
+                .collect::<Vec<_>>();
+            affected_task_ids.extend(Uuid::parse_str(entity_id).ok());
+            affected_task_ids.sort_unstable();
+            affected_task_ids.dedup();
+            for reciprocal in &change.reciprocal {
+                self.publish_property_event(Self::entity_property_updated_event(
+                    &reciprocal.property,
+                    &reciprocal.value,
+                    &reciprocal.previous_value,
+                    access,
+                    source.as_ref(),
+                    None,
+                ));
+            }
             self.publish_property_event(Self::entity_property_updated_event(
-                &property,
-                &property_value,
-                // The relationship transaction doesn't capture the pre-write
-                // value; the activity transition simply omits its "from" side.
-                &None,
+                &change.property,
+                &change.value,
+                &change.previous_value,
                 access,
                 source.as_ref(),
                 None,
             ));
-            return Ok(EntityPropertyWithDefinition {
-                property,
-                definition: property_definition,
-                value: property_value,
-                options: None,
+            return Ok(super::model::EntityPropertyMutation {
+                property: EntityPropertyWithDefinition {
+                    property: change.property,
+                    definition: property_definition,
+                    value: change.value,
+                    options: None,
+                },
+                affected_task_ids,
             });
         }
 
@@ -796,6 +838,16 @@ where
             )
             .await?;
 
+        // Completion admission and persistence share the storage transaction,
+        // including legacy writers protected by the database invariant.
+        let completing_task = entity_type == EntityType::Task
+            && property_definition_id == SystemPropertyKey::STATUS_UUID
+            && matches!(&property_value, Some(PropertyValue::SelectOption(options)) if options.contains(&StatusOption::Completed.uuid()));
+        let completion_span = if completing_task {
+            tracing::info_span!("tasks.completion.check", task_id = entity_id)
+        } else {
+            tracing::Span::none()
+        };
         let snapshot = self
             .repository
             .upsert_entity_property(
@@ -804,6 +856,7 @@ where
                 property_definition_id,
                 property_value.clone(),
             )
+            .instrument(completion_span)
             .await
             .map_err(anyhow::Error::from)?;
 
@@ -816,11 +869,14 @@ where
             None,
         ));
 
-        Ok(EntityPropertyWithDefinition {
-            property: snapshot.property,
-            definition: property_definition,
-            value: property_value,
-            options: None,
+        Ok(super::model::EntityPropertyMutation {
+            property: EntityPropertyWithDefinition {
+                property: snapshot.property,
+                definition: property_definition,
+                value: property_value,
+                options: None,
+            },
+            affected_task_ids: Vec::new(),
         })
     }
 
@@ -1945,10 +2001,22 @@ where
         let subject = self.resolve_subject(access).await?;
         let entity_reference =
             EntityReference::new(access.entity_id().to_string(), subject.storage_entity_type);
-        self.repository
+        let reciprocal = self
+            .repository
             .delete_entity_properties(&entity_reference)
             .await
             .map_err(anyhow::Error::from)?;
+
+        for change in reciprocal {
+            self.publish_property_event(Self::entity_property_updated_event(
+                &change.property,
+                &change.value,
+                &change.previous_value,
+                access,
+                None,
+                None,
+            ));
+        }
 
         let PublishedEventActors {
             actor,

@@ -185,3 +185,74 @@ describe('GraphQL mutation retries', () => {
     ).toBe(false);
   });
 });
+
+describe('task dependency contention retries', () => {
+  const busy = new CombinedError({
+    graphQLErrors: [
+      {
+        message: 'retry',
+        extensions: { code: 'DEPENDENCY_BUSY', retryable: true },
+      },
+    ],
+  });
+
+  it('retries a state replacement twice then releases the queue', () => {
+    const mutation = {
+      uuid: 'task-busy',
+      transactionId: '91',
+      operationName: 'SetTaskProperty',
+    };
+    expect(shouldRetryGraphqlMutation(busy, mutation)).toBe(true);
+    expect(shouldRetryGraphqlMutation(busy, mutation)).toBe(true);
+    expect(shouldRetryGraphqlMutation(busy, mutation)).toBe(false);
+  });
+
+  it.each(['AppendTaskProperty', 'CreateTask', 'SaveEmailDraft'])(
+    'does not retry %s contention',
+    (operationName) => {
+      expect(
+        shouldRetryGraphqlMutation(busy, {
+          uuid: operationName,
+          transactionId: '92',
+          operationName,
+        })
+      ).toBe(false);
+    }
+  );
+
+  it.each([
+    { code: 'DEPENDENCY_BUSY' },
+    { code: 'TASK_BLOCKED', retryable: true },
+    { code: 'INTERNAL', retryable: true },
+  ])('requires the contention code and retry permission: %s', (extensions) => {
+    const error = new CombinedError({
+      graphQLErrors: [{ message: 'failed', extensions }],
+    });
+    expect(
+      shouldRetryGraphqlMutation(error, {
+        uuid: 'task-not-busy',
+        transactionId: '93',
+        operationName: 'SetTaskProperty',
+      })
+    ).toBe(false);
+  });
+
+  it('does not retry a mixed rejection', () => {
+    const error = new CombinedError({
+      graphQLErrors: [
+        {
+          message: 'retry',
+          extensions: { code: 'DEPENDENCY_BUSY', retryable: true },
+        },
+        { message: 'blocked', extensions: { code: 'TASK_BLOCKED' } },
+      ],
+    });
+    expect(
+      shouldRetryGraphqlMutation(error, {
+        uuid: 'task-mixed',
+        transactionId: '94',
+        operationName: 'SetTaskProperty',
+      })
+    ).toBe(false);
+  });
+});

@@ -20,18 +20,18 @@ use uuid::Uuid;
 
 /// Helper to get a task's parent from the database
 async fn get_parent(pool: &Pool<Postgres>, task_id: &str) -> Option<String> {
-    sqlx::query_scalar::<_, Option<String>>(
+    sqlx::query_scalar!(
         r#"
-        SELECT values->'value'->0->>'entity_id'
+        SELECT values->'value'->0->>'entity_id' AS "entity_id?"
         FROM entity_properties
         WHERE entity_id = $1
           AND entity_type = 'TASK'
           AND property_definition_id = $2
           AND values IS NOT NULL
         "#,
+        task_id,
+        SystemPropertyKey::PARENT_TASK_UUID,
     )
-    .bind(task_id)
-    .bind(SystemPropertyKey::PARENT_TASK_UUID)
     .fetch_optional(pool)
     .await
     .ok()
@@ -41,9 +41,9 @@ async fn get_parent(pool: &Pool<Postgres>, task_id: &str) -> Option<String> {
 
 /// Helper to get a task's subtasks from the database
 async fn get_subtasks(pool: &Pool<Postgres>, task_id: &str) -> Vec<String> {
-    sqlx::query_scalar::<_, String>(
+    sqlx::query_scalar!(
         r#"
-        SELECT elem->>'entity_id'
+        SELECT elem->>'entity_id' AS "entity_id!"
         FROM entity_properties,
              jsonb_array_elements(values->'value') elem
         WHERE entity_id = $1
@@ -51,9 +51,9 @@ async fn get_subtasks(pool: &Pool<Postgres>, task_id: &str) -> Vec<String> {
           AND property_definition_id = $2
           AND values IS NOT NULL
         "#,
+        task_id,
+        SystemPropertyKey::SUBTASKS_UUID,
     )
-    .bind(task_id)
-    .bind(SystemPropertyKey::SUBTASKS_UUID)
     .fetch_all(pool)
     .await
     .unwrap_or_default()
@@ -715,14 +715,14 @@ async fn mutual_subtask_link_fails(pool: Pool<Postgres>) -> anyhow::Result<()> {
 /// needing a team/user row.
 async fn seed_multi_select_definition(pool: &Pool<Postgres>, display_name: &str) -> Uuid {
     let def_id = macro_uuid::generate_uuid_v7();
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO property_definitions (id, display_name, data_type, is_multi_select, is_system)
         VALUES ($1, $2, 'SELECT_STRING', true, true)
         "#,
+        def_id,
+        display_name,
     )
-    .bind(def_id)
-    .bind(display_name)
     .execute(pool)
     .await
     .expect("seed definition");
@@ -734,15 +734,14 @@ async fn read_select_value(
     entity_id: &str,
     def_id: Uuid,
 ) -> serde_json::Value {
-    sqlx::query_scalar::<_, serde_json::Value>(
+    sqlx::query_scalar!(
         r#"
-        SELECT values FROM entity_properties
-        WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
+        SELECT values AS "value!" FROM entity_properties
+        WHERE entity_id = $1 AND entity_type = 'DOCUMENT' AND property_definition_id = $2
         "#,
+        entity_id,
+        def_id,
     )
-    .bind(entity_id)
-    .bind(EntityType::Document)
-    .bind(def_id)
     .fetch_one(pool)
     .await
     .expect("read value")
@@ -1139,14 +1138,14 @@ async fn bulk_update_options_removal_only_on_unattached_is_noop(
         "unattached removal-only update must not report a mutation"
     );
 
-    let row_count: i64 = sqlx::query_scalar(
+    let row_count = sqlx::query_scalar!(
         r#"
-        SELECT COUNT(*) FROM entity_properties
+        SELECT COUNT(*) AS "count!" FROM entity_properties
         WHERE entity_id = $1 AND property_definition_id = $2
         "#,
+        entity_id,
+        def_id,
     )
-    .bind(entity_id)
-    .bind(def_id)
     .fetch_one(&pool)
     .await?;
     assert_eq!(row_count, 0, "removal-only update must not create a row");

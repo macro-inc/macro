@@ -56,6 +56,7 @@ fn calendar_range_and_commit_cross_the_ipc_boundary() {
         1_000,
         None,
         vec!["GraphqlCalendarEvent:e1".to_string()],
+        None,
     ))
     .unwrap();
     let covered = range(&handle);

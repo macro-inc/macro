@@ -4,6 +4,8 @@ use super::*;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::shared::DateValue;
 
+type RecordedPropertyWrites = Arc<Mutex<Vec<(Uuid, Option<PropertyValue>)>>>;
+
 fn date_definition(id: Uuid, display_name: &str) -> PropertyDefinition {
     PropertyDefinition {
         id,
@@ -39,7 +41,7 @@ fn repo_with(
     written: Uuid,
     other: Uuid,
     stored: Option<PropertyValue>,
-    writes: Arc<Mutex<Vec<(Uuid, Option<PropertyValue>)>>>,
+    writes: RecordedPropertyWrites,
 ) -> MockPropertiesRepo {
     let mut repo = MockPropertiesRepo::new();
     let name = if written == SystemPropertyKey::START_DATE_UUID {

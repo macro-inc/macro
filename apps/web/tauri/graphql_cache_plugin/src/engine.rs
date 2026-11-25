@@ -1027,6 +1027,7 @@ impl EngineHandle {
         lease_expires_at_ms: i64,
         client_metadata: Option<serde_json::Value>,
         uncertain_calendar_event_keys: Vec<String>,
+        task_dependency_recipe: Option<cache_core::task_dependency::TaskDependencyRecipe>,
     ) -> Result<EnqueueOptimisticMutationResultWire, String> {
         let mut state = self.inner.write().await;
         self.resume_retirement(&mut state).await?;
@@ -1055,6 +1056,7 @@ impl EngineHandle {
             Vec::new()
         };
         let input = BeginOptimisticWrite {
+            task_dependency_recipe: task_dependency_recipe.as_ref(),
             client_metadata: client_metadata.as_ref(),
             uuid: &uuid,
             query: &query,

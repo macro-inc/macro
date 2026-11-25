@@ -1,5 +1,7 @@
 # graphql_soup
 
+- Expose one-hop `dependentTasks` on task documents only; keep the subtype guard and delegate authorization to `SoupEntityEdges::resolve_dependent_tasks`.
+
 ## What it is
 
 Backs the Soup feature (the app's unified entity search/home surface): the
@@ -12,6 +14,7 @@ viewer pattern), which apply to every type defined here.
 
 - `PROJECT` grouping forwards the Project property (initiative membership) to Soup; legacy folder IDs are not grouping keys.
 - Document and initiative `appearance` fields carry entity-owned JSON overrides; the shared Soup reads supply them without changing sort timestamps.
+- `GraphqlSoupDocument.taskDependencies` is task-only and delegates to the composition-supplied, request-scoped dependency DataLoader; ordinary document reads return null.
 
 - `SoupItemLoader` (single-entity lookups, `soupUpdates` hydration) resolves
   email threads through entity-access view receipts, the rule the REST thread

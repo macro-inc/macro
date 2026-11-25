@@ -32,3 +32,45 @@ export const CacheAuthoritySchema = z
   .strict();
 
 export type CacheAuthority = z.infer<typeof CacheAuthoritySchema>;
+
+export const TaskDependencyRecipeSchema = z
+  .object({
+    change: z.any().superRefine((x, ctx) => {
+      const schemas = [
+        z
+          .object({
+            kind: z.literal('dependsOn'),
+            targetIds: z.array(z.string()),
+          })
+          .strict(),
+        z
+          .object({
+            kind: z.literal('blocking'),
+            targetIds: z.array(z.string()),
+          })
+          .strict(),
+        z
+          .object({ kind: z.literal('status'), optionIds: z.array(z.string()) })
+          .strict(),
+      ];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    }),
+    taskId: z.string(),
+  })
+  .strict();
+
+export type TaskDependencyRecipe = z.infer<typeof TaskDependencyRecipeSchema>;

@@ -40,6 +40,7 @@ const policies = {
   SetFavorite: 'custom: favorite list membership',
   ReorderFavorites: 'custom: ordered favorite links',
   SetEntityProperty: 'custom: assignment identity and parent links',
+  SetTaskProperty: 'custom: durable reciprocal task dependency recipes',
   UpdateEntityPropertyOptions: 'custom: ordered option deltas',
   CreateCalendarEvent: 'custom: client event identity and occurrences',
   UpdateCalendarEvent: 'custom: event and occurrence edits',

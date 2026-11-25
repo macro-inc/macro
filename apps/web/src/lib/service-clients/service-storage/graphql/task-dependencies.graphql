@@ -1,0 +1,52 @@
+fragment TaskDependencyStateFields on GraphqlTaskDependencyState {
+  __typename
+  id
+  isBlocked
+  visibleBlockerIds
+  openBlockerIds
+  properties { ...SoupPropertyFields }
+}
+
+query TaskDependencies($input: SoupEntityInput!) {
+  user {
+    id
+    soupEntity(input: $input) {
+      __typename
+      id
+      displayName
+      ... on GraphqlSoupDocument {
+        taskDependencies { ...TaskDependencyStateFields }
+      }
+    }
+  }
+}
+
+mutation SetTaskProperty($input: SetEntityPropertyInput!) {
+  setTaskProperty(input: $input) {
+    property { ...SoupPropertyFields }
+    tasks { ...TaskDependencyStateFields }
+    effectsComplete
+  }
+}
+
+# Failure fallback only: do not refetch cache-maintained lists after successful effects.
+query RepairTaskDependencies($input: SoupEntityInput!) {
+  user {
+    id
+    soupEntity(input: $input) {
+      __typename
+      id
+      ... on GraphqlSoupDocument {
+        taskDependencies { ...TaskDependencyStateFields }
+        dependentTasks { ...TaskDependencyStateFields }
+      }
+    }
+  }
+}
+
+query TaskDependencyStates($taskIds: [ID!]!) {
+  user {
+    id
+    taskDependencyStates(taskIds: $taskIds) { ...TaskDependencyStateFields }
+  }
+}

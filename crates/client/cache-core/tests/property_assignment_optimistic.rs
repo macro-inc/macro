@@ -94,6 +94,7 @@ async fn enqueue(engine: &mut Engine<InMemoryStorage>, value: &str, now: i64) ->
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 identity_bindings: &[],
                 uuid: UUID,
@@ -321,6 +322,7 @@ fn persisted_recovery_query_runs_only_when_the_assignment_link_cannot_be_repaire
                 .begin_optimistic_write(
                     None,
                     BeginOptimisticWrite {
+                        task_dependency_recipe: None,
                         client_metadata: None,
                         identity_bindings: &[],
                         uuid: UUID,
@@ -450,6 +452,7 @@ fn skipped_uncached_query_links_keep_the_recovery_query_after_commit() {
                 .begin_optimistic_write(
                     None,
                     BeginOptimisticWrite {
+                        task_dependency_recipe: None,
                         client_metadata: None,
                         identity_bindings: &[],
                         uuid: UUID,

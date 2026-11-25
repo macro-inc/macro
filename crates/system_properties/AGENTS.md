@@ -14,6 +14,8 @@ for their fixed property catalogs.
   setting/reading system property values.
 - `src/domain/port.rs`: the repository port.
 - `src/outbound/pgpool.rs`: the Postgres adapter.
+- `src/domain/model/constants/system_property_key.rs`: the canonical system catalog, including task-only Depends On and its Blocking inverse.
+- Propagate completion-policy rejection as `SystemPropertyError::TaskCompletionBlocked`; retain unrelated SQL failures in database reports.
 
 ## Scope
 
@@ -40,6 +42,8 @@ for their fixed property catalogs.
   `src/domain/service.rs` → `src/outbound/pgpool.rs`.
 
 ## Gotchas
+
+- Keep catalog UUIDs unique: Start Date uses `0x15`, Time logged uses `0x16`, and Blocking uses `0x17`; mirror the migration, web identifiers, and cache recipe constants.
 
 - Time logged (`0x16`) is derived: the sum of a task's `time_entry` rows,
   written only by `crates/time_tracking` through `time_logged::write_task_time_logged`

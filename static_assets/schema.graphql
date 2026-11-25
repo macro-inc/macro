@@ -328,6 +328,10 @@ type CompleteMutationRoot {
 	"""
 	setEntityProperty(input: SetEntityPropertyInput!): GraphqlProperty!
 	"""
+	Set a task property and return all dependency effects in one cache transaction.
+	"""
+	setTaskProperty(input: SetEntityPropertyInput!): TaskPropertyEffects!
+	"""
 	Add and remove options across one entity's multi-select properties.
 	"""
 	updateEntityPropertyOptions(input: UpdateEntityPropertyOptionsInput!): [GraphqlProperty!]!
@@ -9721,6 +9725,14 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	"""
 	appearance: JSON
 	"""
+	Dependency facts for tasks; ordinary documents do not have dependency state.
+	"""
+	taskDependencies: GraphqlTaskDependencyState
+	"""
+	One hop of authorized dependent states; ordinary documents return no states.
+	"""
+	dependentTasks: [GraphqlTaskDependencyState!]!
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -11120,6 +11132,32 @@ type GraphqlTaskAssignedMetadata {
 }
 
 """
+A task's dependency state, normalized by the task's canonical identity.
+"""
+type GraphqlTaskDependencyState {
+	"""
+	Canonical task identifier.
+	"""
+	id: ID!
+	"""
+	Whether any existing blocker is unfinished.
+	"""
+	isBlocked: Boolean!
+	"""
+	Unfinished blockers that the viewer can read.
+	"""
+	openBlockerIds: [ID!]!
+	"""
+	Prerequisite IDs confirmed readable within the read budget, independent of status.
+	"""
+	visibleBlockerIds: [ID!]!
+	"""
+	Canonical Status, Depends On, and Blocking assignments.
+	"""
+	properties: [GraphqlProperty!]!
+}
+
+"""
 represents the task subtype fields
 """
 type GraphqlTaskSubType {
@@ -11409,6 +11447,10 @@ type GraphqlUser {
 	Stable id of the authenticated user.
 	"""
 	id: ID!
+	"""
+	Authorized dependency facts for a bounded page of task search results.
+	"""
+	taskDependencyStates(taskIds: [ID!]!): [GraphqlTaskDependencyState!]!
 	"""
 	A page filtered and ordered across the entire authorized table.
 	"""
@@ -13368,6 +13410,24 @@ type StopTimerPayload {
 	when the viewer can no longer see it.
 	"""
 	task: GraphqlSoupDocument
+}
+
+"""
+Committed task properties and dependency facts for every affected endpoint.
+"""
+type TaskPropertyEffects {
+	"""
+	The assignment directly edited by the caller.
+	"""
+	property: GraphqlProperty!
+	"""
+	Authoritative normalized task facts, including reciprocal assignments.
+	"""
+	tasks: [GraphqlTaskDependencyState!]!
+	"""
+	False means the write committed but dependency facts need a scoped reload.
+	"""
+	effectsComplete: Boolean!
 }
 
 """

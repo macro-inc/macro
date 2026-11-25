@@ -461,6 +461,7 @@ async fn reconciliation_engine() -> (Engine<ClaimFailingStorage>, MutationId) {
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 uuid: "00000000-0000-4000-8000-000000000005",
                 query: MUTATION,
@@ -541,6 +542,7 @@ async fn begin_value(
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                task_dependency_recipe: None,
                 client_metadata: None,
                 uuid,
                 query: MUTATION,
@@ -585,6 +587,7 @@ fn mutation_inspection_preserves_metadata_without_claiming_or_changing_leases() 
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     uuid: "00000000-0000-4000-8000-000000000030",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -694,6 +697,7 @@ fn begin_persists_mutation_and_optimistic_layer() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000006",
                     query: MUTATION,
@@ -733,6 +737,7 @@ fn enqueue_claims_new_mutation_when_queue_was_empty() {
             .enqueue_optimistic_mutation(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000007",
                     query: MUTATION,
@@ -769,6 +774,7 @@ fn enqueue_claims_older_strict_head() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000008",
                     query: MUTATION,
@@ -787,6 +793,7 @@ fn enqueue_claims_older_strict_head() {
             .enqueue_optimistic_mutation(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000009",
                     query: MUTATION,
@@ -824,6 +831,7 @@ fn enqueue_does_not_skip_a_leased_or_deferred_head() {
                 .begin_optimistic_write(
                     None,
                     BeginOptimisticWrite {
+                        task_dependency_recipe: None,
                         client_metadata: None,
                         uuid: "00000000-0000-4000-8000-000000000010",
                         query: MUTATION,
@@ -850,6 +858,7 @@ fn enqueue_does_not_skip_a_leased_or_deferred_head() {
                 .enqueue_optimistic_mutation(
                     None,
                     BeginOptimisticWrite {
+                        task_dependency_recipe: None,
                         client_metadata: None,
                         uuid: "00000000-0000-4000-8000-000000000011",
                         query: MUTATION,
@@ -910,6 +919,7 @@ fn claim_failure_after_enqueue_preserves_one_durable_visible_mutation() {
             .enqueue_optimistic_mutation(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000012",
                     query: MUTATION,
@@ -1049,6 +1059,7 @@ fn claimed_success_atomically_commits_real_response() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000013",
                     query: MUTATION,
@@ -1103,6 +1114,7 @@ fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000014",
                     query: MUTATION,
@@ -1121,6 +1133,7 @@ fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000015",
                     query: MUTATION,
@@ -1170,6 +1183,7 @@ fn permanent_failure_rolls_back_only_the_claimed_head() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000016",
                     query: MUTATION,
@@ -1188,6 +1202,7 @@ fn permanent_failure_rolls_back_only_the_claimed_head() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000017",
                     query: MUTATION,
@@ -1226,6 +1241,7 @@ fn stale_claim_cannot_settle_mutation() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000018",
                     query: MUTATION,
@@ -1367,6 +1383,7 @@ fn pending_replacement_restores_fields_omitted_by_the_new_intent() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: X,
                     query: MUTATION,
@@ -1395,6 +1412,7 @@ fn pending_replacement_restores_fields_omitted_by_the_new_intent() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: X,
                     query: MUTATION,
@@ -1533,6 +1551,7 @@ fn invalid_uuid_is_rejected_before_queue_hydration() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "not-a-uuid",
                     query: MUTATION,
@@ -1571,6 +1590,7 @@ fn clear_and_identity_reset_drop_durable_queue() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    task_dependency_recipe: None,
                     client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000019",
                     query: MUTATION,

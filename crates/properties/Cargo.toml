@@ -29,6 +29,7 @@ outbound = [
   "dep:models_permissions",
   "dep:notification",
   "dep:sqlx",
+  "dep:tokio",
   "ports",
 ]
 ports = []
@@ -66,7 +67,7 @@ serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros"], optional = true }
+tokio = { workspace = true, features = ["macros", "time"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }

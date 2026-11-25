@@ -146,6 +146,7 @@ fn projection_changes_move_members_and_failed_optimism_restores_them() {
             .unwrap()
             .clone();
         let (id, _) = engine.begin_optimistic_write_with_projections(None, BeginOptimisticWrite {
+            task_dependency_recipe: None,
             client_metadata: None,
             uuid: "00000000-0000-4000-8000-000000000001",
             query: "mutation Read($input: MarkEmailThreadSeenInput!) { markEmailThreadSeen(input: $input) { id isRead } }",

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT blocker_task_id AS \"blocker_task_id!\" FROM task_dependency_edges WHERE dependent_task_id = $1\n         UNION SELECT dependent_task_id FROM task_dependency_edges WHERE blocker_task_id = $1\n         ORDER BY 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blocker_task_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9ff5297df993e812223614dcd20356acf457525e6829f8187ac7768938e52e6d"
+}

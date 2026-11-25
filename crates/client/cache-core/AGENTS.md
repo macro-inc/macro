@@ -41,8 +41,13 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `src/engine/people/sync.rs`: capture the single-owner engine's contact write fence, optionally scan at most 500 raw contact records by key, and reconcile complete exact-ID evidence. Never delete from scan omissions; reject stale fences, foreign/duplicate evidence and omitted self. Removal clears durable/hot records and invalidates dependent reads; context-only stubs are not membership. Engine replacement, clear and contact invalidation/deletion invalidate admission.
 - `src/page_retention.rs`: shared Soup/database/contact snapshot budget; hydration drops viewer page/lookup wrappers, not normalized descendants. Public profiles do not prove contact membership; only `GraphqlContact` projects into `person`.
 - `src/queue.rs`: the optimistic mutation queue.
+- Keep additive optional task recipes in the version-3 source envelope; old hosts ignore them and retain settlement-time repair.
 - `tests/`: the primary spec for engine behavior — one file per concern
   (optimistic updates, calendar range, search, subscriptions, fuzz).
+- `src/task_dependency.rs`, `src/engine/task_dependency.rs`: persist authored dependency/status assignments, not copied task neighborhoods. Replay each recipe against committed records plus surviving earlier layers before normalization. Preserve the authored assignment ID for parent links and canonical identity settlement; missing task roots never invent reciprocal records.
+- `tests/task_dependency_optimistic.rs`: real-engine regressions cover overlapping rejection, committed-base rebasing, completion/reopen, engine replacement, missing-root assignment links, canonical assignment IDs, generation retirement, and private prerequisites.
+- Replay exposes unfinished IDs only from server `visibleBlockerIds`; cached task presence never grants visibility, including after remove/re-add. Preserve aggregate blocking while unreadable prerequisites prevent proving an unblock.
+- Preserve canonical open facts during unrelated replay, including completion/deletion facts; apply cached status only for the authored status change. New prerequisites wait for authoritative visibility evidence.
 
 ## Scope
 
@@ -83,6 +88,7 @@ eviction and reset make it miss. A miss requires full registration and never reu
 
 - Preserve the authority generation when binding the first account without a stored policy; commit account/authority metadata atomically on binding or reset and publish the cached authority without post-commit I/O. Reject malformed stored authority instead of treating it as absent.
 - Use the shared `_in_generation` enqueue/commit methods in every host; discard stale copied data, links, and projections while retaining authored commands and fresh query revalidation descriptors. `None` is reserved for legacy native clients.
+- Retire `task_dependency_recipe` with copied optimistic snapshots while preserving commands, identity bindings, metadata and fresh query revalidations. Missing parents/fields skip both query-rooted and record-rooted link application without recreating records; retain the durable patch for later hydration and targeted repair. Other strict structural errors remain atomic. `UpsertByField` prefers its declared assignment identity among response records before unique-definition discovery.
 
 - Keep ordinary title/channel query tokens split on whitespace and commas, with each token matching independently in any order; storage filtering must remain a superset of core ranking.
 

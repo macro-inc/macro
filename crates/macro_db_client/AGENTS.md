@@ -56,6 +56,9 @@ with their `email_links` row; `user_id` and `list_key` on them repeat the link's
 owner and provider on purpose, so reads never join `email_links`. List rows have no
 foreign key: the contacts worker removes them on account deletion.
 
+`task_dependency_edges` is the indexed Depends On / Blocking graph owned by `properties`. Its endpoint assignment foreign keys cascade on cleanup; JSON compatibility triggers preserve deployed property writers. The backfill uses a standalone procedure CALL with 500-assignment source commits followed by UUID-paged, current-edge projection of touched blockers. Projection locks existing inverse assignments, skips unchanged values, and never recreates deleted roots; same-session retries retain touched IDs and new sessions rescan sources. Legacy JSON writes between phases reconcile through the graph. The legacy JSON bridge retires only after deployed legacy writers drain. `task_completion_guard` applies the owning team's opt-in completion policy to every Status writer.
+- Guard only transitions into Completed; lock conflicting Status assignments before bypassing UPSERT insertion admission and let the actual UPDATE evaluate OLD and NEW.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
@@ -275,6 +278,18 @@ its membership, mailbox and thread foreign keys cascade deletion. The CRM domain
 owns writes and owner-only listing; `crm_email_thread_excluded` is the independent
 veto used by the shared eligibility function and mirrored in set-based ingestion
 and the inline Team reader, including selected contribution.
+
+Dependency writes use `task_dependency_lock_key(uuid)` and deduplicate/sort actual signed
+keys through `lock_task_dependency_endpoints`. New writers lock source/current/desired
+endpoints before writes and recheck their authorized snapshot. Cleanup locks every
+UUID TASK/DOCUMENT root, including zero-edge or missing-subtype tasks, plus discovered
+neighbors, then validates discovery; non-document cleanup skips graph locks.
+Row-first legacy and transition-table triggers only try-lock and raise 40001 on
+contention. Completion admission try-locks its task root. Backfill discovers a batch,
+locks all endpoints, acquires source rows with NOWAIT, and revalidates the snapshot
+before writes. Historical oversized snapshots remain untruncated. The local PG14
+fixture uses `max_locks_per_transaction=8192`; verify production lock-memory capacity
+for historical endpoint cardinalities before deployment.
 
 `import_entity_notion_review_sources_idx` bounds review dependency reconciliation
 by `(review_id, user_id)` for staged Notion data sources. Keep those literal
