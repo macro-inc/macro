@@ -28,6 +28,7 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
   let stream: MediaStreamAudioDestinationNode | undefined;
   let output: HTMLAudioElement | undefined;
   let routing: Promise<void> | undefined;
+  let starting: Promise<void> | undefined;
   let disposed = false;
 
   function audioContext(): AudioContext | undefined {
@@ -71,6 +72,15 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
     }
   }
 
+  /** Tones scheduled before the element plays would be lost, so cues wait. */
+  async function startOutput(element: HTMLAudioElement): Promise<void> {
+    try {
+      await element.play();
+    } finally {
+      starting = undefined;
+    }
+  }
+
   async function routeSerialized(): Promise<void> {
     if (routing) return routing;
     routing = routeOutput();
@@ -94,8 +104,8 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
     // A speaker chosen after audio was unlocked starts its element now, so
     // the call's first cue is not dropped while the element starts.
     const element = context ? routedOutput(context) : undefined;
-    const play = element?.paused ? element.play() : undefined;
-    await Promise.all([play, routeSerialized()]);
+    if (element?.paused) starting = startOutput(element);
+    await Promise.all([starting, routeSerialized()]);
   }
 
   /** Call synchronously inside the gesture, before any network/media awaits. */
@@ -135,7 +145,8 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
       if (!destination) return;
       const expired = performance.now() - requestedAt >= MAX_CUE_DELAY_MS;
       const outputReady =
-        !routed || (output !== undefined && !output.paused && !routing);
+        !routed ||
+        (output !== undefined && !output.paused && !starting && !routing);
       if (expired || current.state !== 'running' || !outputReady) {
         span.setAttr('audio.outcome', 'not-ready');
         return;
