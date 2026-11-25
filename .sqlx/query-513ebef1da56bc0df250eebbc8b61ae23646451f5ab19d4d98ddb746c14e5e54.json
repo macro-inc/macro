@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH target AS MATERIALIZED (\n            SELECT m.thread_id, COALESCE(m.internal_date_ts, m.created_at) AS at\n            FROM email_messages m\n            WHERE m.id = $1 AND NOT m.is_draft\n        ),\n        earlier AS MATERIALIZED (\n            SELECT ml.label_id\n            FROM email_effective_message_labels ml\n            WHERE ml.message_id = ANY(ARRAY(\n                SELECT o.id\n                FROM target t\n                JOIN email_messages o ON o.thread_id = t.thread_id\n                WHERE NOT o.is_draft\n                    AND (COALESCE(o.internal_date_ts, o.created_at), o.id) < (t.at, $1)\n            ))\n        )\n        SELECT ml.label_id AS \"label_id!\"\n        FROM email_effective_message_labels ml\n        JOIN email_labels l ON l.id = ml.label_id AND l.type = 'User'\n        WHERE ml.message_id = $1 AND EXISTS (SELECT 1 FROM target)\n            AND NOT EXISTS (SELECT 1 FROM earlier e WHERE e.label_id = ml.label_id)\n        ORDER BY ml.label_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "label_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "513ebef1da56bc0df250eebbc8b61ae23646451f5ab19d4d98ddb746c14e5e54"
+}

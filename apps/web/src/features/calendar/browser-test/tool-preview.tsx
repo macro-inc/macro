@@ -12,8 +12,12 @@ document.documentElement.dataset.touchDevice = String(isTouchDevice());
 /**
  * The agent card's day preview of a drafted event, 14:00 to 15:00 on
  * 2 January 2030, over the calendar's own sources and occurrences.
+ * `?created=<event id>` names the event the draft became, as a confirmed
+ * review reports it.
  */
 function Fixture() {
+  const createdEventId =
+    new URLSearchParams(location.search).get('created') ?? undefined;
   const controller = createCalendarEventFormController({
     initialValue: {
       title: 'Drafted review',
@@ -37,6 +41,7 @@ function Fixture() {
       <CalendarToolEventPreview
         controller={controller}
         eventId="drafted-review"
+        createdEventId={createdEventId}
         class="h-[480px]"
       />
     </main>

@@ -1937,3 +1937,23 @@ fn a_ping_about_a_channel_message_opens_at_the_message() {
             .into_inner()
     );
 }
+
+#[test]
+fn a_crm_email_sharing_notice_names_no_company_count_or_person() {
+    let notice = CrmEmailSharingChangedMetadata {
+        team_id: uuid::Uuid::nil(),
+        reason: CrmEmailSharingChangeReason::CompaniesMerged,
+    };
+    assert_eq!(
+        notice.format_title(None).unwrap(),
+        "Your CRM email sharing changed"
+    );
+    assert_eq!(
+        notice.format_body(None).unwrap(),
+        "Companies your sharing rules named were merged, so your rules were updated. Review them in CRM settings."
+    );
+    assert_eq!(
+        serde_json::to_value(&notice).unwrap(),
+        serde_json::json!({"teamId": "00000000-0000-0000-0000-000000000000", "reason": "companies_merged"})
+    );
+}

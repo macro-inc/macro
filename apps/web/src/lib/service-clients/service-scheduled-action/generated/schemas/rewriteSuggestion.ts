@@ -12,6 +12,7 @@ import type { RewriteSuggestionPrompt } from './rewriteSuggestionPrompt';
 import type { RewriteSuggestionSends } from './rewriteSuggestionSends';
 import type { RewriteSuggestionSummary } from './rewriteSuggestionSummary';
 import type { RewriteSuggestionTitle } from './rewriteSuggestionTitle';
+import type { RewriteSuggestionTopic } from './rewriteSuggestionTopic';
 
 /**
  * Changes to an open suggestion; fields left out stay.
@@ -37,4 +38,6 @@ where. */
   summary?: RewriteSuggestionSummary;
   /** A new title. */
   title?: RewriteSuggestionTitle;
+  /** The key of the topic it now belongs to, or null for none. */
+  topic?: RewriteSuggestionTopic;
 }

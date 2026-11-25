@@ -96,6 +96,8 @@ export function EmailSavedViewFields(props: {
   inboxes: readonly { id: string; label: string }[];
   suggestions: Accessor<EmailParticipantSuggestion[]>;
   tags: readonly TagOptionSummary[];
+  /** The labels people made, as the Filters menu's Labels group offers them. */
+  labels: readonly ChipComboboxOption[];
 }) {
   const advancedId = createUniqueId();
   // Starts open when the view already uses one, so nothing set is hidden.
@@ -120,6 +122,9 @@ export function EmailSavedViewFields(props: {
       })
     )
   );
+  const labelValues = createMemo(() => props.filters.labels ?? [], undefined, {
+    equals: sameList,
+  });
   // A chosen tag keeps its stored binding, even one the viewer can't see now.
   const setTags = (ids: string[]) => {
     const bindings = new Map([
@@ -178,6 +183,22 @@ export function EmailSavedViewFields(props: {
             onChange={setTags}
             options={tagOptions()}
             describeValue={() => ({ label: t('emailViews.unavailableTag') })}
+            addLabel={(value) => t('emailViews.addEntry', { entry: value })}
+            removeLabel={(entry) => t('emailViews.removeEntry', { entry })}
+            portalScope="local"
+          />
+        </Section>
+      </Show>
+
+      <Show when={props.labels.length > 0 || labelValues().length > 0}>
+        <Section label={t('emailViews.labels')}>
+          <ChipCombobox
+            aria-label={t('emailViews.labels')}
+            placeholder={t('emailViews.addLabelsPlaceholder')}
+            values={labelValues()}
+            onChange={(ids) => set('labels', ids)}
+            options={props.labels}
+            describeValue={() => ({ label: t('emailViews.unavailableLabel') })}
             addLabel={(value) => t('emailViews.addEntry', { entry: value })}
             removeLabel={(entry) => t('emailViews.removeEntry', { entry })}
             portalScope="local"

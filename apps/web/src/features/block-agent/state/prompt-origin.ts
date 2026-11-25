@@ -266,10 +266,13 @@ function readFiring(trigger: Element): Firing {
       tail: `· ${taskTitle} changed`,
       destination: taskDestination,
     }))
-    .with('email_received', () => {
+    .with(P.union('email_received', 'email_labeled'), (type) => {
       const from = attribute(email, 'from');
+      const labeled = type === 'email_labeled';
+      const fallback = labeled ? '· email labeled' : '· email received';
+      const what = labeled ? 'labeled email' : 'email';
       return {
-        tail: from ? `· email from ${senderName(from)}` : '· email received',
+        tail: from ? `· ${what} from ${senderName(from)}` : fallback,
         destination: email
           ? {
               kind: 'email_thread' as const,

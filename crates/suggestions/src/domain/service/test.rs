@@ -13,9 +13,11 @@ use crate::domain::model::{
     SuggestionStatus, Waiting,
 };
 use crate::domain::ports::{FoundDraft, ReplyWaits};
+use crate::domain::topic::{NameTopic, TopicChange};
 use crate::outbound::pg_suggestion_repo::PgSuggestionRepo;
 
 pub(crate) mod runs;
+mod topics;
 
 pub(crate) const OWNER: &str = "macro|suggestions-owner@macro.com";
 const OTHER: &str = "macro|suggestions-other@macro.com";
@@ -31,6 +33,10 @@ pub(crate) fn user(id: &'static str) -> MacroUserIdStr<'static> {
 pub(crate) struct FakeAccess {
     denied: Mutex<HashSet<String>>,
     failing: Mutex<HashSet<String>>,
+    /// Parts since deleted.
+    deleted: Mutex<HashSet<String>>,
+    /// Items asked about, in order, a question for each.
+    asked: Mutex<Vec<String>>,
 }
 
 /// The access check couldn't answer.
@@ -42,6 +48,7 @@ impl SuggestionAccess for FakeAccess {
     type Err = AccessDown;
 
     async fn can_view(&self, _: &MacroUserIdStr<'_>, target: &Target) -> Result<bool, Self::Err> {
+        self.asked.lock().unwrap().push(target.entity_id.clone());
         if self.failing.lock().unwrap().contains(&target.entity_id) {
             return Err(AccessDown);
         }
@@ -49,7 +56,7 @@ impl SuggestionAccess for FakeAccess {
     }
 
     async fn is_part_of(&self, target: &Target, part: &str) -> Result<bool, Self::Err> {
-        Ok(part.starts_with(&target.entity_id))
+        Ok(part.starts_with(&target.entity_id) && !self.deleted.lock().unwrap().contains(part))
     }
 }
 
@@ -288,6 +295,7 @@ fn prompt_suggestion(key: &str, title: &str) -> NewSuggestion {
         summary: "Three supplier quotes arrived this week.".to_owned(),
         importance: 70,
         categories: vec![Category::SaveMoney, Category::SaveMoney],
+        topic: TopicChange::Keep,
         about: vec![Target {
             entity_type: EntityType::EmailThread,
             entity_id: "thread-1".to_owned(),
@@ -309,6 +317,7 @@ pub(crate) fn entity_suggestion(key: &str) -> NewSuggestion {
         summary: "They asked for a headcount by Friday.".to_owned(),
         importance: 80,
         categories: vec![Category::Important],
+        topic: TopicChange::Keep,
         about: vec![Target {
             entity_type: EntityType::EmailThread,
             entity_id: "thread-2".to_owned(),

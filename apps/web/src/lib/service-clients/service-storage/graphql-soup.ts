@@ -1854,6 +1854,20 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'inbox_reauth_required'>
     )
     .with(
+      { __typename: 'GraphqlCrmEmailSharingChangedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'crm_email_sharing_changed',
+          content: {
+            teamId: metadata.crmEmailSharingChangedTeamId,
+            // A reason this build doesn't know still reads as a sharing change.
+            reason: match(metadata.crmEmailSharingChangedReason)
+              .with('COMPANIES_MERGED', () => 'companies_merged' as const)
+              .exhaustive(() => 'companies_merged' as const),
+          },
+        }) satisfies NotifEventMember<'crm_email_sharing_changed'>
+    )
+    .with(
       { __typename: 'GraphqlRoutineRunFinishedMetadata' },
       (metadata) =>
         ({

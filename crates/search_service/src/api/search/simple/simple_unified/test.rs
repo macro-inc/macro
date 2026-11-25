@@ -1550,7 +1550,9 @@ fn a_long_label_name_is_matched_whole_while_words_are_cut() {
     let left_out = "x".repeat(MAX_TERM_CHARS + 15);
     let mut filters = every_kind();
 
-    let (terms, email_query) = limited_terms(
+    let LimitedTerms {
+        terms, email_query, ..
+    } = limited_terms(
         &mut filters,
         false,
         vec![
@@ -1609,6 +1611,233 @@ fn operators_count_toward_the_term_cap() {
 
     assert!(matches!(
         limited_terms(&mut every_kind(), false, terms, MatchType::Partial, clock()),
+        Err(SearchError::TooManyTerms)
+    ));
+}
+
+const SEARCHER: &str = "macro|searcher@example.com";
+/// The id that leaves a kind out of a search.
+const LEFT_OUT: &str = "00000000-0000-0000-0000-000000000000";
+
+/// A search of every kind, agent sessions included, as the Search view sends.
+fn every_kind_and_sessions() -> SearchEntityFilters {
+    SearchEntityFilters::from(item_filters::EntityFilters {
+        agent_session_filters: item_filters::AgentSessionFilters {
+            include: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+}
+
+fn read(filters: &mut SearchEntityFilters, query: &str) -> Result<ReadQuery, SearchError> {
+    read_query(
+        filters,
+        true,
+        split_search_terms(&[query.to_string()]),
+        MatchType::Partial,
+        clock(),
+        SEARCHER,
+    )
+}
+
+#[test]
+fn typed_operators_leave_words_for_the_search_and_its_names() {
+    let mut filters = every_kind_and_sessions();
+
+    let read = read(&mut filters, "type:doc launch plan").unwrap();
+
+    assert_eq!(read.terms, ["launch", "plan"]);
+    assert_eq!(read.conditions.excluded_sub_types, ["task"]);
+    assert!(!read.include_crm, "CRM companies can't meet an operator");
+    assert_eq!(read.name_search_term("type:doc launch plan"), "launch plan");
+}
+
+#[test]
+fn a_query_without_typed_operators_is_read_as_before() {
+    let mut filters = every_kind_and_sessions();
+
+    let read = read(&mut filters, "\"launch plan\" notes").unwrap();
+
+    assert_eq!(read.terms, ["launch plan", "notes"]);
+    assert!(read.include_crm);
+    assert!(read.conditions.property_filters.is_empty());
+    assert_eq!(
+        read.name_search_term("\"launch plan\" notes"),
+        "\"launch plan\" notes",
+        "names match the query as typed"
+    );
+}
+
+#[test]
+fn task_operators_become_property_filters() {
+    let mut filters = every_kind_and_sessions();
+
+    let read = read(&mut filters, "status:in_progress assignee:me launch").unwrap();
+
+    let definitions: Vec<&str> = read
+        .conditions
+        .property_filters
+        .iter()
+        .map(|filter| filter.definition_id.as_str())
+        .collect();
+    assert_eq!(
+        definitions,
+        [
+            "00000001-0000-0000-0000-000000000002",
+            "00000001-0000-0000-0000-000000000001"
+        ]
+    );
+    assert_eq!(read.conditions.property_filters[1].values, [SEARCHER]);
+}
+
+#[test]
+fn operators_alone_need_a_word_unless_they_search_email_alone() {
+    let refused = read(
+        &mut every_kind_and_sessions(),
+        "type:task status:in_progress",
+    );
+    assert!(matches!(refused, Err(SearchError::OperatorsNeedAWord)));
+
+    let email = read(&mut every_kind_and_sessions(), "type:email is:unread").unwrap();
+    assert!(email.terms.is_empty());
+    assert!(email.email_query.is_some());
+
+    let read_before = read(&mut every_kind_and_sessions(), "is:unread").unwrap();
+    assert!(
+        read_before.terms.is_empty(),
+        "email operators alone still search"
+    );
+}
+
+#[test]
+fn in_hash_in_a_mail_search_is_the_email_label_operator() {
+    let mut filters = SearchEntityFilters::from(item_filters::EntityFilters {
+        channel_filters: item_filters::ChannelFilters {
+            channel_ids: vec![LEFT_OUT.to_string()],
+            ..Default::default()
+        },
+        call_filters: item_filters::CallFilters {
+            call_ids: vec![LEFT_OUT.to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    let read = read(&mut filters, "in:#travel").unwrap();
+
+    assert_eq!(read.typed.operators, 0);
+    let email_query = read.email_query.expect("the email operators read it");
+    assert_eq!(email_query.filters.label_names[0].name, "#travel");
+}
+
+#[test]
+fn a_minus_word_or_phrase_leaves_out_what_holds_it_in_every_kind() {
+    let mut filters = every_kind_and_sessions();
+    let query = "budget -draft -\"team lunch\"";
+
+    let read = read(&mut filters, query).unwrap();
+
+    assert_eq!(read.terms, ["budget"]);
+    assert_eq!(read.excluded_terms, ["draft", "team lunch"]);
+    assert!(
+        read.email_query.is_none(),
+        "a word left out says nothing of email"
+    );
+    assert!(read.include_crm);
+    assert!(filters.should_include_documents);
+    assert!(filters.should_include_emails);
+    assert!(filters.should_include_channels);
+    assert!(filters.should_include_chats);
+    assert_eq!(read.name_search_term(query), "budget");
+}
+
+#[test]
+fn a_minus_inside_a_word_or_doubled_stays_part_of_the_word() {
+    let read = read(&mut every_kind_and_sessions(), "e-mail --force").unwrap();
+
+    assert_eq!(read.terms, ["e-mail", "--force"]);
+    assert!(read.excluded_terms.is_empty());
+}
+
+#[test]
+fn minus_words_alone_need_a_word_unless_they_search_email_alone() {
+    let alone = read(&mut every_kind_and_sessions(), "-draft");
+    assert!(matches!(alone, Err(SearchError::OperatorsNeedAWord)));
+
+    let beside_a_kind = read(&mut every_kind_and_sessions(), "type:doc -draft");
+    assert!(matches!(
+        beside_a_kind,
+        Err(SearchError::OperatorsNeedAWord)
+    ));
+
+    let email = read(&mut every_kind_and_sessions(), "type:email -draft").unwrap();
+    assert!(email.terms.is_empty());
+    assert!(
+        email.excluded_terms.is_empty(),
+        "Mail's operators read the word"
+    );
+    let email_query = email.email_query.expect("a search of email alone");
+    assert_eq!(
+        email_query.filters.text_matches,
+        [item_filters::EmailTextMatch {
+            part: item_filters::EmailTextPart::Any,
+            text: "draft".to_string(),
+            exclude: true,
+        }]
+    );
+}
+
+#[test]
+fn a_minus_word_beside_an_operator_leaves_out_of_the_kinds_it_keeps() {
+    let mut filters = every_kind_and_sessions();
+
+    let read = read(&mut filters, "type:doc budget -draft").unwrap();
+
+    assert_eq!(read.terms, ["budget"]);
+    assert_eq!(read.excluded_terms, ["draft"]);
+    assert!(filters.should_include_documents);
+    assert!(!filters.should_include_emails);
+    assert_eq!(read.name_search_term("type:doc budget -draft"), "budget");
+}
+
+#[test]
+fn a_regexp_search_reads_a_minus_as_syntax() {
+    let read = read_query(
+        &mut every_kind_and_sessions(),
+        true,
+        split_search_terms(&["budget -draft".to_string()]),
+        MatchType::Regexp,
+        clock(),
+        SEARCHER,
+    )
+    .unwrap();
+
+    assert_eq!(read.terms, ["budget", "-draft"]);
+    assert!(read.excluded_terms.is_empty());
+}
+
+#[test]
+fn a_left_out_word_is_cut_and_counted_as_terms_are() {
+    let long = "x".repeat(MAX_TERM_CHARS + 5);
+    let read = read(&mut every_kind_and_sessions(), &format!("budget -{long}")).unwrap();
+    assert_eq!(read.excluded_terms[0].chars().count(), MAX_TERM_CHARS);
+
+    let with_conditions = |count: usize| {
+        let mut filters = every_kind();
+        filters.email_filters.text_matches = (0..count)
+            .map(|i| item_filters::EmailTextMatch {
+                part: item_filters::EmailTextPart::Subject,
+                text: format!("t{i}"),
+                exclude: false,
+            })
+            .collect();
+        let terms = vec!["menu".to_string(), "-draft".to_string()];
+        limited_terms(&mut filters, false, terms, MatchType::Partial, clock())
+    };
+    assert!(with_conditions(MAX_SEARCH_TERMS - 2).is_ok());
+    assert!(matches!(
+        with_conditions(MAX_SEARCH_TERMS - 1),
         Err(SearchError::TooManyTerms)
     ));
 }

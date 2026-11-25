@@ -1,4 +1,4 @@
-# The EKS cluster, its managed node group, add-ons and access entries.
+# The EKS cluster, its managed node groups, add-ons and access entries.
 { lib, settings, ... }:
 let
   inherit (lib.tf) ref;
@@ -30,6 +30,8 @@ let
       resolve_conflicts_on_update = "OVERWRITE";
     }
     // extra;
+
+  nodeGroups = map (name: "aws_eks_node_group.${name}") (lib.attrNames cluster.nodeGroups);
 
   # Created before the nodes so they join with networking and Pod Identity.
   beforeNodes = [
@@ -182,14 +184,13 @@ in
       };
       kube_proxy = addon "kube_proxy" { };
       pod_identity_agent = addon "pod_identity_agent" { };
-      coredns = addon "coredns" { depends_on = [ "aws_eks_node_group.observability" ]; };
+      coredns = addon "coredns" { depends_on = nodeGroups; };
       ebs_csi = addon "ebs_csi" {
         pod_identity_association = {
           service_account = settings.serviceAccounts.ebsCsi.name;
           role_arn = ref "aws_iam_role.pod_ebsCsi.arn";
         };
-        depends_on = [
-          "aws_eks_node_group.observability"
+        depends_on = nodeGroups ++ [
           "aws_iam_role_policy_attachment.pod_ebsCsi"
         ];
       };
@@ -229,23 +230,23 @@ in
       ];
     };
 
-    # One node per AZ: the group spans the three private subnets and the
-    # Auto Scaling group balances across them. Updates surge a new node before
-    # draining an old one, one at a time.
-    aws_eks_node_group.observability = {
+    # One node per AZ in each group: a group spans the three private subnets
+    # and its Auto Scaling group balances across them. Updates surge a new node
+    # before draining an old one, one at a time.
+    aws_eks_node_group = lib.mapAttrs (name: group: {
       cluster_name = ref "aws_eks_cluster.observability.name";
-      node_group_name = "observability";
+      node_group_name = name;
       node_role_arn = ref "aws_iam_role.node.arn";
       # Nodes follow the control plane in the same apply, one at a time.
       version = ref "aws_eks_cluster.observability.version";
       subnet_ids = ref "local.private_subnet_ids";
       ami_type = cluster.nodes.amiType;
       capacity_type = "ON_DEMAND";
-      instance_types = [ cluster.nodes.instanceType ];
+      instance_types = [ group.instanceType ];
       scaling_config = {
-        desired_size = cluster.nodes.count;
-        min_size = cluster.nodes.count;
-        max_size = cluster.nodes.count * 2;
+        desired_size = group.count;
+        min_size = group.count;
+        max_size = group.count * 2;
       };
       update_config.max_unavailable = 1;
       launch_template = {
@@ -261,6 +262,6 @@ in
         "aws_iam_role_policy_attachment.node_ecr"
         "aws_iam_role_policy_attachment.node_ssm"
       ];
-    };
+    }) cluster.nodeGroups;
   };
 }

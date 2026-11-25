@@ -21,7 +21,8 @@ only, behind `enable-suggestions`.
   header's Refresh control (`POST /suggestions/regenerate`): running while a
   generation runs, "Available at h:mm" during the hourly cooldown (one timer
   ends it), hidden where the server has no status to give.
-- `primitives/feed.ts` holds each list's rows (`view(list)`, `counts()`)
+- `primitives/feed.ts` holds each list's rows (`view(list)`, `counts()`),
+  the topics that group them (`topics()`, `groups(list, topic)`)
   and decides what a row's action does for its kind: a composer prompt
   accepts, then opens the composer; a background prompt only accepts, which
   starts its run; an entity suggestion accepts, then opens its item
@@ -51,6 +52,7 @@ only, behind `enable-suggestions`.
 - `core/suggestion.ts`: the suggestion and feed model.
 - `primitives/feed.ts`: the lists, row actions, dismiss and undo.
 - `core/lists.ts`: which list holds a suggestion, and a row's states.
+- `core/topics.ts`: which topics group Today's rows, and their colours.
 - `route-views.tsx`, `home-priorities.tsx`: the two production compositions.
 
 ## Scope
@@ -135,11 +137,27 @@ only, behind `enable-suggestions`.
   or dismissed (Undo). Switched off from its row, a turned-on routine reads
   "is off" with a grey dot. With nothing waiting in Today, the page says "You’re
   all caught up" above whatever settled here.
+- Topics are the server's (`suggestion.topic`, `feed.topics` with each one's
+  name and reason); the page decides only which to show. One groups rows from
+  two, in Today alone, in the order of its first row, and a row that settled
+  during the visit still counts towards the two, so a group doesn't come apart
+  while the person works through it. Rows outside the shown topics come last
+  under "Everything else", or with no heading when there is no topic: then
+  Today is one flat list. The sidebar lists the same topics with how many of
+  their rows wait; choosing one (`forYou.topic` in the URL, which replaces `forYou.view`) shows its
+  rows alone, its name as the page's and its reason in place of the date. One
+  that groups nothing shows Today for as long as that holds: the URL keeps it,
+  since a cached feed may lack a new topic. A reason is shown as
+  written or not at all: never build one here.
+- Where topics group rows, a topic's hue tints its rows' tiles in every list
+  and its square in the sidebar, and other rows' tiles are neutral. Hues are
+  taken in key order (`huesOf`), so reordered rows keep theirs.
 - Every row is one `components/suggestion-row.tsx`: an `Item size="sm"`
   with `border-0`, 56px whatever its state (`h-14`), a 32px tile tinted by
-  the suggestion's kind (`suggestionLook`), a medium `text-sm` title and one
-  dimmer 13px line (`text-ink-extra-muted`). Both stay on one line, cut
-  where the row ends; pointing at a cut line shows all of it (`Cut`). A
+  the suggestion's kind (`suggestionLook`) or its topic (above), a medium
+  `text-sm` title and one dimmer 13px line (`text-ink-extra-muted`). Both
+  stay on one line, cut where the row ends; pointing at a cut line shows all
+  of it (`Cut`). A
   failed action or a rewritten suggestion replaces the line with its note,
   after what the run sends (`SendsFirst`), since Run stays one press away.
   The rows sit flat on the page: no cards, outlines, or local surfaces.
@@ -162,7 +180,7 @@ only, behind `enable-suggestions`.
 - Marking done and turning a routine on each show a toast: Undo for the
   first, View routine (the saved routine, `savedRoutineId`) for the second.
 - Nothing on a row is loud: actions are `secondary` or `ghost` buttons (no
-  `primary`), and colour is left to the kind's tile, the settled marks and a
+  `primary`), and colour is left to the row's tile, the settled marks and a
   failed run.
 - The API has no due times; a to-do's "2 days" is the feed's `waitingSince`,
   or when the suggestion arrived without it (`ageLabel`).

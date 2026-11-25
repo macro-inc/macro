@@ -1,9 +1,11 @@
 import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
+import { forgetMergedCrmRecords } from '@service-storage/crm-record-merge';
 import { prepareCrmVisibilityWrite } from '@service-storage/crm-visibility';
 import type { CrmContactDetailResponse } from '@service-storage/generated/schemas/crmContactDetailResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
@@ -71,11 +73,30 @@ export function useCrmContactByEmailQuery(
 function contactQueryOptions(deps: CrmRecordDependencies, contactId: string) {
   return queryOptions({
     queryKey: crmKeys.contact(contactId).queryKey,
-    queryFn: ({ signal }) => {
+    queryFn: async ({ signal }) => {
       if (!contactId) {
         throw new Error('contact id is required to fetch contact');
       }
-      return throwOnErr(() => deps.storage.getContact({ contactId, signal }));
+      const canCache = captureQueryAuthorization();
+      const contact = await throwOnErr(() =>
+        deps.storage.getContact({ contactId, signal })
+      );
+      // A merged contact's id answers with the contact it was merged into,
+      // which its view then opens under that contact's own id.
+      if (contact.id.toLowerCase() !== contactId.toLowerCase() && canCache()) {
+        const survivor = crmKeys.contact(contact.id).queryKey;
+        // An entry already there is as fresh as its own read made it.
+        if (deps.client.getQueryData(survivor) === undefined)
+          deps.client.setQueryData(survivor, contact);
+        fireAndForget(
+          forgetMergedCrmRecords({
+            companies: [],
+            contacts: [contactId.toLowerCase()],
+          }),
+          'crm'
+        );
+      }
+      return contact;
     },
     staleTime: CONTACT_STALE_TIME,
     enabled: !!contactId,

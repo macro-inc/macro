@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use firecracker_host_api::{
-    Action, Computer, ComputerId, CreateComputer, GoldenImage, GoldenKey, HostInfo, HostLimits,
-    SetEnrollment,
+    Action, Computer, ComputerId, CreateComputer, GoldenImage, GoldenKey, GuestImage, HostInfo,
+    HostLimits, SetEnrollment, StageImage, StagedImage,
 };
 
 use super::{HostError, HostProbe, HostService};
@@ -32,6 +32,14 @@ where
         HostService::build_golden(self, key)
     }
 
+    fn stage_image(&self, request: StageImage) -> Result<StagedImage, HostError> {
+        HostService::stage_image(self, request)
+    }
+
+    fn images(&self) -> Vec<StagedImage> {
+        HostService::images(self)
+    }
+
     async fn list(&self) -> Result<Vec<Computer>, HostError> {
         HostService::list(self).await
     }
@@ -50,6 +58,14 @@ where
 
     async fn power(&self, computer_id: ComputerId, action: Action) -> Result<Computer, HostError> {
         HostService::power(self, computer_id, action).await
+    }
+
+    async fn replace_system_disk(
+        &self,
+        computer_id: ComputerId,
+        image: GuestImage,
+    ) -> Result<Computer, HostError> {
+        HostService::replace_system_disk(self, computer_id, image).await
     }
 
     async fn set_enrollment(

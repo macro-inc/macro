@@ -269,7 +269,7 @@ function observeRenameSettlement(
       complete();
   });
   unsubscribeReset = host?.onCacheGenerationChanged((change) => {
-    if (change.storage === 'reset') {
+    if (change.queue === 'reset') {
       finished = true;
       dispose();
     }

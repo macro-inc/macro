@@ -387,7 +387,16 @@ The same suite's `row-styles.browser.e2e.ts` covers Mail's row styles over the
 real row: Minimalist unchanged, and Classic's shared line between rows (plus
 the one above each date group's first row), lifted unread fill, weights and
 always-visible checkbox on desktop and tablet, with phones kept on Minimalist,
-and the Settings → Email sample following the Row style tabs.
+and the Settings → Email sample following the Row style tabs. Its
+`row-labels.browser.e2e.ts` checks the labels people made on wide rows (each
+nested label by its own name, its whole name on hover, three items and then a
+count, none of Gmail's system or hidden labels) and none on narrow or phone
+rows; `ROW_LABELS_SCREENSHOT_DIR` saves its screenshots.
+`sidebar-labels.browser.e2e.ts` checks the sidebar's Labels section on desktop
+and phone (a row per inbox when all show, none for one picked inbox, a nested
+Gmail label under its parent, eight labels then `N more` holding the rest and
+Gmail's hidden ones, the open label marked); `SIDEBAR_LABELS_SCREENSHOT_DIR`
+saves its screenshots.
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the
@@ -434,9 +443,10 @@ and every answer, on desktop and phone, and wraps from the requester name stored
 the event (backend-free):
 `bunx playwright test --config src/features/channel/browser-test/playwright.config.ts`.
 
-The desktop channel gutter's Mark done checks and notification list (docked in
-a wide pane, a popover in a narrow one, hidden when the gutter has no room)
-have a backend-free regression over the real checks, list and stacking:
+The desktop channel gutter's notification list (what was unread when the
+channel opened, each entry held until its check marks the stack done; docked
+in a wide pane, a popover in a narrow one, hidden when the gutter has no room)
+has a backend-free regression over the real list, snapshot and stacking:
 `bunx playwright test --config src/features/channel-notification-stacks/browser-test/playwright.config.ts`.
 
 Channel history keeps the message being read in place when a split opens or
@@ -449,7 +459,8 @@ Discussion link scrolling has a backend-free browser regression:
 
 Adding an agent teammate from Team → Members (its Invite Agent button,
 behind `enable-agent-teammates`; members see only Invite Human): the dialog waiting until the agent is
-online, falling back to the row after five seconds, a declined card and a size
+online, the fixed Add agent label and live price beside Cancel with a long
+name, falling back to the row after five seconds, a declined card and a size
 with no room in place, its row's Setting up step and failed Retry, the ready and failed notifications (Message, Connect Claude plan for
 admins only, Retry), Connect Claude plan's one-screen sign-in with its
 expired, rejected and unreachable states, its row's Claude sign-in and switch
@@ -902,6 +913,15 @@ or mention in it presses the row and opens nothing. The same suite's
 `preview-links.browser.e2e.ts` clicks, Cmd-clicks, middle-clicks and taps a
 link in a row and in an unfolded stack; the Signal suite's
 (`next-soup/soup-view/views/inbox/browser-test`) taps one in a Home card.
+Search snippets are a picture of the message too: `SearchContent`
+(`features/entity/extractors-search`), which every snippet renders through
+(channel message search rows, a result's Show more hits, the agent Search
+card), is `inert`, and so is a result's highlighted name (`EntityTitle`, and
+`CallRecordName` in call rows, which render markdown only for a search result
+with a name highlight), so pressing a link in either opens the result; a
+highlight splits a URL, so a live link opened only its first part. Run
+`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts search-snippet.browser.e2e.ts`,
+which presses a snippet's or title's link on desktop and taps it on phone.
 
 A swipe row folds only what is inside it: draw a row's divider inside its
 `SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line
@@ -1119,6 +1139,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   raised composer cards (`SettingsSurface`), row spacing, and control shapes stay
   consistent; never hand-build a flat `bg-ink/*` card. Integrations is the one
   settings page that spans nearly the full width, for its list columns.
+  Settings sections shown outside a `SettingsPage`, such as in a dialog, go in
+  `SettingsSections` so they keep the page's spacing.
 - Preserve email signature HTML through import, preview, and source editing;
   mount Quill only for explicit Rich text editing and confirm custom-layout
   conversion. Keep the settings and composer preview on the same sanitized HTML
@@ -1234,6 +1256,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   background work until a visible owner reopens storage, retaining accepted
   mutation settlements even if their caller leaves.
   Publish recovery reset outcomes before parking while retaining the read pause.
+  A reset of storage (`openOutcome`) says nothing of the mutation queue, which a
+  recovery wipe carries over: end a mutation in flight or settle pending writes
+  as lost only on `queue: 'reset'`.
   A typed search held across an engine restart reaches the new engine first, and
   one already sent is not refused when the read budget expires; it has no
   network fallback. It still ends after the ordinary read timeout, Quick
@@ -1279,7 +1304,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Release per-history-entry state when its router entry is replaced, pruned, or closed; retain only the latest per-view session snapshot and the latest split event outside reachable Back/Forward history.
 - Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list, which holds top-level routines only: sub-routines, which another routine's run created, are reached from their creator); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
 - Keep Quick Access cache availability reactive to `getGraphqlSoupCacheHost()`; the host can appear, change or be disabled after the provider mounts, and email has no legacy source fallback.
-- Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
+- Browser storage schema 12 enables covering-index search through a fresh versioned cache; native caches run registered storage upgrade steps in place, keeping queued writes; a native file still resets without a complete chain, when a step or the final schema check fails, or when another scope or an unmigratable format wrote it, and a browser build resets an older version it finds under its own name. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; with `enable-contact-lists` the backfill and exact lookup select `GraphqlContact.lists` (the `…WithLists` operations, never the fetch-only pages) and scan under checkpoint v3, so only clients the flag turns on rehydrate; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. An invalidation naming `changed` contacts also tops up just those ids through the exact lookup (`contacts/top-up.ts`), taking turns on the contact fence with scan pages (`write-turn.ts`); top-ups never delete. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
 - A surface orders its personal people window by contact list through `ContactPeoplePolicy.listPriority` (`QuickAccessListOptions.peopleListPriority`); with `enable-contact-lists` only @mention windows pass one (`useMentionListPriority` in `queries/contacts/lists.ts`, the order itself in `list-priority.ts`). `readContactDirectory` sends list fields only to a host that has answered a search with people policy 7 or later (5 and 6 refuse them); the first search on a host goes without and is resent once it answers. On policy 8, among names that start with the query (exact and word-prefix) the list group decides first, then exact before word-prefix, then recency; contains-only and address matches follow, each by group. Policy 7 hosts (native builds before the release that brings 8) rank by name stage before group, and their windows are kept as they come. Keep orders within the host's bounds (16 groups, 64 keys, 128-byte keys). The real-engine regression is `people-list-order.browser.e2e.ts` in `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts`.
 - Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
@@ -1302,7 +1327,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep wide touch channel previews on `ChannelDetailLayout` with floating title/menu and call/invite islands, measured message clearance, and interactive navigation controls.
 - Anchor mobile floating page chrome to its owning workspace pane (`ViewShell.Main`, `ViewShell.Detail`, or a `CollectionPanes` frame), including composers and action bars; keep app navigation global and preserve mounted editors while resizing or collapsing navigation.
 - Use `MobileListLayout` for floating touch collection controls and their list-local fade; reserve its measured inset inside the scroller so sidebars stay clear and rows scroll behind the chrome. Give the outer wide-touch collection header twice the standard left chrome gutter to clear the bezel curve; retain the standard right gutter and narrow-touch spacing.
-- Limit whole-surface glass press scaling to nearly square controls; give horizontal and vertical navigation pills the bounded paint expansion in `glassPress.ts`.
+- Keep native mobile apps identical to the mobile browser: touch glass draws a flat hairline edge, with no press animation. Haptics fire only for the gestures the [mobile rule](../../.agents/rules/web/mobile.md#detection-and-input) lists.
 - Keep split chrome portal targets reactive so cached views can mount before their header, and clear a retiring header's targets only while it still owns them.
 - Opt views into session restoration with `split-layout/view-restoration` and set `resume: true` on ordinary layout navigation; publish captured state only through the leave guard's `onCommit`, keep explicit links and new splits fresh, and reuse entry-state captors rather than hidden mounted views.
 - Agent-opened panes (`features/agent-navigation`) open with `router.open` beside the agent's pane and never replace one; keep the person's active pane and focused element, the Undo toast, and the read hold (`useReadsHeldByAgentArrival` in read markers) when changing split opening, read markers or `TiledSplits` (its `data-split-pane` attribute drives the arrival motion). Undo keeps the read hold until the pane is gone, and plays the departure back when a leave guard keeps the pane. The tab id (`core/agent-session/ui-client.ts`) lives in sessionStorage, which a duplicated tab copies, so live pages compare ids over a BroadcastChannel and the one that took it later mints its own; the app shell takes it at startup. Agent navigation never runs on mobile: `agentNavigationRunsHere()` there is the one predicate that keeps the tab id off prompts, the id and its channel from starting, and the frame handler idle.
@@ -1330,7 +1355,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   first item" command, so a list on `useListInteractions` lands on its first
   row with no code in the view; when that command finds no row (a search with
   no results), the keys stay in the field. `wide` lets the open field take the rest of
-  the header (the view hides its other actions from `onOpenChange`), `open`
+  the header (the view hides its other actions from `onOpenChange`; left
+  empty, it closes once focus leaves the header), `open`
   lets the view keep the open state and close the field itself, and
   `suggestions` lists rows under the field that the arrows walk before the
   results (a row that `editsQuery`, such as Email's `in:` views, keeps the
@@ -1358,7 +1384,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   session pane shares the split's hotkey scope. Covered by
   `ViewSidebar.test.tsx` and `AgentsSidebar.test.tsx`.
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, semantic islands with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for New and Search. Keep a bar at one height: detail-header islands and view `Tabs` use `sm`/`icon-sm` (28px controls), and list-header islands and Tabs (any header with New or Search) use `md`/`icon-md` (32px) to match New and Search. A labelled action outside an island is 32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`. Change desktop headers in desktop views; never edit a mobile view for a desktop change ([mobile rule](../../.agents/rules/web/mobile.md#detection-and-input)). Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
-- Use the unified model selector in every agent composer, including Home, new chats, inline and standalone sessions, and universal-input AI drafts. Reuse it for routine agent/model targets. Keep each host's saved preferences and session mutations; show Reasoning effort and Speed only when that host applies them. Retain the old controls unwired for reference.
+- Use the card-first unified model selector in every agent composer, including Home, new chats, inline and standalone sessions, and universal-input AI drafts. Reuse it for routine agent/model targets. Keep host preference and session mutation ownership; Thinking and Speed edit the card, while the name opens model selection. Retain old pickers and EffortSelector unwired for reference.
 - Render GitHub comment and PR description bodies through `normalizeGithubMarkdown` (`@macro-inc/lexical-core`), not ad hoc HTML stripping; `<details>` renders as a native collapsible section in `StaticMarkdown`. The backend-free desktop/phone regression over CodeRabbit-shaped comments is
   `bunx playwright test --config src/features/block-pr/browser-test/playwright.config.ts`; the same config's
   `changes-split.browser.e2e.ts` checks that a narrow PR split opens Changes over the PR, never as a split inside it.
@@ -1476,8 +1502,21 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Gate task-template controls and workflow recovery with `enable-task-templates` on desktop and touch; inject availability from `ComposeTask` and retain paused template edits without blocking ordinary tasks or property pins.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
-- Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
-  bump its checkpoint version when changing the hydration input contract.
+- Keep CRM contacts explicitly included in the auxiliary GraphQL backfill.
+- Soup backfill checkpoints are keyed by each lane's contract
+  (`queries/soup/backfill-contract.ts`): changing a lane's operation, input or
+  pass flags restarts that lane alone, and a tab runs a lane only while holding
+  its locks (`soupBackfillLaneLocks`), leaving a lane another tab holds until
+  its other lanes are done. The app runs lanes only in the tab that leads
+  backfill, and leading takes the browser's Locks API too; a direct
+  `runSoupBackfill` call without it runs the lane unlocked. Bump the lane's
+  `contractVersion` when it must refetch for a reason those do not show (a
+  projection that needs fields the cache lacks, a page size that must reach
+  scans in flight); bump
+  `BACKFILL_VERSION` only for a runner change every lane shares. Never edit
+  `V19_CONTRACTS`. Read and write a lane's checkpoint through
+  `queries/soup/backfill-checkpoint.ts` with the lane itself, never a
+  checkpoint id: the channel directory reads `CHANNEL_DIRECTORY_LANE`.
 - Refresh the channel list's bounded unread and mention edges when opening a
   conversation, including an empty unread result after a read on another
   device. Include off-page favorites in unread presence without adding them to
@@ -1697,9 +1736,14 @@ the existing error toast. Keep the startup cover fallback in the same owner,
 and let it defer to a pending tap's deadline. The deadline requires responsive
 JavaScript and IPC; it cannot recover a frozen WebContent process.
 
-Open sheets and touch dialogs close when the app navigates, as a scrim tap
-closes them (`createCloseOnNavigation` in `MobileDrawer` and `Dialog`): when
-the active pane shows another view (a link, an agent, the dock, Back), and
+Open sheets, touch dialogs and touch `Dropdown` menus close when the app
+navigates, as a scrim tap closes them (`createCloseOnNavigation` in
+`MobileDrawer`, `Dialog` and `Dropdown`; overlays built on Kobalte's dialog
+directly, such as the full-screen media viewers, the create menu and the
+tablet Launcher and Share dialogs, render `DialogClosesOnNavigation` inside the
+root). Kobalte `ContextMenu` (it has no `open` prop), `Popover` and `Select`
+don't close yet; phones use sheets for long-press and picker menus. The rest
+close when the active pane shows another view (a link, an agent, the dock, Back), and
 before a notification tap navigates, since it may land on the page already
 shown. A search change (filters) or a pane adopting its content's real id
 keeps the view, so those sheets stay open; so does a sheet the destination
@@ -1711,7 +1755,8 @@ swipe-back, so without this its sheets stayed over the new page. Opt out with
 choose: the incoming-share sheet (discards the shared files) and the push and
 iPad prompts (record the prompt as dismissed). The
 backend-free phone and tablet regression drives the real pane stack, router and
-notification tap path with simulated native IPC:
+notification tap path with simulated native IPC, over sheets, a dialog, the
+media viewers, a menu, the Share dialog and the create menu:
 `bunx playwright test --config src/components/app/mobile/navigation-browser-test/playwright.config.ts`.
 
 The frontend cover deadline has a backend-free phone browser regression:

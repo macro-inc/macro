@@ -31,8 +31,12 @@ pub struct CrmCompanyPreview {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct CrmContactPreview {
-    /// The contact.
+    /// The requested contact id.
     pub id: Uuid,
+    /// The contact the requested one was merged into, which is the one the
+    /// rest of the preview shows. Absent for a contact that was not merged.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merged_into: Option<Uuid>,
     /// The contact's display name.
     pub name: Option<String>,
     /// The contact's primary email, which titles a contact with no name.
