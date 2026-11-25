@@ -22,6 +22,9 @@ use tracing::Level;
 use uuid::Uuid;
 
 const MAX_CONCURRENT_BATCH_ACCESS_CHECKS: usize = 8;
+/// Entities a batch looks up one at a time at once, as the GraphQL permission
+/// loader did before batches settled documents and owned threads.
+const MAX_CONCURRENT_PERMISSION_LOOKUPS: usize = 16;
 
 /// Implementation of the [`EntityAccessService`].
 ///
@@ -100,7 +103,7 @@ where
 
     /// What a lookup for the whole batch settles for each of `entities`: every
     /// document, and the email threads the user owns. `None` leaves the entity
-    /// to its own lookup.
+    /// to its own lookup, as does a batch lookup that fails.
     async fn batch_settled_permissions(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
@@ -163,14 +166,9 @@ where
                     );
                 }
             }
+            // Each document takes its own lookup instead.
             Err(error) => {
-                tracing::error!(?error, "bulk document access check failed");
-                for (index, _) in documents {
-                    settle(
-                        index,
-                        Err(AccessError::internal("bulk document access check failed")),
-                    );
-                }
+                tracing::warn!(?error, "bulk document access check failed");
             }
         }
 
@@ -188,16 +186,9 @@ where
                     }
                 }
             }
+            // Each thread takes its own lookup instead.
             Err(error) => {
-                tracing::error!(?error, "bulk email thread ownership check failed");
-                for (index, _) in threads {
-                    settle(
-                        index,
-                        Err(AccessError::internal(
-                            "bulk email thread ownership check failed",
-                        )),
-                    );
-                }
+                tracing::warn!(?error, "bulk email thread ownership check failed");
             }
         }
 
@@ -954,7 +945,7 @@ where
                     }
                 }),
         )
-        .buffered(MAX_CONCURRENT_BATCH_ACCESS_CHECKS)
+        .buffered(MAX_CONCURRENT_PERMISSION_LOOKUPS)
         .collect()
         .await
     }

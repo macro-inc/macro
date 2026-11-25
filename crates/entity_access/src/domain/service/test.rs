@@ -28,6 +28,8 @@ struct MockRepo {
     /// Lookups of one document, then lookups of a batch of documents.
     document_access_calls: Arc<AtomicUsize>,
     documents_access_calls: Arc<AtomicUsize>,
+    /// The batch document lookup fails.
+    documents_access_fails: bool,
     chat_access: Arc<Mutex<Option<AccessLevel>>>,
     project_access: Arc<Mutex<Option<AccessLevel>>>,
     thread_access: Arc<Mutex<Option<AccessLevel>>>,
@@ -90,6 +92,7 @@ impl MockRepo {
             document_access: Arc::new(Mutex::new(None)),
             document_access_calls: Arc::default(),
             documents_access_calls: Arc::default(),
+            documents_access_fails: false,
             chat_access: Arc::new(Mutex::new(None)),
             project_access: Arc::new(Mutex::new(None)),
             thread_access: Arc::new(Mutex::new(None)),
@@ -366,6 +369,9 @@ impl AccessRepository for MockRepo {
         _user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<HashMap<String, AccessLevel>, AccessError> {
         self.documents_access_calls.fetch_add(1, Ordering::SeqCst);
+        if self.documents_access_fails {
+            return Err(AccessError::internal("batch lookup failed"));
+        }
         let level = *self.document_access.lock().await;
         Ok(document_ids
             .iter()
@@ -1700,6 +1706,27 @@ async fn batch_permissions_read_all_documents_in_one_lookup() {
     }
     assert_eq!(batch.load(Ordering::SeqCst), 1);
     assert_eq!(single.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn batch_permissions_look_documents_up_alone_when_the_batch_lookup_fails() {
+    let mut repo = MockRepo::new().with_document_access(AccessLevel::Edit);
+    repo.documents_access_fails = true;
+    let single = repo.document_access_calls.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+    let entities = [
+        entity(EntityType::Document, Uuid::new_v4()),
+        entity(EntityType::Document, Uuid::new_v4()),
+    ];
+
+    let permissions = service
+        .get_entity_permissions(&test_user_id(), None, &entities)
+        .await;
+
+    for permission in permissions {
+        assert_eq!(permission.unwrap(), level(AccessLevel::Edit));
+    }
+    assert_eq!(single.load(Ordering::SeqCst), 2);
 }
 
 #[tokio::test]
