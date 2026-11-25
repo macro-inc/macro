@@ -153,6 +153,29 @@ pub(super) async fn wipe_keeping_queue(
     ))
 }
 
+/// Notes that the copy in `file` may be held by a database about to be reset
+/// for want of one of its files: a later engine would find only its successor.
+/// Returns how much longer the side file is.
+async fn doubt(sidecar: &Sidecar, end: u64, file: &SalvageFile) -> u64 {
+    if file.imports() == 0 {
+        return 0;
+    }
+    let frame = SalvageFile::loss(QueueLoss::default());
+    match sidecar.write_tail(end, &frame).await {
+        Ok(()) => frame.len() as u64,
+        Err(_) => 0,
+    }
+}
+
+/// [`doubt`], for an engine that wipes nothing else.
+pub(super) async fn doubt_copy(sidecar: &Sidecar) -> Result<(), JsValue> {
+    let read = read_file(sidecar).await;
+    if let Some(file) = read.map_err(|error| storage_err_js(&error))? {
+        doubt(sidecar, file.end(), &file).await;
+    }
+    Ok(())
+}
+
 /// The side file, or nothing when it cannot be read. A failure that passes
 /// must not cost the queue in it.
 async fn read_file(sidecar: &Sidecar) -> Result<Option<SalvageFile>, OpfsError> {
@@ -266,6 +289,7 @@ async fn read_before_wipe(
         Ok(OpenResult::Ready(session)) => session,
         // One file of the pair alone is a wipe or a creation cut short.
         Ok(OpenResult::ResetRequired(session)) => {
+            read.end += doubt(sidecar, read.end, &file).await;
             let owner = session
                 .reset()
                 .await

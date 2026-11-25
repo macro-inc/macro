@@ -516,6 +516,38 @@ async fn a_copy_that_may_have_been_imported_is_never_called_kept_once_its_databa
 }
 
 #[wasm_bindgen_test(async)]
+async fn a_copy_of_a_torn_database_is_never_called_kept_after_a_death() {
+    const SCOPE: &str = "cache-wasm-salvage-torn-death";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let mut copy = read_side_file(SCOPE).await;
+    copy.extend(SalvageFile::import_attempt());
+    for recovery in [false, true] {
+        let (engine, _, _) = open(SCOPE, false).await;
+        resolved(engine.close()).await;
+        remove_opfs_file(&database_identity(SCOPE)).await;
+        write_side_file(SCOPE, &copy).await;
+        let owner = owner(SCOPE).await;
+        let (owner, crossing) = match recovery {
+            true => wipe_keeping_queue(SCOPE, owner)
+                .await
+                .unwrap_or_else(|_| panic!("wipe")),
+            false => (owner, Crossing::default()),
+        };
+        let sidecar = owner.sidecar();
+        let Ok((storage, _, _)) = open_or_wipe(SCOPE, owner, &sidecar, crossing).await else {
+            panic!("a fresh database opens")
+        };
+        release_storage(storage).await.expect("release");
+        let (engine, _, queue) = open(SCOPE, false).await;
+        assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+        assert_kept(&engine, SCOPE).await;
+        resolved(engine.close()).await;
+    }
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+}
+
+#[wasm_bindgen_test(async)]
 async fn a_copy_that_cannot_be_forgotten_fails_without_losing_the_lock() {
     const SCOPE: &str = "cache-wasm-salvage-forget-fails";
     closed_with_queue(SCOPE).await;

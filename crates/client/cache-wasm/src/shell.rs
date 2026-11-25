@@ -1079,7 +1079,7 @@ async fn open_storage(
     crossing: Crossing,
 ) -> Result<OpenedStorage, JsValue> {
     let sidecar = owner.sidecar();
-    let (mut storage, outcome, crossing) = open_or_wipe(scope, owner, crossing).await?;
+    let (mut storage, outcome, crossing) = open_or_wipe(scope, owner, &sidecar, crossing).await?;
     match crossing.finish(&sidecar, &mut storage).await {
         Ok(queue) => Ok(OpenedStorage {
             storage,
@@ -1088,19 +1088,25 @@ async fn open_storage(
             queue,
         }),
         Err(error) => {
-            let owner = match storage.try_close().map_err(err_js)? {
-                TursoStorageCloseOutcome::Healthy(closed) => closed.preserve(),
-                TursoStorageCloseOutcome::ResetRequired(closed) => closed.preserve_for_wipe(),
-            };
-            owner.map_err(err_js)?.release().await.map_err(err_js)?;
+            release_storage(storage).await?;
             Err(error)
         }
     }
 }
 
+/// Closes a database nothing was served from and lets its lock go.
+async fn release_storage(storage: TursoStorage) -> Result<(), JsValue> {
+    let owner = match storage.try_close().map_err(err_js)? {
+        TursoStorageCloseOutcome::Healthy(closed) => closed.preserve(),
+        TursoStorageCloseOutcome::ResetRequired(closed) => closed.preserve_for_wipe(),
+    };
+    owner.map_err(err_js)?.release().await.map_err(err_js)
+}
+
 async fn open_or_wipe(
     scope: &str,
     owner: OpfsOwner,
+    sidecar: &Sidecar,
     crossing: Crossing,
 ) -> Result<(TursoStorage, CacheOpenOutcome, Crossing), JsValue> {
     let (owner, reset_outcome, crossing) = match open_owner(owner).await? {
@@ -1122,14 +1128,15 @@ async fn open_or_wipe(
                 }
             }
         }
-        OpenResult::ResetRequired(session) => (
-            session
+        OpenResult::ResetRequired(session) => {
+            salvage::doubt_copy(sidecar).await?;
+            let owner = session
                 .reset()
                 .await
-                .map_err(|failure| storage_err_js(failure.error()))?,
-            CacheOpenOutcome::ResetStorageUncertain,
-            crossing.torn(),
-        ),
+                .map_err(|failure| storage_err_js(failure.error()))?;
+            let outcome = CacheOpenOutcome::ResetStorageUncertain;
+            (owner, outcome, crossing.torn())
+        }
     };
 
     match open_owner(owner).await? {
