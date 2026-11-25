@@ -21,6 +21,9 @@ export default {
   syncingInboxDescription:
     'Your existing mail will appear here as it syncs. You can keep using Macro while it finishes.',
   connectImapInbox: 'Connect an IMAP inbox',
+  connectImapInboxDescription:
+    'Read incoming mail with IMAP and send with SMTP.',
+  connectAction: 'Connect',
   imapSmtp: 'IMAP / SMTP',
   inboxConnected: 'Inbox connected',
   inboxReconnected: 'Inbox reconnected',

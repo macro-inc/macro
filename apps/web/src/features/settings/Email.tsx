@@ -312,10 +312,10 @@ export function EmailCard(props: { class?: string } = {}) {
             <IntegrationRow
               icon={<EnvelopeIcon />}
               title={t('imap.connectImapInbox')}
-              description="Read incoming mail with IMAP and send with SMTP."
+              description={t('imap.connectImapInboxDescription')}
             >
               <ConnectAction
-                label="Connect"
+                label={t('imap.connectAction')}
                 ariaLabel={t('imap.connectImapInbox')}
                 onClick={() => onConnectEmail('IMAP')}
               />
