@@ -28,11 +28,29 @@ export async function refreshEmailThreadCache(threadId: string): Promise<void> {
   }
 }
 
+/**
+ * A REST edit changed the thread outside the cache's writes. Invalidating its
+ * record keeps a background sync run that began before from writing back the
+ * state the server read before the edit.
+ */
+async function invalidateEditedThread(threadId: string): Promise<void> {
+  const host = getGraphqlCacheHost();
+  if (!host) return;
+  try {
+    await host.invalidate([`GraphqlSoupEmailThread:${threadId}`]);
+  } catch (error) {
+    // The edit itself succeeded; a cache that cannot take this is reset or
+    // closed, and holds no run to fence.
+    Telemetry.error(error);
+  }
+}
+
 /** A label 404 may mean a missing label; confirm the thread's state separately. */
 export async function updateEmailThreadLabel(
   args: Parameters<typeof emailClient.updateThreadLabel>[0]
 ) {
   const result = await emailClient.updateThreadLabel(args);
+  if (result.isOk()) await invalidateEditedThread(args.thread_id);
   if (
     result.isErr() &&
     result.error.some((error) => error.code === 'NOT_FOUND')
@@ -47,6 +65,7 @@ export async function updateEmailThreadState(
   args: Parameters<typeof emailClient.updateThreadState>[0]
 ) {
   const result = await emailClient.updateThreadState(args);
+  if (result.isOk()) await invalidateEditedThread(args.thread_id);
   if (
     result.isErr() &&
     result.error.some((error) => error.code === 'NOT_FOUND')
