@@ -1896,6 +1896,39 @@ describe('createTauriCacheHost', () => {
       }
     });
 
+    it('opens its requests in the context it was called in', async () => {
+      const host = createTauriCacheHost({ scope: 'channel-trace' });
+      let inCaller = false;
+      const openedInCaller: boolean[] = [];
+      const span = Telemetry.span.bind(Telemetry);
+      try {
+        await host.readQuery({ query: '{ x }' });
+        vi.spyOn(Telemetry, 'span').mockImplementation(((
+          ...args: Parameters<typeof span>
+        ) => {
+          openedInCaller.push(inCaller);
+          return span(...args);
+        }) as typeof Telemetry.span);
+        vi.spyOn(Telemetry, 'captureContext').mockReturnValue({
+          run: (work) => {
+            inCaller = true;
+            try {
+              return work();
+            } finally {
+              inCaller = false;
+            }
+          },
+        });
+        invokeMock.mockResolvedValue(page);
+
+        await host.channelTimeline(pageArgs);
+
+        expect(openedInCaller).toEqual([true]);
+      } finally {
+        host.dispose();
+      }
+    });
+
     it('reports old native binaries as unsupported and stops probing them', async () => {
       invokeMock.mockImplementation(async (command: string) => {
         if (command === 'graphql_cache_channel_timeline')
