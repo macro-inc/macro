@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { MacroClient } from '../../utils/client';
+import { Company } from '../crm/company';
+import { Contact } from '../crm/contact';
 import { CrmMergeNamespace } from './merges';
 
 const SURVIVOR = '0192d1a0-0000-7000-8000-000000000001';
@@ -21,15 +23,15 @@ function recording() {
       },
     },
   } as unknown as MacroClient;
-  return { bodies, merges: new CrmMergeNamespace(client) };
+  return { bodies, client, merges: new CrmMergeNamespace(client) };
 }
 
 describe('crm merges', () => {
   test('commits one review under one request key, so a retry returns its first result', async () => {
-    const { bodies, merges } = recording();
+    const { bodies, client, merges } = recording();
     const commit = {
-      survivorId: SURVIVOR,
-      sourceIds: [SOURCE],
+      survivor: Company.byId(client, SURVIVOR),
+      sources: [Company.byId(client, SOURCE)],
       revision: REVISION,
     };
 
@@ -41,12 +43,12 @@ describe('crm merges', () => {
   });
 
   test('keeps a request key the caller names', async () => {
-    const { bodies, merges } = recording();
+    const { bodies, client, merges } = recording();
     const requestKey = '0192d1a0-0000-7000-8000-0000000000ff';
 
     await merges.mergeCompanies({
-      survivorId: SURVIVOR,
-      sourceIds: [SOURCE],
+      survivor: Company.byId(client, SURVIVOR),
+      sources: [Company.byId(client, SOURCE)],
       revision: REVISION,
       requestKey,
     });
@@ -55,12 +57,14 @@ describe('crm merges', () => {
   });
 
   test('reviews and merges people as contacts', async () => {
-    const { bodies, merges } = recording();
+    const { bodies, client, merges } = recording();
+    const survivor = Contact.byId(client, SURVIVOR);
+    const sources = [Contact.byId(client, SOURCE)];
 
-    await merges.previewContacts({ survivorId: SURVIVOR, sourceIds: [SOURCE] });
+    await merges.previewContacts({ survivor, sources });
     await merges.mergeContacts({
-      survivorId: SURVIVOR,
-      sourceIds: [SOURCE],
+      survivor,
+      sources,
       revision: REVISION,
       sharingRules: 'stop',
     });

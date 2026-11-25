@@ -5,6 +5,8 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Company } from '../crm/company';
+import type { Contact } from '../crm/contact';
 
 /**
  * A merge's review: the record that stays and the ones merged into it, what
@@ -20,9 +22,9 @@ export type CrmMergeOutcome = MergeOutcome;
 /** The companies a merge names. */
 export type CrmCompanyMerge = {
   /** The company that stays; its name, domains and values win. */
-  survivorId: string;
+  survivor: Company;
   /** The companies merged into it and deleted, at most ten. */
-  sourceIds: string[];
+  sources: Company[];
 };
 
 /** A reviewed merge to commit. */
@@ -45,9 +47,9 @@ export type CrmCompanyMergeCommit = CrmCompanyMerge & {
 /** The people (contacts) a merge names. */
 export type CrmContactMerge = {
   /** The contact that stays; its name, company, primary address and values win. */
-  survivorId: string;
+  survivor: Contact;
   /** The contacts merged into it and deleted, at most ten. */
-  sourceIds: string[];
+  sources: Contact[];
 };
 
 /** A reviewed contact merge to commit. */
@@ -92,7 +94,7 @@ function reviewKey(revision: string): string {
  *
  * ## Merging people
  *
- * One person sometimes shows up as several contacts, one per address they mail from. Merge them the same way with `crm.merges.previewContacts` and `mergeContacts`. The contact that stays keeps its name, company, primary address and values; the others' addresses and mailboxes join it, and their pipeline entries, references, discussions and favorites move to it. A person filed under another company with a work address blocks the merge (`merge_conflict` with `different_companies`): merge their companies first. A person under another company with only personal-provider addresses may join.
+ * One person sometimes shows up as several contacts, one per address they mail from. Merge them the same way with `crm.merges.previewContacts` and `mergeContacts`. The contact that stays keeps its name, company, primary address and values; the others' addresses and mailboxes join it, and their pipeline entries, references, discussions and favorites move to it. A person filed under another company with a work address, or no address, blocks the merge (`merge_conflict` with `different_companies`): merge their companies first, or keep a contact filed under their company. A person under another company with only personal-provider addresses may join.
  */
 export class CrmMergeNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -108,8 +110,8 @@ export class CrmMergeNamespace {
       await this.client.storage.previewCrmMerge({
         body: {
           recordType: 'company',
-          survivorId: merge.survivorId,
-          sourceIds: merge.sourceIds,
+          survivorId: merge.survivor.id,
+          sourceIds: merge.sources.map((source) => source.id),
         },
       }),
     );
@@ -127,8 +129,8 @@ export class CrmMergeNamespace {
       await this.client.storage.commitCrmMerge({
         body: {
           recordType: 'company',
-          survivorId: merge.survivorId,
-          sourceIds: merge.sourceIds,
+          survivorId: merge.survivor.id,
+          sourceIds: merge.sources.map((source) => source.id),
           revision: merge.revision,
           requestKey: merge.requestKey ?? reviewKey(merge.revision),
           sharingRules: merge.sharingRules,
@@ -148,8 +150,8 @@ export class CrmMergeNamespace {
       await this.client.storage.previewCrmMerge({
         body: {
           recordType: 'contact',
-          survivorId: merge.survivorId,
-          sourceIds: merge.sourceIds,
+          survivorId: merge.survivor.id,
+          sourceIds: merge.sources.map((source) => source.id),
         },
       }),
     );
@@ -167,8 +169,8 @@ export class CrmMergeNamespace {
       await this.client.storage.commitCrmMerge({
         body: {
           recordType: 'contact',
-          survivorId: merge.survivorId,
-          sourceIds: merge.sourceIds,
+          survivorId: merge.survivor.id,
+          sourceIds: merge.sources.map((source) => source.id),
           revision: merge.revision,
           requestKey: merge.requestKey ?? reviewKey(merge.revision),
           sharingRules: merge.sharingRules,
