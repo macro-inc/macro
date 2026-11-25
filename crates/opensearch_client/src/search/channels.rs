@@ -93,6 +93,7 @@ impl ChannelMessageQueryBuilder {
         fn user_id(user_id: &str) -> Self;
         fn ids_only(ids_only: bool) -> Self;
         fn collapse(collapse: bool) -> Self;
+        fn excluded_terms(excluded_terms: Vec<String>) -> Self;
     }
 
     /// Builds the main bool query for the index
@@ -113,6 +114,11 @@ impl ChannelMessageQueryBuilder {
         // Add sender_ids to must clause if provided
         if !self.sender_ids.is_empty() {
             content_bool_query.filter(QueryType::terms("sender_id", self.sender_ids.clone()));
+        }
+
+        // A term a minus left out drops every message it would match.
+        for query in self.inner.excluded_content_queries()? {
+            content_bool_query.must_not(query);
         }
         // END CUSTOM ATTRIBUTES SECTION
 

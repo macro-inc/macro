@@ -350,3 +350,38 @@ fn trimmed_query_rejects_quotes_around_nothing() {
     assert_eq!(trimmed_query("\"a\"").ok(), Some("\"a\""));
     assert_eq!(trimmed_query("“a”").ok(), Some("“a”"));
 }
+
+#[test]
+fn one_leading_minus_before_a_word_leaves_it_out() {
+    assert_eq!(left_out("-draft"), Some("draft"));
+    assert_eq!(left_out("-team lunch"), Some("team lunch"));
+    assert_eq!(left_out("-q3"), Some("q3"));
+    assert_eq!(left_out("e-mail"), None);
+    assert_eq!(left_out("--force"), None);
+    assert_eq!(left_out("-"), None);
+    assert_eq!(left_out("-—"), None);
+    assert_eq!(left_out("draft"), None);
+}
+
+#[test]
+fn left_out_terms_are_taken_only_from_plain_word_searches() {
+    let terms = || {
+        vec![
+            "budget".to_string(),
+            "-draft".to_string(),
+            "e-mail".to_string(),
+        ]
+    };
+
+    let (kept, left_out) = take_left_out_terms(terms(), MatchType::Partial);
+    assert_eq!(kept, ["budget", "e-mail"]);
+    assert_eq!(left_out, ["draft"]);
+
+    let (kept, left_out) = take_left_out_terms(terms(), MatchType::Exact);
+    assert_eq!(kept, ["budget", "e-mail"]);
+    assert_eq!(left_out, ["draft"]);
+
+    let (kept, left_out) = take_left_out_terms(terms(), MatchType::Regexp);
+    assert_eq!(kept, ["budget", "-draft", "e-mail"]);
+    assert!(left_out.is_empty());
+}
