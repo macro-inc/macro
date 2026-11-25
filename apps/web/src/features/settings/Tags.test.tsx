@@ -6,6 +6,8 @@ import { Tags } from './Tags';
 
 const mocks = vi.hoisted(() => ({
   promote: undefined as undefined | (() => Promise<unknown>),
+  // Ends once the share has settled and every settle callback has run.
+  shared: Promise.resolve() as Promise<void>,
 }));
 
 const PERSONAL: TagSetResponse = {
@@ -40,8 +42,24 @@ vi.mock('@queries/properties/tags', async () => {
     useTagsQuery: () => ({ data: [PERSONAL] }),
     useDeletePropertyOptionMutation: idle,
     useMergeTagMutation: idle,
-    usePromoteTagMutation: () =>
-      catalogMutation(() => mocks.promote?.() ?? Promise.resolve(), {}),
+    usePromoteTagMutation: () => {
+      const promote = catalogMutation(
+        () => mocks.promote?.() ?? Promise.resolve(),
+        {}
+      );
+      return {
+        mutate: (...args: Parameters<typeof promote.mutateAsync>) => {
+          mocks.shared = promote.mutateAsync(...args).then(
+            () => undefined,
+            () => undefined
+          );
+        },
+        mutateAsync: promote.mutateAsync,
+        get isPending() {
+          return promote.isPending;
+        },
+      };
+    },
   };
 });
 
@@ -79,11 +97,12 @@ it.each(['SIGNED_OUT', 'ACCOUNT_CHANGED'])(
     await fireEvent.click(
       screen.getByRole('button', { name: 'Share Urgent with team' })
     );
-    expect(await screen.findByText(/moves into the Acme team/)).toBeTruthy();
+    expect(screen.getByText(/moves into the Acme team/)).toBeTruthy();
     expect(confirmationOpen()).toBe(true);
     await fireEvent.click(screen.getByRole('button', { name: 'Share' }));
 
-    await vi.waitFor(() => expect(confirmationOpen()).toBe(false));
+    await mocks.shared;
+    expect(confirmationOpen()).toBe(false);
   }
 );
 
@@ -93,8 +112,9 @@ it('closes the share confirmation once the share commits', async () => {
   await fireEvent.click(
     screen.getByRole('button', { name: 'Share Urgent with team' })
   );
-  expect(await screen.findByText(/moves into the Acme team/)).toBeTruthy();
+  expect(screen.getByText(/moves into the Acme team/)).toBeTruthy();
   expect(confirmationOpen()).toBe(true);
   await fireEvent.click(screen.getByRole('button', { name: 'Share' }));
-  await vi.waitFor(() => expect(confirmationOpen()).toBe(false));
+  await mocks.shared;
+  expect(confirmationOpen()).toBe(false);
 });
