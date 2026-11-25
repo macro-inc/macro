@@ -674,21 +674,23 @@ IDs, leases and attempt counts, their optimistic layers and shadows, the aliases
 they use, and the account binding) into a side file, `{database}-salvage`, and
 flushes it before it removes the database. The next open queues the copy again
 before it serves its first request, in one transaction that also records that this
-copy was taken, and then removes the side file. An engine may die between any two
-of these steps: the next one finds the old database, the copy, or both, and a copy
+copy was taken, and then removes the side file. An engine may die between any two of
+these steps: the next one finds the old database, the copy, or both, and a copy
 already taken is never queued twice. A wipe whose copy could not be written notes
-that in the side file, so an older copy there is never called whole. Records, projections and index facts are not
-carried; they are refetched. The copy is given up after three engines die reading
-the old database, three die taking the copy in, or eight wipes in two minutes, and
-a database bound to another account refuses it. Logout, an account switch, a
-mismatched identity and stale-database cleanup remove the copy with the database
-it belongs to. `graphql_cache.schema_init` reports a crossing as
-`cache.queue_outcome` (`kept`, `partial`, `unreadable`, `abandoned`), with
-`cache.queue_kept` and `cache.queue_dropped`. The engine tells pages the queue's
-state apart from the database's (`queue` beside `openOutcome`): `reset` unless
-every queued write is still there under its ID, and only then do pages drop a
-mutation in flight and settle pending writes as lost. A native reset still drops
-the queue.
+that in the side file, so an older copy there is never called whole. Records, the
+projections and index facts the server's answers gave them, and everything else
+refetchable are not carried; only the pending writes' own projections are. The copy
+is given up after three engines die reading the old database, three die taking the
+copy in, or eight wipes in two minutes, and a database bound to another account
+refuses it. Logout, an account switch, a mismatched identity and stale-database
+cleanup remove the copy with the database it belongs to. `graphql_cache.schema_init`
+reports a crossing as `cache.queue_outcome` (`kept`, `partial`, `unreadable`,
+`abandoned`), with `cache.queue_kept` and `cache.queue_dropped`;
+`graphql_cache.queue_read`, `recovery_wipe` and `queue_import` time its steps. The
+engine tells pages the queue's state apart from the database's (`queue` beside
+`openOutcome`): `reset` unless every queued write is still there under its ID, and
+only then do pages drop a mutation in flight and settle pending writes as lost. A
+native reset still drops the queue.
 
 Both hosts use the same `Storage` implementation and compound entity keys.
 Wasm futures are not `Send`, so the `Storage` trait's futures are bound by
