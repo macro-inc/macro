@@ -638,21 +638,3 @@ it.each(providers)(
     }
   }
 );
-
-it('shows a terminal send failure once even when the send is reported again', async () => {
-  const { context, report } = outbox('IMAP');
-  const notices = recordNotices(context);
-  const reply = mountReplyComposer(context);
-  try {
-    await reply.sendEmail();
-    report({ state: 'failed' });
-    report({ state: 'failed' });
-    expect(
-      notices.log.filter((line) =>
-        line.includes('failure: Email failed to send')
-      )
-    ).toHaveLength(1);
-  } finally {
-    reply.dispose();
-  }
-});

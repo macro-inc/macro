@@ -1,7 +1,6 @@
 // A test's world: its own email stack, one signed-in user with one linked
 // mailbox, and the built web app in the browser talking to that stack.
 
-import { fileURLToPath } from 'node:url';
 import {
   test as base,
   expect,
@@ -13,6 +12,7 @@ import { record } from '../ledger/record';
 import { keepCalendarPromptsClosed } from './calendar-prompt';
 import {
   bundleFile,
+  DIST,
   FROM_TEST,
   type Front,
   type SignedInUser,
@@ -29,10 +29,6 @@ import {
   type ProviderMessage,
   Stack,
 } from './stack';
-
-const DIST =
-  process.env.EMAIL_E2E_DIST ??
-  fileURLToPath(new URL('../../../dist', import.meta.url));
 
 /** A thread as the email service lists it. */
 export type ThreadPreview = {

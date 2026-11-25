@@ -1,10 +1,8 @@
-import { t } from '@app/lib/i18n';
 import { useHasPaidAccess } from '@core/auth';
 import {
   createFilesReadyHandler,
   getDragDropPosition,
 } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
-import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useEmail, useUserContext, useUserId } from '@core/context/user';
@@ -15,8 +13,6 @@ import { deviceLooksOffline } from '@core/util/connectivity';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { handleFileFolderDrop } from '@core/util/upload';
-import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
-import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { useContactRecipientSource } from '@queries/contacts/recipient-source';
@@ -84,8 +80,8 @@ import { confirmDialog } from '@ui';
 import { getOwner } from 'solid-js';
 import { createMessageOperationSource } from '../email-message/queries/message-operation';
 import { toEmailThread } from '../email-thread/queries/thread-source';
+import { composeToastFeedback } from './compose-toast-feedback';
 import {
-  type ComposeNoticeOptions,
   type DraftClientHandles,
   DraftPersistRejected,
   type DraftSaveResult,
@@ -154,22 +150,6 @@ export function createEmailComposeContext(): EmailComposeContext {
   const removeAttachment = useRemoveDraftAttachmentMutation();
   const removeForwarded = useRemoveForwardedAttachmentMutation();
   const unschedule = useUnscheduleMessageMutation();
-  const notice = (options?: ComposeNoticeOptions) => {
-    const hasUndo = options?.actions?.some(({ kind }) => kind === 'undo');
-    const hasNavigation = options?.actions?.some(({ kind }) => kind === 'open');
-    return {
-      ...options,
-      dismissStyle: hasUndo || hasNavigation ? ('icon' as const) : undefined,
-      actionLayout: hasUndo ? ('inline' as const) : undefined,
-      actions: options?.actions?.map(({ kind, ...action }) => {
-        if (kind === 'save' || kind === 'open') return action;
-        return {
-          ...action,
-          icon: ArrowCounterClockwise,
-        };
-      }),
-    };
-  };
   const reportError = (error: unknown) =>
     Telemetry.error(error instanceof Error ? error : new Error(String(error)));
   const requireSavedDraftForDelivery = async (
@@ -270,36 +250,7 @@ export function createEmailComposeContext(): EmailComposeContext {
       },
     },
     notices: {
-      feedback: {
-        success: (message, options) => toast.success(message, notice(options)),
-        failure: (message, options) => {
-          if (options?.persistent) {
-            const isDraftRecovery = options.actions?.some(
-              ({ kind }) => kind === 'save'
-            );
-            return toast.custom(
-              {
-                title: message,
-                dismissLabel: t('common.maybeLater'),
-                content: () => options.subtext,
-                icon: ExclamationIcon,
-                color: 'var(--color-failure)',
-                titleColor: 'var(--color-failure)',
-                actions: notice(options).actions,
-              },
-              {
-                persistent: true,
-                dismissStyle: isDraftRecovery ? 'icon' : undefined,
-                replace: options.replace,
-                onDismiss: options.onDismiss,
-              }
-            );
-          }
-          return toast.failure(message, notice(options));
-        },
-        alert: (message, options) => toast.alert(message, notice(options)),
-        dismiss: toast.dismiss,
-      },
+      feedback: composeToastFeedback,
       async blockingNotice({ title, body }) {
         await confirmDialog(
           { title, body, confirmLabel: 'OK' },

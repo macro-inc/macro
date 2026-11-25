@@ -18,9 +18,9 @@ import {
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
-  AddInboxDialog,
-  isAddInboxDialogOpen,
-} from '@app/features/inbox/AddInboxDialog';
+  AddInboxFlow,
+  isAddInboxFlowRunning,
+} from '@app/features/inbox/AddInboxFlow';
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
@@ -306,8 +306,8 @@ export function AppChrome(props: ParentProps) {
               <CreateContactModal />
             </Suspense>
           </Show>
-          <Show when={isAddInboxDialogOpen()}>
-            <AddInboxDialog />
+          <Show when={isAddInboxFlowRunning()}>
+            <AddInboxFlow />
           </Show>
         </Show>
         <Show when={isAuthenticated() === false}>

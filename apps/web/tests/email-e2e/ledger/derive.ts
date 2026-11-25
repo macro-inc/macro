@@ -33,7 +33,7 @@ export const EMAIL_FILES_ELSEWHERE = [
   'src/features/crm/views/contact-emails-section.tsx',
   'src/features/crm/views/email-privacy.tsx',
   'src/features/entity/composed/list-entity/email.tsx',
-  'src/features/inbox/AddInboxDialog.tsx',
+  'src/features/inbox/AddInboxFlow.tsx',
   'src/features/inbox/AdminConsentRequiredDialog.tsx',
   'src/features/inbox/ShareInboxConflictDialog.tsx',
   'src/features/next-soup/actions/make-block-sender-action.ts',
@@ -277,18 +277,16 @@ export function restCalls(): DerivedOperation[] {
     const [url, init] = call.arguments;
     if (!url) continue;
     let scope: ts.Node = call;
-    while (scope.parent && !ts.isFunctionLike(scope)) scope = scope.parent;
-    // Both wrappers forward their URL; the retry callback inside emailRequest
-    // is implementation, not another endpoint. Find its outer declaration too.
-    // Keep both wrappers pure URL forwarders; declare endpoint calls outside them.
-    let implementation: ts.Node | undefined = call;
-    while (implementation && !ts.isFunctionDeclaration(implementation)) {
-      implementation = implementation.parent;
-    }
+    while (
+      scope.parent &&
+      !ts.isFunctionDeclaration(scope) &&
+      !ts.isMethodDeclaration(scope)
+    )
+      scope = scope.parent;
+    // These wrappers only forward URLs to the transport.
     if (
-      implementation &&
-      (implementation.name?.text === 'emailFetch' ||
-        implementation.name?.text === 'emailRequest')
+      ts.isFunctionDeclaration(scope) &&
+      (scope.name?.text === 'emailFetch' || scope.name?.text === 'emailRequest')
     ) {
       continue;
     }

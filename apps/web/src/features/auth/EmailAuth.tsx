@@ -1,5 +1,5 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
+import { openAddInboxFlow } from '@app/features/inbox/AddInboxFlow';
 import { AdminConsentRequiredDialog } from '@app/features/inbox/AdminConsentRequiredDialog';
 import { ShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { onboardingPathWithStep } from '@app/features/onboarding/core/next-target';
@@ -224,7 +224,7 @@ function promptForEmailAccess(scopes: ConsentScopes | undefined) {
           icon: ArrowCounterClockwise,
           onClick: () => {
             toast.dismiss(toastId);
-            openAddInboxDialog({ scopes });
+            openAddInboxFlow({ scopes });
           },
         },
       ],
@@ -497,7 +497,7 @@ function EmailLinkCallbackHandler(props: Pick<EmailAuthParams, 'successPath'>) {
 
     if (notice === ADMIN_CONSENT_GRANTED_NOTICE) {
       toast.success('Approved. Try connecting again.');
-      openAddInboxDialog();
+      openAddInboxFlow();
       navigateAfterLink();
       return;
     }
@@ -527,7 +527,7 @@ function EmailLinkCallbackHandler(props: Pick<EmailAuthParams, 'successPath'>) {
           }}
           onConnectDifferentAccount={() => {
             setAdminConsent(false);
-            openAddInboxDialog();
+            openAddInboxFlow();
             navigateAfterLink();
           }}
         />

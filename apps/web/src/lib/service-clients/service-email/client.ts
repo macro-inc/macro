@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import {
   type FetchWithTokenErrorCode,
@@ -163,7 +164,7 @@ async function messageDownloadError(response: Response) {
   if (response.status !== 413) return;
   return {
     code: 'HTTP_ERROR' as const,
-    message: 'This message is too large to open in Macro (over 25 MB).',
+    message: t('imap.messageTooLarge'),
   };
 }
 
@@ -187,7 +188,7 @@ async function emailRequest<T extends ObjectLike | Uint8Array>(
             : 1;
           return {
             code: 'HTTP_ERROR' as const,
-            message: 'Mailbox is busy, try again.',
+            message: t('imap.mailboxBusy'),
           };
         }
         // Let the shared fetch preserve its status classification and retry policy.

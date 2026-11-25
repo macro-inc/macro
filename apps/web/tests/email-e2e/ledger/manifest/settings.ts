@@ -478,7 +478,7 @@ export const settings = {
       trigger:
         'dialog "Connect email", button "Gmail" or "Outlook / Microsoft 365"',
       source: [
-        'src/features/inbox/AddInboxDialog.tsx',
+        'src/features/inbox/AddInboxFlow.tsx',
         'src/lib/core/email-link/ProviderDialog.tsx',
       ],
     },
@@ -488,7 +488,7 @@ export const settings = {
       fn: ['F-006'],
       action: 'Cancel the Add inbox dialog',
       trigger: 'button "Cancel" / dismiss',
-      source: ['src/features/inbox/AddInboxDialog.tsx'],
+      source: ['src/features/inbox/AddInboxFlow.tsx'],
     },
     {
       id: 'AX-031',

@@ -21,6 +21,7 @@ export const ImapConnectionErrorCode = {
   connection_unavailable: 'connection_unavailable',
   invalid: 'invalid',
   forbidden: 'forbidden',
+  person_required: 'person_required',
   not_found: 'not_found',
   conflict: 'conflict',
   credentials_rejected: 'credentials_rejected',

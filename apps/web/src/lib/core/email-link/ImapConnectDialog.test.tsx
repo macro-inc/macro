@@ -1,6 +1,5 @@
 /** @vitest-environment jsdom */
 
-import { Telemetry } from '@macro-inc/observability';
 import type { Discovery } from '@service-email/generated/schemas';
 import { ImapConnectionErrorCode } from '@service-email/generated/schemas/imapConnectionErrorCode';
 import {
@@ -304,24 +303,31 @@ it('discards discovery when the signed-in account changes', async () => {
   expect(mail.connect).not.toHaveBeenCalled();
 });
 
-it('keeps password entry closed when the server refuses discovery for an unverified address', async () => {
-  mail.discover.mockResolvedValue(
-    err([{ code: 'address_unverified', message: 'IMAP connection refused' }])
-  );
-  render(() => (
-    <ImapConnectDialog
-      open
-      onOpenChange={() => {}}
-      onResult={() => {}}
-      emailAddress="unverified@example.com"
-    />
-  ));
-  expect(await screen.findByRole('alert')).toHaveProperty(
-    'textContent',
-    'Connect a verified address associated with your Macro account.'
-  );
-  expect(screen.queryByLabelText('Password or app password')).toBeNull();
-});
+it.each([
+  {
+    code: 'address_unverified',
+    guidance: 'Connect a verified address associated with your Macro account.',
+  },
+  {
+    code: 'person_required',
+    guidance: 'Sign in as yourself to connect this inbox.',
+  },
+])(
+  'keeps password entry closed after discovery returns $code',
+  async ({ code, guidance }) => {
+    mail.discover.mockResolvedValue(
+      err([{ code, message: 'IMAP connection refused' }])
+    );
+    render(() => (
+      <ImapConnectDialog open onOpenChange={() => {}} onResult={() => {}} />
+    ));
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      guidance
+    );
+    expect(screen.queryByLabelText('Password or app password')).toBeNull();
+  }
+);
 
 it('keeps the same connection action and label while checking, failing and retrying', async () => {
   const first =
@@ -452,7 +458,7 @@ it.each([
   { steer: 'gmail', provider: 'GMAIL', name: 'Google' },
   { steer: 'outlook', provider: 'OUTLOOK', name: 'Microsoft' },
 ])(
-  'steers $name mail to OAuth using the entered address',
+  'steers $name mail to OAuth using the signed-in address',
   async ({ steer, provider, name }) => {
     mail.discover.mockResolvedValue(ok({ steer, provider: name }));
     const result = vi.fn();
@@ -460,10 +466,6 @@ it.each([
       <ImapConnectDialog open onOpenChange={() => {}} onResult={result} />
     ));
 
-    fireEvent.input(screen.getByLabelText('Email address'), {
-      target: { value: 'entered@example.com' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Find settings' }));
     const oauth = await screen.findByRole('button', {
       name: `Continue with ${name}`,
     });
@@ -473,24 +475,11 @@ it.each([
     expect(result).toHaveBeenCalledWith({
       type: 'oauth',
       provider,
-      emailAddress: 'entered@example.com',
+      emailAddress: 'owner@example.com',
     });
     expect(mail.connect).not.toHaveBeenCalled();
   }
 );
-
-it('keeps password setup on the verified address', async () => {
-  render(() => (
-    <ImapConnectDialog open onOpenChange={() => {}} onResult={() => {}} />
-  ));
-  fireEvent.input(screen.getByLabelText('Email address'), {
-    target: { value: 'entered@example.com' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Find settings' }));
-  expect((await screen.findByRole('alert')).textContent).toMatch(/verified/i);
-  expect(screen.queryByLabelText('Password or app password')).toBeNull();
-  expect(mail.connect).not.toHaveBeenCalled();
-});
 
 it('keeps an existing Google IMAP reconnect on its bound password flow', async () => {
   mail.settings.mockResolvedValue(
@@ -725,7 +714,7 @@ it.each([
     expect(
       screen
         .getByRole('button', {
-          name: phase === 'connect' ? 'Connect inbox' : 'Find settings',
+          name: phase === 'connect' ? 'Connect inbox' : 'Try again',
         })
         .getAttribute('aria-busy')
     ).toBeNull();
@@ -780,13 +769,9 @@ it('can connect with an app password after discovery returns a future steer valu
   expect(mail.providers).not.toHaveBeenCalled();
 });
 
-it('records the newly connected link on its completed setup lifetime', async () => {
+it('returns the newly connected link when setup completes', async () => {
   const linkId = '018f0000-0000-7000-8000-000000000123';
   mail.connect.mockResolvedValue(ok({ linkId }));
-  const span = Telemetry.span('test.setup-lifetime');
-  const attribute = vi.spyOn(span, 'setAttr');
-  const ended = vi.spyOn(span, 'end');
-  vi.spyOn(Telemetry, 'span').mockReturnValue(span);
   render(() => <ImperativeDialogHost />);
   const owner = createRoot((dispose) => ({ owner: getOwner(), dispose }));
   try {
@@ -795,12 +780,7 @@ it('records the newly connected link on its completed setup lifetime', async () 
     fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
     fireEvent.input(password, { target: { value: 'synthetic-app-password' } });
     fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
-    await connection;
-    expect(
-      attribute.mock.calls.filter(([key]) => key === 'email.link_id')
-    ).toEqual([['email.link_id', linkId]]);
-    expect(attribute).toHaveBeenCalledWith('dialog.close_reason', 'completed');
-    expect(ended).toHaveBeenCalledExactlyOnceWith();
+    await expect(connection).resolves.toEqual({ type: 'connected', linkId });
   } finally {
     owner.dispose();
   }

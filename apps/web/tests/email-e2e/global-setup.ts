@@ -3,11 +3,12 @@
 // local stack.
 
 import { spawn } from 'node:child_process';
-import { readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import type { FullConfig } from '@playwright/test';
+import { DIST } from './harness/front';
 import {
   checkStandIns,
   LocalStack,
@@ -19,11 +20,13 @@ import { currentRun, runPaths, runReports } from './ledger/paths';
 const REPOSITORY = fileURLToPath(new URL('../../../../', import.meta.url));
 
 function requireLocalBundle(): void {
-  const dist =
-    process.env.EMAIL_E2E_DIST ??
-    fileURLToPath(new URL('../../dist', import.meta.url));
-  const index = readFileSync(join(dist, 'index.html'), 'utf8');
-  if (!/<meta name="macro-gateway-origin" content="\/"\s*\/?\s*>/.test(index)) {
+  const indexPath = join(DIST, 'index.html');
+  if (
+    !existsSync(indexPath) ||
+    /<link\b[^>]*rel="preconnect"[^>]*crossorigin="use-credentials"/.test(
+      readFileSync(indexPath, 'utf8')
+    )
+  ) {
     throw new Error(
       'Email browser tests require a local-only, same-origin bundle. Run just build-email-e2e in apps/web.'
     );

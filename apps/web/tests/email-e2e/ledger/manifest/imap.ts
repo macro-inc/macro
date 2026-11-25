@@ -1,7 +1,7 @@
 // The real-mail browser tier has its own provider and receiver. Its UI evidence
 // belongs to the named Dovecot journey, independent of the OAuth function matrix.
 export const IMAP_CONFIRMATION = {
-  source: 'src/lib/core/email-link/index.ts#Inbox reconnected',
+  source: 'src/lib/core/email-link/index.ts#imap.inboxReconnected',
   connect: 'Inbox connected',
   reconnect: 'Inbox reconnected',
 } as const;

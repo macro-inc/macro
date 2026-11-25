@@ -85,17 +85,8 @@ thread reads and draft autosaves against the real services. Its Soup frames are
 protocol fixtures: the stack's HTTP recording proxy cannot relay WebSocket
 upgrades. Those counts measure client frame handling, not live Kafka delivery.
 
-The per-test gateway exposes `mailbox.emitRefresh` for typed, synthetic refresh
-frames while real server state stays unchanged. It is unavailable on the
-full-stack tier. The sender-menu suite keeps first-retry traces and records menu/row state in
-attachments and report annotations. Its unchanged-refresh baseline starts after
-Noise loads and the menu opens; each wake waits for a newly started matching
-Noise query and records before/after node facts and request/response hashes.
-Scheduled-Undo failure cases silence live updates while holding the toast, so
-Undo itself observes that the forced send has completed. Lost-response reload
-cases await the intercepted submit abort and its journal lease release before
-reloading; interruption of an active dispatch is a separate recovery case. Retry counts remain visible in the JSON
-report; the suite follows the shared retry policy.
+Use `mailbox.emitRefresh` on the per-test tier to send synthetic refresh frames.
+Silence live updates when testing pull-to-refresh or a scheduled Undo failure.
 
 ## Writing a test
 
@@ -327,12 +318,6 @@ apps/web/test-email-fixtures-browser` runs the ones that cover an email or
 calendar bug class; the recipe lists them. The CI job runs it beside this
 suite. `src/features/calendar/browser-test` mounts the calendar over scripted
 `/calendar` routes until `calendar_service` is part of the stack.
-
-The full-stack onboarding tests use unique synthetic addresses in the local Gmail
-and Outlook emulators’ native domains to exercise the direct provider buttons.
-A recognized catalog or unambiguous MX hint can offer IMAP when its rollout is
-enabled. Unknown or reserved lab domains use the chooser’s manual Other email
-(IMAP / SMTP) path; the lab does not override product routing.
 
 ### IMAP and SMTP
 

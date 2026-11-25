@@ -158,8 +158,6 @@ instead of guessing that a password was wrong.
 **Connect new** and **Add another inbox** open the provider chooser immediately.
 Selecting **Other email (IMAP / SMTP)** replaces the chooser with the server
 form. Cancel or close the form to return to the settings surface.
-When the form offers Google or Microsoft consent, the provider receives the
-address entered in the form as its sign-in hint.
 If providers cannot load, **Try again** retries the read without starting an
 OAuth flow. Check that retry restores the offered providers and that calendar
 connections never offer IMAP.
@@ -180,9 +178,10 @@ Known custom Google Workspace and Microsoft 365 domains use domain-only MX
 hints. Unknown hosts keep the provider chooser; provider hints never bypass
 the user's enrollment availability policy.
 
-Google- and Microsoft-hosted discovery offers consent first when available,
-using the typed address as the sign-in hint. For the signed-in account's
-verified address, **Use an app password instead** is a secondary path.
+The form shows the signed-in address and discovers its settings automatically.
+For Google- and Microsoft-hosted mailboxes it offers consent first when
+available, passing that address as the sign-in hint. **Use an app password
+instead** remains available.
 Without provider consent availability, the app-password form opens directly
 for that verified address. Reconnecting an existing IMAP link opens its
 saved server settings and password workflow. If a recoverable error prevents
@@ -1591,8 +1590,7 @@ ended, the notice closes. A send that fails after it was queued turns the
 notice into a persistent **Email failed to send**, and **Delivery unconfirmed**
 reports a send the provider did not confirm. For IMAP, a typed connection failure before any message-body byte after one fresh retry ends as **Email failed to send** and
 releases the next draft on that link. A generic service outage or a lost reply
-after DATA stays unconfirmed and must never automatically resend. Exercise an
-idle-closed pooled SMTP socket, then a real RCPT refusal, separately.
+after DATA stays unconfirmed and must never automatically resend.
 An offline send shows **Email
 queued to send**, which expires as usual, and returns to the email list; once
 the send goes out a **Sending…** notice follows it the same way. The status panel shows a send only while it waits on this
@@ -2160,7 +2158,10 @@ mobile, and email inbox checks.
 
 IMAP size limits: an oversized monitored folder pauses the whole account snapshot, including new Inbox mail. The inbox list and selected empty-inbox view show "Mailbox too large to sync yet" while previously indexed mail stays readable; the empty view must not claim Inbox zero while sync is blocked. Automatic retries grow from one hour to twenty-four hours; a successful round or manual reconnect resets that delay. Changing folder settings allows one immediate attempt; the warning suggests unselecting large folders and shows the next retry time when available. This is separate from sign-in rejection; do not reconnect automatically or promise older mail has imported.
 
-Saved IMAP password recovery: verified per-account ciphertext corruption that qualifies under the fleet guard shows "Reconnect your inbox" and "Macro can't read this mailbox's saved password. Reconnect to continue." This is distinct from a rejected provider sign-in. In Mail settings, Change login details stays reachable even when reading the existing server settings fails. A verified reconnect repairs the same link and clears the warning; temporary credential-service outages, unproven key/context failures, and small replicas with fewer than twenty observed accounts continue retrying without this warning; Change login details remains available. Test with synthetic credentials only.
+If Macro can't read the saved password, the inbox shows **Reconnect your inbox**.
+**Change login details** remains available when reading saved server settings
+fails. Reconnecting with verified settings repairs the existing link and clears
+the warning. Test with synthetic credentials only.
 
 Queue independence: a delayed autosave or send on one draft must not block a
 different draft in the same inbox. Read/star/archive and similar commands retain
@@ -2177,7 +2178,7 @@ provides that evidence. A recipient refusal names the address from the already
 loaded message; no accepted recipient receives the body after another RCPT is
 refused. The send is marked failed, with details in the conversation or Drafts,
 and requires a deliberate recovery. The failure toast has no automatic timeout.
-Close it or swipe it away on a phone to dismiss it for that send attempt.
+Select **Maybe later**, close it or swipe it away on a phone to dismiss it for that send attempt.
 The conversation and Drafts keep the failure details and recovery actions when
 the toast is out of view, including on a phone with one visible toast slot.
 If the provider supplies no reason, the status tells the reader to select

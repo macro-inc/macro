@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
 import { HomeEmptyState } from '@app/features/home/components/HomeEmptyState';
 import {
-  AddInboxDialog,
-  openAddInboxDialog,
-} from '@app/features/inbox/AddInboxDialog';
+  AddInboxFlow,
+  openAddInboxFlow,
+} from '@app/features/inbox/AddInboxFlow';
 import { useAddInboxFlow } from '@core/email-link';
 import { Telemetry } from '@macro-inc/observability';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
@@ -14,7 +14,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EmailEmptyState } from './EmailEmptyState';
 
 const providers = vi.hoisted(() => vi.fn());
-const mail = vi.hoisted(() => ({ discover: vi.fn(), connect: vi.fn() }));
+const mail = vi.hoisted(() => ({
+  discover: vi.fn(),
+  connect: vi.fn(),
+  settings: vi.fn(),
+}));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'sender@example.com',
 }));
@@ -69,6 +73,7 @@ vi.mock('@service-email/client', () => ({
     init: vi.fn(),
     imapDiscover: mail.discover,
     imapConnect: mail.connect,
+    getImapMailboxSettings: mail.settings,
   },
   ALREADY_INITIALIZED_CODE: 'ALREADY_INITIALIZED',
   INBOX_BEING_REMOVED_CODE: 'INBOX_BEING_REMOVED',
@@ -127,12 +132,43 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it('opens one reconnect request per inbox and permits reopening after dismissal', async () => {
+  mail.settings.mockResolvedValue(ok({}));
+  let reconnect: ReturnType<typeof useAddInboxFlow> | undefined;
+  render(() => {
+    reconnect = useAddInboxFlow();
+    return <ImperativeDialogHost />;
+  });
+  if (!reconnect) throw new Error('Missing IMAP setup flow');
+  const options = {
+    provider: 'IMAP',
+    reconnectLinkId: 'connected-inbox',
+    emailAddress: 'sender@example.com',
+  } as const;
+
+  const first = Promise.all([reconnect(options), reconnect(options)]);
+  await screen.findByLabelText('Password or app password');
+  expect(mail.settings).toHaveBeenCalledExactlyOnceWith(
+    'connected-inbox',
+    expect.any(AbortSignal),
+    expect.anything()
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await first;
+
+  const reopened = reconnect(options);
+  await screen.findByLabelText('Password or app password');
+  expect(mail.settings).toHaveBeenCalledTimes(2);
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  await reopened;
+});
+
 it('replaces the app-level provider chooser with one IMAP modal', async () => {
   providers.mockResolvedValue({ gmail: true, outlook: true, imap: true });
   render(() => (
     <>
-      <button onClick={() => openAddInboxDialog()}>Add an inbox</button>
-      <AddInboxDialog />
+      <button onClick={() => openAddInboxFlow()}>Add an inbox</button>
+      <AddInboxFlow />
       <ImperativeDialogHost />
     </>
   ));
@@ -288,10 +324,6 @@ describe.each([
     fireEvent.click(
       await screen.findByRole('button', { name: 'Other email (IMAP / SMTP)' })
     );
-    fireEvent.input(await screen.findByLabelText('Email address'), {
-      target: { value: 'sender@example.com' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Find settings' }));
     const password = await screen.findByLabelText('Password or app password');
     fireEvent.input(password, { target: { value: 'example-app-password' } });
     fireEvent.input(screen.getAllByLabelText('Username')[0], {

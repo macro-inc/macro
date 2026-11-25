@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { FROM_TEST, startFront } from './harness/front';
+import { DIST, FROM_TEST, startFront } from './harness/front';
 import { LocalStack, localStackAddresses } from './harness/local-stack';
 import { replyEditor } from './harness/send';
 import { restMatcher } from './ledger/ledger';
@@ -17,30 +17,33 @@ import { REST } from './ledger/manifest/network';
 const labControl = fileURLToPath(
   new URL('../../../../docker/imap-lab/control.py', import.meta.url)
 );
-const dist =
-  process.env.EMAIL_E2E_DIST ??
-  fileURLToPath(new URL('../../dist', import.meta.url));
-
 // Credential-bearing request bodies must never be stored in traces.
 test.use({ trace: 'off' });
 // Both layouts submit to the same real relay and share its per-host connection limit.
 test.describe.configure({ mode: 'default', timeout: 180_000 });
 
-async function fillLabCredentials(dialog: Locator, email: string) {
-  await expect(dialog.getByLabel('Email address')).toHaveValue(email);
+async function fillLabCredentials(
+  dialog: Locator,
+  email: string,
+  manual: boolean
+) {
+  const address = dialog.getByLabel('Email address');
+  await expect(address).toHaveValue(email);
+  await expect(address).not.toBeEditable();
   const details = dialog.getByRole('button', {
     name: 'Server settings',
     exact: true,
   });
-  if ((await details.getAttribute('aria-expanded')) !== 'true')
-    await details.click();
+  await expect(details).toHaveAttribute('aria-expanded', String(manual));
+  if (!manual) await details.click();
   for (const name of ['Incoming mail (IMAP)', 'Outgoing mail (SMTP)']) {
     const server = dialog.getByRole('group', { name });
     await server.getByLabel('Server name').fill('maillab.example.net');
     await expect(server.getByLabel('Username')).toHaveValue(email);
   }
   const trust = dialog.getByRole('checkbox', { name: /I trust/ });
-  if (!(await trust.isChecked())) await dialog.getByText(/^I trust/).click();
+  await expect(trust).not.toBeChecked();
+  await dialog.getByText(/^I trust/).click();
   await expect(trust).toBeChecked();
   await dialog.getByLabel('Password or app password').fill('pass');
 }
@@ -111,7 +114,7 @@ for (const mobile of [false, true]) {
           timeout: 15_000,
         });
         const front = await startFront({
-          dist,
+          dist: DIST,
           emailUrl: stack.info.emailUrl,
           documentStorageUrl: stack.info.documentStorageUrl,
           internalApiKey: stack.info.internalApiKey,
@@ -139,11 +142,7 @@ for (const mobile of [false, true]) {
             })
             .click();
           const dialog = page.getByRole('dialog');
-          await expect(dialog.getByLabel('Email address')).toHaveValue(email);
-          await dialog
-            .getByRole('button', { name: 'Find settings', exact: true })
-            .click();
-          await fillLabCredentials(dialog, email);
+          await fillLabCredentials(dialog, email, true);
           const response = await submitConnection(page, dialog, mobile);
           const { linkId } = (await response.json()) as { linkId: string };
           const traceparent = await response
@@ -238,19 +237,13 @@ for (const mobile of [false, true]) {
           await expect(configured.getByText(/IDLE.*UIDPLUS/)).toBeVisible();
           await chooseSetting(configured, /^Role for Archive\b/, 'Other');
           await expect(configured).toBeVisible();
-          if (
-            await configured
-              .getByRole('checkbox', { name: 'Sync Junk', exact: true })
-              .isChecked()
-          )
-            await configured
-              .getByRole('checkbox', { name: 'Sync Junk', exact: true })
-              .locator('..')
-              .getByText('Sync folder', { exact: true })
-              .click();
-          await expect(
-            configured.getByRole('checkbox', { name: 'Sync Junk', exact: true })
-          ).not.toBeChecked();
+          const syncJunk = configured.getByRole('checkbox', {
+            name: 'Sync Junk',
+            exact: true,
+          });
+          await expect(syncJunk).toBeChecked();
+          await syncJunk.press('Space');
+          await expect(syncJunk).not.toBeChecked();
           await chooseSetting(
             configured,
             /^Watch for new mail alongside Inbox\b/,
@@ -282,7 +275,7 @@ for (const mobile of [false, true]) {
           const reconnect = page.getByRole('dialog', {
             name: 'Reconnect inbox',
           });
-          await fillLabCredentials(reconnect, email);
+          await fillLabCredentials(reconnect, email, false);
           const promotion = await submitConnection(
             page,
             reconnect,

@@ -10,11 +10,13 @@ import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.
 import { FOCUS_WINDOW_DAYS } from '@queries/email/focus';
 import { useEmailLinksQuery, useInboxSuggestion } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
+import { SyncStatus } from '@service-email/generated/schemas/syncStatus';
 import { EmptyStatePanel, FilteredHiddenBanner, Spinner } from '@ui';
 import { Match, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { canSearchEmailTab } from '../constants';
 import { useEmailView } from '../email-view-context';
+import { linkInView } from '../queries/link-in-view';
 import { emailSearchScopeLabel } from '../search/email-search-scope';
 import type { EmailTab } from '../types';
 
@@ -104,9 +106,8 @@ export function EmailEmptyState(props: {
       (link) =>
         link.is_sync_active &&
         !link.needs_reauth &&
-        link.sync_status === 'SYNCING' &&
-        (state.inboxIds === undefined || state.inboxIds.includes(link.id)) &&
-        (!state.aliasFilter || state.aliasFilter.inboxId === link.id)
+        link.sync_status === SyncStatus.SYNCING &&
+        linkInView(state, link.id)
     );
   const blockedInbox = () => {
     if (!queryReadyGate(links)) return;
@@ -116,8 +117,7 @@ export function EmailEmptyState(props: {
         (!link.needs_reauth ||
           link.mailbox_issue === 'credentials_unreadable') &&
         link.mailbox_issue &&
-        (state.inboxIds === undefined || state.inboxIds.includes(link.id)) &&
-        (!state.aliasFilter || state.aliasFilter.inboxId === link.id)
+        linkInView(state, link.id)
     );
   };
   const suggestion = useInboxSuggestion(() => !emailActive());
@@ -161,20 +161,26 @@ export function EmailEmptyState(props: {
         <EmptyStatePanel
           centered
           graphic={EmptyStateEmailGraphic}
-          title={offer() ? `Connect ${offer()?.email}` : 'Connect your email'}
+          title={
+            offer()
+              ? t('imap.connectSuggestedAddress', {
+                  email: offer()?.email ?? '',
+                })
+              : t('imap.connectYourEmail')
+          }
           description={
             offer()
-              ? 'Read and reply to messages from this inbox in Macro.'
-              : 'Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail.'
+              ? t('imap.suggestedInboxDescription')
+              : t('imap.connectInboxDescription')
           }
           primaryAction={{
-            label: 'Connect email',
+            label: t('imap.connectEmail'),
             onClick: () => fireAndForget(connectSuggested(), 'add-inbox'),
           }}
           secondaryAction={
             offer()
               ? {
-                  label: 'Use a different account',
+                  label: t('imap.differentAccount'),
                   onClick: () => fireAndForget(props.onConnect(), 'add-inbox'),
                 }
               : undefined
@@ -262,8 +268,8 @@ export function EmailEmptyState(props: {
           <EmptyStatePanel
             centered
             graphic={EmptyStateInboxTrayGraphic}
-            title="Syncing your inbox"
-            description="Your existing mail will appear here as it syncs. You can keep using Macro while it finishes."
+            title={t('imap.syncingInbox')}
+            description={t('imap.syncingInboxDescription')}
           >
             <div class="mt-3 flex justify-center">
               <Spinner decorative />

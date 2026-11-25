@@ -42,7 +42,13 @@ test.describe('Settings › Email of a Gmail inbox', () => {
     );
     saw('STX-003');
 
-    listing.fail();
+    listing.fail(500, () =>
+      page.evaluate(() =>
+        document.documentElement.hasAttribute(
+          'data-test-settings-retry-clicked'
+        )
+      )
+    );
     await expect(signatures.getByText("Couldn't load signatures")).toBeVisible({
       timeout: 45_000,
     });
@@ -50,18 +56,24 @@ test.describe('Settings › Email of a Gmail inbox', () => {
     await expect(retry).toBeVisible();
     saw('STX-004');
 
-    // Keep the fault until Retry requests the list. Releasing first lets a
-    // focus or backfill refetch recover and remove the button before its click.
+    await retry.evaluate((button) => {
+      button.addEventListener(
+        'click',
+        () => {
+          document.documentElement.setAttribute(
+            'data-test-settings-retry-clicked',
+            ''
+          );
+        },
+        { once: true }
+      );
+    });
     const beforeRetry = listing.seen();
     await retry.click();
-    await expect.poll(listing.seen).toBeGreaterThan(beforeRetry);
-    listing.release();
-    await expect(async () => {
-      if (await retry.isVisible()) await retry.click({ timeout: 3_000 });
-      await expect(
-        page.getByRole('tablist', { name: `Signature views for ${own}` })
-      ).toBeVisible({ timeout: 3_000 });
-    }).toPass({ timeout: 45_000 });
+    await expect(
+      page.getByRole('tablist', { name: `Signature views for ${own}` })
+    ).toBeVisible({ timeout: 45_000 });
+    expect(listing.seen()).toBeGreaterThan(beforeRetry);
     await expect(signatures.getByText("Couldn't load signatures")).toBeHidden();
 
     // The service refuses the switch: it flips back and says so.

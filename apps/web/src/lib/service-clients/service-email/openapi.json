@@ -6888,6 +6888,7 @@
           "connection_unavailable",
           "invalid",
           "forbidden",
+          "person_required",
           "not_found",
           "conflict",
           "credentials_rejected",

@@ -32,8 +32,8 @@ vi.mock('@solidjs/router', () => ({
   useResolvedPath: (path: () => string) => path,
   useMatch: (path: () => string) => () => ({ path: path(), params: {} }),
 }));
-vi.mock('@app/features/inbox/AddInboxDialog', () => ({
-  openAddInboxDialog: mocks.openAddInbox,
+vi.mock('@app/features/inbox/AddInboxFlow', () => ({
+  openAddInboxFlow: mocks.openAddInbox,
 }));
 vi.mock('@queries/auth/outlook-link', () => ({
   useEmailConnectionProviders: (enabled: () => boolean) => () =>

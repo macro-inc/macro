@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
@@ -46,7 +47,7 @@ export function EmailProviderDialog(
       <Panel depth={2} class="rounded-xl">
         <Panel.Header class="px-6">
           <Dialog.Title class="text-ink text-sm font-semibold">
-            Connect email
+            {t('imap.connectEmail')}
           </Dialog.Title>
         </Panel.Header>
         <Panel.Body class="p-6 font-sans flex flex-col gap-3">
@@ -55,16 +56,15 @@ export function EmailProviderDialog(
               when={props.imapAvailable || props.loading || props.failed}
               fallback={
                 props.outlookAvailable
-                  ? 'Connect Gmail, Outlook.com, or an individual Microsoft 365 account.'
-                  : 'Connect a Gmail or Google Workspace account.'
+                  ? t('imap.googleOrMicrosoftDescription')
+                  : t('imap.googleDescription')
               }
             >
-              Choose the provider for the inbox you want to connect.
+              {t('imap.chooseProvider')}
             </Show>
           </Dialog.Description>
           <p class="text-ink-muted text-sm/tight">
-            Gmail and Outlook connect email and calendar together. Keep the
-            email permissions checked on the provider's screen.
+            {t('imap.providerPermissions')}
           </p>
           <Show when={props.loading}>
             <div
@@ -72,15 +72,15 @@ export function EmailProviderDialog(
               class="flex items-center gap-2 text-sm text-ink-muted"
             >
               <Spinner decorative />
-              Loading email providers…
+              {t('imap.loadingProviders')}
             </div>
           </Show>
           <Show when={props.failed}>
             <div role="alert" class="text-sm text-ink-muted">
-              Could not load email providers. Try again.
+              {t('imap.loadProvidersFailed')}
             </div>
             <Button variant="secondary" onClick={props.onRetry}>
-              Try again
+              {t('imap.retry')}
             </Button>
           </Show>
           <Show when={!props.loading && !props.failed}>
@@ -90,7 +90,7 @@ export function EmailProviderDialog(
                 disabled={props.disabled}
                 onClick={() => props.onSelect('GMAIL')}
               >
-                Gmail
+                {t('imap.gmail')}
               </Button>
             </Show>
             <Show when={props.outlookAvailable}>
@@ -99,7 +99,7 @@ export function EmailProviderDialog(
                 disabled={props.disabled}
                 onClick={() => props.onSelect('OUTLOOK')}
               >
-                Outlook / Microsoft 365
+                {t('imap.outlook')}
                 <OutlookBetaBadge />
               </Button>
             </Show>
@@ -109,7 +109,7 @@ export function EmailProviderDialog(
                 disabled={props.disabled}
                 onClick={() => props.onSelect('IMAP')}
               >
-                Other email (IMAP / SMTP)
+                {t('imap.otherProvider')}
               </Button>
             </Show>
           </Show>
@@ -118,7 +118,7 @@ export function EmailProviderDialog(
             disabled={props.disabled}
             onClick={() => props.onOpenChange(false)}
           >
-            Cancel
+            {t('imap.cancel')}
           </Button>
         </Panel.Body>
       </Panel>
@@ -190,33 +190,31 @@ export async function selectEmailProvider(
   mailOnly = true,
   onSelection?: (provider: UserProvider, dialog: DialogHandle) => void
 ): Promise<UserProvider | undefined> {
-  const lifecycle = Telemetry.span('email.providers.choose');
+  const trace = Telemetry.captureContext();
   let selected: UserProvider | undefined;
-  try {
-    const handle = lifecycle.run(() =>
-      openDialog(
-        EmailProviderSelectionDialog,
-        {
-          mailOnly,
-          onSelect: (provider) => {
-            if (selected !== undefined) return;
-            selected = provider;
-            if (onSelection) onSelection(provider, handle);
-            else handle.close();
-          },
-        },
-        { owner }
-      )
-    );
-    const closed = await handle.closed;
-    lifecycle.setAttr(
+  const handle = openDialog(
+    EmailProviderSelectionDialog,
+    {
+      mailOnly,
+      onSelect: (provider) => {
+        if (selected !== undefined) return;
+        selected = provider;
+        if (onSelection) onSelection(provider, handle);
+        else handle.close();
+      },
+    },
+    { owner }
+  );
+  const closed = await handle.closed;
+  trace.run(() => {
+    const span = Telemetry.span('email.providers.close');
+    span.setAttr(
       'dialog.close_reason',
       selected !== undefined && closed.reason === 'programmatic'
         ? 'completed'
         : closed.reason
     );
-    return selected;
-  } finally {
-    lifecycle.end();
-  }
+    span.end();
+  });
+  return selected;
 }

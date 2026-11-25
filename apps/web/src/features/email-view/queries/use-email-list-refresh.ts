@@ -11,20 +11,29 @@ import {
   parseWebsocketPayload,
   ws,
 } from '@service-connection/websocket';
-import type { RefreshEmailEvent } from '@service-email/generated/schemas';
+import {
+  BackfillStatus,
+  type RefreshEmailEvent,
+  RefreshEmailEventOneOfEvent,
+  RefreshEmailEventOneOfFiveEvent,
+  RefreshEmailEventOneOfNineEvent,
+  RefreshEmailEventOneOfOnethreeEvent,
+  RefreshEmailEventOneOfSevenEvent,
+  RefreshEmailEventOneOfThreeEvent,
+} from '@service-email/generated/schemas';
 import { until } from '@solid-primitives/promise';
 import { debounce } from '@solid-primitives/scheduled';
 import { getOwner, onCleanup, runWithOwner } from 'solid-js';
 
 const LIST_REFRESH_INTERVAL_MS = 5_000;
 const RECONNECT_SPREAD_MS = 2_000;
-const LIST_EVENTS = new Set([
-  'upsert_message',
-  'update_labels',
-  'delete_message',
-  'backfill',
-  'backfill_progress',
-  'link_removed',
+const LIST_EVENTS = new Set<RefreshEmailEvent['event']>([
+  RefreshEmailEventOneOfThreeEvent.upsert_message,
+  RefreshEmailEventOneOfFiveEvent.update_labels,
+  RefreshEmailEventOneOfSevenEvent.delete_message,
+  RefreshEmailEventOneOfEvent.backfill,
+  RefreshEmailEventOneOfOnethreeEvent.backfill_progress,
+  RefreshEmailEventOneOfNineEvent.link_removed,
 ]);
 
 /** Link refreshes are independent of signal notifications and cache membership. */
@@ -116,8 +125,10 @@ export function useEmailListRefresh(options: {
     )
       return;
     const complete =
-      (event.event === 'backfill' || event.event === 'backfill_progress') &&
-      event.status === 'complete';
+      (event.event === RefreshEmailEventOneOfEvent.backfill ||
+        event.event ===
+          RefreshEmailEventOneOfOnethreeEvent.backfill_progress) &&
+      event.status === BackfillStatus.complete;
     request(event.link_id, complete);
   });
   const reconnect = debounce(

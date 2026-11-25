@@ -657,25 +657,16 @@ const HTML_ENTRIES = {
   canvasRender: resolve(__dirname, 'canvas-render.html'),
 };
 
-/** Lets local browser tests inspect the resolved gateway before loading the app. */
-function markLocalBundleIndex(): Plugin {
+/** Avoid a redundant gateway preconnect in same-origin bundles. */
+function stripSameOriginPreconnect(): Plugin {
   return {
-    name: 'local-bundle-gateway',
+    name: 'same-origin-preconnect',
     apply: 'build',
     transformIndexHtml: {
       order: 'pre',
       handler(html, { filename }) {
         if (filename !== HTML_ENTRIES.app) return html;
-        return {
-          html: html.replace(/<link\b[^>]*\bhref="%GATEWAY_ORIGIN%"[^>]*>/, ''),
-          tags: [
-            {
-              tag: 'meta',
-              attrs: { name: 'macro-gateway-origin', content: '/' },
-              injectTo: 'head',
-            },
-          ],
-        };
+        return html.replace(/<link\b[^>]*\bhref="%GATEWAY_ORIGIN%"[^>]*>/, '');
       },
     },
   };
@@ -702,7 +693,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         },
       },
       plugins: [
-        sameOriginLocalBundle && markLocalBundleIndex(),
+        sameOriginLocalBundle && stripSameOriginPreconnect(),
         devHttps(),
         devCompression(),
         devExternalSourcemaps(),

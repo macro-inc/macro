@@ -24,8 +24,8 @@ vi.mock('@core/util/platform', async (importOriginal) => ({
   getNativeMobilePlatform: () => undefined,
 }));
 vi.mock('@queries/auth', () => ({ invalidateGithubLinkStatus: vi.fn() }));
-vi.mock('@app/features/inbox/AddInboxDialog', () => ({
-  openAddInboxDialog: vi.fn(),
+vi.mock('@app/features/inbox/AddInboxFlow', () => ({
+  openAddInboxFlow: vi.fn(),
 }));
 vi.mock('@app/features/inbox/AdminConsentRequiredDialog', () => ({
   AdminConsentRequiredDialog: () => null,

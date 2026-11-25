@@ -311,12 +311,12 @@ export function EmailCard(props: { class?: string } = {}) {
           <SettingsSurface>
             <IntegrationRow
               icon={<EnvelopeIcon />}
-              title="Connect an IMAP inbox"
+              title={t('imap.connectImapInbox')}
               description="Read incoming mail with IMAP and send with SMTP."
             >
               <ConnectAction
                 label="Connect"
-                ariaLabel="Connect an IMAP inbox"
+                ariaLabel={t('imap.connectImapInbox')}
                 onClick={() => onConnectEmail('IMAP')}
               />
             </IntegrationRow>
@@ -539,7 +539,7 @@ function InboxRow(props: {
             when={props.link.provider === 'OUTLOOK'}
             fallback={
               <span class="text-xs text-ink-muted">
-                {props.link.provider === 'IMAP' ? 'IMAP / SMTP' : 'Gmail'}
+                {props.link.provider === 'IMAP' ? t('imap.imapSmtp') : 'Gmail'}
               </span>
             }
           >

@@ -1,5 +1,5 @@
 import { formatLocale, type TranslationKey, t } from '@app/lib/i18n';
-import { beginInteraction, TraceFlow, useFlow } from '@app/observability/flow';
+import { TraceFlow, useFlow } from '@app/observability/flow';
 import { startUiOperation } from '@app/observability/ui-operation';
 import { imapHelpUrl } from '@core/email-link/help-url';
 import { isMobile } from '@core/mobile/isMobile';
@@ -19,7 +19,6 @@ import type {
   AccountMailSettings,
   Endpoint,
   FolderRole,
-  FolderSetting,
   ServerFeatures,
   UpdateFolderSettings,
 } from '@service-email/generated/schemas';
@@ -174,10 +173,12 @@ function SettingsDialog(props: {
   async function save(event: Event) {
     const data = settings();
     if (!data || !current() || saving()) return;
-    const operation = startUiOperation('email.imap.settings.save', {
-      event,
-      attributes: { 'email.link_id': props.linkId },
-    });
+    const operation = flow.span.run(() =>
+      startUiOperation('email.imap.settings.save', {
+        event,
+        attributes: { 'email.link_id': props.linkId },
+      })
+    );
     setSaving(true);
     setError(undefined);
     try {
@@ -225,15 +226,6 @@ function SettingsDialog(props: {
     }
   }
 
-  function plannedRole(folder: FolderSetting): FolderRole {
-    const overrides = roles();
-    const manual = overrides[folder.id];
-    if (manual) return manual;
-    return Object.values(overrides).includes(folder.detectedRole)
-      ? 'other'
-      : folder.detectedRole;
-  }
-
   function changeRole(id: string, role: string) {
     setRoles((previous) => {
       const next = { ...previous };
@@ -242,10 +234,6 @@ function SettingsDialog(props: {
       else delete next[id];
       return next;
     });
-    const currentWatch = settings()?.folders.find(
-      (folder) => folder.id === watch()
-    );
-    if (currentWatch && plannedRole(currentWatch) === 'drafts') setWatch('');
   }
 
   const actions = () => (
@@ -473,7 +461,7 @@ function SettingsDialog(props: {
                             .folders.filter(
                               (folder) =>
                                 folder.detectedRole !== 'inbox' &&
-                                plannedRole(folder) !== 'drafts' &&
+                                folder.effectiveRole !== 'drafts' &&
                                 !excluded().includes(folder.id)
                             )
                             .map((folder) => ({
@@ -514,17 +502,7 @@ export function ImapMailboxSettings(props: {
       <SettingsButton
         size="md"
         variant="secondary"
-        onClick={(event) => {
-          const interaction = beginInteraction('email.imap.settings.open', {
-            event,
-            attributes: { 'email.link_id': props.linkId },
-          });
-          try {
-            setOpen(true);
-          } finally {
-            interaction.end();
-          }
-        }}
+        onClick={() => setOpen(true)}
       >
         {t('imap.serverSettings')}
       </SettingsButton>

@@ -1,4 +1,5 @@
 import { ROUTER_BASE_CONCAT, toBaseRelative } from '@app/constants/routerBase';
+import { t } from '@app/lib/i18n';
 import { updateUserAuth } from '@core/auth';
 import {
   createNativeAuthSession,
@@ -421,11 +422,18 @@ export function useAddInboxFlow() {
     };
   };
 
+  const reconnectingImap = new Set<string>();
   const connectImap = async (
     viewer: QueryAccount | undefined,
     options?: AddInboxOptions,
     chooser?: DialogHandle
   ): Promise<void> => {
+    const linkId = options?.reconnectLinkId;
+    if (linkId && reconnectingImap.has(linkId)) {
+      chooser?.close();
+      return;
+    }
+    if (linkId) reconnectingImap.add(linkId);
     try {
       const { openImapConnection } = await import('./ImapConnectDialog');
       if (!isCurrentQueryAccount(viewer) || (chooser && !chooser.isOpen()))
@@ -436,7 +444,7 @@ export function useAddInboxFlow() {
         const pending = openImapConnection(
           owner,
           options?.emailAddress,
-          options?.reconnectLinkId
+          linkId
         );
         chooser?.close();
         return pending;
@@ -451,7 +459,7 @@ export function useAddInboxFlow() {
           invalidateEmailLinks();
           await invalidateUserInfo();
           toast.success(
-            options?.reconnectLinkId ? 'Inbox reconnected' : 'Inbox connected'
+            t(linkId ? 'imap.inboxReconnected' : 'imap.inboxConnected')
           );
         })
         .with({ type: 'oauth' }, ({ provider, emailAddress }) =>
@@ -462,6 +470,7 @@ export function useAddInboxFlow() {
         )
         .exhaustive();
     } finally {
+      if (linkId) reconnectingImap.delete(linkId);
       chooser?.close();
     }
   };

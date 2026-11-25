@@ -1,5 +1,6 @@
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import type { ConsentScopes } from '@service-auth/client';
 import { createEffect, createSignal, on, onCleanup } from 'solid-js';
 
@@ -11,15 +12,20 @@ type AddInboxRequest = {
 const [request, setRequest] = createSignal<AddInboxRequest | null>(null);
 
 /** Request the app-owned connection flow; the backend enforces entitlement. */
-export const openAddInboxDialog = (options?: AddInboxRequest) => {
-  if (request()) return;
+export const openAddInboxFlow = (options?: AddInboxRequest) => {
+  if (request()) {
+    const span = Telemetry.span('email.connect.request');
+    span.setAttr('email.connect.ignored', 'flow_running');
+    span.end();
+    return;
+  }
   setRequest({ scopes: options?.scopes });
 };
 
-export const isAddInboxDialogOpen = () => request() !== null;
+export const isAddInboxFlowRunning = () => request() !== null;
 
 /** Keep the chooser and IMAP handoff under the stable app owner. */
-export function AddInboxDialog() {
+export function AddInboxFlow() {
   const addInbox = useAddInboxFlow();
   async function connect(options: AddInboxRequest) {
     try {

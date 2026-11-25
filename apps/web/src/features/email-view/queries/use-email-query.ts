@@ -55,6 +55,7 @@ import {
   type EmailSearchContext,
   facetsLeftToClient,
 } from './email-search';
+import { linkInView } from './link-in-view';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
 import { useEmailListRefresh } from './use-email-list-refresh';
 import { useFocusEmailSource } from './use-focus-email-source';
@@ -931,9 +932,7 @@ export function useEmailDataSource(
   useEmailListRefresh({
     enabled: () => sourceEnabled() && state.inboxIds?.length !== 0,
     scope,
-    matchesLink: (linkId) =>
-      (state.inboxIds === undefined || state.inboxIds.includes(linkId)) &&
-      (!state.aliasFilter || state.aliasFilter.inboxId === linkId),
+    matchesLink: (linkId) => linkInView(state, linkId),
     isFetching: () => dataSource.isFetching() || dataSource.isLoadingMore(),
     refresh: async (catchUp) => {
       // These sources own their own invalidation, and service search is a

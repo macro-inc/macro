@@ -1,9 +1,9 @@
-import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { toaster } from '@kobalte/core/toast';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { composeToastFeedback } from '../compose-toast-feedback';
 import type { EmailSendProgress } from '../context/compose-capabilities';
 import { createComposeContext } from '../tests/capabilities';
 import { announceQueuedSend } from './queued-send-notice';
@@ -39,12 +39,7 @@ it('keeps one failed-send toast visible across time and focus changes', async ()
   announceQueuedSend({
     notices: {
       ...context.notices,
-      feedback: {
-        success: toast.success,
-        failure: toast.failure,
-        alert: toast.alert,
-        dismiss: toast.dismiss,
-      },
+      feedback: composeToastFeedback,
     },
     delivery: {
       watchSend: (_id, changed) => {
@@ -88,19 +83,7 @@ it('keeps a dismissed failure closed when returning to the page and shows a new 
     announceQueuedSend({
       notices: {
         ...context.notices,
-        feedback: {
-          success: toast.success,
-          failure: (title, options) =>
-            toast.custom(
-              { title, content: () => options?.subtext },
-              {
-                persistent: options?.persistent,
-                replace: options?.replace,
-              }
-            ),
-          alert: toast.alert,
-          dismiss: toast.dismiss,
-        },
+        feedback: composeToastFeedback,
       },
       delivery: {
         watchSend: (_id, changed) => {

@@ -34,13 +34,6 @@
   [web-app delivery](../../infra/stacks/web-app/README.md); its publisher tests
   are backend-free, and its Pulumi tests must not run real staging/cloud commands.
 
-Keep Home and Email connect flows owned by their stable lists, passing callbacks
-to empty states so loading/empty transitions preserve the chooser and IMAP form.
-Record the connected link ID on the setup lifetime when connection succeeds;
-new connections have no link ID when the dialog opens.
-Keep the provider chooser mounted until the IMAP form is ready, then hand off
-both dialogs together without dropping the backdrop.
-
 ## Account-scoped source queries
 
 Treat CRM access changes as rare session transitions. Detect them from response
@@ -2310,54 +2303,19 @@ per-file worker (`lib/core/password-import`); the parsed export lives only in
 the import primitive's closure while the dialog is open, and sessionStorage
 holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).
 
-- Refresh mounted email list readers from matching `refresh_email` events through
-  their data source, for both GraphQL and REST. Coalesce bursts, fence deferred
-  work by account/session/scope, and catch up on reconnect/visibility. Show
-  first-sync progress instead of an empty-inbox claim while selected links sync.
+## Email
 
-- Open generic email-provider selection immediately with loading and explicit
-  retry on availability errors; never silently start Gmail on a failed read.
-  Once availability succeeds, start the sole consent provider directly when
-  IMAP is not offered; retain the chooser when there are multiple choices.
-  Chooser capabilities omit the optional admin-consent callback and use a
-  separate account/session cache variant from signed approval links.
-  Route app-level Add another inbox through the same chooser and replace it
-  with the IMAP form in one handoff.
-  Carry the address entered in the IMAP form into the provider's OAuth hint.
+- Keep inbox connection flows under stable Home, Mail, or app hosts so loading
+  and refetching preserve dialogs. Swap the chooser for IMAP once the form is ready.
+- Discover IMAP settings for the signed-in address or load the bound link on
+  reconnect. Use the signed-in address as the OAuth hint.
+- Keep credentials in the capture-excluded form and clear them after attempts.
+  Preserve confirmed endpoints and match generated refusal codes for retry guidance.
+- Use the server's effective folder roles throughout settings. Keep server
+  Drafts out of sync controls and unsynced-folder counts.
+- Refresh mounted inbox readers from matching mailbox events regardless of
+  notification settings. Scope deferred work to the current account and list.
+- Replay only fixed-state or deduplicated mutations. Show a delivery warning
+  only when the service reports an unconfirmed send.
 
-- Use the shared SecretInput with autocomplete off for IMAP/SMTP and keep
-  the credential form marked ph-no-capture.
-  Reconnect secrets start empty and switching off a separate outgoing secret
-  clears its typed value.
-
-- Keep confirmed IMAP server settings after verification refusal, clear secret
-  fields, and offer the catalog app-password help link. Match generated IMAP
-  refusal codes exhaustively for localized guidance and request ID reuse.
-
-- Exclude folders whose effective role is Drafts from sync-limit notices, label their intentional server-only handling separately, and omit their no-op sync checkbox while keeping the role picker.
-
-- Label reconnect actions Reconnect, stack server fields at full dialog width,
-  and show the same labelled port/TLS choice in the menu and selected value.
-- Keep IMAP connect action labels mounted through verification with Button
-  loading, and reserve a wrapping error area so refusal/retry does not shift
-  the footer. Avoid fixed action widths or clipped error copy.
-
-For email content limits, show the closed unsupported-size message rather than
-a generic HTTP fault. Email mutations default to no automatic replay. Opt in
-only a fixed-state idempotent operation or an enforced deduplication contract;
-never replay sends or operation resolution. The fixed-state label batch may
-retry one 429 after Retry-After, capped at five seconds.
-Selective fetch error filters return undefined to preserve default status and
-server retry behavior for responses they do not handle.
-
-Account mailbox issues render independently of the generic sync-badge flag and
-never imply a rejected app password. Size failures keep the last complete index.
-
-The reserved IMAP browser-lab domain intentionally receives no passive MX offer.
-Drive its normal manual provider chooser, open Server settings through the
-Collapsible trigger, and choose settings via the shared listbox roles. Do not
-add product routing exceptions for test identities.
-
-A queued send's HTTP acceptance is not SMTP acceptance: a client timer may show
-Still sending, but only the server's actual unconfirmed outcome may warn about
-uncertain delivery. Terminal send progress must not replay its failure toast.
+See the [Email walkthrough](../../docs/agent-guide/email.md) for browser checks.

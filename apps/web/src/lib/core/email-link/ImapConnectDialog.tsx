@@ -1,5 +1,5 @@
 import { type TranslationKey, t } from '@app/lib/i18n';
-import { beginInteraction, TraceFlow, useFlow } from '@app/observability/flow';
+import { TraceFlow, useFlow } from '@app/observability/flow';
 import { startUiOperation } from '@app/observability/ui-operation';
 import { useEmail } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
@@ -187,6 +187,9 @@ function connectionRefusal(code?: ImapConnectionErrorCode) {
       retrySameRequest?: boolean;
       requiresPayment?: boolean;
     }>()
+    .with(ImapConnectionErrorCode.person_required, () => ({
+      message: 'imap.personRequired',
+    }))
     .with(ImapConnectionErrorCode.address_unverified, () => ({
       message: 'imap.addressUnverified',
     }))
@@ -253,6 +256,7 @@ function connectionRefusal(code?: ImapConnectionErrorCode) {
 type ImapConnectProps = ManagedDialogProps & {
   emailAddress?: string;
   linkId?: string;
+  onSetupFlow?: (span: Span) => void;
   onResult: (value: ConnectOutcome) => void;
 };
 
@@ -269,21 +273,18 @@ export function ImapConnectDialog(props: ImapConnectProps) {
 
 function ConnectForm(props: ImapConnectProps) {
   const flow = useFlow();
-  const viewerEmail = useEmail();
   const viewer = currentQueryAccount();
-  const [email, setEmail] = createSignal(
-    props.emailAddress ?? viewerEmail() ?? ''
-  );
-  const usesVerifiedAddress = () =>
-    email().trim().toLowerCase() === viewerEmail()?.toLowerCase();
-  const [phase, setPhase] = createSignal<'address' | 'servers'>('address');
+  const viewerEmail = useEmail();
+  const email =
+    (props.linkId ? props.emailAddress : undefined) ?? viewerEmail() ?? '';
+  const [ready, setReady] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal<TranslationKey>();
   const [discovery, setDiscovery] = createSignal<Discovery>();
   const [oauthAvailable, setOauthAvailable] = createSignal(false);
   const [passwordSelected, setPasswordSelected] = createSignal(false);
-  const [imap, setImap] = createSignal(blankEndpoint(email(), 993));
-  const [smtp, setSmtp] = createSignal(blankEndpoint(email(), 465));
+  const [imap, setImap] = createSignal(blankEndpoint(email, 993));
+  const [smtp, setSmtp] = createSignal(blankEndpoint(email, 465));
   const [separatePassword, setSeparatePassword] = createSignal(false);
   const [confirmed, setConfirmed] = createSignal(false);
   const [manual, setManual] = createSignal(false);
@@ -350,23 +351,17 @@ function ConnectForm(props: ImapConnectProps) {
   }
 
   function showServerSettings(found?: Discovery, consentAvailable = false) {
-    if (!usesVerifiedAddress() && !consentAvailable) {
-      setError('imap.addressUnverified');
-      return;
-    }
     setOauthAvailable(consentAvailable);
     setPasswordSelected(false);
     setDiscovery(found);
-    setImap(found?.imap ?? blankEndpoint(email(), 993));
-    setSmtp(found?.smtp ?? blankEndpoint(email(), 465));
+    setImap(found?.imap ?? blankEndpoint(email, 993));
+    setSmtp(found?.smtp ?? blankEndpoint(email, 465));
     setManual(!found?.imap || !found?.smtp);
-    setPhase('servers');
+    setReady(true);
   }
 
   async function discover(parent: Span) {
     if (busy() || !isCurrentQueryAccount(viewer)) return;
-    const address = email().trim();
-    setEmail(address);
     setBusy(true);
     setError(undefined);
     // Discovery has a five-second provider budget; allow capability lookup too.
@@ -395,6 +390,7 @@ function ConnectForm(props: ImapConnectProps) {
         const inaccessible = result.error.some(({ code }) =>
           [
             ImapConnectionErrorCode.forbidden,
+            ImapConnectionErrorCode.person_required,
             ImapConnectionErrorCode.not_found,
             ImapConnectionErrorCode.connection_changed,
             'UNAUTHORIZED',
@@ -426,12 +422,13 @@ function ConnectForm(props: ImapConnectProps) {
     }
   }
 
+  function loadSettings() {
+    fireAndForget(flow.task('email.imap.discover', discover), 'imap-discovery');
+  }
+
   onMount(() => {
-    if (props.emailAddress || props.linkId)
-      fireAndForget(
-        flow.task('email.imap.discover', discover),
-        'imap-discovery'
-      );
+    props.onSetupFlow?.(flow.span);
+    loadSettings();
   });
 
   async function connect(parent: Span) {
@@ -439,7 +436,7 @@ function ConnectForm(props: ImapConnectProps) {
       busy() ||
       !confirmed() ||
       !isCurrentQueryAccount(viewer) ||
-      !usesVerifiedAddress() ||
+      !ready() ||
       password() === '' ||
       (separatePassword() && smtpPassword() === '')
     )
@@ -466,8 +463,7 @@ function ConnectForm(props: ImapConnectProps) {
       );
       if (attempt.signal.aborted || !isCurrentQueryAccount(viewer)) return;
       if (result.isOk()) {
-        if (result.value?.linkId)
-          parent.setAttr('email.link_id', result.value.linkId);
+        parent.setAttr('email.link_id', result.value.linkId);
         props.onResult({ type: 'connected', linkId: result.value.linkId });
         return;
       }
@@ -490,20 +486,16 @@ function ConnectForm(props: ImapConnectProps) {
   }
 
   async function submit(event: SubmitEvent) {
-    const discovering = phase() === 'address';
-    const operation = startUiOperation(
-      discovering ? 'email.imap.discover' : 'email.imap.connect',
-      {
+    const operation = flow.span.run(() =>
+      startUiOperation('email.imap.connect', {
         event,
         attributes: props.linkId
           ? { 'email.link_id': props.linkId }
           : undefined,
-      }
+      })
     );
     try {
-      await operation.run(() =>
-        discovering ? discover(operation.span) : connect(operation.span)
-      );
+      await operation.run(() => connect(operation.span));
       if (error()) operation.finish('error');
       else operation.afterPaint();
     } catch (e) {
@@ -519,9 +511,7 @@ function ConnectForm(props: ImapConnectProps) {
   };
   const canUsePassword = () => {
     return (
-      usesVerifiedAddress() &&
-      steer() !== 'none' &&
-      (!oauthProvider() || passwordSelected())
+      ready() && steer() !== 'none' && (!oauthProvider() || passwordSelected())
     );
   };
 
@@ -530,17 +520,20 @@ function ConnectForm(props: ImapConnectProps) {
       <Button type="button" variant="ghost" onClick={cancel}>
         {t('imap.cancel')}
       </Button>
-      <Show when={phase() === 'address' || canUsePassword()}>
+      <Show when={!ready() && !busy() && error()}>
+        <Button type="button" variant="secondary" onClick={loadSettings}>
+          {t('imap.retry')}
+        </Button>
+      </Show>
+      <Show when={canUsePassword()}>
         <Button
           type="submit"
           form={formId}
           variant="primary"
           loading={busy()}
-          disabled={phase() === 'servers' && !confirmed()}
+          disabled={!confirmed()}
         >
-          {phase() === 'address'
-            ? t('imap.findSettings')
-            : t(props.linkId ? 'imap.reconnectAction' : 'imap.connectInbox')}
+          {t(props.linkId ? 'imap.reconnectAction' : 'imap.connectInbox')}
         </Button>
       </Show>
     </div>
@@ -576,29 +569,14 @@ function ConnectForm(props: ImapConnectProps) {
             <fieldset disabled={busy()} class="flex flex-col gap-4">
               <label class="grid gap-1 text-sm">
                 {t('imap.emailAddress')}
-                <Input
-                  type="email"
-                  required
-                  readOnly={!!props.linkId || phase() === 'servers'}
-                  value={email()}
-                  onInput={(event) => setEmail(event.currentTarget.value)}
-                />
+                <Input type="email" readOnly value={email} />
               </label>
-              <Show when={phase() === 'servers'}>
-                <Show when={!props.linkId}>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    class="self-start"
-                    onClick={() => {
-                      changeSettings();
-                      setPhase('address');
-                      setDiscovery(undefined);
-                    }}
-                  >
-                    {t('imap.changeAddress')}
-                  </Button>
-                </Show>
+              <Show when={!ready() && busy()}>
+                <p role="status" class="text-sm text-ink-muted">
+                  {t('imap.discovering')}
+                </p>
+              </Show>
+              <Show when={ready()}>
                 <Show when={oauthProvider()}>
                   {(provider) => (
                     <Button
@@ -608,7 +586,7 @@ function ConnectForm(props: ImapConnectProps) {
                         props.onResult({
                           type: 'oauth',
                           provider: provider().code,
-                          emailAddress: email().trim(),
+                          emailAddress: email,
                         })
                       }
                     >
@@ -616,13 +594,7 @@ function ConnectForm(props: ImapConnectProps) {
                     </Button>
                   )}
                 </Show>
-                <Show
-                  when={
-                    oauthProvider() &&
-                    usesVerifiedAddress() &&
-                    !passwordSelected()
-                  }
-                >
+                <Show when={oauthProvider() && !passwordSelected()}>
                   <Button
                     type="button"
                     variant="secondary"
@@ -790,44 +762,31 @@ export async function openImapConnection(
   emailAddress?: string,
   linkId?: string
 ) {
-  const lifecycle = Telemetry.span('email.imap.setup.lifetime');
+  let flowSpan: Span | undefined;
   let outcome: ConnectOutcome | undefined;
-  try {
-    const interaction = lifecycle.run(() =>
-      beginInteraction('email.imap.setup.open', {
-        attributes: linkId ? { 'email.link_id': linkId } : undefined,
-      })
-    );
-    let closed: ReturnType<typeof openDialog>['closed'];
-    try {
-      const dialog = lifecycle.run(() =>
-        openDialog(
-          ImapConnectDialog,
-          {
-            emailAddress,
-            linkId,
-            onResult(value) {
-              outcome = value;
-              dialog.close();
-            },
-          },
-          { owner }
-        )
-      );
-      closed = dialog.closed;
-    } finally {
-      interaction.end();
-    }
-    const event = await closed;
-    const completedLinkId =
-      outcome?.type === 'connected' ? outcome.linkId : linkId;
-    if (completedLinkId) lifecycle.setAttr('email.link_id', completedLinkId);
-    lifecycle.setAttr(
-      'dialog.close_reason',
-      outcome === undefined ? event.reason : 'completed'
-    );
-    return outcome;
-  } finally {
-    lifecycle.end();
-  }
+  const dialog = openDialog(
+    ImapConnectDialog,
+    {
+      emailAddress,
+      linkId,
+      onSetupFlow(span) {
+        flowSpan = span;
+      },
+      onResult(value) {
+        outcome = value;
+        dialog.close();
+      },
+    },
+    { owner }
+  );
+  const closed = await dialog.closed;
+  const close = flowSpan
+    ? flowSpan.span('email.imap.setup.close')
+    : Telemetry.span('email.imap.setup.close');
+  const completedLinkId =
+    outcome?.type === 'connected' ? outcome.linkId : linkId;
+  if (completedLinkId) close.setAttr('email.link_id', completedLinkId);
+  close.setAttr('dialog.close_reason', outcome ? 'completed' : closed.reason);
+  close.end();
+  return outcome;
 }

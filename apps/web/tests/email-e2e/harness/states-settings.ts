@@ -31,7 +31,7 @@ export type Hold = {
   /** Lets the held requests, and every later one, reach the service. */
   release(): void;
   /** Answers the held requests, and every later one, with this status. */
-  fail(status?: number): void;
+  fail(status?: number, recoverWhen?: () => Promise<boolean>): void;
 };
 
 /**
@@ -49,11 +49,13 @@ export async function holdRequests(
     wake = resolve;
   });
   let seen = 0;
+  let recoverWhen: (() => Promise<boolean>) | undefined;
   await page.route(url, async (route) => {
     if (route.request().method() !== method) return route.fallback();
     seen += 1;
     while (mode === 'hold') await woken;
     try {
+      if (typeof mode === 'number' && (await recoverWhen?.())) settle('pass');
       if (mode === 'pass') await route.fallback();
       else await route.fulfill({ status: mode, json: {} });
     } catch {
@@ -70,7 +72,10 @@ export async function holdRequests(
   return {
     seen: () => seen,
     release: () => settle('pass'),
-    fail: (status = 500) => settle(status),
+    fail: (status = 500, when) => {
+      recoverWhen = when;
+      settle(status);
+    },
   };
 }
 
