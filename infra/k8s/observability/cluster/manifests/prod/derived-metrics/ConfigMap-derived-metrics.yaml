@@ -57,106 +57,106 @@ data:
         `set(attributes["runtime.long_animation_frame.blocking_ms"], Double(attributes["runtime.long_animation_frame.blocking_ms"])) where attributes["runtime.long_animation_frame.blocking_ms"] != nil and not IsBool(attributes["runtime.long_animation_frame.blocking_ms"])`,
         `set(attributes["macro.memory.js_heap.used_bytes"], Double(attributes["macro.memory.js_heap.used_bytes"])) where attributes["macro.memory.js_heap.used_bytes"] != nil and not IsBool(attributes["macro.memory.js_heap.used_bytes"])`,
         `set(attributes["typing.event_duration_p95_ms"], Double(attributes["typing.event_duration_p95_ms"])) where attributes["typing.event_duration_p95_ms"] != nil and not IsBool(attributes["typing.event_duration_p95_ms"])`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment.name"]) where resource.attributes["deployment.environment.name"] != nil and name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil and name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment.name"]) where attributes["deployment.environment.name"] != nil and name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil and name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.provider"], resource.attributes["gen_ai.provider.name"]) where resource.attributes["gen_ai.provider.name"] != nil and name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.provider"], attributes["gen_ai.provider.name"]) where attributes["gen_ai.provider.name"] != nil and name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment.name"]) where resource.attributes["deployment.environment.name"] != nil and attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil and attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment.name"]) where attributes["deployment.environment.name"] != nil and attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil and attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.tool"], resource.attributes["gen_ai.tool.name"]) where resource.attributes["gen_ai.tool.name"] != nil and attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.tool"], attributes["gen_ai.tool.name"]) where attributes["gen_ai.tool.name"] != nil and attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment.name"]) where resource.attributes["deployment.environment.name"] != nil and name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil and name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment.name"]) where attributes["deployment.environment.name"] != nil and name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil and name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment.name"]) where resource.attributes["deployment.environment.name"] != nil and name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil and name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment.name"]) where attributes["deployment.environment.name"] != nil and name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil and name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.model"], resource.attributes["agent.model"]) where resource.attributes["agent.model"] != nil and name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.model"], attributes["agent.model"]) where attributes["agent.model"] != nil and name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment.name"]) where resource.attributes["deployment.environment.name"] != nil and name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil and name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment.name"]) where attributes["deployment.environment.name"] != nil and name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil and name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.harness"], resource.attributes["harness"]) where resource.attributes["harness"] != nil and name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.harness"], attributes["harness"]) where attributes["harness"] != nil and name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment.name"]) where resource.attributes["deployment.environment.name"] != nil and name == "ai.provider_account_unavailable"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil and name == "ai.provider_account_unavailable"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment.name"]) where attributes["deployment.environment.name"] != nil and name == "ai.provider_account_unavailable"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil and name == "ai.provider_account_unavailable"`,
-        `set(attributes["tag.provider"], resource.attributes["ai.provider"]) where resource.attributes["ai.provider"] != nil and name == "ai.provider_account_unavailable"`,
-        `set(attributes["tag.provider"], attributes["ai.provider"]) where attributes["ai.provider"] != nil and name == "ai.provider_account_unavailable"`,
-        `set(attributes["tag.reason"], resource.attributes["ai.account_unavailable"]) where resource.attributes["ai.account_unavailable"] != nil and name == "ai.provider_account_unavailable"`,
-        `set(attributes["tag.reason"], attributes["ai.account_unavailable"]) where attributes["ai.account_unavailable"] != nil and name == "ai.provider_account_unavailable"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment.name"]) where resource.attributes["deployment.environment.name"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment.name"]) where attributes["deployment.environment.name"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
-        `set(attributes["tag.host"], resource.attributes["host.name"]) where resource.attributes["host.name"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
-        `set(attributes["tag.host"], attributes["host.name"]) where attributes["host.name"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
-        `set(attributes["tag.source"], resource.attributes["source"]) where resource.attributes["source"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
-        `set(attributes["tag.source"], attributes["source"]) where attributes["source"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment.name"]) where resource.attributes["deployment.environment.name"] != nil and attributes["outlook.throttle_origin"] != nil`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil and attributes["outlook.throttle_origin"] != nil`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment.name"]) where attributes["deployment.environment.name"] != nil and attributes["outlook.throttle_origin"] != nil`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil and attributes["outlook.throttle_origin"] != nil`,
-        `set(attributes["tag.http_status_code"], resource.attributes["http.status_code"]) where resource.attributes["http.status_code"] != nil and attributes["outlook.throttle_origin"] != nil`,
-        `set(attributes["tag.http_status_code"], resource.attributes["http.response.status_code"]) where resource.attributes["http.response.status_code"] != nil and attributes["outlook.throttle_origin"] != nil`,
-        `set(attributes["tag.http_status_code"], attributes["http.status_code"]) where attributes["http.status_code"] != nil and attributes["outlook.throttle_origin"] != nil`,
-        `set(attributes["tag.http_status_code"], attributes["http.response.status_code"]) where attributes["http.response.status_code"] != nil and attributes["outlook.throttle_origin"] != nil`,
-        `set(attributes["tag.outlook_throttle_origin"], resource.attributes["outlook.throttle_origin"]) where resource.attributes["outlook.throttle_origin"] != nil and attributes["outlook.throttle_origin"] != nil`,
-        `set(attributes["tag.outlook_throttle_origin"], attributes["outlook.throttle_origin"]) where attributes["outlook.throttle_origin"] != nil and attributes["outlook.throttle_origin"] != nil`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment.name"]) where resource.attributes["deployment.environment.name"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment.name"]) where attributes["deployment.environment.name"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
-        `set(attributes["tag.outlook_outcome"], resource.attributes["outlook.outcome"]) where resource.attributes["outlook.outcome"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
-        `set(attributes["tag.outlook_outcome"], attributes["outlook.outcome"]) where attributes["outlook.outcome"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
-        `set(attributes["tag.outlook_defer_reason"], resource.attributes["outlook.defer_reason"]) where resource.attributes["outlook.defer_reason"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
-        `set(attributes["tag.outlook_defer_reason"], attributes["outlook.defer_reason"]) where attributes["outlook.defer_reason"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
-        `set(attributes["tag.resource_name"], name) where name != nil and IsMatch(name, "^outlook[.]sync[.]")`,
-        `set(attributes["tag.resource_name"], resource.attributes["http.request.method"]) where resource.attributes["http.request.method"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
-        `set(attributes["tag.resource_name"], attributes["http.request.method"]) where attributes["http.request.method"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment.name"]) where resource.attributes["deployment.environment.name"] != nil and attributes["outlook.token_cache"] != nil`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil and attributes["outlook.token_cache"] != nil`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment.name"]) where attributes["deployment.environment.name"] != nil and attributes["outlook.token_cache"] != nil`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil and attributes["outlook.token_cache"] != nil`,
-        `set(attributes["tag.http_status_code"], resource.attributes["http.status_code"]) where resource.attributes["http.status_code"] != nil and attributes["outlook.token_cache"] != nil`,
-        `set(attributes["tag.http_status_code"], resource.attributes["http.response.status_code"]) where resource.attributes["http.response.status_code"] != nil and attributes["outlook.token_cache"] != nil`,
-        `set(attributes["tag.http_status_code"], attributes["http.status_code"]) where attributes["http.status_code"] != nil and attributes["outlook.token_cache"] != nil`,
-        `set(attributes["tag.http_status_code"], attributes["http.response.status_code"]) where attributes["http.response.status_code"] != nil and attributes["outlook.token_cache"] != nil`,
-        `set(attributes["tag.outlook_outcome"], resource.attributes["outlook.outcome"]) where resource.attributes["outlook.outcome"] != nil and attributes["outlook.token_cache"] != nil`,
-        `set(attributes["tag.outlook_outcome"], attributes["outlook.outcome"]) where attributes["outlook.outcome"] != nil and attributes["outlook.token_cache"] != nil`,
-        `set(attributes["tag.outlook_token_cache"], resource.attributes["outlook.token_cache"]) where resource.attributes["outlook.token_cache"] != nil and attributes["outlook.token_cache"] != nil`,
-        `set(attributes["tag.outlook_token_cache"], attributes["outlook.token_cache"]) where attributes["outlook.token_cache"] != nil and attributes["outlook.token_cache"] != nil`,
-        `set(attributes["tag.app_platform"], resource.attributes["app.platform"]) where resource.attributes["app.platform"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.app_platform"], attributes["app.platform"]) where attributes["app.platform"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment.name"]) where resource.attributes["deployment.environment.name"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.deployment_environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment.name"]) where attributes["deployment.environment.name"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.deployment_environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.flow_kind"], resource.attributes["flow.kind"]) where resource.attributes["flow.kind"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.flow_kind"], attributes["flow.kind"]) where attributes["flow.kind"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.os_type"], resource.attributes["os.type"]) where resource.attributes["os.type"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.os_type"], attributes["os.type"]) where attributes["os.type"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.resource_name"], name) where name != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.resource_name"], resource.attributes["http.request.method"]) where resource.attributes["http.request.method"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.resource_name"], attributes["http.request.method"]) where attributes["http.request.method"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.route_id"], resource.attributes["route.id"]) where resource.attributes["route.id"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.route_id"], attributes["route.id"]) where attributes["route.id"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.ui_outcome"], resource.attributes["ui.outcome"]) where resource.attributes["ui.outcome"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.ui_outcome"], attributes["ui.outcome"]) where attributes["ui.outcome"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.flow_root"], resource.attributes["flow.root"]) where resource.attributes["flow.root"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.flow_root"], attributes["flow.root"]) where attributes["flow.root"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.app_runtime"], resource.attributes["app.runtime"]) where resource.attributes["app.runtime"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.app_runtime"], attributes["app.runtime"]) where attributes["app.runtime"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.typing_surface"], resource.attributes["typing.surface"]) where resource.attributes["typing.surface"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
-        `set(attributes["tag.typing_surface"], attributes["typing.surface"]) where attributes["typing.surface"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment.name"])) where resource.attributes["deployment.environment.name"] != nil and name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment"])) where resource.attributes["deployment.environment"] != nil and name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment.name"])) where attributes["deployment.environment.name"] != nil and name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment"])) where attributes["deployment.environment"] != nil and name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.provider"], String(resource.attributes["gen_ai.provider.name"])) where resource.attributes["gen_ai.provider.name"] != nil and name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.provider"], String(attributes["gen_ai.provider.name"])) where attributes["gen_ai.provider.name"] != nil and name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment.name"])) where resource.attributes["deployment.environment.name"] != nil and attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment"])) where resource.attributes["deployment.environment"] != nil and attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment.name"])) where attributes["deployment.environment.name"] != nil and attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment"])) where attributes["deployment.environment"] != nil and attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.tool"], String(resource.attributes["gen_ai.tool.name"])) where resource.attributes["gen_ai.tool.name"] != nil and attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.tool"], String(attributes["gen_ai.tool.name"])) where attributes["gen_ai.tool.name"] != nil and attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment.name"])) where resource.attributes["deployment.environment.name"] != nil and name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment"])) where resource.attributes["deployment.environment"] != nil and name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment.name"])) where attributes["deployment.environment.name"] != nil and name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment"])) where attributes["deployment.environment"] != nil and name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment.name"])) where resource.attributes["deployment.environment.name"] != nil and name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment"])) where resource.attributes["deployment.environment"] != nil and name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment.name"])) where attributes["deployment.environment.name"] != nil and name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment"])) where attributes["deployment.environment"] != nil and name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.model"], String(resource.attributes["agent.model"])) where resource.attributes["agent.model"] != nil and name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.model"], String(attributes["agent.model"])) where attributes["agent.model"] != nil and name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment.name"])) where resource.attributes["deployment.environment.name"] != nil and name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment"])) where resource.attributes["deployment.environment"] != nil and name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment.name"])) where attributes["deployment.environment.name"] != nil and name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment"])) where attributes["deployment.environment"] != nil and name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.harness"], String(resource.attributes["harness"])) where resource.attributes["harness"] != nil and name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.harness"], String(attributes["harness"])) where attributes["harness"] != nil and name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment.name"])) where resource.attributes["deployment.environment.name"] != nil and name == "ai.provider_account_unavailable"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment"])) where resource.attributes["deployment.environment"] != nil and name == "ai.provider_account_unavailable"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment.name"])) where attributes["deployment.environment.name"] != nil and name == "ai.provider_account_unavailable"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment"])) where attributes["deployment.environment"] != nil and name == "ai.provider_account_unavailable"`,
+        `set(attributes["tag.provider"], String(resource.attributes["ai.provider"])) where resource.attributes["ai.provider"] != nil and name == "ai.provider_account_unavailable"`,
+        `set(attributes["tag.provider"], String(attributes["ai.provider"])) where attributes["ai.provider"] != nil and name == "ai.provider_account_unavailable"`,
+        `set(attributes["tag.reason"], String(resource.attributes["ai.account_unavailable"])) where resource.attributes["ai.account_unavailable"] != nil and name == "ai.provider_account_unavailable"`,
+        `set(attributes["tag.reason"], String(attributes["ai.account_unavailable"])) where attributes["ai.account_unavailable"] != nil and name == "ai.provider_account_unavailable"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment.name"])) where resource.attributes["deployment.environment.name"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment"])) where resource.attributes["deployment.environment"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment.name"])) where attributes["deployment.environment.name"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment"])) where attributes["deployment.environment"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
+        `set(attributes["tag.host"], String(resource.attributes["host.name"])) where resource.attributes["host.name"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
+        `set(attributes["tag.host"], String(attributes["host.name"])) where attributes["host.name"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
+        `set(attributes["tag.source"], String(resource.attributes["source"])) where resource.attributes["source"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
+        `set(attributes["tag.source"], String(attributes["source"])) where attributes["source"] != nil and name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment.name"])) where resource.attributes["deployment.environment.name"] != nil and attributes["outlook.throttle_origin"] != nil`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment"])) where resource.attributes["deployment.environment"] != nil and attributes["outlook.throttle_origin"] != nil`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment.name"])) where attributes["deployment.environment.name"] != nil and attributes["outlook.throttle_origin"] != nil`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment"])) where attributes["deployment.environment"] != nil and attributes["outlook.throttle_origin"] != nil`,
+        `set(attributes["tag.http_status_code"], String(resource.attributes["http.status_code"])) where resource.attributes["http.status_code"] != nil and attributes["outlook.throttle_origin"] != nil`,
+        `set(attributes["tag.http_status_code"], String(resource.attributes["http.response.status_code"])) where resource.attributes["http.response.status_code"] != nil and attributes["outlook.throttle_origin"] != nil`,
+        `set(attributes["tag.http_status_code"], String(attributes["http.status_code"])) where attributes["http.status_code"] != nil and attributes["outlook.throttle_origin"] != nil`,
+        `set(attributes["tag.http_status_code"], String(attributes["http.response.status_code"])) where attributes["http.response.status_code"] != nil and attributes["outlook.throttle_origin"] != nil`,
+        `set(attributes["tag.outlook_throttle_origin"], String(resource.attributes["outlook.throttle_origin"])) where resource.attributes["outlook.throttle_origin"] != nil and attributes["outlook.throttle_origin"] != nil`,
+        `set(attributes["tag.outlook_throttle_origin"], String(attributes["outlook.throttle_origin"])) where attributes["outlook.throttle_origin"] != nil and attributes["outlook.throttle_origin"] != nil`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment.name"])) where resource.attributes["deployment.environment.name"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment"])) where resource.attributes["deployment.environment"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment.name"])) where attributes["deployment.environment.name"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment"])) where attributes["deployment.environment"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
+        `set(attributes["tag.outlook_outcome"], String(resource.attributes["outlook.outcome"])) where resource.attributes["outlook.outcome"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
+        `set(attributes["tag.outlook_outcome"], String(attributes["outlook.outcome"])) where attributes["outlook.outcome"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
+        `set(attributes["tag.outlook_defer_reason"], String(resource.attributes["outlook.defer_reason"])) where resource.attributes["outlook.defer_reason"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
+        `set(attributes["tag.outlook_defer_reason"], String(attributes["outlook.defer_reason"])) where attributes["outlook.defer_reason"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
+        `set(attributes["tag.resource_name"], String(name)) where name != nil and IsMatch(name, "^outlook[.]sync[.]")`,
+        `set(attributes["tag.resource_name"], String(resource.attributes["http.request.method"])) where resource.attributes["http.request.method"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
+        `set(attributes["tag.resource_name"], String(attributes["http.request.method"])) where attributes["http.request.method"] != nil and IsMatch(name, "^outlook[.]sync[.]")`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment.name"])) where resource.attributes["deployment.environment.name"] != nil and attributes["outlook.token_cache"] != nil`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment"])) where resource.attributes["deployment.environment"] != nil and attributes["outlook.token_cache"] != nil`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment.name"])) where attributes["deployment.environment.name"] != nil and attributes["outlook.token_cache"] != nil`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment"])) where attributes["deployment.environment"] != nil and attributes["outlook.token_cache"] != nil`,
+        `set(attributes["tag.http_status_code"], String(resource.attributes["http.status_code"])) where resource.attributes["http.status_code"] != nil and attributes["outlook.token_cache"] != nil`,
+        `set(attributes["tag.http_status_code"], String(resource.attributes["http.response.status_code"])) where resource.attributes["http.response.status_code"] != nil and attributes["outlook.token_cache"] != nil`,
+        `set(attributes["tag.http_status_code"], String(attributes["http.status_code"])) where attributes["http.status_code"] != nil and attributes["outlook.token_cache"] != nil`,
+        `set(attributes["tag.http_status_code"], String(attributes["http.response.status_code"])) where attributes["http.response.status_code"] != nil and attributes["outlook.token_cache"] != nil`,
+        `set(attributes["tag.outlook_outcome"], String(resource.attributes["outlook.outcome"])) where resource.attributes["outlook.outcome"] != nil and attributes["outlook.token_cache"] != nil`,
+        `set(attributes["tag.outlook_outcome"], String(attributes["outlook.outcome"])) where attributes["outlook.outcome"] != nil and attributes["outlook.token_cache"] != nil`,
+        `set(attributes["tag.outlook_token_cache"], String(resource.attributes["outlook.token_cache"])) where resource.attributes["outlook.token_cache"] != nil and attributes["outlook.token_cache"] != nil`,
+        `set(attributes["tag.outlook_token_cache"], String(attributes["outlook.token_cache"])) where attributes["outlook.token_cache"] != nil and attributes["outlook.token_cache"] != nil`,
+        `set(attributes["tag.app_platform"], String(resource.attributes["app.platform"])) where resource.attributes["app.platform"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.app_platform"], String(attributes["app.platform"])) where attributes["app.platform"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment.name"])) where resource.attributes["deployment.environment.name"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.deployment_environment"], String(resource.attributes["deployment.environment"])) where resource.attributes["deployment.environment"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment.name"])) where attributes["deployment.environment.name"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.deployment_environment"], String(attributes["deployment.environment"])) where attributes["deployment.environment"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.flow_kind"], String(resource.attributes["flow.kind"])) where resource.attributes["flow.kind"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.flow_kind"], String(attributes["flow.kind"])) where attributes["flow.kind"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.os_type"], String(resource.attributes["os.type"])) where resource.attributes["os.type"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.os_type"], String(attributes["os.type"])) where attributes["os.type"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.resource_name"], String(name)) where name != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.resource_name"], String(resource.attributes["http.request.method"])) where resource.attributes["http.request.method"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.resource_name"], String(attributes["http.request.method"])) where attributes["http.request.method"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.route_id"], String(resource.attributes["route.id"])) where resource.attributes["route.id"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.route_id"], String(attributes["route.id"])) where attributes["route.id"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.ui_outcome"], String(resource.attributes["ui.outcome"])) where resource.attributes["ui.outcome"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.ui_outcome"], String(attributes["ui.outcome"])) where attributes["ui.outcome"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.flow_root"], String(resource.attributes["flow.root"])) where resource.attributes["flow.root"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.flow_root"], String(attributes["flow.root"])) where attributes["flow.root"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.app_runtime"], String(resource.attributes["app.runtime"])) where resource.attributes["app.runtime"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.app_runtime"], String(attributes["app.runtime"])) where attributes["app.runtime"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.typing_surface"], String(resource.attributes["typing.surface"])) where resource.attributes["typing.surface"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
+        `set(attributes["tag.typing_surface"], String(attributes["typing.surface"])) where attributes["typing.surface"] != nil and attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"`,
         `replace_pattern(attributes["tag.tool"], "(?s)^([A-Za-z][A-Za-z0-9_-]{0,63}): .*$", "$1") where attributes["tag.tool"] != nil`,
         `set(attributes["tag.tool"], "other") where attributes["tag.tool"] != nil and not IsMatch(attributes["tag.tool"], "^[A-Za-z][A-Za-z0-9_-]{0,63}$")`,
       ]
@@ -177,7 +177,7 @@ data:
     spans {
       name        = "macro_agent_chat_cache_read_tokens"
       description = "Datadog macro.agent.chat.cache_read_tokens"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["gen_ai.usage.cache_read.input_tokens"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["gen_ai.usage.cache_read.input_tokens"]) and attributes["gen_ai.usage.cache_read.input_tokens"] > -1.0e300 and attributes["gen_ai.usage.cache_read.input_tokens"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -198,7 +198,7 @@ data:
     spans {
       name        = "macro_agent_chat_cache_write_tokens"
       description = "Datadog macro.agent.chat.cache_write_tokens"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["gen_ai.usage.cache_creation.input_tokens"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["gen_ai.usage.cache_creation.input_tokens"]) and attributes["gen_ai.usage.cache_creation.input_tokens"] > -1.0e300 and attributes["gen_ai.usage.cache_creation.input_tokens"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -219,7 +219,7 @@ data:
     spans {
       name        = "macro_agent_chat_input_tokens"
       description = "Datadog macro.agent.chat.input_tokens"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["gen_ai.usage.input_tokens"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["gen_ai.usage.input_tokens"]) and attributes["gen_ai.usage.input_tokens"] > -1.0e300 and attributes["gen_ai.usage.input_tokens"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -240,7 +240,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_connected_integrations_bytes"
       description = "Datadog macro.agent.chat.prompt.connected_integrations.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.connected_integrations.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.connected_integrations.bytes"]) and attributes["macro.genai.prompt.connected_integrations.bytes"] > -1.0e300 and attributes["macro.genai.prompt.connected_integrations.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -261,7 +261,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_history_bytes"
       description = "Datadog macro.agent.chat.prompt.history.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.history.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.history.bytes"]) and attributes["macro.genai.prompt.history.bytes"] > -1.0e300 and attributes["macro.genai.prompt.history.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -282,7 +282,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_identity_bytes"
       description = "Datadog macro.agent.chat.prompt.identity.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.identity.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.identity.bytes"]) and attributes["macro.genai.prompt.identity.bytes"] > -1.0e300 and attributes["macro.genai.prompt.identity.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -303,7 +303,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_macro_prompt_bytes"
       description = "Datadog macro.agent.chat.prompt.macro_prompt.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.macro_prompt.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.macro_prompt.bytes"]) and attributes["macro.genai.prompt.macro_prompt.bytes"] > -1.0e300 and attributes["macro.genai.prompt.macro_prompt.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -324,7 +324,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_memory_bytes"
       description = "Datadog macro.agent.chat.prompt.memory.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.memory.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.memory.bytes"]) and attributes["macro.genai.prompt.memory.bytes"] > -1.0e300 and attributes["macro.genai.prompt.memory.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -345,7 +345,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_model_id_bytes"
       description = "Datadog macro.agent.chat.prompt.model_id.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.model_id.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.model_id.bytes"]) and attributes["macro.genai.prompt.model_id.bytes"] > -1.0e300 and attributes["macro.genai.prompt.model_id.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -366,7 +366,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_opener_note_bytes"
       description = "Datadog macro.agent.chat.prompt.opener_note.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.opener_note.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.opener_note.bytes"]) and attributes["macro.genai.prompt.opener_note.bytes"] > -1.0e300 and attributes["macro.genai.prompt.opener_note.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -387,7 +387,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_preamble_bytes"
       description = "Datadog macro.agent.chat.prompt.preamble.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.preamble.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.preamble.bytes"]) and attributes["macro.genai.prompt.preamble.bytes"] > -1.0e300 and attributes["macro.genai.prompt.preamble.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -408,7 +408,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_sdk_docs_bytes"
       description = "Datadog macro.agent.chat.prompt.sdk_docs.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.sdk_docs.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.sdk_docs.bytes"]) and attributes["macro.genai.prompt.sdk_docs.bytes"] > -1.0e300 and attributes["macro.genai.prompt.sdk_docs.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -429,7 +429,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_session_instructions_bytes"
       description = "Datadog macro.agent.chat.prompt.session_instructions.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.session_instructions.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.session_instructions.bytes"]) and attributes["macro.genai.prompt.session_instructions.bytes"] > -1.0e300 and attributes["macro.genai.prompt.session_instructions.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -450,7 +450,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_session_note_bytes"
       description = "Datadog macro.agent.chat.prompt.session_note.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.session_note.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.session_note.bytes"]) and attributes["macro.genai.prompt.session_note.bytes"] > -1.0e300 and attributes["macro.genai.prompt.session_note.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -471,7 +471,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_tool_results_bytes"
       description = "Datadog macro.agent.chat.prompt.tool_results.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.tool_results.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.tool_results.bytes"]) and attributes["macro.genai.prompt.tool_results.bytes"] > -1.0e300 and attributes["macro.genai.prompt.tool_results.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -492,7 +492,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_tools_eager_bytes"
       description = "Datadog macro.agent.chat.prompt.tools.eager.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.tools.eager.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.tools.eager.bytes"]) and attributes["macro.genai.prompt.tools.eager.bytes"] > -1.0e300 and attributes["macro.genai.prompt.tools.eager.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -513,7 +513,7 @@ data:
     spans {
       name        = "macro_agent_chat_prompt_tools_loaded_bytes"
       description = "Datadog macro.agent.chat.prompt.tools.loaded.bytes"
-      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.tools.loaded.bytes"])`]
+      conditions  = [`name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.prompt.tools.loaded.bytes"]) and attributes["macro.genai.prompt.tools.loaded.bytes"] > -1.0e300 and attributes["macro.genai.prompt.tools.loaded.bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -576,7 +576,7 @@ data:
     spans {
       name        = "macro_agent_tool_result_bytes"
       description = "Datadog macro.agent.tool.result_bytes"
-      conditions  = [`attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.tool.result_bytes"])`]
+      conditions  = [`attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["macro.genai.tool.result_bytes"]) and attributes["macro.genai.tool.result_bytes"] > -1.0e300 and attributes["macro.genai.tool.result_bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -618,7 +618,7 @@ data:
     spans {
       name        = "macro_agent_turn_code_executions"
       description = "Datadog macro.agent.turn.code_executions"
-      conditions  = [`name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.turn.code_executions"])`]
+      conditions  = [`name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.turn.code_executions"]) and attributes["agent.turn.code_executions"] > -1.0e300 and attributes["agent.turn.code_executions"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -635,7 +635,7 @@ data:
     spans {
       name        = "macro_agent_turn_code_failures"
       description = "Datadog macro.agent.turn.code_failures"
-      conditions  = [`name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.turn.code_failures"])`]
+      conditions  = [`name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.turn.code_failures"]) and attributes["agent.turn.code_failures"] > -1.0e300 and attributes["agent.turn.code_failures"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -652,7 +652,7 @@ data:
     spans {
       name        = "macro_agent_turn_compaction_wait_ms"
       description = "Datadog macro.agent.turn.compaction_wait_ms"
-      conditions  = [`name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.turn.compaction_wait_ms"])`]
+      conditions  = [`name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.turn.compaction_wait_ms"]) and attributes["agent.turn.compaction_wait_ms"] > -1.0e300 and attributes["agent.turn.compaction_wait_ms"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -690,7 +690,7 @@ data:
     spans {
       name        = "macro_agent_turn_model_calls"
       description = "Datadog macro.agent.turn.model_calls"
-      conditions  = [`name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.stream.model_calls"])`]
+      conditions  = [`name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.stream.model_calls"]) and attributes["agent.stream.model_calls"] > -1.0e300 and attributes["agent.stream.model_calls"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -732,7 +732,7 @@ data:
     spans {
       name        = "macro_agent_harness_runtime_reattach_eager"
       description = "Datadog macro.agent_harness.runtime_reattach.eager"
-      conditions  = [`name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.runtime.reattach_eager"])`]
+      conditions  = [`name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.runtime.reattach_eager"]) and attributes["agent.runtime.reattach_eager"] > -1.0e300 and attributes["agent.runtime.reattach_eager"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -753,7 +753,7 @@ data:
     spans {
       name        = "macro_agent_harness_runtime_reattach_failures"
       description = "Datadog macro.agent_harness.runtime_reattach.failures"
-      conditions  = [`name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.runtime.reattach_failures"])`]
+      conditions  = [`name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.runtime.reattach_failures"]) and attributes["agent.runtime.reattach_failures"] > -1.0e300 and attributes["agent.runtime.reattach_failures"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -774,7 +774,7 @@ data:
     spans {
       name        = "macro_agent_harness_runtime_reattach_lazy"
       description = "Datadog macro.agent_harness.runtime_reattach.lazy"
-      conditions  = [`name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.runtime.reattach_lazy"])`]
+      conditions  = [`name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.runtime.reattach_lazy"]) and attributes["agent.runtime.reattach_lazy"] > -1.0e300 and attributes["agent.runtime.reattach_lazy"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -795,7 +795,7 @@ data:
     spans {
       name        = "macro_agent_harness_runtime_reattach_sessions"
       description = "Datadog macro.agent_harness.runtime_reattach.sessions"
-      conditions  = [`name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.runtime.reattach_sessions"])`]
+      conditions  = [`name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.runtime.reattach_sessions"]) and attributes["agent.runtime.reattach_sessions"] > -1.0e300 and attributes["agent.runtime.reattach_sessions"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -816,7 +816,7 @@ data:
     spans {
       name        = "macro_agent_harness_runtime_reattach_skipped"
       description = "Datadog macro.agent_harness.runtime_reattach.skipped"
-      conditions  = [`name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.runtime.reattach_skipped"])`]
+      conditions  = [`name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service" and IsDouble(attributes["agent.runtime.reattach_skipped"]) and attributes["agent.runtime.reattach_skipped"] > -1.0e300 and attributes["agent.runtime.reattach_skipped"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -912,7 +912,7 @@ data:
     spans {
       name        = "macro_outlook_notification_lag"
       description = "Datadog macro.outlook.notification_lag"
-      conditions  = [`IsMatch(name, "^outlook[.]sync[.]") and name == "outlook.sync.reconcile" and IsDouble(attributes["outlook.notification_lag_ms"])`]
+      conditions  = [`IsMatch(name, "^outlook[.]sync[.]") and name == "outlook.sync.reconcile" and IsDouble(attributes["outlook.notification_lag_ms"]) and attributes["outlook.notification_lag_ms"] > -1.0e300 and attributes["outlook.notification_lag_ms"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -991,7 +991,7 @@ data:
     spans {
       name        = "macro_web_flow_blocking_ms"
       description = "Datadog macro.web.flow.blocking_ms"
-      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and attributes["flow.kind"] != nil and attributes["ui.outcome"] == "success" and IsDouble(attributes["ui.long_animation_frame_blocking_ms"])`]
+      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and attributes["flow.kind"] != nil and attributes["ui.outcome"] == "success" and IsDouble(attributes["ui.long_animation_frame_blocking_ms"]) and attributes["ui.long_animation_frame_blocking_ms"] > -1.0e300 and attributes["ui.long_animation_frame_blocking_ms"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -1024,7 +1024,7 @@ data:
     spans {
       name        = "macro_web_flow_elapsed_ms"
       description = "Datadog macro.web.flow.elapsed_ms"
-      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and attributes["flow.kind"] != nil and IsDouble(attributes["ui.elapsed_ms"])`]
+      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and attributes["flow.kind"] != nil and IsDouble(attributes["ui.elapsed_ms"]) and attributes["ui.elapsed_ms"] > -1.0e300 and attributes["ui.elapsed_ms"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -1065,7 +1065,7 @@ data:
     spans {
       name        = "macro_web_graphql_body_ms"
       description = "Datadog macro.web.graphql.body_ms"
-      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and name == "graphql.transport" and attributes["graphql.body_outcome"] == "complete" and IsDouble(attributes["graphql.body_ms"])`]
+      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and name == "graphql.transport" and attributes["graphql.body_outcome"] == "complete" and IsDouble(attributes["graphql.body_ms"]) and attributes["graphql.body_ms"] > -1.0e300 and attributes["graphql.body_ms"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -1094,7 +1094,7 @@ data:
     spans {
       name        = "macro_web_http_body_ms"
       description = "Datadog macro.web.http.body_ms"
-      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and attributes["http.body_outcome"] == "complete" and IsDouble(attributes["http.body_ms"])`]
+      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and attributes["http.body_outcome"] == "complete" and IsDouble(attributes["http.body_ms"]) and attributes["http.body_ms"] > -1.0e300 and attributes["http.body_ms"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -1156,7 +1156,7 @@ data:
     spans {
       name        = "macro_web_runtime_blocking_ms"
       description = "Datadog macro.web.runtime.blocking_ms"
-      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and name == "app.runtime.sample" and IsDouble(attributes["runtime.long_animation_frame.blocking_ms"])`]
+      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and name == "app.runtime.sample" and IsDouble(attributes["runtime.long_animation_frame.blocking_ms"]) and attributes["runtime.long_animation_frame.blocking_ms"] > -1.0e300 and attributes["runtime.long_animation_frame.blocking_ms"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -1189,7 +1189,7 @@ data:
     spans {
       name        = "macro_web_runtime_js_heap_used_bytes"
       description = "Datadog macro.web.runtime.js_heap_used_bytes"
-      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and name == "app.runtime.sample" and IsDouble(attributes["macro.memory.js_heap.used_bytes"])`]
+      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and name == "app.runtime.sample" and IsDouble(attributes["macro.memory.js_heap.used_bytes"]) and attributes["macro.memory.js_heap.used_bytes"] > -1.0e300 and attributes["macro.memory.js_heap.used_bytes"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -1222,7 +1222,7 @@ data:
     spans {
       name        = "macro_web_typing_event_duration_p95_ms"
       description = "Datadog macro.web.typing.event_duration_p95_ms"
-      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and name == "input.typing_burst" and IsDouble(attributes["typing.event_duration_p95_ms"])`]
+      conditions  = [`attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app" and name == "input.typing_burst" and IsDouble(attributes["typing.event_duration_p95_ms"]) and attributes["typing.event_duration_p95_ms"] > -1.0e300 and attributes["typing.event_duration_p95_ms"] < 1.0e300`]
 
       // None: without this block, every resource attribute becomes a label.
       include_resource_attributes {
@@ -1323,12 +1323,16 @@ data:
 
     prometheus.scrape "alloy" {
       targets         = prometheus.exporter.self.alloy.targets
-      job_name        = "observability/derived-metrics"
       scrape_interval = "30s"
       forward_to      = [prometheus.relabel.alloy.receiver]
     }
 
+    // The exporter's targets bring their own job.
     prometheus.relabel "alloy" {
+      rule {
+        target_label = "job"
+        replacement  = "observability/derived-metrics"
+      }
       rule {
         source_labels = ["__name__"]
         regex         = "otelcol_.*|alloy_resources_process_.*|up"

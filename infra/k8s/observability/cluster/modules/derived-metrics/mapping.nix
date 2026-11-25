@@ -57,8 +57,11 @@ in
   Distributions are native histograms: no `_bucket`, `_sum` or `_count` series.
   Counts, sums and averages are exact; quantiles are within a bucket (a few
   percent; Datadog's sketches are within 1 %).
-  Nothing happening means no sample, so a monitor that has to see zero needs
-  `or vector(0)`.
+  Nothing happening means no sample: an ungrouped query that has to give zero needs
+  `or vector(0)`; a grouped one has no series for a group where nothing happened.
+
+  Metrics of production services need those services to send to Grafana: until one
+  does, its metrics have no `deployment_environment="prod"`.
 
   ## From spans
 

@@ -206,15 +206,16 @@ alloy-ingest ── tap: spans some metric reads, before sampling ──▶ deri
   to translate a query. Read it before porting a monitor.
 - Not Tempo's metrics generator: it sees only the traces the sampler keeps and
   can measure nothing but a span's duration.
-- The tap never holds ingest up: its queue is small and it drops what
+- The tap never holds ingest up: its queue holds 4 MiB at most and it drops what
   `derived-metrics` can't take for a minute. It forwards only the attributes the
-  metrics read, so no prompt or response text.
+  metrics read, without events, so no prompt or response text.
 - Every 30 s each replica writes one delta sample per series that had spans,
   stored as it comes (`otel_native_delta_ingestion` in Mimir, experimental): no
   counter resets, no first increment lost, a series that fires once a day counts.
   A distribution is one native histogram series.
 - Cardinality: each replica writes its own series, so a metric has at most twice
-  its label combinations. `tool` is the widest label.
+  its label combinations. `tool` is the widest label. Mimir caps any one metric at
+  50k series (`max_global_series_per_metric`).
 
 ## Grafana, the edge and ingest
 
