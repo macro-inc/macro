@@ -7,6 +7,7 @@ mod duplicate;
 mod infer_column_type;
 mod metadata;
 mod ops;
+mod project_creation;
 mod reads;
 mod saved_queries;
 mod sharing;
@@ -17,6 +18,7 @@ mod transfer;
 mod undo;
 mod views;
 
+use models_databases::MAX_OPTION_LABEL_LEN;
 use std::collections::{HashMap, HashSet};
 
 use activity::Actor;
@@ -57,8 +59,6 @@ const FIRST_TABLE_NAME: &str = "Table 1";
 const FIRST_TABLE_TITLE_COLUMN: &str = "Name";
 /// Longest accepted database/table/column name.
 const MAX_NAME_LEN: usize = 200;
-/// Longest accepted select-option label.
-const MAX_OPTION_LABEL_LEN: usize = 200;
 /// Most rows a schema operation converts in one go.
 const MAX_CONVERTED_ROWS: usize = 200_000;
 
@@ -536,27 +536,7 @@ where
 {
     #[tracing::instrument(skip(self), err)]
     async fn create_database(&self, command: CreateDatabase) -> Result<Database, DatabaseError> {
-        let first_table = FirstTable {
-            name: validate_name(command.first_table.as_deref().unwrap_or(FIRST_TABLE_NAME))?,
-            title_column: FIRST_TABLE_TITLE_COLUMN,
-        };
-        let command = CreateDatabase {
-            name: validate_name(&command.name)?,
-            ..command
-        };
-        let database = self
-            .repository
-            .create_database(&command, first_table)
-            .await
-            .map_err(repository_error)?;
-        self.emit(DatabaseMacroEvent::created(DatabaseCreatedMetadata {
-            database_id: database.id,
-            owner: command.owner_id.clone(),
-            name: database.name.clone(),
-            created_at: database.created_at,
-            attribution: events::Attribution::acting(command.owner_id, command.acting_bot),
-        }));
-        Ok(database)
+        self.create_database_at(command, None, None).await
     }
 
     #[tracing::instrument(skip(self, receipt), err)]

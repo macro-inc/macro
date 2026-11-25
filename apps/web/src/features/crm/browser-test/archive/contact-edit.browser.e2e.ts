@@ -22,7 +22,7 @@ async function rowAction(scope: Locator, name: string, isMobile: boolean) {
   const action = scope.getByRole('button', { name, exact: true });
   if (!isMobile)
     await action
-      .locator('xpath=ancestor::*[contains(@class, "group/address")][1]')
+      .locator('xpath=ancestor::*[contains(@class, "group/value")][1]')
       .hover();
   return action;
 }

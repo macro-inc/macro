@@ -32,10 +32,6 @@ import { UtilWrap } from '../components/utils/UtilWrap';
 import { analytics } from '../utils/utilAnalytic';
 
 import { utilFaviconEffect } from '../utils/utilFavicon';
-import {
-  MOBILE_SIGNUP_PATH,
-  MOBILE_SIGNUP_SENT_PATH,
-} from '../utils/utilMobileSignup';
 
 function RouteHomepage() {
   return <Homepage embedded />;
@@ -197,14 +193,9 @@ const RoutePartnerTerms = lazy(() =>
     default: module.RoutePartnerTerms,
   }))
 );
-const RouteMobileSignup = lazy(() =>
-  import('../routes/RouteMobileSignup').then((module) => ({
-    default: module.RouteMobileSignup,
-  }))
-);
-const RouteMobileSignupSent = lazy(() =>
-  import('../routes/RouteMobileSignupSent').then((module) => ({
-    default: module.RouteMobileSignupSent,
+const RouteMobileSignupRedirect = lazy(() =>
+  import('../routes/RouteMobileSignupRedirect').then((module) => ({
+    default: module.RouteMobileSignupRedirect,
   }))
 );
 
@@ -297,10 +288,10 @@ const RootLayout: ParentComponent = (props) => {
                 width: 'calc(100vw / var(--site-scale, 1))',
               }}
             >
-              {/* The phone signup pages are only the email capture. */}
+              {/* The retired phone signup paths only forward to the app. */}
               <Show
                 when={
-                  ![MOBILE_SIGNUP_PATH, MOBILE_SIGNUP_SENT_PATH].includes(
+                  !['/mobile-signup', '/mobile-signup-sent'].includes(
                     location.pathname.replace(/\/$/, '')
                   )
                 }
@@ -389,11 +380,9 @@ export const App: Component<{
       {/* Partner program: the landing page and its full program terms. */}
       <Route path="/partners" component={RoutePartners} />
       <Route path="/partners/terms" component={RoutePartnerTerms} />
-      {/* Mobile-web signup: email capture and its "check your email"
-          confirmation. Mobile CTAs land here instead of loading the app just to
-          show an email field. */}
-      <Route path={MOBILE_SIGNUP_PATH} component={RouteMobileSignup} />
-      <Route path={MOBILE_SIGNUP_SENT_PATH} component={RouteMobileSignupSent} />
+      {/* The retired phone email capture forwards old links to app signup. */}
+      <Route path="/mobile-signup" component={RouteMobileSignupRedirect} />
+      <Route path="/mobile-signup-sent" component={RouteMobileSignupRedirect} />
       {/* The switching guide. Prerendered and in the sitemap; reached from the
           versus posts and the footer rather than the header nav. */}
       <Route

@@ -156,6 +156,151 @@ describe('rescheduling a timed range', () => {
       rescheduledGanttTimes(times(), 'start', october9, october9 + 9, 'day')
     ).toEqual({ start: new Date(2026, 9, 13, 9), end: times().end });
   });
+
+  it('moves an end saved without a time by whole days only', () => {
+    const midnightDue = {
+      start: new Date(2026, 9, 9, 9),
+      end: new Date(2026, 9, 13),
+    };
+    expect(
+      rescheduledGanttTimes(
+        midnightDue,
+        'move',
+        october9,
+        october9 - 2 / 24,
+        60,
+        'end'
+      )
+    ).toEqual({ start: new Date(2026, 9, 9, 7), end: midnightDue.end });
+    const endOfDayDue = {
+      start: new Date(2026, 9, 9, 9),
+      end: new Date(2026, 9, 13, 23, 59, 59, 999),
+    };
+    expect(
+      rescheduledGanttTimes(
+        endOfDayDue,
+        'move',
+        october9,
+        october9 + 3 / 24,
+        60,
+        'end'
+      )
+    ).toEqual({ start: new Date(2026, 9, 9, 12), end: endOfDayDue.end });
+    const wholeDayStart = {
+      start: new Date(2026, 9, 9),
+      end: new Date(2026, 9, 13, 17),
+    };
+    expect(
+      rescheduledGanttTimes(
+        wholeDayStart,
+        'move',
+        october9,
+        october9 - 3 / 24,
+        60,
+        'start'
+      )
+    ).toEqual({ start: wholeDayStart.start, end: new Date(2026, 9, 13, 14) });
+    expect(
+      rescheduledGanttTimes(
+        midnightDue,
+        'move',
+        october9,
+        october9 + 20 / 24,
+        60,
+        'end'
+      )
+    ).toEqual({
+      start: new Date(2026, 9, 10, 5),
+      end: new Date(2026, 9, 14),
+    });
+    expect(
+      rescheduledGanttTimes(
+        midnightDue,
+        'end',
+        october9,
+        october9 - 14 / 24,
+        60,
+        'end'
+      )
+    ).toEqual({ start: midnightDue.start, end: new Date(2026, 9, 12) });
+  });
+
+  it('rounds a date without a time toward its own side rather than past the other end', () => {
+    expect(
+      rescheduledGanttTimes(
+        { start: new Date(2026, 9, 12, 22), end: new Date(2026, 9, 13) },
+        'move',
+        october9,
+        october9 + 3 / 24,
+        60,
+        'end'
+      )
+    ).toEqual({
+      start: new Date(2026, 9, 13, 1),
+      end: new Date(2026, 9, 14),
+    });
+    const wholeDayStart = {
+      start: new Date(2026, 9, 13),
+      end: new Date(2026, 9, 13, 17),
+    };
+    expect(
+      rescheduledGanttTimes(
+        wholeDayStart,
+        'start',
+        october9,
+        october9 + 16 / 24,
+        60,
+        'start'
+      )
+    ).toEqual(wholeDayStart);
+  });
+
+  it('stops the start edge on the grid before a due date held at the end of its day', () => {
+    const endOfDay = new Date(2026, 9, 13, 23, 59, 59, 999);
+    expect(
+      rescheduledGanttTimes(
+        { start: new Date(2026, 9, 13, 9), end: endOfDay },
+        'start',
+        october9,
+        october9 + 1,
+        60,
+        'end'
+      )
+    ).toEqual({ start: new Date(2026, 9, 13, 23), end: endOfDay });
+  });
+
+  it('keeps the start edge before an end in the hour clocks repeat', () => {
+    // 1:30 AM EST on Nov 1, after the clocks fell back: an hour earlier is
+    // 1:30 AM EDT, whose wall-clock hour would round to 2:00 AM EST.
+    const end = new Date('2026-11-01T06:30:00Z');
+    const moved = rescheduledGanttTimes(
+      { start: new Date(2026, 9, 31, 20), end },
+      'start',
+      november1 - 1,
+      november1 + 1,
+      60,
+      'end'
+    );
+    expect(moved.start).toEqual(new Date('2026-11-01T05:30:00Z'));
+    expect(moved.start < moved.end).toBe(true);
+  });
+
+  it('measures a move across a clock change at the start', () => {
+    // From Oct 30, 3 days 11 hours later is Nov 2, 8 PM, short of half a day past 3 days.
+    expect(
+      rescheduledGanttTimes(
+        { start: new Date(2026, 9, 30, 9), end: new Date(2026, 10, 2) },
+        'move',
+        november1 - 2,
+        november1 + 1 + 11 / 24,
+        60,
+        'end'
+      )
+    ).toEqual({
+      start: new Date(2026, 10, 2, 20),
+      end: new Date(2026, 10, 5),
+    });
+  });
 });
 
 describe('timed bars and creation', () => {

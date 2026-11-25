@@ -78,3 +78,21 @@ it('opens the title menu when the title is tapped', () => {
   fireEvent.click(screen.getByText('Quarterly plan'));
   expect(openTitleMenu).toHaveBeenCalledOnce();
 });
+
+it('opens the title menu from the keyboard, naming the whole title', () => {
+  const openTitleMenu = vi.fn();
+  const pane = renderPane(openTitleMenu);
+  pane.setMobileView(true);
+
+  const title = screen.getByRole('button', { name: 'Quarterly plan' });
+  fireEvent.keyDown(title, { key: 'Enter' });
+  expect(openTitleMenu).toHaveBeenCalledOnce();
+});
+
+it('leaves a title without a menu as plain text', () => {
+  const pane = renderPane();
+  pane.setMobileView(true);
+
+  expect(screen.queryByRole('button', { name: 'Quarterly plan' })).toBeNull();
+  expect(screen.getByText('Quarterly plan')).toBeTruthy();
+});

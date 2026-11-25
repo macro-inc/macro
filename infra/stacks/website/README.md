@@ -100,7 +100,9 @@ website when changing the manifest. The separate `apps/docs/docs.json` records
 cover the old docs hostname; publish those only after the destination site is live.
 
 `apps/marketing/seo/download-redirects.json` maps `/download/mac` and
-`/download/linux` to the fixed-name desktop installers on the `desktop-stable`
+`/download/linux` (and `/download/mac-intel` once the Intel installer is
+published; deploy the website stack and site before or with the web app that
+links to it) to the fixed-name desktop installers on the `desktop-stable`
 GitHub release. The handler answers them first, with a `302` and
 `Cache-Control: no-store`, so the target can move without browsers keeping the
 old one; the desktop publish job keeps those assets current

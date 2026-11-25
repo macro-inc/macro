@@ -357,6 +357,40 @@ describe('GitHub triggers', () => {
   });
 });
 
+describe('email label selectors', () => {
+  it('round trips the labels of an email label trigger', () => {
+    const config = {
+      type: 'events' as const,
+      filters: [
+        {
+          events: ['email.labeled' as const],
+          labels: ['label-1', 'label-2'],
+          condition: 'Is it overdue?',
+        },
+      ],
+    };
+    const [trigger] = parseRoutineTriggers(config)!;
+    expect(routineTriggerSchema.safeParse(trigger).success).toBe(true);
+    expect(serializeTriggers([trigger])).toEqual(config);
+    expect(trigger.kind === 'event' && eventTriggerLabel(trigger)).toBe(
+      'Email labeled'
+    );
+  });
+
+  it('sends no labels for any label', () => {
+    const trigger = {
+      id: 'trigger',
+      kind: 'event' as const,
+      events: ['email.labeled' as const],
+      labels: [],
+    };
+    expect(serializeTriggers([trigger])).toEqual({
+      type: 'events',
+      filters: [{ events: ['email.labeled'] }],
+    });
+  });
+});
+
 describe('task property selectors', () => {
   const STATUS = SYSTEM_PROPERTY_IDS.STATUS;
   const COMPLETED = PROPERTY_OPTION_IDS.STATUS.COMPLETED;
@@ -428,5 +462,57 @@ describe('task property selectors', () => {
       withPropertyValues(trigger, SYSTEM_PROPERTY_IDS.ASSIGNEES, []).property
     ).toEqual({ definitionId: SYSTEM_PROPERTY_IDS.ASSIGNEES, values: [] });
     expect(taskTriggerProperty(trigger)).toBeUndefined();
+  });
+});
+
+describe('email trigger inboxes', () => {
+  const inbox = '01900000-0000-7000-8000-0000000000a1';
+
+  it('round trips the inboxes an email trigger watches', () => {
+    const config = {
+      type: 'events' as const,
+      filters: [
+        { events: ['email.message_received' as const], inboxes: [inbox] },
+      ],
+    };
+    const triggers = parseRoutineTriggers(config)!;
+    expect(triggers[0]).toMatchObject({ kind: 'event', inboxes: [inbox] });
+    expect(routineTriggerSchema.safeParse(triggers[0]).success).toBe(true);
+    expect(serializeTriggers(triggers)).toEqual(config);
+  });
+
+  it('sends no inboxes for every inbox', () => {
+    const trigger = {
+      id: 'trigger',
+      kind: 'event' as const,
+      events: ['email.message_received' as const],
+    };
+    for (const inboxes of [undefined, []])
+      expect(serializeTriggers([{ ...trigger, inboxes }])).toEqual({
+        type: 'events',
+        filters: [{ events: ['email.message_received'] }],
+      });
+    expect(
+      parseRoutineTriggers({
+        type: 'events',
+        filters: [{ events: ['email.message_received'], inboxes: [] }],
+      })?.[0]
+    ).toMatchObject({ inboxes: undefined });
+  });
+
+  it('refuses more inboxes than the backend accepts', () => {
+    const trigger = {
+      id: 'trigger',
+      kind: 'event' as const,
+      events: ['email.message_received' as const],
+    };
+    expect(
+      validateTriggers([
+        {
+          ...trigger,
+          inboxes: Array.from({ length: 26 }, () => crypto.randomUUID()),
+        },
+      ])
+    ).toBe('Choose up to 25 inboxes per email trigger.');
   });
 });

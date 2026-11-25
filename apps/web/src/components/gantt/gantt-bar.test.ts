@@ -165,3 +165,38 @@ it('names a timed bar whose start has no time with that start as a day', () => {
     'Write the brief: Mar 4 → Mar 6, 8 PM'
   );
 });
+
+it("draws a timed bar to the end of a due date's day when the due date has no time", () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 2, 3, 12));
+  const [wholeDay, setWholeDay] = createSignal<'end' | undefined>('end');
+  const view = render(() =>
+    createComponent(Gantt.Root, {
+      range: {
+        start: toGanttDay('2026-03-01')!,
+        end: toGanttDay('2026-03-21')!,
+      },
+      defaultScale: 'day',
+      get children() {
+        return createComponent(Gantt.Bar, {
+          start: new Date(2026, 2, 4, 10),
+          end: new Date(2026, 2, 6),
+          timed: true,
+          get wholeDay() {
+            return wholeDay();
+          },
+          title: 'Write the brief',
+        });
+      },
+    })
+  );
+  const width = () =>
+    Number.parseFloat(
+      view.container.querySelector<HTMLElement>('[data-gantt-timed]')!.style
+        .width
+    );
+  // From 10 AM on Mar 4 to the end of Mar 6 is 2 days 14 hours, at 40 px a day.
+  expect(width()).toBeCloseTo(40 * (2 + 14 / 24), 0);
+  setWholeDay(undefined);
+  expect(width()).toBeCloseTo(40 * (1 + 14 / 24), 0);
+});

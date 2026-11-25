@@ -29,6 +29,15 @@ interface CreateSearchStateArgs {
    */
   searchText: Accessor<string>;
   setSearchText: Setter<string>;
+  /** The text the search service is sent, when it differs from the field's. */
+  serviceText?: Accessor<string>;
+  /** The words names are matched with, when they differ from the field's. */
+  nameText?: Accessor<string>;
+  /**
+   * The types a query's operators leave to search, which name matches are
+   * narrowed to, or undefined for every type.
+   */
+  operatorIndexes?: Accessor<readonly string[] | undefined>;
 }
 
 const namesAny = (ids: readonly string[] | undefined) =>
@@ -62,6 +71,9 @@ export const createSearchState = ({
   searchPaused,
   searchText,
   setSearchText,
+  serviceText,
+  nameText,
+  operatorIndexes,
 }: CreateSearchStateArgs) => {
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
@@ -75,11 +87,12 @@ export const createSearchState = ({
   const hideLocalResults = () =>
     hidesLocalSearchResults(filters().include, surface());
   const searchContext = useSearchContext();
+  const namesText = nameText ?? searchText;
   const entityPool = searchContext.entityPool(
     () =>
       !disableLocalSearch?.() &&
       !hideLocalResults() &&
-      Boolean(searchText().trim())
+      Boolean(namesText().trim())
   );
   const localPool = createLazyMemo(() => {
     const pool =
@@ -89,28 +102,30 @@ export const createSearchState = ({
     const activeIds = soup.predicates
       .activeIds()
       .filter((id) => id !== 'explicit-noise');
-    if (activeIds.length === 0) return pool;
+    const indexes = operatorIndexes?.();
+    if (activeIds.length === 0 && !indexes) return pool;
 
     const context = getFilterContext();
     const entities = pool.map((item) => item.data);
-    const matches = intersectEntityPools(
-      activeIds.map((id) => {
-        const predicate = soup.predicates.available.find(
-          (candidate) => candidate.id === id
-        );
-        if (!predicate) return [];
-        return entities.filter((entity) =>
-          predicate.predicate(entity, context)
-        );
-      })
-    );
+    const matching = (id: string) => {
+      const predicate = soup.predicates.available.find(
+        (candidate) => candidate.id === id
+      );
+      if (!predicate) return [];
+      return entities.filter((entity) => predicate.predicate(entity, context));
+    };
+    const pools = activeIds.map(matching);
+    // The types `type:` names are alternatives: a match is any one of them.
+    if (indexes) pools.push(indexes.flatMap(matching));
+    const matches = intersectEntityPools(pools);
     const matchingIds = new Set(matches.map((entity) => entity.id));
     return pool.filter((item) => matchingIds.has(item.data.id));
   });
 
   const search = createSharedSearchState({
     surface,
-    text: searchText,
+    text: serviceText ?? searchText,
+    nameText: namesText,
     buildRequest: (search) => buildSoupSearchRequest(filters(), search),
     localPool,
     disableLocalSearch,
@@ -122,6 +137,7 @@ export const createSearchState = ({
     searchText,
     setSearchText,
     localFuzzyResults: search.localFuzzyResults,
+    localSearchText: search.localSearchText,
     refresh: search.refresh,
     isSearching: search.isSearching,
     serviceSearchResults: search.serviceSearchResults,

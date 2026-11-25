@@ -8,6 +8,7 @@ use super::telemetry::{
 use super::{MailboxError, MailboxKey, MessageRetry, UNFINISHED_CLAIM_LIMIT};
 use crate::domain::events::*;
 use crate::domain::models::calendar_invitation::CalendarInvitation;
+use crate::domain::models::label::LabelsGained;
 use email_api_client::domain::models::{CalendarPart, EmailApiError};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{
@@ -52,6 +53,10 @@ pub enum ProjectionEvent {
         #[serde(default)]
         version: Option<String>,
         calendar_parts: Vec<CalendarPart>,
+        #[serde(default)]
+        labels_gained: Option<LabelsGained>,
+        #[serde(default)]
+        traceparent: Option<String>,
     },
     Absent {
         message_id: Uuid,
@@ -65,6 +70,13 @@ pub enum ProjectionEvent {
         actor: Option<MacroUserIdStr<'static>>,
         #[serde(default)]
         action: Option<crate::domain::models::mailbox_action::MailboxAction>,
+        /// Routine whose run wrote the action, from its signed token.
+        #[serde(default)]
+        routine_id: Option<Uuid>,
+        #[serde(default)]
+        labels_gained: Option<LabelsGained>,
+        #[serde(default)]
+        traceparent: Option<String>,
     },
     LinkConnected {
         actor_id: String,
@@ -83,6 +95,23 @@ impl ProjectionEvent {
                 agent_correlation_id,
                 ..
             } => *agent_correlation_id,
+            _ => None,
+        }
+    }
+
+    fn routine_id(&self) -> Option<Uuid> {
+        match self {
+            Self::Organization { routine_id, .. } => *routine_id,
+            _ => None,
+        }
+    }
+
+    /// The trace of the read or request that wrote this event.
+    fn traceparent(&self) -> Option<&str> {
+        match self {
+            Self::Message { traceparent, .. } | Self::Organization { traceparent, .. } => {
+                traceparent.as_deref()
+            }
             _ => None,
         }
     }
@@ -303,12 +332,20 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
             outlook.attachment_id = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );
-        let correlation = lease.event.agent_correlation_id();
+        crate::trace_context::adopt(&span, lease.event.traceparent());
+        let attribution = agent_correlation::context::Attribution {
+            correlation_id: lease.event.agent_correlation_id(),
+            routine_id: lease.event.routine_id(),
+            ..Default::default()
+        };
         if lease.unfinished_claims >= UNFINISHED_CLAIM_LIMIT {
             return self.abandon_unfinished(&lease).instrument(span).await;
         }
-        agent_correlation::context::scope(correlation, self.project_leased(&lease).instrument(span))
-            .await
+        agent_correlation::context::scope_attribution(
+            attribution,
+            self.project_leased(&lease).instrument(span),
+        )
+        .await
     }
 
     /// Gives up on an event without projecting it, since projecting it is the
@@ -476,14 +513,27 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                 thread_id,
                 actor,
                 action,
+                labels_gained,
                 ..
             } => {
+                // A category Macro wrote reports what the thread gained on its
+                // own event; one first seen confirming that write, on a label
+                // event of the provider's.
                 if let (Some(actor), Some(action)) = (actor, action) {
-                    self.effects
-                        .publish(
-                            organization_event(&context.link, *thread_id, actor.clone(), action)
-                                .with_event_id(lease.id),
-                        )
+                    let event =
+                        organization_event(&context.link, *thread_id, actor.clone(), action)
+                            .with_event_id(lease.id);
+                    let event = match labels_gained {
+                        Some(gained) => event.with_labels_gained(
+                            gained.message_id,
+                            gained.label_ids.clone(),
+                            gained.automated,
+                        ),
+                        None => event,
+                    };
+                    self.effects.publish(event).await?;
+                } else if let Some(gained) = labels_gained {
+                    self.publish_gained(&context.link, *thread_id, gained)
                         .await?;
                 }
                 self.reindex(&context.link, *thread_id, effects).await?;
@@ -498,6 +548,7 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                 was_draft,
                 version,
                 calendar_parts,
+                labels_gained,
                 ..
             } => {
                 let Some(current) = &context.message else {
@@ -517,11 +568,30 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                         self.effects.contacts(correspondence).await?;
                         effects.crm_jobs += crm_jobs;
                     }
-                    if !import
-                        && let Some(event) =
-                            live_event(&context, *is_new, *is_new_thread, *was_draft, actor.clone())
-                    {
+                    // Received mail reports what it gave its thread on its own
+                    // event; sent mail and a stored message, on a label event of
+                    // the provider's; mail arriving in spam or trash, nowhere.
+                    let gained = labels_gained.as_ref().filter(|_| !import);
+                    let event =
+                        live_event(&context, *is_new, *is_new_thread, *was_draft, actor.clone())
+                            .filter(|_| !import);
+                    let (carried, apart) =
+                        match (event.as_ref().map(EmailMacroEvent::arrival_gains), gained) {
+                            (Some(ArrivalGains::OnThisEvent), Some(gained)) => {
+                                (gained.label_ids.clone(), None)
+                            }
+                            (Some(ArrivalGains::OnLabelEvent) | None, gained) => {
+                                (Vec::new(), gained)
+                            }
+                            _ => (Vec::new(), None),
+                        };
+                    if let Some(event) = event {
+                        let event = event.with_arrival_labels(carried);
                         self.effects.publish(event.with_event_id(lease.id)).await?;
+                    }
+                    if let Some(gained) = apart {
+                        self.publish_gained(&context.link, *thread_id, gained)
+                            .await?;
                     }
                     if should_notify(import, *is_new, current) {
                         for notification in notifications(lease, &context) {
@@ -551,6 +621,38 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
         Ok(())
     }
 
+    /// Publish the categories a thread gained from the provider.
+    async fn publish_gained(
+        &self,
+        link: &Link,
+        thread_id: Uuid,
+        gained: &LabelsGained,
+    ) -> Result<(), MailboxError> {
+        tracing::info!(
+            link_id = %link.id,
+            %thread_id,
+            labels = span_int(gained.label_ids.len()),
+            "thread gained categories in Outlook"
+        );
+        self.effects
+            .publish(
+                EmailMacroEvent::thread_labels_updated(ThreadLabelsUpdatedMetadata {
+                    link_id: link.id,
+                    owner: link.macro_id.clone(),
+                    actor: None,
+                    thread_id,
+                    added: Vec::new(),
+                    removed: Vec::new(),
+                    origin: EmailEventOrigin::ProviderSync,
+                    message_id: gained.message_id,
+                    labels_gained: gained.label_ids.clone(),
+                    automated: gained.automated,
+                })
+                .with_event_id(gained.event_id),
+            )
+            .await
+    }
+
     async fn reindex(
         &self,
         link: &Link,
@@ -558,13 +660,10 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
         effects: &mut EffectCounts,
     ) -> Result<(), MailboxError> {
         self.effects
-            .publish(EmailMacroEvent::threads_reindex_requested(
-                ThreadsReindexRequestedMetadata {
-                    link_id: link.id,
-                    owner: link.macro_id.clone(),
-                    thread_ids: vec![thread],
-                    reason: ThreadsReindexReason::ProviderChanged,
-                },
+            .publish(EmailMacroEvent::thread_reindex_requested(
+                link.id,
+                link.macro_id.clone(),
+                thread,
             ))
             .await?;
         effects.reindex_events += 1;
@@ -680,6 +779,7 @@ fn live_event(
             attachment_count: message.attachments.len() as u32,
             is_spam_or_trash: current.in_trash || current.in_junk,
             received_at: message.internal_date_ts,
+            labels_gained: Vec::new(),
         }))
     }
 }
@@ -865,6 +965,9 @@ fn organization_event(
                 added,
                 removed,
                 origin,
+                message_id: None,
+                labels_gained: Vec::new(),
+                automated: false,
             })
         }
     }

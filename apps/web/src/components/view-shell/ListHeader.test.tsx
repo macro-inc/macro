@@ -38,9 +38,12 @@ function setup(
     /** The search found nothing, so the list has no first row. */
     empty?: boolean;
     recent?: string[];
+    /** The view keeps the field's open state, as Email does. */
+    controlled?: boolean;
   } = {}
 ) {
   const [search, setSearch] = createSignal(options.search ?? '');
+  const [open, setOpen] = createSignal(false);
   const [selected, setSelected] = createSignal(options.selected ?? 0);
   const [active, setActive] = createSignal(-1);
   const focusResults = vi.fn();
@@ -67,6 +70,8 @@ function setup(
             list.focus();
           }}
           registerFocus={() => {}}
+          open={options.controlled ? open() : undefined}
+          onOpenChange={setOpen}
           suggestions={
             options.recent
               ? {
@@ -121,7 +126,8 @@ function setup(
       hotkey: 'escape',
       scopeId: splitScope,
       description: 'Leave the tab',
-      condition: () => selected() === 0 && !search().trim(),
+      condition: () =>
+        selected() === 0 && !search().trim() && !(options.controlled && open()),
       keyDownHandler: backToDefaultTab,
       registrationType: 'add',
     });
@@ -162,6 +168,7 @@ function setup(
     field,
     search,
     selected,
+    open,
     focusResults,
     goToFirst,
     backToDefaultTab,
@@ -270,6 +277,21 @@ it('clears the search on Escape in the list, after a selection', () => {
 
   press('Escape');
   expect(search()).toBe('');
+  expect(view.queryByRole('searchbox')).toBeNull();
+  expect(backToDefaultTab).not.toHaveBeenCalled();
+
+  press('Escape');
+  expect(backToDefaultTab).toHaveBeenCalledOnce();
+});
+
+it('closes a field its view keeps open on Escape in the list, before leaving the tab', () => {
+  const { view, open, backToDefaultTab, list } = setup({ controlled: true });
+  fireEvent.click(view.getByRole('button', { name: 'Search tasks' }));
+  list().focus();
+  expect(open()).toBe(true);
+
+  press('Escape');
+  expect(open()).toBe(false);
   expect(view.queryByRole('searchbox')).toBeNull();
   expect(backToDefaultTab).not.toHaveBeenCalled();
 
@@ -422,6 +444,7 @@ function setupSuggestions(initial: string[]) {
   const [active, setActive] = createSignal(-1);
   const [open, setOpen] = createSignal(false);
   const picked: number[] = [];
+  const commit = vi.fn();
   let list!: HTMLDivElement;
 
   const view = render(() => (
@@ -442,6 +465,7 @@ function setupSuggestions(initial: string[]) {
             picked.push(index);
             setSearch(initial[index] ?? '');
           },
+          commit,
         }}
       />
       <div ref={list} tabIndex={0} />
@@ -457,6 +481,7 @@ function setupSuggestions(initial: string[]) {
     active,
     open,
     picked,
+    commit,
     list: () => list,
   };
 }
@@ -488,6 +513,19 @@ it('runs the active suggestion on Enter and moves to its results', () => {
   expect(picked).toEqual([0]);
   expect(search()).toBe('budget');
   expect(document.activeElement).toBe(list());
+});
+
+it('runs the typed search on Enter, and not on a suggestion picked with it', () => {
+  const { field, commit, list } = setupSuggestions(['budget']);
+
+  type(field, 'Enter');
+  expect(commit).toHaveBeenCalledOnce();
+  expect(document.activeElement).toBe(list());
+
+  field.focus();
+  type(field, 'ArrowDown');
+  type(field, 'Enter');
+  expect(commit).toHaveBeenCalledOnce();
 });
 
 it('reports a wide field open, and closed once it is left empty', () => {
@@ -538,4 +576,32 @@ it('reports closed and unfocused when it unmounts while open', () => {
 
   expect(open()).toBe(false);
   expect(focused()).toBe(false);
+});
+
+it('closes for a view that keeps its open state, and reports it unfocused', () => {
+  const [open, setOpen] = createSignal(false);
+  const [focused, setFocused] = createSignal(false);
+  const view = render(() => (
+    <ListHeaderSearch
+      label="Search email"
+      value=""
+      onValueChange={() => {}}
+      registerFocus={() => {}}
+      open={open()}
+      onOpenChange={setOpen}
+      onFocusChange={setFocused}
+    />
+  ));
+  fireEvent.click(view.getByRole('button', { name: 'Search email' }));
+  view.getByRole('searchbox', { name: 'Search email' }).focus();
+  expect(open()).toBe(true);
+  expect(focused()).toBe(true);
+
+  setOpen(false);
+
+  expect(view.queryByRole('searchbox')).toBeNull();
+  expect(focused()).toBe(false);
+
+  fireEvent.click(view.getByRole('button', { name: 'Search email' }));
+  expect(open()).toBe(true);
 });

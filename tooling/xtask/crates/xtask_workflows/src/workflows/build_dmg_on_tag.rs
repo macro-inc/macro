@@ -1,5 +1,6 @@
 //! `Build macOS DMG` — reusable workflow that builds the Tauri desktop DMG via
-//! Nix. The release orchestrator also uses its build job directly.
+//! Nix. The release orchestrator also uses its build job directly, once per
+//! Mac architecture.
 
 use gh_workflow::expr::typed::{Expr, JobHandle, StepHandle, Str, cancelled, input};
 use gh_workflow::{
@@ -13,8 +14,71 @@ mod test;
 
 const NIX_CACHE_SIZE_GB: u16 = 100;
 
-/// The DMG build job, here and in the desktop release orchestrator.
+/// The Apple silicon DMG build job, here and in the desktop release
+/// orchestrator.
 pub(crate) const BUILD_DMG: JobHandle<()> = JobHandle::new("build-dmg", ());
+/// The Intel DMG build job of the desktop release orchestrator.
+pub(crate) const BUILD_DMG_X86_64: JobHandle<()> = JobHandle::new("build-dmg-x86_64", ());
+
+/// A Mac architecture the desktop app ships for. Both build on Apple silicon:
+/// the Intel app cross-compiles (`tauri-desktop-dmg-x86_64` in
+/// `nix/tauri-desktop.nix`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MacArch {
+    Aarch64,
+    X86_64,
+}
+
+impl MacArch {
+    /// The `packages.aarch64-darwin` attribute of the signed DMG.
+    fn dmg_package(self) -> &'static str {
+        match self {
+            MacArch::Aarch64 => "tauri-desktop-dmg",
+            MacArch::X86_64 => "tauri-desktop-dmg-x86_64",
+        }
+    }
+
+    /// The architecture in release file names (`Macro-<version>-<arch>-darwin.dmg`).
+    fn file_arch(self) -> &'static str {
+        match self {
+            MacArch::Aarch64 => "aarch64",
+            MacArch::X86_64 => "x86_64",
+        }
+    }
+
+    /// The architecture `lipo -archs` reports for the app's Mach-O files.
+    fn mach_o_arch(self) -> &'static str {
+        match self {
+            MacArch::Aarch64 => "arm64",
+            MacArch::X86_64 => "x86_64",
+        }
+    }
+
+    /// The workflow artifact, and the prefix of its checksum file. The Apple
+    /// silicon names predate the Intel build.
+    fn artifact(self) -> &'static str {
+        match self {
+            MacArch::Aarch64 => "macro-dmg",
+            MacArch::X86_64 => "macro-dmg-x86_64",
+        }
+    }
+
+    /// Each architecture keeps its own Nix cache volume: the last job to finish
+    /// replaces a volume with only its own closure.
+    fn cache_tag(self) -> &'static str {
+        match self {
+            MacArch::Aarch64 => "macro-desktop-macos",
+            MacArch::X86_64 => "macro-desktop-macos-x86_64",
+        }
+    }
+
+    fn job_name(self) -> &'static str {
+        match self {
+            MacArch::Aarch64 => "Build macOS DMG",
+            MacArch::X86_64 => "Build macOS DMG (Intel)",
+        }
+    }
+}
 /// The [`configure_nix_cache`] step.
 const NIX_CACHE: StepHandle<()> = StepHandle::new("nix-cache", ());
 
@@ -57,19 +121,25 @@ pub fn build_dmg() -> Workflow {
                         .required(true),
                 ),
         ))
-        .add_job(BUILD_DMG, build_dmg_job(input("ref")))
+        .add_job(BUILD_DMG, build_dmg_job(input("ref"), MacArch::Aarch64))
 }
 
-/// Build the macOS DMG job, checking out and naming artifacts from `ref_expr`.
-pub fn build_dmg_job(ref_expr: Expr<Str>) -> Job {
+/// Build the macOS DMG job for `arch`, checking out and naming artifacts from
+/// `ref_expr`.
+pub fn build_dmg_job(ref_expr: Expr<Str>, arch: MacArch) -> Job {
     Job::default()
-        .name("Build macOS DMG")
+        .name(arch.job_name())
         .runs_on(vec![
             format!("{}-with-cache", runners::Runner::MacOsArmLarge),
-            "nscloud-cache-tag-macro-desktop-macos".to_owned(),
+            format!("nscloud-cache-tag-{}", arch.cache_tag()),
             format!("nscloud-cache-size-{NIX_CACHE_SIZE_GB}gb"),
         ])
         .add_env(("DESKTOP_NIX_CACHE_SIZE_GB", NIX_CACHE_SIZE_GB.to_string()))
+        // Read by the build, collect, validate and notarize scripts.
+        .add_env(("DESKTOP_DMG_PACKAGE", arch.dmg_package()))
+        .add_env(("DESKTOP_ARCH", arch.file_arch()))
+        .add_env(("DESKTOP_MACH_O_ARCH", arch.mach_o_arch()))
+        .add_env(("DESKTOP_ARTIFACT", arch.artifact()))
         .add_step(steps::checkout_ref(ref_expr.clone()))
         .add_step(assert_arm64())
         .add_step(steps::mount_macos_nix_cache_volume())
@@ -86,7 +156,8 @@ pub fn build_dmg_job(ref_expr: Expr<Str>) -> Job {
         .add_step(notarize_dmg())
         .add_step(steps::upload_artifact(
             &format!(
-                "macro-dmg-{}",
+                "{}-{}",
+                arch.artifact(),
                 steps::ARTIFACT_METADATA.outputs.safe_tag.read()
             ),
             xtask_paths::runtime_path!("artifacts/*"),

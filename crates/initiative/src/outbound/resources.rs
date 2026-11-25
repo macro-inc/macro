@@ -129,7 +129,7 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
             // consumers hear about it. The write is internal: it records no activity.
             let tasks = self
                 .system_properties
-                .project_task_ids(id.as_uuid())
+                .project_task_ids(id.as_uuid(), None)
                 .await
                 .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))?;
             for task_id in tasks {
@@ -158,7 +158,7 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
     fn project_tasks(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<String>> {
         Box::pin(async move {
             self.system_properties
-                .project_task_ids(id.as_uuid())
+                .project_task_ids(id.as_uuid(), None)
                 .await
                 .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))
         })

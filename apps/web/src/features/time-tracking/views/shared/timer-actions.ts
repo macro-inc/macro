@@ -5,6 +5,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { openDialog } from '@ui/components/ImperativeDialog';
 import { err } from 'neverthrow';
+import { v7 as uuidv7 } from 'uuid';
 import { EditEntryDialog } from '../../components/edit-entry-dialog';
 import {
   type OverLimitChoice,
@@ -148,18 +149,16 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
       began = true;
       const discarded = await timerOps.discard(newTimerId);
       if (discarded.isErr()) return err(discarded.error);
+      const restartId = uuidv7();
       const restarted = await timerOps.start({
+        id: restartId,
         taskId: stopped.taskId,
         startedAt,
       });
       if (restarted.isErr()) return err(restarted.error);
       const removed = await writes.remove(stopped);
       if (removed.isOk()) return removed;
-      const restartedId =
-        restarted.value.kind === 'committed'
-          ? restarted.value.data?.timeTracking.runningTimer?.id
-          : undefined;
-      if (restartedId) await timerOps.discard(restartedId);
+      await timerOps.discard(restartId);
       return removed;
     });
     if (undone.isErr() && !began) return fail(undone.error);
@@ -237,10 +236,11 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
         fail(stopped.error);
         return;
       }
-      const entry =
-        stopped.value.kind === 'committed' ? stopped.value.data?.entry : null;
-      if (entry) showLogged(entry, name);
-      else toast.alert(t('timeTracking.timerDiscarded'));
+      const reply =
+        stopped.value.kind === 'committed' ? stopped.value.data : undefined;
+      // No reply means the stop landed but its answer was lost: say nothing.
+      if (reply?.entry) showLogged(reply.entry, name);
+      else if (reply) toast.alert(t('timeTracking.timerDiscarded'));
     } finally {
       interaction.end();
     }

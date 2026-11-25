@@ -1713,7 +1713,7 @@ The typed activity-action vocabulary. One member per durable action, plus
 with an undecodable payload) surface with their raw tag and payload
 instead of failing the page.
 """
-union GraphqlActivityAction = GraphqlActivityCreated | GraphqlActivityEdited | GraphqlActivityOpened | GraphqlActivityDeleted | GraphqlActivityMessaged | GraphqlActivitySent | GraphqlActivityResponded | GraphqlActivityPropertyChanged | GraphqlActivityParticipantAdded | GraphqlActivityParticipantRemoved | GraphqlActivityCallStarted | GraphqlActivityTaskAdded | GraphqlActivityTaskRemoved | GraphqlActivityTimeLogged | GraphqlActivityUnknownAction
+union GraphqlActivityAction = GraphqlActivityCreated | GraphqlActivityEdited | GraphqlActivityOpened | GraphqlActivityDeleted | GraphqlActivityMessaged | GraphqlActivitySent | GraphqlActivityResponded | GraphqlActivityPropertyChanged | GraphqlActivityParticipantAdded | GraphqlActivityParticipantRemoved | GraphqlActivityCallStarted | GraphqlActivityTaskAdded | GraphqlActivityTaskRemoved | GraphqlActivityTimeLogged | GraphqlActivityRecordMerged | GraphqlActivityUnknownAction
 
 """
 A call was started in the entity.
@@ -1757,6 +1757,24 @@ type GraphqlActivityDeleted {
 	this object has nothing as a field but we need at least 1 field
 	"""
 	nothing: Boolean!
+}
+
+"""
+A value a merge dropped.
+"""
+type GraphqlActivityDroppedValue {
+	"""
+	The property definition id.
+	"""
+	property: String!
+	"""
+	The merged record that held it.
+	"""
+	record: ID!
+	"""
+	The value.
+	"""
+	value: JSON!
 }
 
 """
@@ -1846,6 +1864,20 @@ type GraphqlActivityInvalidation {
 	True when mounted activity queries need a fresh read.
 	"""
 	refresh: Boolean!
+}
+
+"""
+A record merged into the entity.
+"""
+type GraphqlActivityMergedRecord {
+	"""
+	Its id, which now opens the entity.
+	"""
+	id: ID!
+	"""
+	Its name at the merge.
+	"""
+	name: String
 }
 
 """
@@ -1957,6 +1989,21 @@ type GraphqlActivityPropertyChanged {
 	set to JSON null; the wire cannot distinguish the two.
 	"""
 	to: JSON
+}
+
+"""
+Records were merged into the entity, which they now name.
+"""
+type GraphqlActivityRecordMerged {
+	"""
+	The records merged in, as they were named at the merge.
+	"""
+	merged: [GraphqlActivityMergedRecord!]!
+	"""
+	Team-visible values of the merged records that the entity's own
+	values replaced. Private values are never recorded here.
+	"""
+	dropped: [GraphqlActivityDroppedValue!]!
 }
 
 """
@@ -2517,7 +2564,9 @@ type GraphqlCalendar {
 	"""
 	isWritable: Boolean!
 	"""
-	Whether this is a shared system calendar (holidays, birthdays).
+	Whether the account subscribes to this calendar as a feed: one of
+	Google's system calendars (holidays, birthdays), or one added by URL in
+	Google or subscribed from the web in Outlook.
 	"""
 	isSubscription: Boolean!
 	"""
@@ -4369,6 +4418,31 @@ enum GraphqlCrmDiscussionReason {
 }
 
 """
+Why someone's CRM email sharing rules changed.
+"""
+enum GraphqlCrmEmailSharingChangeReason {
+	"""
+	Companies their rules named were merged.
+	"""
+	COMPANIES_MERGED
+}
+
+"""
+A teammate's action changed the viewer's CRM email sharing rules. It names
+no company, count or person.
+"""
+type GraphqlCrmEmailSharingChangedMetadata {
+	"""
+	The team whose CRM the rules share mail with.
+	"""
+	teamId: ID!
+	"""
+	Why they changed.
+	"""
+	reason: GraphqlCrmEmailSharingChangeReason!
+}
+
+"""
 A CRM pipeline the viewer can see.
 """
 type GraphqlCrmPipeline {
@@ -5103,6 +5177,11 @@ input GraphqlEmailLiteral @oneOf {
 	Threads with at least one attachment of this kind.
 	"""
 	attachment: GraphqlAttachmentKind
+	"""
+	Threads with at least one message carrying this label of one of the
+	viewer's inboxes.
+	"""
+	label: ID
 	"""
 	The created at option.
 	"""
@@ -6965,7 +7044,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlPasswordAccessRequestedMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlComputerSetupMetadata | GraphqlPingMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
+union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlCrmEmailSharingChangedMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlPasswordAccessRequestedMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlComputerSetupMetadata | GraphqlPingMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
 
 """
 A notification associated with a shared entity, including entities outside Soup.
@@ -8100,6 +8179,10 @@ type GraphqlScheduledActionEventFilter {
 	"""
 	property: GraphqlScheduledActionPropertySelector
 	"""
+	Email label ids, one of which an `EMAIL_LABELED` thread must gain. Null matches any label.
+	"""
+	labelIds: [ID!]
+	"""
 	Yes/no question the triggering content must answer with yes before the routine runs.
 	"""
 	condition: String
@@ -8141,6 +8224,10 @@ enum GraphqlScheduledActionEventName {
 	A new email was received.
 	"""
 	EMAIL_MESSAGE_RECEIVED
+	"""
+	An email thread gained a Gmail label or Outlook category.
+	"""
+	EMAIL_LABELED
 	"""
 	A channel was created.
 	"""
@@ -11153,6 +11240,112 @@ enum GraphqlTimeEntrySource {
 }
 
 """
+One group's total and its split by the second grouping.
+"""
+type GraphqlTimeGroup {
+	"""
+	What the group is for.
+	"""
+	key: GraphqlTimeGroupKey!
+	"""
+	Minutes logged in the group.
+	"""
+	minutes: Int!
+	"""
+	Tasks with time in the group.
+	"""
+	taskCount: Int!
+	"""
+	The group's totals by the second grouping, in report order; empty
+	without one.
+	"""
+	rows: [GraphqlTimeTotal!]!
+}
+
+"""
+What one total is for: a person, a task or a day.
+"""
+type GraphqlTimeGroupKey {
+	"""
+	Which of the fields below is set.
+	"""
+	by: TimeGrouping!
+	"""
+	The person, for `PERSON`.
+	"""
+	userId: String
+	"""
+	The task document, for `TASK`.
+	"""
+	taskId: ID
+	"""
+	The task, for `TASK`; null when the viewer can no longer see it.
+	"""
+	task: GraphqlSoupDocument
+	"""
+	The loggers' calendar day, `YYYY-MM-DD`, for `DAY`.
+	"""
+	date: String
+}
+
+"""
+The time a scope logged over a period. Only tasks the viewer can see
+count, out of the Trash.
+"""
+type GraphqlTimeSummary {
+	"""
+	The first day of the period, `YYYY-MM-DD`.
+	"""
+	from: String!
+	"""
+	The last day of the period, `YYYY-MM-DD`.
+	"""
+	to: String!
+	"""
+	Minutes logged in the period.
+	"""
+	totalMinutes: Int!
+	"""
+	Tasks with time in the period.
+	"""
+	taskCount: Int!
+	"""
+	For a project, its tasks the viewer can see that are out of the
+	Trash, with time or not; null for other scopes.
+	"""
+	scopeTaskCount: Int
+	"""
+	False when the scope held more than 5,000 tasks and only the first
+	5,000 were read.
+	"""
+	complete: Boolean!
+	"""
+	Totals by the first grouping: days in calendar order, people and
+	tasks with the most time first. Grouped by person, the viewer's own
+	and their team's summaries list every current member.
+	"""
+	groups: [GraphqlTimeGroup!]!
+	"""
+	Totals by the second grouping across all groups; empty without one.
+	"""
+	thenTotals: [GraphqlTimeTotal!]!
+}
+
+"""
+A total of minutes.
+"""
+type GraphqlTimeTotal {
+	"""
+	What the total is for.
+	"""
+	key: GraphqlTimeGroupKey!
+	"""
+	Minutes logged.
+	"""
+	minutes: Int!
+}
+
+"""
 The authenticated viewer's time tracking state.
 """
 type GraphqlTimeTracking {
@@ -11237,6 +11430,12 @@ type GraphqlUser {
 	The authenticated user's running timer and the server's clock.
 	"""
 	timeTracking: GraphqlTimeTracking!
+	"""
+	The authenticated user's time over a period, for a project, themselves
+	or their team, grouped by person, task or day. Only tasks they can see
+	count. Reads the latest writes, so read it again after a change.
+	"""
+	timeSummary(input: TimeSummaryInput!): GraphqlTimeSummary!
 	"""
 	AI routines the authenticated user can access.
 	"""
@@ -12406,6 +12605,12 @@ type NotificationInboxUnreadCount {
 	100, so present a total of 100 or more as "99+".
 	"""
 	count: Int!
+	"""
+	How many of `count` Chat shows as unread: channel rows holding an
+	unseen top-level message or a mention. Replies, reactions and pings
+	are unread in the inbox alone. Counting stops as `count`'s does.
+	"""
+	chatCount: Int!
 }
 
 """
@@ -13163,6 +13368,72 @@ type StopTimerPayload {
 	when the viewer can no longer see it.
 	"""
 	task: GraphqlSoupDocument
+}
+
+"""
+What a report's totals are grouped by.
+"""
+enum TimeGrouping {
+	"""
+	The person who logged the time.
+	"""
+	PERSON
+	"""
+	The task the time was logged on.
+	"""
+	TASK
+	"""
+	The logger's calendar day.
+	"""
+	DAY
+}
+
+"""
+Whose time a report reads.
+"""
+enum TimeReportScope {
+	"""
+	Everyone's time on a project's tasks; needs `projectId`.
+	"""
+	PROJECT
+	"""
+	The viewer's own time.
+	"""
+	MINE
+	"""
+	The time of the viewer's team's current members, the viewer included.
+	"""
+	TEAM
+}
+
+"""
+The scope, days and grouping of a time summary.
+"""
+input TimeSummaryInput {
+	"""
+	Whose time to read.
+	"""
+	scope: TimeReportScope!
+	"""
+	The project, with scope `PROJECT` only.
+	"""
+	projectId: ID
+	"""
+	The first day, `YYYY-MM-DD`.
+	"""
+	from: String!
+	"""
+	The last day, `YYYY-MM-DD`, at most 365 days after `from`.
+	"""
+	to: String!
+	"""
+	What the totals are grouped by.
+	"""
+	groupBy: TimeGrouping!
+	"""
+	What each group is split by; another grouping than `groupBy`.
+	"""
+	thenBy: TimeGrouping
 }
 
 """

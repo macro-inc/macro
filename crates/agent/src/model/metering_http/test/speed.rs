@@ -19,7 +19,7 @@ async fn responses_transport_prices_actual_tier_and_rejects_mismatched_request()
             AiFeature::Chat,
             "macro|speed@example.com".to_owned().try_into().unwrap(),
         ),
-        "openai/gpt-6.1-sol",
+        "openai/gpt-6.2-sol",
         ModelSpeed::Ultrafast,
     )
     .unwrap();
@@ -31,7 +31,7 @@ async fn responses_transport_prices_actual_tier_and_rejects_mismatched_request()
                 let request = Request::builder()
                     .uri("https://example.test/responses")
                     .body(Bytes::from(
-                        json!({"model":"gpt-6.1-sol","service_tier":tier}).to_string(),
+                        json!({"model":"gpt-6.2-sol","service_tier":tier}).to_string(),
                     ))
                     .unwrap();
                 let result = client.send::<_, Bytes>(request).await;
@@ -42,7 +42,7 @@ async fn responses_transport_prices_actual_tier_and_rejects_mismatched_request()
     assert_eq!(transport.calls.load(Ordering::SeqCst), 1);
     let events = recorder.0.lock().unwrap();
     assert_eq!(events.len(), 1);
-    assert_eq!(events[0].model, "gpt-6.1-sol:ultrafast");
+    assert_eq!(events[0].model, "gpt-6.2-sol:ultrafast");
     assert!(matches!(
         events[0].amount,
         UsageAmount::Tokens {
@@ -231,7 +231,7 @@ fn model_call_span_records_the_tier_and_effort_sent() {
     for (protocol, body) in [
         (
             WireProtocol::Responses,
-            json!({"model":"gpt-6.1-sol","service_tier":"priority","reasoning":{"effort":"xhigh"}}),
+            json!({"model":"gpt-6.2-sol","service_tier":"priority","reasoning":{"effort":"xhigh"}}),
         ),
         (
             WireProtocol::Anthropic,

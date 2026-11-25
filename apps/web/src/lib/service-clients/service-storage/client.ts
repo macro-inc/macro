@@ -152,6 +152,12 @@ import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesP
 import type { ListSlackImportsParams } from './generated/schemas/listSlackImportsParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
+import type { MergeBlock } from './generated/schemas/mergeBlock';
+import type { MergeCommitRequest } from './generated/schemas/mergeCommitRequest';
+import type { MergeErrorResponse } from './generated/schemas/mergeErrorResponse';
+import type { MergeOutcome } from './generated/schemas/mergeOutcome';
+import type { MergePreview } from './generated/schemas/mergePreview';
+import type { MergePreviewRequest } from './generated/schemas/mergePreviewRequest';
 import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchHarnessRequest } from './generated/schemas/patchHarnessRequest';
@@ -253,6 +259,59 @@ export function dssFetch<T extends Record<string, any> | null = never>(
   | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${dssHost}${url}`, init);
+}
+
+/** Why the storage service refused to review or commit a merge. */
+export type CrmMergeErrorCode =
+  | 'merge_permission_required'
+  | 'merge_unavailable'
+  | 'record_unavailable'
+  | 'record_hidden'
+  | 'record_already_merged'
+  | 'merge_preview_stale'
+  | 'merge_request_reused'
+  | 'merge_conflict'
+  | 'merge_sharing_rules_too_large'
+  | 'invalid_request';
+
+export const CRM_MERGE_ERROR_CODES: readonly string[] = [
+  'merge_permission_required',
+  'merge_unavailable',
+  'record_unavailable',
+  'record_hidden',
+  'record_already_merged',
+  'merge_preview_stale',
+  'merge_request_reused',
+  'merge_conflict',
+  'merge_sharing_rules_too_large',
+  'invalid_request',
+] satisfies CrmMergeErrorCode[];
+
+/** A merge refusal: its code, and what a conflict or an earlier merge names. */
+export type CrmMergeError = ResultError<
+  CrmMergeErrorCode | FetchWithTokenErrorCode
+> & {
+  blocked?: MergeBlock | null;
+  currentId?: string | null;
+};
+
+async function crmMergeErrorHandler(response: Response) {
+  const body = (await response
+    .json()
+    .catch(() => null)) as MergeErrorResponse | null;
+  if (body?.code && CRM_MERGE_ERROR_CODES.includes(body.code)) {
+    const error: CrmMergeError = {
+      code: body.code as CrmMergeErrorCode,
+      message: body.message,
+      blocked: body.blocked ?? null,
+      currentId: body.currentId ?? null,
+    };
+    return error;
+  }
+  return {
+    code: 'HTTP_ERROR' as const,
+    message: `HTTP error! status: ${response.status}`,
+  };
 }
 
 /**
@@ -2793,6 +2852,28 @@ export const storageServiceClient = {
     return await dssFetch<CompanyContactsPageResponse>(
       `/crm/companies/${companyId}/contacts/page?${search}`,
       { method: 'GET' }
+    );
+  },
+  /** Review merging CRM records into the one that stays; changes nothing. */
+  async previewCrmMerge(body: MergePreviewRequest) {
+    return await fetchWithToken<MergePreview, CrmMergeErrorCode>(
+      `${dssHost}/crm/merges/preview`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: crmMergeErrorHandler,
+      }
+    );
+  },
+  /** Commit a reviewed merge; a retry with the same request key returns its result. */
+  async commitCrmMerge(body: MergeCommitRequest) {
+    return await fetchWithToken<MergeOutcome, CrmMergeErrorCode>(
+      `${dssHost}/crm/merges`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: crmMergeErrorHandler,
+      }
     );
   },
   /** Titles of many company and contact chips; records the caller can't open are left out. */

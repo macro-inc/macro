@@ -141,7 +141,8 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
       {
         appSlug: 'hubspot',
         name: 'HubSpot',
-        detail: 'Companies and contacts',
+        detail: 'Companies, contacts and deals',
+        ledger: 'hubspot',
         icon: IconHubSpot as ImportIcon,
       },
       {

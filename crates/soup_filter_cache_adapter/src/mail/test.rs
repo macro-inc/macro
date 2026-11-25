@@ -10,6 +10,7 @@ use soup_filter_projection::{
 };
 
 mod drafts;
+mod labels;
 mod optimistic;
 mod reconciliation;
 mod reminders;

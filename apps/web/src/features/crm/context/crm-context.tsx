@@ -29,6 +29,7 @@ import type {
   EmailPrivacyChange,
   ExcludedThreads,
 } from '../core/email-privacy';
+import type { MergeCommands } from '../core/merge';
 import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
 import type { PipelineEntryRecord } from '../core/pipeline-entry';
@@ -73,6 +74,8 @@ export type CrmContext = {
   accessState: Accessor<'pending' | 'allowed' | 'denied' | 'error'>;
   retryAccess(): Promise<unknown>;
   createEmailPolicy(): EmailPolicySource;
+  /** Opens the app's add-inbox flow; never changes CRM email consent. */
+  connectMailbox(): void;
   /** Owner-scoped email reference, available independently of CRM viewing access. */
   EmailThreadMention: Component<{
     threadId: string;
@@ -177,7 +180,19 @@ export type CrmContext = {
   ): ItemListSource;
   /** The record's Tasks tab, scoped to tasks associated with it. */
   RecordTasks: Component<{ scope: CrmRecordScope }>;
+  /** The record's Activity section in its side panel. */
+  RecordActivity: Component<{
+    record: { type: 'company' | 'contact'; id: string };
+    order: number;
+  }>;
   createPropertyCommands(): PropertyCommands;
+  /** Review and commit company merges; admins and owners only. */
+  createMergeCommands(): MergeCommands;
+  /** A stored property value as text, by its property, for a merge review. */
+  createPropertyValueLabel(): (
+    propertyId: string,
+    value: unknown
+  ) => string | undefined;
   hydrateCompany(company: CrmCompanyEntity): CrmCompanyEntity;
   createSettingsCommands(): CrmMutation<
     { enabled: boolean; backfill?: boolean },
