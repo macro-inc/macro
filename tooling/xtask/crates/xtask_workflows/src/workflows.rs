@@ -72,6 +72,7 @@ mod email_e2e_full_stack;
 mod ensure_daytona_snapshot;
 mod export_ci_telemetry;
 mod export_datadog_observability;
+mod firecracker_image_rollout;
 mod ios_app_store_publish;
 mod ios_app_store_release;
 mod ios_preview;
@@ -530,6 +531,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || {
             render_gh_workflow(export_datadog_observability::export_datadog_observability)()
         },
+    },
+    WorkflowFile {
+        slug: "firecracker_image_rollout",
+        file_name: "firecracker-image-rollout.yml",
+        render_yaml: || render_gh_workflow(firecracker_image_rollout::firecracker_image_rollout)(),
     },
     WorkflowFile {
         slug: "migrate_macro_db",

@@ -8829,11 +8829,13 @@ dependencies = [
  "memchr",
  "opentelemetry",
  "pinned_tls",
+ "reqwest 0.13.4",
  "rootcause",
  "rustix 1.1.6",
  "rustls",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "strum 0.27.2",
  "tempfile",
  "thiserror 2.0.18",
@@ -8847,6 +8849,7 @@ dependencies = [
  "utoipa",
  "uuid",
  "workspace-hack",
+ "zstd",
 ]
 
 [[package]]
@@ -24572,6 +24575,9 @@ dependencies = [
  "zerocopy",
  "zeroize",
  "zip",
+ "zstd",
+ "zstd-safe",
+ "zstd-sys",
 ]
 
 [[package]]

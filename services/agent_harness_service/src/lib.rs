@@ -1651,6 +1651,7 @@ pub async fn run() -> anyhow::Result<()> {
                 service_shutdown.clone(),
             )
             .await,
+            config.environment,
             &computer_tasks,
             service_shutdown.clone(),
         );
