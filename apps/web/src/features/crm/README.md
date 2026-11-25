@@ -41,6 +41,7 @@ crm/
   crm-company.tsx / crm-contact.tsx / crm-settings.tsx
   crm-create.tsx / crm-link.tsx
   crm-actions.ts / crm-hide-action.ts / crm-action-items.ts / crm-user-action.tsx
+  crm-merge.tsx  Merge entry points; crm-merge-dialog.tsx, loaded on demand, wires the dialog
   crm-search.ts / crm-tool-renderers.tsx
   crm-route.ts  Route params, record and item trails, and legacy pipeline link decoding
   route-views.tsx  Authenticated route and shared-view decoding
