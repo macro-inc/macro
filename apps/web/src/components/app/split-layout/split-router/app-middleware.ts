@@ -110,8 +110,12 @@ function redirectLegacyRoutes(
       const page = `/${recordType}/${encodeURIComponent(recordId)}`;
       if (typeof section !== 'string') return redirect(page);
       const query = new URLSearchParams();
+      // An explicit query replaces the entry's search, so keep what it carries.
       replacePaneSearchParams(query, [
-        { [crmRecordSectionSearch.namespace]: { section: [section] } },
+        {
+          ...to.location.search,
+          [crmRecordSectionSearch.namespace]: { section: [section] },
+        },
       ]);
       return redirect(`${page}?${query}`);
     }

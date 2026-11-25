@@ -182,3 +182,10 @@ it('opens on its overview when a link names a company-only section', () => {
   render(() => <ContactBlockAdapter />);
   expect(screen.getByText('Showing overview')).toBeTruthy();
 });
+
+it('opens on its overview when a link names a company-only section over a kept one', () => {
+  entry.state = { 'crm.recordSection:contact:contact-1': 'tasks' };
+  entry.link = { section: 'team' };
+  render(() => <ContactBlockAdapter />);
+  expect(screen.getByText('Showing overview')).toBeTruthy();
+});

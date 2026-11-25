@@ -589,6 +589,25 @@ describe('legacy CRM URLs', () => {
     }
   });
 
+  it('keeps the Discussion message a touch record tab link carries', () => {
+    const entry = recordEntry('company', companyId, undefined, 'team');
+    const result = run(
+      {
+        ...entry,
+        location: {
+          ...entry.location,
+          search: { 'crm-record': { commentId: ['message'], seek: ['s'] } },
+        },
+      },
+      { touch: true }
+    );
+    if (result?.type !== 'redirect') throw new Error('Expected a redirect');
+    const url = new URL(result.to, window.location.origin);
+    expect(url.pathname).toBe(`/company/${companyId}`);
+    expect(url.searchParams.get('s0.crm-section.section')).toBe('team');
+    expect(url.searchParams.get('s0.crm-record.commentId')).toBe('message');
+  });
+
   it('keeps a record item link inside Customers on touch instead of dropping the item', () => {
     const entry: Entry = {
       id: 'entry',

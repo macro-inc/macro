@@ -67,7 +67,14 @@ export function createRecordSection<
     crmRecordSectionKey(record),
     { default: 'overview' as RecordSection<T> }
   );
-  if (sections.includes(linked)) setSection(() => linked as RecordSection<T>);
-  if (linked) setLink({ section: '' }, { history: 'replace' });
+  if (linked) {
+    // A section this record type lacks opens Overview, not a restored one.
+    setSection(() =>
+      sections.includes(linked)
+        ? (linked as RecordSection<T>)
+        : ('overview' as RecordSection<T>)
+    );
+    setLink({ section: '' }, { history: 'replace' });
+  }
   return [section, setSection] as const;
 }
