@@ -36,6 +36,9 @@ that an initial visit resolves entity names in both the feed and Most active,
 then reload and scroll through another page. Preview loading and live name
 updates should keep the page responsive without repeatedly fetching previews.
 
+A company merge leaves one `record_merged` entry on the company that stays;
+until the merge screen ships, the activity list shows it as an unknown action.
+
 Activity refreshes live after recorded actions. With two pages loaded, make an
 action in another tab and verify the feed retains its page-boundary rows while
 the action count and heatmap update. An open entity activity panel should also

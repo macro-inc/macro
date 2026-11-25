@@ -209,7 +209,8 @@ The assistant can take the same item actions as the app's menus. Messages
 and comments: edit, delete, or react to channel messages; edit or delete
 document comments; open a DM. Items: move to trash, duplicate, rename, change
 sharing, favorite, and mute or snooze notifications. Also: create CRM companies
-and contacts, rename or delete calls, create skills, and run or delete routines.
+and contacts, merge duplicate companies (admins, once the merge flag is on),
+rename or delete calls, create skills, and run or delete routines.
 Edits and deletes act as the message or comment's author, so the assistant
 changes its own messages as itself and the user's as the user. Reactions are
 always the user's. Each row names the item with a chip that opens it; edit and
