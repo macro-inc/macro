@@ -1,7 +1,7 @@
 import {
-  completeSearchOperator,
   searchOperatorBeingTyped,
   searchOperatorCompletions,
+  searchTokenAtEnd,
 } from '@app/features/next-soup/core/search-operator-completions';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { registerSearchSplit } from '@app/features/next-soup/soup-view/search-controllers';
@@ -233,8 +233,9 @@ export function SearchbarInput(
     // Tab writes the offered operator; declining it otherwise leaves Tab to
     // focus order, and having a handler at all keeps the editor's tab
     // indentation out of this single-line field.
-    .onTab(() => {
+    .onTab((event) => {
       if (operatorRows().length === 0) return false;
+      event.preventDefault();
       pickOperator(Math.max(0, activeIndex()));
       return true;
     })
@@ -268,17 +269,14 @@ export function SearchbarInput(
   const pickOperator = (index: number) => {
     const row = operatorRows()[index];
     if (!row) return;
-    const next = completeSearchOperator(markdown(), row);
-    // Markdown drops trailing whitespace, so the space after a whole
-    // operator is typed at the caret.
-    editor.controls.setMarkdown(next.trimEnd());
-    publish(next.trimEnd());
-    editor.controls.getLexical().update(() => {
+    const typed = searchTokenAtEnd(fieldText()) ?? '';
+    const lexical = editor.controls.getLexical();
+    lexical.update(() => {
       $getRoot().selectEnd();
       const selection = $getSelection();
-      if (next.endsWith(' ') && $isRangeSelection(selection)) {
-        selection.insertText(' ');
-      }
+      if (!$isRangeSelection(selection)) return;
+      for (const _ of typed) selection.deleteCharacter(true);
+      selection.insertText(row.insert);
     });
   };
   const hasContent = () => !!markdown().trim();

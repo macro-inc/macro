@@ -53,6 +53,7 @@ describe('searchOperatorCompletions', () => {
 
   it('offers nothing once the operator is whole', () => {
     expect(inserts('type:task')).toEqual([]);
+    expect(inserts('assignee:me')).toEqual([]);
   });
 });
 
@@ -60,7 +61,7 @@ describe('completeSearchOperator', () => {
   it('writes the row in place of the token being typed', () => {
     const [row] = searchOperatorCompletions('launch type:ta', VALUES);
     expect(row && completeSearchOperator('launch type:ta', row)).toBe(
-      'launch type:task '
+      'launch type:task'
     );
   });
 

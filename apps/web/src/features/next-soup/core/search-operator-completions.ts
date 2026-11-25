@@ -39,7 +39,7 @@ export type SearchOperatorCompletion =
   | { kind: 'tag' | 'inbox' | 'channel'; text: string; insert: string };
 
 /** The token at the end of `text`, unless the text ends in whitespace. */
-function lastToken(text: string): string | undefined {
+export function searchTokenAtEnd(text: string): string | undefined {
   let inQuotes = false;
   let start = 0;
   for (let index = 0; index < text.length; index++) {
@@ -64,7 +64,7 @@ export function searchOperatorBeingTyped(
   | { name: SearchOperatorName; value: string }
   | { prefix: string }
   | undefined {
-  const token = lastToken(text);
+  const token = searchTokenAtEnd(text);
   if (!token) return undefined;
   const colon = token.indexOf(':');
   if (colon < 0) {
@@ -106,24 +106,28 @@ export function searchOperatorCompletions(
       ).map((name) => ({ kind: 'name', name, insert: `${name}:` }));
     }
     const { name, value } = typing;
-    const people = (): SearchOperatorCompletion[] => [
-      ...(startsWith('me', value)
-        ? [
-            {
-              kind: 'person' as const,
-              person: 'me' as const,
-              insert: `${name}:me`,
-            },
-          ]
-        : []),
-      ...values.people.map(
-        (person): SearchOperatorCompletion => ({
-          kind: 'person',
-          person,
-          insert: `${name}:${person.email}`,
-        })
-      ),
-    ];
+    // A whole `me` is the searcher; nobody else is offered in its place.
+    const people = (): SearchOperatorCompletion[] =>
+      value.toLowerCase() === 'me'
+        ? []
+        : [
+            ...(startsWith('me', value)
+              ? [
+                  {
+                    kind: 'person' as const,
+                    person: 'me' as const,
+                    insert: `${name}:me`,
+                  },
+                ]
+              : []),
+            ...values.people.map(
+              (person): SearchOperatorCompletion => ({
+                kind: 'person',
+                person,
+                insert: `${name}:${person.email}`,
+              })
+            ),
+          ];
     return match(name)
       .with('type', () => listed(name, SEARCH_OPERATOR_TYPES, value))
       .with('status', () =>
@@ -172,20 +176,19 @@ export function searchOperatorCompletions(
       })
       .exhaustive();
   })();
-  const token = lastToken(text) ?? '';
+  const token = searchTokenAtEnd(text) ?? '';
   return rows.filter((row) => row.insert !== token).slice(0, MAX_ROWS);
 }
 
 /**
- * The field's text with the token being typed replaced by `row`'s, followed
- * by a space unless the row writes an operator's name, whose value comes
- * next.
+ * The field's text with the token being typed replaced by `row`'s. The caret
+ * stays right after it: a space typed next starts the next word, as it would
+ * have without the row.
  */
 export function completeSearchOperator(
   text: string,
   row: SearchOperatorCompletion
 ): string {
-  const token = lastToken(text) ?? '';
-  const kept = text.slice(0, text.length - token.length);
-  return row.kind === 'name' ? `${kept}${row.insert}` : `${kept}${row.insert} `;
+  const token = searchTokenAtEnd(text) ?? '';
+  return `${text.slice(0, text.length - token.length)}${row.insert}`;
 }
