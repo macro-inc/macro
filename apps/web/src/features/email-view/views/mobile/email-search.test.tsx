@@ -147,11 +147,13 @@ it('picks a listed view from a hardware keyboard and keeps the keyboard up', () 
   expect(document.activeElement).toBe(field);
 });
 
-it('remembers the search it is left with', () => {
+it('remembers the search it is left with', async () => {
   const { field } = renderPage();
   field.focus();
   fireEvent.input(field, { target: { value: 'quarterly report' } });
   field.blur();
+  // Leaving saves the search a microtask later.
+  await Promise.resolve();
   // The list leaves out the text already typed, so start from an empty field.
   fireEvent.input(field, { target: { value: '' } });
 
