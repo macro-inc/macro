@@ -3,6 +3,7 @@ import { ApiLabelType } from '@service-email/generated/schemas';
 import { type Accessor, createMemo } from 'solid-js';
 import { queryReadyGate } from '../gate';
 import { useEmailUserLabelsQuery } from './labels';
+import { useEmailLinksQuery } from './link';
 import { formatLabelPath, nestLabels } from './nested-labels';
 
 /** What a label is called where it shows. */
@@ -130,17 +131,21 @@ export function inboxLabelsOf(
 }
 
 /**
- * The labels people made in the viewer's inboxes, in their inboxes' order,
- * from one read of their labels while `enabled`. Never suspends.
+ * Whether the label list and the inboxes it is named by have loaded or failed,
+ * so `useEmailInboxLabels` holds every label it will name.
  */
-/** Whether the label list has loaded or failed, so a label can be named. */
 export function useEmailLabelsFetched(
   enabled: Accessor<boolean> = () => true
 ): Accessor<boolean> {
   const catalog = useEmailUserLabelsQuery(enabled);
-  return () => catalog.isFetched;
+  const inboxes = useEmailLinksQuery(enabled);
+  return () => catalog.isFetched && inboxes.isFetched;
 }
 
+/**
+ * The labels people made in the viewer's inboxes, in their inboxes' order,
+ * from one read of their labels while `enabled`. Never suspends.
+ */
 export function useEmailInboxLabels(
   enabled: Accessor<boolean> = () => true
 ): Accessor<InboxLabelEntry[]> {
