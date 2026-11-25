@@ -1,6 +1,6 @@
 // A composer's Retry once a draft it could not read can be read again: a
 // new message reopened from Drafts and after a reload, and a reply reopened
-// in its thread and after a reload; and its Reload once the app's local
+// in its thread and after a reload; and its Retry once the app's local
 // cache, which could not start, can start again. For a Gmail and an Outlook
 // inbox.
 //
@@ -21,11 +21,11 @@ import {
 import {
   cacheWorkerUnloadable,
   emailTab,
-  reloadBanner,
   subjectField,
   unreadable,
+  waitingNotice,
 } from './harness/ways-faults';
-import { did } from './ledger/record';
+import { did, saw } from './ledger/record';
 
 for (const provider of PROVIDERS) {
   test.describe(`recovering a draft after a fault on this device, ${anInbox(provider)}`, () => {
@@ -98,34 +98,54 @@ for (const provider of PROVIDERS) {
       await expect(replyBody(page)).toContainText('Noted.');
     });
 
-    // When this fails, the composer's Reload, offered when the app's local
-    // cache could not start, does not reload into a working cache, or the
-    // draft is gone after it: the composer opens without its subject or
-    // text, or later edits stay on this device and never reach the mailbox.
-    test('Reload recovers local storage and keeps the draft', async ({
+    // When this fails, the composer's Retry, offered once the app's local
+    // cache could not start for a while, does not start it again once it
+    // can, or the draft is lost on the way: the composer opens without its
+    // subject or text, or an edit made meanwhile stays on this device and
+    // never reaches the mailbox.
+    test('Retry recovers local storage and keeps the draft', async ({
       page,
       mailbox,
     }) => {
+      test.setTimeout(240_000);
       await savedNew(page, mailbox, 'Quarterly numbers');
       const fault = await cacheWorkerUnloadable(page);
       await page.reload();
-      const banner = reloadBanner(page);
-      await expect(banner).toContainText(
-        'Saved on this device; waiting to sync'
-      );
-      await expect(body(page)).toHaveText('The numbers are in.');
-
-      await fault.lift();
-      const reloaded = page.waitForEvent('load');
-      await banner.getByRole('button', { name: 'Reload' }).click();
-      did('AC-065');
-      await reloaded;
       await expect(subjectField(page)).toHaveValue('Quarterly numbers');
       await expect(body(page)).toHaveText('The numbers are in.');
-      await expect(banner).toHaveCount(0);
+
+      // The edit waits on this device. The worker's failure to load tells
+      // the page at once, and the composer says so once storage has been
+      // restarting for 15 seconds.
       await body(page).click();
       await page.keyboard.press('ControlOrMeta+End');
       await page.keyboard.type(' Final.');
+      const notice = waitingNotice(page);
+      await expect(notice).toContainText(
+        'Changes stay on this device until draft synchronization resumes.',
+        { timeout: 90_000 }
+      );
+      saw('STC-434');
+
+      // Retry shows only between the cache's own attempts, which wait longer
+      // after each failure (at least 1.6 s after the second, 12.8 s after
+      // the fifth, up to 30 s). Once a fresh attempt, the fifth or later,
+      // has failed, a load within six seconds of it can only be the attempt
+      // Retry starts.
+      const retry = notice.getByRole('button', { name: 'Retry', exact: true });
+      await expect(retry).toBeVisible({ timeout: 90_000 });
+      const attempts = Math.max(fault.refusedAttempts(), 4);
+      await expect
+        .poll(fault.refusedAttempts, { timeout: 60_000 })
+        .toBeGreaterThan(attempts);
+      await expect(retry).toBeVisible();
+      fault.lift();
+      await retry.click({ timeout: 5_000 });
+      did('AC-064');
+      await expect.poll(fault.loads, { timeout: 5_000 }).toBeGreaterThan(0);
+      expect(fault.msFromRefusalToLoad()).toBeLessThan(6_000);
+      await expect(notice).toHaveCount(0);
+      await expect(body(page)).toHaveText('The numbers are in. Final.');
       await expect
         .poll(() =>
           savedDraft(mailbox, { subject: 'Quarterly numbers' }, 'Final.')

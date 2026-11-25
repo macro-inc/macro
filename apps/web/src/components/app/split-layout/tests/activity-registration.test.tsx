@@ -79,6 +79,12 @@ vi.mock('@app/features/activity/views/my-activity-view', () => ({
     return <div>Activity feed</div>;
   },
 }));
+vi.mock('@app/features/agent-screen/route-views', () => ({
+  AgentScreenView: (props: { harnessId: string }) => (
+    <div>Screen of {props.harnessId}</div>
+  ),
+  AgentScreenRouteView: () => null,
+}));
 vi.mock('@app/features/activity/open-entity-in-split', () => ({
   openEntityInSplit: vi.fn(),
 }));
@@ -122,7 +128,6 @@ vi.mock('@app/features/home/home-view', () => ({
   HomeCalendarRouteView: () => null,
   HomePendingView: () => null,
 }));
-vi.mock('@app/features/next-soup/filters/filter-store', () => ({}));
 vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));
 vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({}));
 vi.mock('@app/features/next-soup/soup-view/soup-view', () => ({}));
@@ -631,5 +636,18 @@ describe('pane create context registration', () => {
     expect(context.read('task')?.key).toBe('parent');
     removeParent();
     expect(context.read('task')).toBeUndefined();
+  });
+});
+
+describe('agent screen registration', () => {
+  it('renders split content opened with agentScreenContent through the registry', async () => {
+    const { agentScreenContent } = await import(
+      '@app/features/agent-screen/core/route'
+    );
+    const content = agentScreenContent('harness-1');
+    const screenView = resolveComponent(content.id, content.params);
+    render(() => <Suspense>{screenView.element()}</Suspense>);
+    await import('@app/features/agent-screen/route-views');
+    expect(await screen.findByText('Screen of harness-1')).toBeTruthy();
   });
 });

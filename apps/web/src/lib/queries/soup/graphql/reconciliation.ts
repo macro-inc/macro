@@ -7,6 +7,12 @@ type SoupRecord = { __typename: string; id: string };
 export const soupItemKey = (item: SoupRecord): string =>
   `${item.__typename}:${item.id}`;
 
+/** The sorts the local cache can order a list by; any other reads the network only. */
+export const isLocallySortable = (
+  sortMethod: string | null | undefined
+): sortMethod is 'CREATED_AT' | 'UPDATED_AT' =>
+  sortMethod === 'CREATED_AT' || sortMethod === 'UPDATED_AT';
+
 /** Same-query server membership and sort evidence; filtering stays in Rust. */
 export function soupReconciliationBaseline(
   records: readonly SoupRecord[],

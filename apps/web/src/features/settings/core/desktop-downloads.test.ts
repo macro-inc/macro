@@ -1,18 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  desktopInstallers,
   detectDesktopPlatform,
-  FALLBACK_DOWNLOAD_URLS,
-  releaseDownloadUrls,
+  intelMacPublished,
+  readMacArchitecture,
 } from './desktop-downloads';
-
-const macos = {
-  name: 'Macro-2.5.0-aarch64-darwin.dmg',
-  browser_download_url: 'https://example.com/mac.dmg',
-};
-const linux = {
-  name: 'Macro-2.5.0-x86_64-linux.AppImage',
-  browser_download_url: 'https://example.com/linux.AppImage',
-};
 
 describe('detectDesktopPlatform', () => {
   it.each([
@@ -29,59 +21,69 @@ describe('detectDesktopPlatform', () => {
   });
 });
 
-describe('releaseDownloadUrls', () => {
-  it('finds desktop installers behind a newer CLI-only release', () => {
+describe('intelMacPublished', () => {
+  it('offers Intel only once the website links to its installer', () => {
+    expect(intelMacPublished({ '/download/mac': 'a' })).toBe(false);
     expect(
-      releaseDownloadUrls([
-        {
-          assets: [
-            {
-              name: 'macrod-v2026.10.6.1-macos-aarch64.tar.gz',
-              browser_download_url: 'https://example.com/cli.tar.gz',
-            },
-          ],
-        },
-        { assets: [macos, linux] },
-      ])
-    ).toEqual({
-      macos: macos.browser_download_url,
-      linux: linux.browser_download_url,
-    });
+      intelMacPublished({ '/download/mac': 'a', '/download/mac-intel': 'b' })
+    ).toBe(true);
+  });
+});
+
+describe('readMacArchitecture', () => {
+  const answering = (value: Promise<{ architecture?: string }>) => ({
+    getHighEntropyValues: () => value,
   });
 
-  it('selects each platform independently during partial uploads', () => {
+  it.each([
+    ['arm', 'arm'],
+    ['x86', 'x86'],
+    ['', undefined],
+    [undefined, undefined],
+  ])('reads %s as %s', async (architecture, expected) => {
     expect(
-      releaseDownloadUrls([
-        { assets: [macos] },
-        {
-          assets: [
-            { ...macos, browser_download_url: 'https://example.com/old.dmg' },
-            linux,
-          ],
-        },
-      ])
-    ).toEqual({
-      macos: macos.browser_download_url,
-      linux: linux.browser_download_url,
-    });
+      await readMacArchitecture(answering(Promise.resolve({ architecture })))
+    ).toBe(expected);
   });
 
-  it('excludes draft and prerelease installers', () => {
+  it('knows nothing without the hint or when the browser refuses it', async () => {
+    expect(await readMacArchitecture(undefined)).toBeUndefined();
     expect(
-      releaseDownloadUrls([
-        { draft: true, assets: [macos, linux] },
-        { prerelease: true, assets: [macos, linux] },
-      ])
-    ).toEqual(FALLBACK_DOWNLOAD_URLS);
+      await readMacArchitecture(answering(Promise.reject(new Error('denied'))))
+    ).toBeUndefined();
+  });
+});
+
+describe('desktopInstallers', () => {
+  it('offers one Mac installer until Intel is published', () => {
+    expect(
+      desktopInstallers({ system: 'macos', architecture: 'x86', intel: false })
+    ).toEqual(['macos', 'linux']);
   });
 
-  it('keeps the pinned installers when assets are missing', () => {
-    expect(releaseDownloadUrls([])).toEqual(FALLBACK_DOWNLOAD_URLS);
-    expect(releaseDownloadUrls([{}, { assets: [linux] }])).toEqual({
-      macos: FALLBACK_DOWNLOAD_URLS.macos,
-      linux: linux.browser_download_url,
-    });
-    expect(FALLBACK_DOWNLOAD_URLS.macos).toMatch(/\/download\/.*\.dmg$/);
-    expect(FALLBACK_DOWNLOAD_URLS.linux).toMatch(/\/download\/.*\.AppImage$/);
+  it('leads with the Mac architecture the browser reports, else Apple silicon', () => {
+    expect(
+      desktopInstallers({ system: 'macos', architecture: 'x86', intel: true })
+    ).toEqual(['macos-intel', 'macos', 'linux']);
+    expect(
+      desktopInstallers({ system: 'macos', architecture: 'arm', intel: true })
+    ).toEqual(['macos', 'macos-intel', 'linux']);
+    expect(
+      desktopInstallers({
+        system: undefined,
+        architecture: undefined,
+        intel: true,
+      })
+    ).toEqual(['macos', 'macos-intel', 'linux']);
+  });
+
+  it('keeps both Mac installers together after Linux on Linux', () => {
+    expect(
+      desktopInstallers({
+        system: 'linux',
+        architecture: undefined,
+        intel: true,
+      })
+    ).toEqual(['linux', 'macos', 'macos-intel']);
   });
 });

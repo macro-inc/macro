@@ -27,6 +27,7 @@ import type {
   ListRoutineSuggestionsParams,
   ListScheduledActionsParams,
   ListSuggestionsParams,
+  NameTopic,
   NewSuggestion,
   RecordSuggestionsSeenParams,
   RegenerateSuggestionsParams,
@@ -37,8 +38,10 @@ import type {
   RewriteSuggestion,
   RoutineCatalogParams,
   RoutineCheck,
+  RoutineLimitErrorBody,
   RoutineSuggestions,
   RoutineTemplate,
+  RunReport,
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
@@ -191,6 +194,11 @@ export type createScheduledActionResponse401 = {
   status: 401;
 };
 
+export type createScheduledActionResponse402 = {
+  data: RoutineLimitErrorBody;
+  status: 402;
+};
+
 export type createScheduledActionResponse403 = {
   data: string;
   status: 403;
@@ -215,6 +223,7 @@ export type createScheduledActionResponseSuccess = (
 export type createScheduledActionResponseError = (
   | createScheduledActionResponse400
   | createScheduledActionResponse401
+  | createScheduledActionResponse402
   | createScheduledActionResponse403
   | createScheduledActionResponse409
   | createScheduledActionResponse500
@@ -1163,6 +1172,11 @@ export type updateScheduledActionResponse401 = {
   status: 401;
 };
 
+export type updateScheduledActionResponse402 = {
+  data: RoutineLimitErrorBody;
+  status: 402;
+};
+
 export type updateScheduledActionResponse404 = {
   data: string;
   status: 404;
@@ -1185,6 +1199,7 @@ export type updateScheduledActionResponseSuccess =
 export type updateScheduledActionResponseError = (
   | updateScheduledActionResponse400
   | updateScheduledActionResponse401
+  | updateScheduledActionResponse402
   | updateScheduledActionResponse404
   | updateScheduledActionResponse409
   | updateScheduledActionResponse500
@@ -1496,6 +1511,11 @@ export type setScheduledActionEnabledResponse401 = {
   status: 401;
 };
 
+export type setScheduledActionEnabledResponse402 = {
+  data: RoutineLimitErrorBody;
+  status: 402;
+};
+
 export type setScheduledActionEnabledResponse404 = {
   data: string;
   status: 404;
@@ -1518,6 +1538,7 @@ export type setScheduledActionEnabledResponseSuccess =
 export type setScheduledActionEnabledResponseError = (
   | setScheduledActionEnabledResponse400
   | setScheduledActionEnabledResponse401
+  | setScheduledActionEnabledResponse402
   | setScheduledActionEnabledResponse404
   | setScheduledActionEnabledResponse409
   | setScheduledActionEnabledResponse500
@@ -1701,6 +1722,70 @@ export const listScheduledActionHistory = async (
     status: res.status,
     headers: res.headers,
   } as listScheduledActionHistoryResponse;
+};
+
+/**
+ * Stop the routine's run in progress. It ends as stopped shortly after; with no run in progress, nothing changes.
+ */
+export type stopScheduledActionRunResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type stopScheduledActionRunResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type stopScheduledActionRunResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type stopScheduledActionRunResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type stopScheduledActionRunResponseSuccess =
+  stopScheduledActionRunResponse204 & {
+    headers: Headers;
+  };
+export type stopScheduledActionRunResponseError = (
+  | stopScheduledActionRunResponse401
+  | stopScheduledActionRunResponse404
+  | stopScheduledActionRunResponse500
+) & {
+  headers: Headers;
+};
+
+export type stopScheduledActionRunResponse =
+  | stopScheduledActionRunResponseSuccess
+  | stopScheduledActionRunResponseError;
+
+export const getStopScheduledActionRunUrl = (id: string) => {
+  return `/scheduled-actions/${id}/stop`;
+};
+
+export const stopScheduledActionRun = async (
+  id: string,
+  options?: RequestInit
+): Promise<stopScheduledActionRunResponse> => {
+  const res = await fetch(getStopScheduledActionRunUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: stopScheduledActionRunResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as stopScheduledActionRunResponse;
 };
 
 export type getScheduledActionTemplateResponse200 = {
@@ -1910,6 +1995,11 @@ export type activateScheduledActionTemplateResponse401 = {
   status: 401;
 };
 
+export type activateScheduledActionTemplateResponse402 = {
+  data: RoutineLimitErrorBody;
+  status: 402;
+};
+
 export type activateScheduledActionTemplateResponse403 = {
   data: string;
   status: 403;
@@ -1932,6 +2022,7 @@ export type activateScheduledActionTemplateResponseSuccess =
 export type activateScheduledActionTemplateResponseError = (
   | activateScheduledActionTemplateResponse400
   | activateScheduledActionTemplateResponse401
+  | activateScheduledActionTemplateResponse402
   | activateScheduledActionTemplateResponse403
   | activateScheduledActionTemplateResponse404
   | activateScheduledActionTemplateResponse500
@@ -2486,6 +2577,85 @@ export const reviewSuggestions = async (
 };
 
 /**
+ * @summary A suggestion's background run says, in one line for the person, what it
+did and what it sent.
+ */
+export type reportSuggestionRunResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type reportSuggestionRunResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type reportSuggestionRunResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type reportSuggestionRunResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type reportSuggestionRunResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type reportSuggestionRunResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type reportSuggestionRunResponseSuccess =
+  reportSuggestionRunResponse200 & {
+    headers: Headers;
+  };
+export type reportSuggestionRunResponseError = (
+  | reportSuggestionRunResponse400
+  | reportSuggestionRunResponse401
+  | reportSuggestionRunResponse403
+  | reportSuggestionRunResponse404
+  | reportSuggestionRunResponse500
+) & {
+  headers: Headers;
+};
+
+export type reportSuggestionRunResponse =
+  | reportSuggestionRunResponseSuccess
+  | reportSuggestionRunResponseError;
+
+export const getReportSuggestionRunUrl = () => {
+  return `/suggestions/runs/report`;
+};
+
+export const reportSuggestionRun = async (
+  runReport: RunReport,
+  options?: RequestInit
+): Promise<reportSuggestionRunResponse> => {
+  const res = await fetch(getReportSuggestionRunUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(runReport),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportSuggestionRunResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as reportSuggestionRunResponse;
+};
+
+/**
  * @summary The caller loaded the app in their time zone.
  */
 export type recordSuggestionsSeenResponse204 = {
@@ -2555,6 +2725,85 @@ export const recordSuggestionsSeen = async (
     status: res.status,
     headers: res.headers,
   } as recordSuggestionsSeenResponse;
+};
+
+/**
+ * @summary Name a topic suggestions may belong to, from a suggestions generation
+session, or change the name and reason of the one with its key.
+ */
+export type nameSuggestionTopicResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type nameSuggestionTopicResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type nameSuggestionTopicResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type nameSuggestionTopicResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type nameSuggestionTopicResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type nameSuggestionTopicResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type nameSuggestionTopicResponseSuccess =
+  nameSuggestionTopicResponse200 & {
+    headers: Headers;
+  };
+export type nameSuggestionTopicResponseError = (
+  | nameSuggestionTopicResponse400
+  | nameSuggestionTopicResponse401
+  | nameSuggestionTopicResponse403
+  | nameSuggestionTopicResponse404
+  | nameSuggestionTopicResponse500
+) & {
+  headers: Headers;
+};
+
+export type nameSuggestionTopicResponse =
+  | nameSuggestionTopicResponseSuccess
+  | nameSuggestionTopicResponseError;
+
+export const getNameSuggestionTopicUrl = () => {
+  return `/suggestions/topics`;
+};
+
+export const nameSuggestionTopic = async (
+  nameTopic: NameTopic,
+  options?: RequestInit
+): Promise<nameSuggestionTopicResponse> => {
+  const res = await fetch(getNameSuggestionTopicUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(nameTopic),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: nameSuggestionTopicResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as nameSuggestionTopicResponse;
 };
 
 /**
@@ -2939,8 +3188,9 @@ export const attachSuggestionDraft = async (
 };
 
 /**
- * @summary The caller, or their own agent, takes back dismissing a suggestion, within
-five minutes of it.
+ * @summary The caller, or their own agent, takes back dismissing a suggestion, or
+completing one by acting on it (not a finished run or an answered reply),
+within five minutes of it.
  */
 export type restoreSuggestionResponse204 = {
   data: void;
@@ -3086,4 +3336,72 @@ export const retireSuggestion = async (
     status: res.status,
     headers: res.headers,
   } as retireSuggestionResponse;
+};
+
+/**
+ * @summary The caller, or their own agent, stops an open suggestion's run without
+dismissing it.
+ */
+export type stopSuggestionRunResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type stopSuggestionRunResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type stopSuggestionRunResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type stopSuggestionRunResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type stopSuggestionRunResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type stopSuggestionRunResponseSuccess = stopSuggestionRunResponse204 & {
+  headers: Headers;
+};
+export type stopSuggestionRunResponseError = (
+  | stopSuggestionRunResponse401
+  | stopSuggestionRunResponse403
+  | stopSuggestionRunResponse404
+  | stopSuggestionRunResponse500
+) & {
+  headers: Headers;
+};
+
+export type stopSuggestionRunResponse =
+  | stopSuggestionRunResponseSuccess
+  | stopSuggestionRunResponseError;
+
+export const getStopSuggestionRunUrl = (id: string) => {
+  return `/suggestions/${id}/stop`;
+};
+
+export const stopSuggestionRun = async (
+  id: string,
+  options?: RequestInit
+): Promise<stopSuggestionRunResponse> => {
+  const res = await fetch(getStopSuggestionRunUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: stopSuggestionRunResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as stopSuggestionRunResponse;
 };

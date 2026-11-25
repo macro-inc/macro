@@ -1,4 +1,5 @@
-import { Show } from 'solid-js';
+import { t } from '@app/lib/i18n';
+import { createMemo, Show } from 'solid-js';
 import { SettingsSelect } from '../../settings/components/settings-select';
 import {
   SettingsCard,
@@ -7,27 +8,30 @@ import {
 } from '../../settings/primitives';
 import type { CalendarSharing } from '../core/model';
 
-const choices: {
+export function calendarSharingOptions(): {
   id: CalendarSharing;
   name: string;
   description: string;
-}[] = [
-  {
-    id: 'busy_only',
-    name: 'Busy blocks',
-    description: 'Teammates see when you are busy, not what.',
-  },
-  {
-    id: 'all',
-    name: 'Event details',
-    description: 'Teammates see your events. Private events stay busy blocks.',
-  },
-  {
-    id: 'none',
-    name: 'Nothing',
-    description: 'Teammates cannot see your calendar or availability.',
-  },
-];
+}[] {
+  return [
+    {
+      id: 'busy_only',
+      name: t('calendar.sharingBusy'),
+      description: 'Teammates see when you are busy, not what.',
+    },
+    {
+      id: 'all',
+      name: t('calendar.sharingDetails'),
+      description:
+        'Teammates see your events. Private events stay busy blocks.',
+    },
+    {
+      id: 'none',
+      name: t('calendar.sharingNothing'),
+      description: 'Teammates cannot see your calendar or availability.',
+    },
+  ];
+}
 
 export function TeamSharingSettings(props: {
   hasTeam: boolean;
@@ -37,7 +41,8 @@ export function TeamSharingSettings(props: {
   onChange: (sharing: CalendarSharing) => void;
   onRetry: () => void;
 }) {
-  const choice = () => choices.find((option) => option.id === props.sharing);
+  const choices = createMemo(calendarSharingOptions);
+  const choice = () => choices().find((option) => option.id === props.sharing);
   return (
     <SettingsSection
       title="Team sharing"
@@ -92,12 +97,12 @@ export function TeamSharingSettings(props: {
               <SettingsSelect
                 label="Share with teammates"
                 class="w-44 min-w-0"
-                options={choices}
+                options={choices()}
                 value={props.sharing}
                 placeholder="Loading…"
                 disabled={props.sharing === undefined}
                 onChange={(id) => {
-                  const next = choices.find((option) => option.id === id);
+                  const next = choices().find((option) => option.id === id);
                   if (next) props.onChange(next.id);
                 }}
               />

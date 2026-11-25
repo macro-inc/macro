@@ -1038,6 +1038,7 @@ fn time_tracking_hangs_off_documents_and_the_authenticated_user() {
         "startTimer(input: StartTimerInput!): StartTimerPayload!",
         "stopTimer(input: StopTimerInput!): StopTimerPayload!",
         "discardTimer(timerId: ID!): DiscardTimerPayload!",
+        "timeSummary(input: TimeSummaryInput!): GraphqlTimeSummary!",
     ] {
         assert_sdl_line(&sdl, expected);
     }
@@ -1061,6 +1062,9 @@ fn time_tracking_hangs_off_documents_and_the_authenticated_user() {
     }
     // A page is embedded in its task, per its arguments; it has no identity.
     assert!(!object("GraphqlTimeEntryPage").fields.contains_key("id"));
+    // A summary is embedded in the viewer, per its input; it has no identity.
+    assert!(!object("GraphqlTimeSummary").fields.contains_key("id"));
+    assert!(object("GraphqlUser").fields.contains_key("timeSummary"));
     // Entries belong to documents, not to every Soup entity.
     assert!(
         object("GraphqlSoupDocument")
@@ -1124,4 +1128,64 @@ fn saved_view_contract_is_composed_under_authenticated_user_and_mutations() {
         !output.contains("membership"),
         "membership tokens are internal"
     );
+}
+
+#[test]
+fn tag_sets_hang_off_the_authenticated_user() {
+    let sdl = crate::build_schema().sdl();
+    let user = sdl
+        .split_once("type GraphqlUser {")
+        .unwrap()
+        .1
+        .split_once("\n}")
+        .unwrap()
+        .0;
+    assert!(user.contains("tagSets: [GraphqlTagSet!]!"));
+    for expected in [
+        "scope: GraphqlTagScope!",
+        "definition: GraphqlPropertyDefinition\n",
+        "options: [GraphqlPropertyOption!]!",
+    ] {
+        let tag_set = sdl
+            .split_once("type GraphqlTagSet {")
+            .unwrap()
+            .1
+            .split_once("\n}")
+            .unwrap()
+            .0;
+        assert!(tag_set.contains(expected), "missing {expected}");
+    }
+    // A tag set is embedded in the viewer, never a normalized entity.
+    let tag_set = sdl.split_once("type GraphqlTagSet {").unwrap().1;
+    assert!(!tag_set.split_once("\n}").unwrap().0.contains("\tid:"));
+}
+
+#[test]
+fn property_catalog_writes_are_mutations() {
+    let sdl = crate::build_schema().sdl();
+    let mutation = sdl
+        .split_once("type CompleteMutationRoot {")
+        .unwrap()
+        .1
+        .split_once("\n}")
+        .unwrap()
+        .0;
+    for expected in [
+        "createPropertyDefinition(input: CreatePropertyDefinitionInput!): GraphqlPropertyDefinition!",
+        "deletePropertyDefinition(propertyDefinitionId: ID!): GraphqlCacheDeletion!",
+        "addPropertyOption(input: AddPropertyOptionInput!): GraphqlPropertyOption!",
+        "updatePropertyOption(input: UpdatePropertyOptionInput!): GraphqlPropertyOption!",
+        "deletePropertyOption(propertyDefinitionId: ID!, optionId: ID!): GraphqlCacheDeletion!",
+        "ensureTagSet(scope: GraphqlTagScope!): GraphqlTagSet!",
+        "promoteTag(optionId: ID!): GraphqlTagPromotion!",
+        "mergeTag(optionId: ID!, targetOptionId: ID!): GraphqlTagMerge!",
+    ] {
+        assert!(mutation.contains(expected), "missing {expected}");
+    }
+    assert!(
+        sdl.contains(
+            "union GraphqlTagPromotion = GraphqlPromotedTag | GraphqlTagPromotionConflict"
+        )
+    );
+    assert!(sdl.contains("input GraphqlPropertyOptionValueInput @oneOf {"));
 }

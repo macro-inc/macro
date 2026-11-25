@@ -110,6 +110,58 @@ pub fn sdk_members(name: &str) -> Option<Vec<&'static str>> {
     Some(members)
 }
 
+/// The values of the SDK's string-literal union type `name`, such as
+/// `SortDirection`, in declaration order.
+/// The SDK's own declarations (`src/`) win over a generated type of the same
+/// name; `None` when the type is something else or its declarations disagree.
+pub fn sdk_string_literals(name: &str) -> Option<Vec<&'static str>> {
+    let header = format!("type {name} = ");
+    let declared: Vec<(&str, Option<Vec<&'static str>>)> = SDK
+        .files
+        .iter()
+        .flat_map(|(path, text)| {
+            text.lines()
+                .filter_map(|line| {
+                    line.trim_start_matches("export ")
+                        .strip_prefix(header.as_str())?
+                        .strip_suffix(';')
+                })
+                .map(|union| (path.as_str(), string_union(union)))
+        })
+        .collect();
+    let own: Vec<_> = declared
+        .iter()
+        .filter(|(path, _)| path.starts_with("src/"))
+        .collect();
+    let candidates = if own.is_empty() {
+        declared.iter().collect()
+    } else {
+        own
+    };
+    let (_, first) = candidates.first()?;
+    candidates
+        .iter()
+        .all(|(_, values)| values == first)
+        .then(|| first.clone())
+        .flatten()
+}
+
+/// `'a' | 'b'` (or `"a" | "b"`) as `["a", "b"]`, or `None` when any member
+/// isn't a plain string.
+fn string_union(union: &'static str) -> Option<Vec<&'static str>> {
+    union
+        .split(" | ")
+        .map(|member| {
+            ['\'', '"'].into_iter().find_map(|quote| {
+                member
+                    .strip_prefix(quote)?
+                    .strip_suffix(quote)
+                    .filter(|value| !value.contains(['\'', '"']))
+            })
+        })
+        .collect()
+}
+
 /// The members `name`'s own declaration lists, and the class or interface
 /// it extends, if any.
 fn declared_members(name: &str) -> Option<(Vec<&'static str>, Option<String>)> {

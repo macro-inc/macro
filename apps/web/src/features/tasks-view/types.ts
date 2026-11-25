@@ -1,6 +1,9 @@
 import type { FacetSelection, SortSelection } from '@app/features/soup';
 import type { TaskComposerContext } from '../task-composer/core/context';
-import type { TaskDueDateFilter } from './core/task-due-date';
+import type {
+  TaskDueDateFilter,
+  TaskStartDateFilter,
+} from './core/task-due-date';
 
 export type TaskCreateOptions = {
   dueDate?: Date;
@@ -18,7 +21,8 @@ export type TaskGroupBy =
   | 'assignee'
   | 'project'
   | 'date'
-  | 'due_date';
+  | 'due_date'
+  | 'start_date';
 
 export type TaskSortId =
   | 'updated_at'
@@ -28,7 +32,9 @@ export type TaskSortId =
   | 'status'
   | 'priority'
   | 'due_date_earliest'
-  | 'due_date_latest';
+  | 'due_date_latest'
+  | 'start_date_earliest'
+  | 'start_date_latest';
 
 /** Scopes a task list to tasks whose entity-reference property points at an entity. */
 export type TaskReferenceScope = {
@@ -58,6 +64,7 @@ export type TasksViewState = {
   sort: SortSelection<TaskSortId>[];
   facets: FacetSelection;
   dueDate?: TaskDueDateFilter;
+  startDate?: TaskStartDateFilter;
   collapsedGroupIds: string[];
   collapsedSidebarSectionIds: string[];
   /** Transient marker: never persist saved-view filter drafts in entry history. */

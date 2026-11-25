@@ -7,15 +7,22 @@ import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadI
 import { useProjectSavedViews } from '@app/features/projects/context/project-saved-views-context';
 import { ProjectSavedViewsList } from '@app/features/projects/views/project-saved-views';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { useNavigate } from '@app/lib/split-router';
+import { tasksTimeRoute } from '@app/routes/routes';
 import {
   favoriteSplitContent,
   useFavoriteDisplayName,
 } from '@app/util/favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
+import { enableTimeTracking } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ClockIcon from '@icon/system/regular/clock.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { createMemo, For, Show } from 'solid-js';
@@ -28,6 +35,7 @@ import {
 import { isProjectTab, projectScopeForTab } from '../core/task-navigation';
 import { TasksCreateAction } from '../tasks-create-action';
 import { useTasksView } from '../tasks-view-context';
+import { useTasksTimeView } from '../time-view';
 import type { TasksTab } from '../types';
 import { TaskSavedViewsList } from '../views/task-saved-views';
 import { TAB_ICONS } from './task-view-icons';
@@ -39,7 +47,9 @@ function TasksNavigation(props: {
 }) {
   const { state } = useTasksView();
   const projectViews = useProjectSavedViews();
+  const timeView = useTasksTimeView();
   const isActive = (id: TasksTab) =>
+    !timeView() &&
     !state.savedViewActive &&
     state.tab === id &&
     (!isProjectTab(id) || !projectViews?.selectedId());
@@ -145,11 +155,78 @@ function TaskFavorites(props: {
   );
 }
 
+/** Time across projects: My week and Team, behind `enable-time-tracking`. */
+function TimeSection(props: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const flag = useFeatureFlag(enableTimeTracking);
+  const navigate = useNavigate();
+  const timeView = useTasksTimeView();
+  const views = [
+    {
+      id: 'week' as const,
+      label: () => t('timeTracking.myWeek'),
+      icon: ClockIcon,
+    },
+    {
+      id: 'team' as const,
+      label: () => t('timeTracking.team'),
+      icon: UsersIcon,
+    },
+  ];
+  return (
+    <Show when={flag().enabled}>
+      <CollapsibleSection.Root
+        sectionId="time"
+        sectionLabel={t('timeTracking.timeSection')}
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+      >
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger class="flex-1">
+            <span class="min-w-0 truncate">
+              {t('timeTracking.timeSection')}
+            </span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+        </CollapsibleSection.Header>
+        <CollapsibleSection.Content>
+          <ViewSidebar.Nav aria-label={t('timeTracking.timeSection')}>
+            <For each={views}>
+              {(view) => (
+                <ViewSidebar.Item
+                  active={timeView() === view.id}
+                  onClick={() =>
+                    fireAndForget(
+                      navigate({
+                        route: tasksTimeRoute,
+                        params: { timeView: view.id },
+                      }),
+                      'tasks-time'
+                    )
+                  }
+                >
+                  <ViewSidebar.Icon>
+                    <Dynamic component={view.icon} class="size-4" />
+                  </ViewSidebar.Icon>
+                  <span class="truncate">{view.label()}</span>
+                </ViewSidebar.Item>
+              )}
+            </For>
+          </ViewSidebar.Nav>
+        </CollapsibleSection.Content>
+      </CollapsibleSection.Root>
+    </Show>
+  );
+}
+
 export function TasksSidebar() {
   const layout = useSplitLayout();
   const { state, setTab, isSidebarSectionOpen, setSidebarSectionOpen } =
     useTasksView();
   const projectViews = useProjectSavedViews();
+  const timeView = useTasksTimeView();
   const selectTab = (id: TasksTab) => {
     if (isProjectTab(id) && projectViews)
       projectViews.selectScope(projectScopeForTab(id));
@@ -191,7 +268,7 @@ export function TasksSidebar() {
             label={t('viewMenus.taskViews')}
             onSelect={selectTab}
           />
-          <TaskSavedViewsList />
+          <TaskSavedViewsList showSelection={!timeView()} />
         </ViewSidebar.Section>
         <CollapsibleSection.Root
           sectionId="projects"
@@ -223,10 +300,15 @@ export function TasksSidebar() {
                 label={t('viewMenus.projectViews')}
                 onSelect={selectTab}
               />
-              <ProjectSavedViewsList />
+              <ProjectSavedViewsList showSelection={!timeView()} />
             </div>
           </CollapsibleSection.Content>
         </CollapsibleSection.Root>
+
+        <TimeSection
+          open={isSidebarSectionOpen('time')}
+          onOpenChange={(open) => setSidebarSectionOpen('time', open)}
+        />
 
         <TaskFavorites
           open={isSidebarSectionOpen('favorites')}

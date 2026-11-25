@@ -8,6 +8,28 @@ export const MAX_RECORDING_MS = 5 * 60 * 1000 - 1_000;
 /** Requested chunk cadence; browsers may deliver chunks late. */
 export const RECORDING_CHUNK_MS = 200;
 
+/** Containers a recorder tries, most preferred first. */
+export type RecordingFormats = readonly string[];
+
+/** Transcription accepts any of these, so the smallest encoder wins. */
+export const DICTATION_FORMATS: RecordingFormats = [
+  'audio/webm;codecs=opus',
+  'audio/mp4',
+  'audio/ogg;codecs=opus',
+];
+
+/**
+ * Voice memos are played back by every recipient, so AAC in MP4 comes first:
+ * Safari, iOS and Chrome record it, and every supported browser plays it.
+ * Firefox records only WebM/Ogg Opus, which Chrome, Firefox and Safari 17+ play.
+ */
+export const VOICE_MEMO_FORMATS: RecordingFormats = [
+  'audio/mp4;codecs=mp4a.40.2',
+  'audio/mp4',
+  'audio/webm;codecs=opus',
+  'audio/ogg;codecs=opus',
+];
+
 export type AudioRecorderCallbacks = {
   /** Microphone level, sampled every `VOLUME_INTERVAL_MS` while recording. */
   onLevel?: (level: VolumeLevel) => void;

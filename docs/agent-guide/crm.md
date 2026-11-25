@@ -147,6 +147,38 @@ Verify company domain validation by creating a company with an allowed business
 domain, then adding a contact whose email matches it. Personal email provider
 domains must still be rejected as company domains.
 
+Team admins and owners merge duplicate companies while `enable-crm-merge` is
+on for them. Select two or more companies in a Companies list and press Merge
+in the selection toolbar, or choose Merge companies (several selected) or Merge
+with… (one) from a row's menu; on a phone, long-press a row for Merge with….
+Merge with… first asks for the other companies of the current team (search by
+name or domain, which reaches past the recent companies; tick them). Then choose the company to keep and review: its domains, what moves to
+it, pipelines where it ends up with several entries (kept separate), values
+that differ (the kept company's win), what email sync does, and, when a
+teammate's email sharing names a merged company, Keep sharing the same mail or
+Stop sharing it (Keep is unavailable when it wouldn't fit). People under
+different companies with the same address block the merge, archived ones
+included. A review that changed before the confirm is fetched again with a
+notice. After the merge a toast offers Open, the merged companies' old links and
+chips open the company that stays, and its Activity section (side panel) shows
+one "merged … into this" entry with the team-visible values it dropped. The same
+merge is available through `POST /crm/merges/preview` then `POST /crm/merges`,
+the SDK's `crm.merges`, and the agent's PreviewMerge and MergeRecords tools.
+Verify with two throwaway companies on desktop and at phone width.
+
+Duplicate people merge the same way from a People list: Merge in the selection
+toolbar, Merge people (several selected) or Merge with… (one) in a row's menu,
+or a long-press on a phone. Merge with… searches the current team's people by
+name, address or company. The review lists the person's addresses after the merge (its primary
+first), what moves, pipelines, values that differ, email sync and teammates'
+sharing, as for companies. Someone under another company with a work address,
+or no address, blocks it; the block lists each of them with their company.
+After the merge a toast offers Open, and the merged people's old links open the
+person who stays. The routes take `recordType: "contact"`, and the SDK has
+`crm.merges.previewContacts` and `mergeContacts`. Verify with two throwaway
+contacts on desktop and at phone width: the person who stays has every
+address, pipeline entry, task reference and discussion message.
+
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses
 the field; Close or Escape clears the query and returns to the icon.
@@ -196,41 +228,53 @@ Customers too: `/app/company/<uuid>` and `/app/contact/<uuid>` links (which
 **Copy link** still copies), `@` mentions, search and Command-K results,
 favorites, and CRM discussion notifications. A contact opens under People, so its
 breadcrumb returns to People. A split already showing that record is brought
-forward instead. Touch devices keep the standalone record pages; a Customers
-record URL redirects there unless it opens a linked item inside Customers.
+forward instead. The old id of a company or contact merged into another (an
+old link, mention or bookmark) opens the record it went into under that
+record's own id, on the tab and Discussion message the link named, replacing
+the old entry so Back skips it, on desktop and touch;
+when another split already shows that record, the split with the old id steps
+back (or closes) and that one comes up. Touch devices keep the standalone
+record pages; a Customers record URL redirects there unless it opens a linked
+item inside Customers.
 Each record opened from the details appends a breadcrumb and a history entry: a
 contact from a company's Team tab gives `Companies > <company> > <contact>`, and
-a person's **Go to company** action gives `People > <contact> > <company>`. Opening a record
+opening a person's company from its company pill gives `People > <contact> > <company>`. Opening a record
 already in the trail (such as the contact's own company from `Companies >
 <company> > <contact>`) returns to it instead of adding a duplicate. Back and
 Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 <record>`. The CRM sidebar stays visible throughout.
-Contact properties use Tasks-style pills in the header and **Record details**.
-The email property lists every address the contact holds, the primary first,
-followed by an add control: **Add email** while blank, then a plus button named
-**Add email** at the end of the addresses' last line, which it never leaves for
-a line of its own, even in the narrow **Record details** column (long addresses
-truncate). Save
-adds the address; Cancel or Escape discards the draft, and invalid input stays
-open. Each address pill opens its own actions: **Make primary** and **Remove**.
-Removing an address deletes nothing; the contact's Emails tab and the email
-attachments in Files then stop covering it. Removing the primary promotes the
-oldest address left. Emails and Files cover every address of the contact.
+Contact properties look like task properties, in the header and in **Record
+details**. The header's email pill shows the primary address, `+N` for the
+others and a caret, and hovering lists every address; a blank contact shows an
+empty **Email** pill named **Add email**. **Record details** lists one line per
+address with an envelope icon, **Primary** beside the primary, and an **Add
+email** pill below. The pill, an address or **Add email** opens the email
+editor: an address field (Enter or **Add** adds it and keeps the field for the
+next one; Escape closes it and invalid input stays) above the same address
+rows. Each row offers **Remove** (a trash icon) and **Make primary** (a pin)
+when it can take them: on desktop they appear while the pointer is on the row
+or focus is in it, and on touch they always show. Removing an address deletes
+nothing; the contact's Emails tab and the email attachments in Files then stop
+covering it. Removing the primary promotes the oldest address left. Emails and
+Files cover every address of the contact.
 
-A contact without a company shows **Add company**, whatever its address.
-Contacts whose primary is a known personal-provider address, and that hold no
-address on their company's domain, can also switch company. The company
-pill opens the Tasks singleton picker; on touch, select a company then **Done**.
-Cancel keeps the original relation. **Remove company** sits in the same editor
-for every linked contact that holds no address on the company's domain; a
-contact that cannot switch gets an editor with that action alone. It asks for
-confirmation first. A
-rejected removal stays in the confirmation with its message. A contact
-with an address on its company's domain has a read-only company value, with
-the reason in its tooltip, and the one address that links it to the company
-shows no Remove. Extra addresses can still be added to it. The separate
-**Go to company** action opens an existing company, including for read-only
-contacts; Shift-click opens a separate split on desktop.
+The company is one split pill: its name opens the company, or brings forward the
+split that already shows it. Shift-click opens a separate split on desktop, and
+also brings forward a split that already shows the company. Its caret opens the
+editor. Hovering the name shows it in full, with the reason
+when the email domain sets the company. A contact without a
+company shows an empty **Company** pill (**No company** in **Record details**)
+named **Add company**, whatever its address. Contacts whose primary is a known
+personal-provider address, and that hold no address on their company's domain,
+can also switch company: the caret opens the Tasks singleton picker; on touch,
+select a company then **Done**. Cancel keeps the original relation. **Remove
+company** sits in the same editor for every linked contact that holds no
+address on the company's domain; a contact that cannot switch gets an editor
+with that action alone. It asks for confirmation first. A rejected removal
+stays in the confirmation with its message. A contact with an address on its
+company's domain has no caret, with the reason in its tooltip, and the one
+address that links it to the company shows no **Remove**. Extra addresses can
+still be added to it.
 
 Pending controls prevent duplicate saves; rejected edits retain their draft for
 retry. The server enforces the same eligibility (see
@@ -246,6 +290,25 @@ moving it. Personal-email sync reuses a unique existing contact, preserving its
 chosen company through sent/received refreshes and source cleanup. Ambiguous
 matches are left unchanged. CRM settings and domain admission still apply.
 
+A company's header shows its domains as one pill, like a contact's **Email**:
+the primary domain (the first), `+N` and a caret, with every domain on hover;
+it opens the domain editor, an add field above one row per domain. **Record
+details** lists them under **Website**, one line each with the primary first,
+followed by **Add domain**. Adding a
+domain the organization also uses files its mail and new contacts under this
+company instead of a company of their own; the company keeps its name and
+primary domain, and contacts already filed elsewhere stay where they are.
+Personal email providers are refused, and so is a domain another company of the
+team has: the message names that company, or says an archived company has it.
+Each domain row has **Remove** (on hover or focus on desktop, always on touch).
+Removing deletes no contact or mail; new mail
+from the domain is then filed as before it was added. The domain the company is
+named after can't be removed until the company is renamed, and only a team
+admin can remove a domain from a company whose email sync is off. The SDK
+(`company.addDomain`, `company.removeDomain`), `PUT`/`DELETE
+/crm/companies/{id}/domains` and the `AddCompanyDomain` and
+`RemoveCompanyDomain` agent tools do the same.
+
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
 With the keyboard on the record pane (as a record opens, with nothing focused,
@@ -259,6 +322,9 @@ open the shared **Switch view** bottom drawer: every available section
 has an icon and label, with a check beside the current section. Choosing a section
 closes the drawer and updates the header label; Escape, backdrop tap, and drag
 also dismiss it. Focus returns to the section trigger. Contacts do not show Team.
+A Customers record link with a section (`/app/companies/company/<id>/team`)
+opens on a phone on that section of the record's own page; a section the
+record type lacks opens Overview.
 The workspace's scrollable mobile view strip is unchanged. Copy-link islands are 40px square on touch with
 a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
 and header fit at phone and tablet widths.
@@ -282,14 +348,19 @@ company requires an explicit confirmation: every person is restored, including t
 archived individually, while email syncing stays off. Re-enable **Sync Emails** under
 **Email sharing** separately. A person whose company is archived offers **Open company**
 so that restoration happens there first. Unfiled people restore directly. Company row
-**Archive / Restore** actions also confirm the cascade. Record details and References
-appear first in both information panels, then Properties; company Lists and Email
-sharing follow. Neither panel has a duplicate visibility control. A contact's
+**Archive / Restore** actions also confirm the cascade. Both information panels, on
+desktop and in the phone **Show details** sheet, list **Record details**, then
+**Properties**, then the company-only **Lists** and **Email sharing**, with
+**References** last; as in a task's or document's panel, Properties come before
+References. Record details rows use the same text size and small muted labels as the
+Properties rows. Neither panel has a
+duplicate visibility control. A contact's
 Properties hold the team's custom properties only: Stage, Owner and Revenue are
 company-only, so its **Add property** list leaves them out (a company's leaves
 out task-only properties). **Add property** attaches one, such as a Phone text
 or a LinkedIn link, and it saves, clears and survives a reload like a company
-property. On a phone the panel opens from **Show details** in the record header.
+property. Its value field opens right after picking or creating it, and a value
+typed straight away is saved after the add, not cleared by it. On a phone the panel opens from **Show details** in the record header.
 
 Verify successful changes update open People, Companies, Team and ordinary Cmd-K;
 late responses must not reintroduce archived rows or hide restored rows with an
@@ -426,7 +497,7 @@ contact also reference its company. The side panel contains References, with no
 empty Sharing section.
 
 In workspace activity and a company or contact's embedded sections, clicking a
-Task, Email, Note, or Call opens its authorized detail inside Customers.
+Task, Email, Note, Call, or file opens its authorized detail inside Customers.
 The CRM sidebar stays in place and the breadcrumb shows the source view, record
 trail (when present), and selected item, without section labels such as Tasks or
 Files or an extra separator before preview titles. The current record breadcrumb
@@ -443,6 +514,10 @@ Reload keeps the selected item's URL. Shift-click uses the existing separate
 split behavior; modified row clicks keep the existing split behavior. On touch,
 the existing header and breadcrumb conventions apply without a new navigation UI.
 Verify that tasks display their status and properties, not the Drive editor.
+A file in Files (an upload or an imported email attachment) opens in its own
+viewer, as in Drive; notes, tasks, snippets and skills open in the Markdown
+editor. Verify a PDF, a Word file and an image render, never "This document
+couldn't be displayed."
 
 Links to the retired Databases views still resolve: a record's `/databases`
 section opens the record, `/databases/<id>` and `/app/companies/database/<id>`
@@ -702,16 +777,25 @@ access is denied; no CRM record data is required. Restoring access returns
 Stages and Email sync.
 
 CRM access does not require contributing email. The banner **Your emails aren’t
-contributing to CRM** opens **Review and opt in**. The dialog shows the exact
-connected primary mailbox, **Team blacklist**, and **My blacklist** before
-**Share my emails with CRM**. Opt-in shares full content from all available
+contributing to CRM** opens **Review and opt in**. The dialog's **Your email
+contribution** row shows the exact connected primary mailbox and its status,
+with **Share my emails with CRM** (or **Stop sharing my emails**) beside it; on
+phones the button wraps under the status. The line above the row says what
+opting in shares and asks the member to review **Team blacklist** and **My
+blacklist**, below it, first. Opt-in shares full content from all available
 historical and future messages, excluding blocked threads. The same controls
 are in CRM settings and **Email contribution settings** on a company. A
 changed or reconnecting mailbox requires a fresh review; a disconnected mailbox
-cannot opt in.
+cannot opt in. While sharing is off and no mailbox is linked, the row reads
+**No email connected** with a **Connect email** button. It closes the privacy
+dialog, if one is open, and opens the app's add-inbox provider picker; in
+**Settings > CRM** it opens the picker directly. Once the mailbox links, even in
+place without a reload, the row shows it with sharing still off until the
+member opts in.
 
-When selective contribution is enabled, **Sharing rules** sits below **Your
-email contribution** and above the blacklists and excluded threads. **Edit JSON**,
+When selective contribution is enabled, the contribution row holds **Change**
+and, while sharing, **Stop sharing my emails**, and **Sharing rules** sits below
+**Your email contribution** and above the blacklists and excluded threads. **Edit JSON**,
 **Preview counts**, and **History** open separate settings pages, including inside
 the phone settings sheet. Opening these pages never initializes consent.
 **Save and share** validates the JSON first and shows server validation problems,
@@ -731,8 +815,17 @@ opens immutable saved JSON separately. With the selective gate off, all-mail
 members retain the existing controls; selected contributors can still inspect
 rules/history and withdraw with the single **Stop sharing my emails** action.
 
-Any member can add a team domain; only team admins/owners can remove one.
-Personal domains affect only that member's mailbox. Domains include subdomains;
+Any member can add a team domain; only team admins/owners can remove one, and
+only they see **Remove** on **Team blacklist** rows. A long domain wraps beside
+**Remove** instead of pushing it onto its own line. Archiving a company lists
+its domains there until it is restored. Admins see that the row's company is
+archived and get **Open company** (where **Restore** is) instead of **Remove**;
+shift-click opens it in a new split, and a company already open in another split
+is brought to the front instead. Members, who can't see
+archived companies, get a plain row. A remove refused because the company was
+archived meanwhile says the same in its toast, and the row then shows the
+archived company. Personal domains affect
+only that member's mailbox. Domains include subdomains;
 a blocked participant in To/Cc/Bcc or the sender excludes the whole thread.
 Blocking hides previously shared matching threads on subsequent CRM reads.
 Another teammate's permitted copy may still appear when only a personal block

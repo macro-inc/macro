@@ -58,6 +58,7 @@ it('reports a downloaded update with its check and download timing', () => {
       target_version: '2026.1119.1',
       download_ms: 300,
       download_bytes: 4096,
+      resumed_bytes: 1024,
     })
   );
   const attributes = {
@@ -69,6 +70,7 @@ it('reports a downloaded update with its check and download timing', () => {
     native_update_target_version: '2026.1119.1',
     native_update_download_ms: 300,
     native_update_download_bytes: 4096,
+    native_update_resumed_bytes: 1024,
   };
   expect(telemetry.track).toHaveBeenCalledWith(NATIVE_UPDATE_EVENT, attributes);
   const [check, download] = telemetry.spans;

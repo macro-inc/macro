@@ -2,6 +2,7 @@ import { behavior } from '@macro-inc/muppet/core/behavior';
 import { source } from '@macro-inc/muppet/core/event';
 import type { ChatContext } from '../../capabilities/chat/context.ts';
 import { type Conversation, Entry } from '../../capabilities/chat/entry.ts';
+import { maintenanceSource } from '../../context/runtime-maintenance.ts';
 
 /** One conversation at a time per channel; channels don't wait on each other. */
 export async function* conversations({
@@ -34,7 +35,10 @@ export const chatSources = (
   context: Pick<ChatContext, 'chat' | 'waiting' | 'history' | 'unanswered'>
 ) =>
   behavior().source({
-    messages: source(context.chat.incoming),
-    conversations: source(conversations(context)),
-    unanswered: context.unanswered.source,
+    messages: maintenanceSource(source(context.chat.incoming), 'replayable'),
+    conversations: maintenanceSource(
+      source(conversations(context)),
+      'replayable'
+    ),
+    unanswered: maintenanceSource(context.unanswered.source, 'dependent'),
   });

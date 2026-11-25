@@ -10,4 +10,6 @@ pub use chat::{
 };
 pub use error::{ChatErr, Result};
 pub use message::{PatchChatMessageArgs, ResolvedMessageContent, WebCitation};
-pub use model_access::{CHAT_MODELS, FREE_MODEL, FreeTierModel, PAID_DEFAULT_MODEL};
+pub use model_access::{
+    CHAT_MODELS, FREE_MODEL, FreeTierModel, PAID_DEFAULT_MODEL, RETIRED_MODELS, current_model,
+};

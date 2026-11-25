@@ -71,6 +71,14 @@ answer queues behind data in flight, and a shorter one drops connections that
 are slow, not dead. An HTTP/1.1 connection, such as one to file storage, has no
 probe and waits for TCP to give up. All of this needs a native app release.
 
+A request that sends no `Origin` of its own gets the origin the plugin
+recorded when the webview's page started (and finished) loading; the plugin
+reads the webview's URL only before it has seen a load. The app builds the
+plugin with `unsafe-headers`, so a request's own `Origin` is kept, and an empty
+one removes the header. A webview getter waits for the UI thread while
+holding the async runtime worker that asked, so one per request stalled every
+async command under load; keep webview getters off per-request paths.
+
 Requests on a shared connection share its flow control, so a response body the
 page neither reads nor cancels holds data against the others until it is read
 or released. The plugin gives a connection a window far larger than a few
@@ -79,13 +87,27 @@ you fetch.
 
 ## OTA bundle storage
 
-On iOS, the bundle updater stores downloads and their persistence markers in
+Both mobile platforms can delete cache files when storage runs low, and they can
+take some of a bundle's files while leaving the rest. On iOS the bundle updater
+therefore stores downloads and their persistence markers in
 `Library/Application Support/<bundle-identifier>/bundle-updates`, not the
-purgeable `Library/Caches` directory. The directory is excluded from backup
-because the server can supply the bundles again. The updater deliberately
-ignores legacy cache contents: the first launch uses embedded assets and checks
-for a fresh download. Other platforms retain their existing cache location.
-This storage change requires a native app release.
+purgeable `Library/Caches` directory, excluded from backup because the server
+can supply the bundles again. On Android it stores them in the app's data
+directory (`/data/data/<package>/bundle-updates`), not its cache directory;
+the manifest's backup rules already exclude app data from backups. On both, the
+updater deliberately ignores legacy cache contents: the first launch uses
+embedded assets and checks for a fresh download. Desktop platforms retain their
+existing cache location. A storage change requires a native app release.
+
+Each extraction also writes a completion record beside the bundle directory
+(`<n>.complete`) that lists every extracted file and its size, except the
+downloaded archive. Before startup serves a saved or completed bundle, and
+before a download is reused, the updater checks that every listed file is still
+there at that size; otherwise it falls back to the embedded bundle (rejection
+`files_missing`) and downloads again. Without this check, a bundle that lost a
+startup chunk still has its `index.html`, so the document loads, its scripts
+404, and the app shows a blank screen with no telemetry. Records written before
+the file list hold only the bundle build and are trusted as before.
 
 ## File saving and sharing
 
@@ -181,18 +203,22 @@ binaries.
 Each native launch also records how the bundle updater chose its bundle, and
 every document in the launch reports it on `native_webview_started`:
 `native_bundle_startup_selection` (`saved_ota`, `completed_download`, or
-`embedded`), `native_bundle_startup_saved_selection` (what the saved selection
+`embedded`; a completed download wins over a saved bundle it is newer than, and
+survives the saved bundle's rejection), `native_bundle_startup_saved_selection` (what the saved selection
 held: `none`, `unreadable`, `embedded`, or `ota`),
 `native_bundle_startup_rejection` (which check a saved OTA bundle failed),
 `native_bundle_startup_read_error` (the I/O error kind, such as `NotFound` or
 `PermissionDenied`), and `native_bundle_startup_dirs_found` /
 `native_bundle_startup_dirs_removed` (numbered bundle directories before and
-after startup cleanup). A user who was on an OTA bundle and starts a new launch
-on the embedded one without a reload dispatch lost it at startup: `none` with
-no directories means bundle storage was emptied, `unreadable` means the files
-were there but could not be read, and a rejection names the failed check. On
-iOS, the first launch of the release that moved bundles out of `Library/Caches`
-also reports `none`, because it ignores the old location. An older
+after startup cleanup), and `native_bundle_startup_check_ms` (time spent
+checking a saved OTA bundle, including its file list). A user who was on an OTA
+bundle and starts a new launch on the embedded one without a reload dispatch
+lost it at startup: `none` with no directories means bundle storage was
+emptied, `unreadable` means the files were there but could not be read, and a
+rejection names the failed check (`files_missing`: a listed file was gone or
+had changed size). On iOS and Android, the first launch of the release that
+moved bundles out of the cache directory also reports `none`, because it
+ignores the old location. An older
 release's embedded bundle predates these fields, but the record lives for the
 whole launch, so the document an update reload brings up reports it. Missing
 fields mean an older binary or a build with automatic updates disabled.
@@ -498,7 +524,7 @@ document-rendering finding; passing the smoke test is not full iOS 26/27 parity.
 nix build --option sandbox false .#tauri-desktop-cef-app
 
 # Linux and Windows desktop bundles (system webview; from this directory)
-cargo tauri build
+cargo tauri build    # on Windows: the per-user NSIS installer, see below
 
 # iOS / Android release artifacts
 cargo tauri ios build
@@ -622,6 +648,10 @@ in an installed macOS bundle before release.
 `threadId` (stacks a conversation's alerts), and `sender` (`id`, `name`,
 `avatarUrl`). A sender makes it a communication notification, as on iOS: the
 downloaded avatar replaces the app icon and group conversations show their name.
+macOS names a group only when its message has more than one recipient, so a
+notification with a subtitle (the channel or document it happened in) carries
+two opaque stand-in recipients; without them a signed build titles it with the
+sender alone.
 The new arguments are optional, so older frontends and native builds keep
 working together. macOS honors this only for an app signed with the restricted
 `com.apple.developer.usernotifications.communication` entitlement and
@@ -659,6 +689,95 @@ or enqueueing mutations. An older binary uses the existing uncached fallback and
 shows an update-required notice; its existing mutation queue stays intact until
 the user installs the native update.
 
+## Windows desktop app
+
+Windows builds this crate on wry, like Linux, so the webview is WebView2
+(Chromium); the CEF build is macOS only. `tauri.windows.conf.json` sets what
+differs from the shared config:
+
+- `useHttpsScheme`: the app is served from `https://tauri.localhost`, the
+  origin `lib.rs` and `tauri_protocol::rewrite_uri` expect on Windows.
+  WebView2's default `http://` origin would not match.
+- `dragDropEnabled: false`, as on macOS: Tauri's native drop handler would
+  swallow the page's HTML5 drag and drop.
+- An NSIS installer only, installed per user (`%LOCALAPPDATA%\Macro`), so
+  neither installing nor updating asks for an administrator. It writes the
+  `macro://` handler that sign-in callbacks return through to HKCU, and installs
+  WebView2 through its bootstrapper on the rare PC without it.
+  `windows/installer-hooks.nsh` stops the bundled `macrod.exe` before the
+  installer replaces or removes it, since Windows cannot replace a running
+  executable.
+
+Not yet on Windows: notification clicks open the app but not the conversation,
+and there are no desktop tabs or app menu. The title bar is the native one.
+
+Release builds come from `Build Desktop on Tag` (`xtask_workflows`'
+`desktop_windows.rs`). A Linux job builds the frontend in Nix
+(`.#tauri-frontend`) and the Tauri release config
+(`desktop-release.mjs tauri-config`); the Namespace Windows runner builds macrod
+and the installer with MSVC and the pinned `tauri-cli`, installs it silently and
+checks the `macro://` handler. WebView2 cannot start there (the runner runs jobs
+elevated in session 0), so a GitHub-hosted `windows-2025` job installs it again,
+launches it, checks that Macro and WebView2 start and stay up for 30 seconds,
+and uninstalls it; only an installer that passed reaches the release. The
+unsigned pull request build (`Desktop Windows smoke`, never published) is the
+only one that opens WebView2's DevTools port, through the window's
+`additionalBrowserArgs` (Tauri's own switches make WebView2 ignore
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`), so its launch job also checks the page
+loaded over the DevTools protocol. A build that may be signed fails if any
+config it merges opens the port, and the release launch check fails if WebView2
+started with it. A Windows failure leaves
+the macOS and Linux release alone; Windows users stay on their version, and
+rerunning the failed Windows jobs adds `windows-x86_64` to that version's feed,
+as for Intel below. The release does wait for the Windows jobs to end, so keep the
+`desktop-windows-signing` environment free of required reviewers and wait
+timers.
+
+Signing uses Azure Artifact Signing (formerly Trusted Signing). The bundler
+signs `Macro.exe`, `macrod.exe`, the uninstaller and the installer through
+`scripts/sign_windows_file.ps1`, which runs SignTool with Microsoft's dlib. CI
+holds no signing secret: the job's GitHub OIDC token, for the
+`desktop-windows-signing` environment, signs in as an Entra app. Setting it up
+takes an Artifact Signing account with a validated organization identity, a
+Public Trust certificate profile, and an Entra app with a federated credential
+for `repo:macro-inc/macro:environment:desktop-windows-signing` and the
+Artifact Signing Certificate Profile Signer role on the profile. Then set the
+repository variables `WINDOWS_SIGNING_AZURE_TENANT_ID`,
+`WINDOWS_SIGNING_AZURE_CLIENT_ID`, `WINDOWS_SIGNING_ENDPOINT`,
+`WINDOWS_SIGNING_ACCOUNT` and `WINDOWS_SIGNING_PROFILE`. While any is empty the
+installer is unsigned and stays a workflow artifact (`windows-installer-<tag>`).
+A signed build also stays one until `WINDOWS_DESKTOP_RELEASE` is `true`: set it
+after a person has tested a signed build on Windows 10 and 11 (sign-in through
+the browser and the `macro://` callback, cold and warm; notifications; calls
+with camera, microphone and screen share; macrod; an update between two signed
+builds). Only then does the installer reach the release as
+`Macro-<version>-x86_64-windows-setup.exe` and the update feed as
+`windows-x86_64`.
+
+Pull requests that change the app run the same build unsigned as
+`Desktop Windows` in `PR CI`, outside `CI gate`. Without a Windows machine,
+check that the Windows code paths compile with
+[cargo-xwin](https://github.com/rust-cross/cargo-xwin) and a rustup toolchain
+that has the `x86_64-pc-windows-msvc` target (the Nix shell's has not):
+
+```sh
+AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true \
+  cargo xwin clippy --manifest-path apps/web/tauri/Cargo.toml -p app --target x86_64-pc-windows-msvc
+```
+
+It needs `clang-cl`, `lld-link` and `llvm-lib` on `PATH` (`nix shell
+nixpkgs#clang nixpkgs#lld nixpkgs#llvm`), an `apps/web/dist/index.html`, and
+`development` in `.macro-tauri-env`.
+
+The same setup builds an unsigned debug installer, which checks the NSIS
+template and `windows/installer-hooks.nsh` (CI's tauri-cli release, plus
+`nixpkgs#nsis` for `makensis`), from `apps/web/tauri/src-tauri`:
+
+```sh
+cargo-tauri build --debug --runner cargo-xwin --target x86_64-pc-windows-msvc \
+  --bundles nsis --config '{"build":{"beforeBuildCommand":""}}'
+```
+
 ## Desktop window state
 
 The desktop window reopens at its last size, position, maximized, and
@@ -675,24 +794,89 @@ it from the startup config if it no longer exists (`src/desktop/main_window.rs`)
 
 ## Desktop native updates
 
-Release builds for macOS Apple Silicon and Linux AppImage check for native updates
-after startup and every six hours. Downloads are verified with Tauri's updater
-signature before becoming eligible for installation. A ready update installs on
-normal app quit; closing/hiding a window only installs if it actually exits the
-app. Force-killing loses the in-memory download and the next launch checks again.
-No network work is started during quit. Errors retry with backoff.
+Release builds for macOS (Apple silicon and Intel), Linux AppImage and Windows
+check for native updates after startup and every six hours. The download streams into
+`native-update/` under the app's local data directory (Application Support on
+macOS, never a purgeable cache): `download.partial` while it arrives,
+`download.bin` once complete, and `download.json` naming the version and
+signature they belong to. A quit, crash or failed attempt keeps what arrived;
+the next attempt or launch, offered the same update, resumes with an HTTP
+`Range` request (a server that answers with the whole file replaces the saved
+bytes), and a complete file is reused without downloading. A different
+offered update, a release that needs a newer OS, or a feed that offers none,
+deletes the saved files. The whole
+file is verified with Tauri's updater signature (the updater's own
+`minisign-verify` check, `desktop_update/desktop/download.rs`) before it becomes
+eligible for installation, and read and verified again just before installing;
+bytes that fail are deleted, so the next check downloads afresh. A successful
+install (on Windows, starting the installer) deletes them too. Without an app data directory native updates stay
+disabled. The download uses the updater's timeout and proxy settings. While
+the app stays open, the six-hourly check keeps running with an update ready, so
+an app left open for days doesn't install the first update it downloaded and
+find the next one on relaunch. A newer release downloads into `native-update/next/`
+while the ready update stays installable, and replaces it, in one rename, only
+once verified; it is then offered as a new update, not as another try at an
+install that failed (`failedInstallVersion` is cleared). A failed download, a feed
+that offers nothing newer, or a release this Mac can't run leaves the ready
+update as it is. The next launch deletes a staged download a quit left
+behind. A ready update installs on normal app quit;
+closing/hiding a window only installs if it actually exits the app. No network
+work is started during quit. Errors retry with backoff.
 
-The ready notification and Settings → Account offer **Restart to update**. Explicit
+The ready notification and Settings → Desktop App offer **Restart to update**. Explicit
 restart waits for registered canvas/PDF saves and local query persistence, and is
 blocked during calls, uploads and imports. Native installation closes the native
-cache and excludes concurrent frontend OTA reloads. Neither update channel wipes
-user data. Mobile updates remain managed by the app stores. Debug, recording,
+cache and excludes concurrent frontend OTA reloads. On Windows the app stops
+macrod, starts the verified NSIS installer in passive mode and quits normally;
+the installer reopens Macro only after **Restart to update**
+(`desktop_update/desktop/windows_installer.rs`). The updater plugin's own
+`install()` is not used there: it exits the process itself, skipping the
+app's exit handling, and always reopens the app, which on Windows would follow
+closing the last window. Neither update channel wipes
+user data.
+
+Before Restart installs, the page checks for the deployed web bundle and waits up to
+10 seconds for it to download (`stageDeployedBundle`, `src/lib/tauri/stage-bundle.ts`;
+span `native.update.stage_bundle` with its outcome), then restarts whatever the
+check found. A new release embeds the bundle from its release commit, which is
+usually older than the deployed one, so without this the first launch would
+download it and offer "Update ready" for a second restart. The download stays
+pending (`pending_bundle_root`), and startup keeps it even when it rejects the
+saved bundle the old app ran, and prefers it over a saved bundle it is newer than;
+it is applied before the first document loads, so the new launch reports
+`native_bundle_startup_selection=completed_download`. A check that no longer
+offers a pending download (a rolled-back deploy) forgets it, so a later launch
+can't start on it. Installs on quit don't stage, since quitting starts no network
+work, and neither does a restart that a call, upload or import blocks. Mobile updates remain managed by the app stores. Debug, recording,
 branch, and `--no-default-features` builds do not auto-install native updates.
+
+When an install fails, **Restart to update** relaunches the version still
+installed; a quit stays quit, because the person asked to quit. On Windows the
+app's part ends once the NSIS installer starts, and the installer reopens Macro
+itself, so the app only exits; it relaunches only when the installer could not
+start. The common
+failures (a read-only or translocated bundle, a declined admin prompt, a bad
+archive) leave the old app in place, and the AppImage updater restores its
+backup. On macOS the pinned updater keeps its backup of the old app in a
+temporary directory, so a failure after it moved the old app out can leave no
+app to relaunch; the app then just exits. The next launch reads the
+install record (see [update telemetry](#update-telemetry)), reports
+`install_failed`, and keeps the target version as `failedInstallVersion` in
+the status it gives the webview (`get_native_update_status`, generated as
+`src/lib/tauri/generated/native-update-status.ts` by
+`UPDATE_NATIVE_UPDATE_STATUS_TYPES=1 cargo test --manifest-path apps/web/tauri/Cargo.toml --locked -p app --lib native_update_status_wire_types`).
+A failed install keeps the saved download (unless it no longer verified, which
+deletes it), so the launch's first check, offered the same update, reuses it
+without downloading, or resumes or restarts the download otherwise; meanwhile
+the rail's update popover and Settings → Account say the last update couldn't
+be installed, and once it is ready the popover offers **Try again**, which
+restarts to install it.
 
 `../desktop-release.json` is the public release configuration; its checked-in
 defaults disable updates for local builds. `bun apps/web/scripts/desktop-release.mjs prepare <ref>`
 (run from the repository root) updates this tracked file in CI
-before Nix evaluates either package. Both packages receive the same native version,
+before Nix evaluates either package (and before the Windows frontend job builds
+the Windows release config). Every package receives the same native version,
 OTA compatibility build number, and source commit timestamp for the embedded
 frontend. That timestamp is earlier than the OTA bundle the web deploy builds from
 the same commit (numbered by build time), so the embedded bundle manifest also
@@ -707,8 +891,18 @@ or rebuild an already published tag; publish a higher version for fixes/reverts.
 
 The combined desktop workflow is the only publisher. It exports the final
 relocated/signed macOS app, notarizes and staples it, and archives it as
-`.app.tar.gz`. The Linux AppImage and macOS archive receive updater signatures
-outside Nix. `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+`.app.tar.gz`, once per Mac architecture. The Intel build
+(`Macro-<version>-x86_64-darwin.{dmg,app.tar.gz}`, feed key `darwin-x86_64`)
+is optional: release tags build it only once
+`../desktop-cef/cef-codecs.json` pins its codec CEF, and a failed or skipped
+Intel build still publishes the others, leaving `darwin-x86_64` out of that
+release's feed. Installed Intel apps then report a failed check (the feed has no
+entry for them) and stay on their version until a release includes it; the feed
+has one version for every platform, so an older Intel package can't be carried
+forward. A failed Intel build raises the native-build alert. Rerunning it adds
+`darwin-x86_64` to that version's feed: publication accepts a same-version feed
+that only adds platforms and leaves every listed one unchanged. The Linux AppImage, the macOS archives and, when
+it is released, the Windows installer receive updater signatures outside Nix. `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 live in Doppler `macos-release/prd`, read using the existing
 `MACOS_RELEASE_DOPPLER_TOKEN` CI secret. Only the corresponding public key is
 committed. Keep this private key: changing the embedded key requires a transition
@@ -723,10 +917,47 @@ Apps released before that check don't read the field.
 Versioned GitHub Release assets are immutable. Publication retries reuse and
 verify any already-published signatures, since newly generated signatures include
 the signing time. The stable manifest is uploaded last to the dedicated
-`desktop-stable` prerelease's `latest.json` asset, after both packages and signatures
-exist. Promotions are serialized and reject older/equal versions; unrelated SDK
+`desktop-stable` prerelease's `latest.json` asset, after every package and signature
+exists. Promotions are serialized and reject older/equal versions; unrelated SDK
 or daemon releases cannot move the desktop update feed. A brief missing manifest
 during replacement is treated as a retryable check error.
+
+Promotion waits for the `QA macOS release app` job: it mounts the notarized DMG
+the release built, checks it against the build's `macro-dmg-SHA256SUMS` and its
+stapled Gatekeeper verdict, and launches the app from it on the macOS runner's
+GUI session with the smoke suite of `apps/web/tests/macos/qa.mjs` (window,
+screenshot, soak, crash report, clean quit, app log). A launch that shows no
+window or screenshot is retried once; a crash, crash report, panic or a second
+failed launch fails the job, so `desktop-stable` and its download links keep the
+previous version, and `Alert native build failures` says so in its post. The
+versioned release still gets the installers `publish-installers` attaches, but
+not the update signatures `publish-release` makes, so `Desktop Release Watch`
+reports those missing 4 hours later unless a re-run has promoted the release.
+The release app embeds the production PostHog key, so the job blocks the
+analytics proxy host (read from `src/lib/analytics/analytics.ts`) in
+`/etc/hosts` before the launch. The job's `macos-qa-release-*` artifact holds
+`summary.md`, screenshots and logs. After a flake, re-run the failed jobs:
+`qa-macos` reruns, then `publish-release` promotes. `Desktop QA macOS` (workflow
+dispatch, any ref) runs the same harness on an unsigned build; its `full` suite
+adds the src-tauri `cargo test`, linked with the DMG build's Apple linker
+(`.#tauri-desktop-apple-linker`) because Nix's cctools `ld` crashes on it.
+
+Public download links never name a version. While `desktop-stable` serves a
+release's `latest.json`, the next step of the same job copies that release's
+installers onto `desktop-stable` as `Macro-macos-arm64.dmg` and
+`Macro-linux-x86_64.AppImage`, so they always match what auto-update installs. Each
+copy is uploaded under a staging name and then renamed over the old one, so the
+link is never missing for the length of an upload; an installer whose bytes are
+already there is skipped, and reruns of an older tag change nothing. Customers
+use `https://macro.com/download/mac` and `/download/linux`, which the website's
+edge redirects to those assets (`apps/marketing/seo/download-redirects.json`), so
+the hosting can move without changing the links. A new platform (Windows) adds a
+fixed name in `publish_desktop_download_links.sh` and a redirect in that
+manifest. The Intel Mac installer becomes `Macro-macos-x86_64.dmg` only from a
+release that built it; one without it leaves the previous copy, which installs
+and then updates itself. Its redirect, `/download/mac-intel`, is added to the
+manifest after the first release that publishes it, and both download pages
+offer Intel only while the manifest has it.
 
 Failed releases post to the Macro Alerts channel. `Alert native build failures`
 posts when any job of `Build Desktop on Tag` fails or times out, or when a tag's
@@ -739,7 +970,7 @@ never start, wait for a runner or end without uploading.
 
 Bootstrap requires one manual native upgrade: older binaries cannot acquire the
 Rust updater through a frontend OTA. Before promoting the first release, test two
-consecutive signed builds on installed macOS and Linux apps, including offline
+consecutive signed builds on installed macOS, Linux and Windows apps, including offline
 launch, read-only install locations, quit, restart, and preservation of local data.
 Builds run directly from a mounted DMG or the Nix store are not writable installed
 apps. For a broken release, stop promotion and release the last working code under
@@ -754,9 +985,11 @@ The coordinator queues up to 32 reports (`desktop_update/report.rs`) and emits
 when it mounts and after each emit, so each report goes out once. A check
 reports `up_to_date`, `needs_newer_os` (a newer release whose
 `minimumSystemVersion` this Mac is below, with that minimum; not downloaded),
-`update_found` then `downloaded`, `check_failed` or `download_failed` (span
-`native.update.check`, timed by the host, with a `native.update.download`
-child; `update_found` is a PostHog event only). Failures
+`update_found` then `downloaded` (with `resumed_bytes`, the bytes kept from an
+earlier launch or attempt; equal to `download_bytes` when a saved download was
+reused whole), `check_failed` or `download_failed` (span `native.update.check`,
+timed by the host, with a `native.update.download` child; `update_found` is a
+PostHog event only). Failures
 carry `consecutive_failures`. Installs run as the app quits, so before
 installing the app writes `native-update/pending-install.json` under the app's
 local data directory, adding the failure if `install()` returns one. The next
@@ -779,10 +1012,33 @@ types (`generated/native-update.ts`, same command as above).
 
 The Rust coordinator tests exercise the pinned updater against a local HTTP
 server with a test-only public key and signed fixture (the test private key is
-discarded), including corrupt signatures and older versions. Release metadata tests
+discarded), including corrupt signatures, older versions, resumed and reused
+saved downloads, servers that ignore `Range`, and saved bytes changed before install. Release metadata tests
 run from `apps/web` with `bunx vitest run --project scripts scripts/desktop-release.test.ts scripts/desktop-signing.test.ts`.
 Frontend preparation tests are in the web `tauri` Vitest project. Native replacement/notarization still
 requires platform release testing; mocked HTTP tests never replace the test runner.
+
+## Unit tests in PR CI
+
+`PR CI` builds the desktop app on Linux and runs the library tests of `app` and
+`macro_bundle_updater_plugin` (`Desktop app / Test on Linux`,
+`desktop_check.yml`) when a pull request changes `apps/web/tauri/`, a
+root-workspace crate it builds (such as `crates/client/cache-core`) or the root
+`Cargo.toml`, the generated wire types in
+`apps/web/src/observability/generated/`, or the Nix shell. A new path dependency
+needs its crate in that workflow's `PATHS` (`desktop_check.rs`); its test fails
+otherwise. The job stubs the frontend build as `desktop_qa_macos.yml` does. Locally,
+from the repository root:
+
+```sh
+mkdir -p apps/web/dist && echo '<!doctype html>' > apps/web/dist/index.html
+echo development > apps/web/tauri/src-tauri/.macro-tauri-env
+nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml --locked -p app -p macro_bundle_updater_plugin --lib
+```
+
+The Linux notification tests start a private `dbus-daemon` with their own
+configuration, so they need no session bus or `/etc/dbus-1`. The macOS-only
+code (the `cef` feature, Apple APIs) compiles only in the macOS builds.
 
 ## Automated offline tests (Linux)
 

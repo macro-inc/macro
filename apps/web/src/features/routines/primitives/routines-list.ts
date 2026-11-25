@@ -8,9 +8,15 @@ import {
   describeTrigger,
   hasOnlyScheduledTriggers,
   type RoutineTriggerDraft,
+  summarizeTriggerLabels,
   triggerKind,
 } from '../core/routine-triggers';
-import { runOutcome, stepsForRun, summarizeRun } from '../core/step-history';
+import {
+  failedStep,
+  runOutcome,
+  stepsForRun,
+  summarizeRun,
+} from '../core/step-history';
 import type { RoutineRow } from '../core/types';
 
 /** Today's runs show their time; older ones their day. */
@@ -27,23 +33,31 @@ function lastRun(routine: RoutineSnapshot): RoutineRow['lastRun'] {
   const record = routine.lastRun;
   const at = record?.startedAt;
   if (!record || !at) return undefined;
+  const outcome = runOutcome(record);
+  const reason =
+    outcome === 'failed'
+      ? (failedStep(record)?.error ?? record.error)?.trim() || undefined
+      : undefined;
   return {
     at: runTime(at),
-    outcome: runOutcome(record),
+    outcome,
     summary: summarizeRun(record, stepsForRun(record, routine)),
+    ...(reason ? { reason } : {}),
   };
 }
 
-/** What starts the routine, its AI check included, in a line. */
-function describeWhen(triggers: RoutineTriggerDraft[]): string {
-  return triggers
-    .map((trigger) => {
-      const condition =
-        trigger.kind === 'event' ? trigger.condition?.trim() : undefined;
-      const text = describeTrigger(trigger);
-      return condition ? `${text} · ${condition}` : text;
-    })
-    .join(' · ');
+/** A compact trigger line and the full descriptions for search and details. */
+function describeWhen(triggers: RoutineTriggerDraft[]) {
+  const labels = triggers.map((trigger) => {
+    const condition =
+      trigger.kind === 'event' ? trigger.condition?.trim() : undefined;
+    const text = describeTrigger(trigger);
+    return condition ? `${text}: ${condition}` : text;
+  });
+  return {
+    when: summarizeTriggerLabels(labels),
+    whenDetails: labels.join('\n'),
+  };
 }
 
 /**
@@ -84,9 +98,10 @@ export function createRoutineRows(
     return {
       id: routine.id,
       name: routine.name,
+      appearance: routine.appearance,
       description: draft?.description?.trim() || undefined,
       createdAt: routine.createdAt,
-      when: describeWhen(draft?.triggers ?? []),
+      ...describeWhen(draft?.triggers ?? []),
       whenKind: first ? triggerKind(first) : undefined,
       does: work.text,
       ai: work.chip,

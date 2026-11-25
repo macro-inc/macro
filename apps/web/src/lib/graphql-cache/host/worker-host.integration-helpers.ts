@@ -100,3 +100,58 @@ export class LinkedMessageChannel {
     this.port2.peer = this.port1;
   }
 }
+
+type HeldLock = { released: Promise<void>; release: () => void };
+
+function holdLock(): HeldLock {
+  let release = () => {};
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { released, release };
+}
+
+/**
+ * The Web Locks of one origin. `abandon` frees those whose name starts with
+ * `prefix`, as the browser does when the holder is gone.
+ */
+export function originLocks() {
+  const held = new Map<string, HeldLock>();
+  const free = (name: string, lock: HeldLock): void => {
+    if (held.get(name) === lock) held.delete(name);
+    lock.release();
+  };
+  const request = async (
+    name: string,
+    options: LockOptions,
+    callback: (lock: Lock | null) => unknown
+  ): Promise<unknown> => {
+    for (let holder = held.get(name); holder; holder = held.get(name)) {
+      const aborted = new Promise<never>((_resolve, reject) =>
+        options.signal?.addEventListener('abort', () =>
+          reject(new DOMException('aborted', 'AbortError'))
+        )
+      );
+      await Promise.race([holder.released, aborted]);
+    }
+    if (options.mode === 'shared')
+      return await callback({ name, mode: 'shared' });
+    const lock = holdLock();
+    held.set(name, lock);
+    try {
+      return await Promise.race([
+        callback({ name, mode: 'exclusive' }),
+        lock.released,
+      ]);
+    } finally {
+      free(name, lock);
+    }
+  };
+  return {
+    request,
+    abandon: (prefix: string): void => {
+      for (const [name, lock] of held)
+        if (name.startsWith(prefix)) free(name, lock);
+    },
+  };
+}

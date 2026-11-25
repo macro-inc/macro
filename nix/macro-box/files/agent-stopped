@@ -6,6 +6,7 @@
 # must roll back. A boot whose code needs a newer image (79) isn't restarted
 # and has nothing to roll back to: it never counts.
 # `_agent.nix` prepends `last_good`, `failures` and `boot_head`.
+[[ ! -e ${runtime_control:-/nonexistent}/fence ]] || exit 0
 head=$(cat "$boot_head" 2>/dev/null || true)
 # Any stop of last-good's code, clean or not, starts the count again: what
 # failed before was other code.

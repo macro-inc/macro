@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH sync_off AS MATERIALIZED (\n                   SELECT id FROM crm_companies WHERE team_id = $1 AND NOT email_sync\n               )\n               SELECT domain AS \"domain!\" FROM crm_blocked_domains WHERE team_id = $1\n               UNION SELECT lower(d.domain) FROM sync_off JOIN crm_domains d ON d.company_id = sync_off.id\n               ORDER BY 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "domain!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "be687cda8ba348e95934fa0210b105200a902948fb9064ad75990fec20f6131a"
+}

@@ -15,11 +15,27 @@ export TAURI_SIGNING_PRIVATE_KEY_PATH="$credentials_dir/updater.key"
 TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$(jq -r '.TAURI_SIGNING_PRIVATE_KEY_PASSWORD // ""' "$credentials_dir/secrets.json")
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 
-# Verify against the public key compiled into BOTH packages before publishing.
-jq -er '.publicKey | select(length > 0)' release-artifacts/darwin-aarch64.release.json > "$credentials_dir/mac.pub"
-jq -er '.publicKey | select(length > 0)' release-artifacts/linux-x86_64.release.json > "$credentials_dir/linux.pub"
-cmp "$credentials_dir/mac.pub" "$credentials_dir/linux.pub"
-base64 --decode "$credentials_dir/mac.pub" > "$credentials_dir/minisign.pub"
+# Verify against the public key compiled into EVERY package before publishing.
+# The Intel Mac and Windows builds are optional: a failed, skipped or
+# unreleased one must not hold back the others, so each is checked only when it
+# arrived.
+shopt -s nullglob
+release_files=(release-artifacts/*.release.json)
+for required in darwin-aarch64 linux-x86_64; do
+  if [ ! -f "release-artifacts/$required.release.json" ]; then
+    echo "Missing release-artifacts/$required.release.json" >&2
+    exit 1
+  fi
+done
+jq -er '.publicKey | select(length > 0)' release-artifacts/darwin-aarch64.release.json > "$credentials_dir/expected.pub"
+for release_file in "${release_files[@]}"; do
+  jq -er '.publicKey | select(length > 0)' "$release_file" > "$credentials_dir/package.pub"
+  if ! cmp -s "$credentials_dir/expected.pub" "$credentials_dir/package.pub"; then
+    echo "$release_file was built with a different updater public key" >&2
+    exit 1
+  fi
+done
+base64 --decode "$credentials_dir/expected.pub" > "$credentials_dir/minisign.pub"
 if ! gh release view "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --json assets > "$credentials_dir/release.json"; then
   # Reading the collection must succeed before treating the version as absent.
   gh api --paginate --slurp "repos/$RELEASE_REPOSITORY/releases" > "$credentials_dir/releases.json"
@@ -29,10 +45,10 @@ if ! gh release view "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --json assets >
   fi
   printf '{"assets":[]}' > "$credentials_dir/release.json"
 fi
-shopt -s nullglob
-artifacts=(release-artifacts/*.app.tar.gz release-artifacts/*.AppImage)
-if [ "${#artifacts[@]}" -ne 2 ]; then
-  echo "Expected one macOS and one Linux updater artifact" >&2
+artifacts=(release-artifacts/*.app.tar.gz release-artifacts/*.AppImage release-artifacts/*-windows-setup.exe)
+# One updater package per build that arrived, and nothing else.
+if [ "${#artifacts[@]}" -ne "${#release_files[@]}" ]; then
+  echo "Expected one updater artifact for each of ${release_files[*]}, found ${artifacts[*]}" >&2
   exit 1
 fi
 for artifact in "${artifacts[@]}"; do

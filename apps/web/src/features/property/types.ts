@@ -62,6 +62,8 @@ export type Property = {
   /** Property must always have a value — disables the "No <name>" clear
    * affordance in single-select editors. */
   isRequired?: boolean;
+  /** A tag set read as a select: its labels come from the tag sets, not options. */
+  isTag?: boolean;
   options?: PropertyOption[];
   /** Restricts selectable values without hiding labels for historical values. */
   allowedOptionIds?: readonly string[];

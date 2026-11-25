@@ -7,6 +7,8 @@
 
 import { errorMessage } from '../../core/error.ts';
 import { source } from '../../core/event.ts';
+import { hostedMaintenance } from '../../core/maintenance.ts';
+import { acknowledgeMaintenanceEvent } from '../../internal/schedule-acknowledgement.ts';
 import type { Clock } from '../time/index.ts';
 import {
   instant,
@@ -103,7 +105,7 @@ const changeRun = (
     : { ...table, [name]: { ...entry, run: change(entry.run) } };
 };
 
-/** Nothing runs between passes, so a run still marked running was cut off, e.g. by a restart. */
+/** A normal restart keeps the existing policy for interrupted schedules. */
 const recover = (table: Table): Table =>
   Object.values(table).some((entry) => entry.run.running === true)
     ? Object.fromEntries(
@@ -141,6 +143,7 @@ export const scheduler = ({
   clock,
   tz,
   signal,
+  recoverPending = hostedMaintenance()?.recoverSchedules,
 }: {
   readonly store: ScheduleStore;
   readonly clock: Clock;
@@ -148,8 +151,11 @@ export const scheduler = ({
   readonly tz: string;
   /** Ends `fired`, e.g. on shutdown. */
   readonly signal?: AbortSignal;
+  /** A maintenance handoff replays pending occurrences once, then acknowledges them. */
+  readonly recoverPending?: () => Promise<void>;
 }): Schedules => {
   const zone = timeZone(tz);
+  let recovery = recoverPending;
 
   // One read and write at a time, so the loop and changes never lose each other's writes.
   let queue: Promise<unknown> = Promise.resolve();
@@ -190,10 +196,39 @@ export const scheduler = ({
     };
   };
 
+  const firing = (name: string, due: string, schedule: Schedule): Fired => ({
+    name,
+    due,
+    ...(schedule.data === undefined ? {} : { data: schedule.data }),
+  });
+
+  async function* deliver(event: Fired): AsyncGenerator<Fired, void> {
+    const acknowledged = acknowledgeMaintenanceEvent(event);
+    yield event;
+    // If this write fails, leave the invocation un-drainable. Its store has
+    // not durably acknowledged the completed handler.
+    await update((current) => end(current, event.name, clock.now()));
+    acknowledged();
+  }
+
   /** One pass: records what was missed, fires what is due, and says how long to sleep. */
   async function* pass(): AsyncGenerator<Fired, number> {
     try {
+      if (recovery !== undefined) {
+        const pending = Object.entries(await read()).filter(
+          ([, { run }]) => run.running === true && run.due !== undefined
+        );
+        for (const [name, entry] of pending) {
+          const { due: occurrence } = entry.run;
+          if (occurrence === undefined) continue;
+          yield* deliver(firing(name, occurrence, entry.schedule));
+        }
+        await recovery();
+        recovery = undefined;
+        if (pending.length > 0) return 0;
+      }
       const table = await update(recover);
+
       const verdict = due(table, clock.now(), zone);
       if (verdict.miss.length > 0)
         await update((current) => verdict.miss.reduce(miss, current));
@@ -202,14 +237,7 @@ export const scheduler = ({
           await update((current) => start(current, fire, clock.now()))
         )[fire.name];
         if (entry === undefined) continue;
-        yield {
-          name: fire.name,
-          due: isoText(fire.due),
-          ...(entry.schedule.data === undefined
-            ? {}
-            : { data: entry.schedule.data }),
-        };
-        await update((current) => end(current, fire.name, clock.now()));
+        yield* deliver(firing(fire.name, isoText(fire.due), entry.schedule));
       }
       // Firing took time, so look again before sleeping.
       if (verdict.fire.length > 0) return 0;
@@ -274,6 +302,6 @@ export const scheduler = ({
         .map(([name, entry]) => statusOf(name, entry, now, zone))
         .sort(soonest);
     },
-    fired: source(loop()),
+    fired: source(loop(), 'replayable'),
   };
 };

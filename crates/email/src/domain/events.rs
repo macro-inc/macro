@@ -169,6 +169,10 @@ pub struct MessageReceivedMetadata {
     pub is_spam_or_trash: bool,
     /// Provider-reported receive time.
     pub received_at: Option<DateTime<Utc>>,
+    /// Macro's row ids of the user labels the message brought to its thread:
+    /// labels none of the thread's other messages, drafts aside, carried.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub labels_gained: Vec<Uuid>,
 }
 
 /// Metadata for [`EmailTopicEvent::MessageDraftSynced`].
@@ -404,6 +408,17 @@ pub struct ThreadLabelsUpdatedMetadata {
     pub removed: Vec<LabelRef>,
     /// Where the change originated.
     pub origin: EmailEventOrigin,
+    /// The message the labels were seen on; `None` when the whole thread was
+    /// labeled in Macro.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<Uuid>,
+    /// Macro's row ids of the user labels the thread gained: labels none of
+    /// its other messages, drafts aside, carried.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub labels_gained: Vec<Uuid>,
+    /// Whether an agent or a routine made the change for `actor`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub automated: bool,
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadBackfilled`].
@@ -451,6 +466,7 @@ pub enum EmailTopicEvent {
     /// When a previously-unsynced thread is pulled in whole, only the
     /// message that triggered the sync is published — its historical
     /// siblings are persisted silently (they were not just received).
+    /// `labels_gained` names the user labels it brought to its thread.
     #[serde(rename = "email.message_received")]
     MessageReceived(MessageReceivedMetadata),
     /// A draft was persisted or updated while syncing from the provider.
@@ -507,9 +523,10 @@ pub enum EmailTopicEvent {
     #[serde(rename = "email.thread_project_changed")]
     ThreadProjectChanged(ThreadProjectChangedMetadata),
     /// A thread's user labels changed. Emitted from the email domain
-    /// service's label path (`origin = user_action`) or the inbox-sync label
-    /// diff (`origin = provider_sync`). System labels are published as the
-    /// semantic thread events instead.
+    /// service's label path (`origin = user_action`), the inbox-sync label
+    /// diff and the Outlook mailbox projection (`origin = provider_sync`).
+    /// System labels are published as the semantic thread events instead.
+    /// `labels_gained` names the labels the thread didn't have before.
     #[serde(rename = "email.thread_labels_updated")]
     ThreadLabelsUpdated(ThreadLabelsUpdatedMetadata),
     /// All messages of a backfilled thread are persisted and thread metadata
@@ -527,6 +544,17 @@ impl TopicEvent for EmailTopicEvent {
     type Topic = MacroEmailTopic;
 
     const SCHEMA_VERSION: u8 = 1;
+}
+
+/// Where arriving mail reports the labels its thread gained.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrivalGains {
+    /// On its own event: received mail.
+    OnThisEvent,
+    /// On a label event of the provider's: other arriving mail, such as sent.
+    OnLabelEvent,
+    /// Nowhere: mail that arrives in spam or trash.
+    Dropped,
 }
 
 /// Publishable event for [`MacroEmailTopic`], keyed by link (inbox) id.
@@ -685,11 +713,26 @@ impl EmailMacroEvent {
         )
     }
 
+    /// Build a request to reindex one thread whose stored state changed
+    /// without a more specific event.
+    pub fn thread_reindex_requested(
+        link_id: Uuid,
+        owner: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Self {
+        Self::threads_reindex_requested(ThreadsReindexRequestedMetadata {
+            link_id,
+            owner,
+            thread_ids: vec![thread_id],
+            reason: ThreadsReindexReason::ProviderChanged,
+        })
+    }
+
     /// Map a thread-scoped label change onto the semantic event for that
     /// label: INBOX/TRASH/UNREAD/STARRED/SPAM become dedicated thread-state
-    /// events, IMPORTANT/SENT/DRAFT and category labels publish nothing
-    /// (`None`), and any other (user) label becomes a
-    /// `thread_labels_updated` diff.
+    /// events, any other user label becomes a `thread_labels_updated` diff,
+    /// and IMPORTANT/SENT/DRAFT and category labels, which have no event of
+    /// their own, only request the thread's reindex: search indexes them too.
     pub fn thread_label_change(
         link_id: Uuid,
         owner: MacroUserIdStr<'static>,
@@ -698,10 +741,10 @@ impl EmailMacroEvent {
         label: LabelRef,
         added: bool,
         origin: EmailEventOrigin,
-    ) -> Option<Self> {
+    ) -> Self {
         use crate::domain::models::label::system_labels;
 
-        let event = match label.provider_label_id.as_str() {
+        match label.provider_label_id.as_str() {
             system_labels::UNREAD => Self::thread_read(ThreadReadMetadata {
                 link_id,
                 owner,
@@ -742,10 +785,14 @@ impl EmailMacroEvent {
                 spam: added,
                 origin,
             }),
-            system_labels::IMPORTANT | system_labels::SENT | system_labels::DRAFT => return None,
+            system_labels::IMPORTANT | system_labels::SENT | system_labels::DRAFT => {
+                Self::thread_reindex_requested(link_id, owner, thread_id)
+            }
             // Gmail category tabs (CATEGORY_PERSONAL/SOCIAL/...) are
             // provider system labels, not user labels.
-            l if l.starts_with("CATEGORY_") => return None,
+            l if l.starts_with("CATEGORY_") => {
+                Self::thread_reindex_requested(link_id, owner, thread_id)
+            }
             _ => {
                 let (added, removed) = if added {
                     (vec![label], vec![])
@@ -760,10 +807,50 @@ impl EmailMacroEvent {
                     added,
                     removed,
                     origin,
+                    message_id: None,
+                    labels_gained: Vec::new(),
+                    automated: false,
                 })
             }
-        };
-        Some(event)
+        }
+    }
+
+    /// Record the user labels a label change gave its thread, the message they
+    /// were seen on, and whether an agent or a routine made the change. Only a
+    /// user-label change reports them; any other event is returned unchanged.
+    pub fn with_labels_gained(
+        mut self,
+        message_id: Option<Uuid>,
+        labels_gained: Vec<Uuid>,
+        automated: bool,
+    ) -> Self {
+        if let EmailTopicEvent::ThreadLabelsUpdated(metadata) = &mut self.event.event {
+            metadata.message_id = message_id;
+            metadata.labels_gained = labels_gained;
+            metadata.automated = automated;
+        }
+        self
+    }
+
+    /// Record the user labels a received message brought to its thread. Any
+    /// other event is returned unchanged.
+    pub fn with_arrival_labels(mut self, labels_gained: Vec<Uuid>) -> Self {
+        if let EmailTopicEvent::MessageReceived(metadata) = &mut self.event.event {
+            metadata.labels_gained = labels_gained;
+        }
+        self
+    }
+
+    /// Where the mail this event announces reports labels its thread gained,
+    /// as Gmail sync does (`upsert_message`).
+    pub fn arrival_gains(&self) -> ArrivalGains {
+        match &self.event.event {
+            EmailTopicEvent::MessageReceived(metadata) if metadata.is_spam_or_trash => {
+                ArrivalGains::Dropped
+            }
+            EmailTopicEvent::MessageReceived(_) => ArrivalGains::OnThisEvent,
+            _ => ArrivalGains::OnLabelEvent,
+        }
     }
 
     /// Build an event from a topic-specific event variant.

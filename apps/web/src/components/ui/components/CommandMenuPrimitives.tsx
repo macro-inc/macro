@@ -87,7 +87,7 @@ export function createCommandListController<T>(options: {
     if (items.length === 0) return false;
 
     setSelectedIndex(
-      (previous) => (previous - 1 + items.length) % items.length,
+      (previous) => (Math.max(previous, 0) - 1 + items.length) % items.length,
       { scrollIntoView: true }
     );
     return true;

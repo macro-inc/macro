@@ -8,20 +8,30 @@
  * composer only knows how to edit the draft and what the two buttons mean.
  */
 
-import { createCalendarEventFormController } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
-import { EventForm } from '@app/features/calendar/components/composer/EventForm';
-import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
+import type { CreateCalendarEventFormControllerOptions } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
+import {
+  type EventEditorSubmitValues,
+  eventDateValidationError,
+} from '@app/features/calendar/components/composer/event-form-model';
 import { eventGuestOptions } from '@app/features/calendar/components/composer/guest-options';
+import { ComposerRoot } from '@app/features/calendar/components/composer/parts/ComposerRoot';
+import type { ComposerMetadataChanges } from '@app/features/calendar/core/composer-metadata';
 import { useCalendarGuestInvitesFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { createAgentComposer } from '@app/features/calendar/primitives/create-agent-composer';
 import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/types';
 import {
   calendarDisplayLabel,
   spansMultipleInboxes,
 } from '@app/features/calendar/utils/calendar-label';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
+import { AgentComposer } from '@app/features/calendar/views/composer/AgentComposer';
+import { MobileAgentComposer } from '@app/features/calendar/views/composer/mobile/MobileAgentComposer';
+import { t } from '@app/lib/i18n';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { calendarConsentScopes } from '@core/email-link/consent';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -30,7 +40,6 @@ import { Button, Layer } from '@ui';
 import {
   createEffect,
   createMemo,
-  createSignal,
   ErrorBoundary,
   onCleanup,
   Show,
@@ -58,6 +67,8 @@ export type CalendarDraftComposerProps = {
   previewKey: string;
   /** Show the calendar preview under the form. On by default. */
   showPreview?: boolean;
+  /** The Macro event this draft created, once the create is confirmed. */
+  createdEventId?: string;
 };
 
 function CalendarDraftComposerFallback() {
@@ -98,6 +109,8 @@ function CalendarDraftComposerFallback() {
 }
 
 function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
+  const [preferences] = useCalendarPreferences();
+  const resolveAppLink = useMacroMentionLinkResolver();
   const calendarsQuery = useVisibleCalendarsQuery();
   const linksQuery = useEmailLinksQuery();
   const userId = useUserId();
@@ -131,12 +144,9 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   // choice under the same flag as the calendar's own event composer.
   // Guest permissions roll out with guest invites.
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
-  const [preferences] = useCalendarPreferences();
-  const [operation, setOperation] = createSignal<'create' | 'reject'>();
-  let finalized = false;
+  let agent: ReturnType<typeof createAgentComposer<CreateCalendarEvent>>;
 
-  const interactionLocked = () =>
-    finalized || !props.sink.canAct() || operation() !== undefined;
+  const interactionLocked = () => agent?.locked() ?? !props.sink.canAct();
 
   const guestOptions = createMemo(() =>
     eventGuestOptions(props.initialData.attendees ?? [])
@@ -175,7 +185,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
             calendar.emailLinkId === primaryInbox()?.id && calendar.isPrimary
         )?.id;
 
-  const controller = createCalendarEventFormController({
+  const formOptions: CreateCalendarEventFormControllerOptions = {
     initialValue: createCalendarEventToEditorInitialValues(props.initialData),
     calendarOptions,
     defaultCalendarId,
@@ -189,7 +199,44 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
       const args = currentArgs();
       if (args) props.sink.onEdit?.(args);
     },
+  };
+
+  function currentArgs(
+    values?: EventEditorSubmitValues,
+    metadata?: ComposerMetadataChanges
+  ) {
+    if (!values) {
+      const prepared = agent?.model.submission();
+      if (agent && !prepared) return undefined;
+      values = prepared?.values ?? controller.submitValues();
+      metadata = prepared?.changes;
+    }
+    return values
+      ? editorSubmitValuesToCreateCalendarEvent(
+          values,
+          props.initialData,
+          guestInvitesEnabled() &&
+            controller.selectedCalendarOption()?.capabilities?.guestPolicy !==
+              false,
+          metadata
+        )
+      : undefined;
+  }
+
+  agent = createAgentComposer({
+    form: formOptions,
+    get timeFormat() {
+      return preferences.timeFormat;
+    },
+    get guestPolicyEditable() {
+      return guestInvitesEnabled();
+    },
+    canAct: props.sink.canAct,
+    prepare: currentArgs,
+    onExecute: props.sink.onExecute,
+    onReject: props.sink.onReject,
   });
+  const controller = agent.controller;
   let calendarInitialized = false;
   createEffect(() => {
     const calendars = calendarOptions();
@@ -206,160 +253,175 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
     if (selected) controller.setField('calendarId', selected.id);
   });
 
-  function currentArgs(values = controller.submitValues()) {
-    return values
-      ? editorSubmitValuesToCreateCalendarEvent(
-          values,
-          props.initialData,
-          guestInvitesEnabled() &&
-            controller.selectedCalendarOption()?.capabilities?.guestPolicy !==
-              false
-        )
+  const previewSubmission = createMemo(() => agent.model.submission());
+  const previewTimeZone = () => {
+    if (previewSubmission()?.changes.timeZoneChanged)
+      return agent.model.timeZone();
+    const original = props.initialData.time;
+    return original.kind === 'timed'
+      ? (original.timeZone ?? undefined)
       : undefined;
-  }
+  };
+  const previewValidationError = () => {
+    const state = controller.state();
+    return (
+      eventDateValidationError(state) ??
+      controller.dateRangeError() ??
+      (agent.model.timeZoneRangeInvalid()
+        ? t('calendar.invalidTimeZoneRange')
+        : undefined) ??
+      (state.title.trim() ? undefined : t('calendar.previewMissingTitle')) ??
+      controller.conferenceError() ??
+      (controller.selectedCalendarOption()
+        ? undefined
+        : t('calendar.chooseCalendar'))
+    );
+  };
 
   props.registerDraftReader?.(currentArgs);
   props.registerSubmitReader?.(async () => currentArgs());
 
-  async function handleCreate(values: EventEditorSubmitValues) {
-    if (interactionLocked()) return;
-    const args = currentArgs(values);
-    if (!args) return;
-    setOperation('create');
-    const done = await props.sink.onExecute(args);
-    setOperation(undefined);
-    if (done) finalized = true;
-  }
-
-  async function handleCancel() {
-    if (interactionLocked()) return;
-    setOperation('reject');
-    const done = await props.sink.onReject();
-    setOperation(undefined);
-    if (done) finalized = true;
-  }
+  const status = () => (
+    <>
+      <Show when={props.sink.lockedNotice()}>
+        {(notice) => (
+          <p class="px-4 pt-3 text-xs text-ink-disabled">{notice()}</p>
+        )}
+      </Show>
+      <Show when={!controller.selectedCalendarOption()}>
+        <div
+          role="status"
+          class="flex flex-wrap items-center gap-2 px-4 pt-3 text-sm text-ink-muted"
+        >
+          <Show
+            when={!calendarLoadFailed()}
+            fallback={
+              <>
+                <span>Could not load your calendars.</span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={retryCalendarData}
+                >
+                  Try again
+                </Button>
+              </>
+            }
+          >
+            <Show when={!loadingCalendars()} fallback="Loading your calendars…">
+              <span>
+                The requested calendar is unavailable.{' '}
+                {requestedNeedsAccess()
+                  ? 'Reconnect it or choose another calendar.'
+                  : 'Wait for it to sync or choose another calendar.'}
+              </span>
+              <Show when={requestedNeedsAccess() && requestedInbox()}>
+                {(link) => (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      fireAndForget(
+                        startAddInbox({
+                          scopes: calendarConsentScopes(link()),
+                          emailAddress: link().email_address,
+                        }),
+                        'add-inbox'
+                      )
+                    }
+                  >
+                    Reconnect calendar
+                  </Button>
+                )}
+              </Show>
+              <Show when={!requestedInbox()}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    fireAndForget(
+                      startAddInbox({ scopes: 'gmail_and_calendar' }),
+                      'add-inbox'
+                    )
+                  }
+                >
+                  Connect calendar
+                </Button>
+              </Show>
+            </Show>
+          </Show>
+        </div>
+      </Show>
+    </>
+  );
 
   onCleanup(() => props.sink.onDispose?.());
 
   return (
     <Layer depth={2}>
-      <div class="flex min-h-0 w-full flex-col gap-4">
+      <div class="@container w-full">
         <div
-          data-calendar-tool-composer
-          class="flex min-h-80 max-h-128 min-w-0 flex-col gap-3 rounded-xl border border-edge-muted bg-surface p-4 text-ink shadow-sm"
+          class="flex min-h-0 w-full flex-col gap-4"
+          classList={{
+            '@3xl:grid @3xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]':
+              !isTouchDevice() && props.showPreview !== false,
+          }}
         >
-          <Show when={props.sink.lockedNotice()}>
-            {(notice) => (
-              <p class="text-xs text-ink-extra-muted/60">{notice()}</p>
-            )}
-          </Show>
-          <Show when={!controller.selectedCalendarOption()}>
-            <div
-              role="status"
-              class="flex flex-wrap items-center gap-2 text-sm text-ink-muted"
-            >
-              <Show
-                when={!calendarLoadFailed()}
-                fallback={
-                  <>
-                    <span>Could not load your calendars.</span>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={retryCalendarData}
-                    >
-                      Try again
-                    </Button>
-                  </>
-                }
-              >
-                <Show
-                  when={!loadingCalendars()}
-                  fallback="Loading your calendars…"
-                >
-                  <span>
-                    The requested calendar is unavailable.{' '}
-                    {requestedNeedsAccess()
-                      ? 'Reconnect it or choose another calendar.'
-                      : 'Wait for it to sync or choose another calendar.'}
-                  </span>
-                  <Show when={requestedNeedsAccess() && requestedInbox()}>
-                    {(link) => (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() =>
-                          fireAndForget(
-                            startAddInbox({
-                              scopes: calendarConsentScopes(link()),
-                              emailAddress: link().email_address,
-                            }),
-                            'add-inbox'
-                          )
-                        }
-                      >
-                        Reconnect calendar
-                      </Button>
-                    )}
-                  </Show>
-                  <Show when={!requestedInbox()}>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        fireAndForget(
-                          startAddInbox({ scopes: 'gmail_and_calendar' }),
-                          'add-inbox'
-                        )
-                      }
-                    >
-                      Connect calendar
-                    </Button>
-                  </Show>
-                </Show>
-              </Show>
-            </div>
-          </Show>
-          <EventForm
-            controller={controller}
-            macroCallsEnabled
-            guestPolicyEditable={guestInvitesEnabled()}
-            timeFormat={preferences.timeFormat}
-            class="min-w-0"
-            disabled={
-              finalized || !props.sink.canAct() || operation() === 'reject'
-            }
-            pending={operation() === 'create'}
-            onCancel={() =>
-              fireAndForget(handleCancel(), 'ai-calendar-compose')
-            }
-            onSubmit={(values) =>
-              fireAndForget(handleCreate(values), 'ai-calendar-compose')
-            }
-          />
-        </div>
-        <Show when={props.showPreview !== false}>
-          <ErrorBoundary
+          <Show
+            when={isTouchDevice()}
             fallback={
-              <div class="flex h-96 items-center justify-center rounded-xl border border-edge-muted bg-surface p-4 text-center text-xs text-ink-muted shadow-sm">
-                Calendar preview unavailable.
+              <div
+                data-calendar-tool-composer
+                class="flex min-h-80 max-h-128 min-w-0 flex-col gap-3 overflow-hidden rounded-xl border border-edge-muted bg-surface text-ink shadow-sm"
+              >
+                {status()}
+                <ComposerRoot model={agent.model} class="min-h-0 flex-1">
+                  <AgentComposer
+                    onCancel={() =>
+                      fireAndForget(agent.cancel(), 'ai-calendar-compose')
+                    }
+                    resolveAppLink={resolveAppLink}
+                  />
+                </ComposerRoot>
               </div>
             }
           >
-            <CalendarToolEventPreview
-              controller={controller}
-              eventId={`calendar-tool-preview:${props.previewKey}`}
-              showPeriodLabel
-              showNavigationControls
-              timeZone={
-                props.initialData.time.kind === 'timed'
-                  ? (props.initialData.time.timeZone ?? undefined)
-                  : undefined
+            <MobileAgentComposer
+              model={agent.model}
+              resolveAppLink={resolveAppLink}
+              onCancel={() =>
+                fireAndForget(agent.cancel(), 'ai-calendar-compose')
               }
-              class="h-96 shrink-0"
-            />
-          </ErrorBoundary>
-        </Show>
+            >
+              {status()}
+            </MobileAgentComposer>
+          </Show>
+          <Show when={props.showPreview !== false}>
+            <ErrorBoundary
+              fallback={
+                <div class="flex h-96 items-center justify-center rounded-xl border border-edge-muted bg-surface p-4 text-center text-xs text-ink-muted shadow-sm">
+                  Calendar preview unavailable.
+                </div>
+              }
+            >
+              <CalendarToolEventPreview
+                controller={controller}
+                eventId={`calendar-tool-preview:${props.previewKey}`}
+                submission={() => previewSubmission()?.values}
+                validationError={previewValidationError}
+                showPeriodLabel
+                showNavigationControls
+                timeZone={previewTimeZone()}
+                class={
+                  isTouchDevice()
+                    ? 'h-96 min-w-0 shrink-0'
+                    : 'h-96 min-w-0 shrink-0 @3xl:h-full'
+                }
+                createdEventId={props.createdEventId}
+              />
+            </ErrorBoundary>
+          </Show>
+        </div>
       </div>
     </Layer>
   );

@@ -1,9 +1,7 @@
-import { hapticImpact } from '@core/mobile/haptics';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInputCommands } from '../create-input-commands';
 import type { InputSnapshot } from '../types';
 
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 beforeEach(() => vi.clearAllMocks());
 
 describe('createInputCommands', () => {
@@ -31,7 +29,6 @@ describe('createInputCommands', () => {
 
     await expect(commands.send()).resolves.toBe(false);
     expect(onSend).not.toHaveBeenCalled();
-    expect(hapticImpact).not.toHaveBeenCalled();
   });
 
   it('allows attachment-only messages', async () => {
@@ -68,7 +65,6 @@ describe('createInputCommands', () => {
 
     await expect(commands.send()).resolves.toBe(true);
     expect(onSend).toHaveBeenCalledWith(snapshot);
-    expect(hapticImpact).toHaveBeenCalledExactlyOnceWith('light');
     expect(reset).toHaveBeenCalledOnce();
     expect(clearComposer).toHaveBeenCalledOnce();
   });

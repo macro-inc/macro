@@ -14,7 +14,11 @@ export type TimeWriteError =
   /** The request did not complete. */
   | { kind: 'failed'; error: Error };
 
-/** A write the server committed, with its reply, or one the offline queue holds. */
+/**
+ * A write the server committed, with its reply, or one the offline queue holds.
+ * A timer write whose reply was lost but which the server shows landed is
+ * committed with no `data`.
+ */
 export type TimeWriteOutcome<TData = undefined> =
   | { kind: 'committed'; data: TData | undefined }
   | { kind: 'queued' };

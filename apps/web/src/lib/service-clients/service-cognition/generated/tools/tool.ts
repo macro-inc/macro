@@ -9,6 +9,10 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
+  AddCompanyDomain: {
+    call: types.AddCompanyDomain;
+    response: types.CompanyDomainsResponse;
+  };
   AddSharedCalendarEvent: {
     call: types.AddSharedCalendarEvent;
     response: types.ToolCalendarEvent;
@@ -239,6 +243,10 @@ type ToolParserMap = {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
   };
+  ImportFromHubspot: {
+    call: types.ImportFromHubspot;
+    response: types.HubspotImportResponse;
+  };
   ImportFromJira: {
     call: types.ImportFromJira;
     response: types.TrackerImportResponse;
@@ -346,6 +354,10 @@ type ToolParserMap = {
     call: types.MarkNotificationsSeen;
     response: types.MarkNotificationsResponse;
   };
+  MergeRecords: {
+    call: types.MergeRecords;
+    response: types.MergeRecordsResponse;
+  };
   MoveToProject: {
     call: types.MoveToProject;
     response: types.MoveToProjectResponse;
@@ -359,6 +371,10 @@ type ToolParserMap = {
   OpenDirectMessage: {
     call: types.OpenDirectMessage;
     response: types.OpenDirectMessageResponse;
+  };
+  PreviewMerge: {
+    call: types.PreviewMerge;
+    response: types.PreviewMergeResponse;
   };
   QueryDatabase: {
     call: types.QueryDatabase;
@@ -454,6 +470,10 @@ type ToolParserMap = {
   ReadWordDocument: {
     call: types.ReadWordDocument;
     response: types.WordDocumentResponse;
+  };
+  RemoveCompanyDomain: {
+    call: types.RemoveCompanyDomain;
+    response: types.CompanyDomainsResponse;
   };
   RemoveFromPipeline: {
     call: types.RemoveFromPipeline;
@@ -566,6 +586,10 @@ type ToolParserMap = {
 };
 
 const toolParserMap = {
+  AddCompanyDomain: {
+    call: schemas.AddCompanyDomain,
+    response: schemas.CompanyDomainsResponse,
+  },
   AddSharedCalendarEvent: {
     call: schemas.AddSharedCalendarEvent,
     response: schemas.ToolCalendarEvent,
@@ -811,6 +835,10 @@ const toolParserMap = {
     call: schemas.ImportCompaniesCsv,
     response: schemas.ImportCompaniesCsvResponse,
   },
+  ImportFromHubspot: {
+    call: schemas.ImportFromHubspot,
+    response: schemas.HubspotImportResponse,
+  },
   ImportFromJira: {
     call: schemas.ImportFromJira,
     response: schemas.TrackerImportResponse,
@@ -933,6 +961,10 @@ const toolParserMap = {
     call: schemas.MarkNotificationsSeen,
     response: schemas.MarkNotificationsResponse,
   },
+  MergeRecords: {
+    call: schemas.MergeRecords,
+    response: schemas.MergeRecordsResponse,
+  },
   MoveToProject: {
     call: schemas.MoveToProject,
     response: schemas.MoveToProjectResponse,
@@ -952,6 +984,10 @@ const toolParserMap = {
   OpenDirectMessage: {
     call: schemas.OpenDirectMessage,
     response: schemas.OpenDirectMessageResponse,
+  },
+  PreviewMerge: {
+    call: schemas.PreviewMerge,
+    response: schemas.PreviewMergeResponse,
   },
   QueryDatabase: {
     call: schemas.QueryDatabase,
@@ -1059,6 +1095,10 @@ const toolParserMap = {
   ReadWordDocument: {
     call: schemas.ReadWordDocument,
     response: schemas.WordDocumentResponse,
+  },
+  RemoveCompanyDomain: {
+    call: schemas.RemoveCompanyDomain,
+    response: schemas.CompanyDomainsResponse,
   },
   RemoveFromPipeline: {
     call: schemas.RemoveFromPipeline,
@@ -1197,6 +1237,10 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
+  AddCompanyDomain: {
+    call: types.AddCompanyDomain;
+    response: types.CompanyDomainsResponse;
+  };
   AddSharedCalendarEvent: {
     call: types.AddSharedCalendarEvent;
     response: types.ToolCalendarEvent;
@@ -1427,6 +1471,10 @@ type ToolDataMap = {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
   };
+  ImportFromHubspot: {
+    call: types.ImportFromHubspot;
+    response: types.HubspotImportResponse;
+  };
   ImportFromJira: {
     call: types.ImportFromJira;
     response: types.TrackerImportResponse;
@@ -1534,6 +1582,10 @@ type ToolDataMap = {
     call: types.MarkNotificationsSeen;
     response: types.MarkNotificationsResponse;
   };
+  MergeRecords: {
+    call: types.MergeRecords;
+    response: types.MergeRecordsResponse;
+  };
   MoveToProject: {
     call: types.MoveToProject;
     response: types.MoveToProjectResponse;
@@ -1547,6 +1599,10 @@ type ToolDataMap = {
   OpenDirectMessage: {
     call: types.OpenDirectMessage;
     response: types.OpenDirectMessageResponse;
+  };
+  PreviewMerge: {
+    call: types.PreviewMerge;
+    response: types.PreviewMergeResponse;
   };
   QueryDatabase: {
     call: types.QueryDatabase;
@@ -1642,6 +1698,10 @@ type ToolDataMap = {
   ReadWordDocument: {
     call: types.ReadWordDocument;
     response: types.WordDocumentResponse;
+  };
+  RemoveCompanyDomain: {
+    call: types.RemoveCompanyDomain;
+    response: types.CompanyDomainsResponse;
   };
   RemoveFromPipeline: {
     call: types.RemoveFromPipeline;

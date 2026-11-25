@@ -4,12 +4,19 @@ import ArchiveIcon from '@icon/system/regular/archive.svg';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import CurrencyDollarIcon from '@icon/system/regular/currency-dollar.svg';
 import FlagIcon from '@icon/system/regular/flag.svg';
+import GitMergeIcon from '@icon/system/regular/git-merge.svg';
 import UserIcon from '@icon/system/regular/user.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import type { Component, JSX } from 'solid-js';
 import type { EntityActionListState } from '../next-soup/actions/entity-action-context';
 import { makeSetCompanyPropertyAction } from './crm-actions';
 import { makeHideCompanyAction } from './crm-hide-action';
+import {
+  mergeActionLabel,
+  mergeCandidates,
+  openMerge,
+  useCanMerge,
+} from './crm-merge';
 import { useSetCompanyHiddenMutation } from './record-adapter';
 
 type CrmEntityActionItem = {
@@ -28,6 +35,7 @@ export function createCrmEntityActionItems() {
       hiddenMutation.mutateAsync({ companyId, hidden }),
   });
   const setCompanyPropertyAction = makeSetCompanyPropertyAction();
+  const canMerge = useCanMerge();
 
   return (
     entities: EntityData[],
@@ -70,6 +78,16 @@ export function createCrmEntityActionItems() {
           ? t('viewMenus.crmRestore')
           : t('viewMenus.crmArchive'),
         onClick: () => hideCompanyAction.executeWithSoup(entities, soup),
+      });
+    }
+
+    const merging = canMerge() ? mergeCandidates(entities) : undefined;
+    if (merging) {
+      crmItems.push({
+        id: `merge-${merging.recordType}`,
+        icon: GitMergeIcon,
+        label: mergeActionLabel(merging),
+        onClick: () => openMerge(merging, () => soup.selection.clear()),
       });
     }
 

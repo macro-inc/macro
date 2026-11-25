@@ -9,13 +9,40 @@ use crate::FusionAuthClient;
 pub enum MicrosoftRuntimeError {
     /// The user must grant access again.
     #[error("Microsoft authorization requires reconnecting")]
-    ReauthorizationRequired,
+    ReauthorizationRequired(MicrosoftRefusal),
+    /// Microsoft refused the request for a reason reconnecting does not fix.
+    #[error("Microsoft refused the authorization request")]
+    Refused(MicrosoftRefusal),
     /// The provider or network is temporarily unavailable.
     #[error("Microsoft authorization is temporarily unavailable")]
     Unavailable,
     /// Configuration, permissions, or an unexpected provider response prevented access.
     #[error("Microsoft authorization could not be completed")]
     InvalidResponse,
+}
+
+impl MicrosoftRuntimeError {
+    /// Why Microsoft refused, when it answered with a refusal.
+    pub fn refusal(&self) -> Option<&MicrosoftRefusal> {
+        match self {
+            Self::ReauthorizationRequired(refusal) | Self::Refused(refusal) => Some(refusal),
+            Self::Unavailable | Self::InvalidResponse => None,
+        }
+    }
+}
+
+/// What Microsoft's token endpoint answered when it refused a request: the
+/// HTTP status, its OAuth `error` and the first of its `error_codes` (the
+/// AADSTS number). Never its `error_description`, which can quote the user's
+/// address.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MicrosoftRefusal {
+    /// The token endpoint's HTTP status.
+    pub status: u16,
+    /// The OAuth `error`, such as `invalid_grant`.
+    pub error: Option<String>,
+    /// The AADSTS number of Microsoft's first error code, such as 50076.
+    pub aadsts: Option<u32>,
 }
 
 /// Refreshed delegated credentials. Intentionally does not implement Debug.
@@ -137,15 +164,25 @@ async fn refresh(
             return Err(MicrosoftRuntimeError::Unavailable);
         }
         #[derive(serde::Deserialize)]
-        struct ErrorCode {
-            error: String,
+        struct ErrorBody {
+            error: Option<String>,
+            #[serde(default)]
+            error_codes: Vec<u32>,
         }
-        let code = response.json::<ErrorCode>().await.ok();
-        return Err(match code.as_ref().map(|code| code.error.as_str()) {
+        let status = response.status().as_u16();
+        let body = response.json::<ErrorBody>().await.ok();
+        let refusal = MicrosoftRefusal {
+            status,
+            aadsts: body
+                .as_ref()
+                .and_then(|body| body.error_codes.first().copied()),
+            error: body.and_then(|body| body.error),
+        };
+        return Err(match refusal.error.as_deref() {
             Some("invalid_grant" | "interaction_required" | "consent_required") => {
-                MicrosoftRuntimeError::ReauthorizationRequired
+                MicrosoftRuntimeError::ReauthorizationRequired(refusal)
             }
-            _ => MicrosoftRuntimeError::InvalidResponse,
+            _ => MicrosoftRuntimeError::Refused(refusal),
         });
     }
     let tokens: MicrosoftRefreshedTokens = response

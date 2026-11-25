@@ -29,7 +29,7 @@ describe('settings navigation', () => {
     expect(settingsSlugToTab('connections')).toBe('Connected');
   });
 
-  it('lands old Mobile App and Desktop App links on Downloads', () => {
+  it('lands old Mobile App and Desktop App links on Downloads in a browser', () => {
     expect(settingsSlugToTab('mobile-app')).toBe('Downloads');
     expect(settingsSlugToTab('desktop-app')).toBe('Downloads');
     expect(settingsTabToSlug('Downloads')).toBe('downloads');

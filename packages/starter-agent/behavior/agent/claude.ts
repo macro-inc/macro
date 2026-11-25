@@ -26,18 +26,42 @@ export type TraceSpan = {
   readonly set: (name: string, value: string | number | boolean) => void;
   /** This span's W3C trace context, for a child process. */
   readonly traceparent: () => string | undefined;
+  /** Marks the span failed (error status), with a category, never error text. */
+  readonly fail?: (category: string) => void;
 };
 
-/** Runs `run` inside a span named `name` (the Telemetry facade, injected). */
+/**
+ * Runs `run` inside a span named `name` (the Telemetry facade, injected): a
+ * child of the active span, or of `parent` (a W3C `traceparent` another run
+ * or process recorded) when one is given.
+ */
 export type Trace = <Value>(
   name: string,
-  run: (span: TraceSpan) => Promise<Value>
+  run: (span: TraceSpan) => Promise<Value>,
+  parent?: string
 ) => Promise<Value>;
 
 /** A trace that records nothing. */
 export const passthrough: Trace = (_name, run) =>
   run({ set: () => undefined, traceparent: () => undefined });
 const server = capabilityServer;
+
+/**
+ * Marks this query's model requests as the agent's main loop (Claude Code
+ * sends `ANTHROPIC_CUSTOM_HEADERS` with each), so the harness gives it, and
+ * no side query, the notices of a person taking over its screen.
+ */
+export const mainLoop = (
+  env: Readonly<Record<string, string>>
+): Record<string, string> => {
+  const header = 'x-macro-agent-loop: main';
+  const given = env.ANTHROPIC_CUSTOM_HEADERS;
+  return {
+    ...env,
+    ANTHROPIC_CUSTOM_HEADERS:
+      given === undefined || given === '' ? header : `${given}\n${header}`,
+  };
+};
 
 /** The SDK's `query`, as much of it as a wake uses. */
 export type Query = (params: {
@@ -137,9 +161,11 @@ export const agentClaude = ({
     });
 
     const { budgetUsd, timeoutMs, cwd, directories } = profile(event);
-    const env = Object.fromEntries(
-      Object.entries(await environment()).flatMap(([name, value]) =>
-        value === undefined ? [] : [[name, value]]
+    const env = mainLoop(
+      Object.fromEntries(
+        Object.entries(await environment()).flatMap(([name, value]) =>
+          value === undefined ? [] : [[name, value]]
+        )
       )
     );
     const abort = new AbortController();

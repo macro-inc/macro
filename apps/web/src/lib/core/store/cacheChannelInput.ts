@@ -5,15 +5,19 @@ import { createStore } from 'solid-js/store';
 // Define constants
 export const STATIC_IMAGE = 'static/image' as const;
 export const STATIC_VIDEO = 'static/video' as const;
+export const STATIC_AUDIO = 'static/audio' as const;
 
 type StaticImageType = typeof STATIC_IMAGE;
 type StaticVideoType = typeof STATIC_VIDEO;
-type StaticAttachmentType = StaticImageType | StaticVideoType;
+type StaticAudioType = typeof STATIC_AUDIO;
+type StaticAttachmentType = StaticImageType | StaticVideoType | StaticAudioType;
 
 export function isStaticAttachmentType(
   value: any
 ): value is StaticAttachmentType {
-  return value === STATIC_IMAGE || value === STATIC_VIDEO;
+  return (
+    value === STATIC_IMAGE || value === STATIC_VIDEO || value === STATIC_AUDIO
+  );
 }
 
 type AttachmentType = BlockName | BlockAlias | StaticAttachmentType;

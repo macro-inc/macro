@@ -441,15 +441,15 @@ impl Mailbox {
         Ok((id, thread_id))
     }
 
-    /// The labels the mailbox's filters put on, and take off, an arriving
-    /// message.
-    pub(crate) fn filtered_labels(&self, raw: &[u8], labels: &mut BTreeSet<String>) {
+    /// The labels the mailbox's filters put on, and take off, a message
+    /// arriving at `now_ms`.
+    pub(crate) fn filtered_labels(&self, raw: &[u8], now_ms: i64, labels: &mut BTreeSet<String>) {
         let Ok(parsed) = mime::parse(raw) else {
             return;
         };
 
         for (_, filter) in &self.filters {
-            if !crate::query::filter_matches(&filter["criteria"], &parsed) {
+            if !crate::query::filter_matches(&filter["criteria"], &parsed, now_ms) {
                 continue;
             }
             for label in label_list(&filter["action"]["addLabelIds"]) {

@@ -275,6 +275,7 @@ dependencies = [
  "mime_guess",
  "minidump",
  "minidump-synth",
+ "minisign-verify",
  "navigation_plugin",
  "nom 8.0.0",
  "objc2 0.5.2",
@@ -325,6 +326,7 @@ dependencies = [
  "tauri-plugin-virtual-keyboard",
  "tauri-plugin-websocket",
  "tauri-plugin-window-state",
+ "tempfile",
  "test-assembler",
  "thiserror 2.0.18",
  "tokio",
@@ -8214,7 +8216,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-fs"
 version = "2.5.1"
-source = "git+https://github.com/macro-inc/plugins-workspace?rev=a6f62aed2b573d46ccac835598f8624676876e92#a6f62aed2b573d46ccac835598f8624676876e92"
+source = "git+https://github.com/macro-inc/plugins-workspace?rev=e5a5706b001c7adfc500a7674be2aaae808d0fb4#e5a5706b001c7adfc500a7674be2aaae808d0fb4"
 dependencies = [
  "anyhow",
  "dunce",
@@ -8251,7 +8253,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-http"
 version = "2.5.9"
-source = "git+https://github.com/macro-inc/plugins-workspace?rev=a6f62aed2b573d46ccac835598f8624676876e92#a6f62aed2b573d46ccac835598f8624676876e92"
+source = "git+https://github.com/macro-inc/plugins-workspace?rev=e5a5706b001c7adfc500a7674be2aaae808d0fb4#e5a5706b001c7adfc500a7674be2aaae808d0fb4"
 dependencies = [
  "bytes",
  "cookie_store",
@@ -8471,7 +8473,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-websocket"
 version = "2.4.2"
-source = "git+https://github.com/macro-inc/plugins-workspace?rev=a6f62aed2b573d46ccac835598f8624676876e92#a6f62aed2b573d46ccac835598f8624676876e92"
+source = "git+https://github.com/macro-inc/plugins-workspace?rev=e5a5706b001c7adfc500a7674be2aaae808d0fb4#e5a5706b001c7adfc500a7674be2aaae808d0fb4"
 dependencies = [
  "futures-util",
  "http",

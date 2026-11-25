@@ -31,7 +31,7 @@ function navigateToItem(
 ) {
   analytics.track('sidebar_click', { view: item.id });
   navigateToSidebarView({
-    viewId: item.viewId ?? item.id,
+    viewId: item.id,
     params: item.params,
     search: item.search,
     shiftKey,
@@ -51,7 +51,7 @@ export function MoreMenu(props: MoreMenuProps) {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const preloadItem = (item: SidebarNextMenuItem) =>
-    layout.preloadContent(sidebarContent(item.viewId ?? item.id, item.params));
+    layout.preloadContent(sidebarContent(item.id, item.params));
   const menuItems = () => [
     ...props.overflowItems,
     ...moreMenuItems(props.gates),

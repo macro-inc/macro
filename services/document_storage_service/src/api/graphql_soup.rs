@@ -181,7 +181,10 @@ fn insert_graphql_context_data(
         state.properties_service.clone(),
         state.entity_access_service.clone(),
         macro_user_id.clone(),
-    );
+    )
+    .with_managed_team_definitions(properties::ManagedTeamDefinitions::new(
+        crate::api::context::managed_team_property_definitions(),
+    ));
     let email_content_reader = complete_graph::EmailServiceEmailContentReader::new(
         state.soup_router_state.email_service(),
         state.entity_access_service.clone(),
@@ -228,6 +231,7 @@ fn insert_graphql_context_data(
         macro_user_id.clone(),
     ));
     data.insert(state.graphql_time_tracking_context.clone());
+    data.insert(state.graphql_time_report_context.clone());
     data.insert(graphql_time_tracking::time_entries_loader(
         state.graphql_time_tracking_context.clone(),
         macro_user_id.clone(),

@@ -151,5 +151,14 @@ subscription NotificationInboxUnreadUpdates {
 	notificationInboxUnreadUpdates {
 		rowType
 		count
+		chatCount
+	}
+}
+
+# For a server from before `chatCount`, which refuses a document selecting it.
+subscription NotificationInboxUnreadUpdatesWithoutChat {
+	notificationInboxUnreadUpdates {
+		rowType
+		count
 	}
 }

@@ -12,6 +12,7 @@ import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { preloadAgentFold } from '@core/agent-fold/client';
+import { createComposerItemDrop } from '@core/component/AI/primitives/create-composer-item-drop';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import {
@@ -21,7 +22,6 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { toast } from '@core/component/Toast/Toast';
-import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -74,7 +74,7 @@ export function ChatComposer(props: {
   onAttachFiles?: (files: File[]) => void;
   onRemoveAttachment?: (attachment: InputAttachmentData) => void;
   drawer?: JSX.Element;
-  /** Home retains its settings drawer below the desktop composer. */
+  /** Full new-session views share Home's settings row below the composer. */
   settingsPlacement?: 'inside' | 'below';
   drawerOpen?: boolean;
   placeholder?: string;
@@ -107,7 +107,7 @@ export function ChatComposer(props: {
   const [content, setContent] = createSignal<HTMLDivElement>();
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [height, setHeight] = createSignal<number>();
-  const [addMenuOpen, setAddMenuOpen] = createSignal(false);
+  const [addControlsActive, setAddControlsActive] = createSignal(false);
   createResizeObserver(content, (_, element) => {
     // Content held offscreen by a pending Suspense reports 0; pinning that
     // would animate the surface up from nothing once it attaches.
@@ -115,13 +115,24 @@ export function ChatComposer(props: {
     setHeight(element.getBoundingClientRect().height);
   });
   let container: HTMLDivElement | undefined;
+  const controlsOpen = () => Boolean(props.controlsOpen || addControlsActive());
   const { focused, hasFocused, collapsed, focus, blur } =
-    createComposerExpansion(
-      () => props.collapseOnBlur,
-      () => props.controlsOpen || addMenuOpen()
-    );
+    createComposerExpansion(() => props.collapseOnBlur, controlsOpen);
+  createEffect(
+    on(controlsOpen, (active, previous) => {
+      if (active || !previous) return;
+      // A null-target iOS blur can precede the opening click. Reconcile with
+      // the DOM only after every control finishes its final focus restoration.
+      if (container?.contains(document.activeElement)) focus();
+      else blur();
+    })
+  );
   const drawerOpen = () => props.drawerOpen && !collapsed();
-  useTouchOutsideToDismissKeyboard(() => container);
+  // Portaled controls own their keyboard and outside-dismissal behavior.
+  // The composer's DOM-only boundary must not blur their editor on touchstart.
+  useTouchOutsideToDismissKeyboard(() =>
+    controlsOpen() ? undefined : container
+  );
   const disabled = () => !!props.blockedReason || props.session?.disabled;
   // The editor reports a host draft back as its own export, which can differ
   // (a code block loses trailing blank lines). Passing that on would rewrite
@@ -186,6 +197,11 @@ export function ChatComposer(props: {
   }
 
   const dictation = createComposerDictation(() => editor.lexical);
+  const itemDrop = createComposerItemDrop({
+    editor: () => editor.lexical,
+    enabled: () =>
+      !disabled() && !props.session?.readOnly && !dictation.active(),
+  });
 
   const { isCompact } = createComposerLayout(editor.buildHandle().lexical, {
     container: layout,
@@ -259,7 +275,6 @@ export function ChatComposer(props: {
     const attached = attachments();
     props.onDraftChange('');
     editor.controls.clear();
-    hapticImpact('light');
     props.onSend(prompt, attached);
   };
 
@@ -274,6 +289,9 @@ export function ChatComposer(props: {
     // composer (the paste viewer) through here; cancelling them blocks
     // selecting their text.
     if (!(event.currentTarget as Node).contains(target)) return;
+    // An outside pointer can clear interaction focus without moving DOM focus.
+    // Pressing the same editor must still expand it without a new focus event.
+    focus();
     if (editor.lexical.getRootElement()?.contains(target)) return;
     event.preventDefault();
     if (event.type === 'pointerdown') editor.controls.focus();
@@ -305,6 +323,7 @@ export function ChatComposer(props: {
         config={editor}
         initialValue={props.draft}
         onConnect={() => {
+          itemDrop.onConnect();
           editorConnected = true;
           if (props.draft) placeCaretAfterDraft();
         }}
@@ -328,7 +347,11 @@ export function ChatComposer(props: {
     <Show when={props.drawer}>
       <div
         class="composer-drawer"
-        data-placement={isTouchDevice() ? 'top' : 'bottom'}
+        data-placement={
+          isTouchDevice() && props.settingsPlacement !== 'below'
+            ? 'top'
+            : 'bottom'
+        }
         data-open={drawerOpen() ? '' : undefined}
         aria-hidden={!drawerOpen()}
         inert={!drawerOpen()}
@@ -366,7 +389,7 @@ export function ChatComposer(props: {
           getEditor={() => editor.lexical.getRootElement()}
           session={!!props.session}
           disabled={disabled()}
-          onOpenChange={setAddMenuOpen}
+          onFocusScopeChange={setAddControlsActive}
         />
       )}
     />
@@ -438,15 +461,22 @@ export function ChatComposer(props: {
           'touch:island': !props.phoneLayout,
         }}
         onFocusIn={(event) => {
-          // Focusing a control before its click must not move it into the
-          // expanded layout midway through a tap.
+          if (
+            !(event.target instanceof Node) ||
+            !event.currentTarget.contains(event.target)
+          )
+            return;
+          // Portaled events are not physical focus inside this root. Local
+          // controls retain an existing interaction without moving a first tap.
           if (
             event.target instanceof Element &&
             event.target.closest(
               '[data-composer-controls], button, input, select, a'
             )
-          )
+          ) {
+            if (hasFocused()) focus();
             return;
+          }
           focus();
           fireAndForget(preloadAgentFold(), 'agents-view');
         }}
@@ -454,8 +484,14 @@ export function ChatComposer(props: {
           // iOS control taps can blur with no relatedTarget before click.
           // Collapse only for a known outside focus or pointer interaction.
           if (
-            event.relatedTarget instanceof Node &&
-            !event.currentTarget.contains(event.relatedTarget)
+            !(event.target instanceof Node) ||
+            !event.currentTarget.contains(event.target)
+          )
+            return;
+          if (
+            (event.relatedTarget instanceof Node &&
+              !event.currentTarget.contains(event.relatedTarget)) ||
+            (event.relatedTarget === null && controlsOpen())
           )
             blur();
         }}
@@ -464,8 +500,16 @@ export function ChatComposer(props: {
           when={props.phoneLayout}
           fallback={
             <>
-              <Show when={isTouchDevice()}>{repositoryDrawer()}</Show>
+              <Show
+                when={isTouchDevice() && props.settingsPlacement !== 'below'}
+              >
+                {repositoryDrawer()}
+              </Show>
               <ComposerSurface
+                ref={itemDrop.ref}
+                classList={{
+                  'outline-2 outline-accent': itemDrop.isDraggedOver(),
+                }}
                 as="div"
                 data-agent-composer="chat"
                 data-composer-expanded={
@@ -565,9 +609,7 @@ export function ChatComposer(props: {
                 </Input.DropZone>
                 <DictationPanel dictation={dictation} />
               </ComposerSurface>
-              <Show
-                when={!isTouchDevice() && props.settingsPlacement === 'below'}
-              >
+              <Show when={props.settingsPlacement === 'below'}>
                 {repositoryDrawer()}
               </Show>
             </>
@@ -577,6 +619,8 @@ export function ChatComposer(props: {
             {props.drawer}
           </MobileComposerDrawer>
           <MobileComposerRoot
+            onSurfaceRef={itemDrop.ref}
+            isItemDraggedOver={itemDrop.isDraggedOver()}
             collapsed={!!collapsed()}
             height={height()}
             dictating={dictation.active()}

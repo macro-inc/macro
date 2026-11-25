@@ -195,15 +195,18 @@ impl<I> StripeCheckoutGateway<I> {
         terms: CheckoutTerms,
         promotion: Option<stripe::PromotionCodeId>,
     ) -> Result<String, StripeCheckoutError> {
-        // Trial days are attached only for the Pro price. Max checkout is paid
-        // up front; a Trial term for any other plan is a caller bug.
+        // Trial days are attached only for the Pro price. Business and Max
+        // checkout is paid up front; a Trial term for any other plan is a
+        // caller bug.
         if terms == CheckoutTerms::Trial && request.plan != SeatPlan::Premium {
             return Err(StripeCheckoutError::TrialUnavailable);
         }
         let mut params = checkout_params(
             customer.clone(),
             &request,
-            self.prices.price_id(request.plan)?.as_str(),
+            self.prices
+                .price_id(request.plan, request.interval)?
+                .as_str(),
             terms,
             promotion,
         );

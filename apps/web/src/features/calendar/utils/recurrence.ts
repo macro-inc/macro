@@ -519,6 +519,16 @@ function untilDate(value: string, timeZone?: string): string | undefined {
   );
 }
 
+/** Validate editable recurrence fields before applying a staged choice. */
+export function isValidRecurrenceConfig(config: RecurrenceConfig): boolean {
+  if (!Number.isInteger(config.interval) || config.interval < 1) return false;
+  if (config.frequency === 'WEEKLY' && config.byDay.length === 0) return false;
+  if (config.ends.kind === 'on') return config.ends.date !== '';
+  if (config.ends.kind === 'after')
+    return Number.isInteger(config.ends.count) && config.ends.count >= 1;
+  return true;
+}
+
 /** Serialize a config into a single-`RRULE` recurrence property list. */
 export function buildRecurrenceLines(
   config: RecurrenceConfig,
@@ -544,6 +554,35 @@ export function buildRecurrenceLines(
     parts.push(`COUNT=${config.ends.count}`);
   }
   return [`RRULE:${parts.join(';')}`];
+}
+
+/** Rezone an inclusive end date without dropping provider-only RRULE fields. */
+export function rezoneRecurrenceUntil(
+  lines: string[],
+  date: string,
+  allDay: boolean,
+  timeZone: string
+): string[] {
+  const value = untilValue(date, allDay, timeZone);
+  return lines.map((line) => {
+    const separator = line.indexOf(':');
+    const property = line
+      .slice(0, separator)
+      .split(';', 1)[0]
+      ?.trim()
+      .toUpperCase();
+    if (separator < 0 || property !== 'RRULE') return line;
+    const fields = line
+      .slice(separator + 1)
+      .split(';')
+      .map((field) => {
+        const equals = field.indexOf('=');
+        if (field.slice(0, equals).trim().toUpperCase() !== 'UNTIL')
+          return field;
+        return `${field.slice(0, equals + 1)}${value}`;
+      });
+    return `${line.slice(0, separator + 1)}${fields.join(';')}`;
+  });
 }
 
 /**

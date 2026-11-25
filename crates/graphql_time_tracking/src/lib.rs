@@ -1,6 +1,6 @@
 //! Typed GraphQL inbound adapter for time tracking: a task's time entries, the
-//! viewer's running timer, and the mutations that log, change and delete time
-//! and start, stop and discard the timer.
+//! viewer's running timer, the mutations that log, change and delete time and
+//! start, stop and discard the timer, and time summaries over a period.
 #![deny(missing_docs)]
 
 mod context;
@@ -9,6 +9,7 @@ mod loaders;
 mod mutation;
 mod objects;
 mod query;
+mod reports;
 
 #[cfg(test)]
 mod test;
@@ -25,6 +26,11 @@ pub use objects::{
     StartTimerPayload, StopTimerPayload, UpdateTimeEntryPayload,
 };
 pub use query::resolve_time_tracking;
+pub use reports::{
+    GraphqlTimeGroup, GraphqlTimeGroupKey, GraphqlTimeGrouping, GraphqlTimeReportScope,
+    GraphqlTimeSummary, GraphqlTimeTotal, TimeReportAuthorizer, TimeReportGraphqlContext,
+    TimeSummaryInput, resolve_time_summary,
+};
 
 use async_graphql::{ErrorExtensions, Value};
 use entity_access::domain::models::AccessError;

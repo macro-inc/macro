@@ -51,7 +51,7 @@ let
   ingest = upstream: auth: ''
     if ($observability_host != otlp) { return 404; }
     limit_except POST { deny all; }
-    limit_req zone=ingest burst=200 nodelay;
+    limit_req zone=ingest burst=800 nodelay;
     limit_req_status 429;
     proxy_read_timeout 30s;
     ${lib.optionalString auth ''
@@ -74,7 +74,7 @@ let
     map $host $observability_host {
       default denied;
     ${hostMap}  }
-    limit_req_zone $server_name zone=ingest:1m rate=100r/s;
+    limit_req_zone $server_name zone=ingest:1m rate=400r/s;
     map $http_upgrade $connection_upgrade {
       default upgrade;
       "" close;

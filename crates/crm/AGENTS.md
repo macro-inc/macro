@@ -25,6 +25,15 @@ tools/HTTP/GraphQL surfaces over them.
   a saved file). Writes go through the
   pipeline workflows and `CrmService`; CSV files reach documents through the
   `CsvFiles` port, implemented in `ai_tools::crm_csv_files`.
+- `src/domain/record_import.rs`: `CrmRecordImports`, the companies, contacts
+  and deal pipelines another CRM's import (HubSpot) writes, with the viewer's
+  receipts: companies by domain (personal providers never key one), contacts
+  with every free address, and company pipelines whose entries carry `Deal`,
+  `Close date` and `Source link` beside the standard Stage, Outcome, Owner
+  and Revenue. Every stage is checked against the select-option rules before
+  the pipeline is created, since its stages are set only after it exists. An
+  existing deal entry is found from its company's entries
+  (`record_entries`, indexed by record), never by scanning the pipeline.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
 - `src/inbound/pipeline_workflows.rs`: HTTP routes over the pipeline workflows
   and CSV transfers (entries by record, fields by name, options by label),
@@ -136,6 +145,45 @@ tools/HTTP/GraphQL surfaces over them.
   edit hooks invalidate preview metadata; no mailbox index is added for counts.
   No worker initializes consent or activates selected contribution.
 
+- Merges (`domain/record_merge`, `outbound/record_merge.rs`,
+  `companies_repo/merge.rs`, behind the `merge` feature and the default-off
+  `enable-crm-merge` flag) are one use case for every record type: review
+  (`POST /crm/merges/preview`, read-only, one snapshot), then commit with the
+  review's revision and a request key (`POST /crm/merges`); `PreviewMerge` and
+  `MergeRecords` are the tools. Admins and owners only. The commit takes the
+  privacy lock first, then the request-key check, then the CRM locks in
+  writer order, recomputes the review and refuses a changed one
+  (`merge_preview_stale`). Every owner moves its own rows through a function
+  that runs on the merge's connection (properties, the databases ops path for
+  pipeline cells, messages, favorites, saved_views, activity), and every
+  changed row goes to `crm_merge_changes` with its value before. Rules naming
+  a merged company never point at the survivor: keep turns them into its
+  domains, stop removes them, each as a new revision with a `records_merged`
+  entry in the owner's sharing history. Delete the merged rows last, after
+  everything that would cascade from them has moved. The owners' moves are
+  one step for every record type (`move_owned_rows`); each type brings its
+  own records' locks, state and fold (`companies_repo/merge.rs`,
+  `companies_repo/contact_merge.rs`).
+- A contact merge locks every address's domain, keeps the survivor's name,
+  company and primary address (one without a primary takes its oldest after
+  the merged contacts are deleted), adds the others' addresses after its own
+  and each mailbox source once, and spans their interaction dates. Someone
+  under another company with a work address (or no address) blocks it
+  (`different_companies`), as a contact edit couldn't move them. Sharing
+  rules naming a merged contact become rules for its addresses with keep,
+  and lose that contact with stop; their other selectors stay. CRM lists
+  hold companies only, so contact merges leave them alone.
+- A company merged away keeps answering to its old id through
+  `crm_company_aliases`: the `/crm/companies/{company_id}` routes, the company and
+  pipeline tools, a contact's company, record associations and `/crm/previews`.
+  The company extractor and `company_receipt` mint the receipt for the company
+  the id names now, so act on the receipt's id, never on the path or argument.
+  A contact merged away does the same through `crm_contact_aliases`: the
+  `/crm/contacts/{contact_id}` routes (the contact extractor), pipeline entries,
+  record associations, `/crm/previews`, and a contact's discussion and
+  properties. Previews stay keyed by the requested id and name the other in
+  `mergedInto`. Soup and search filters match company and contact ids as given.
+
 - Company lists with at most 500 explicit IDs and policy target reads probe the
   primary key behind `OFFSET 0` before applying team/visibility filters. Keeping a team
   predicate inside the probe lets stale plans scan the team per ID. For target
@@ -223,6 +271,21 @@ tools/HTTP/GraphQL surfaces over them.
   same-team duplicates without disclosing restricted matches. A new address
   must be free across the team; a link, switch or unlink re-checks every
   address the contact holds. Preserve ID, archive and sources.
+- Company domain setters (`domain/company_domains.rs`, `PUT`/`DELETE
+  /crm/companies/{id}/domains`, the `AddCompanyDomain` and
+  `RemoveCompanyDomain` tools) add or remove one of a company's
+  `crm_domains`, validated under the exclusive team privacy lock, the
+  domain's lock and the company row. Any member who can see the company may
+  edit; a domain another company of the team tracks is refused
+  (`CompanyDomainTaken`, naming it only to a caller who can see it). An
+  added domain is dated after every domain the company holds, so the
+  primary domain and the name never change; the primary that names a
+  company without a team name can't be removed. A company whose sync is off
+  keeps its domains out of sync, so adding one passes the mailbox-domain
+  guard and removing one is admin-only and schedules history. Edits mark
+  the company `manually_created`, record a company matching change, never
+  attach existing contacts, never delete contacts or mail, and write the
+  directory only through `ensure_domain_directory_entry`, as creation does.
 - A company-domain contact has a company and an address on one of that
   company's `crm_domains` (`CrmContact::company_domain_emails`; there is no
   stored marker). It cannot be unlinked or moved, and its last such address
