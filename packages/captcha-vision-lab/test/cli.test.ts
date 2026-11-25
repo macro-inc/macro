@@ -119,3 +119,30 @@ test('refuses proxy-configured runs before making any requests', async () => {
     await rm(records, { recursive: true, force: true });
   }
 }, 60_000);
+
+test('a browser that cannot start still leaves a record for every challenge', async () => {
+  const records = await mkdtemp(join(tmpdir(), 'captcha-vision-lab-records-'));
+  try {
+    const result = Bun.spawn(
+      ['bun', CLI, '--lab-run', '--challenges', '2', '--records-dir', records],
+      {
+        env: { ...process.env, LAB_CHROMIUM_PATH: '/nonexistent/chromium' },
+        stdout: 'pipe',
+      }
+    );
+
+    expect(await result.exited).toBe(1);
+    const files = await readdir(records);
+    expect(files).toHaveLength(2);
+    for (const file of files) {
+      const record = JSON.parse(await Bun.file(join(records, file)).text());
+      expect(record).toMatchObject({
+        outcome: 'browser_error',
+        plannerCalls: 0,
+        actions: [],
+      });
+    }
+  } finally {
+    await rm(records, { recursive: true, force: true });
+  }
+}, 60_000);

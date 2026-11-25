@@ -47,6 +47,7 @@ export type Outcome =
   | 'model_error'
   | 'aborted'
   | 'action_error'
+  | 'browser_error'
   | 'timeout';
 
 /** The per-challenge record. It never holds option ids, the answer or a seed. */
@@ -100,6 +101,8 @@ export type RunInput = {
 const CHALLENGE_DEADLINE_MS = 180_000;
 /** How long closing the browser may take before the attempt moves on. */
 const CLOSE_TIMEOUT_MS = 10_000;
+/** How long reading the prompt or taking the screenshot may take. */
+const CAPTURE_TIMEOUT_MS = 15_000;
 /** How long one request to the lab may take. */
 const LAB_REQUEST_TIMEOUT_MS = 10_000;
 
@@ -413,13 +416,20 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
   const deadline = AbortSignal.timeout(
     input.deadlineMs ?? CHALLENGE_DEADLINE_MS
   );
-  const profile = await mkdtemp(join(tmpdir(), 'captcha-vision-lab-'));
+  let profile: string | undefined;
   let session: Session | undefined;
 
   // The attempt itself. Every await in it is bounded on its own, but only
   // the deadline below bounds them together; past it, nothing more happens.
   const attempt = async (): Promise<RunRecord> => {
-    const opened = await openSession(input, profile);
+    // A browser that cannot start is a kept failure, not a lost trial.
+    let opened: Session;
+    try {
+      profile = await mkdtemp(join(tmpdir(), 'captcha-vision-lab-'));
+      opened = await openSession(input, profile);
+    } catch {
+      return finish('browser_error', 'browser_launch_failed');
+    }
     session = opened;
     if (deadline.aborted) return record;
     const { page, observed } = opened;
@@ -443,12 +453,26 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
     if (plannerRejection !== undefined) return plannerRejection;
 
     const quiz = page.locator(QUIZ_SELECTOR);
-    const prompt = (await page.locator(PROMPT_SELECTOR).innerText()).trim();
     const controls = page.locator(OPTION_SELECTOR).filter({ visible: true });
-    const labels = (await controls.locator('.label').allInnerTexts()).map(
-      (label) => label.trim()
-    );
-    const screenshot = await quiz.screenshot({ type: 'png' });
+    let prompt: string;
+    let labels: string[];
+    let screenshot: Buffer;
+    try {
+      prompt = (
+        await page.locator(PROMPT_SELECTOR).innerText({
+          timeout: CAPTURE_TIMEOUT_MS,
+        })
+      ).trim();
+      labels = (await controls.locator('.label').allInnerTexts()).map((label) =>
+        label.trim()
+      );
+      screenshot = await quiz.screenshot({
+        type: 'png',
+        timeout: CAPTURE_TIMEOUT_MS,
+      });
+    } catch {
+      return finish('browser_error', 'page_capture_failed');
+    }
 
     // Reading the page takes time too: check again that what the planner
     // will see still comes from the gated page.
@@ -551,6 +575,8 @@ export const runChallenge = async (input: RunInput): Promise<RunRecord> => {
     ]);
   } finally {
     await closeSession(session);
-    await rm(profile, { recursive: true, force: true });
+    if (profile !== undefined) {
+      await rm(profile, { recursive: true, force: true });
+    }
   }
 };

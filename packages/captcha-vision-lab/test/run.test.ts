@@ -432,3 +432,27 @@ describe('the per-challenge deadline', () => {
     expect(record.actions).toHaveLength(0);
   }, 30_000);
 });
+
+test('a browser that cannot start is a kept browser_error, no planner call', async () => {
+  const lab = createLab();
+  handler = lab.fetch;
+  const { planner, inputs } = recordingPlanner('A');
+  const sessionNonce = crypto.randomUUID();
+  const issued = lab.issue(sessionNonce);
+
+  const record = await runChallenge({
+    lab,
+    planner,
+    ...issued,
+    sessionNonce,
+    targetUrl: LAB_URL,
+    executablePath: '/nonexistent/chromium',
+  });
+
+  expect(record.outcome).toBe('browser_error');
+  expect(record.detail).toBe('browser_launch_failed');
+  expect(record.plannerCalls).toBe(0);
+  expect(record.actions).toHaveLength(0);
+  expect(inputs).toHaveLength(0);
+  expect(lab.stats().submissions).toBe(0);
+});

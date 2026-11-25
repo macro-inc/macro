@@ -81,6 +81,9 @@ bun run lab:smoke -- --lab-run [--provider mock|kimi]
   (giving up after 10 s) and the record is kept with outcome `timeout`.
   Each request the runner forwards to the lab has a 10 s bound and a fresh
   connection.
+  A browser that cannot start, or a page that cannot be read or
+  captured, ends the attempt as a kept `browser_error` (no planner call,
+  no action), and the command goes on to the next challenge.
 - **Planner** (`src/planner.ts`). Input: a PNG of the quiz region, the
   visible prompt, the visible labels. Output: one visible label, or abort.
   The Kimi adapter sends the prompt, the image and a strict JSON schema
