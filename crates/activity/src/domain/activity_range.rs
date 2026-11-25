@@ -135,7 +135,8 @@ impl ToolActivityAction {
                 | Action::PictureChanged
                 | Action::CallEnded(_)
                 | Action::AccessRequested(_)
-                | Action::TimeLogged(_)),
+                | Action::TimeLogged(_)
+                | Action::RecordMerged(_)),
             ) => {
                 let (tag, payload) = action.to_columns();
                 Self::Unknown {

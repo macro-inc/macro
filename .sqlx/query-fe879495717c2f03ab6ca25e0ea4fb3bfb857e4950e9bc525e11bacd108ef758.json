@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE crm_email_consent SET active_rule_revision = $3, updated_at = NOW()\n                   WHERE team_id = $1 AND user_id = $2 AND active_rule_revision = $4\n                   RETURNING link_id, consent_incarnation, policy_version",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "consent_incarnation",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "policy_version",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "fe879495717c2f03ab6ca25e0ea4fb3bfb857e4950e9bc525e11bacd108ef758"
+}

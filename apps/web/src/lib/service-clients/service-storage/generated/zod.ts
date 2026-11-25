@@ -10180,6 +10180,7 @@ export const listCrmEmailPolicyHistoryResponse = zod
                     'withdrawn',
                     'mailbox_revoked',
                     'live_targets_changed',
+                    'records_merged',
                   ])
                   .describe(
                     'Events in the member-only policy history; records never contain mail content.'
@@ -10936,6 +10937,262 @@ export const getCrmMemberAccessResponse = zod
   .describe(
     'Current authority for the authenticated viewer; contribution consent is separate.'
   );
+
+/**
+ * @summary Merge records into the one that stays, as reviewed. It can't be undone.
+The records merged away are deleted; their ids keep opening the record
+that stays. Refused with `merge_preview_stale` when anything the review
+showed has changed.
+ */
+export const commitCrmMergeBodySourceIdsMax = 10;
+
+export const commitCrmMergeBody = zod
+  .object({
+    recordType: zod
+      .enum(['company', 'contact'])
+      .describe('The kind of record a merge combines.'),
+    requestKey: zod
+      .uuid()
+      .describe(
+        'A new key per merge, reused only to retry the same one: a retry\nreturns the first result.'
+      ),
+    revision: zod
+      .string()
+      .describe('The revision of the review being confirmed.'),
+    sharingRules: zod
+      .enum(['keep', 'stop'])
+      .optional()
+      .describe(
+        "What happens to a teammate's email-sharing rule that names a record merged\naway. A rule is never pointed at the record that stays, which would share\nmore than its owner chose."
+      ),
+    sourceIds: zod
+      .array(zod.uuid())
+      .min(1)
+      .max(commitCrmMergeBodySourceIdsMax)
+      .describe('The records merged into it.'),
+    survivorId: zod.uuid().describe('The record that stays.'),
+  })
+  .describe('A reviewed merge to commit.');
+
+export const commitCrmMergeResponse = zod
+  .object({
+    committedAt: zod.iso.datetime({}).describe('When the merge committed.'),
+    mergeId: zod.uuid().describe("The merge's id in the merge log."),
+    mergedIds: zod
+      .array(zod.uuid())
+      .describe(
+        'The records merged into it; their ids now open the record that stays.'
+      ),
+    recordType: zod
+      .enum(['company', 'contact'])
+      .describe('The kind of record a merge combines.'),
+    survivorId: zod.uuid().describe('The record that stays.'),
+  })
+  .describe('A committed merge.');
+
+/**
+ * @summary Review a merge: what moves to the record that stays, the values that
+differ, what happens to email sync and teammates' sharing, and anything
+that blocks it. Read-only. Admins and owners only, while merging is
+enabled for them.
+ */
+export const previewCrmMergeBodySourceIdsMax = 10;
+
+export const previewCrmMergeBody = zod
+  .object({
+    recordType: zod
+      .enum(['company', 'contact'])
+      .describe('The kind of record a merge combines.'),
+    sourceIds: zod
+      .array(zod.uuid())
+      .min(1)
+      .max(previewCrmMergeBodySourceIdsMax)
+      .describe('The records merged into it, at most ten.'),
+    survivorId: zod.uuid().describe('The record that stays.'),
+  })
+  .describe('The records a merge names.');
+
+export const previewCrmMergeResponseMovesContactsMin = 0;
+
+export const previewCrmMergeResponseMovesDiscussionMessagesMin = 0;
+
+export const previewCrmMergeResponseMovesPipelineEntriesMin = 0;
+
+export const previewCrmMergeResponseMovesReferencesMin = 0;
+
+export const previewCrmMergeResponseSharedPipelinesItemEntriesAfterMin = 0;
+
+export const previewCrmMergeResponseSharingRulesTeammatesMin = 0;
+
+export const previewCrmMergeResponse = zod
+  .object({
+    blocked: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            kind: zod.enum(['same_address_people']),
+            people: zod
+              .array(
+                zod
+                  .object({
+                    address: zod.string().describe('The address both hold.'),
+                    archived: zod
+                      .boolean()
+                      .describe('Whether the contact is archived.'),
+                    contactId: zod.uuid().describe('Contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe('Contact name, when it has one.'),
+                    recordId: zod
+                      .uuid()
+                      .describe('The record it is filed under.'),
+                  })
+                  .describe(
+                    'A person blocking the merge: they share an address with someone filed\nunder another of the records.'
+                  )
+              )
+              .describe('Every person involved, archived ones too.'),
+          })
+          .describe(
+            'People under different records share an address; merging would file\ntwo people with one address under the same record.'
+          )
+          .describe(
+            "Why a merge can't go ahead until someone changes the records."
+          ),
+      ])
+      .optional(),
+    conflicts: zod
+      .array(
+        zod
+          .object({
+            dropped: zod
+              .array(
+                zod
+                  .object({
+                    recordId: zod
+                      .uuid()
+                      .describe('The record merged away that held it.'),
+                    value: zod.object({}).describe('The value.'),
+                  })
+                  .describe('One value a merge drops.')
+              )
+              .describe('The values dropped, with the record each came from.'),
+            kept: zod.object({}).describe('The value kept.'),
+            propertyId: zod.uuid().describe('The property definition.'),
+            propertyName: zod.string().describe("The property's name."),
+          })
+          .describe(
+            'A team-visible field whose values differ. The value of the record that\nstays is kept; the others are dropped and kept in the merge log.'
+          )
+      )
+      .describe('Team-visible values that differ.'),
+    emailSync: zod
+      .object({
+        keptOut: zod
+          .array(zod.string())
+          .describe('Domains joining it whose mail stays out of sync.'),
+        survivorSyncs: zod
+          .boolean()
+          .describe('Whether the record that stays syncs mail.'),
+      })
+      .describe(
+        'What email sync does after the merge. The record that stays keeps its\nsetting; domains whose sync was off stay out of sync.'
+      ),
+    identifiers: zod
+      .array(zod.string())
+      .describe(
+        'The domains (or addresses) the record that stays has after the merge,\nits own first.'
+      ),
+    moves: zod
+      .object({
+        contacts: zod
+          .number()
+          .min(previewCrmMergeResponseMovesContactsMin)
+          .describe('People filed under the records merged away.'),
+        discussionMessages: zod
+          .number()
+          .min(previewCrmMergeResponseMovesDiscussionMessagesMin)
+          .describe('Discussion messages on them.'),
+        pipelineEntries: zod
+          .number()
+          .min(previewCrmMergeResponseMovesPipelineEntriesMin)
+          .describe('Pipeline entries tracking the records merged away.'),
+        references: zod
+          .number()
+          .min(previewCrmMergeResponseMovesReferencesMin)
+          .describe(
+            'Tasks, notes, emails, calls, events and rows that reference them.'
+          ),
+      })
+      .describe('What moves to the record that stays.'),
+    recordType: zod
+      .enum(['company', 'contact'])
+      .describe('The kind of record a merge combines.'),
+    revision: zod
+      .string()
+      .describe(
+        'Changes whenever anything shown here changes; the commit must name it.'
+      ),
+    sharedPipelines: zod
+      .array(
+        zod
+          .object({
+            entriesAfter: zod
+              .number()
+              .min(previewCrmMergeResponseSharedPipelinesItemEntriesAfterMin)
+              .describe(
+                'Entries the record that stays has in it after the merge.'
+              ),
+            name: zod.string().describe('Pipeline name.'),
+            pipelineId: zod.uuid().describe('Pipeline id.'),
+          })
+          .describe(
+            'A pipeline in which the record that stays will have more than one entry.\nEntries are distinct deals, so they stay separate.'
+          )
+      )
+      .describe(
+        'Pipelines where the record that stays will have several entries.'
+      ),
+    sharingRules: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            keepFits: zod
+              .boolean()
+              .describe(
+                'Whether every changed rule set still fits the rule limits when kept.'
+              ),
+            teammates: zod
+              .number()
+              .min(previewCrmMergeResponseSharingRulesTeammatesMin)
+              .describe("How many teammates' rules change."),
+          })
+          .describe(
+            'Teammates whose email-sharing rules name a record merged away. Whose rules\nthey are is not shown.'
+          ),
+      ])
+      .optional(),
+    sources: zod
+      .array(
+        zod
+          .object({
+            id: zod.uuid().describe('Record id.'),
+            name: zod.string().describe('Display name, as listings show it.'),
+          })
+          .describe('A record as the review names it.')
+      )
+      .describe('The records merged into it.'),
+    survivor: zod
+      .object({
+        id: zod.uuid().describe('Record id.'),
+        name: zod.string().describe('Display name, as listings show it.'),
+      })
+      .describe('A record as the review names it.'),
+  })
+  .describe('The review an admin confirms before merging.');
 
 /**
  * @summary List the caller's live pipelines in their CRM.

@@ -14972,6 +14972,43 @@ export const MarkNotificationsSeen = z.object({
   notificationIds: z.array(z.string().uuid()),
 });
 
+export const MergeRecords = z.object({
+  recordType: z.literal('company'),
+  survivorId: z.string().uuid(),
+  sourceIds: z.array(z.string().uuid()),
+  revision: z.string(),
+  requestKey: z.string().uuid(),
+  sharingRules: z
+    .intersection(
+      z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('keep'), z.literal('stop')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.any().default('keep')
+    )
+    .optional(),
+});
+
+export const MergeRecordsResponse = z.object({
+  mergeId: z.string().uuid(),
+  survivorId: z.string().uuid(),
+  mergedIds: z.array(z.string().uuid()),
+});
+
 export const MoveToProject = z.object({
   entityType: z.any().superRefine((x, ctx) => {
     const schemas = [
@@ -15242,6 +15279,17 @@ export const OpenDirectMessageResponse = z.object({
   created: z.boolean(),
   participants: z.array(z.string()),
   summary: z.string(),
+});
+
+export const PreviewMerge = z.object({
+  recordType: z.literal('company'),
+  survivorId: z.string().uuid(),
+  sourceIds: z.array(z.string().uuid()),
+});
+
+export const PreviewMergeResponse = z.object({
+  revision: z.string(),
+  review: z.any(),
 });
 
 export const QueryDatabase = z.object({

@@ -136,6 +136,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('github_pr_mention', () => 'mentioned you in')
       .with('github_pr_review', () => 'reviewed')
       .with('inbox_reauth_required', () => 'needs reconnection')
+      .with('crm_email_sharing_changed', () => 'changed')
       // The bot is the actor: "<bot> finished <session>".
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer in')
@@ -230,6 +231,7 @@ export function getNotificationTargetName(
       )
       .with({ tag: 'password_access_requested' }, (m) => m.content.itemName)
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
+      .with({ tag: 'crm_email_sharing_changed' }, () => undefined)
       .with({ tag: 'routine_run_finished' }, () => undefined)
       .with({ tag: 'agent_sign_in_expiry' }, () => undefined)
       .with({ tag: 'computer_setup' }, () => undefined)
@@ -313,6 +315,10 @@ export function getNotificationContent(
       .with({ tag: 'calendar_event_join_request' }, () => undefined)
       .with({ tag: 'password_access_requested' }, () => undefined)
       .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress)
+      // Names nothing the recipient may not see: their rules show the rest.
+      .with({ tag: 'crm_email_sharing_changed' }, () =>
+        t('crm.emailSharingChangedBody')
+      )
       .with(
         { tag: 'agent_session_settled' },
         (m) => m.content.excerpt ?? undefined
@@ -430,6 +436,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'calendar_event_join_request' }, () => true)
       .with({ tag: 'password_access_requested' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
+      .with({ tag: 'crm_email_sharing_changed' }, () => false)
       .with({ tag: 'routine_run_finished' }, () => false)
       .with({ tag: 'agent_sign_in_expiry' }, () => false)
       .with({ tag: 'computer_setup' }, () => false)
