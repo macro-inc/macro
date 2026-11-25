@@ -7,6 +7,7 @@ import {
 import {
   COORDINATOR_RECONNECT_TIMEOUT_MS,
   COORDINATOR_WATCH_INTERVAL_MS,
+  LOCK_QUERY_TIMEOUT_MS,
 } from '../worker/startup';
 
 /** A connection attempt is over: another page found a newer coordinator. */
@@ -165,8 +166,6 @@ export class CoordinatorGenerations {
     }
   }
 }
-
-const LOCK_QUERY_TIMEOUT_MS = 5_000;
 
 /** Rejects after `ms`, or when `signal` aborts. */
 const noAnswer = async (ms: number, signal: AbortSignal): Promise<never> => {

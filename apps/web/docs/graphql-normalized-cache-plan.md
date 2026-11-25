@@ -486,9 +486,13 @@ gives one page at a time the turn. Pages that wait for an answer look once a
 second for a newer generation and go to it at no cost in attempts. A coordinator
 that takes its lock first looks at the others of its scope and build: it ends
 itself under a newer generation, and it ends the older ones by stealing their
-locks, which also tells the pages of one that hangs. An ended coordinator tells
-its pages with `connection-closed` and closes its worker. Through all of it the
-owner lock keeps two engines off one database.
+locks, which also tells the pages of one that hangs. An ended coordinator drains
+its engine, whose page may be stuck, tells its pages with `connection-closed`, and
+closes its worker. Through all of it the owner lock keeps two engines off one
+database. A lock list the browser does not give within five seconds
+(`LOCK_QUERY_TIMEOUT_MS`) is unknown, and then no page renames: it looks before
+it takes the turn and again with it. Only locks held exclusively count as running,
+since a page that watches one is given it in shared mode when its holder ends.
 `ownerEvent: coordinator-renamed` and `coordinator-replaced` record both.
 
 A handshake nobody answers in its startup phase's time is treated like a lost

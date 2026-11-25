@@ -55,6 +55,7 @@ import {
 import {
   ENGINE_ASSET_LOAD_TIMEOUT_MS,
   ENGINE_DATABASE_OPEN_TIMEOUT_MS,
+  LOCK_QUERY_TIMEOUT_MS,
   OWNER_LOCK_WAIT_TIMEOUT_MS,
   TAKEOVER_REPLY_TIMEOUT_MS,
 } from './startup';
@@ -722,10 +723,21 @@ export class CoordinatorRouter {
       reportCoordinatorTaskFailure(error);
       return;
     }
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await this.endOlderGenerations(identity);
+      await Promise.race([
+        this.endOlderGenerations(identity),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('the browser does not list its locks')),
+            LOCK_QUERY_TIMEOUT_MS
+          );
+        }),
+      ]);
     } catch (error) {
       reportCoordinatorTaskFailure(error);
+    } finally {
+      clearTimeout(timer);
     }
     return lockName;
   }

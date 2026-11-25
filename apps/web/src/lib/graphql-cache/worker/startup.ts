@@ -8,6 +8,7 @@ export const COORDINATOR_RECONNECT_TIMEOUT_MS = 10_000;
 /** How often a page that waits for an answer looks whether the others found
  * another coordinator. */
 export const COORDINATOR_WATCH_INTERVAL_MS = 1_000;
+export const LOCK_QUERY_TIMEOUT_MS = 5_000;
 export const ENGINE_ASSET_LOAD_TIMEOUT_MS = 5 * 60_000;
 export const ENGINE_DATABASE_OPEN_TIMEOUT_MS = 20_000;
 /** Delays between attempts to take a busy database owner lock. The engine

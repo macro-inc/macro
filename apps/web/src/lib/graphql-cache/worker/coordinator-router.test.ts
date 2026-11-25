@@ -3729,6 +3729,23 @@ describe('registration acknowledgement', () => {
     vi.unstubAllGlobals();
   });
 
+  it('serves its tabs where the browser never lists its locks', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => undefined,
+      holdCoordinatorLock: async () => {},
+      queryHeldLockNames: () => new Promise<string[]>(() => {}),
+      endCoordinator: () => {},
+    });
+    const tab = new FakePort();
+    const joined = register(router, tab, 'tab-a');
+    await vi.advanceTimersByTimeAsync(5_000);
+    await joined;
+    expect(registered(tab)).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
   it('serves its tabs when it cannot end an older coordinator', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const router = new CoordinatorRouter({
