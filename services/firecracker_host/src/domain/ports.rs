@@ -100,6 +100,10 @@ pub trait Disks: Send + Sync + 'static {
         disk: SystemDisk,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// The quota of a computer's dataset with `resources`: room for two
+    /// system disks, `/home`, a hibernation of all its memory and headroom.
+    fn quota_bytes(&self, resources: &firecracker_host_api::ComputerResources) -> u64;
+
     /// Delete the computer's system disk files other than `keep`; returns
     /// the ones deleted.
     fn remove_other_system_disks(

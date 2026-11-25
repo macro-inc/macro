@@ -90,6 +90,11 @@ pub struct ComputerRecord {
     /// succeeded since, so a repeated create boots it.
     #[serde(default)]
     pub start_pending: bool,
+    /// Whether a system disk replacement stopped this running computer and
+    /// has not booted it again yet: a repeat of the replacement (or of the
+    /// one going back) boots it.
+    #[serde(default)]
+    pub boot_after_system_disk: bool,
     /// Whether a hibernation began and was not settled: after a crash, a
     /// published snapshot finishes it; without one the VM stays as it was.
     #[serde(default)]
@@ -120,6 +125,7 @@ impl ComputerRecord {
             rootfs_never_booted: true,
             guest_restore_pending: false,
             start_pending: request.start,
+            boot_after_system_disk: false,
             hibernating: false,
             last_launch: None,
             created_at: now,

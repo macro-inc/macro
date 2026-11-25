@@ -420,3 +420,67 @@ fn a_record_from_before_system_disk_replacement_boots_its_first_disk() {
     assert_eq!(loaded.system_disk, crate::domain::model::SystemDisk(0));
     assert_eq!(loaded.previous_system_disk, None);
 }
+
+#[tokio::test]
+async fn killed_after_the_save_a_repeated_replacement_boots_the_computer_it_stopped() {
+    let store = FakeStore::default();
+    let mut swapped = record(PowerState::Stopped, None);
+    let old_image = swapped.image.clone();
+    let new_image = firecracker_host_api::GuestImage::try_new("macro-box/2026-11-24a").unwrap();
+    swapped.image = new_image.clone();
+    swapped.system_disk = crate::domain::model::SystemDisk(1);
+    swapped.previous_system_disk = Some(crate::domain::model::PreviousSystemDisk {
+        disk: crate::domain::model::SystemDisk(0),
+        image: old_image,
+    });
+    // It ran when the replacement stopped it.
+    swapped.boot_after_system_disk = true;
+    saved(&store, &swapped).await;
+    let host = super::super::test::host_with_disks(
+        store,
+        disks_with(&[0, 1]),
+        FakeMachines::default(),
+        1,
+    )
+    .await;
+
+    let computer = host
+        .service
+        .replace_system_disk(computer_id(), new_image.clone())
+        .await
+        .unwrap();
+
+    assert_eq!(computer.state, PowerState::Running);
+    assert_eq!(computer.image, new_image);
+    assert_eq!(
+        host.machines.launches.lock().unwrap()[0].0,
+        BootSource::ColdBoot
+    );
+    assert!(!host.store.0.lock().unwrap()[&computer_id()].boot_after_system_disk);
+}
+
+#[tokio::test]
+async fn killed_after_the_shutdown_a_repeated_replacement_clones_and_boots_it() {
+    let store = FakeStore::default();
+    let mut stopped = record(PowerState::Stopped, None);
+    stopped.boot_after_system_disk = true;
+    saved(&store, &stopped).await;
+    let host = super::super::test::host_with_disks(
+        store,
+        disks_with(&[0]),
+        FakeMachines::default(),
+        1,
+    )
+    .await;
+    let new_image = firecracker_host_api::GuestImage::try_new("macro-box/2026-11-24a").unwrap();
+
+    let computer = host
+        .service
+        .replace_system_disk(computer_id(), new_image.clone())
+        .await
+        .unwrap();
+
+    assert_eq!(computer.state, PowerState::Running);
+    assert_eq!(computer.image, new_image);
+    assert_eq!(files_left(&host), [0, 1]);
+}

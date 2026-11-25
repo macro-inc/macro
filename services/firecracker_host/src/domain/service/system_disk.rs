@@ -102,14 +102,23 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
             },
         );
         if let Replacement::Current = replacement {
+            // A replacement cut short by an agent restart left the computer
+            // stopped on its new disk: this repeat finishes it.
+            self.boot_if_owed(record).await?;
             return Ok(self.view(record));
         }
         if record.state == PowerState::Hibernated {
             return Err(HostError::Hibernated(computer_id));
         }
 
-        let was_running = record.state != PowerState::Stopped;
+        // Saved before the shutdown, so a replacement cut short still
+        // boots the computer it found running when it is asked again.
+        let was_running = record.state != PowerState::Stopped || record.boot_after_system_disk;
         span.record("was_running", was_running);
+        if was_running && !record.boot_after_system_disk {
+            record.boot_after_system_disk = true;
+            self.save(record).await?;
+        }
         self.run_steps(record, plan(record.state, Action::Stop)?)
             .await?;
 
@@ -118,20 +127,28 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
             Replacement::Clone(key) => self.clone_and_swap(record, key).await,
         };
         if let Err(error) = swapped {
-            if was_running {
-                // Back up on whichever disk the record names: the failure
-                // left the computer stopped, and a computer someone was
-                // using should not stay down for it.
-                if let Err(boot_error) = self.run_steps(record, &[Step::Boot]).await {
-                    tracing::warn!(computer_id = %computer_id, error = %boot_error, "booting again after a failed system disk replacement failed");
-                }
+            // Back up on whichever disk the record names: the failure left
+            // the computer stopped, and a computer someone was using should
+            // not stay down for it.
+            if let Err(boot_error) = self.boot_if_owed(record).await {
+                tracing::warn!(computer_id = %computer_id, error = %boot_error, "booting again after a failed system disk replacement failed");
             }
             return Err(error);
         }
-        if was_running {
+        self.boot_if_owed(record).await?;
+        Ok(self.view(record))
+    }
+
+    /// Boot a computer a replacement stopped, then forget that it owes one.
+    async fn boot_if_owed(&self, record: &mut ComputerRecord) -> Result<(), HostError> {
+        if !record.boot_after_system_disk {
+            return Ok(());
+        }
+        if record.state == PowerState::Stopped {
             self.run_steps(record, &[Step::Boot]).await?;
         }
-        Ok(self.view(record))
+        record.boot_after_system_disk = false;
+        self.save(record).await
     }
 
     /// Swap the current and the previous system disk.

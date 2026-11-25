@@ -270,23 +270,24 @@ impl ImageUpgrades for PgComputerRepo {
 
     async fn update_upgrade(
         &self,
+        holder: Uuid,
         upgrade: &ImageUpgrade,
         finished: bool,
         now: DateTime<Utc>,
-    ) -> Result<(), PgComputerError> {
+    ) -> Result<bool, PgComputerError> {
         let sources = upgrade
             .sources
             .as_ref()
             .map(serde_json::to_value)
             .transpose()?;
-        sqlx::query!(
+        let updated = sqlx::query!(
             r#"
             UPDATE image_upgrade
             SET state = $2, error = $3, sources = $4, updated_at = $5,
                 finished_at = CASE WHEN $6::boolean THEN $5::timestamptz END,
                 leased_by = CASE WHEN $6::boolean THEN NULL ELSE leased_by END,
                 leased_until = CASE WHEN $6::boolean THEN NULL ELSE leased_until END
-            WHERE id = $1
+            WHERE id = $1 AND leased_by = $7
             "#,
             upgrade.id.into_inner(),
             upgrade.state as UpgradeState,
@@ -294,22 +295,26 @@ impl ImageUpgrades for PgComputerRepo {
             sources,
             now,
             finished,
+            holder,
         )
         .execute(&self.pool)
         .await?;
-        Ok(())
+        Ok(updated.rows_affected() == 1)
     }
 
     async fn update_computer_upgrade(
         &self,
+        holder: Uuid,
         computer: &ComputerUpgrade,
         now: DateTime<Utc>,
-    ) -> Result<(), PgComputerError> {
-        sqlx::query!(
+    ) -> Result<bool, PgComputerError> {
+        let updated = sqlx::query!(
             r#"
-            UPDATE image_upgrade_computer
+            UPDATE image_upgrade_computer row
             SET state = $3, old_image = $4, phase_started_at = $5, error = $6, updated_at = $7
-            WHERE upgrade_id = $1 AND computer_id = $2
+            FROM image_upgrade upgrade
+            WHERE row.upgrade_id = $1 AND row.computer_id = $2
+              AND upgrade.id = row.upgrade_id AND upgrade.leased_by = $8
             "#,
             computer.upgrade_id.into_inner(),
             computer.computer_id.as_uuid(),
@@ -318,9 +323,10 @@ impl ImageUpgrades for PgComputerRepo {
             computer.phase_started_at,
             computer.error,
             now,
+            holder,
         )
         .execute(&self.pool)
         .await?;
-        Ok(())
+        Ok(updated.rows_affected() == 1)
     }
 }

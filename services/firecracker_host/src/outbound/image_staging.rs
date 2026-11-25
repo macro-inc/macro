@@ -260,7 +260,8 @@ impl ImageStaging {
         std::fs::create_dir_all(&staging).map_err(io("create", &staging))?;
         let result = self.download_into(request, &staging, target).await;
         if result.is_err() {
-            let _ = std::fs::remove_dir_all(&staging);
+            // Up to 16 GiB of files: off the async workers.
+            let _ = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(staging)).await;
         }
         result
     }
@@ -315,13 +316,16 @@ impl ImageStaging {
             let path = staging.join(file.name.to_string());
             read_only(&path)?;
         }
-        write_digests(&self.digests_path(&request.image), &files)?;
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent).map_err(io("create", parent))?;
         }
         // Never over an image someone put there meanwhile: rename refuses a
         // non-empty target directory.
         std::fs::rename(staging, target).map_err(io("install", target))?;
+        // Only once the checked files are in place: a digests file never
+        // vouches for files it did not check. Without one (a crash here),
+        // the next request hashes the image.
+        write_digests(&self.digests_path(&request.image), &files)?;
         tracing::info!(image = %request.image, "image staged");
         Ok(ImageState::Ready { files: Some(files) })
     }

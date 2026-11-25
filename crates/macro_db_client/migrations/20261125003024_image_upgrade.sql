@@ -16,7 +16,7 @@ CREATE TYPE image_upgrade_state AS ENUM ('staging', 'rolling', 'paused', 'done',
 -- reconcile skips it): replacing, verifying, rolling_back.
 CREATE TYPE image_upgrade_computer_state AS ENUM (
     'waiting', 'replacing', 'verifying', 'rolling_back',
-    'upgraded', 'skipped', 'rolled_back', 'rollback_failed'
+    'upgraded', 'skipped', 'rolled_back', 'rollback_failed', 'failed'
 );
 
 -- `files` holds each file's name, SHA-256 and size; `sources` the URLs hosts

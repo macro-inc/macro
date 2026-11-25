@@ -139,24 +139,26 @@ impl ImageUpgrades for FakeRepo {
 
     async fn update_upgrade(
         &self,
+        _holder: Uuid,
         upgrade: &ImageUpgrade,
         finished: bool,
         _now: DateTime<Utc>,
-    ) -> Result<(), FakeError> {
+    ) -> Result<bool, FakeError> {
         for stored in self.image_upgrades.lock().unwrap().iter_mut() {
             if stored.upgrade.id == upgrade.id {
                 stored.upgrade = upgrade.clone();
                 stored.finished = finished;
             }
         }
-        Ok(())
+        Ok(true)
     }
 
     async fn update_computer_upgrade(
         &self,
+        _holder: Uuid,
         computer: &ComputerUpgrade,
         _now: DateTime<Utc>,
-    ) -> Result<(), FakeError> {
+    ) -> Result<bool, FakeError> {
         for stored in self.image_upgrades.lock().unwrap().iter_mut() {
             for row in &mut stored.computers {
                 if row.upgrade_id == computer.upgrade_id && row.computer_id == computer.computer_id
@@ -168,6 +170,6 @@ impl ImageUpgrades for FakeRepo {
                 }
             }
         }
-        Ok(())
+        Ok(true)
     }
 }

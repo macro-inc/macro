@@ -11,7 +11,7 @@ use crate::domain::ids::ComputerId;
 use crate::domain::image::GuestImage;
 use crate::domain::image_upgrade::{
     HostImageError, HostImages, ImageFile, ImageFileName, ImageSource, ImageVersion, Sha256,
-    StagedImage,
+    StagedImage, SystemDiskState,
 };
 use crate::outbound::configured_fleet::ConfiguredFleet;
 
@@ -57,6 +57,31 @@ fn staged(state: ImageState) -> Result<StagedImage, FirecrackerFleetError> {
 impl HostImageError for FirecrackerFleetError {
     fn is_golden_not_ready(&self) -> bool {
         matches!(self, Self::Client(error) if error.code() == Some(ErrorCode::GoldenNotReady))
+    }
+
+    fn is_refused(&self) -> bool {
+        // Each of these is answered before the computer is stopped.
+        matches!(self, Self::Client(error) if matches!(
+            error.code(),
+            Some(
+                ErrorCode::NotFound
+                    | ErrorCode::GenerationMismatch
+                    | ErrorCode::InvalidRequest
+                    | ErrorCode::ImageMissing
+                    | ErrorCode::InvalidState
+            )
+        ))
+    }
+}
+
+fn disk_state(computer: firecracker_host_api::Computer) -> SystemDiskState {
+    SystemDiskState {
+        image: computer.image,
+        previous_image: computer.previous_image,
+        running: matches!(
+            computer.state,
+            firecracker_host_api::PowerState::Running | firecracker_host_api::PowerState::Paused
+        ),
     }
 }
 
@@ -112,7 +137,7 @@ impl HostImages for FirecrackerFleet {
         &self,
         computer_id: ComputerId,
         image: &GuestImage,
-    ) -> Result<GuestImage, FirecrackerFleetError> {
+    ) -> Result<SystemDiskState, FirecrackerFleetError> {
         let computer = self
             .client
             .replace_system_disk(
@@ -122,7 +147,14 @@ impl HostImages for FirecrackerFleet {
                 },
             )
             .await?;
-        Ok(computer.image)
+        Ok(disk_state(computer))
+    }
+
+    async fn system_disk(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<SystemDiskState, FirecrackerFleetError> {
+        Ok(disk_state(self.client.computer(computer_id).await?))
     }
 }
 
@@ -142,6 +174,13 @@ impl HostImageError for ConfiguredImageError {
         match self {
             Self::Firecracker(error) => error.is_golden_not_ready(),
             Self::Unsupported => false,
+        }
+    }
+
+    fn is_refused(&self) -> bool {
+        match self {
+            Self::Firecracker(error) => error.is_refused(),
+            Self::Unsupported => true,
         }
     }
 }
@@ -174,9 +213,19 @@ impl HostImages for ConfiguredFleet {
         &self,
         computer_id: ComputerId,
         image: &GuestImage,
-    ) -> Result<GuestImage, ConfiguredImageError> {
+    ) -> Result<SystemDiskState, ConfiguredImageError> {
         match self {
             Self::Firecracker(fleet) => Ok(fleet.replace_system_disk(computer_id, image).await?),
+            Self::Docker(_) => Err(ConfiguredImageError::Unsupported),
+        }
+    }
+
+    async fn system_disk(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<SystemDiskState, ConfiguredImageError> {
+        match self {
+            Self::Firecracker(fleet) => Ok(fleet.system_disk(computer_id).await?),
             Self::Docker(_) => Err(ConfiguredImageError::Unsupported),
         }
     }

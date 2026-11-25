@@ -100,6 +100,9 @@ impl Disks for FakeDisks {
             .insert(disk);
         Ok(())
     }
+    fn quota_bytes(&self, resources: &ComputerResources) -> u64 {
+        u64::from(resources.root_disk_gib) * 2 + u64::from(resources.home_disk_gib)
+    }
     async fn remove_other_system_disks(
         &self,
         computer_id: ComputerId,

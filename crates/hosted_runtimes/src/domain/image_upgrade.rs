@@ -7,7 +7,8 @@
 //!    host holds exactly these files ([`UpgradeState::Staging`]);
 //! 2. moves computers [`ImageUpgrade::batch_size`] at a time
 //!    ([`UpgradeState::Rolling`]): each waits until no one uses it (no agent
-//!    turn under way, no screen or shell open), at most until
+//!    turn under way or queued, no screen open; terminal shells are not seen),
+//!    at most until
 //!    [`ImageUpgrade::idle_deadline_at`], after which it is skipped, never
 //!    forced. An idle one gets a fresh system disk of the image and cold
 //!    boots with its own `/home` and identity; it is done once macrod
@@ -15,7 +16,14 @@
 //! 3. on a failed boot, or no macrod within
 //!    [`ImageUpgrade::reconnect_timeout`], puts that computer back on its
 //!    previous system disk, checks macrod comes back, and pauses the upgrade
-//!    ([`UpgradeState::Paused`]): no further computer starts.
+//!    ([`UpgradeState::Paused`]): no further computer starts. A host that
+//!    refuses, or fails before it moved the computer to the new disk, leaves
+//!    it on its own image ([`ComputerUpgradeState::Failed`]), which pauses the
+//!    upgrade too.
+//!
+//! Whatever is not finished [`UPGRADE_GRACE`] after the idle deadline stops:
+//! staging fails, waiting computers are skipped, and one under way is left
+//! for an operator.
 //!
 //! Every computer's old and new image is recorded on its row here and in
 //! `hosted_runtime.image`. While a computer is being replaced or rolled
@@ -40,8 +48,11 @@ pub const MAX_COMPUTERS: usize = 50;
 pub const MAX_IDLE_WAIT: Duration = Duration::hours(24);
 /// The longest it waits for macrod after a boot.
 pub const MAX_RECONNECT_TIMEOUT: Duration = Duration::minutes(30);
-/// How long a replica holds an upgrade between passes; the pass renews it.
+/// How long a replica holds an upgrade; the pass renews it before every
+/// host call, each of which ends within the fleet's request timeout.
 pub const UPGRADE_LEASE: Duration = Duration::minutes(5);
+/// How long after the idle deadline an upgrade may still run.
+pub const UPGRADE_GRACE: Duration = Duration::hours(2);
 
 /// An upgrade's identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -396,6 +407,9 @@ pub enum ComputerUpgradeState {
     RolledBack,
     /// The rollback did not bring macrod back; finished, needs an operator.
     RollbackFailed,
+    /// The host refused, or failed before the computer left its own disk:
+    /// it runs its old image; finished.
+    Failed,
 }
 
 impl ComputerUpgradeState {
@@ -408,14 +422,19 @@ impl ComputerUpgradeState {
             | Self::Upgraded
             | Self::Skipped
             | Self::RolledBack
-            | Self::RollbackFailed => false,
+            | Self::RollbackFailed
+            | Self::Failed => false,
         }
     }
 
     /// Whether the computer is finished with this upgrade.
     pub fn is_finished(self) -> bool {
         match self {
-            Self::Upgraded | Self::Skipped | Self::RolledBack | Self::RollbackFailed => true,
+            Self::Upgraded
+            | Self::Skipped
+            | Self::RolledBack
+            | Self::RollbackFailed
+            | Self::Failed => true,
             Self::Waiting | Self::Replacing | Self::Verifying | Self::RollingBack => false,
         }
     }
@@ -424,7 +443,7 @@ impl ComputerUpgradeState {
     pub fn pauses_upgrade(self) -> bool {
         matches!(
             self,
-            Self::RollingBack | Self::RolledBack | Self::RollbackFailed
+            Self::RollingBack | Self::RolledBack | Self::RollbackFailed | Self::Failed
         )
     }
 }
@@ -477,6 +496,13 @@ pub struct ComputerUpgrade {
     pub reconnected_at: Option<DateTime<Utc>>,
     /// What went wrong, or why it was skipped.
     pub error: Option<String>,
+}
+
+impl ImageUpgrade {
+    /// When whatever is not finished stops.
+    pub fn deadline_at(&self) -> DateTime<Utc> {
+        self.idle_deadline_at + UPGRADE_GRACE
+    }
 }
 
 impl ComputerUpgrade {
@@ -663,24 +689,29 @@ pub trait ImageUpgrades: Send + Sync + 'static {
         id: UpgradeId,
     ) -> impl Future<Output = Result<Option<(ImageUpgrade, Vec<ComputerUpgrade>)>, Self::Err>> + Send;
 
-    /// Save the upgrade's state, error and sources; a finished one is
-    /// released and records when it finished.
+    /// Save the upgrade's state, error and sources while `holder` holds its
+    /// lease; a finished one is released and records when it finished.
+    /// False when another replica took the lease: nothing was written.
     fn update_upgrade(
         &self,
+        holder: Uuid,
         upgrade: &ImageUpgrade,
         finished: bool,
         now: DateTime<Utc>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Save one computer's state, images, phase start and error. Its
     /// `reconnected_at` is the store's: applying a macrod connection to a
     /// computer under way sets it, and only a connection after the phase
     /// began counts ([`ComputerUpgrade::reconnected`]).
+    /// False when `holder` no longer holds the upgrade's lease: nothing was
+    /// written.
     fn update_computer_upgrade(
         &self,
+        holder: Uuid,
         computer: &ComputerUpgrade,
         now: DateTime<Utc>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
 /// What a host does for image upgrades, beside running computers.
@@ -704,12 +735,31 @@ pub trait HostImages: Send + Sync + 'static {
     /// Boot the computer from a system disk of `image` (or back to its
     /// previous one), keeping its `/home` and identity. A running computer
     /// is stopped and cold booted; a stopped one stays stopped. Answers the
-    /// image the computer now boots.
+    /// computer as it stands after.
     fn replace_system_disk(
         &self,
         computer_id: ComputerId,
         image: &GuestImage,
-    ) -> impl Future<Output = Result<GuestImage, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<SystemDiskState, Self::Err>> + Send;
+
+    /// The image the computer boots and whether it runs. Waits for an
+    /// operation on the computer to end, so after a failed or timed-out
+    /// replacement it is where the replacement left it.
+    fn system_disk(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<SystemDiskState, Self::Err>> + Send;
+}
+
+/// A computer's system disk as its host holds it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SystemDiskState {
+    /// The image of the disk it boots.
+    pub image: GuestImage,
+    /// The image of the disk kept for going back, if any.
+    pub previous_image: Option<GuestImage>,
+    /// Whether it runs (or is paused) now.
+    pub running: bool,
 }
 
 /// Classifies a [`HostImages`] failure.
@@ -717,6 +767,10 @@ pub trait HostImageError: std::error::Error + Send + Sync + 'static {
     /// The image's golden for the computer's shape is still being built:
     /// asking again later succeeds.
     fn is_golden_not_ready(&self) -> bool;
+
+    /// The host refused the request before touching the computer (the image
+    /// is missing, the computer is hibernated or gone): it is as it was.
+    fn is_refused(&self) -> bool;
 }
 
 /// Where an image stands on a host.

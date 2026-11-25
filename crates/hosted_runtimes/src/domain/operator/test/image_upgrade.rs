@@ -7,7 +7,8 @@ use super::host_scope::{TwoHosts, two_host_operator};
 use super::*;
 use crate::domain::image_upgrade::{
     ComputerUpgradeState, HostImageError, HostImages, ImageFile, ImageFileName, ImageSource,
-    ImageVersion, NewImageUpgrade, Sha256, SourceUrl, StagedImage, StartUpgradeError, UpgradeState,
+    ImageVersion, NewImageUpgrade, Sha256, SourceUrl, StagedImage, StartUpgradeError,
+    SystemDiskState, UpgradeState,
 };
 use crate::domain::lifecycle::Phase;
 use crate::domain::moves::ComputerMoves;
@@ -19,8 +20,39 @@ impl HostImageError for FakeFleetError {
     fn is_golden_not_ready(&self) -> bool {
         matches!(self, Self::GoldenNotReady)
     }
+
+    fn is_refused(&self) -> bool {
+        matches!(self, Self::Rejected)
+    }
 }
 
+impl FakeFleet {
+    fn disk_of(&self, computer_id: ComputerId) -> (String, Option<String>, bool) {
+        self.system_disks
+            .lock()
+            .unwrap()
+            .entry(computer_id)
+            .or_insert_with(|| (BASE_IMAGE.to_owned(), None, true))
+            .clone()
+    }
+
+    fn state_of_disk(&self, computer_id: ComputerId) -> SystemDiskState {
+        let (image, previous, running) = self.disk_of(computer_id);
+        SystemDiskState {
+            image: GuestImage::try_new(&image).unwrap(),
+            previous_image: previous.map(|image| GuestImage::try_new(&image).unwrap()),
+            running,
+        }
+    }
+
+    fn listed(&self, list: &Mutex<Vec<String>>, image: &GuestImage) -> bool {
+        list.lock().unwrap().contains(&image.as_str().to_owned())
+    }
+}
+
+/// Like the host agent: the current image is a no-op, the previous one
+/// swaps back, a new one needs its golden; a disk that does not boot leaves
+/// the computer stopped on it.
 impl HostImages for FakeFleet {
     type Err = FakeFleetError;
 
@@ -47,28 +79,44 @@ impl HostImages for FakeFleet {
         &self,
         computer_id: ComputerId,
         image: &GuestImage,
-    ) -> Result<GuestImage, FakeFleetError> {
+    ) -> Result<SystemDiskState, FakeFleetError> {
         self.calls
             .lock()
             .unwrap()
             .push(format!("replace {computer_id} {}", image.as_str()));
-        if self
-            .building_images
-            .lock()
-            .unwrap()
-            .contains(&image.as_str().to_owned())
-        {
-            return Err(FakeFleetError::GoldenNotReady);
+        let (current, previous, running) = self.disk_of(computer_id);
+        if current == image.as_str() {
+            return Ok(self.state_of_disk(computer_id));
         }
-        if self
-            .broken_images
-            .lock()
-            .unwrap()
-            .contains(&image.as_str().to_owned())
-        {
+        let going_back = previous.as_deref() == Some(image.as_str());
+        if !going_back {
+            if self.listed(&self.refused_images, image) {
+                return Err(FakeFleetError::Rejected);
+            }
+            if self.listed(&self.building_images, image) {
+                return Err(FakeFleetError::GoldenNotReady);
+            }
+        }
+        if self.listed(&self.put_back_images, image) {
+            self.system_disks
+                .lock()
+                .unwrap()
+                .insert(computer_id, (current, previous, false));
             return Err(FakeFleetError::Unavailable);
         }
-        Ok(image.clone())
+        let boots = !self.listed(&self.broken_images, image);
+        self.system_disks.lock().unwrap().insert(
+            computer_id,
+            (image.as_str().to_owned(), Some(current), running && boots),
+        );
+        if running && !boots {
+            return Err(FakeFleetError::Unavailable);
+        }
+        Ok(self.state_of_disk(computer_id))
+    }
+
+    async fn system_disk(&self, computer_id: ComputerId) -> Result<SystemDiskState, FakeFleetError> {
+        Ok(self.state_of_disk(computer_id))
     }
 }
 
@@ -464,4 +512,123 @@ async fn one_upgrade_at_a_time_and_versions_are_immutable() {
             .unwrap(),
         Err(StartUpgradeError::UnknownComputer(unknown))
     );
+}
+
+#[tokio::test]
+async fn a_refusal_before_the_computer_was_touched_fails_it_without_a_rollback() {
+    let operator = upgrade_operator(vec![]).await;
+    let id = running(&operator, 1).await;
+    operator
+        .fleet
+        .home
+        .refused_images
+        .lock()
+        .unwrap()
+        .push(NEW_IMAGE.to_owned());
+    operator
+        .start_image_upgrade(&request(vec![id, running(&operator, 2).await], 1))
+        .await
+        .unwrap()
+        .unwrap();
+    stage_and_roll(&operator).await;
+
+    assert_eq!(state_of(&operator, id), ComputerUpgradeState::Failed);
+    // Nothing to roll back and no reconnect to wait for.
+    assert_eq!(operator.fleet.home.logged(&format!("replace {id} {BASE_IMAGE}")), 0);
+    assert_eq!(operator.fleet.home.logged(&format!("start {id}")), 0);
+    let (state, finished) = upgrade_state(&operator);
+    assert_eq!((state, finished), (UpgradeState::Paused, true));
+}
+
+#[tokio::test]
+async fn a_failed_replacement_that_left_the_computer_on_its_own_disk_starts_it_and_fails() {
+    let operator = upgrade_operator(vec![]).await;
+    let id = running(&operator, 1).await;
+    operator
+        .fleet
+        .home
+        .put_back_images
+        .lock()
+        .unwrap()
+        .push(NEW_IMAGE.to_owned());
+    operator
+        .start_image_upgrade(&request(vec![id], 1))
+        .await
+        .unwrap()
+        .unwrap();
+    stage_and_roll(&operator).await;
+
+    assert_eq!(state_of(&operator, id), ComputerUpgradeState::Failed);
+    assert_eq!(operator.fleet.home.logged(&format!("start {id}")), 1);
+    assert!(operator.fleet.home.state_of_disk(id).running);
+    assert_eq!(upgrade_state(&operator), (UpgradeState::Paused, true));
+}
+
+#[tokio::test]
+async fn a_replacement_cut_short_is_asked_again_and_verified_from_the_boot() {
+    let operator = upgrade_operator(vec![]).await;
+    let id = running(&operator, 1).await;
+    operator
+        .start_image_upgrade(&request(vec![id], 1))
+        .await
+        .unwrap()
+        .unwrap();
+    stage_and_roll(&operator).await;
+    // As if the pass died before it saved Verifying.
+    {
+        let mut upgrades = operator.repo.image_upgrades.lock().unwrap();
+        upgrades[0].computers[0].state = ComputerUpgradeState::Replacing;
+    }
+    operator.advance_image_upgrade().await.unwrap();
+    assert_eq!(state_of(&operator, id), ComputerUpgradeState::Verifying);
+    assert_eq!(
+        operator
+            .fleet
+            .home
+            .logged(&format!("replace {id} {NEW_IMAGE}")),
+        2
+    );
+}
+
+#[tokio::test]
+async fn past_its_deadline_an_upgrade_skips_what_waits_and_leaves_what_is_under_way() {
+    let operator = upgrade_operator(vec![]).await;
+    let first = running(&operator, 1).await;
+    let second = running(&operator, 2).await;
+    operator
+        .start_image_upgrade(&request(vec![first, second], 1))
+        .await
+        .unwrap()
+        .unwrap();
+    stage_and_roll(&operator).await;
+    assert_eq!(state_of(&operator, first), ComputerUpgradeState::Verifying);
+    operator.repo.image_upgrades.lock().unwrap()[0]
+        .upgrade
+        .idle_deadline_at = now() - crate::domain::image_upgrade::UPGRADE_GRACE;
+
+    operator.advance_image_upgrade().await.unwrap();
+
+    assert_eq!(state_of(&operator, first), ComputerUpgradeState::RollbackFailed);
+    assert_eq!(state_of(&operator, second), ComputerUpgradeState::Skipped);
+    assert_eq!(upgrade_state(&operator), (UpgradeState::Paused, true));
+}
+
+#[tokio::test]
+async fn staging_that_never_finishes_fails_at_the_deadline() {
+    let operator = upgrade_operator(vec![]).await;
+    let id = running(&operator, 1).await;
+    operator
+        .start_image_upgrade(&request(vec![id], 1))
+        .await
+        .unwrap()
+        .unwrap();
+    operator.advance_image_upgrade().await.unwrap();
+    operator.repo.image_upgrades.lock().unwrap()[0]
+        .upgrade
+        .idle_deadline_at = now() - crate::domain::image_upgrade::UPGRADE_GRACE;
+
+    operator.advance_image_upgrade().await.unwrap();
+
+    assert_eq!(upgrade_state(&operator), (UpgradeState::Failed, true));
+    assert_eq!(operator.fleet.home.logged("replace"), 0);
 }

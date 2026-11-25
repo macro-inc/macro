@@ -361,6 +361,37 @@ fn system_disk_of_file(name: &str) -> Option<SystemDisk> {
         .then_some(SystemDisk(generation))
 }
 
+/// Delete the system disk files in `directory` other than `keep`, and
+/// their staged copies; the ones deleted.
+fn remove_system_disks_except(
+    directory: &Path,
+    keep: &[SystemDisk],
+) -> Result<Vec<SystemDisk>, DiskError> {
+    let entries = match std::fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(io("list", directory)(error)),
+    };
+    let mut removed = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(io("list", directory))?;
+        let Ok(name) = entry.file_name().into_string() else {
+            continue;
+        };
+        // A clone cut short leaves its staged `.ext4.new` too.
+        let disk = system_disk_of_file(&name)
+            .or_else(|| name.strip_suffix(".new").and_then(system_disk_of_file));
+        if let Some(disk) = disk
+            && !keep.contains(&disk)
+        {
+            let path = entry.path();
+            std::fs::remove_file(&path).map_err(io("remove", &path))?;
+            removed.push(disk);
+        }
+    }
+    Ok(removed)
+}
+
 /// The first system disk's file.
 const ROOTFS_FILE: &str = "rootfs.ext4";
 
@@ -591,35 +622,25 @@ impl Disks for FileDisks {
         grow(&target, record.resources.root_disk_gib)
     }
 
+    fn quota_bytes(&self, resources: &ComputerResources) -> u64 {
+        computer_quota_bytes(resources, self.golden_root_disk_gib)
+    }
+
     async fn remove_other_system_disks(
         &self,
         computer_id: ComputerId,
         keep: &[SystemDisk],
     ) -> Result<Vec<SystemDisk>, DiskError> {
         let directory = self.layout.computer(computer_id);
-        let entries = match std::fs::read_dir(&directory) {
-            Ok(entries) => entries,
-            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(error) => return Err(io("list", &directory)(error)),
-        };
-        let mut removed = Vec::new();
-        for entry in entries {
-            let entry = entry.map_err(io("list", &directory))?;
-            let Some(name) = entry.file_name().into_string().ok() else {
-                continue;
-            };
-            // A clone cut short leaves its staged `.ext4.new` too.
-            let disk = system_disk_of_file(&name)
-                .or_else(|| name.strip_suffix(".new").and_then(system_disk_of_file));
-            if let Some(disk) = disk
-                && !keep.contains(&disk)
-            {
-                let path = entry.path();
-                std::fs::remove_file(&path).map_err(io("remove", &path))?;
-                removed.push(disk);
-            }
-        }
-        Ok(removed)
+        let keep = keep.to_vec();
+        // Deleting a 32 GiB disk file takes a while: off the async workers.
+        tokio::task::spawn_blocking(move || remove_system_disks_except(&directory, &keep))
+            .await
+            .map_err(|error| DiskError::Io {
+                action: "remove system disks",
+                path: PathBuf::new(),
+                source: std::io::Error::other(error),
+            })?
     }
 
     #[tracing::instrument(name = "firecracker_host.golden_rootfs_create", skip(self), err)]
