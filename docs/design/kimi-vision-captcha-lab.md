@@ -34,13 +34,17 @@ bun run lab:smoke -- --lab-run [--provider mock|kimi]
       issue(sessionNonce) → runId, challengeId, signed one-time capability
       gate before_navigation: capability present, target == registered URL
       own Chromium process, fresh temp profile, one context
-        route allowlist: only the lab origin; the page request alone carries
-        the capability; only the first main-frame navigation to the target
+        route allowlist: only the lab origin, fetched by the runner with no
+        redirects followed; the page request alone carries the capability;
+        only the first main-frame navigation to the target; every WebSocket
+        refused; popups counted and closed
       gate before_planner: URL, one navigation, no redirect/popup/frame/
         blocked request, and the service attests this session opened it
       planner(screenshot of #quiz, visible prompt, visible labels) → {choice}
       gate before_action (same checks, fresh attestation)
       click the chosen label's own option button → one submission
+      gate after_action (observations after a 500 ms quiet window): anything
+        the click set off voids the attempt
       verdict = lab service status for (runId, challengeId)
       record JSON; browser and profile destroyed
 ```
@@ -57,7 +61,10 @@ bun run lab:smoke -- --lab-run [--provider mock|kimi]
   are in-process calls, not routes.
 - **Runner** (`src/run.ts`, `src/gate.ts`). Owns the browser and the gate. The
   planner never sees or influences a gate decision. Success comes only from
-  the service's status.
+  the service's status. Records hold fixed failure codes, never error
+  messages, which can quote page markup or model output. The gate sees what
+  happened up to its last check; anything a page does later is still blocked
+  by the allowlist, it just no longer changes a recorded verdict.
 - **Planner** (`src/planner.ts`). Input: a PNG of the quiz region, the
   visible prompt, the visible labels. Output: one visible label, or abort.
   The Kimi adapter sends the prompt, the image and a strict JSON schema
@@ -75,8 +82,10 @@ Mock end to end (right → `solved`, wrong → `incorrect`, replayed capability
 HTML, asset URLs and bytes, API responses, planner input and records, gate
 negatives (no, forged, cross-run, expired or replayed capability; wrong
 origin; wrong path; redirect; navigation; popup; third-party frame; third-party
-asset; expiry between planner and action), each asserting zero planner calls,
-zero actions and zero submissions, and the Kimi adapter against the stand-in
+asset; WebSocket; delayed popup; expiry between planner and action), each
+asserting zero planner calls, zero actions and zero submissions, a popup or
+foreign request set off by the click voiding the scored attempt, a failed
+click recording no markup, and the Kimi adapter against the stand-in
 (request shape, malformed output → closed failure). CI runs them in the
 Browser Tests job.
 
