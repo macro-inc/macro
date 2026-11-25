@@ -48,7 +48,9 @@ Applies to `apps/web/src/components/ui`, including ports from shadcn-solid.
   square actions. Shared minimum heights are 24/28/32/40/48px; labeled controls
   can grow with their content. Preserve the 36px touch minimum and size rendered
   glyphs separately. Composer Send, microphone, and attachment controls use
-  `icon-md`, with 20px desktop and 24px touch glyphs.
+  `icon-md`, with 20px desktop and 24px touch glyphs. `finish="island"` makes a
+  mobile chrome row action: the `island` material at 40px, square for `icon-*`
+  sizes ([FE-75](design-system.md)); `ButtonGroup` takes no island finish.
 - Keep ordinary children in the Button's flex row so trailing carets, truncation,
   and custom spacing work. Only loading actions need the reserved-content layer.
   Preserve native disabled behavior and activation guards for polymorphic controls.

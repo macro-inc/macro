@@ -1,0 +1,44 @@
+id: tsx-button-island-finish
+snapshots:
+  <Button variant="ghost" class="island bg-chrome size-10 rounded-full" />:
+    labels:
+    - source: <Button variant="ghost" class="island bg-chrome size-10 rounded-full" />
+      style: primary
+      start: 0
+      end: 72
+    - source: Button
+      style: secondary
+      start: 1
+      end: 7
+    - source: class="island bg-chrome size-10 rounded-full"
+      style: secondary
+      start: 24
+      end: 69
+  "<Button variant=\"ghost\" class={cn('shrink-0', open && 'touch:island')} />":
+    labels:
+    - source: <Button variant="ghost" class={cn('shrink-0', open && 'touch:island')} />
+      style: primary
+      start: 0
+      end: 73
+    - source: Button
+      style: secondary
+      start: 1
+      end: 7
+    - source: class={cn('shrink-0', open && 'touch:island')}
+      style: secondary
+      start: 24
+      end: 70
+  "<MobileDrawer.Trigger as={Button} class=\"island bg-chrome h-10\">x</MobileDrawer.Trigger>":
+    labels:
+    - source: <MobileDrawer.Trigger as={Button} class="island bg-chrome h-10">
+      style: primary
+      start: 0
+      end: 64
+    - source: as={Button}
+      style: secondary
+      start: 22
+      end: 33
+    - source: class="island bg-chrome h-10"
+      style: secondary
+      start: 34
+      end: 63

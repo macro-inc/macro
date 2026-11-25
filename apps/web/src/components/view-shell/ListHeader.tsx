@@ -171,8 +171,8 @@ export function ListHeaderSearch(props: {
             tooltip={props.label}
             ref={trigger}
             variant={isTouchDevice() ? 'ghost' : 'secondary'}
-            size={isTouchDevice() ? 'icon-lg' : 'icon-md'}
-            class="touch:island"
+            size="icon-md"
+            finish={isTouchDevice() ? 'island' : undefined}
             aria-expanded="false"
             onClick={focus}
           >

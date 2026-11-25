@@ -45,7 +45,8 @@ export function InboxClearDrawer(props: InboxClearMenuProps) {
         aria-label={t('notificationsInbox.clear')}
         variant="ghost"
         size="icon-md"
-        class="island bg-chrome pointer-events-auto relative z-10 size-10 shrink-0 rounded-full"
+        finish="island"
+        class="relative z-10 shrink-0"
       >
         <ChecksIcon class="size-6 shrink-0" />
       </MobileDrawer.Trigger>

@@ -30,7 +30,8 @@ export type ButtonGroupProps = Omit<ComponentProps<'div'>, 'size'> & {
   /** Softer secondary frame by default; primary is solid neutral and accent is explicit. */
   variant?: ButtonVariant;
   /** The shared frame adapts by default; segments always stay flat. */
-  finish?: ButtonFinish;
+  /** Groups are header frames; the chrome `island` finish is for one Button. */
+  finish?: Exclude<ButtonFinish, 'island'>;
   size?: ButtonSize;
   orientation?: ButtonGroupOrientation;
 };

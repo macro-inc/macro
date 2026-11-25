@@ -113,7 +113,12 @@ const buttonStyles = createVariants(
 export type ButtonVariantProps = VariantProps<typeof buttonStyles>;
 export type ButtonVariant = NonNullable<ButtonVariantProps['variant']>;
 export type ButtonSize = NonNullable<ButtonVariantProps['size']>;
-export type ButtonFinish = 'flat' | 'raised';
+/**
+ * `island` is the floating touch chrome material (`island` utility): every
+ * action in a mobile chrome row (sidebar toggle, filters, search, clear) is a
+ * 40px chrome island, so none can drift from the others.
+ */
+export type ButtonFinish = 'flat' | 'raised' | 'island';
 export type ButtonClassOptions = {
   variant?: ButtonVariant;
   /** Composed rows own their surface states without layering a second button face. */
@@ -126,6 +131,7 @@ export type ButtonClassOptions = {
 };
 
 function buttonFinishClasses(variant: ButtonVariant, finish?: ButtonFinish) {
+  if (finish === 'island') return undefined;
   if (finish === 'flat' || variant === 'outline') return 'shadow-none';
   if (
     finish !== 'raised' &&
@@ -153,8 +159,20 @@ export function buttonClasses(options: ButtonClassOptions = {}) {
     buttonStyles({ variant: isBare ? null : variant, size: options.size }),
     isBare && 'border-transparent bg-transparent shadow-none',
     !isBare && buttonFinishClasses(variant, finish),
+    !isBare && finish === 'island' && islandFinishClasses(options.size),
     options.fullWidth && 'w-full',
     options.class
+  );
+}
+
+/**
+ * The chrome island's fill, edge and height; icon sizes are square. Like the
+ * row's tab pills, it never drops below 40px when Dynamic Type shrinks rem.
+ */
+function islandFinishClasses(size: ButtonSize | undefined) {
+  return cn(
+    'island pointer-events-auto h-10 min-h-[40px] min-w-[40px] touch:min-h-[40px] touch:min-w-[40px] rounded-full bg-chrome',
+    size?.startsWith('icon-') ? 'w-10 px-0' : 'px-3'
   );
 }
 

@@ -1,0 +1,28 @@
+id: tsx-button-island-finish
+language: tsx
+severity: error
+message: Give a mobile chrome Button `finish="island"` instead of the `island` class.
+note: |-
+  Rule FE-75 in .agents/rules/web/design-system.md. Every action in a mobile
+  chrome row (sidebar toggle, filters, search, clear) is the same 40px chrome
+  island; a Button restyled with `island` and its own fill or size drifts from
+  the others.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/components/ui/**
+rule:
+  any:
+    - kind: jsx_opening_element
+    - kind: jsx_self_closing_element
+  all:
+    - any:
+        - has:
+            field: name
+            regex: ^Button$
+        - has:
+            kind: jsx_attribute
+            regex: ^as=\{Button\}$
+    - has:
+        kind: jsx_attribute
+        regex: ^class=[\s\S]*\bisland\b

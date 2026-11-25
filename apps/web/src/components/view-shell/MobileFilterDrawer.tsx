@@ -77,13 +77,9 @@ function Root(props: MobileFilterDrawerProps) {
         as={Button}
         aria-label={props.triggerLabel ?? 'Open filters'}
         variant={props.inline ? 'secondary' : 'ghost'}
+        finish={props.inline ? undefined : 'island'}
         size={props.activeCount > 0 ? 'md' : 'icon-md'}
-        class={cn(
-          'pointer-events-auto relative z-10 shrink-0',
-          !props.inline && 'island bg-chrome h-10 rounded-full',
-          !props.inline && (props.activeCount > 0 ? 'px-3' : 'w-10'),
-          props.class
-        )}
+        class={cn('pointer-events-auto relative z-10 shrink-0', props.class)}
       >
         <SlidersHorizontalIcon class="size-6 shrink-0" />
         <CountBadge count={props.activeCount} />
