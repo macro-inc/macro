@@ -177,9 +177,13 @@ export function onCalendarOccurrenceMoved(listener: () => void): () => void {
 function movedOccurrence(
   event: EventRecord | undefined,
   occurrences: readonly OccurrenceRecord[],
-  occurrenceKey: string | undefined,
+  {
+    patch,
+    occurrenceKey,
+  }: Pick<UpdateCalendarEventArgs, 'patch' | 'occurrenceKey'>,
   { oneOccurrence, recurring }: { oneOccurrence: boolean; recurring: boolean }
 ): OccurrenceRecord | undefined {
+  if (!patch.time) return undefined;
   if (oneOccurrence)
     return occurrences.find(
       (occurrence) => occurrence.occurrenceKey === occurrenceKey
@@ -192,13 +196,21 @@ function movedOccurrence(
 }
 
 /**
- * The occurrence an answer put in place of `moved`: a series instance keeps
- * its provider's original start, and a standalone event has one occurrence.
+ * The occurrence a committed answer put in place of `moved`: a series
+ * instance keeps its provider's original start, and a standalone event has
+ * one occurrence. An answer the queue holds says nothing yet.
  */
 function replacingOccurrence(
-  payload: Payload,
+  result: OperationResult<UpdateCalendarEventMutation>,
   moved: OccurrenceRecord
 ): OccurrenceRecord | undefined {
+  const payload = result.data?.updateCalendarEvent;
+  if (
+    !payload ||
+    result.error ||
+    optimisticMutationDispositionOf(result)?.kind === 'queued'
+  )
+    return undefined;
   const live = payload.occurrences.filter(
     (occurrence) => !occurrence.isCancelled
   );
@@ -209,7 +221,11 @@ function replacingOccurrence(
   return live.length === 1 ? live[0] : undefined;
 }
 
-function recordMove(moved: OccurrenceRecord, replacing: OccurrenceRecord) {
+function recordMove(
+  moved: OccurrenceRecord,
+  replacing: OccurrenceRecord | undefined
+) {
+  if (!replacing) return;
   const from = occurrenceRef(moved.eventId, moved.occurrenceKey);
   const to = occurrenceRef(replacing.eventId, replacing.occurrenceKey);
   if (from === to) return;
@@ -623,12 +639,10 @@ export async function executeGraphqlUpdate(
     !oneOccurrence &&
     recurring &&
     (patch.time != null || patch.recurrenceLines != null);
-  const moved = time
-    ? movedOccurrence(event, occurrences, args.occurrenceKey, {
-        oneOccurrence,
-        recurring,
-      })
-    : undefined;
+  const moved = movedOccurrence(event, occurrences, args, {
+    oneOccurrence,
+    recurring,
+  });
   const movedRef = moved && occurrenceRef(moved.eventId, moved.occurrenceKey);
   const sent = executeOptimisticMutation(
     client,
@@ -716,18 +730,14 @@ export async function executeGraphqlUpdate(
   ).toPromise();
   try {
     const result = await sent;
-    const payload = result.data?.updateCalendarEvent ?? undefined;
     // Recorded before the answer replaces the event's occurrences, so the
     // moved occurrence leaves the calendar only once its details can follow.
-    const replacing =
-      moved &&
-      payload &&
-      !result.error &&
-      optimisticMutationDispositionOf(result)?.kind !== 'queued'
-        ? replacingOccurrence(payload, moved)
-        : undefined;
-    if (moved && replacing) recordMove(moved, replacing);
-    return await settle(host, result, payload);
+    if (moved) recordMove(moved, replacingOccurrence(result, moved));
+    return await settle(
+      host,
+      result,
+      result.data?.updateCalendarEvent ?? undefined
+    );
   } finally {
     if (movedRef) {
       movingOccurrences.delete(movedRef);
