@@ -458,7 +458,7 @@ async fn an_ack_is_not_resent_when_clearing_it_meets_local_contention() {
 }
 
 #[tokio::test]
-async fn a_hint_task_fenced_by_an_owner_move_stops_cleanly_without_delivery() {
+async fn a_hint_task_waits_for_the_first_owner_claim_without_claiming_or_delivering() {
     let fixture = fixture(Error::CredentialsUnavailable);
     fixture
         .repository
@@ -472,11 +472,74 @@ async fn a_hint_task_fenced_by_an_owner_move_stops_cleanly_without_delivery() {
         .store(false, Ordering::Release);
     let stopped = CancellationToken::new();
     let changed = Arc::new(tokio::sync::Notify::new());
+    let owner = Uuid::now_v7();
+    let mut hints = Box::pin(fixture.engine.retry_host_hints(
+        fixture.binding,
+        owner,
+        &stopped,
+        &changed,
+    ));
+    assert!(futures::poll!(hints.as_mut()).is_pending());
+    assert_eq!(fixture.repository.owner_claims.load(Ordering::Relaxed), 0);
+    assert!(fixture.notifier.0.lock().unwrap().is_empty());
+
     fixture
+        .repository
+        .owner_available
+        .store(true, Ordering::Release);
+    assert!(
+        fixture
+            .repository
+            .claim_owner(fixture.binding, owner)
+            .await
+            .unwrap()
+    );
+    changed.notify_one();
+    assert!(futures::poll!(hints.as_mut()).is_pending());
+    assert_eq!(fixture.repository.owner_claims.load(Ordering::Relaxed), 1);
+    assert_eq!(fixture.notifier.0.lock().unwrap().len(), 1);
+
+    stopped.cancel();
+    assert_eq!(
+        futures::poll!(hints.as_mut()),
+        std::task::Poll::Ready(Ok(()))
+    );
+}
+
+#[tokio::test]
+async fn a_hint_task_fenced_by_an_owner_move_stops_cleanly_without_delivery() {
+    let fixture = fixture(Error::CredentialsUnavailable);
+    let held = fixture
         .engine
-        .retry_host_hints(fixture.binding, Uuid::now_v7(), &stopped, &changed)
+        .synchronization_capacity
+        .acquire_many(2)
         .await
         .unwrap();
+    let mut actor = Box::pin(
+        fixture
+            .engine
+            .run_account(fixture.binding, CancellationToken::new()),
+    );
+    assert!(futures::poll!(actor.as_mut()).is_pending());
+    assert_eq!(fixture.repository.owner_claims.load(Ordering::Relaxed), 1);
+
+    fixture
+        .repository
+        .state
+        .lock()
+        .unwrap()
+        .mark_notification_pending();
+    fixture
+        .repository
+        .owner_available
+        .store(false, Ordering::Release);
+    drop(held);
+
+    assert_eq!(
+        futures::poll!(actor.as_mut()),
+        std::task::Poll::Ready(Ok(()))
+    );
+    assert_eq!(fixture.repository.owner_claims.load(Ordering::Relaxed), 2);
     assert!(fixture.notifier.0.lock().unwrap().is_empty());
     assert!(
         fixture
