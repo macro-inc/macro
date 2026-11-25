@@ -79,11 +79,11 @@ export const searchTextOf = (markdown: string) =>
 
 /**
  * A plain query as the editor's markdown. Its addresses stay text: imported,
- * `from:ana@example.com` would become a mail link that swallows the space
- * typed after it.
+ * `from:ana@example.com` or `<ana@example.com>` would become a mail link that
+ * swallows the space typed after it. The field only ever imports plain text,
+ * never mention markup, so every `@` is escaped.
  */
-const queryMarkdown = (query: string) =>
-  query.replace(/<[^>]*>|@/g, (match) => (match === '@' ? '\\@' : match));
+const queryMarkdown = (query: string) => query.replaceAll('@', '\\@');
 
 /** Split-owned history, focus shortcuts and navigation around the shared search input. */
 export function SoupSearchbar(props: SoupSearchbarProps) {

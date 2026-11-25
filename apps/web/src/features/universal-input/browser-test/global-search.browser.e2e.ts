@@ -209,6 +209,28 @@ test('the shared global Search input keeps mention nodes when the host acknowled
   );
 });
 
+test('the shared global Search input keeps addresses it is given as text', async ({
+  page,
+}) => {
+  await page.goto('/?searchbar');
+  const input = page.getByRole('textbox', {
+    name: 'Standalone search',
+    exact: true,
+  });
+  await page
+    .getByRole('button', { name: 'Set external address search', exact: true })
+    .click();
+  await expect(input).toHaveText(
+    'comparison <ana@example.com> from:ana@example.com next'
+  );
+  await expect(input.locator('a')).toHaveCount(0);
+  await input.press('End');
+  await page.keyboard.type(' plan');
+  await expect(page.getByTestId('standalone-query')).toHaveText(
+    'comparison <ana@example.com> from:ana@example.com next plan'
+  );
+});
+
 test('keeps typing in Search for in place while a sender is unresolved', async ({
   page,
 }) => {

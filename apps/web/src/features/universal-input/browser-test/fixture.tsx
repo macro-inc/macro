@@ -177,6 +177,13 @@ function SearchbarFixture() {
       <button onClick={() => setQuery('externally changed query')}>
         Set external search
       </button>
+      <button
+        onClick={() =>
+          setQuery('comparison <ana@example.com> from:ana@example.com next')
+        }
+      >
+        Set external address search
+      </button>
       <output data-testid="standalone-query">{query()}</output>
       <output data-testid="standalone-query-changes">{changes()}</output>
     </div>
