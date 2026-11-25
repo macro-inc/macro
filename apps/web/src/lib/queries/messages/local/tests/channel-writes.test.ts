@@ -210,11 +210,6 @@ describe('createChannelWrites', () => {
     await writes.send(send(reply.id, { content: 'reply', thread_id: root.id }));
     await writes.send(send(reply.id, { content: 'reply', thread_id: full.id }));
 
-    // The rest of the root and of its other replies stays the server's.
-    const named = (id: string) => ({
-      __typename: 'GraphqlChannelMessage',
-      id,
-    });
     const rootOf = (call: (typeof calls)[number]) =>
       (
         call.context.optimisticResponse as {
@@ -223,15 +218,18 @@ describe('createChannelWrites', () => {
           };
         }
       ).sendChannelMessage.root;
+    // The rest of the root stays the server's.
     expect(rootOf(calls[0])).toEqual({
-      ...named(root.id),
-      thread: expect.objectContaining({ preview: [named(reply.id)] }),
+      __typename: 'GraphqlChannelMessage',
+      id: root.id,
+      thread: expect.objectContaining({
+        preview: [expect.objectContaining({ id: reply.id, content: 'reply' })],
+      }),
     });
     expect(rootOf(calls[1])).toEqual({
-      ...named(full.id),
-      thread: expect.objectContaining({
-        preview: full.thread!.preview.map(({ id }) => named(id)),
-      }),
+      __typename: 'GraphqlChannelMessage',
+      id: full.id,
+      thread: expect.objectContaining({ preview: full.thread!.preview }),
     });
   });
 
@@ -277,7 +275,7 @@ describe('createChannelWrites', () => {
       id: root.id,
       thread: expect.objectContaining({
         replyCount: 1,
-        preview: [{ __typename: 'GraphqlChannelMessage', id: replies[1]!.id }],
+        preview: [replies[1]],
       }),
     });
     // Already deleted, it is in neither; a top-level message has no root.
