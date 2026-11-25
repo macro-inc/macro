@@ -1,5 +1,6 @@
 //! Reads the queue out of a database that is about to be wiped.
 
+use super::schema_store::{self, StoredRow};
 use super::{
     Db, IDENTITY_COLUMN, IDENTITY_META_KEY, ImportMarker, QueueRead, RecordKey,
     STORAGE_GENERATION_META_KEY, SalvagedQueue, Shadow, TursoStorage, driver, identity_of,
@@ -256,6 +257,7 @@ fn read_database(connection: &Db, scope: &str, now_ms: i64) -> Result<Held, Turs
             rows: Vec::new(),
             shadows: Vec::new(),
             records: Vec::new(),
+            schema: schema_store::salvaged(connection),
         },
         account: metadata_record(connection, IDENTITY_META_KEY)?,
         imported: marker.map(|marker| marker.id),
@@ -486,11 +488,13 @@ impl SalvagedQueue {
             current.insert(required_text(row, 1)?);
         }
         let mut left_out = BTreeSet::new();
+        let mut added = false;
         for row in older.rows {
             if current.contains(&required_text(&row, 1)?) {
                 left_out.insert(required_i64(&row, 0)?);
             } else {
                 self.rows.push(row);
+                added = true;
             }
         }
         for shadow in older.shadows {
@@ -506,6 +510,13 @@ impl SalvagedQueue {
             if !self.records.iter().any(|(own, _)| *own == key) {
                 self.records.push((key, value));
             }
+        }
+        // No one schema describes overlays made under two.
+        if added
+            && self.schema.as_ref().map(|row| &row.hash)
+                != older.schema.as_ref().map(|row| &row.hash)
+        {
+            self.schema = Some(StoredRow::unreadable());
         }
         // The older writes have new IDs.
         self.complete = false;

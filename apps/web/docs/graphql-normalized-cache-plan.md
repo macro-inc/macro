@@ -684,7 +684,8 @@ that fails tries to keep the migrated file as it is.
 A recovery wipe in the browser keeps the mutation queue. Under the owner lock, the
 engine about to wipe opens the old database, copies what it queues (rows with their
 IDs, leases and attempt counts, their optimistic layers and shadows, the aliases
-they use, and the account binding) into a side file, `{database}-salvage`, and
+they use, the account binding, and the stored GraphQL schema their overlays were
+made under) into a side file, `{database}-salvage`, and
 flushes it before it removes the database. The next open queues the copy again
 before it serves its first request, in one transaction that also records that this
 copy was taken, and then removes the side file. An engine may die between any two of
@@ -709,7 +710,13 @@ opened and reset, even when no copy says what it queued. A side file that cannot
 `unreadable` rather than queued behind newer writes later; only one that can be neither
 removed nor emptied then can still come back, behind them and as `partial`. Records, the
 projections and index facts the server's answers gave them, and everything else
-refetchable are not carried; only the pending writes' own projections are. The copy
+refetchable are not carried; only the pending writes' own projections are. The
+next database takes the copy's stored schema with it, so the schema adoption after the
+open retires the overlays the wiped database would have retired. A copy joined from
+databases of two schemas, or taken into a database that stores another one, leaves
+that database's schema unreadable instead: adoption then resets it and keeps every
+write, without their overlays. An adoption that fails as a corrupt file does wipes
+the same way, keeping the queue. The copy
 is given up after three engines die reading the old database, three die taking the
 copy in, or eight wipes in two minutes, and a database bound to another account
 refuses it. Logout, an account switch, a mismatched identity and stale-database

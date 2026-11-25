@@ -1000,10 +1000,60 @@ fn recreate_tables(connection: &Db, tables: &[&str]) -> Result<(), TursoStorageE
     Ok(())
 }
 
-struct StoredRow {
-    hash: String,
-    incoming_hash: String,
-    artifact: Vec<u8>,
+/// The `cache_schema` row, as a salvaged queue also carries it
+/// (`queue_salvage`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct StoredRow {
+    pub(super) hash: String,
+    pub(super) incoming_hash: String,
+    pub(super) artifact: Vec<u8>,
+}
+
+impl StoredRow {
+    /// A schema no build can read, which resets the cache that stores it.
+    pub(super) fn unreadable() -> Self {
+        Self {
+            hash: UNREADABLE.to_owned(),
+            incoming_hash: UNREADABLE.to_owned(),
+            artifact: vec![0],
+        }
+    }
+}
+
+/// The stored schema of a database whose queue is being salvaged, for the
+/// database that imports the queue. One that cannot be read is carried as
+/// [`StoredRow::unreadable`].
+pub(super) fn salvaged(connection: &Db) -> Option<StoredRow> {
+    load(connection).unwrap_or_else(|_| Some(StoredRow::unreadable()))
+}
+
+/// Gives a database the stored schema `carried` of the one whose queue it is
+/// importing, inside the import's transaction, so that the adoption after the
+/// open judges the queue's overlays by the schema they were made under, as it
+/// would have in that database. One that stores another schema already is
+/// made unreadable instead: no one schema describes both, so the adoption
+/// resets it, keeping every queued write and none of their overlays.
+pub(super) fn import(
+    connection: &Db,
+    carried: Option<&StoredRow>,
+) -> Result<(), TursoStorageError> {
+    match (load(connection)?, carried) {
+        (None, None) => Ok(()),
+        (None, Some(carried)) => require_changed(
+            driver::execute(
+                connection,
+                UPSERT,
+                vec![
+                    text(&carried.hash),
+                    text(&carried.incoming_hash),
+                    Value::from_blob(carried.artifact.clone()),
+                ],
+            )?,
+            1,
+        ),
+        (Some(own), Some(carried)) if own.hash == carried.hash => Ok(()),
+        (Some(_), _) => mark_unreadable(connection),
+    }
 }
 
 fn load(connection: &Db) -> Result<Option<StoredRow>, TursoStorageError> {
