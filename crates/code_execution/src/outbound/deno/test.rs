@@ -841,6 +841,50 @@ async fn times_out_cancels_and_reaps_busy_processes() {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn lone_surrogates_reach_the_host_as_replacement_characters() {
+    let (_root, service) = setup(Limits::default()).await;
+    // Slicing a string by UTF-16 index can cut an emoji in half.
+    let (events, outcome) = run(
+        &service,
+        "export function main() { const cut = 'a😀b'.slice(0, 2); console.log(cut); return {data: {[cut]: [cut, 'ok 😀']}}; }",
+        5000,
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({"data": {"a\u{FFFD}": ["a\u{FFFD}", "ok 😀"]}})
+    );
+    assert!(events.iter().any(
+        |event| matches!(&event.kind, EventKind::Log { message, .. } if message == "a\u{FFFD}")
+    ));
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn malformed_keys_keep_json_wrapper_and_proto_handling() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (_, outcome) = run(
+        &service,
+        r#"export function main() { const n = new Number(7); n["\ud800"] = 1; return {data: {n, s: new String("a\ud800"), b: new Boolean(false), p: Object.setPrototypeOf({a: 1}, Number.prototype), o: {["__proto__"]: {keep: 1}, ["\ud800"]: 2}}}; }"#,
+        5000,
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({"data": {"n": 7, "s": "a\u{FFFD}", "b": false, "p": {"a": 1}, "o": {"__proto__": {"keep": 1}, "\u{FFFD}": 2}}})
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn bounds_output_and_rejects_invalid_or_duplicate_frames() {
     let (_root, service) = setup(Limits {
         max_frame_bytes: 16 * 1024,
