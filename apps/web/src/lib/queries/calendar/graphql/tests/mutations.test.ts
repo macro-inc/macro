@@ -1403,6 +1403,44 @@ describe('executeGraphqlCreate', () => {
       untrack();
     });
 
+    it('lands once its own call turns out to be queued', async () => {
+      const { host, untrack } = trackedHost(async () => ({
+        revision: '1' as never,
+        records: [],
+      }));
+      const fake = fakeClient('queued');
+      const held = heldClient(fake);
+      const created = executeGraphqlCreate(
+        {
+          title: 'Offsite',
+          time: {
+            kind: 'allDay',
+            startDate: '2026-11-28',
+            endDate: '2026-11-29',
+          },
+        },
+        held.client
+      );
+      await vi.waitFor(() => expect(fake.calls).toHaveLength(1));
+      const localId = fake.calls[0]?.optimistic.uuid ?? '';
+      host.settle({
+        mutationUuid: localId,
+        transactionId: 'tx-1',
+        status: 'committed',
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(isCalendarEventCreating(localId)).toBe(true);
+
+      host.readRecordsByKeys.mockImplementation(landedAs('server-16', localId));
+      held.answer();
+      await created;
+      await vi.waitFor(() =>
+        expect(createdCalendarEventId(localId)).toBe('server-16')
+      );
+      expect(isCalendarEventCreating(localId)).toBe(false);
+      untrack();
+    });
+
     it('is asked for once', async () => {
       const { host, untrack } = trackedHost();
       const localId = await settledWhilePaused(host.settle);

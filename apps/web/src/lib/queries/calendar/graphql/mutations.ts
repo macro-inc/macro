@@ -120,6 +120,8 @@ const answeringCreates = new Set<string>();
 const landedCreates = new Map<string, string>();
 /** Confirmed creates whose server id the cache has not been able to tell. */
 const unreadCreates = new Set<string>();
+/** Reads where a confirmed create landed, from each tracked host. */
+const createReaders = new Set<(localId: string) => Promise<void>>();
 /**
  * The occurrence each of the latest creates' answers carried for the one
  * drawn locally, by local id: open details move to it before the calendar's
@@ -232,6 +234,7 @@ export function trackCalendarCreateSettlements(
 ): () => void {
   let stopped = false;
 
+  createReaders.add(landConfirmed);
   async function landConfirmed(localId: string): Promise<void> {
     let serverId: string | undefined;
     try {
@@ -265,6 +268,7 @@ export function trackCalendarCreateSettlements(
   });
   return () => {
     stopped = true;
+    createReaders.delete(landConfirmed);
     stopReady?.();
     stopSettled();
   };
@@ -754,6 +758,12 @@ export async function executeGraphqlCreate(
     );
   } finally {
     answeringCreates.delete(clientId);
+    // It settled while its call was out, and the call answered nothing more.
+    if (unreadCreates.has(clientId)) {
+      for (const read of createReaders) {
+        fireAndForget(read(clientId), 'calendar-create-settlement');
+      }
+    }
   }
 }
 
