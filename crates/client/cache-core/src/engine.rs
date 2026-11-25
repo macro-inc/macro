@@ -9,6 +9,7 @@ mod channel_timeline;
 mod channel_write;
 mod hydration;
 mod pass_reads;
+mod pending_sends;
 mod people;
 mod retirement;
 pub use channel_timeline::ChannelEvictionResult;
@@ -16,6 +17,7 @@ mod staged_hydrate;
 use channel_write::{ChannelAdmission, Refused};
 pub use hydration::HydrationScope;
 pub use pass_reads::{PassReadSet, PassReads};
+use pending_sends::PendingSends;
 pub use staged_hydrate::StagedHydrate;
 #[cfg(test)]
 mod test;
@@ -771,6 +773,7 @@ impl<S: Storage> Engine<S> {
         staged: &StagedRecords,
     ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
         let mut layers = Vec::with_capacity(queued.len());
+        let mut pending_sends = PendingSends::default();
         for queued in queued {
             let variables: Json = serde_json::from_str(&queued.mutation.request.variables_json)
                 .map_err(|error| EngineError::InvalidQueuedMutation {
@@ -834,6 +837,7 @@ impl<S: Storage> Engine<S> {
             let (candidates, bases) = self
                 .load_link_patch_bases(candidates, &layers, &updates, &patches, staged)
                 .await?;
+            pending_sends.yield_to_server(queued.uuid, &mut updates, &bases);
             let composed = effective_records(&bases, &layers, &candidates);
             let mut effective = present_records(composed);
             merge_updates_into_effective(&mut effective, &updates);
