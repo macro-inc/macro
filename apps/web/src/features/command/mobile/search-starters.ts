@@ -7,6 +7,7 @@ import {
   isUnfinishedSearchOperator,
   readSearchOperators,
   readsAsSearchOperator,
+  type SearchOperatorBinding,
   searchOperatorIndexes,
   searchOperatorSpans,
   splitSearchTerms,
@@ -58,9 +59,13 @@ function starterOf(token: string): StarterToken | undefined {
 }
 
 /** Whether the search reads `token` as an operator, or one still being typed. */
-function isOperatorToken(token: string): boolean {
+function isOperatorToken(
+  token: string,
+  bindings: readonly SearchOperatorBinding[]
+): boolean {
   const term = splitSearchTerms(token)[0] ?? token;
   return (
+    bindings.some((binding) => binding.token === token) ||
     readsAsSearchOperator(token) ||
     readsAsEmailSearchOperator(token) ||
     isUnfinishedSearchOperator(term) ||
@@ -89,11 +94,14 @@ function tokensOf(text: string): string[] {
 /** The last operator `starter` sets in `text`, with a value, if any. */
 export function searchStarterValue(
   text: string,
-  starter: SearchStarter
+  starter: SearchStarter,
+  bindings: readonly SearchOperatorBinding[] = []
 ): StarterToken | undefined {
   // As the search reads it: beside `type:task`, `is:unread` is a word.
   const read = new Set(
-    searchOperatorSpans(text).map(({ start, end }) => text.slice(start, end))
+    searchOperatorSpans(text, bindings).map(({ start, end }) =>
+      text.slice(start, end)
+    )
   );
   return tokensOf(text)
     .filter((token) => read.has(token))
@@ -112,13 +120,15 @@ export function searchStarterValue(
  */
 export function startSearchOperator(
   text: string,
-  starter: SearchStarter
+  starter: SearchStarter,
+  bindings: readonly SearchOperatorBinding[] = []
 ): string {
   const tokens = tokensOf(text);
   // Only what the search reads as the starter's operator, or one still being
   // typed: `type:banana` is a word and stays.
   const removed = tokens.map(
-    (token) => starterOf(token)?.starter === starter && isOperatorToken(token)
+    (token) =>
+      starterOf(token)?.starter === starter && isOperatorToken(token, bindings)
   );
   // An `OR` that joined a removed operator goes with it.
   const joined = tokens.filter(

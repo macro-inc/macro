@@ -1,3 +1,4 @@
+import type { SearchOperatorBinding } from '@app/features/next-soup/core/search-operators';
 import { type PaneId, useSplitRouter } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createEffect, on, onCleanup, untrack } from 'solid-js';
@@ -6,6 +7,30 @@ import {
   type MobileSearchSnapshot,
   SearchState,
 } from './mobileSearchState';
+
+type SearchOpener = { query: string; bindings: SearchOperatorBinding[] };
+
+/**
+ * What the entry was opened to search: a tag's entry state, or the route
+ * params the universal input and Cmd+K open Search with, as on desktop.
+ */
+function openerSearch(
+  state: Record<string, unknown> | undefined,
+  params: Record<string, unknown> | undefined
+): SearchOpener | undefined {
+  const text = state?.['search.text'];
+  if (typeof text === 'string' && text.trim())
+    return {
+      query: text,
+      bindings: (state?.['search.bindings'] as SearchOperatorBinding[]) ?? [],
+    };
+  const query = params?.initialQuery;
+  if (typeof query === 'string' && query.trim())
+    return {
+      query,
+      bindings: (params?.initialBindings as SearchOperatorBinding[]) ?? [],
+    };
+}
 
 /** Bind chrome to this entry only while it is foregrounded, without focusing it. */
 export function createMobileSearchEntry() {
@@ -16,13 +41,29 @@ export function createMobileSearchEntry() {
   const stored = untrack(
     () => handle.currentEntryState()?.['mobileSearch.session']
   ) as MobileSearchSnapshot | undefined;
+  const opener = untrack(() => {
+    const content = handle.content();
+    return openerSearch(
+      handle.currentEntryState(),
+      content.type === 'component'
+        ? (content.params as Record<string, unknown> | undefined)
+        : undefined
+    );
+  });
   const session = stored
     ? createMobileSearchSession(stored)
-    : untrack(() =>
-        SearchState.isOpen()
-          ? SearchState.session()
-          : createMobileSearchSession()
-      );
+    : opener
+      ? createMobileSearchSession({
+          query: opener.query,
+          bindings: opener.bindings,
+          mode: 'name',
+          universalInputActive: false,
+        })
+      : untrack(() =>
+          SearchState.isOpen()
+            ? SearchState.session()
+            : createMobileSearchSession()
+        );
   const dispose = handle.registerEntryStateCaptor(
     'mobileSearch.session',
     session.snapshot

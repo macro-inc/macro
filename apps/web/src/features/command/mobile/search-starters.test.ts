@@ -95,3 +95,16 @@ describe('searchStarterLabel', () => {
     );
   });
 });
+
+it("reads a bound tag as the Tag starter's value, and takes it out", () => {
+  const binding = {
+    token: 'tag:"🎉"',
+    tags: [{ propertyId: 'prop-1', optionId: 'opt-1' }],
+  };
+  expect(searchStarterValue('tag:"🎉" launch', 'tag', [binding])?.value).toBe(
+    '🎉'
+  );
+  expect(startSearchOperator('tag:"🎉" launch', 'tag', [binding])).toBe(
+    'launch tag:'
+  );
+});

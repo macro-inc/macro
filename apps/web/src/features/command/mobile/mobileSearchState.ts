@@ -1,3 +1,7 @@
+import {
+  type SearchOperatorBinding,
+  searchBindingsIn,
+} from '@app/features/next-soup/core/search-operators';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, batch, createSignal } from 'solid-js';
@@ -7,6 +11,8 @@ export type MobileSearchSnapshot = {
   query: string;
   mode: 'name' | 'full-text';
   universalInputActive?: boolean;
+  /** What the opener's tokens in `query` stand for, by id. */
+  bindings?: SearchOperatorBinding[];
 };
 
 export interface MobileSearchSession {
@@ -18,6 +24,8 @@ export interface MobileSearchSession {
   /** query (the dock input's live value) */
   query: Accessor<string>;
   setQuery: (value: string) => void;
+  /** The opener's bindings its tokens still hold; an edited token lets go. */
+  bindings: Accessor<SearchOperatorBinding[]>;
   snapshot: () => MobileSearchSnapshot;
 }
 
@@ -26,18 +34,28 @@ export function createMobileSearchSession(
   initial?: MobileSearchSnapshot
 ): MobileSearchSession {
   const [query, writeQuery] = createSignal(initial?.query ?? '');
+  // A session that starts unpromoted, such as one an opener searches, stays a
+  // search until the person edits it.
   const [universalInputActive, setUniversalInputActive] = createSignal(
-    shouldUseUniversalInputForSearch(
-      initial?.query ?? '',
-      initial?.universalInputActive
-    )
+    initial?.universalInputActive !== false &&
+      shouldUseUniversalInputForSearch(
+        initial?.query ?? '',
+        initial?.universalInputActive
+      )
   );
   const [mode, setMode] = createSignal<'name' | 'full-text'>(
     initial?.mode ?? 'name'
   );
+  const [bindings, setBindings] = createSignal(
+    searchBindingsIn(initial?.query ?? '', initial?.bindings ?? [])
+  );
   const setQuery = (value: string) =>
     batch(() => {
       writeQuery(value);
+      setBindings((kept) => {
+        const next = searchBindingsIn(value, kept);
+        return next.length === kept.length ? kept : next;
+      });
       setUniversalInputActive((active) =>
         shouldUseUniversalInputForSearch(value, active)
       );
@@ -58,12 +76,14 @@ export function createMobileSearchSession(
     universalInputActive,
     query,
     setQuery,
+    bindings,
     mode,
     searchFullText,
     snapshot: () => ({
       query: query(),
       mode: mode(),
       universalInputActive: universalInputActive(),
+      bindings: bindings(),
     }),
   };
 }
