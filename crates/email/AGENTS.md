@@ -538,6 +538,33 @@ tools — hexagonal, heavily feature-gated.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
   through `set_thread_inbox`, and read Outlook inbox, trash, and junk state from
   `email_message_mailbox_facts`, never from labels.
+- An Outlook draft is a conflict when its content was edited outside Macro, or
+  when its version moved with no baseline recorded for it (below)
+  (`DraftChange::between` in `domain/mailbox/drafts/models.rs`): a mailbox
+  stamps drafts on its own (an add-in, a label policy) and Macro's own archive
+  moves them, which move the version and keep the content fingerprint. Compare
+  Outlook's copy with Outlook's earlier copy, never with what Macro submitted,
+  because Outlook rewrites whitespace as it stores a body. `base_content`
+  is that earlier copy once a new revision clears the checkpoint, always the
+  content of `base_version`: `settle_draft` writes it from the draft read,
+  `ingest` from the sync read (`MailboxMessage::draft_content`, the same digests
+  of the same fields), and a resolution clears it. It records the version it
+  was read at and counts only while that equals `base_version`, so a writer
+  that moves one without the other (a process from before it, during a deploy
+  or after a rollback) leaves no baseline; Macro's own move
+  (`record_write_version`) keeps the content and moves both. Without one, a
+  moved version conflicts. The fingerprint leaves attachments out, so a step
+  that acts on a moved version checks the approved files itself (`attached`). A refused PATCH
+  (412) is written again at most `UPDATE_ATTEMPTS` times, after a read that
+  shows no edit.
+- Every stopped draft logs `email_send.draft_failed` with its link, message,
+  waiting send attempts, code and the names (never values) of the raw Graph
+  fields that changed (`base_content` keeps each field's digest for that), and a
+  moved version it goes on with logs `email_send.draft_version_moved`. A send
+  admitted onto a stopped draft logs `email_send.admitted_stopped`, since no
+  worker takes that send up. Each
+  claimed draft step is one `outlook.draft.step` span, the parent of its Graph
+  requests. Stop a draft through `MailboxDraftService::fail`.
 - Each `email_message_mailbox_facts` probe rebuilds a message's facts from its
   labels and pending state. In the dynamic preview query, give a view's facts
   condition to `view_mailbox_fact` so it shares the presence/trash probe in

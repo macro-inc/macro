@@ -1516,6 +1516,52 @@ export const send = {
       trigger:
         'the server reports the attempt FAILED (this device: Cancel; another device: Cancel and restore)',
       source: ['src/features/email-compose/queued-send-status.tsx'],
+      providers: ['gmail'],
+      note: 'an Outlook failure carries its reason: STC-984 to STC-987',
+    },
+    {
+      id: 'STC-984',
+      surface: 'SC-17',
+      fn: ['F-136'],
+      state:
+        'Send failed before delivery. This draft changed in your mailbox. Cancel to recover it, then choose which version to keep.',
+      trigger:
+        'the server reports the attempt FAILED because the draft was edited in Outlook',
+      source: ['src/features/email-compose/queued-send-status.tsx'],
+      providers: ['outlook'],
+    },
+    {
+      id: 'STC-985',
+      surface: 'SC-17',
+      fn: ['F-136'],
+      state:
+        'Send failed before delivery. Your mail provider rejected this send. Cancel to recover this draft.',
+      trigger:
+        'the server reports the attempt FAILED because Outlook refused the send',
+      source: ['src/features/email-compose/queued-send-status.tsx'],
+      providers: ['outlook'],
+    },
+    {
+      id: 'STC-986',
+      surface: 'SC-17',
+      fn: ['F-136'],
+      state:
+        'Send failed before delivery. Access to this inbox has changed. Cancel to recover this draft.',
+      trigger:
+        'the server reports the attempt FAILED because Outlook refused Macro access to the draft',
+      source: ['src/features/email-compose/queued-send-status.tsx'],
+      providers: ['outlook'],
+    },
+    {
+      id: 'STC-987',
+      surface: 'SC-17',
+      fn: ['F-136'],
+      state:
+        'Send failed before delivery. Your mail provider could not save this draft. Cancel to recover it and edit the message or attachments.',
+      trigger:
+        'the server reports the attempt FAILED because Outlook refused the draft content',
+      source: ['src/features/email-compose/queued-send-status.tsx'],
+      providers: ['outlook'],
     },
     {
       id: 'STC-428',

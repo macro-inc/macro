@@ -274,6 +274,25 @@ token that works again clears the flag.
 - Levers: fix the shared credential or roll back. Mailboxes already marked
   need their users to reconnect.
 
+## Drafts that stop
+
+A draft step that gives up logs `email_send.draft_failed` (WARN) with `link_id`,
+`message_id`, the waiting `attempt_ids`, `code`, `stage`, and for a conflict
+`change` and `changed_fields`. `change=content` means the content Graph returns
+(raw, before Macro's sanitizer) differs from the last one Macro read or wrote, in
+the fields `changed_fields` names (`body`, `subject`, `toRecipients`, …);
+`change=unknown` means nothing was recorded to compare. A send admitted onto a
+draft that already stopped logs `email_send.admitted_stopped`. Every step is an
+`outlook.draft.step` span (`@draft.stage`, `@draft.error_code`) whose children
+are its Graph requests.
+
+A moved version goes on only when the content Macro last read or wrote is
+recorded and Graph still returns it: the step logs
+`email_send.draft_version_moved` (INFO). With nothing recorded the draft stops as
+`change=unknown`. On a mailbox whose tenant changes drafts on its own, the INFO
+lines show the rule at work, and a `change=content` line shows where it does not
+apply, with the field a tool rewrites.
+
 ## No mailbox
 
 Graph answers 404 to an account's Inbox, and to every other mailbox call,
