@@ -140,7 +140,10 @@ function lostWrites(world: World): Violation[] {
   return [...neverStored, ...lost];
 }
 
-/** Pages whose queued write could not be read, and which were not told. */
+/**
+ * Pages whose queued write could not be read, and which were not told. One that
+ * was signed out since, or left its cache to a newer build, has no host to ask.
+ */
 function untold(world: World): Violation[] {
   return world.calls
     .filter(({ page, uuid, issuedAt, moot }) => {
@@ -149,6 +152,8 @@ function untold(world: World): Violation[] {
       return (
         asked !== undefined &&
         !exempt(asked) &&
+        issuedAt >= asked.sessionSince &&
+        !world.reloadRequests.includes(page) &&
         !asked.queueResets.some((at) => at >= issuedAt)
       );
     })
@@ -254,8 +259,9 @@ function missingEngine(world: World, pages: Page[]): Violation[] {
     .findLast((coordinator) => coordinator.scope() === scope)
     ?.coreState();
   if (state?.startsWith('active')) return [];
-  if (state?.startsWith('resetting-after-loss') && heldByFrozen(world))
-    return [];
+  // Each attempt to take it over waits, then fails.
+  const waits = /^(activating|resetting-after-loss)/.test(state ?? '');
+  if (waits && heldByFrozen(world)) return [];
   return [
     {
       symptom: `L2:no active engine (${state?.replace(/[@:/].*/, '') ?? 'no coordinator'})`,

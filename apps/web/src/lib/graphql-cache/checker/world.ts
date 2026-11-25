@@ -271,6 +271,8 @@ export class Page {
   stops: string[] = [];
   /** Goes up each time the page's session ends. */
   session = 0;
+  /** When its session last began after another had ended. */
+  sessionSince = 0;
   /** When its host said that some of the queue may be gone. */
   readonly queueResets: number[] = [];
 
@@ -486,6 +488,7 @@ export class Page {
   /** The session ends (`disposeSessionClients`), and is back a second later. */
   expireSession(): void {
     this.session += 1;
+    this.sessionSince = this.world.sim.now;
     this.recovery.reset();
     this.stops = [];
     this.cacheOff = false;
