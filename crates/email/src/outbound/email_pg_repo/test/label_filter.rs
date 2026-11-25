@@ -279,8 +279,8 @@ async fn a_label_on_another_tab_lists_what_the_general_builder_lists(
         PreviewViewStandardLabel::Other,
     ] {
         for filter in filters() {
-            let (general, _) = read(view.clone(), filter.clone(), None).await?;
-            let (walking, stats) = read(view.clone(), filter.clone(), Some(WALK)).await?;
+            let (general, _) = read(view, filter.clone(), None).await?;
+            let (walking, stats) = read(view, filter.clone(), Some(WALK)).await?;
             assert!(
                 stats.is_some(),
                 "{view:?} {filter:?} took the general builder"
@@ -292,7 +292,7 @@ async fn a_label_on_another_tab_lists_what_the_general_builder_lists(
         PreviewViewStandardLabel::Spam,
         PreviewViewStandardLabel::Trash,
     ] {
-        let (_, stats) = read(view.clone(), label(WORK), Some(WALK)).await?;
+        let (_, stats) = read(view, label(WORK), Some(WALK)).await?;
         assert!(stats.is_none(), "{view:?} took the walk");
     }
     Ok(())
