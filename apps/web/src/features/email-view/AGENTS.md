@@ -34,6 +34,10 @@ the Soup-backed thread list, and saved email views.
   `components/EmailRowStylePreview.tsx` draws Settings' inert sample of it
   with the real row, restoring Mail's list tokens that the settings card
   overrides.
+- `primitives/create-email-row-labels.ts`: the labels each row shows after its
+  tags (`ListEntity.labels`), named from the viewer's label list once per list
+  through `@queries/email/label-names`, which the open thread's pill and side
+  panel share.
 - `primitives/create-search-scroll-reset.ts`: a new search starts at the top
   once its own results replace the rows kept on screen.
 - `search/`: the `in:<view>` filter (`email-search-scope.ts`: parsing, the
@@ -42,10 +46,7 @@ the Soup-backed thread list, and saved email views.
   operators, which are still being typed and left out of the search, and what
   finishes one; its tests and the service's read
   `crates/search_service/src/api/search/email_operators/typed_operators.json`),
-  recent searches (`recent-searches.ts`, per person in browser storage; a
-  search is remembered on Enter, a picked recent search, a thread opened
-  from it, or leaving the field with its own results on screen, `hasResults`)
-  and
+  recent searches (`recent-searches.ts`, per person in browser storage) and
   the rows the search field lists: views (then labels) while `in:` is typed,
   people after `from:`/`to:`/`cc:`/`bcc:`, labels and tags after `label:`,
   otherwise the operators that finish the typed token, then recent searches

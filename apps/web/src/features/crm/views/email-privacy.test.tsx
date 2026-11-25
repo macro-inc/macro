@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 
@@ -101,6 +101,29 @@ it('leaves a connected mailbox with sharing off and no Connect email', () => {
   expect(state.mutate).not.toHaveBeenCalled();
 });
 
+it('puts the opt-in beside the sharing status, before the blacklists', async () => {
+  const user = userEvent.setup();
+  state.mailboxEmail = 'member@example.com';
+  state.mailboxLinkId = '00000000-0000-4000-8000-000000000045';
+  render(() => <CrmEmailPrivacySettings />);
+
+  const contribution = within(
+    screen
+      .getByRole('heading', { name: 'Your email contribution' })
+      .closest('section') as HTMLElement
+  );
+  contribution.getByText('Sharing off');
+  const share = contribution.getByRole('button', {
+    name: 'Share my emails with CRM',
+  });
+  await user.tab();
+  expect(document.activeElement).toBe(share);
+  await user.tab();
+  expect(document.activeElement).toBe(
+    screen.getByRole('textbox', { name: 'Domain to block for the team' })
+  );
+});
+
 it('keys Connect email on the linked mailbox, not its address', () => {
   state.mailboxLinkId = '00000000-0000-4000-8000-000000000045';
   render(() => <CrmEmailPrivacySettings />);
@@ -113,9 +136,14 @@ it('keeps the sharing status instead of Connect email while sharing is on', () =
   state.enabled = true;
   render(() => <CrmEmailPrivacySettings />);
 
-  screen.getByText('Sharing on');
+  const contribution = within(
+    screen
+      .getByRole('heading', { name: 'Your email contribution' })
+      .closest('section') as HTMLElement
+  );
+  contribution.getByText('Sharing on');
   expect(screen.queryByRole('button', { name: 'Connect email' })).toBeNull();
-  screen.getByRole('button', { name: 'Stop sharing my emails' });
+  contribution.getByRole('button', { name: 'Stop sharing my emails' });
 });
 
 it('keeps the load error and retry without offering Connect email for an unknown mailbox', () => {

@@ -298,6 +298,13 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<CrmEntityAccess>, AccessError>> + Send;
 
+    /// The company each merged company's old id names now, for the ids a
+    /// merge retired. Grants nothing.
+    fn get_merged_crm_company_ids(
+        &self,
+        company_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, Uuid>, AccessError>> + Send;
+
     /// Get the access level a user has for a CRM contact, with the contact's
     /// owning `team_id` (its parent company's team).
     ///
@@ -717,6 +724,38 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<(EntityPermission, Uuid, TeamRole), AccessError>> + Send;
+
+    /// The company each merged company's old id names now, for the ids a
+    /// merge retired; see [`Self::current_entity_id`].
+    fn merged_crm_company_ids(
+        &self,
+        _company_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, Uuid>, AccessError>> + Send {
+        async { Ok(HashMap::new()) }
+    }
+
+    /// The id of the entity an id names now: for a company merged away, the
+    /// company it was merged into; for anything else, the id itself.
+    ///
+    /// Grants nothing. Every access check here is for exactly the id it is
+    /// given, so a caller that accepts old ids resolves first, then
+    /// authorizes, reads and writes the returned id only.
+    fn current_entity_id(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<String, AccessError>> + Send {
+        async move {
+            let (EntityType::CrmCompany, Ok(company_id)) = (entity_type, entity_id.parse::<Uuid>())
+            else {
+                return Ok(entity_id.to_owned());
+            };
+            let merged = self.merged_crm_company_ids(&[company_id]).await?;
+            Ok(merged
+                .get(&company_id)
+                .map_or_else(|| entity_id.to_owned(), Uuid::to_string))
+        }
+    }
 
     /// Get all user IDs that have access to a given entity.
     ///

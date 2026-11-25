@@ -16,6 +16,7 @@ mod outlook_import;
 mod outlook_subscriptions;
 mod poll_schedule;
 mod projection_retries;
+mod reauthorization;
 mod retries;
 mod unstorable_values;
 
@@ -353,6 +354,7 @@ pub(super) fn snapshot(
         folder_id: Some(ProviderId::new("folder").unwrap()),
         tags: vec!["TRASH".into()],
         version: Some(version.into()),
+        draft_content: None,
     }
 }
 

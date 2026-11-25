@@ -37,9 +37,14 @@ error.
 
 With the calendar cache, `Create event` and `Save` close the composer as soon as
 the write is saved locally and queued (as property saves do), before the provider
-answers; the event is already on the grid under a local id. Its details open
-while the reply is on its way and move to the server's id once the create lands;
-only then does the URL name the event. A refused save shows
+answers; the event is already on the grid under a local id. The composer hands
+the create the calendar it shows, so the create reads no calendar list first.
+Its details open while the reply is on its way and move to the server's copy
+the create's answer carries as soon as it arrives, before the grid's own reads
+draw it; only then does the URL name the event, and the new chip stays selected
+until the grid replaces it. A local copy, new or moved, shows no
+`Original time` line: the server keeps a time zone on the event, never on its
+occurrences. A refused save shows
 `Failed to create event` or `Failed to update event` afterwards, and a refused
 create leaves the grid. An edit that adds a new Macro call still waits for the
 call to be linked. Over REST the composer closes when the provider answers.

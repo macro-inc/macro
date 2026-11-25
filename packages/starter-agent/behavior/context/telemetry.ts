@@ -87,12 +87,22 @@ export const agentTelemetryId = (agent: string): string =>
   createHash('sha256').update(agent).digest('hex').slice(0, 16);
 
 /** Starts the agent's telemetry, once per process. */
-export const startTelemetry = async ({
+export const startTelemetry = ({
   environment,
   agent,
 }: {
   readonly environment: Environment;
   readonly agent: string;
+}): Promise<void> =>
+  startTelemetryAs({ environment, agentId: agentTelemetryId(agent) });
+
+/** Starts telemetry for a helper process of the agent's, given its opaque id (`agentTelemetryId`). */
+export const startTelemetryAs = async ({
+  environment,
+  agentId,
+}: {
+  readonly environment: Environment;
+  readonly agentId: string;
 }): Promise<void> => {
   const url = tracesUrl(environment);
   // No sampling: no class is configured, so every span the agent makes (a
@@ -101,7 +111,7 @@ export const startTelemetry = async ({
     serviceName,
     environment: environment.OTEL_DEPLOYMENT_ENVIRONMENT ?? 'unset',
     tracesUrl: url,
-    resourceAttributes: { 'macro.agent.id': agentTelemetryId(agent) },
+    resourceAttributes: { 'macro.agent.id': agentId },
     enabled: async () => url !== undefined,
     tracingProvider: (resource, getUserId, sampling) =>
       createServerTracingProvider(

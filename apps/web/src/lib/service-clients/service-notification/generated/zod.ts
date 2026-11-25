@@ -2705,6 +2705,12 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          appsToConnect: zod
+                            .array(zod.string())
+                            .optional()
+                            .describe(
+                              'The apps the routine needs connected, by name, when the run failed\nbecause one of them is not. Empty for every other run.'
+                            ),
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -5083,6 +5089,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          appsToConnect: zod
+                            .array(zod.string())
+                            .optional()
+                            .describe(
+                              'The apps the routine needs connected, by name, when the run failed\nbecause one of them is not. Empty for every other run.'
+                            ),
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -7411,6 +7423,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          appsToConnect: zod
+                            .array(zod.string())
+                            .optional()
+                            .describe(
+                              'The apps the routine needs connected, by name, when the run failed\nbecause one of them is not. Empty for every other run.'
+                            ),
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -9664,6 +9682,12 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
+                  appsToConnect: zod
+                    .array(zod.string())
+                    .optional()
+                    .describe(
+                      'The apps the routine needs connected, by name, when the run failed\nbecause one of them is not. Empty for every other run.'
+                    ),
                   outcome: zod
                     .enum(['succeeded', 'failed'])
                     .describe(

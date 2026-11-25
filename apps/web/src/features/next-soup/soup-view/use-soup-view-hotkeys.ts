@@ -226,7 +226,9 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       // before the reminder button's propagation guards can handle the event.
       if (
         event?.target instanceof Element &&
-        event.target.closest('button[data-reminder-action]')
+        event.target.closest(
+          'button[data-reminder-action], button[data-owns-enter]'
+        )
       )
         return false;
       const focusedRow = soup.focus.row();

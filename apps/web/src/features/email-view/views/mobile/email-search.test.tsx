@@ -7,25 +7,16 @@ import {
   EmailMobileSearchSuggestions,
 } from './email-search';
 
-afterEach(() => {
-  cleanup();
-  vi.restoreAllMocks();
-});
+afterEach(cleanup);
 beforeEach(() => {
   localStorage.clear();
-  // jsdom calls the page unfocused during a blur; a browser does only while
-  // another window or app has the focus.
-  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
   localStorage.setItem(
     'macro:email:recent-searches:v1:user-a',
     JSON.stringify(['budget', 'invoice'])
   );
 });
 
-function renderPage(
-  initialSearch = '',
-  options: { hasResults?: boolean } = {}
-) {
+function renderPage(initialSearch = '') {
   const [search, setSearch] = createSignal(initialSearch);
   const onCancel = vi.fn();
   let input: HTMLInputElement | undefined;
@@ -35,9 +26,6 @@ function renderPage(
       userId: () => 'user-a',
       search,
       setSearch,
-      hasResults: () => options.hasResults ?? true,
-      openedThread: () => undefined,
-      isResult: () => true,
       scopeAvailable: () => true,
     });
     return (
@@ -153,22 +141,6 @@ it('remembers the search it is left with', () => {
   fireEvent.input(field, { target: { value: 'quarterly report' } });
   field.blur();
   // The list leaves out the text already typed, so start from an empty field.
-  fireEvent.input(field, { target: { value: '' } });
-
-  field.focus();
-  expect(screen.getAllByRole('option').map((row) => row.textContent)).toEqual([
-    'quarterly report',
-    'budget',
-    'invoice',
-  ]);
-});
-
-it('remembers the search on Search, before its results arrive', () => {
-  const { field } = renderPage('', { hasResults: false });
-  field.focus();
-  fireEvent.input(field, { target: { value: 'quarterly report' } });
-  fireEvent.keyDown(field, { key: 'Enter' });
-  expect(document.activeElement).not.toBe(field);
   fireEvent.input(field, { target: { value: '' } });
 
   field.focus();

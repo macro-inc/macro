@@ -1510,6 +1510,7 @@ fn routine_run_finished_names_the_routine_and_its_outcome() {
         routine_id: Uuid::nil(),
         routine_name: "Morning brief".to_string(),
         outcome: RoutineRunOutcome::Failed,
+        apps_to_connect: Vec::new(),
     };
     let succeeded = RoutineRunFinishedMetadata {
         outcome: RoutineRunOutcome::Succeeded,
@@ -1532,6 +1533,43 @@ fn routine_run_finished_names_the_routine_and_its_outcome() {
     }))
     .unwrap();
     assert!(matches!(event, NotifEvent::RoutineRunFinished(_)));
+    assert!(value.get("appsToConnect").is_none());
+}
+
+#[test]
+fn a_routine_run_refused_for_a_disconnected_app_says_which_to_reconnect() {
+    let one = RoutineRunFinishedMetadata {
+        routine_id: Uuid::nil(),
+        routine_name: "Morning brief".to_string(),
+        outcome: RoutineRunOutcome::Failed,
+        apps_to_connect: vec!["Linear".to_string()],
+    };
+    let several = RoutineRunFinishedMetadata {
+        apps_to_connect: vec!["Linear".into(), "Notion".into(), "Slack".into()],
+        ..one.clone()
+    };
+
+    assert_eq!(one.format_title(None).unwrap(), "Morning brief failed");
+    assert_eq!(
+        one.format_body(None).unwrap(),
+        "It needs Linear connected to run. Reconnect it."
+    );
+    assert_eq!(
+        several.format_body(None).unwrap(),
+        "It needs Linear, Notion and Slack connected to run. Reconnect them."
+    );
+    assert_eq!(
+        serde_json::to_value(&one).unwrap()["appsToConnect"],
+        serde_json::json!(["Linear"])
+    );
+    // Payloads stored before the field existed still read.
+    let stored: RoutineRunFinishedMetadata = serde_json::from_value(serde_json::json!({
+        "routineId": Uuid::nil(),
+        "routineName": "Morning brief",
+        "outcome": "failed",
+    }))
+    .unwrap();
+    assert!(stored.apps_to_connect.is_empty());
 }
 
 #[test]

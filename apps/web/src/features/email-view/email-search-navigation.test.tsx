@@ -5,7 +5,15 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { For, type JSX, type ParentProps } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import {
   afterAll,
   afterEach,
@@ -315,9 +323,6 @@ function WideSearchHeader() {
     userId: () => 'user',
     search: () => state.search,
     setSearch: (search) => setState('search', search),
-    hasResults: () => false,
-    openedThread: () => undefined,
-    isResult: () => true,
     scopeAvailable: () => true,
   });
   return <EmailHeader tabOnly searchSuggestions={suggestions} />;
@@ -509,5 +514,50 @@ describe('phone tab strip', () => {
     view.setTab('sent');
     expect(searchField()).toBeNull();
     expect(stripTitle()).toBe('Sent');
+  });
+});
+
+describe('leaving Mail', () => {
+  /**
+   * Reads what the sidebar shows (a memo over a memo of the view's search
+   * state, like a `Show` condition and the content it renders) from a
+   * cleanup, as parts of the view still do while Mail is torn down.
+   */
+  function ReadsWhileLeaving(props: { shown: () => unknown }) {
+    onCleanup(() => {});
+    onCleanup(() => {});
+    onCleanup(() => props.shown());
+    return null;
+  }
+
+  function Mail() {
+    const view = useEmailView();
+    const shownTab = createMemo(() => view.shownTab());
+    const shown = createMemo(() => shownTab());
+    return (
+      <>
+        <Show when={true}>
+          <ReadsWhileLeaving shown={shown} />
+        </Show>
+        <Show when={true}>
+          <EmailHeader tabOnly />
+        </Show>
+      </>
+    );
+  }
+
+  it('leaves for another page while the header holds the search field', () => {
+    const [onMail, setOnMail] = createSignal(true);
+    render(() => (
+      <Show when={onMail()} fallback={<p>Elsewhere</p>}>
+        <EmailViewProvider initialState={{}}>
+          <Mail />
+        </EmailViewProvider>
+      </Show>
+    ));
+    expect(screen.getByRole('banner')).toBeTruthy();
+
+    expect(() => setOnMail(false)).not.toThrow();
+    expect(screen.getByText('Elsewhere')).toBeTruthy();
   });
 });

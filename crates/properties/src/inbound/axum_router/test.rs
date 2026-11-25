@@ -1,5 +1,6 @@
 #[cfg(feature = "outbound")]
 mod crm_contact_access;
+mod merged_company;
 
 use entity_access::domain::models::TeamRole;
 use std::sync::{Arc, Mutex};
