@@ -212,6 +212,28 @@ pub async fn merge_entity_values_in(
     locked: &[MergeEntityValue],
     moves: &[Uuid],
 ) -> Result<MergedEntityValues, sqlx::Error> {
+    // Only what was read under its writer locks: a value attached since has
+    // no lock here, and deleting it would drop it unrecorded.
+    let reviewed: Vec<Uuid> = locked.iter().map(|value| value.id).collect();
+    // A moved value takes the place of the survivor's own row for that
+    // property, which the plan found empty, so that row goes first.
+    let moved_definitions: Vec<Uuid> = locked
+        .iter()
+        .filter(|value| moves.contains(&value.id))
+        .map(|value| value.property_definition_id)
+        .collect();
+    let replaced_ids = sqlx::query_scalar!(
+        r#"DELETE FROM entity_properties
+           WHERE entity_type = $1 AND entity_id = $2 AND property_definition_id = ANY($3)
+             AND id = ANY($4)
+           RETURNING id"#,
+        entity_type as EntityType,
+        survivor,
+        &moved_definitions,
+        &reviewed,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
     let written = sqlx::query!(
         r#"UPDATE entity_properties SET entity_id = $1, updated_at = NOW()
            WHERE id = ANY($2) AND entity_type = $3 AND entity_id = ANY($4)
@@ -223,9 +245,6 @@ pub async fn merge_entity_values_in(
     )
     .fetch_all(&mut *conn)
     .await?;
-    // Only what was read under its writer locks: a value attached since has
-    // no lock here, and deleting it would drop it unrecorded.
-    let reviewed: Vec<Uuid> = locked.iter().map(|value| value.id).collect();
     let deleted_ids = sqlx::query_scalar!(
         r#"DELETE FROM entity_properties
            WHERE entity_type = $1 AND entity_id = ANY($2) AND id = ANY($3)
@@ -245,7 +264,7 @@ pub async fn merge_entity_values_in(
     for value in locked {
         if moves.contains(&value.id) {
             merged.moved.push(value.clone());
-        } else if deleted_ids.contains(&value.id) {
+        } else if deleted_ids.contains(&value.id) || replaced_ids.contains(&value.id) {
             merged.deleted.push(value.clone());
         }
     }

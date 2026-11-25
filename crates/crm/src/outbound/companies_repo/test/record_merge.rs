@@ -1065,3 +1065,33 @@ async fn a_domain_changing_company_after_the_review_makes_it_stale(pool: PgPool)
     assert_eq!(after.identifiers, before.identifiers);
     assert_ne!(after.revision, before.revision);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_merged_value_fills_a_property_the_survivor_left_empty(pool: PgPool) {
+    let world = World::new(pool.clone()).await;
+    let stays = world.company("Stays", true, &["stays.example.com"]).await;
+    let merged = world.company("Merged", true, &["merged.example.com"]).await;
+    let tier = world.definition("Tier", false).await;
+    world
+        .value(&stays.to_string(), "COMPANY", tier, Value::Null)
+        .await;
+    world
+        .value(&merged.to_string(), "COMPANY", tier, text("Gold"))
+        .await;
+
+    world
+        .merge(&targets(stays, &[merged]), SharingRulesChoice::Keep)
+        .await
+        .unwrap();
+
+    let kept: Value = sqlx::query_scalar(
+        "SELECT values FROM entity_properties
+         WHERE entity_type = 'COMPANY' AND entity_id = $1 AND property_definition_id = $2",
+    )
+    .bind(stays.to_string())
+    .bind(tier)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(kept, text("Gold"));
+}

@@ -340,3 +340,50 @@ async fn a_value_attached_after_the_review_is_kept_and_reported(pool: PgPool) {
     tx.rollback().await.unwrap();
     assert!(stored(&pool, late).await.is_some());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_moved_value_replaces_the_survivors_empty_row(pool: PgPool) {
+    let team = setup(&pool).await;
+    let tier = definition(&pool, "Tier", "STRING", Some(team), None).await;
+    let [survivor, source] = [Uuid::now_v7(), Uuid::now_v7()].map(|id| id.to_string());
+    let empty = value(&pool, &survivor, "COMPANY", &tier.to_string(), Value::Null).await;
+    let gold = value(
+        &pool,
+        &source,
+        "COMPANY",
+        &tier.to_string(),
+        json!({"type": "String", "value": "Gold"}),
+    )
+    .await;
+
+    let mut tx = pool.begin().await.unwrap();
+    let locked = lock_entity_values_in(
+        &mut tx,
+        EntityType::Company,
+        &[survivor.clone(), source.clone()],
+        &survivor,
+    )
+    .await
+    .unwrap();
+    let merged = merge_entity_values_in(
+        &mut tx,
+        EntityType::Company,
+        &survivor,
+        &[source.clone()],
+        &locked,
+        &[gold],
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    assert_eq!(
+        merged.deleted.iter().map(|v| v.id).collect::<Vec<_>>(),
+        vec![empty],
+        "the empty row is recorded as it was"
+    );
+    assert_eq!(stored(&pool, empty).await, None);
+    let (owner, kept) = stored(&pool, gold).await.unwrap();
+    assert_eq!(owner, survivor);
+    assert_eq!(kept["value"], "Gold");
+}
