@@ -12,6 +12,7 @@ import type { CacheGenerationChange } from '@graphql-cache/host/types';
 import type { CacheHost } from '@graphql-cache/index';
 import {
   isAdmittedEnqueueUncertainError,
+  isEngineAbsentError,
   isWriteNotAdmittedError,
   LOCAL_COMMIT_FAILED,
   type MutationSettlement,
@@ -65,6 +66,13 @@ const QUEUE_LOST = ['CACHE_RESET', 'CACHE_RETIRED'];
  * request may be in flight, but nothing promises that it is.
  */
 const RETIRED_ANSWER_BUDGET_MS = 10_000;
+/**
+ * The longest wait before a write no engine was there for is handed over
+ * again, in case nothing says that one is: doubling from the first to the
+ * second.
+ */
+const NEXT_ENGINE_WAIT_MS = 250;
+const NEXT_ENGINE_WAIT_MAX_MS = 4_000;
 /**
  * The server's code for a write it could not finish, which it may have
  * committed before it could not read the answer back.
@@ -341,6 +349,15 @@ const cacheRetired = () => refusal('CACHE_RETIRED', 'device cache was retired');
 const notQueued = (error: CombinedError | undefined) =>
   error?.networkError instanceof MutationNotQueuedError ||
   isWriteNotAdmittedError(error?.networkError);
+
+/**
+ * Whether a write never reached the queue because the engine was lost and the
+ * next one is not there yet. One that had reached the lost engine is instead
+ * an `admitted-enqueue-uncertain`.
+ */
+const foundNoEngine = (error: CombinedError | undefined) =>
+  error?.networkError instanceof MutationNotQueuedError &&
+  isEngineAbsentError(error.networkError.cause);
 
 /** What became of a write nothing more will be heard of. */
 const unanswered = (write: { operation: string }) =>
@@ -1122,6 +1139,26 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     served !== undefined ||
     deps.serving?.() === false;
 
+  /** Waits for the cache, as a span of its own, unless the host retires. */
+  function awaitCache(
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'operation' | 'channelId' | 'messageId'
+    >,
+    reason: 'outage' | 'next_engine',
+    waiting: Effect.Effect<void>
+  ): Promise<void> {
+    return Telemetry.span('channel.write.await_cache', async (span) => {
+      span.setAttr('channel.id', write.channelId);
+      span.setAttr('message.id', write.messageId);
+      span.setAttr('write.operation', write.operation);
+      span.setAttr('write.wait', reason);
+      await Effect.runPromise(
+        Effect.raceFirst(waiting, Deferred.await(retired))
+      );
+    });
+  }
+
   /**
    * Waits out an outage of the host's database, until its queue has been read
    * again.
@@ -1134,15 +1171,30 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   ): Promise<void> {
     while (away()) {
       served ??= Deferred.makeUnsafe<void>();
-      const waiting = Deferred.await(served);
-      await Telemetry.span('channel.write.await_cache', async (span) => {
-        span.setAttr('channel.id', write.channelId);
-        span.setAttr('message.id', write.messageId);
-        span.setAttr('write.operation', write.operation);
-        await Effect.runPromise(
-          Effect.raceFirst(waiting, Deferred.await(retired))
-        );
-      });
+      await awaitCache(write, 'outage', Deferred.await(served));
+    }
+  }
+
+  /** Waits for the engine after the lost one, at most `maxMs`. */
+  async function untilNextEngine(
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'operation' | 'channelId' | 'messageId'
+    >,
+    maxMs: number
+  ): Promise<void> {
+    const replaced = Deferred.makeUnsafe<void>();
+    const stop = deps.host.onCacheGenerationChanged(() => {
+      Deferred.doneUnsafe(replaced, Effect.void);
+    });
+    try {
+      await awaitCache(
+        write,
+        'next_engine',
+        Effect.raceFirst(Deferred.await(replaced), Effect.sleep(maxMs))
+      );
+    } finally {
+      stop();
     }
   }
 
@@ -1185,16 +1237,18 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   }
 
   /**
-   * Hands a write over in its turn, and again when it found the database away
-   * and waited for it. A write that outlasted its host or its sign-in is not
-   * handed over: `client` then answers for another. One that does not reach
-   * the queue though the database is there goes nowhere, and fails.
+   * Hands a write over in its turn, and again when it found the database away,
+   * or no engine to serve it, and waited for that. A write that outlasted its
+   * host or its sign-in is not handed over: `client` then answers for another.
+   * One that does not reach the queue though the database is there goes
+   * nowhere, and fails.
    */
   async function handOver<TData, TVariables extends AnyVariables>(
     write: Write<TData, TVariables>,
     handOff: HandOff
   ): Promise<OperationResult<TData, TVariables>> {
     const { trace } = handOff;
+    let nextEngineWaitMs = NEXT_ENGINE_WAIT_MS;
     for (;;) {
       await trace.run(() => untilServed(write));
       const root = await trace.run(() => write.root?.(handOff.key));
@@ -1218,7 +1272,11 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       );
       if (!notQueued(result.error)) return result;
       if (!handOff.stands()) throw cacheRetired();
-      if (!away()) return result;
+      if (away()) continue;
+      if (!foundNoEngine(result.error)) return result;
+      const waitMs = nextEngineWaitMs;
+      nextEngineWaitMs = Math.min(waitMs * 2, NEXT_ENGINE_WAIT_MAX_MS);
+      await trace.run(() => untilNextEngine(write, waitMs));
     }
   }
 

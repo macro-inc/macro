@@ -6,6 +6,7 @@ import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { createClient, fetchExchange } from '@urql/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { channelMessageKey } from '../channel-map';
 import { createChannelWrites } from '../channel-writes';
 import { CHANNEL_ID, graphqlMessage } from './fixtures';
 import { NOW, send, writeHost, written } from './write-fixtures';
@@ -211,6 +212,109 @@ describe.each([
     await settle();
     expect(await sending).toBe('CACHE_RETIRED');
     expect(fixture.sent()).toEqual([]);
+  });
+});
+
+describe('a write asked for while no engine is there', () => {
+  const noEngine = () =>
+    Promise.reject(
+      Object.assign(new Error('owner epoch 1 was lost'), {
+        errorCode: 'owner-epoch-lost',
+      })
+    );
+  /** A queue no engine serves until told so. */
+  function betweenEngines() {
+    const enqueue = vi
+      .fn<CacheHost['enqueueOptimisticMutation']>()
+      .mockImplementation(noEngine);
+    return { enqueue, fixture: setup(enqueue) };
+  }
+
+  it('waits for the next one, in its turn', async () => {
+    vi.useFakeTimers();
+    const { enqueue, fixture } = betweenEngines();
+    const first = fixture.writes.send(send(root.id));
+    const second = outcome(fixture.writes.send(send(other.id)));
+    await settle();
+    expect(fixture.sent()).toEqual([]);
+    expect(
+      fixture.writes.unstoredRoots(CHANNEL_ID).map((row) => row.key)
+    ).toEqual([channelMessageKey(other.id), channelMessageKey(root.id)]);
+
+    enqueue.mockClear();
+    enqueue.mockImplementation(claimed);
+    fixture.restore();
+    await settle();
+    expect(enqueue.mock.calls.map(([{ uuid }]) => uuid)).toEqual([
+      root.id,
+      other.id,
+    ]);
+    expect(fixture.sent()).toEqual([root.id]);
+    fixture.requests[0].answer(json(written('sendChannelMessage', root)));
+    await settle();
+    expect((await first)?.id).toBe(root.id);
+    fixture.writes.retire();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await second).toBe('DELIVERY_UNKNOWN');
+  });
+
+  it('does not need to hear that the next one came', async () => {
+    vi.useFakeTimers();
+    const { enqueue, fixture } = betweenEngines();
+    const sending = fixture.writes.send(send(root.id));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(fixture.sent()).toEqual([]);
+    // Asked again and again, at a bounded rate.
+    expect(enqueue.mock.calls.length).toBeGreaterThan(3);
+    expect(enqueue.mock.calls.length).toBeLessThan(20);
+
+    enqueue.mockImplementation(claimed);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(fixture.sent()).toEqual([root.id]);
+    fixture.requests[0].answer(json(written('sendChannelMessage', root)));
+    await settle();
+    expect((await sending)?.id).toBe(root.id);
+  });
+
+  it('waits on when the database turns out to be away', async () => {
+    vi.useFakeTimers();
+    const { enqueue, fixture } = betweenEngines();
+    const sending = fixture.writes.send(send(root.id));
+    await settle();
+    fixture.availability.paused = true;
+    await vi.advanceTimersByTimeAsync(30_000);
+    const asked = enqueue.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(enqueue.mock.calls.length).toBe(asked);
+
+    enqueue.mockImplementation(claimed);
+    fixture.availability.paused = false;
+    fixture.writes.resumed();
+    await settle();
+    expect(fixture.sent()).toEqual([root.id]);
+    fixture.requests[0].answer(json(written('sendChannelMessage', root)));
+    await settle();
+    expect((await sending)?.id).toBe(root.id);
+  });
+
+  it('goes nowhere once its host or its sign-in ended', async () => {
+    vi.useFakeTimers();
+    const retired = betweenEngines();
+    const unsent = outcome(retired.fixture.writes.send(send(root.id)));
+    await settle();
+    retired.fixture.writes.retire();
+    await settle();
+    expect(await unsent).toBe('CACHE_RETIRED');
+
+    const signedOut = betweenEngines();
+    const refused = outcome(signedOut.fixture.writes.send(send(root.id)));
+    await settle();
+    signedOut.fixture.signInAgain();
+    signedOut.enqueue.mockImplementation(claimed);
+    signedOut.fixture.restore();
+    await settle();
+    expect(await refused).toBe('CACHE_RETIRED');
+    expect(signedOut.fixture.sent()).toEqual([]);
   });
 });
 

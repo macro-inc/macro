@@ -72,7 +72,8 @@ with the watermark after it.
   more than `MAX_THREAD_PAGES` pages.
 - Outage: while the host is `paused`, open channels keep what they show, new
   ones load from the server unheld, and writes wait
-  (`channel.write.await_cache`). Once it serves again the session proves it
+  (`channel.write.await_cache`), as they do for the engine after a lost one,
+  which no `paused` announces. Once it serves again the session proves it
   readable: channels stay with a host that answered, or was away, before
   (`sessionChannelHost` in `channel-flag.ts`), reads and pushed frames go to
   it, and writes still wait until its queue has been read. `restartCache` in
@@ -104,7 +105,9 @@ uncertain send again under the same id
 (`features/channel/Input/utils/uncertain-sends.ts`), in memory only and until
 the session ends. Recovery runs as `channel.write.recover` in the write's
 trace. A write is its transaction id and its mutation id: transaction ids
-restart when the queue is rebuilt. The queue replays every write the network
+restart when the queue is rebuilt. A send's mutation id is its message's id,
+by which the engine shows the server's copy, once the device has it, in place
+of the prediction still queued. The queue replays every write the network
 lost; of those the server refused, only sends and deletes answered
 `SERVICE_UNAVAILABLE` (`graphql-mutation-retry.ts`).
 
