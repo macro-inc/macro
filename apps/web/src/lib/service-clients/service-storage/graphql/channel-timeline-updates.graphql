@@ -12,5 +12,6 @@ subscription ChannelTimelineUpdates {
 			...ChannelTimelineActivityFields
 		}
 		removedIds
+		truncated
 	}
 }

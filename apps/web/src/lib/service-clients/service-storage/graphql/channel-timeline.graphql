@@ -127,7 +127,10 @@ query ChannelMessage($channelId: ID!, $messageId: ID!) {
 	user {
 		id
 		channelMessage(channelId: $channelId, messageId: $messageId) {
-			...ChannelMessageFields
+			seq
+			message {
+				...ChannelMessageFields
+			}
 		}
 	}
 }

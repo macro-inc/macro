@@ -1,4 +1,5 @@
 fragment ChannelMessageWriteFields on GraphqlChannelMessageWrite {
+	seq
 	message {
 		...ChannelMessageFields
 	}
