@@ -76,6 +76,12 @@ let
       tokens_file_path = "${data}/store-gateway-tokens";
     };
 
+    # Mimir queues each query's work, after sharding and time splitting, and
+    # past 100 queued parts per pod refuses with 429. A Grafana dashboard loads
+    # all its panels at once: one pod refused 38 of the agents dashboard's 43
+    # queries. In a local replay, two loads at once fit under 2000.
+    query_scheduler.max_outstanding_requests_per_tenant = 2000;
+
     limits = {
       # Prometheus' --storage.tsdb.retention.time on the host.
       compactor_blocks_retention_period = "30d";
