@@ -40,7 +40,7 @@
   gap: 1px;
   font-size: 13px;
   line-height: 1.4;
-  color: var(--color-ink-subtle);
+  color: var(--color-ink-muted);
 }
 
 .homepage-founder-letter-name {

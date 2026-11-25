@@ -122,7 +122,7 @@ html[data-homepage][data-theme-light='true'] :is(.site-nav-demo, .macro-home-dem
 .macro-homepage .homepage-open-source-badges { margin-top: 40px; }
 @media (max-width: 699px) {
   .macro-homepage .macro-home-hero { padding: 100px 16px 32px; align-items: flex-start; text-align: left; }
-  .macro-homepage .macro-home-hero h1 { margin-bottom: 22px; font-size: clamp(21px, 7.5vw, 40px); line-height: 1.1; white-space: nowrap; }
+  .macro-homepage .macro-home-hero h1 { margin-bottom: 22px; font-size: clamp(21px, 7.5vw, 40px); }
   .macro-homepage .macro-home-hero > .macro-home-tagline { width: 100%; font-size: clamp(14px, 4.1vw, 15.4px); line-height: 1.55; text-wrap: wrap; }
   .macro-home-actions { justify-content: flex-start; gap: 8px; margin-top: 24px; }
   .macro-home-actions :is(.homepage-hero-cta, .macro-home-demo) { min-width: 0; min-height: 38px; height: 38px; padding-inline: 20px; font-size: 13px; }

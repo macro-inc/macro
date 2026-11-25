@@ -22,7 +22,7 @@ export function HomepageFounderLetter() {
       <footer class="homepage-founder-letter-signature">
         <img
           src={avatarJacob}
-          alt="Jacob Beckerman"
+          alt=""
           width="34"
           height="34"
           loading="lazy"
