@@ -1,4 +1,5 @@
 import type { ResultError } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import type { CrmMergeError } from '@service-storage/client';
@@ -43,31 +44,50 @@ export function createMergeCommands(
   deps: CrmRecordDependencies
 ): MergeCommands {
   return {
-    async review({ survivorId, sourceIds }) {
-      const result = await deps.storage.previewCrmMerge({
-        recordType: 'company',
-        survivorId,
-        sourceIds,
+    review({ survivorId, sourceIds }) {
+      return Telemetry.span('crm.merge.review', async (span) => {
+        span.setAttr('crm.record_id', survivorId);
+        span.setAttr('crm.merge.source_count', sourceIds.length);
+        const result = await deps.storage.previewCrmMerge({
+          recordType: 'company',
+          survivorId,
+          sourceIds,
+        });
+        if (result.isErr()) {
+          const refusal = refusalOf(result.error);
+          span.setAttr('crm.merge.refusal', refusal.code);
+          return { ok: false, refusal };
+        }
+        span.setAttr('crm.merge.blocked', result.value.blocked?.kind ?? 'none');
+        span.setAttr('crm.merge.conflict_count', result.value.conflicts.length);
+        return { ok: true, value: result.value };
       });
-      return result.isOk()
-        ? { ok: true, value: result.value }
-        : { ok: false, refusal: refusalOf(result.error) };
     },
-    async commit(input) {
-      const result = await deps.storage.commitCrmMerge({
-        recordType: 'company',
-        ...input,
+    commit(input) {
+      return Telemetry.span('crm.merge.commit', async (span) => {
+        span.setAttr('crm.record_id', input.survivorId);
+        span.setAttr('crm.merge.source_count', input.sourceIds.length);
+        span.setAttr('crm.merge.sharing_rules', input.sharingRules);
+        const result = await span.span('crm.merge.commit.save', async () =>
+          deps.storage.commitCrmMerge({ recordType: 'company', ...input })
+        );
+        if (result.isErr()) {
+          const refusal = refusalOf(result.error);
+          span.setAttr('crm.merge.refusal', refusal.code);
+          return { ok: false, refusal };
+        }
+        span.setAttr('crm.merge.id', result.value.mergeId);
+        await span.span('crm.merge.commit.refresh', () =>
+          refreshAfterMerge(deps, result.value.mergedIds)
+        );
+        return {
+          ok: true,
+          value: {
+            survivorId: result.value.survivorId,
+            mergedIds: result.value.mergedIds,
+          },
+        };
       });
-      if (result.isErr())
-        return { ok: false, refusal: refusalOf(result.error) };
-      await refreshAfterMerge(deps, result.value.mergedIds);
-      return {
-        ok: true,
-        value: {
-          survivorId: result.value.survivorId,
-          mergedIds: result.value.mergedIds,
-        },
-      };
     },
   };
 }

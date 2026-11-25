@@ -35,7 +35,7 @@ function commandsWith(storage: Record<string, unknown>) {
 it('reviews a company merge and reads a refusal by its code', async () => {
   const previewCrmMerge = vi
     .fn()
-    .mockResolvedValueOnce(ok({ revision: 'r' }))
+    .mockResolvedValueOnce(ok({ revision: 'r', conflicts: [], blocked: null }))
     .mockResolvedValueOnce(
       err([
         {
@@ -49,7 +49,10 @@ it('reviews a company merge and reads a refusal by its code', async () => {
 
   expect(
     await commands.review({ survivorId: 'kept', sourceIds: ['old'] })
-  ).toEqual({ ok: true, value: { revision: 'r' } });
+  ).toEqual({
+    ok: true,
+    value: { revision: 'r', conflicts: [], blocked: null },
+  });
   expect(previewCrmMerge).toHaveBeenCalledWith({
     recordType: 'company',
     survivorId: 'kept',
