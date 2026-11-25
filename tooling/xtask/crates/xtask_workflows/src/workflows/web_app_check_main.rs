@@ -802,14 +802,15 @@ fn run_agent_screen_browser_tests() -> Step<Run> {
 
 /// The CAPTCHA vision lab is outside the root workspace: its own install and
 /// its own Playwright's Chromium, then its typecheck and tests with the mock
-/// planner and the loopback provider stand-in only. Like the browser suites,
-/// it runs without the dev shell's LD_LIBRARY_PATH, which Playwright's
-/// Chromium can't load with. It runs on every browser job: its isolation test
-/// scans the whole repository for code that names the lab.
+/// planner and the loopback provider stand-in only. Clear BASH_ENV as well as
+/// LD_LIBRARY_PATH because Bun's script shell would restore the Nix libraries,
+/// which are incompatible with Playwright's Chromium. Run the check with Bun
+/// 1.4.2 so node:http sends lab requests directly even with HTTP_PROXY set.
+/// Run on every browser job so the lab's isolation test scans the whole repo.
 fn run_captcha_vision_lab_tests() -> Step<Run> {
     Step::new("CAPTCHA Vision Lab Tests")
         .run(
-            "bun install --frozen-lockfile\nbunx playwright install --with-deps chromium\nenv -u LD_LIBRARY_PATH bun run check",
+            "bun install --frozen-lockfile\nbunx playwright install --with-deps chromium\nenv -u LD_LIBRARY_PATH -u BASH_ENV bun x bun@1.4.2 run check",
         )
         .working_directory(xtask_paths::repo_dir!("packages/captcha-vision-lab"))
 }

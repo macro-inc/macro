@@ -25,6 +25,10 @@ export LAB_CHROMIUM_PATH=$(readlink -f $(which chromium || which google-chrome-s
 bun install --frozen-lockfile
 ```
 
+Use the repo dev shell's Bun for the install and Bun 1.4.2 for the test and
+smoke commands below. Bun 1.3.13 routes `node:http` through `HTTP_PROXY`,
+while the lab requires a direct connection to its loopback service.
+
 Tests (mock planner and loopback stand-in only; no provider call):
 
 ```sh

@@ -1544,7 +1544,7 @@ jobs:
         run: |-
           bun install --frozen-lockfile
           bunx playwright install --with-deps chromium
-          env -u LD_LIBRARY_PATH bun run check
+          env -u LD_LIBRARY_PATH -u BASH_ENV bun x bun@1.4.2 run check
         working-directory: packages/captcha-vision-lab
       - name: Teardown Nix
         if: always()
