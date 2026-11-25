@@ -648,6 +648,80 @@ fn a_dropped_records_shadow_under_its_server_key_goes_and_its_identity_stays() {
     });
 }
 
+/// Stores what writes no queued write names any more left: a settled
+/// create's alias from its local key to the server's and the coalescing UUID
+/// on the server's record, and a deletion tombstone. A write made later
+/// through the local key, its settlement and a stale response read them.
+async fn settle_writes_none_queued(storage: &mut TursoStorage) {
+    let mut server = record("note");
+    server.fields.insert(
+        cache_core::identity::MUTATION_UUID_FIELD.into(),
+        cache_core::value::CacheValue::String("settled".into()),
+    );
+    let mut gone = record("note");
+    gone.fields.insert(
+        cache_core::identity::DELETED_FIELD.into(),
+        cache_core::value::CacheValue::Bool(true),
+    );
+    storage
+        .put_batch(vec![
+            (
+                key("Note:settled-local"),
+                cache_core::identity::alias_record(&key("Note:settled")),
+            ),
+            (key("Note:settled"), server),
+            (key("Note:gone"), gone),
+        ])
+        .await
+        .unwrap();
+}
+
+/// Asserts the records [`settle_writes_none_queued`] stored keep their
+/// identity metadata and nothing else.
+async fn assert_unqueued_identity_kept(storage: &TursoStorage, context: &str) {
+    let records = storage
+        .get_batch(&[key("Note:settled-local"), key("Note:settled"), key("Note:gone")])
+        .await
+        .unwrap();
+    assert_eq!(
+        records[0],
+        Some(cache_core::identity::alias_record(&key("Note:settled"))),
+        "{context}"
+    );
+    let server = records[1].as_ref().expect(context);
+    assert!(
+        server
+            .fields
+            .contains_key(cache_core::identity::MUTATION_UUID_FIELD),
+        "{context}"
+    );
+    assert!(!server.fields.contains_key("value"), "{context}");
+    let gone = records[2].as_ref().expect(context);
+    assert_eq!(
+        gone.fields.get(cache_core::identity::DELETED_FIELD),
+        Some(&cache_core::value::CacheValue::Bool(true)),
+        "{context}"
+    );
+    assert!(!gone.fields.contains_key("value"), "{context}");
+}
+
+#[test]
+fn a_tier_keeps_the_identity_of_every_record_it_drops() {
+    block_on(async {
+        for (sdl, change) in [
+            (BOTH_RETYPED, types(&["Note", "Thing"], false)),
+            (ROOTS, Some(Tier::Reset(ResetReason::Roots))),
+        ] {
+            let mut storage =
+                populate(TursoStorage::open_in_memory("schema-unqueued-identity").unwrap()).await;
+            settle_writes_none_queued(&mut storage).await;
+
+            assert_eq!(adopt(&storage, sdl, &ProjectionInputs::none()).change, change);
+            assert_unqueued_identity_kept(&storage, &format!("{change:?}")).await;
+        }
+    });
+}
+
 #[test]
 fn a_kept_records_shadow_under_its_server_key_is_composed_there() {
     block_on(async {
@@ -1588,10 +1662,12 @@ fn a_previous_formats_cache_keeps_its_identity_authority_and_aliases() {
             .await
             .unwrap();
         settle_a_create(&mut storage).await;
+        settle_writes_none_queued(&mut storage).await;
         let kept = [
             key(IDENTITY_META_KEY),
             key("__meta:authority"),
             key("Note:local"),
+            key("Note:settled-local"),
         ];
         let before = storage.get_batch(&kept).await.unwrap();
         let commands = storage
@@ -1614,10 +1690,12 @@ fn a_previous_formats_cache_keeps_its_identity_authority_and_aliases() {
         // adoption after it resets the rest.
         let storage = database.open("scope").unwrap();
         assert_eq!(storage.get_batch(&kept).await.unwrap(), before);
-        assert_eq!(count(&storage, "SELECT count(*) FROM records"), 4);
+        assert_eq!(count(&storage, "SELECT count(*) FROM records"), 7);
+        assert_unqueued_identity_kept(&storage, "previous format").await;
         let adoption = adopt(&storage, OLD, &ProjectionInputs::none());
         assert_eq!(adoption.change, Some(Tier::Reset(ResetReason::Unreadable)));
         assert_eq!(storage.get_batch(&kept).await.unwrap(), before);
+        assert_unqueued_identity_kept(&storage, "previous format, adopted").await;
         let server = storage.get_batch(&[key("Note:server")]).await.unwrap();
         let server = server[0].as_ref().unwrap();
         assert!(
