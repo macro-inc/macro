@@ -1306,16 +1306,35 @@ where
         Ok(candidates_by_entity)
     }
 
-    #[tracing::instrument(err, skip(self, req))]
     async fn handle_email_request(
         &self,
         req: Option<GetEmailsRequest>,
     ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
+        self.handle_email_page_request(req)
+            .await
+            .map(|(candidates, _)| candidates)
+    }
+
+    /// The email leg, with where the email list goes on when its read
+    /// stopped short of a full page before the end of the mail (a label read
+    /// that spent its walk).
+    #[tracing::instrument(err, skip(self, req))]
+    async fn handle_email_page_request(
+        &self,
+        req: Option<GetEmailsRequest>,
+    ) -> Result<
+        (
+            impl Iterator<Item = SoupCandidate>,
+            Option<(chrono::DateTime<chrono::Utc>, uuid::Uuid)>,
+        ),
+        SoupErr,
+    > {
         use frecency::domain::models::AggregateFrecency;
 
         let Some(req) = req else {
-            return Ok(Either::Left(None.into_iter()));
+            return Ok((Either::Left(None.into_iter()), None));
         };
+        let limit = req.limit;
 
         let email_response = match self.email_service.get_email_thread_previews(req).await {
             Ok(response) => response,
@@ -1325,11 +1344,19 @@ where
             // and every other source keeps its results.
             Err(err @ (EmailErr::CrmDomainNotFound(_) | EmailErr::CrmDomainNotPermitted(_))) => {
                 tracing::warn!(error = %err, "CRM domain scope rejected; omitting email threads");
-                return Ok(Either::Left(None.into_iter()));
+                return Ok((Either::Left(None.into_iter()), None));
             }
             Err(err) => return Err(err.into()),
         };
 
+        // A full page's cursor is its last row, which the merge already
+        // knows; only a short page with a cursor says where to go on.
+        let short = limit.is_some_and(|limit| email_response.items.len() < limit as usize);
+        let continue_below = email_response
+            .next_cursor
+            .filter(|_| short)
+            .and_then(|cursor| cursor.decode_json().ok())
+            .map(|cursor| (cursor.val.last_val, cursor.id));
         let mut frecency_scores: Vec<Option<AggregateFrecency>> =
             Vec::with_capacity(email_response.items.len());
         let items: Vec<SoupItem<()>> = email_response
@@ -1341,16 +1368,22 @@ where
             })
             .collect();
 
-        Ok(Either::Right(items.into_iter().zip(frecency_scores).map(
-            |(item, frecency_score)| SoupCandidate {
-                item,
-                document_server_facts: None,
-                frecency_score,
-                touched_at: None,
-                notified_at: None,
-                sort_key: None,
-            },
-        )))
+        Ok((
+            Either::Right(
+                items
+                    .into_iter()
+                    .zip(frecency_scores)
+                    .map(|(item, frecency_score)| SoupCandidate {
+                        item,
+                        document_server_facts: None,
+                        frecency_score,
+                        touched_at: None,
+                        notified_at: None,
+                        sort_key: None,
+                    }),
+            ),
+            continue_below,
+        ))
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -1955,7 +1988,7 @@ where
                     },
                     include_projection,
                 );
-                let email_soup_fut = self.handle_email_request(email_request);
+                let email_soup_fut = self.handle_email_page_request(email_request);
                 let comms_soup_fut = self.handle_comms_request(comms_request);
                 let comms_thread_soup_fut = self.handle_comms_thread_request(comms_thread_request);
                 let call_soup_fut = self.handle_call_request(call_request);
@@ -1990,8 +2023,10 @@ where
                     foreign_entity_soup_fut,
                 );
 
+                let (email_soup, email_continues_below) = email_soup?;
+                let entity_filter_for_cursor = entity_filter.clone();
                 let paginator = main_soup?
-                    .chain(email_soup?)
+                    .chain(email_soup)
                     .chain(comms_soup?)
                     .chain(comms_thread_soup?)
                     .chain(call_soup?)
@@ -2001,11 +2036,32 @@ where
                     .paginate_on(limit.into(), sort_method)
                     .filter_on(entity_filter);
 
-                let page = match sort_direction {
+                let mut page = match sort_direction {
                     SoupSortDirection::Asc => paginator.sort_asc(),
                     SoupSortDirection::Desc => paginator.sort_desc(),
                 }
                 .into_page();
+                // A page the email read cut short goes on below where it
+                // walked. One cursor serves every leg, so only when email is
+                // the page's only source (Mail's lists) and newest first.
+                if page.next_cursor.is_none()
+                    && matches!(sort_direction, SoupSortDirection::Desc)
+                    && page
+                        .items
+                        .iter()
+                        .all(|candidate| matches!(candidate.item, SoupItem::EmailThread(_)))
+                    && let Some((last_val, id)) = email_continues_below
+                {
+                    page.next_cursor = Some(Base64Str::encode_json(Cursor {
+                        id: id.to_string(),
+                        limit: limit.into(),
+                        val: CursorVal {
+                            sort_type: sort_method,
+                            last_val,
+                        },
+                        filter: entity_filter_for_cursor,
+                    }));
+                }
 
                 Ok(SoupOutput::Simple(page))
             }

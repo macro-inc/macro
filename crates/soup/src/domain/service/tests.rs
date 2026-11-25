@@ -3542,3 +3542,122 @@ async fn notified_soup_rejects_unfoldable_calendar_filters() {
 
     assert_matches!(err, SoupErr::NotifiedUnsupportedFilter("calendar_event"));
 }
+
+/// An email read that spent its walk: no threads, and a cursor below the
+/// last thread it walked.
+struct ContinuingEmailPreviewService {
+    walked_to: (DateTime<Utc>, Uuid),
+}
+
+impl EmailPreviewServiceReadOnly for ContinuingEmailPreviewService {
+    async fn get_email_thread_previews(
+        &self,
+        _req: email::domain::models::GetEmailsRequest,
+    ) -> Result<
+        PaginatedCursor<EnrichedEmailThreadPreview, Uuid, SimpleSortMethod, ()>,
+        email::domain::models::EmailErr,
+    > {
+        let (last_val, id) = self.walked_to;
+        Ok(models_pagination::Paginated::from_parts(
+            Vec::new(),
+            Some(models_pagination::Base64Str::encode_json(Cursor {
+                id,
+                limit: 20,
+                val: CursorVal {
+                    sort_type: SimpleSortMethod::UpdatedAt,
+                    last_val,
+                },
+                filter: (),
+            })),
+        ))
+    }
+}
+
+fn email_list_request(user: MacroUserIdStr<'static>) -> SoupRequest<EntityFilters> {
+    SoupRequest {
+        sort_direction: SoupSortDirection::default(),
+        email_preview_view: PreviewView::StandardLabel(
+            email::domain::models::PreviewViewStandardLabel::All,
+        ),
+        link_ids: vec![Uuid::from_u128(8)],
+        soup_type: SoupType::UnExpanded,
+        limit: 20,
+        cursor: SoupQuery::new_sort_simple(SimpleSortMethod::UpdatedAt, EntityFilters::default()),
+        user,
+    }
+}
+
+/// A Mail list page the email read cut short goes on below where it walked,
+/// so the list reads on instead of ending on an empty page.
+#[tokio::test]
+async fn a_short_email_page_goes_on_below_where_the_read_walked() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let walked_to = (DateTime::default() + Days::new(3), Uuid::from_u128(9));
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        ContinuingEmailPreviewService { walked_to },
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopPullRequestListing,
+    )
+    .get_user_soup(email_list_request(user), None)
+    .await
+    .unwrap()
+    .into_simple()
+    .unwrap();
+
+    assert!(page.items.is_empty());
+    let cursor: CursorWithValAndFilter<String, SimpleSortMethod, EntityFilters> = page
+        .next_cursor
+        .expect("the list goes on")
+        .decode_json()
+        .unwrap();
+    assert_eq!(cursor.id, walked_to.1.to_string());
+    assert_eq!(cursor.val.last_val, walked_to.0);
+}
+
+/// One cursor serves every leg, so a page holding another entity's row ends
+/// as before rather than skipping that leg's rows below the email walk.
+#[tokio::test]
+async fn a_short_page_with_other_rows_keeps_its_own_end() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let comms_service = RecordingCommsService::new(vec![channel_thread_message(
+        Uuid::from_u128(0xaaaa),
+        Uuid::from_u128(0xbbbb),
+        Uuid::from_u128(0xcccc),
+        DateTime::default() + Days::new(2),
+    )]);
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        ContinuingEmailPreviewService {
+            walked_to: (DateTime::default() + Days::new(3), Uuid::from_u128(9)),
+        },
+        comms_service,
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopPullRequestListing,
+    )
+    .get_user_soup(email_list_request(user), None)
+    .await
+    .unwrap()
+    .into_simple()
+    .unwrap();
+
+    assert_eq!(page.items.len(), 1);
+    assert!(page.next_cursor.is_none());
+}
