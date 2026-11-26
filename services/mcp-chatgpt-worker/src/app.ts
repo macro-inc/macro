@@ -205,6 +205,9 @@ function protectedResourceMetadata(config: Config) {
   };
 }
 
+/** Whether the public MCP server refused this request's bearer. */
+type Upstream = { unauthorized: boolean };
+
 /** The 401 that sends an MCP client to the authorization server (RFC 9728). */
 function unauthorized(config: Config) {
   const metadata = new URL(
@@ -399,12 +402,14 @@ export function createHandler(config: Config) {
    * An MCP Events request, answered by the public MCP server as the bearer's
    * user. Person tokens in its arguments go back to the ids they replaced
    * (only there: the callback URL and secret are forwarded as sent), and any
-   * that come back are sealed again.
+   * that come back are sealed again. A bearer the public MCP server refuses
+   * marks `upstream`, so the HTTP request is answered with a 401.
    */
   async function forwardEvents(
     method: EventsMethod,
     params: Record<string, unknown> | undefined,
-    token: string
+    token: string,
+    upstream: Upstream
   ): Promise<Record<string, unknown>> {
     return Telemetry.span('mcp_chatgpt.events', async (span) => {
       span.setAttr('mcp.method', method);
@@ -459,6 +464,18 @@ export function createHandler(config: Config) {
         }),
       });
       span.setAttr('http.response.status_code', response.status);
+      if (response.status === 401) {
+        // The bearer expired or was revoked. Only an HTTP 401 sends the
+        // client back to sign in; a JSON-RPC error would not.
+        await response.body?.cancel();
+        upstream.unauthorized = true;
+        span.setAttr('mcp.outcome', 'unauthorized');
+        throw new RelayedError(
+          ErrorCode.InternalError,
+          'Sign in to Macro.',
+          undefined
+        );
+      }
       const relayed = RELAYED.safeParse(
         await response.json().catch(() => undefined)
       );
@@ -472,11 +489,12 @@ export function createHandler(config: Config) {
       }
       if ('error' in relayed.data) {
         const { code, message, data } = relayed.data.error;
+        const concealed = await concealAnswer(span, people, { message, data });
         span.setAttr('mcp.outcome', String(code));
         throw new RelayedError(
           code,
-          String(await people.conceal(message)),
-          await people.conceal(data)
+          String(concealed.message),
+          concealed.data
         );
       }
       const { _meta: meta, ...result } = relayed.data.result;
@@ -492,16 +510,35 @@ export function createHandler(config: Config) {
           undefined
         );
       }
+      const concealed = await concealAnswer(span, people, result);
       span.setAttr('mcp.outcome', 'ok');
-      return (await people.conceal(result)) as Record<string, unknown>;
+      return concealed as Record<string, unknown>;
     });
   }
 
-  function mcpServer(token: string) {
+  /** `answer` with its people sealed, or an internal error if they can't be. */
+  async function concealAnswer<T>(
+    span: { setAttr(key: string, value: string): void },
+    people: ReturnType<typeof personTokens>,
+    answer: T
+  ): Promise<T> {
+    try {
+      return (await people.conceal(answer)) as T;
+    } catch {
+      span.setAttr('mcp.outcome', 'internal');
+      throw new RelayedError(
+        ErrorCode.InternalError,
+        "Couldn't protect people in the answer.",
+        undefined
+      );
+    }
+  }
+
+  function mcpServer(token: string, upstream: Upstream) {
     const server = new Server(SERVER_INFO, { capabilities: CAPABILITIES });
     for (const method of EVENTS_METHODS)
       server.setRequestHandler(eventsRequestSchema(method), (request) =>
-        forwardEvents(method, request.params, token)
+        forwardEvents(method, request.params, token, upstream)
       );
     server.setRequestHandler(ListToolsRequestSchema, () => ({
       tools: [...listed, PEOPLE_LISTED],
@@ -538,14 +575,18 @@ export function createHandler(config: Config) {
     const token = bearerToken(request);
     if (!token) return unauthorized(config);
 
-    const server = mcpServer(token);
+    const upstream: Upstream = { unauthorized: false };
+    const server = mcpServer(token, upstream);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
     await server.connect(transport);
-    return match(request.method)
+    const response = await match(request.method)
       .with('POST', 'GET', 'DELETE', () => transport.handleRequest(request))
       .otherwise(() => new Response('Method not allowed', { status: 405 }));
+    // JSON responses are built after every handler ran, so a refused bearer
+    // is known here.
+    return upstream.unauthorized ? unauthorized(config) : response;
   };
 }
