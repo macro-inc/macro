@@ -5,6 +5,7 @@ resolver = "2"
 exclude = ["vendor", "crates/password_import/fuzz"]
 
 members = [
+  "crates/egress_guard",
   "crates/passwords",
   "crates/password_events",
   "crates/password_import",

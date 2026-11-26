@@ -15,6 +15,55 @@ use strum::AsRefStr;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+/// Known evidence that message data was never accepted; never inferred from HTTP status alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SendRejectionReason {
+    /// The provider explicitly refused the envelope or DATA command.
+    ProviderRejected,
+    /// A bounded connection retry ended before any DATA bytes were submitted.
+    ConnectionUnavailable,
+}
+
+/// The SMTP command refused before any message body byte was sent.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum SubmissionRefusalPhase {
+    /// MAIL FROM was refused.
+    Sender,
+    /// One RCPT TO was refused; no accepted recipient receives DATA.
+    Recipient,
+    /// DATA was refused before the body, or advertised capabilities cannot carry it.
+    Message,
+}
+
+/// Closed SMTP refusal class; neither variant authorizes automatic resubmission.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum SubmissionRefusalClass {
+    /// A 4xx reply permits a later deliberate retry.
+    Temporary,
+    /// A 5xx reply requires correcting the envelope or message.
+    Permanent,
+}
+
+/// Non-submission evidence without provider text or recipient addresses.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, schemars::JsonSchema,
+)]
+pub struct SubmissionRefusal {
+    /// Which command was refused.
+    pub phase: SubmissionRefusalPhase,
+    /// Zero-based position in the frozen To, Cc, then Bcc envelope; recipient refusals only.
+    pub recipient_index: Option<u16>,
+    /// Sanitized SMTP reply class; absent for a local capability/size rejection.
+    pub reply_class: Option<SubmissionRefusalClass>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ParsedMessage {
     /// Draft edit generation captured with this message snapshot.

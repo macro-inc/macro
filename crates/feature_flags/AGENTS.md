@@ -14,6 +14,8 @@ for authenticated Macro users or explicit global service contexts; one load retu
 - `src/outbound/posthog_local.rs`: evaluates named boolean flags in memory
   from polled definitions; fails closed on any condition it doesn't support.
 - `src/outbound/fake.rs`: the in-memory adapter for tests.
+- `src/polling.rs`: cancellable, 60-second default-off global switches; missing
+  adapters, missing flags and failed loads explicitly disable the switch.
 
 ## Scope
 

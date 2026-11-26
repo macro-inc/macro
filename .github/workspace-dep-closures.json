@@ -6747,6 +6747,10 @@
       "crates/s3_key",
       "crates/workspace-hack"
     ],
+    "egress_guard": [
+      "crates/egress_guard",
+      "crates/workspace-hack"
+    ],
     "email": [
       "crates/activity",
       "crates/agent",
