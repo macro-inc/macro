@@ -862,3 +862,41 @@ fn a_view_keeps_only_its_last_reads_observation() {
         assert!(!unchanged.contains(&released.observation_id));
     });
 }
+
+#[test]
+fn a_view_drops_its_old_observation_after_many_other_views_read() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        seed(&mut engine, "a", 1).await;
+        let unrelated = |n: usize| {
+            (
+                EntityKey::entity("GraphqlUser", &["viewer"]),
+                Record {
+                    fields: BTreeMap::from([("n".into(), CacheValue::String(n.to_string()))]),
+                },
+            )
+        };
+        let first = engine.read_live_query("view", spec(), None).await.unwrap();
+        // Proofs after each write keep the first window recent while more views
+        // than the live-view bound read.
+        for n in 0..300 {
+            engine
+                .read_live_query(&format!("other-{n}"), spec(), None)
+                .await
+                .unwrap();
+            engine
+                .put_records_with_projections(None, vec![unrelated(n)], vec![])
+                .await
+                .unwrap();
+            engine.unchanged_observed_windows().await.unwrap();
+        }
+        let second = engine.read_live_query("view", spec(), None).await.unwrap();
+        engine
+            .put_records_with_projections(None, vec![unrelated(300)], vec![])
+            .await
+            .unwrap();
+        let unchanged = engine.unchanged_observed_windows().await.unwrap();
+        assert!(unchanged.contains(&second.observation_id));
+        assert!(!unchanged.contains(&first.observation_id));
+    });
+}
