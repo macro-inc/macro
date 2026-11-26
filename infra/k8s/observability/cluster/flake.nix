@@ -50,6 +50,10 @@
               mv "$file" "$(dirname "$file")/$(basename "$file" | tr : _)"
             done
           '';
+          # Committed as modules/derived-metrics/MAPPING.md.
+          derived-metrics-mapping = pkgs.writeText "MAPPING.md" (
+            import ./modules/derived-metrics/mapping.nix { inherit (pkgs) lib; }
+          );
           inherit (tools)
             render
             check

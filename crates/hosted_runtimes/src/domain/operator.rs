@@ -27,6 +27,8 @@ mod image_upgrade;
 pub use image_upgrade::start_image_upgrade;
 mod moves;
 mod relief;
+#[cfg(feature = "outbound")]
+mod runtime_update;
 #[cfg(test)]
 mod test;
 

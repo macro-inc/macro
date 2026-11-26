@@ -7,6 +7,10 @@ import type { Pipeline } from '../core/pipeline';
 import type { CrmRecordDependencies } from './dependencies';
 import { createPipelineTransfer } from './pipeline-transfer';
 
+const refreshGraphqlLists = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('@queries/soup/graphql/active-queries', () => ({
+  refreshActiveGraphqlSoupQueries: refreshGraphqlLists,
+}));
 vi.mock('./export', () => ({
   fetchCrmExportCompanies: async () => [
     { id: 'acme-id', name: 'Acme', domains: [{ domain: 'acme.com' }] },
@@ -207,5 +211,19 @@ describe('pipeline transfer', () => {
       column: 'stage',
       change: { kind: 'add_options', options: [{ label: 'Won' }] },
     });
+  });
+
+  it('reads GraphQL lists that can show the imported records again', async () => {
+    refreshGraphqlLists.mockClear();
+    const { transfer } = setup();
+    await transfer.refresh();
+    expect(refreshGraphqlLists).toHaveBeenCalledOnce();
+    const [{ where }] = refreshGraphqlLists.mock.calls[0] as unknown as [
+      { where: (body: unknown) => boolean },
+    ];
+    const excluded = { l: { id: '00000000-0000-0000-0000-000000000000' } };
+    expect(where({ ccf: { l: { id: 'other' } } })).toBe(true);
+    expect(where({ ccf: excluded, crmf: { l: { id: 'other' } } })).toBe(true);
+    expect(where({ ccf: excluded })).toBe(false);
   });
 });

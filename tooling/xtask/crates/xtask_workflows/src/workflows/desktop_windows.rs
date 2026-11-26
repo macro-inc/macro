@@ -1,0 +1,313 @@
+//! The Windows desktop installer: a per-user NSIS installer around the wry
+//! (WebView2) app, built with MSVC on the Namespace Windows runner from a
+//! frontend Nix builds on Linux, and launched on a GitHub-hosted Windows runner,
+//! since WebView2 cannot start on the Namespace one.
+//!
+//! [`super::build_desktop_on_tag`] runs these jobs on every desktop tag; the
+//! installer is Authenticode-signed when the signing variables are set (see
+//! [`vars::WINDOWS_SIGNING_AZURE_TENANT_ID`]) and published only when
+//! [`vars::WINDOWS_DESKTOP_RELEASE`] also allows it. A Windows failure never
+//! holds back the macOS and Linux release, but the release waits for the
+//! Windows jobs to end, so keep the signing environment free of required
+//! reviewers and wait timers.
+//!
+//! Every build installs the installer silently and checks what it registered;
+//! the launch job installs it again, launches it, checks that Macro and
+//! WebView2 start and stay up, and uninstalls, and only then uploads it for the
+//! release. `Desktop Windows smoke` does the same, unsigned, for pull requests
+//! that touch the app; its build alone opens WebView2's DevTools port
+//! ([`DEVTOOLS_PORT`]), so its launch job also checks the page loaded. `PR CI`
+//! calls it outside `CI gate`. Generated into `desktop_windows.yml`.
+
+use gh_workflow::expr::typed::{
+    Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, github,
+};
+use gh_workflow::{
+    Environment, Event, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowCall,
+    WorkflowDispatch,
+};
+use xtask_paths::RepoGlob;
+
+use crate::workflows::actions::ActionsDownloadArtifact;
+use crate::workflows::{build_appimage_on_tag, runners, steps, vars};
+
+#[cfg(test)]
+mod test;
+
+/// The tauri-cli release nixpkgs bundles the AppImage with.
+const TAURI_CLI_VERSION: &str = "2.11.4";
+
+/// WebView2's DevTools port in the pull request smoke build, which is never
+/// signed or published. Tauri's WebView2 switches make WebView2 ignore
+/// `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` and its per-app policy, so the
+/// build sets the window's `additionalBrowserArgs` instead.
+const DEVTOOLS_PORT: &str = "9222";
+
+/// The GitHub environment whose OIDC subject the signing identity trusts:
+/// `repo:macro-inc/macro:environment:desktop-windows-signing`.
+const SIGNING_ENVIRONMENT: &str = "desktop-windows-signing";
+
+/// Files whose change makes `PR CI` call the smoke workflow: the app, the
+/// Tauri crates it links on Windows, and this build.
+pub const PATHS: &[RepoGlob<'static>] = &[
+    xtask_paths::repo_glob!("apps/web/tauri/src-tauri/**"),
+    xtask_paths::repo_glob!("apps/web/tauri/Cargo.toml"),
+    xtask_paths::repo_glob!("apps/web/tauri/Cargo.lock"),
+    xtask_paths::repo_glob!("apps/web/tauri/graphql_cache_plugin/**"),
+    xtask_paths::repo_glob!("apps/web/tauri/logger/**"),
+    xtask_paths::repo_glob!("apps/web/tauri/macro_bundle_updater_plugin/**"),
+    xtask_paths::repo_glob!("apps/web/tauri/navigation_plugin/**"),
+    xtask_paths::repo_glob!("apps/web/tauri/ios_push_plugin/**"),
+    xtask_paths::repo_glob!("apps/web/tauri/staged_upload_constants/**"),
+    xtask_paths::repo_glob!("apps/web/scripts/desktop-release.mjs"),
+    xtask_paths::repo_glob!(
+        "tooling/xtask/crates/xtask_workflows/src/workflows/desktop_windows.rs"
+    ),
+    xtask_paths::repo_glob!("tooling/xtask/crates/xtask_workflows/src/workflows/scripts/*windows*"),
+    xtask_paths::repo_glob!(".github/workflows/desktop_windows.yml"),
+];
+
+/// Builds the frontend the Windows job bundles.
+pub(crate) const WINDOWS_FRONTEND: JobHandle<()> = JobHandle::new("build-windows-frontend", ());
+pub(crate) struct BuildWindowsOutputs {
+    /// The installer and what it installs are signed.
+    signed: JobOutput<Flag>,
+    /// The installer may reach the release, the feed and the download pages.
+    publish: JobOutput<Flag>,
+}
+
+/// Builds the installer, checks what it installs and uploads it.
+pub(crate) const BUILD_WINDOWS: JobHandle<BuildWindowsOutputs> = JobHandle::new(
+    "build-windows",
+    BuildWindowsOutputs {
+        signed: JobOutput::new("build-windows", "signed"),
+        publish: JobOutput::new("build-windows", "publish"),
+    },
+);
+/// Launches the installed app and uploads the installer for the release when
+/// it may be published.
+pub(crate) const LAUNCH_WINDOWS: JobHandle<()> = JobHandle::new("launch-windows", ());
+
+struct SigningOutputs {
+    /// The installer and what it installs will be signed.
+    signed: StepOutput<Flag>,
+    /// The installer may reach the release, the feed and the download pages.
+    publish: StepOutput<Flag>,
+}
+
+const SIGNING: StepHandle<SigningOutputs> = StepHandle::new(
+    "signing",
+    SigningOutputs {
+        signed: StepOutput::new("signing", "signed"),
+        publish: StepOutput::new("signing", "publish"),
+    },
+);
+
+/// How a Windows build ends.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Purpose {
+    /// A desktop tag: signed and published when configured to be.
+    Release,
+    /// A pull request: unsigned, never published, no PostHog key, with
+    /// WebView2's DevTools port open.
+    Smoke,
+}
+
+/// Build the smoke workflow.
+pub fn desktop_windows_smoke() -> Workflow {
+    Workflow::new("Desktop Windows smoke")
+        .permissions(Permissions {
+            contents: Some(Level::Read),
+            ..Default::default()
+        })
+        .on(Event::default()
+            .workflow_call(WorkflowCall::default())
+            .workflow_dispatch(WorkflowDispatch::default()))
+        .add_job(
+            WINDOWS_FRONTEND,
+            frontend_job(github().git_ref(), Purpose::Smoke),
+        )
+        .add_job(
+            BUILD_WINDOWS,
+            windows_job(github().git_ref(), Purpose::Smoke).add_needs(WINDOWS_FRONTEND),
+        )
+        .add_job(
+            LAUNCH_WINDOWS,
+            launch_job(github().git_ref(), Purpose::Smoke).add_needs(BUILD_WINDOWS),
+        )
+}
+
+fn frontend_artifact() -> String {
+    format!(
+        "windows-frontend-{}",
+        steps::ARTIFACT_METADATA.outputs.safe_tag.read()
+    )
+}
+
+/// Builds `.#tauri-frontend` with the release identity of `ref_expr` and
+/// uploads it with the Tauri configs the Windows build merges: the release
+/// identity and, for [`Purpose::Smoke`], the DevTools switches.
+pub(crate) fn frontend_job(ref_expr: Expr<Str>, purpose: Purpose) -> Job {
+    let build = Step::new("Build frontend with Nix")
+        .run(include_str!("scripts/build_windows_frontend.sh"))
+        .shell("bash");
+    let build = match purpose {
+        Purpose::Release => build
+            .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
+            .add_env(("REQUIRE_POSTHOG_API_KEY", "true")),
+        Purpose::Smoke => build.add_env(("DEVTOOLS_PORT", DEVTOOLS_PORT)),
+    };
+    Job::default()
+        .name("Build Windows frontend")
+        .runs_on(runners::Runner::Mid.with_cache_tag("desktop-windows-frontend"))
+        .timeout_minutes(45u32)
+        .add_step(steps::checkout_ref(ref_expr.clone()))
+        .add_step(steps::mount_nix_cache_volume())
+        .add_step(steps::setup_nix())
+        .add_step(steps::derive_artifact_metadata(ref_expr.clone()))
+        .add_step(build_appimage_on_tag::prepare_desktop_release(ref_expr))
+        .add_step(build)
+        .add_step(steps::upload_artifact(
+            &frontend_artifact(),
+            xtask_paths::runtime_path!("windows-input"),
+        ))
+        .add_step(steps::teardown_nix())
+}
+
+/// Builds the installer, installs it and checks what it registered, then
+/// uploads it for [`launch_job`].
+pub(crate) fn windows_job(ref_expr: Expr<Str>, purpose: Purpose) -> Job {
+    let configure_signing = match purpose {
+        Purpose::Release => configure_signing().add_env((
+            "SIGN",
+            ref_expr
+                .clone()
+                .starts_with("refs/tags/v")
+                .then_else::<Str>("true", "false"),
+        )),
+        Purpose::Smoke => configure_signing().add_env(("SIGN", "false")),
+    };
+    let job = Job::default()
+        .name("Build Windows installer")
+        .runs_on(runners::Runner::Windows.to_string())
+        // A cold build compiles macrod, tauri-cli and the app in release.
+        .timeout_minutes(120u32)
+        .add_env(("TAURI_CLI_VERSION", TAURI_CLI_VERSION))
+        .add_step(steps::checkout_ref(ref_expr.clone()))
+        .add_step(steps::setup_rust_light())
+        .add_step(steps::derive_artifact_metadata(ref_expr))
+        .add_step(
+            ActionsDownloadArtifact::new("Download frontend")
+                .name(frontend_artifact())
+                .path("windows-input")
+                .step(),
+        )
+        .add_step(configure_signing)
+        .add_step(
+            Step::new("Build bundled macrod")
+                .run(include_str!("scripts/build_agent_daemon_windows.sh"))
+                .shell("bash")
+                .add_env(("TARGET", "x86_64-pc-windows-msvc")),
+        )
+        .add_step(
+            Step::new("Build installer")
+                .run(include_str!("scripts/build_windows_installer.sh"))
+                .shell("bash"),
+        )
+        .add_step(
+            Step::new("Install and check")
+                .run(include_str!("scripts/windows_installer_smoke.ps1"))
+                .shell("pwsh")
+                .add_env(("EXPECT_SIGNED", SIGNING.outputs.signed.read())),
+        )
+        .add_output(
+            BUILD_WINDOWS.outputs.signed.name(),
+            SIGNING.outputs.signed.read(),
+        )
+        .add_output(
+            BUILD_WINDOWS.outputs.publish.name(),
+            SIGNING.outputs.publish.read(),
+        )
+        .add_step(steps::upload_artifact(
+            &installer_artifact(),
+            xtask_paths::runtime_path!("artifacts/*"),
+        ));
+    match purpose {
+        Purpose::Release => job
+            .permissions(Permissions {
+                contents: Some(Level::Read),
+                // The signing dlib exchanges the job's OIDC token for Azure.
+                id_token: Some(Level::Write),
+                ..Default::default()
+            })
+            .environment(Environment {
+                name: SIGNING_ENVIRONMENT.to_string(),
+                url: None,
+            })
+            .add_env(("AZURE_TENANT_ID", vars::WINDOWS_SIGNING_AZURE_TENANT_ID))
+            .add_env(("AZURE_CLIENT_ID", vars::WINDOWS_SIGNING_AZURE_CLIENT_ID))
+            .add_env(("ARTIFACT_SIGNING_ENDPOINT", vars::WINDOWS_SIGNING_ENDPOINT))
+            .add_env(("ARTIFACT_SIGNING_ACCOUNT", vars::WINDOWS_SIGNING_ACCOUNT))
+            .add_env(("ARTIFACT_SIGNING_PROFILE", vars::WINDOWS_SIGNING_PROFILE))
+            .add_env(("WINDOWS_DESKTOP_RELEASE", vars::WINDOWS_DESKTOP_RELEASE)),
+        Purpose::Smoke => job,
+    }
+}
+
+fn configure_signing() -> Step<Run> {
+    Step::new("Configure Authenticode signing")
+        .run(include_str!("scripts/configure_windows_signing.ps1"))
+        .shell("pwsh")
+        .id(SIGNING.id())
+}
+
+/// The installer as built, which stays in the workflow run for people to test.
+fn installer_artifact() -> String {
+    format!(
+        "windows-installer-{}",
+        steps::ARTIFACT_METADATA.outputs.safe_tag.read()
+    )
+}
+
+/// Installs the built installer, launches Macro, checks that it and WebView2
+/// start and stay up (and, for [`Purpose::Smoke`], that its page loaded), and
+/// uninstalls. A Namespace Windows runner cannot do this part: it runs jobs
+/// elevated in session 0, where WebView2 fails to start (0x80080005).
+pub(crate) fn launch_job(ref_expr: Expr<Str>, purpose: Purpose) -> Job {
+    let launch = Step::new("Install, launch and uninstall")
+        .run(include_str!("scripts/windows_installer_smoke.ps1"))
+        .shell("pwsh")
+        .add_env(("INSTALLER", "artifacts/*-windows-setup.exe"))
+        .add_env(("EXPECT_SIGNED", BUILD_WINDOWS.outputs.signed.read()))
+        .add_env(("LAUNCH", "true"));
+    let launch = match purpose {
+        Purpose::Release => launch,
+        Purpose::Smoke => launch.add_env(("DEVTOOLS_PORT", DEVTOOLS_PORT)),
+    };
+    Job::default()
+        .name("Launch Windows installer")
+        .runs_on(runners::GITHUB_WINDOWS)
+        .timeout_minutes(20u32)
+        .add_step(steps::derive_artifact_metadata(ref_expr))
+        .add_step(
+            ActionsDownloadArtifact::new("Download installer")
+                .name(installer_artifact())
+                .path("artifacts")
+                .step(),
+        )
+        .add_step(launch)
+        .add_step(upload_release_installer())
+}
+
+/// `macro-windows-*` joins the release's `macro-*` build artifacts, once the
+/// installed app has launched.
+fn upload_release_installer() -> Step<Use> {
+    steps::upload_artifact(
+        &format!(
+            "macro-windows-{}",
+            steps::ARTIFACT_METADATA.outputs.safe_tag.read()
+        ),
+        xtask_paths::runtime_path!("artifacts/*"),
+    )
+    .if_condition(BUILD_WINDOWS.outputs.publish.read().is_set())
+}

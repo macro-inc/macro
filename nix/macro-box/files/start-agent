@@ -79,7 +79,7 @@ begin
 count=$(cat "$failures" 2>/dev/null || echo 0)
 good=$(cat "$last_good" 2>/dev/null || true)
 head=$(wgit rev-parse HEAD)
-if ((count >= max_failed_boots)) && [[ -n $good && $good != "$head" ]]; then
+if ((count >= max_failed_boots)) && [[ -n $good && $good != "$head" && ! -e ${runtime_control:-/nonexistent}/fence ]]; then
   echo "rolling back from $head to last-good $good after $count failed boots" >&2
   rollback=$(wgit commit-tree "$good^{tree}" -p "$head" \
     -m "revert(agent): roll back to last-good ${good:0:12} after $count failed boots")
@@ -126,7 +126,21 @@ dependencies_edited() {
   [[ $ours != "$theirs" ]]
 }
 begin
-if ! cmp -s "$workspace/bun.lock" "$runtime/bun.lock"; then
+# Only an image can adopt a workspace lockfile. A service-only update uses
+# the already staged, compatible modules while leaving the behavior intact.
+image_runtime=$runtime
+if [[ -n ${runtime_bundles:-} ]]; then
+  export MACRO_AGENT_RUNTIME_ID=image
+  export MACRO_AGENT_RUNTIME_CONTROL=$runtime_control
+  if [[ -L $runtime_bundles/current ]]; then
+    runtime_version=$(readlink "$runtime_bundles/current")
+    [[ $runtime_version =~ ^[0-9a-f]{40}$ ]] || exit 79
+    runtime="$runtime_bundles/$runtime_version"
+    MACRO_AGENT_RUNTIME_ID=$(cat "$runtime/identity")
+  fi
+fi
+if [[ $runtime == "$image_runtime" && ! -e ${runtime_control:-/nonexistent}/fence ]] &&
+  ! cmp -s "$workspace/bun.lock" "$runtime/bun.lock"; then
   if dependencies_edited; then
     echo "bun.lock differs from the image's and the agent changed its dependencies; new packages need a new image" >&2
     exit 1
@@ -140,8 +154,13 @@ if ! cmp -s "$workspace/bun.lock" "$runtime/bun.lock"; then
 fi
 modules=$workspace/node_modules
 if [[ "$(readlink "$modules" || true)" != "$runtime/node_modules" ]]; then
-  rm -rf "$modules"
-  ln -s "$runtime/node_modules" "$modules"
+  if [[ -L $modules ]]; then
+    ln -sfn "$runtime/node_modules" "$modules.new"
+    mv -Tf "$modules.new" "$modules"
+  else
+    rm -rf "$modules"
+    ln -s "$runtime/node_modules" "$modules"
+  fi
 fi
 finish packages
 
@@ -221,5 +240,10 @@ fi
 cd "$workspace"
 echo "starting the runtime at $head" >&2
 MACRO_LAUNCH_TIMINGS="$launch_timings,exec:$(now)"
+export MACRO_AGENT_RUNTIME_REVISION=$head
 export MACRO_LAUNCH_TIMINGS
+preload="$runtime/node_modules/@macro-inc/muppet/host/maintenance.ts"
+if [[ -n ${runtime_bundles:-} && -f $preload ]]; then
+  exec bun --preload "$preload" "$workspace/cli.ts" run
+fi
 exec bun "$workspace/cli.ts" run

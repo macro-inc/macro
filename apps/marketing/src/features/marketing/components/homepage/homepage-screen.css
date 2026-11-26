@@ -33,6 +33,11 @@
   filter: drop-shadow(0 2px 5px #0006) drop-shadow(0 30px 56px #0008);
 }
 
+/* A light window needs less shadow to lift off the wallpaper. */
+.homepage-screen-window.palette-light-only {
+  filter: drop-shadow(0 1px 3px #0003) drop-shadow(0 24px 48px #0005);
+}
+
 .homepage-screen[data-fit='bleed'] {
   padding: 56px 0 0 56px;
 }

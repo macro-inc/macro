@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT computer.id FROM hosted_runtime computer\n            JOIN hosted_runtime_host host ON host.id = computer.host_id\n            WHERE computer.id = $1 AND computer.agent_user_id IS NOT NULL\n              AND computer.hibernated_at IS NULL AND host.endpoint IS NOT NULL\n              AND computer.state->'phase'->>'phase' = 'running'\n            FOR UPDATE OF computer\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f4aeec83c00bc1e4aff7d8c0fb236fd24d8f719989e4e725dbbd09d0f2206767"
+}

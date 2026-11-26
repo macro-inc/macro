@@ -184,7 +184,7 @@ test('waits for IME composition before predicting from the mobile editor', async
   await expect(input).toBeFocused();
 });
 
-test('uses live global search filters on mobile and opens a filtered hit directly', async ({
+test('writes the search filters into Search for on mobile and opens a filtered hit directly', async ({
   page,
 }) => {
   await page.goto('/?mobile-search&eligible');
@@ -196,9 +196,9 @@ test('uses live global search filters on mobile and opens a filtered hit directl
     exact: true,
   });
   await input.fill('search messages from julia in #sales about budget');
-  const filters = page.getByLabel('Search filters');
-  await expect(filters.getByText('Channels', { exact: true })).toBeVisible();
-  await expect(filters.getByText('Julia Jones', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('textbox', { name: 'Search for', exact: true })
+  ).toHaveText('type:channel in:#sales from:julia@macro.com budget');
   const results = page.getByRole('listbox', {
     name: 'Search results',
     exact: true,
@@ -206,7 +206,7 @@ test('uses live global search filters on mobile and opens a filtered hit directl
   await expect(results.getByRole('option')).toHaveCount(1);
   await expect(results).toContainText('Julia shared the budget');
   await expect(page.getByTestId('global-search-requests')).toContainText(
-    '"sender_ids":["macro|julia@macro.com"]'
+    '"query":"type:channel from:julia@macro.com budget"'
   );
   await expect(page.getByTestId('global-search-requests')).toContainText(
     '"channel_ids":["sales-channel"]'

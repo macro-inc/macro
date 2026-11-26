@@ -11,6 +11,9 @@ pub enum PropertyDefinitionValidationError {
         min: usize,
         max: usize,
     },
+
+    #[error("Option values cannot be empty or whitespace")]
+    EmptyOptionValue,
 }
 
 /// Errors that can occur during property option validation

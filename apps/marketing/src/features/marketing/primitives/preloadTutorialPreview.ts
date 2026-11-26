@@ -1,3 +1,4 @@
+import { sitePalette } from '../../setup/sitePalette';
 import {
   type TutorialVideoId,
   tutorialPreviewUrl,
@@ -35,5 +36,5 @@ export function preloadTutorialPreview(path: string) {
   const tutorial = PAGE_TUTORIALS[path];
   if (!tutorial || requested.has(tutorial)) return;
   requested.add(tutorial);
-  new Image().src = tutorialPreviewUrl(tutorial);
+  new Image().src = tutorialPreviewUrl(tutorial, sitePalette() === 'cream');
 }

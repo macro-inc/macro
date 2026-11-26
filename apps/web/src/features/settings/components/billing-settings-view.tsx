@@ -1,10 +1,22 @@
-import { type PaidPlanTier, PLAN_BY_TIER } from '@app/features/paywall/plans';
+import { BillingCycleDialog } from '@app/features/paywall/components/billing-cycle-dialog';
+import {
+  defaultInterval,
+  type PaidPlanTier,
+  PLAN_BY_TIER,
+  type PlanTier,
+  soldAt,
+} from '@app/features/paywall/plans';
 import { plural } from '@core/util/string';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import { Button, Layer } from '@ui';
-import { For, type JSX, Match, Show, Switch } from 'solid-js';
-import { type BillingState, describeSeatPlans } from '../core/billing-state';
+import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  type BillingState,
+  cardInterval,
+  describeSeatPlans,
+} from '../core/billing-state';
 import { SettingsCard, SettingsPage } from '../primitives';
 import { BillingPlanCard, PlanFeatures } from './billing-plan-card';
 
@@ -12,7 +24,7 @@ export function BillingSettingsView(props: {
   state: BillingState;
   controls?: JSX.Element;
   renewalDate?: string;
-  scheduledChange?: { plan: 'free' | 'premium' | 'max'; effectiveAt: string };
+  scheduledChange?: { plan: PlanTier; effectiveAt: string };
   subscriptionStatusFailed?: boolean;
   onRefreshStatus?: () => void;
   trialEligibilityFailed?: boolean;
@@ -20,11 +32,30 @@ export function BillingSettingsView(props: {
   onKeepPlan?: (plan: PaidPlanTier) => void;
   teamSeatDescription?: string;
   onManage: () => void;
-  onSelectPlan: (plan: PaidPlanTier) => void;
+  onSelectPlan: (plan: PaidPlanTier, interval: BillingInterval) => void;
   onTeamSettings?: JSX.EventHandler<HTMLAnchorElement, MouseEvent>;
   /** The subscription breakdown, or the computers list when billing is unavailable. */
   computers?: JSX.Element;
 }) {
+  // Free-tier checkouts for plans with annual and monthly options confirm
+  // the billing cycle in a compact dialog before launching Stripe Checkout.
+  const [cyclePlan, setCyclePlan] = createSignal<PaidPlanTier | null>(null);
+  const handleSelectPlan = (plan: PaidPlanTier, interval: BillingInterval) => {
+    if (!props.state.hasPaid && PLAN_BY_TIER[plan].annualPrice !== undefined) {
+      setCyclePlan(plan);
+      return;
+    }
+    props.onSelectPlan(plan, interval);
+  };
+  // A paid plan change keeps the subscription's interval, so until it is
+  // known no card is priced or offered.
+  const offeredPlans = () =>
+    (['premium', 'business', 'max'] as const).filter((plan) => {
+      if (!props.state.hasPaid) return true;
+      const interval = props.state.interval;
+      if (interval === undefined || plan === props.state.tier) return false;
+      return soldAt(plan, interval);
+    });
   const formatDate = (value: string | undefined) => {
     if (!value) return;
     const date = new Date(value);
@@ -220,6 +251,7 @@ export function BillingSettingsView(props: {
         when={
           props.state.canChangePlan &&
           props.state.tier !== 'max' &&
+          offeredPlans().length > 0 &&
           (props.state.hasPaid || !props.state.existingSubscription)
         }
       >
@@ -251,25 +283,37 @@ export function BillingSettingsView(props: {
           <div
             class="grid grid-cols-1 gap-6"
             classList={{
-              '@2xl/plan-options:grid-cols-2': !props.state.hasPaid,
+              '@2xl/plan-options:grid-cols-2': offeredPlans().length === 2,
+              '@4xl/plan-options:grid-cols-3': offeredPlans().length === 3,
             }}
           >
-            <For
-              each={(['premium', 'max'] as const).filter(
-                (plan) => !props.state.hasPaid || plan !== props.state.tier
-              )}
-            >
+            <For each={offeredPlans()}>
               {(plan) => (
                 <BillingPlanCard
                   plan={plan}
+                  interval={cardInterval(
+                    plan,
+                    props.state,
+                    defaultInterval(plan)
+                  )}
                   state={props.state}
-                  onSelectPlan={props.onSelectPlan}
+                  onSelectPlan={handleSelectPlan}
                 />
               )}
             </For>
           </div>
         </section>
       </Show>
+      <BillingCycleDialog
+        plan={cyclePlan()}
+        perSeat={!!props.state.teamRole}
+        pending={props.state.pending}
+        onClose={() => setCyclePlan(null)}
+        onConfirm={(plan, chosen) => {
+          setCyclePlan(null);
+          props.onSelectPlan(plan, chosen);
+        }}
+      />
     </SettingsPage>
   );
 }

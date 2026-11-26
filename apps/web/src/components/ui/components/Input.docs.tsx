@@ -17,7 +17,7 @@ function BasicDemo() {
 
 // #region demo:sizes
 function SizesDemo() {
-  const sizes: InputSize[] = ['xs', 'sm', 'md', 'lg', 'xl'];
+  const sizes: InputSize[] = ['xs', 'sm', 'md', 'lg', 'xl', 'field'];
 
   return (
     <div class="flex w-full max-w-sm flex-col gap-3">
@@ -39,6 +39,7 @@ function VariantsDemo() {
   return (
     <div class="flex w-full max-w-sm flex-col gap-3 rounded-md bg-inset p-3">
       <Input variant="outline" placeholder="Outline" />
+      <Input variant="value" size="field" placeholder="Editable value" />
       <Input variant="bare" placeholder="Bare" />
     </div>
   );

@@ -51,16 +51,17 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Match Model-row and Speed triggers to the unchanged name button: 28px height, 6px/10px horizontal padding and text-sm on desktop; 44px, 10px/12px and text-base with 22px leading on phone; retain rounded-full and matching icon sizes.
 - Inherit menu-surface's outline and dark inset edge without changing the selector's custom fill, radius, padding, layout, or cast shadow.
 - Open the desktop card and selection pages below the trigger, end-aligned with a 6px gap; flip above only when needed, without changing the phone sheet.
-- Await asynchronous host confirmation before dismissing selection pages or recording recents, reject false results, and discard late account changes; keep selector action telemetry open through confirmation.
+- Await asynchronous host confirmation before dismissing selection pages or recording recents, reject false results, and discard late account changes; keep selector action telemetry open through confirmation. Keep draft model overrides scoped to their selecting account and agent. Reset speed only for confirmed in-memory model picks with no newer explicit speed selection.
 - Show a Thinking label in the trigger only when the effective choice differs from the model's advertised default; never treat a confirmed session value as that default. Render See all agents with the shared text-only link Button and a trailing right-arrow icon; override its hover underline locally so only the link color changes.
 - Keep custom-agent model pins browser-local per account and agent; preserve pinned overrides across sends, clear pins on the agent default or confirmed catalog retirement, and never mutate the agent's shared default.
 - Keep Suggested below Recent, using only fixed frontier matches, excluding Auto and Recent, with at most five models and no full-catalog fallback.
+- Preserve newer in-memory model recents when storage writes fail; refresh only changed storage payloads, while accepting selections from other mounted selectors.
 - Use semantic hover, active, selected, overlay and shadow tokens throughout the selector; match name and Model-row hover/pressed backgrounds to Speed's button-tertiary tokens, retain accelerated glyphs, and keep the custom Thinking slider's geometry and accent fill, with only its unfilled track using neutral bg-active.
 - Keep logo-to-name spacing at `gap-1` and name-to-Thinking spacing at `gap-2` on both platforms; match name and Thinking value type sizes, inset Model rows only on the left by 6px desktop or 10px phone, keep Thinking labels inset on both sides, and keep the full-width slider surface's thumb-range inset in its own padding with an invisible 44px phone thumb hit area.
 - Keep model-selector cards and sheets in the composer's active interaction lifetime; dismiss them when navigation removes or hides their trigger, and unmount the card while a phone sheet owns focus.
 - Scope model discovery by account, preserve kept models while discovery is pending, and retire them only against a successful catalog for that account.
 - Reuse AgentAvatar for selector agent identities at the specified sizes; keep the agents-view circular surface-1 fill and muted glyph rather than the person-avatar treatment.
-- Give every More models row its provider logo and keep provider headings text-only; render matching Auto in its own heading-free section on the main, More models, and agent-model pages, including search results.
+- Give every More models row its provider logo and keep provider headings text-only; key provider groups by their stable identity, translate agent group headings, and prefer host model labels throughout. Render matching Auto in its own heading-free section on the main, More models, and agent-model pages, including search results.
 - Group selector headings and rows in ModelSelectionSection, keep card fields together, and use parent gaps and padding rather than child margins: 24px from agent names to Auto, 16px between model sections, and 32px from agent names to search-only model headings.
 - Keep focus on the stable popover before replacing a desktop page, run open-autofocus imperatively under untrack so page changes cannot restart the library focus scope, and wait for the phone sheet's final focus callback before remounting the card.
 - Render search misses as the shared centered query/icon/Clear search state on every selector page; clearing refocuses the field without scrolling the page, the page's gap separates search from sections by 24px desktop/16px phone, and the search row opts out of drawer dragging. Let the input fill the row height with explicit standard text leading (20px desktop, 24px phone), rather than retaining Input's fixed 32px height.
@@ -82,6 +83,16 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Keep phone file inputs and overlay owners mounted on blur; let open add-menu, model, and repository controls own keyboard dismissal and count as composer focus, track physical focus separately, and release expansion only after each control's final focus restoration when focus remains outside; aggregate overlapping repository, branch, add-menu, and settings scopes.
 - Keep the phone list composer's unfocused 46px pill vertically centered with no Send control; hide controls without unmounting their file or overlay owners.
 - Keep phone composer layout measurable while collapsed; animate the clipped shape and editor insets together, reveal inert controls during the final part of the 200ms expansion, and disable transitions for reduced motion.
+
+## Composer boundaries
+
+`ChatComposer` serves new conversations, Home and active sessions. Session state
+and sending belong to the host; the composer edits a draft and inserts mentions.
+
+Use `@core/component/AI/primitives/create-composer-item-drop` on the desktop and
+phone composer surfaces for app-item drops. Do not treat item rows as native files.
+Keep disabled, read-only and dictation states ineligible; preserve source selection.
+Keep the drop primitive's readiness hook inside the existing `MarkdownShell.onConnect` callback, alongside draft initialization.
 
 ## Checks
 

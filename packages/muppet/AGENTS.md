@@ -18,6 +18,9 @@ fails isn't run.
 
 - `DESIGN.md`: the layout an agent's repository follows, and why.
 - `core/behavior.ts`: the behavior builder and `serve`.
+- `core/maintenance.ts`: the dispatch fence and invocation receipts. Mark
+  replayable sources explicitly and register detached work that needs to
+  drain before a service restart.
 - `core/capability.ts`, `core/code.ts`: capabilities as modules
   of typed functions, and how scripts run (in the agent's process, or each in
   its own with `inSubprocess`).

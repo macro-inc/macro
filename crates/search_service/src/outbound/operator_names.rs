@@ -13,15 +13,41 @@ use rootcause::Report;
 use uuid::Uuid;
 
 use crate::domain::email_search::TagOption;
-use crate::domain::operator_names::{InboxAddress, OperatorNameSource};
+use crate::domain::operator_names::{InboxAddress, OperatorNameSource, as_typed};
 use crate::outbound::email_search::caller_tag_options;
 
-/// The channel types `in:#` names; a DM has no name of its own.
-const NAMED_CHANNEL_TYPES: [ChannelType; 3] =
-    [ChannelType::Public, ChannelType::Private, ChannelType::Team];
+/// The channel types `in:#` names: a DM by the name the caller sees for it,
+/// the other person's, as the channel list shows it.
+const IN_CHANNEL_TYPES: [ChannelType; 4] = [
+    ChannelType::Public,
+    ChannelType::Private,
+    ChannelType::Team,
+    ChannelType::DirectMessage,
+];
 
 #[cfg(test)]
 mod test;
+
+/// The phrase quotes a typed term drops, any number of them.
+const QUOTES: &str = "[\"“”„]*";
+
+/// A whole-name pattern for `name` as typed, with phrase quotes allowed around
+/// each of its characters: a typed term drops its quotes, so `launch beta`
+/// names a channel called `Launch "beta"`.
+fn name_as_typed_pattern(name: &str) -> String {
+    let mut pattern = format!("^{QUOTES}");
+    for char in name.chars() {
+        pattern.push_str(&escape_regex(char.encode_utf8(&mut [0; 4])));
+        pattern.push_str(QUOTES);
+    }
+    pattern.push('$');
+    pattern
+}
+
+/// Far longer than a channel name (the channels toolset caps them at 255
+/// characters), so a longer typed name names nothing and its pattern is never
+/// built: Postgres compiles a regex in time that grows with its length squared.
+const LONGEST_CHANNEL_NAME: usize = 1024;
 
 /// Most pages of candidates one channel name reads.
 const MAX_CANDIDATE_PAGES: usize = 5;
@@ -61,7 +87,10 @@ impl OperatorNameSource for OperatorNamesPgSource {
         name: &str,
         limit: usize,
     ) -> Result<Vec<Uuid>, Report> {
-        let patterns = [format!("^{}$", escape_regex(name))];
+        if name.chars().count() > LONGEST_CHANNEL_NAME {
+            return Ok(Vec::new());
+        }
+        let patterns = [name_as_typed_pattern(name)];
         let page_size = i64::try_from(limit).unwrap_or(i64::MAX);
         let wanted = name.to_lowercase();
         let mut named = Vec::new();
@@ -78,7 +107,7 @@ impl OperatorNameSource for OperatorNamesPgSource {
                     excluded_patterns: &[],
                     regex_patterns: true,
                     channel_ids: &[],
-                    channel_types: &NAMED_CHANNEL_TYPES,
+                    channel_types: &IN_CHANNEL_TYPES,
                     after,
                     limit: page_size,
                 },
@@ -92,7 +121,7 @@ impl OperatorNameSource for OperatorNamesPgSource {
             named.extend(ids.into_iter().filter(|id| {
                 names
                     .get(id)
-                    .is_some_and(|shown| shown.to_lowercase() == wanted)
+                    .is_some_and(|shown| as_typed(shown).to_lowercase() == wanted)
             }));
             if named.len() >= limit || page.len() < limit {
                 break;

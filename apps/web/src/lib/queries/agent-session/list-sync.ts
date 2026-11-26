@@ -1,5 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import type { CacheHost } from '@graphql-cache/host/types';
 import { type Span, Telemetry } from '@macro-inc/observability';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import {
   getSoupEntityById,
   hydrateSoupEntity,
@@ -7,10 +9,12 @@ import {
 import { refreshSoupEntities } from '@queries/soup/refresh';
 import { AgentSessionRowDocument } from '@service-storage/graphql/generated/graphql';
 import {
+  getGraphqlCacheHost,
   getGraphqlSoupClient,
   mapGraphqlAgentSessionRow,
 } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
+import { NIL as NIL_UUID } from 'uuid';
 
 const changedSessions = new Set<string>();
 let pending: Promise<void> | undefined;
@@ -71,8 +75,126 @@ async function readSessionRows(
   if (failed?.status === 'rejected') throw failed.reason;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Only a positive nil `id`, possibly AND-ed with anything, proves a session
+ * filter selects nothing (`compileClause` excludes a target that way). */
+function excludesAgentSessions(ast: unknown): boolean {
+  if (!isRecord(ast)) return false;
+  const and = ast['&'];
+  if (Array.isArray(and)) return and.some(excludesAgentSessions);
+  return isRecord(ast.l) && ast.l.id === NIL_UUID;
+}
+
+/**
+ * Whether a Soup list's REST-shaped filter body can contain agent sessions.
+ * Sessions are opt-in: the server lists them only for a present `asf`
+ * (`opted_in` in `pg_soup_repo/agent_session.rs`), or for a favorites list,
+ * whose favorite session ids it adds itself (`soup` `favorites.rs`).
+ */
+function listCanIncludeAgentSessions(body: unknown): boolean {
+  if (!isRecord(body)) return false;
+  if (body.favorites_only === true) return true;
+  return body.asf != null && !excludesAgentSessions(body.asf);
+}
+
+/**
+ * Refetch the lists holding these sessions. REST lists refetch by entity.
+ * GraphQL lists normally need nothing: the row read writes the record the
+ * normalized cache keeps them on (FE-58). Without the cache there is no such
+ * record, so they refetch too; otherwise a list such as Quick Access's sessions
+ * keeps the old name until the page reloads.
+ */
+async function refetchLists(span: Span, sessions: string[]): Promise<void> {
+  const rest = refreshSoupEntities(sessions, { throwOnError: true });
+  const cached = Boolean(getGraphqlCacheHost());
+  span.setAttr('agent_session.lists_refetch.graphql', !cached);
+  if (cached) return await rest;
+  // Settle both before a retry, so an older pass cannot land after it.
+  const results = await Promise.allSettled([
+    rest,
+    refreshActiveGraphqlSoupQueries({
+      throwOnError: true,
+      where: listCanIncludeAgentSessions,
+    }),
+  ]);
+  const failed = results.find((result) => result.status === 'rejected');
+  if (failed?.status === 'rejected') throw failed.reason;
+}
+
+/** How long a reread waits for the cache engine to open before giving up. */
+export const CACHE_OPEN_WAIT_MS = 60_000;
+
+/** Whether the engine opened within {@link CACHE_OPEN_WAIT_MS}. */
+async function cacheOpened(host: CacheHost): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, CACHE_OPEN_WAIT_MS);
+  });
+  try {
+    await Promise.race([host.whenReady?.(), timedOut]);
+  } finally {
+    clearTimeout(timer);
+  }
+  return host.isReady?.() ?? true;
+}
+
+/** Sessions whose rows are read again once the opening cache engine opens. */
+const awaitingCacheOpen = new Set<string>();
+let reread: Promise<void> | undefined;
+
+/**
+ * Read the rows again once the cache engine has opened. A row read while it
+ * opens is written only when it opens (or not at all, while a replaced engine
+ * is awaited), in line with the writes of lists that loaded meanwhile from
+ * responses fetched before the change; until the next write, such a list can
+ * show the old row (a rename seconds after page load). The second read lands
+ * after them.
+ *
+ * It runs beside the queue, so a slow open never holds later passes: one
+ * reread collects every session changed while the engine opens, waits for it
+ * once (giving up after {@link CACHE_OPEN_WAIT_MS}), then for the pass in
+ * flight, and queues the sessions again if a read fails.
+ */
+function rereadSessionRowsWhenCacheOpens(
+  parent: Span,
+  host: CacheHost,
+  sessions: string[]
+): void {
+  for (const session of sessions) awaitingCacheOpen.add(session);
+  if (reread) return;
+  reread = parent.span('agent_session.row_reread', async (span) => {
+    try {
+      const ready = await cacheOpened(host);
+      span.setAttr('graphql_cache.ready', ready);
+      if (ready) await pending;
+      const rows = [...awaitingCacheOpen];
+      awaitingCacheOpen.clear();
+      span.setAttr('agent_session.count', rows.length);
+      if (!ready) return;
+      try {
+        await readSessionRows(span, rows);
+      } catch (error) {
+        span.error(error);
+        for (const session of rows)
+          fireAndForget(
+            refreshAgentSessionLists(session),
+            'agent-session-lists'
+          );
+      }
+    } finally {
+      reread = undefined;
+    }
+  });
+  fireAndForget(reread, 'agent-session-row-reread');
+}
+
 /**
  * One pass over a batch: the REST list refetch, then the primary row reads.
+ * If the cache engine was still opening, the rows are read again once it
+ * opens, after the pass.
  * The phases start from the pass's span, not the ambient context, which does
  * not survive an `await`.
  */
@@ -81,11 +203,16 @@ function refreshBatch(sessions: string[], attempt: number): Promise<void> {
     span.setAttr('agent_session.ids', sessions.join(','));
     span.setAttr('agent_session.count', sessions.length);
     span.setAttr('agent_session.lists_refresh.attempt', attempt);
+    const host = getGraphqlCacheHost();
+    const opening = host?.isReady?.() === false;
+    span.setAttr('agent_session.lists_refresh.cache_opening', opening);
     try {
-      await span.span('agent_session.lists_refetch', () =>
-        refreshSoupEntities(sessions, { throwOnError: true })
+      await span.span('agent_session.lists_refetch', (refetch) =>
+        refetchLists(refetch, sessions)
       );
       await readSessionRows(span, sessions);
+      if (opening && host)
+        rereadSessionRowsWhenCacheOpens(span, host, sessions);
     } catch (error) {
       span.error(error);
       throw error;
@@ -119,7 +246,8 @@ async function refreshQueuedLists(resolve: () => void): Promise<void> {
 
 /**
  * Refresh the lists that show a session after its metadata changes: REST
- * lists refetch, then the session's own row is read from the primary.
+ * lists (and GraphQL lists, without the normalized cache) refetch, then the
+ * session's own row is read from the primary.
  * A burst shares one pass; updates committed during a fetch get a later pass.
  * A failed pass retries once with queued updates. Further failures retain the
  * batch for the next event instead of dropping it or spinning.

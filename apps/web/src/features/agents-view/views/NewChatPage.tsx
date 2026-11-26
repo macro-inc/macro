@@ -533,7 +533,7 @@ export function NewChatPage(props: {
         : {}),
     });
     // Clear only the one-shot choice; account-scoped kept models and effort stay.
-    setModelOverride(undefined);
+    if (modelOverride()) setModelOverride(undefined);
   };
 
   const selectAgent = (
@@ -568,7 +568,7 @@ export function NewChatPage(props: {
     if (harness === 'in-memory' || harness === 'cursor') {
       preferredEffort().forget(JSON.stringify({ harness, model }));
     }
-    setPreferredSpeed('standard');
+    if (harness === 'in-memory') setPreferredSpeed('standard');
   };
 
   // An @mentioned agent becomes the active one, switching to its mode, as

@@ -18,7 +18,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 2d59b4a3de1c815713a911ed9cd62f17451cd843da596f87eb8a0002d3b1f8ac
+        checksum/config: a7da3d6aa83f12c138340e244a62ed42f46e0c0d6089581ec6baa6ef230c068a
         observability.macro.com/alb-readiness-gate: "true"
       labels:
         app.kubernetes.io/name: edge

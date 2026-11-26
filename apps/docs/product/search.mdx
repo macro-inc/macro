@@ -22,6 +22,8 @@ The Search field reads search operators: a name, a colon, and a value that narro
 
 As you type, the field suggests operators, their values, people, tags, and channels. On a computer, a word such as `tasks` or `unread`, or the start of a person's name, also offers the operator it stands for. Hover the info button beside the **Search** title for a few examples; on a phone, tap it in the empty search field. On a phone, the **From**, **Type**, **Tag**, **Date**, and **Unread** buttons above the results start an operator for you.
 
+When you describe a search in the command menu (**Cmd-K**), Macro writes it into **Search for** as these operators, so you can check or change them before opening Search.
+
 | Operator | Finds |
 | --- | --- |
 | `type:task` | One kind of item: `task`, `doc`, `email`, `channel`, `call`, `folder`, `agent`, or `calendar` |
@@ -31,7 +33,7 @@ As you type, the field suggests operators, their values, people, tags, and chann
 | `author:me` | Tasks you created, or that someone created, by address |
 | `tag:finance` | Items with the tag Finance |
 | `inbox:ana@example.com` | Email in one of your connected inboxes |
-| `in:#launch` | Messages and calls in a channel you're in |
+| `in:#launch` | Messages and calls in a channel you're in, or a direct message by the other person's name, such as `in:#"Ana Lima"` |
 | `from:ana` | Mail from Ana, as in [Search mail](#search-mail). With `type:channel` or `type:call`, who sent the message or spoke: `from:me` or an address |
 | `"q3 plan"` | Containing the exact phrase "q3 plan" |
 
@@ -39,10 +41,10 @@ The operators in [Search mail](#search-mail), such as `subject:lunch`, `is:unrea
 
 A few details:
 
-- Put `OR` between two values of the same operator to match either one: `tag:finance OR tag:legal`, `status:completed OR status:canceled`. Without `OR`, every operator must match, so `tag:finance tag:legal` finds items with both tags.
+- Put `OR` between two values of the same operator to match either one: `tag:finance OR tag:legal`, `status:completed OR status:canceled`. Without `OR`, every operator must match, so `tag:finance tag:legal` finds items with both tags, and `tag:finance OR tag:legal tag:q3` finds items tagged Q3 and either Finance or Legal.
 - `assignee:` and `author:` take `me` or a full address, and `inbox:` takes the address of one of your inboxes. A bare name such as `assignee:ana` is left out of the search until you pick someone from the suggestions or type their full address.
 - Put a minus before a word or a quoted phrase to leave out the results that contain it: `budget -draft` finds items about the budget that don't mention "draft", and `-"team lunch"` leaves out the exact phrase. A minus inside a word, as in `e-mail`, is part of the word. A minus word on its own waits for a word to search for, unless the search is limited to email.
-- Quote a value that has a space in it: `tag:"team offsite"`, `in:#"team lunch"`.
+- Quote a value that has a space in it: `tag:"team offsite"`, `in:#"team lunch"`. A tag or channel named only with an emoji works as typed, such as `tag:🔥`. Leave out double quotes that are part of a tag's or channel's name: `tag:"Q3 Plan"` finds a tag named Q3 "Plan", and `in:#"Launch beta"` a channel named Launch "beta".
 - Each operator keeps the results to the kinds of item it applies to. `status:` and `priority:` find tasks (or calls, for a call status), `tag:` finds items that can have tags, and `in:#` finds channels and calls.
 - A sender on its own, such as `type:channel from:me`, needs a word beside it.
 - `@ana` finds items that mention Ana. `from:ana` finds what Ana sent.
