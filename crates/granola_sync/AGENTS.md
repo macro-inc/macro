@@ -23,8 +23,8 @@ Webhooks only bring new activity, so each enabled sync also backfills the
 notes the key can already see (`SyncService::backfill`). It runs only for
 users the backend flag `enable-granola-backfill` opts in (`outbound::rollout`;
 off without a PostHog key or flag), otherwise the page is deferred without
-calling Granola: ten minutes, doubling per deferral in a row, up to twelve
-hours. A user opted in later starts within that wait, or at once on reconnect. The worker leases one page of `GET /notes` (10 notes)
+calling Granola: ten minutes, doubling per deferral in a row, up to an hour,
+so a user opted in later starts within the hour, or at once on reconnect. The worker leases one page of `GET /notes` (10 notes)
 at a time while no delivery waits, fetches each live note through the same
 adapter and mapper as a delivery, imports it at once, and saves the next
 cursor after the page. Each imported note is recorded on the page
@@ -33,7 +33,7 @@ has a 120 s budget, inside the worker's 300 s timeout, so it always records
 its outcome; notes it did not reach fail that attempt. A failed page retries
 from its saved cursor with backoff; after `BACKFILL_PAGE_ATTEMPTS` the notes
 that still fail are skipped so history is not blocked, each logged and kept
-by ID and `SkipReason` in `backfill_skipped`. A listing that keeps repeating
+by ID and `SkipReason` in `backfill_skipped` (the newest 1000). A listing that keeps repeating
 its cursor ends the backfill (`backfill_gave_up`). A 429 (`RateLimited`) is not a failure: the page stops, waits for
 Granola's `Retry-After` (a minute without one) and keeps its attempt; a
 deferred page keeps it too. Restarting sync (a connect) starts the backfill over.

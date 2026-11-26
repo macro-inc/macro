@@ -307,7 +307,8 @@ impl SyncRepository for PgSyncRepository {
         // A failed page waits 30 s, doubling per attempt, up to an hour. A
         // throttled page waits as long as Granola asked. A deferred one (the
         // user is not opted in) waits ten minutes, doubling per deferral in a
-        // row, up to twelve hours. Neither of the last two spends the attempt.
+        // row, up to an hour, so an opt-in takes effect within the hour.
+        // Neither of the last two spends the attempt.
         let mut finished = Finished::default();
         match step {
             BackfillStep::Next { cursor, skipped } => {
@@ -338,7 +339,7 @@ impl SyncRepository for PgSyncRepository {
             BackfillStep::Deferred => {
                 let seconds = 600_i64
                     .saturating_mul(2_i64.saturating_pow(job.deferrals.clamp(0, 10) as u32))
-                    .min(12 * 3600);
+                    .min(3600);
                 finished.wait_seconds = Some(seconds as f64);
                 finished.keep_attempt = true;
                 finished.deferred = true;
@@ -352,7 +353,12 @@ impl SyncRepository for PgSyncRepository {
                     WHEN $5::double precision IS NULL THEN 0 ELSE backfill_attempts END,
                 backfill_available_at = now() + make_interval(secs => COALESCE($5::double precision, 0)),
                 backfill_handled = CASE WHEN $7 THEN '{}' ELSE backfill_handled END,
-                backfill_skipped = backfill_skipped || $8::jsonb,
+                backfill_skipped = CASE WHEN jsonb_array_length($8::jsonb) = 0 THEN backfill_skipped
+                    ELSE (SELECT COALESCE(jsonb_agg(entry ORDER BY position), '[]'::jsonb)
+                        FROM jsonb_array_elements(backfill_skipped || $8::jsonb)
+                            WITH ORDINALITY AS kept(entry, position)
+                        WHERE position > jsonb_array_length(backfill_skipped || $8::jsonb) - $11)
+                    END,
                 backfill_gave_up = COALESCE($9, backfill_gave_up),
                 backfill_deferrals = CASE WHEN $10 THEN backfill_deferrals + 1 ELSE 0 END,
                 backfill_lease_id = NULL
@@ -366,13 +372,17 @@ impl SyncRepository for PgSyncRepository {
             finished.page_over,
             serde_json::to_value(&finished.skipped)?,
             finished.gave_up.as_ref().map(|reason| reason.as_ref()),
-            finished.deferred
+            finished.deferred,
+            BACKFILL_SKIPPED_KEPT as i64
         )
         .execute(&self.pool)
         .await?;
         Ok(())
     }
 }
+
+/// Skipped notes kept per connection; older entries drop off first.
+pub(crate) const BACKFILL_SKIPPED_KEPT: usize = 1000;
 
 /// The columns one backfill outcome writes.
 #[derive(Default)]

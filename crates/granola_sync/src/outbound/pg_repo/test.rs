@@ -437,11 +437,26 @@ async fn backfill_progress_losses_give_ups_and_deferrals_are_recorded(pool: PgPo
         .unwrap();
     assert!((wait_seconds(pool.clone()).await - 1200.0).abs() < 5.0);
     available(pool.clone()).await;
+    // A long streak waits at most an hour, so opting a user in takes effect
+    // within an hour.
+    sqlx::query!(
+        "UPDATE granola_sync_connections SET backfill_deferrals = 20 WHERE id = $1",
+        connection.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let job = repo.claim_backfill().await.unwrap().unwrap();
+    repo.finish_backfill(&job, BackfillStep::Deferred)
+        .await
+        .unwrap();
+    assert!((wait_seconds(pool.clone()).await - 3600.0).abs() < 5.0);
+    available(pool.clone()).await;
 
     // Notes handled on a page are remembered until the page moves on; a
     // stale lease cannot record one.
     let job = repo.claim_backfill().await.unwrap().unwrap();
-    assert_eq!(job.deferrals, 2);
+    assert_eq!(job.deferrals, 21);
     let note = NoteId("not_aaaaaaaaaaaaaa".into());
     repo.mark_backfilled(&job, &note).await.unwrap();
     repo.finish_backfill(&job, BackfillStep::Retry)
@@ -497,4 +512,82 @@ async fn backfill_progress_losses_give_ups_and_deferrals_are_recorded(pool: PgPo
     .await
     .unwrap();
     assert_eq!(gave_up.as_deref(), Some("repeated_cursor"));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn the_skipped_note_record_keeps_only_the_newest_entries(pool: PgPool) {
+    let repo = PgSyncRepository::new(pool.clone(), &[7; 32]);
+    let connection = connection();
+    assert!(repo.reserve(&connection).await.unwrap());
+    assert!(
+        repo.activate(
+            connection.id,
+            Webhook {
+                id: "whe_test".into(),
+                secret: SigningSecret("secret".into()),
+            },
+            Scope::All,
+        )
+        .await
+        .unwrap()
+    );
+    let skipped = |from: usize, count: usize| -> Vec<SkippedNote> {
+        (from..from + count)
+            .map(|n| SkippedNote {
+                note_id: NoteId(format!("not_{n:014}")),
+                reason: SkipReason::FetchFailed,
+            })
+            .collect()
+    };
+    let page = |skipped: Vec<SkippedNote>| BackfillStep::Next {
+        cursor: "next".into(),
+        skipped,
+    };
+
+    let job = repo.claim_backfill().await.unwrap().unwrap();
+    repo.finish_backfill(&job, page(skipped(0, BACKFILL_SKIPPED_KEPT)))
+        .await
+        .unwrap();
+    let job = repo.claim_backfill().await.unwrap().unwrap();
+    repo.finish_backfill(&job, page(skipped(BACKFILL_SKIPPED_KEPT, 5)))
+        .await
+        .unwrap();
+    // A page with nothing skipped leaves the record as it is.
+    let job = repo.claim_backfill().await.unwrap().unwrap();
+    repo.finish_backfill(&job, page(vec![])).await.unwrap();
+
+    let record = sqlx::query_scalar!(
+        "SELECT backfill_skipped FROM granola_sync_connections WHERE id = $1",
+        connection.id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let record = record.as_array().unwrap();
+    assert_eq!(record.len(), BACKFILL_SKIPPED_KEPT);
+    assert_eq!(record[0]["note_id"], "not_00000000000005");
+    assert_eq!(
+        record[BACKFILL_SKIPPED_KEPT - 1]["note_id"],
+        format!("not_{:014}", BACKFILL_SKIPPED_KEPT + 4)
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn only_known_give_up_reasons_are_stored(pool: PgPool) {
+    let repo = PgSyncRepository::new(pool.clone(), &[7; 32]);
+    let connection = connection();
+    assert!(repo.reserve(&connection).await.unwrap());
+    let stored = sqlx::query!(
+        "UPDATE granola_sync_connections SET backfill_gave_up = 'unknown' WHERE id = $1",
+        connection.id
+    )
+    .execute(&pool)
+    .await;
+    assert!(stored.is_err());
 }
