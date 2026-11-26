@@ -297,8 +297,6 @@ export class CacheWorkerCore {
   /** Serializes engine calls while allowing safe read prioritization. */
   private readonly queue: QueuedEngineRequest[] = [];
   private readonly operations = new OperationIndex<QueuedEngineRequest>();
-  /** The latest queued request with each read signature. */
-  private readonly readsBySignature = new Map<string, QueuedEngineRequest>();
   /** The queued ordering barriers, in queue order. */
   private readonly queuedBarriers: QueuedEngineRequest[] = [];
   private nextSeq = 0;
@@ -528,14 +526,21 @@ export class CacheWorkerCore {
       // read queued before this operation's teardown: a remount must perform
       // a fresh read to re-register deps. Only the latest read with this
       // signature can qualify: an earlier one has a barrier or teardown
-      // between, which runs only after it.
-      if (signature !== undefined) {
-        const duplicate = this.readsBySignature.get(signature);
+      // between, which runs only after it. A signature names its operation,
+      // so that read is among the operation's own requests. (A signature
+      // holds the query text, so a map keyed by it would hash all of that
+      // text on every arrival.)
+      if (
+        signature !== undefined &&
+        request.kind === 'read' &&
+        request.opId !== undefined
+      ) {
+        const duplicate = this.operations.lastOf(
+          request.opId,
+          (queued) => queued.readSignature === signature
+        );
         const barrier = this.queuedBarriers[this.queuedBarriers.length - 1];
-        const teardown =
-          request.kind === 'read' && request.opId !== undefined
-            ? this.operations.lastTeardownOf(request.opId)
-            : undefined;
+        const teardown = this.operations.lastTeardownOf(request.opId);
         if (
           duplicate &&
           (barrier === undefined || duplicate.seq > barrier.seq) &&
@@ -560,7 +565,6 @@ export class CacheWorkerCore {
       this.nextSeq += 1;
       this.queue.push(queued);
       this.operations.add(queued);
-      if (signature !== undefined) this.readsBySignature.set(signature, queued);
       if (isOrderingBarrier(request)) this.queuedBarriers.push(queued);
       this.collectArrivalsThenDrain();
     });
@@ -571,11 +575,6 @@ export class CacheWorkerCore {
     const [queued] = this.queue.splice(index, 1);
     if (!queued) return undefined;
     this.operations.remove(queued);
-    if (
-      queued.readSignature !== undefined &&
-      this.readsBySignature.get(queued.readSignature) === queued
-    )
-      this.readsBySignature.delete(queued.readSignature);
     const barrier = this.queuedBarriers.indexOf(queued);
     if (barrier !== -1) this.queuedBarriers.splice(barrier, 1);
     return queued;
@@ -594,31 +593,35 @@ export class CacheWorkerCore {
     );
     if (segmentEnd === -1) segmentEnd = this.queue.length;
 
-    const firstAuthoritativeWrite = this.queue
-      .slice(0, segmentEnd)
-      .findIndex((queued) => isAuthoritativeWrite(queued.request));
+    let firstAuthoritativeWrite = -1;
+    for (let i = 0; i < segmentEnd && firstAuthoritativeWrite === -1; i += 1) {
+      const queued = this.queue[i];
+      if (queued && isAuthoritativeWrite(queued.request)) {
+        firstAuthoritativeWrite = i;
+      }
+    }
     const pick = (
       end: number,
       priorityAt: (index: number) => number | undefined
     ) => {
-      const priorityOf = (i: number) =>
-        priorityAt(i) ?? Number.NEGATIVE_INFINITY;
       let index = 0;
+      let selected = priorityAt(0) ?? Number.NEGATIVE_INFINITY;
       for (let i = 1; i < end; i += 1) {
+        const priority = priorityAt(i);
+        if (priority === undefined || priority <= selected) continue;
         const candidate = this.queue[i];
-        const preservesWriteOrder =
-          !candidate ||
-          !isAuthoritativeWrite(candidate.request) ||
-          i === firstAuthoritativeWrite;
+        // Authoritative writes keep their order: only the first can run.
         if (
-          priorityAt(i) !== undefined &&
-          preservesWriteOrder &&
-          priorityOf(i) > priorityOf(index)
+          candidate &&
+          isAuthoritativeWrite(candidate.request) &&
+          i !== firstAuthoritativeWrite
         ) {
-          index = i;
+          continue;
         }
+        index = i;
+        selected = priority;
       }
-      return this.pickPastFences(index, priorityOf(index), end);
+      return this.pickPastFences(index, selected, end);
     };
 
     let index = pick(segmentEnd, this.runnablePriority(segmentEnd, false));
@@ -892,15 +895,16 @@ export class CacheWorkerCore {
       let index = -1;
       let priority = BACKGROUND_HYDRATION_PRIORITY;
       for (let i = 0; i < end; i += 1) {
-        const candidate = this.queue[i];
         const candidatePriority = priorityAt(i);
+        if (candidatePriority === undefined || candidatePriority <= priority) {
+          continue;
+        }
+        const candidate = this.queue[i];
         if (
           candidate &&
-          candidatePriority !== undefined &&
           !isAuthoritativeWrite(candidate.request) &&
           // A teardown can't run here, and holds back only its own operation.
-          candidate.request.kind !== 'teardown' &&
-          candidatePriority > priority
+          candidate.request.kind !== 'teardown'
         ) {
           index = i;
           priority = candidatePriority;

@@ -143,6 +143,17 @@ export class OperationIndex<T extends Indexed> {
     return blocker;
   }
 
+  /** The last queued request about `opId` that `matches`, if any. */
+  lastOf(opId: string, matches: (queued: T) => boolean): T | undefined {
+    const list = this.touches.get(opId);
+    if (!list) return undefined;
+    for (let index = list.length - 1; index >= 0; index -= 1) {
+      const queued = list[index];
+      if (queued !== undefined && matches(queued)) return queued;
+    }
+    return undefined;
+  }
+
   /** The last queued teardown of `opId`, if any. */
   lastTeardownOf(opId: string): T | undefined {
     const list = this.teardowns.get(opId);
