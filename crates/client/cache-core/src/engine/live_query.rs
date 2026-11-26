@@ -142,12 +142,20 @@ pub(super) struct Changes {
     pub projections: BTreeSet<PredicateRecordKey>,
 }
 
+/// A row as the view last sent it, kept to diff the next read against. Compact
+/// JSON holds a channel row in about a fifth of the memory of its `Json` tree.
+/// `serde_json` maps are ordered, so equal records serialize to equal text.
+struct RetainedRow {
+    identity: identity::IdentityStatus,
+    record: Box<str>,
+}
+
 struct View {
     registration_id: LiveQueryRegistration,
     spec: LiveQuerySpec,
     revision: CacheRevision,
     membership: PredicateReconciliation,
-    rows: BTreeMap<EntityKey<'static>, SelectedRecord>,
+    rows: BTreeMap<EntityKey<'static>, RetainedRow>,
     dependencies: RowDependencies,
     dependents: BTreeMap<EntityKey<'static>, BTreeSet<EntityKey<'static>>>,
 }
@@ -354,6 +362,10 @@ impl<S: PredicateIndexStorage> Engine<S> {
         } else {
             dirty.extend(keys.iter().cloned());
         }
+        // A reset sends every row whole, read again rather than parsed back.
+        if reset {
+            dirty.extend(keys.iter().cloned());
+        }
         dirty.retain(|key| keys.contains(key));
         let removed_members: Vec<_> = view
             .dependencies
@@ -381,24 +393,42 @@ impl<S: PredicateIndexStorage> Engine<S> {
                 view.replace_dependencies(key, tracked.remove(key));
                 match selected.remove(key) {
                     Some(row) => {
-                        if view.rows.get(key) != Some(&row) {
-                            if let Some(previous) = view.rows.get(key) {
-                                let mut fields = Vec::new();
-                                diff_fields(
-                                    &previous.record,
-                                    &row.record,
-                                    &mut Vec::new(),
-                                    &mut fields,
-                                );
-                                patches.push(LiveRowPatch {
-                                    record_key: key.clone(),
-                                    fields,
-                                    identity: row.identity.clone(),
-                                });
-                            } else {
-                                upserts.push(row.clone());
+                        let record: Box<str> = row.record.to_string().into();
+                        let previous = view.rows.get(key);
+                        let unchanged = previous.is_some_and(|previous| {
+                            previous.identity == row.identity && previous.record == record
+                        });
+                        if !unchanged && !reset && let Some(previous) = previous {
+                            let mut fields = Vec::new();
+                            match serde_json::from_str::<Json>(&previous.record) {
+                                Ok(before) => {
+                                    diff_fields(&before, &row.record, &mut Vec::new(), &mut fields)
+                                }
+                                // Unreadable retained text (deeper than the parser
+                                // allows): replace the whole record.
+                                Err(_) => fields.push(LiveFieldPatch {
+                                    path: Vec::new(),
+                                    value: row.record.clone(),
+                                }),
                             }
-                            view.rows.insert(key.clone(), row);
+                            patches.push(LiveRowPatch {
+                                record_key: key.clone(),
+                                fields,
+                                identity: row.identity.clone(),
+                            });
+                        }
+                        let new = previous.is_none();
+                        if !unchanged {
+                            view.rows.insert(
+                                key.clone(),
+                                RetainedRow {
+                                    identity: row.identity.clone(),
+                                    record,
+                                },
+                            );
+                        }
+                        if reset || new {
+                            upserts.push(row);
                         }
                     }
                     None => {
@@ -410,9 +440,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
             }
         }
         if reset {
-            upserts = view.rows.values().cloned().collect();
             removed.clear();
-            patches.clear();
         }
         let observation_id = self
             .observe_live_query_window(id, &spec, &membership, &view.dependencies)

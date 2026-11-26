@@ -369,6 +369,8 @@ fn native_channel_batches_bench() {
 
         let rss_before_views = live_kb();
         let mut revisions = Vec::new();
+        // The rows a first read sends, as JSON: what each view retains to diff.
+        let mut view_row_bytes = 0;
         let mut observations = Vec::new();
         for (batch, ids) in batches.iter().enumerate() {
             let started = Mark::now();
@@ -381,6 +383,7 @@ fn native_channel_batches_bench() {
             assert_eq!(result["kind"], "live-query", "batch {batch}: {result}");
             assert_eq!(result["keys"].as_array().unwrap().len(), ids.len());
             revisions.push(result["revision"].as_str().unwrap().to_owned());
+            view_row_bytes += serde_json::to_string(&result["upserts"]).unwrap().len();
             observations.push(result["observationId"].as_str().unwrap().to_owned());
         }
         let rss_views = live_kb();
@@ -468,6 +471,7 @@ fn native_channel_batches_bench() {
                     "rssOpenKb": rss_open,
                     "rssBeforeViewsKb": rss_before_views,
                     "rssWithViewsKb": rss_views,
+                    "viewRowJsonKb": view_row_bytes / 1024,
                     "rssBeforeSecondViewsKb": rss_before_second,
                     "rssWithSecondViewsKb": rss_second,
                     "peakRssKb": memory_kb("VmHWM"),

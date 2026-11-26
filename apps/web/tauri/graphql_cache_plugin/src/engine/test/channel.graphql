@@ -1,0 +1,24 @@
+query NativeChannels {
+  user {
+    id
+    soup(input: { initial: { limit: 100 } }) {
+      items {
+        __typename
+        id
+        cacheProjection
+        isFavorited
+        displayName
+        ... on GraphqlSoupChannel {
+          name
+          channelType
+          ownerId
+          createdAt
+          updatedAt
+          participants { channelId userId role joinedAt leftAt }
+          latestMessage { messageId channelId threadId senderId content createdAt updatedAt deletedAt mentions }
+          notifications { __typename id state createdAt }
+        }
+      }
+    }
+  }
+}
