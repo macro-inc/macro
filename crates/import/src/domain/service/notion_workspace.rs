@@ -255,6 +255,12 @@ where
         self.current_report(user).await
     }
 
+    #[tracing::instrument(
+        name = "workspace_import.attach_review",
+        skip(self, user),
+        fields(review_id = %review_id, agent_session_id = %session_id),
+        err
+    )]
     async fn attach_notion_review(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -956,7 +962,7 @@ pub fn failure_kind(error: &ImportError) -> RunErrorKind {
             // An incomplete saved-view list is the source's to finish; a
             // later retry can read it.
             NotionError::Upstream { .. }
-            | NotionError::Transport(_)
+            | NotionError::Transport { .. }
             | NotionError::IncompleteViewList => RunErrorKind::Unreachable,
             NotionError::Decode(_) => RunErrorKind::Internal,
         },
@@ -1084,7 +1090,7 @@ fn notion_failure_text(error: &NotionError) -> Option<&'static str> {
         } => "Notion couldn’t return this item’s content.",
         NotionError::Decode(_) => "Notion returned data Macro couldn’t read.",
         NotionError::IncompleteViewList => "Notion only returned part of the database’s tab list.",
-        NotionError::Transport(_) | NotionError::Upstream { .. } => {
+        NotionError::Transport { .. } | NotionError::Upstream { .. } => {
             "Notion couldn’t complete the request."
         }
     })

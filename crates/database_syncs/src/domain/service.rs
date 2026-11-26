@@ -109,7 +109,7 @@ fn notion_error(error: NotionError) -> SourceError {
         | NotionError::Upstream { .. }
         | NotionError::Decode(_)
         | NotionError::IncompleteViewList
-        | NotionError::Transport(_) => {
+        | NotionError::Transport { .. } => {
             SourceError::Unavailable(rootcause::report!("reading Notion: {error}"))
         }
     }
