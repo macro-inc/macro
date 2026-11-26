@@ -100,7 +100,64 @@ pub enum NotionRead {
     },
 }
 
+/// Which Notion endpoint a [`NotionRead`] calls, without its ids, cursor or
+/// body: the only description of a request that spans and logs carry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum NotionEndpoint {
+    /// `POST /v1/search`.
+    Search,
+    /// `GET /v1/pages/{id}`.
+    Page,
+    /// `GET /v1/pages/{id}/markdown`.
+    PageMarkdown,
+    /// `GET /v1/pages/{page}/properties/{property}`.
+    PageProperty,
+    /// `GET /v1/data_sources/{id}`.
+    DataSource,
+    /// `POST /v1/data_sources/{id}/query`.
+    QueryDataSource,
+    /// `GET /v1/databases/{id}`.
+    Database,
+    /// `GET /v1/views`.
+    ListViews,
+    /// `GET /v1/views/{id}`.
+    RetrieveView,
+    /// `GET /v1/users`.
+    Users,
+}
+
+/// How a request's attempts ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr, strum::Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum RequestOutcome {
+    /// Notion answered successfully, after `attempts` tries, with a body
+    /// that decoded.
+    Succeeded,
+    /// Every attempt hit a rate limit or a transient failure.
+    Exhausted,
+    /// The failure is final, so it was not retried; this includes a
+    /// successful answer whose body did not decode.
+    NotRetryable,
+}
+
 impl NotionRead {
+    /// The endpoint this read calls.
+    pub fn endpoint(&self) -> NotionEndpoint {
+        match self {
+            Self::Search(_) => NotionEndpoint::Search,
+            Self::Page(_) => NotionEndpoint::Page,
+            Self::PageMarkdown(_) => NotionEndpoint::PageMarkdown,
+            Self::PageProperty { .. } => NotionEndpoint::PageProperty,
+            Self::DataSource(_) => NotionEndpoint::DataSource,
+            Self::QueryDataSource { .. } => NotionEndpoint::QueryDataSource,
+            Self::Database(_) => NotionEndpoint::Database,
+            Self::ListViews { .. } => NotionEndpoint::ListViews,
+            Self::RetrieveView(_) => NotionEndpoint::RetrieveView,
+            Self::Users { .. } => NotionEndpoint::Users,
+        }
+    }
+
     /// The HTTP method Notion's API takes this read with.
     pub fn method(&self) -> Method {
         match self {
@@ -245,46 +302,99 @@ impl<Transport: NotionTransport> NotionRestClient<Transport> {
         Self { transport, pacer }
     }
 
-    async fn request<Body: DeserializeOwned>(&self, read: NotionRead) -> Result<Body, NotionError> {
-        let text = self.send(&read).await?;
-        serde_json::from_str(&text)
-            .map_err(|error| NotionError::Decode(format!("{}: {error}", read.path_and_query())))
-    }
-
+    // `err` records the content-free `Display` as an ERROR event, which marks
+    // the exported span as failed. Decoding happens inside the span, so a 200
+    // whose body is not the expected shape is a failed request too.
     #[tracing::instrument(
         name = "notion.request",
         skip_all,
         err,
-        fields(method = %read.method(), path = %read.path_and_query(), attempts, status)
+        fields(
+            endpoint = <&'static str>::from(read.endpoint()),
+            method = %read.method(),
+            attempts = tracing::field::Empty,
+            status = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+            error_class = tracing::field::Empty,
+            transport_class = tracing::field::Empty,
+        )
     )]
-    async fn send(&self, read: &NotionRead) -> Result<String, NotionError> {
+    async fn request<Body: DeserializeOwned>(&self, read: NotionRead) -> Result<Body, NotionError> {
+        let (sent, mut attempts) = self.attempt(&read).await;
+        let result = sent.and_then(|text| {
+            serde_json::from_str(&text).map_err(|error| {
+                attempts.outcome = RequestOutcome::NotRetryable;
+                NotionError::Decode(format!("{}: {error}", read.endpoint()))
+            })
+        });
         let span = tracing::Span::current();
-        let mut attempt: u8 = 0;
+        span.record("attempts", attempts.count);
+        if let Some(status) = attempts.status {
+            span.record("status", status);
+        }
+        span.record("outcome", <&'static str>::from(attempts.outcome));
+        if let Err(error) = &result {
+            let error_class = <&'static str>::from(error.class());
+            let transport_class = error.transport_class().map(<&'static str>::from);
+            span.record("error_class", error_class);
+            if let Some(class) = transport_class {
+                span.record("transport_class", class);
+            }
+            tracing::warn!(
+                endpoint = <&'static str>::from(read.endpoint()),
+                attempts = attempts.count,
+                status = attempts.status,
+                outcome = <&'static str>::from(attempts.outcome),
+                error_class,
+                transport_class,
+                "Notion request failed"
+            );
+        }
+        result
+    }
+
+    /// Send `read` until it succeeds, fails for good, or runs out of attempts.
+    async fn attempt(&self, read: &NotionRead) -> (Result<String, NotionError>, Attempts) {
+        let mut attempts = Attempts {
+            count: 0,
+            status: None,
+            outcome: RequestOutcome::NotRetryable,
+        };
         loop {
-            attempt += 1;
-            span.record("attempts", attempt);
+            attempts.count += 1;
             self.pacer.wait().await;
             let (error, retry_after) = match self.transport.send(read).await {
                 Ok(response) => {
-                    span.record("status", response.status.as_u16());
+                    attempts.status = Some(response.status.as_u16());
                     if response.status.is_success() {
-                        return Ok(response.body);
+                        attempts.outcome = RequestOutcome::Succeeded;
+                        return (Ok(response.body), attempts);
                     }
                     match failure(response) {
-                        Failure::Final(error) => return Err(error),
+                        Failure::Final(error) => return (Err(error), attempts),
                         Failure::Transient { error, retry_after } => (error, retry_after),
                     }
                 }
-                Err(NotionError::Transport(report)) => (NotionError::Transport(report), None),
-                Err(error) => return Err(error),
+                Err(error @ NotionError::Transport { .. }) => {
+                    attempts.status = None;
+                    (error, None)
+                }
+                Err(error) => return (Err(error), attempts),
             };
-            if attempt >= MAX_ATTEMPTS {
-                return Err(error);
+            if attempts.count >= MAX_ATTEMPTS {
+                attempts.outcome = RequestOutcome::Exhausted;
+                return (Err(error), attempts);
             }
-            tracing::warn!(attempt, error = %error, "retrying Notion request");
+            tracing::debug!(
+                attempt = attempts.count,
+                status = attempts.status,
+                error_class = <&'static str>::from(error.class()),
+                transport_class = error.transport_class().map(<&'static str>::from),
+                "retrying Notion request"
+            );
             match retry_after {
                 Some(delay) => self.pacer.hold(delay),
-                None => tokio::time::sleep(backoff(attempt)).await,
+                None => tokio::time::sleep(backoff(attempts.count)).await,
             }
         }
     }
@@ -328,7 +438,7 @@ impl<Transport: NotionTransport> NotionRestClient<Transport> {
             let list: WireList = self.request(read.clone()).await?;
             for item in &list.results {
                 let item = WirePropertyItem::deserialize(item).map_err(|error| {
-                    NotionError::Decode(format!("{}: {error}", read.path_and_query()))
+                    NotionError::Decode(format!("{}: {error}", read.endpoint()))
                 })?;
                 references.extend(item.reference().map(|id| wire::WireReference { id }));
             }
@@ -407,7 +517,7 @@ impl<Transport: NotionTransport> NotionApi for NotionRestClient<Transport> {
         let source: WireDataSource = self.request(read.clone()).await?;
         source
             .into_data_source()
-            .map_err(|error| NotionError::Decode(format!("{}: {error}", read.path_and_query())))
+            .map_err(|error| NotionError::Decode(format!("{}: {error}", read.endpoint())))
     }
 
     async fn database_sources(&self, database: &NotionId) -> Result<Vec<NotionId>, NotionError> {
@@ -547,6 +657,14 @@ impl QueryCursor {
             .map_err(|error| NotionError::Decode(format!("query cursor: {error}")))?;
         Ok(RowsNext::More { cursor })
     }
+}
+
+/// What a request's attempts came to, recorded once on its span.
+struct Attempts {
+    count: u8,
+    /// The last HTTP status, or `None` when the last attempt got no answer.
+    status: Option<u16>,
+    outcome: RequestOutcome,
 }
 
 enum Failure {

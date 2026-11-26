@@ -5,7 +5,9 @@ use std::collections::{HashMap, HashSet};
 
 use futures::{StreamExt, stream};
 use import_notion::domain::databases::{DatabaseLoss, ReadFailure};
-use import_notion::domain::model::{DataSourceSummary, Inventory, InventoryProgress, NotionId};
+use import_notion::domain::model::{
+    DataSourceSummary, Inventory, InventoryProgress, NotionId, PlanStage,
+};
 use import_notion::domain::ports::NotionApi;
 
 use super::super::write::Cancel;
@@ -37,7 +39,16 @@ struct PageScan {
 }
 
 /// Keep search summaries and discard each page body as soon as its references are read.
-#[tracing::instrument(name = "notion.database_dependencies", skip_all, fields(dependencies = tracing::field::Empty, sources = tracing::field::Empty), err)]
+#[tracing::instrument(
+    name = "notion.plan.database_dependencies",
+    skip_all,
+    fields(
+        stage = <&'static str>::from(PlanStage::DatabaseDiscovery),
+        dependencies = tracing::field::Empty,
+        sources = tracing::field::Empty,
+    ),
+    err
+)]
 pub(crate) async fn discover<Api: NotionApi>(
     api: &Api,
     mut inventory: Inventory,
