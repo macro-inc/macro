@@ -143,13 +143,21 @@ export class OperationIndex<T extends Indexed> {
     return blocker;
   }
 
-  /** The last queued request about `opId` that `matches`, if any. */
-  lastOf(opId: string, matches: (queued: T) => boolean): T | undefined {
+  /**
+   * The last request about `opId` queued after `after` (a `seq`) that
+   * `matches`, if any. It reads back only as far as `after`.
+   */
+  lastOf(
+    opId: string,
+    after: number,
+    matches: (queued: T) => boolean
+  ): T | undefined {
     const list = this.touches.get(opId);
     if (!list) return undefined;
     for (let index = list.length - 1; index >= 0; index -= 1) {
       const queued = list[index];
-      if (queued !== undefined && matches(queued)) return queued;
+      if (queued === undefined || queued.seq <= after) return undefined;
+      if (matches(queued)) return queued;
     }
     return undefined;
   }

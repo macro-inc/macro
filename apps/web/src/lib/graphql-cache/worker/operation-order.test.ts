@@ -448,6 +448,27 @@ describe('OperationIndex', () => {
     const reads = rest.filter((entry) => entry.request.kind !== 'teardown');
     expect(roots(reads)).toEqual([1, 3, 4]);
   });
+
+  it('finds the last matching request about an operation, reading back only to a fence', () => {
+    const { entries, index } = indexed([
+      read(1, 'a'),
+      read(2, 'b'),
+      teardown(3, 'a'),
+      read(4, 'a'),
+      read(5, 'a'),
+    ]);
+    const isRead = (entry: (typeof entries)[number]) =>
+      entry.request.kind === 'read';
+    const found = (after: number) => {
+      const entry = index.lastOf('a', after, isRead);
+      return entry === undefined ? undefined : entries.indexOf(entry);
+    };
+    expect(found(-1)).toBe(4);
+    expect(found(3)).toBe(4);
+    expect(found(4)).toBeUndefined();
+    expect(index.lastOf('a', -1, (entry) => entry.seq < 3)).toBe(entries[2]);
+    expect(index.lastOf('c', -1, isRead)).toBeUndefined();
+  });
 });
 
 describe('operation teardown order', () => {

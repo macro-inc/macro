@@ -524,28 +524,24 @@ export class CacheWorkerCore {
 
       // Coalesce only within the current lifecycle segment, and never with a
       // read queued before this operation's teardown: a remount must perform
-      // a fresh read to re-register deps. Only the latest read with this
-      // signature can qualify: an earlier one has a barrier or teardown
-      // between, which runs only after it. A signature names its operation,
-      // so that read is among the operation's own requests. (A signature
-      // holds the query text, so a map keyed by it would hash all of that
-      // text on every arrival.)
+      // a fresh read to re-register deps. A signature names its operation, so
+      // a duplicate is among that operation's requests queued since the later
+      // of the two. (A signature holds the query text, so a map keyed by it
+      // would hash all of that text on every arrival.)
       if (
         signature !== undefined &&
         request.kind === 'read' &&
         request.opId !== undefined
       ) {
-        const duplicate = this.operations.lastOf(
-          request.opId,
-          (queued) => queued.readSignature === signature
-        );
         const barrier = this.queuedBarriers[this.queuedBarriers.length - 1];
         const teardown = this.operations.lastTeardownOf(request.opId);
-        if (
-          duplicate &&
-          (barrier === undefined || duplicate.seq > barrier.seq) &&
-          (teardown === undefined || duplicate.seq > teardown.seq)
-        ) {
+        const fence = Math.max(barrier?.seq ?? -1, teardown?.seq ?? -1);
+        const duplicate = this.operations.lastOf(
+          request.opId,
+          fence,
+          (queued) => queued.readSignature === signature
+        );
+        if (duplicate) {
           duplicate.priority = Math.max(duplicate.priority, priority);
           duplicate.waiters.push({ resolve, reject });
           this.collectArrivalsThenDrain();
