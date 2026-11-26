@@ -7,6 +7,9 @@ use predicate_index::{
 const DOCUMENTS: i64 = 40;
 const TIED: i64 = 5;
 const PROFILE: &str = "profile-v1";
+const SORT: &str = "created-at";
+/// The most ids the channel list sends in one filter.
+const BATCH: i64 = 500;
 
 fn token(value: &str) -> Token {
     Token::new(value).unwrap()
@@ -55,7 +58,7 @@ fn documents() -> Vec<IndexDocument> {
             Vec::new()
         } else {
             vec![IntegerFact {
-                attribute: token("created-at"),
+                attribute: token(SORT),
                 value: n / TIED,
             }]
         },
@@ -87,10 +90,30 @@ fn lists() -> Vec<Vec<String>> {
             vec!["id-created".into(), "id-changed".into()],
         ]
         .concat(),
+        // A full batch, as the channel list sends: every cached id and the rest absent.
+        [
+            ids(0..DOCUMENTS),
+            (DOCUMENTS..BATCH)
+                .map(|n| format!("id-absent-{n}"))
+                .collect(),
+        ]
+        .concat(),
     ]
 }
 
-fn predicates(list: &[String]) -> Vec<Vec<PartitionPredicate>> {
+fn predicates(
+    list: &[String],
+    direction: SortDirection,
+    tie_direction: SortDirection,
+) -> Vec<Vec<PartitionPredicate>> {
+    // The next page's cursor: past a record inside a run of tied sort values.
+    let after = PredicateExpr::After {
+        attribute: token(SORT),
+        value: 3,
+        key: PredicateRecordKey::new("Thing:thing:17").unwrap(),
+        direction,
+        tie_direction,
+    };
     let thing = |predicate| PartitionPredicate {
         partition: token("thing"),
         predicate,
@@ -113,6 +136,11 @@ fn predicates(list: &[String]) -> Vec<Vec<PartitionPredicate>> {
             },
         ],
         vec![thing(any_of("id", list)), other(any_of("id", list))],
+        vec![thing(and(any_of("id", list), after.clone()))],
+        vec![thing(and(
+            and(any_of("id", list), exact("member", "me")),
+            after,
+        ))],
     ]
 }
 
@@ -153,7 +181,7 @@ fn shadows(
     replace(Some(moved.clone()), &moved.record_key);
     let mut tied = at(13);
     tied.sort_facts = vec![IntegerFact {
-        attribute: token("created-at"),
+        attribute: token(SORT),
         value: 0,
     }];
     replace(Some(tied.clone()), &tied.record_key);
@@ -200,16 +228,16 @@ fn id_lists_answer_the_reference_rows_in_order_across_ties_missing_ids_shadows_a
                     .await
                     .unwrap();
             }
-            let mut listed = 0;
+            let (mut listed, mut windowed) = (0, 0);
             for list in lists() {
-                for partitions in predicates(&list) {
-                    for limit in [1, 3, 7, 100] {
-                        for direction in [SortDirection::Asc, SortDirection::Desc] {
-                            for tie_break_direction in [SortDirection::Asc, SortDirection::Desc] {
+                for direction in [SortDirection::Asc, SortDirection::Desc] {
+                    for tie_break_direction in [SortDirection::Asc, SortDirection::Desc] {
+                        for partitions in predicates(&list, direction, tie_break_direction) {
+                            for limit in [1, 3, 7, 100] {
                                 let query = ValidatedIndexQuery::new(IndexQuery {
                                     profile: Profile::new(token(PROFILE)),
                                     partitions: partitions.clone(),
-                                    sort_attribute: token("created-at"),
+                                    sort_attribute: token(SORT),
                                     sort_direction: direction,
                                     tie_break_direction,
                                     limit,
@@ -226,14 +254,26 @@ fn id_lists_answer_the_reference_rows_in_order_across_ties_missing_ids_shadows_a
                                 {
                                     listed += 1;
                                 }
-                                let expected = evaluate_reference(&query, &effective)
-                                    .into_iter()
+                                let reference = evaluate_reference(&query, &effective);
+                                let expected = reference
+                                    .iter()
                                     .map(|hit| hit.record_key.as_str().to_owned())
                                     .collect::<Vec<_>>();
+                                let expected_sorts = reference
+                                    .iter()
+                                    .map(|hit| hit.sort_value)
+                                    .collect::<Vec<_>>();
+                                if both_plans(&storage, &query, &context) {
+                                    windowed += 1;
+                                }
                                 let reconciled = storage
                                     .reconcile_predicate_index(&query, &[])
                                     .await
                                     .unwrap_or_else(|error| panic!("{error:?}; {context}"));
+                                assert_eq!(
+                                    reconciled.sort_values, expected_sorts,
+                                    "reconcile sort values; {context}"
+                                );
                                 let reconciled = reconciled
                                     .keys
                                     .iter()
@@ -264,6 +304,7 @@ fn id_lists_answer_the_reference_rows_in_order_across_ties_missing_ids_shadows_a
                 }
             }
             assert!(listed > 0, "no query took the id-list plan");
+            assert!(windowed > 0, "no window answered to compare with");
         }
     });
 }
@@ -286,7 +327,7 @@ fn id_lists_take_the_set_plan_only_when_their_facts_fit_the_first_window() {
             let query = ValidatedIndexQuery::new(IndexQuery {
                 profile: Profile::new(token(PROFILE)),
                 partitions,
-                sort_attribute: token("created-at"),
+                sort_attribute: token(SORT),
                 sort_direction: SortDirection::Desc,
                 tie_break_direction: SortDirection::Desc,
                 limit,
@@ -352,5 +393,97 @@ fn id_lists_take_the_set_plan_only_when_their_facts_fit_the_first_window() {
             ],
             7
         ));
+    });
+}
+
+/// Runs the query through both plans, whatever the routing would pick, and
+/// checks they answer the same rows, sort values and order. Returns whether
+/// the window answered (it gives up past its candidate cap).
+fn both_plans(storage: &TursoStorage, query: &ValidatedIndexQuery, context: &str) -> bool {
+    let connection = storage.connection();
+    let excluded = optimistic_query_status(&connection, query)
+        .unwrap()
+        .uncertain_ids;
+    let (sql, parameters) = compile_predicate_selection(query, &excluded, true);
+    let set = driver::query(&connection, &sql, parameters)
+        .unwrap_or_else(|error| panic!("{error:?}; set plan; {context}"))
+        .iter()
+        .map(|row| {
+            (
+                required_text(row, 0).unwrap(),
+                required_i64(row, 1).unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let Some(hits) = bounded_selection::try_select(&connection, query, &excluded)
+        .unwrap_or_else(|error| panic!("{error:?}; window; {context}"))
+    else {
+        return false;
+    };
+    let windows = hits
+        .into_iter()
+        .map(|hit| (hit.record_key.as_str().to_owned(), hit.sort_value))
+        .collect::<Vec<_>>();
+    assert_eq!(windows, set, "window against set plan; {context}");
+    true
+}
+
+/// A list beside a residual the set-based plan flattens into one AND chain
+/// too deep for Turso's parser: the window still answers it.
+#[test]
+fn an_id_list_the_set_plan_cannot_prepare_falls_back_to_the_window() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("id-list-deep-residual").unwrap();
+        let docs = documents();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                docs.iter()
+                    .cloned()
+                    .map(ProjectionMutation::Replace)
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        fn none_of(values: &[String]) -> PredicateExpr {
+            match values {
+                [value] => PredicateExpr::Not(Box::new(exact("project", value))),
+                _ => {
+                    let (left, right) = values.split_at(values.len() / 2);
+                    and(none_of(left), none_of(right))
+                }
+            }
+        }
+        let projects = (0..128).map(|n| format!("project-{n}")).collect::<Vec<_>>();
+        let query = ValidatedIndexQuery::new(IndexQuery {
+            profile: Profile::new(token(PROFILE)),
+            partitions: vec![PartitionPredicate {
+                partition: token("thing"),
+                predicate: and(any_of("id", &ids([0, 1])), none_of(&projects)),
+            }],
+            sort_attribute: token(SORT),
+            sort_direction: SortDirection::Desc,
+            tie_break_direction: SortDirection::Desc,
+            limit: 1,
+        })
+        .unwrap();
+        assert!(
+            bounded_selection::listed_within_window(&storage.connection(), query.as_query())
+                .unwrap()
+        );
+        let expected = evaluate_reference(&query, &docs)
+            .into_iter()
+            .map(|hit| hit.record_key.as_str().to_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(expected.len(), 1);
+        let actual = storage
+            .reconcile_predicate_index(&query, &[])
+            .await
+            .unwrap()
+            .keys
+            .iter()
+            .map(|key| key.as_str().to_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected);
     });
 }

@@ -31,8 +31,22 @@ pub(super) fn select(
     excluded_optimistic: &[i64],
     include_sort: bool,
 ) -> Result<driver::Rows, TursoStorageError> {
-    let listed = listed_within_window(connection, query.as_query())?;
-    if !listed && let Some(hits) = try_select(connection, query, excluded_optimistic)? {
+    let compile = || {
+        if include_sort {
+            compile_predicate_selection(query, excluded_optimistic, true)
+        } else {
+            compile_predicate_sql(query)
+        }
+    };
+    if listed_within_window(connection, query.as_query())? {
+        let (sql, parameters) = compile();
+        // Turso can refuse the set-based SQL (a residual it flattens past the
+        // parser's depth) where the window's prepares: then take the window.
+        if let Some(mut statement) = driver::prepare_unless_refused(connection, &sql)? {
+            return driver::query_prepared(&mut statement, parameters);
+        }
+    }
+    if let Some(hits) = try_select(connection, query, excluded_optimistic)? {
         return Ok(hits
             .into_iter()
             .map(|hit| {
@@ -44,11 +58,7 @@ pub(super) fn select(
             })
             .collect());
     }
-    let (sql, parameters) = if include_sort {
-        compile_predicate_selection(query, excluded_optimistic, true)
-    } else {
-        compile_predicate_sql(query)
-    };
+    let (sql, parameters) = compile();
     driver::query(connection, &sql, parameters)
 }
 
@@ -68,7 +78,7 @@ pub(super) fn listed_within_window(
     for partition in searched_partitions(query) {
         let seed =
             conjunction::split(&partition.predicate).map_or(&partition.predicate, |(seed, _)| seed);
-        let list = match seed {
+        let mut list = match seed {
             PredicateExpr::Exact { attribute, value } => (attribute, vec![value]),
             PredicateExpr::Or(_, _) => match alternatives::exact_alternatives(seed) {
                 Some(list) => list,
@@ -76,6 +86,11 @@ pub(super) fn listed_within_window(
             },
             _ => return Ok(false),
         };
+        // A repeated value would count its facts twice.
+        list.1
+            .sort_by(|left, right| left.as_bytes().cmp(right.as_bytes()));
+        list.1
+            .dedup_by(|left, right| left.as_bytes() == right.as_bytes());
         lists.push(list);
     }
     // A single value per partition is what the window tests cheaply.
@@ -409,7 +424,7 @@ fn has_optimistic_documents(connection: &Db) -> Result<bool, TursoStorageError> 
 /// Reads both fact sources' windows, continuing any that cannot yet prove the
 /// page past the candidates it already read, until every window is exhausted
 /// or reaches past the page's cutoff.
-fn try_select(
+pub(super) fn try_select(
     connection: &Db,
     query: &ValidatedIndexQuery,
     excluded_optimistic: &[i64],
