@@ -1310,6 +1310,32 @@ async fn the_cpu_limit_stops_a_busy_program() {
     service.shutdown().await;
 }
 
+/// Programs import the handle types their helpers take, as they would from
+/// any package; the type check must know them.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn entity_handle_types_can_be_imported_from_the_sdk() {
+    let (_root, service) = checked_service().await;
+    let body = "export async function main({ macro }: CodeContext) {\n  const channel: Channel = macro.channels.byId('c');\n  const message: Message = channel.message('m');\n  const project: Project = macro.projects.byId('p');\n  const document: Document = macro.documents.byId('d');\n  const task: Task = macro.tasks.byId('t');\n  const thread: EmailThread = macro.email.byId('e');\n  const email: EmailMessage = macro.email.message('em');\n  const chat: Chat = macro.chats.byId('ch');\n  const user: User = macro.users.byId('u');\n  const session: AgentSession = macro.agentSessions.byId('s');\n  return { data: [channel, message, project, document, task, thread, email, chat, user, session].map((handle) => handle.id) };\n}\n";
+    let names = "AgentSession, Channel, Chat, Document, EmailMessage, EmailThread, Message, Project, Task, User";
+    for import in ["import type", "import"] {
+        let source = format!("{import} {{ {names} }} from '@macro-inc/sdk';\n{body}");
+        let (_, outcome) = run(&service, &source, 10_000).await;
+        assert!(
+            matches!(&outcome, Outcome::Succeeded { value } if value["data"] == serde_json::json!(["c", "m", "p", "d", "t", "e", "em", "ch", "u", "s"])),
+            "{import}: {outcome:?}"
+        );
+    }
+    // The import is the handle's class, not `any`.
+    let source = "import type { Channel } from '@macro-inc/sdk';\nexport async function main({ macro }: CodeContext) {\n  const channel: Channel = macro.channels.byId('c');\n  const count: number = channel;\n  return { data: count };\n}\n";
+    let (_, outcome) = run(&service, source, 10_000).await;
+    assert!(
+        matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Compile && error.message.contains("TS2322")),
+        "{outcome:?}"
+    );
+    service.shutdown().await;
+}
+
 async fn checked_service() -> (tempfile::TempDir, ExecutionService) {
     let root = tempfile::tempdir().unwrap();
     let binary = Command::new("which").arg("deno").output().await.unwrap();
