@@ -1,0 +1,139 @@
+//! The hot tier: decoded records kept in memory in front of storage, bounded
+//! by a record count (chosen by the host) and by an estimate of their heap
+//! bytes (the same for every host). Storage holds every record the tier
+//! holds, so whatever it evicts is read back on the next miss.
+
+use crate::value::{CacheValue, EntityKey, Record};
+use lru::LruCache;
+use std::collections::BTreeMap;
+use std::mem::size_of;
+use std::num::NonZeroUsize;
+
+/// Heap bytes the hot tier may hold, estimated by [`record_bytes`]. In a
+/// replay of a 6,500-channel chat sidebar its records average about 51 KB, so
+/// the budget holds about 1,200 of them; most other records are far smaller,
+/// and the host's record cap bounds those. The estimate leaves out allocator
+/// overhead: in that replay, freeing an estimated 293 MB freed 420 MB of RSS.
+pub const HOT_BYTE_BUDGET: usize = 64 << 20;
+
+/// Bytes a `BTreeMap` spends per entry besides the key and value, about
+/// what its nodes (of up to 11 entries) average.
+const MAP_ENTRY_BYTES: usize = 16;
+
+struct HotRecord {
+    record: Record,
+    bytes: usize,
+}
+
+pub struct HotRecords {
+    records: LruCache<EntityKey<'static>, HotRecord>,
+    bytes: usize,
+    budget: usize,
+}
+
+impl HotRecords {
+    pub fn new(capacity: NonZeroUsize, budget: usize) -> Self {
+        Self {
+            records: LruCache::new(capacity),
+            bytes: 0,
+            budget,
+        }
+    }
+
+    /// The record, marked as the most recently used.
+    pub fn get(&mut self, key: &EntityKey<'static>) -> Option<&Record> {
+        self.records.get(key).map(|hot| &hot.record)
+    }
+
+    /// The record, leaving recency as it is.
+    pub fn peek(&self, key: &EntityKey<'static>) -> Option<&Record> {
+        self.records.peek(key).map(|hot| &hot.record)
+    }
+
+    pub fn contains(&self, key: &EntityKey<'static>) -> bool {
+        self.records.contains(key)
+    }
+
+    pub fn pop(&mut self, key: &EntityKey<'static>) -> Option<Record> {
+        let hot = self.records.pop(key)?;
+        self.bytes -= hot.bytes;
+        Some(hot.record)
+    }
+
+    /// Keeps the record as the most recently used, then evicts the least
+    /// recently used until both bounds hold. A record larger than the whole
+    /// byte budget is not kept, and drops any older copy of itself.
+    pub fn put(&mut self, key: EntityKey<'static>, record: Record) {
+        let bytes = record_bytes(&key, &record);
+        if bytes > self.budget {
+            self.pop(&key);
+            return;
+        }
+        if let Some((_, replaced)) = self.records.push(key, HotRecord { record, bytes }) {
+            self.bytes -= replaced.bytes;
+        }
+        self.bytes += bytes;
+        while self.bytes > self.budget {
+            let Some((_, evicted)) = self.records.pop_lru() else {
+                break;
+            };
+            self.bytes -= evicted.bytes;
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.records.clear();
+        self.bytes = 0;
+    }
+
+    pub fn size(&self) -> HotTierSize {
+        HotTierSize {
+            records: self.records.len(),
+            bytes: self.bytes,
+        }
+    }
+}
+
+/// What the hot tier holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HotTierSize {
+    pub records: usize,
+    /// Estimated by [`record_bytes`].
+    pub bytes: usize,
+}
+
+/// An estimate of the heap bytes an entry holds: its key, the record's
+/// field map and everything the values own. It counts string and list
+/// lengths, not their spare capacity, which a decoded record rarely has.
+pub fn record_bytes(key: &EntityKey<'_>, record: &Record) -> usize {
+    key.0.len() + fields_bytes(&record.fields)
+}
+
+fn fields_bytes(fields: &BTreeMap<String, CacheValue>) -> usize {
+    fields
+        .iter()
+        .map(|(name, value)| {
+            MAP_ENTRY_BYTES
+                + size_of::<String>()
+                + size_of::<CacheValue>()
+                + name.len()
+                + value_bytes(value)
+        })
+        .sum()
+}
+
+fn value_bytes(value: &CacheValue) -> usize {
+    match value {
+        CacheValue::Null | CacheValue::Bool(_) | CacheValue::Number(_) => 0,
+        CacheValue::String(text) | CacheValue::Opaque(text) => text.len(),
+        CacheValue::Ref(key) => key.0.len(),
+        CacheValue::Object(fields) => fields_bytes(fields),
+        CacheValue::List(items) => items
+            .iter()
+            .map(|item| size_of::<CacheValue>() + value_bytes(item))
+            .sum(),
+    }
+}
+
+#[cfg(test)]
+mod test;

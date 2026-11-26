@@ -30,7 +30,7 @@ pub struct PassReadSet {
 /// only copy it.
 pub struct PassReads<'a, S> {
     storage: &'a S,
-    hot: &'a LruCache<EntityKey<'static>, Record>,
+    hot: &'a HotRecords,
     read: Mutex<PassReadSet>,
 }
 

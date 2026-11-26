@@ -4,6 +4,7 @@
 
 pub mod authority;
 mod calendar;
+mod hot_records;
 mod hydration;
 mod pass_reads;
 mod people;
@@ -67,6 +68,8 @@ use crate::search::{
 };
 use crate::store::{QueueDiagnostics, Storage};
 use crate::value::{EntityKey, Record, canonical_json};
+use hot_records::HotRecords;
+pub use hot_records::{HOT_BYTE_BUDGET, HotTierSize};
 use lru::LruCache;
 use predicate_index::{
     OptimisticProjectionMutation, RecordKey as PredicateRecordKey, ValidatedIndexQuery,
@@ -460,8 +463,8 @@ enum IdentityState {
     Bound(String),
 }
 
-/// Default hot-tier capacity (records, not bytes — byte budgets are a
-/// hardening-phase refinement).
+/// Default hot-tier record cap. The tier is also bounded by
+/// [`HOT_BYTE_BUDGET`], whichever binds first.
 pub const DEFAULT_HOT_CAPACITY: usize = 10_000;
 
 /// Bound on the uncertain calendar events one optimistic layer may declare.
@@ -490,7 +493,7 @@ pub struct Engine<S: Storage> {
     revision: CacheRevision,
     contact_fence: Uuid,
     people_context_fence: Uuid,
-    hot: LruCache<EntityKey<'static>, Record>,
+    hot: HotRecords,
     docs: LruCache<String, Document>,
     deps: DepIndex,
     identity: IdentityState,
@@ -513,6 +516,11 @@ impl<S: Storage> Engine<S> {
         Self::with_schema(storage, hot_capacity, crate::meta::bundled_schema())
     }
 
+    /// How many records the hot tier holds and their estimated heap bytes.
+    pub fn hot_tier_size(&self) -> HotTierSize {
+        self.hot.size()
+    }
+
     /// Creates an engine with immutable metadata supplied by its host.
     pub fn with_schema(
         storage: S,
@@ -528,7 +536,10 @@ impl<S: Storage> Engine<S> {
             revision: CacheRevision::ZERO,
             contact_fence: Uuid::now_v7(),
             people_context_fence: Uuid::now_v7(),
-            hot: LruCache::new(NonZeroUsize::new(hot_capacity).expect("capacity > 0")),
+            hot: HotRecords::new(
+                NonZeroUsize::new(hot_capacity).expect("capacity > 0"),
+                HOT_BYTE_BUDGET,
+            ),
             docs: LruCache::new(NonZeroUsize::new(DOCUMENT_CACHE_CAPACITY).unwrap()),
             deps: DepIndex::new(),
             identity: IdentityState::NotHydrated,
@@ -3840,7 +3851,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
 /// `peek` (no recency mutation) — recency is refreshed once per read from
 /// the dep set.
 struct EngineSource<'a> {
-    hot: &'a LruCache<EntityKey<'static>, Record>,
+    hot: &'a HotRecords,
     /// Durable records batch-fetched from storage during this read.
     fetched: &'a HashMap<EntityKey<'static>, Record>,
     /// Optimistically touched keys: durable base + layers, pre-merged.
