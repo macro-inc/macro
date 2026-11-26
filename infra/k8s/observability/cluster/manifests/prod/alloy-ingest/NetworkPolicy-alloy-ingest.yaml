@@ -22,6 +22,13 @@ spec:
       ports:
         - port: 4318
           protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: alloy
+      ports:
+        - port: 12345
+          protocol: TCP
   podSelector:
     matchLabels:
       app.kubernetes.io/instance: alloy-ingest

@@ -16,7 +16,7 @@ modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──
 | Application | Namespace | What it is |
 | --- | --- | --- |
 | `apps` | `argocd` | The app of apps: one Application per directory below. Applied once by hand (bootstrap); it is in `apps/` itself, so from then on it manages itself too. |
-| `argocd` | `argocd` | Argo CD, managing itself. Every Application syncs with prune and self-heal, automatically once `macro.cluster.autoSync` is on (below). |
+| `argocd` | `argocd` | Argo CD, managing itself. Every Application syncs with prune and self-heal, automatically while `macro.cluster.autoSync` is on (below). UI and API at `argo.macro-internal.com`, Google sign-in, read-only ("Argo CD" below). |
 | `cert-manager` | `cert-manager` | Issues the load balancer controller's webhook certificate. |
 | `aws-load-balancer-controller` | `kube-system` | Registers pods in ALB/NLB target groups (`TargetGroupBinding`). Creates no load balancers: no IngressClass, Service controller, Service mutator or Ingress validation, and its role can only register targets. |
 | `external-secrets` | `external-secrets` | External Secrets Operator and the `secrets-manager` ClusterSecretStore over the Secrets Manager secret `observability/prod`. Only cluster admins can create stores (namespace `edit` and `admin` can't), since a store without credentials reads with the operator's. |
@@ -24,13 +24,15 @@ modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──
 | `observability-namespace` | `observability` | The namespace the backends and Grafana run in, default-deny NetworkPolicies and the policies they share. |
 | `alloy-node` | `alloy` | One Alloy per node for the cluster's own node, kubelet, cAdvisor and pod-log telemetry. Sends to Mimir and Loki. |
 | `loki` | `observability` | Loki, three single-binary replicas, logs in S3. |
-| `tempo` | `observability` | Tempo (tempo-distributed), three ingesters, traces in S3; its metrics generator writes span metrics and service graphs to Mimir. |
+| `tempo` | `observability` | Tempo (tempo-distributed), three ingesters, traces in S3; its metrics generator keeps recent blocks for TraceQL metrics. |
 | `mimir` | `observability` | Mimir, three monolithic replicas, metrics in S3, in place of the host's Prometheus. |
 | `reloader` | `observability` | Restarts a Deployment when a Secret it names in `secret.reloader.stakater.com/reload` changes (Grafana's rotated database password). |
 | `grafana` | `observability` | Grafana, two replicas on RDS Postgres with HA alerting between them, provisioned from the host's `nixos/grafana-provisioning`. Sends no notification until the switch, except the watchdog heartbeat (below). |
-| `edge` | `observability` | nginx, the only target of the ALB: Grafana by hostname, OTLP to `alloy-ingest`, basic-auth remote write and Loki push. Runs only in the ALB's zones. |
+| `edge` | `observability` | nginx, the only target of the ALB: Grafana and Argo CD by hostname, OTLP to `alloy-ingest`, basic-auth remote write and Loki push. Runs only in the ALB's zones. |
 | `query-gateway` | `observability` | nginx between Grafana's datasources and the backends: only query endpoints and methods pass. |
-| `alloy-ingest` | `observability` | Two Alloys running the host's `nixos/ingest.alloy`: check the OTLP token, send to Loki, Tempo and Mimir. |
+| `alloy-ingest` | `observability` | Two Alloys running the host's `nixos/ingest.alloy`: check the OTLP token, send logs to Loki, metrics to Mimir and traces to the sampler. |
+| `derived-metrics` | `observability` | Two Alloys that compute the metrics Datadog derives from spans and write them to Mimir ("Derived metrics"). |
+| `alloy-sampler` | `observability` | Three Alloys that each see whole traces: count span metrics and service graphs, keep or drop each trace, send the kept ones to Tempo ("Trace sampling" below). |
 
 Charts are pinned in `charts/<repo>/<chart>/default.nix` (version and hash).
 
@@ -40,8 +42,8 @@ Run from this directory.
 
 | Command | What it does |
 | --- | --- |
-| `nix run .#render` | Renders the modules into `manifests/prod/`. Commit the result with the change. |
-| `nix run .#check` | Fails when `manifests/prod/` differs from a fresh render, then validates. CI runs this (`observability_cluster.yml`). |
+| `nix run .#render` | Renders the modules into `manifests/prod/` and the derived metrics' `MAPPING.md`. Commit the result with the change. |
+| `nix run .#check` | Fails when either differs from a fresh render, then validates. CI runs this (`observability_cluster.yml`). |
 | `nix run .#validate` | Validates the manifests strictly with kubeconform: core kinds against the Kubernetes schemas for the cluster's version, custom resources against the CRDs being installed. |
 | `nix run .#kind-smoke` | Bootstraps the pushed branch onto a throwaway kind cluster and waits for the applications. Every application must sync and be healthy except those that need AWS: `aws-load-balancer-controller` (VPC lookup), `external-secrets` (the ClusterSecretStore), `loki`, `tempo` and `mimir` (gp3 volumes and S3), and `grafana`, `edge` and `alloy-ingest` (their secrets); `edge` may also stay unsynced (its TargetGroupBindings need the controller's webhook). Pass `--delete` to remove the cluster afterwards. |
 | `nix run .#bootstrap -- --context <ctx>` | The one-time bootstrap below. |
@@ -67,31 +69,54 @@ On a new cluster, set `macro.cluster.autoSync = false` in `env/prod.nix`,
 render and merge it before the bootstrap (prod ran its first rollout that way).
 `apps` still syncs itself, but it holds only the Application objects; every
 other application shows what it would change and applies nothing until
-someone syncs it. Read each diff, then sync them in the order of the table
-above (`argocd` first: until then the bootstrap's copy runs):
+someone syncs it. Read each diff, then sync `external-secrets` (its CRD
+comes first: `argocd` has an ExternalSecret), `argocd` (until then the
+bootstrap's copy runs), and the rest in the order of the table above.
+
+The UI is read-only (below), so sync with the CLI as a cluster admin, which
+talks to the cluster through kubectl and needs no Argo CD login. It uses the
+context's namespace, so set that to `argocd` once:
 
 ```sh
-kubectl --context observability -n argocd get applications
-kubectl --context observability -n argocd get secret argocd-initial-admin-secret \
-  -o jsonpath='{.data.password}' | base64 -d
-kubectl --context observability -n argocd port-forward svc/argocd-server 8080:443
-# https://localhost:8080, user admin: each application's "App diff", then "Sync".
-# Or with the CLI (`nix shell nixpkgs#argocd`), after
-# `argocd login localhost:8080 --username admin`:
-argocd app diff argocd/cert-manager
-argocd app sync argocd/cert-manager
+kubectl config set-context observability --namespace argocd
+a="nix shell nixpkgs#argocd -c argocd --core --kube-context observability"
+$a app list
+$a app diff argocd/cert-manager
+$a app sync argocd/cert-manager
 ```
 
 Then a change sets `autoSync = true`, and merging deploys from then on. Prod
 has it on.
 
-After the first login, change the admin password (`argocd account update-password`)
-and delete `argocd-initial-admin-secret`. Any pod in the cluster can reach the
-Argo CD API, and admin there controls the cluster.
+The local `admin` account is off (`admin.enabled = false`), so the install's
+`argocd-initial-admin-secret` is useless; delete it after the bootstrap
+(`kubectl --context observability -n argocd delete secret argocd-initial-admin-secret`).
 
 The repository is public, so Argo CD clones it over HTTPS without a deploy key
 (shallow, `depth: 1`). If it ever goes private, add a read-only deploy key to
 `observability/prod` and an ExternalSecret for the repository Secret.
+
+## Argo CD
+
+The UI and API are at https://argo.macro-internal.com: the ALB (listener rule,
+DNS record and certificate from `../aws/` settings `hosts.argocd`) → the edge
+→ `argocd-server`, plain HTTP inside the cluster (`server.insecure`).
+
+- **Sign-in** is Google only, through Argo CD's Dex
+  (`modules/platform/argocd.nix`), for accounts in `macro.com`: Dex rejects
+  any account without that hosted domain. It uses Grafana's Google OAuth
+  client (`google_client_id`, `google_client_secret` in `observability/prod`,
+  through the ExternalSecret `argocd-google`), whose authorized redirect URIs
+  must include `https://argo.macro-internal.com/api/dex/callback`.
+- **Everyone is read-only** (`policy.default: role:readonly`): applications,
+  diffs, history, resources and pod logs, with Secret values masked, plus a
+  refresh (re-reading `main`), which changes nothing. Nothing grants more. Changes ship by merging to `main`; anything else (a manual sync, a
+  rollback) is a cluster admin with `argocd --core` ("Bootstrap").
+- **No local accounts**: `admin.enabled = false`.
+- The ALB alarms see only the edge, so after any change to sign-in (the OAuth
+  client, `dex.config`, the hostname), sign in once in a browser.
+- The CLI signs in through the browser:
+  `argocd login argo.macro-internal.com --sso --grpc-web`.
 
 ## What `../aws/` must provide
 
@@ -115,9 +140,8 @@ Loki, Tempo and Mimir (`modules/backends/`) each keep three copies of recent
 data (replication 3, quorum 2), one replica per zone, and older data in their
 own S3 bucket, so a rollout, a drained node or a lost zone loses neither
 writes nor queries. Two parts keep one copy: Tempo's metrics generators and
-Loki's pattern ingester each own a share of the series or streams, so while a
-replica is down its share of span metrics, service graphs and log patterns
-is missing. Each pod keeps its WAL on a gp3 volume.
+Loki's pattern ingester each own a share of the spans or streams, so while a
+replica is down its share of TraceQL metrics and log patterns is missing. Each pod keeps its WAL on a gp3 volume.
 
 | Backend | Write | Query | Bucket |
 | --- | --- | --- | --- |
@@ -130,7 +154,7 @@ from there. No tenant headers: Loki runs without auth (tenant `fake`), Tempo
 and Mimir without multitenancy.
 
 Retention (logs 30 days, traces 7, metrics 30), limits and features (pattern
-ingestion, level detection, span metrics, service graphs) come from the
+ingestion, level detection, TraceQL metrics) come from the
 single host's `infra/stacks/observability/nixos/backend-config.nix`, so the
 two stay the same while both run; CI re-checks the render when it changes.
 
@@ -166,13 +190,95 @@ Their pods reach the backends at the URLs in `modules/backends/endpoints.nix`;
 label writers `observability.macro.com/telemetry-write: "true"` and readers
 `observability.macro.com/telemetry-read: "true"` (`clientLabels` there).
 
+## Derived metrics
+
+Datadog computes metrics from spans and logs, which its monitors and dashboards read.
+`modules/derived-metrics/` computes the same ones here:
+
+```
+alloy-ingest ── tap: spans and logs some metric reads, before sampling ──▶ derived-metrics ── OTLP, delta ──▶ Mimir
+```
+
+- `spans.nix` and `logs.nix` define them, with Datadog's meaning; `alloy.nix` turns the
+  definitions into the tap and the application's Alloy configuration.
+- [`modules/derived-metrics/MAPPING.md`](modules/derived-metrics/MAPPING.md)
+  (generated) says what each Datadog metric and tag is called in Mimir and how
+  to translate a query. Read it before porting a monitor.
+- Not Loki's ruler: a rule would read every service's logs each minute, and a
+  quantile of logs can't be summed over time.
+- Not Tempo's metrics generator: it sees only the traces the sampler keeps and
+  can measure nothing but a span's duration.
+- The tap drops rather than waits: its queue holds 4 MiB at most and it gives up
+  on what `derived-metrics` can't take for a minute. It isn't free: ingest copies
+  each batch before the tap filters it, about a fifth more memory churn and CPU
+  for a log batch (more for deeply nested ones). The cluster's ingest has twice the
+  host's memory limit to make up for it; look here first if it refuses data. The
+  tap forwards only the attributes the metrics read, and of those only strings
+  (cut at 256 bytes), numbers and booleans, without events or links, and only the
+  known phrases of a log's body, so no prompt or response text.
+- Every 30 s each replica writes one delta sample per series that had any,
+  stored as it comes (`otel_native_delta_ingestion` in Mimir, experimental): no
+  counter resets, no first increment lost, a series that fires once a day counts.
+  A distribution is one native histogram series.
+- Cardinality: each replica writes its own series, so a metric has at most twice
+  its label combinations. The widest labels are `tool` and, on the eight Outlook
+  mailbox metrics, `link_id` (one per connected mailbox, by two flags). Mimir caps
+  any one metric at 20k series (`max_global_series_per_metric`), so a metric
+  stops growing at its cap but several together can still fill the total: watch
+  `cortex_ingester_memory_series` when a sender is added.
+
 ## Grafana, the edge and ingest
 
 ```
 ALB ─▶ edge ─┬─ grafana.* ──▶ grafana ──▶ query-gateway ──▶ Loki, Mimir, Tempo
-             ├─ /v1/{traces,logs,metrics} ──▶ alloy-ingest ──▶ Loki, Tempo, Mimir
+             ├─ /v1/{traces,logs,metrics} ──▶ alloy-ingest ─┬─ logs, metrics ──▶ Loki, Mimir
+             │                                             └─ traces ──▶ alloy-sampler ──▶ Tempo
              └─ /api/v1/write, /loki/api/v1/push (basic auth) ──▶ Mimir, Loki
 ```
+
+### Trace sampling
+
+`alloy-ingest` routes every span of a trace to one `alloy-sampler` replica by
+its trace ID, over the headless Service's DNS. Each replica:
+
+- counts `traces_spanmetrics_*` and `traces_service_graph_*` from every span,
+  before anything is dropped. Series carry the replica's name in `sampler`, so
+  sum across it;
+- holds a trace 30 seconds, then keeps it if a policy in
+  `modules/sampler/policies.nix` matches: from prod, every trace with an error,
+  every served request of 1 s or more, and a tenth of the rest; from any
+  environment, every `perf` and Outlook trace; from dev, CI and local stacks,
+  everything, up to the caps below (low for each local service, since one
+  failing in a loop sends as much as the rest of dev). An unnamed environment
+  is sampled like prod. A span that arrives later follows a kept trace; one of
+  a dropped trace is judged again, so a late error is still kept (that part of
+  the trace only);
+- caps each service within each group of policies, in sustained spans a second
+  (a burst of at least 20,000 per replica passes first). A trace is charged to
+  the service of its root span, or, when the root never arrives, to every named
+  service in it, from a separate cap of half the size. A service over its cap
+  loses traces while the others keep theirs. Services named in `policies.nix` have their own; the rest share
+  `other`. Perf and Outlook traces have one cap each, shared by all. The caps
+  bound what is stored, not what is held: spans of every service wait in the
+  same memory, so a flood far above the sized load can push others out early.
+
+Two things are approximate. When a replica starts or stops, about a third of
+trace IDs move to another one, so a trace in flight can be in two parts, each
+decided on its own; a retry after a replica dies abruptly counts and stores
+spans twice for a few seconds. A graceful stop loses up to 30 seconds of the
+replica's unflushed span metrics.
+
+TraceQL metrics and Drilldown → Traces see only the sampled traces; use the
+span metrics for rates and errors. An exemplar can point at a trace that was
+dropped.
+
+A load test of 38,000 spans a second (synthetic, about 1 KB each, on x86) took
+0.7 cores of ingest and 1.5 of sampler over three replicas, each holding 80,000
+traces in 1.8 GiB, with nothing refused or pushed out.
+
+Watch `otelcol_processor_tail_sampling_*` and `otelcol_exporter_*_failed_*`
+(`job="observability/alloy"`): a trace dropped too early means `NUM_TRACES` is
+too small, and refused spans mean the memory limit is reached.
 
 The edge and the query gateway are the full host's nginx rules, ported by
 hand; Alloy ingest runs the host stack's `nixos/ingest.alloy` with the
@@ -194,7 +300,9 @@ notification route, so rules evaluate and show state here but nothing reaches
 GoAlert, SNS or anyone. The one exception is the watchdog: an always-firing
 rule that pings a GoAlert heartbeat monitor every two minutes, so GoAlert pages if
 this Grafana, its alerting or its path to GoAlert stops. The switch sets
-`notify = true`. Muting covers notification policies only: a contact point's
+`notify = true`. The cluster's own rules are the "Observability cluster"
+group in `modules/grafana.nix` (today: Tempo compaction stalled), routed to
+GoAlert notify. Muting covers notification policies only: a contact point's
 **Test** button in the UI sends for real even while muted; don't press it
 before the switch.
 
@@ -265,7 +373,7 @@ machine with cluster access (`../aws/README.md` "Cluster access"):
     -d '{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"switch-test"}}]},"scopeLogs":[{"logRecords":[{"timeUnixNano":"'"$now"'","body":{"stringValue":"switch test"}}]}]}]}'
   curl -fsS http://localhost:8080/v1/traces -H 'Host: otlp.macro-internal.com' \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
-    -d '{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"switch-test"}}]},"scopeSpans":[{"spans":[{"traceId":"5b8efff798038103d269b633813fc60c","spanId":"eee19b7ec3c1b174","name":"switch-test","kind":1,"startTimeUnixNano":"'"$now"'","endTimeUnixNano":"'"$((now + 1000000))"'"}]}]}]}'
+    -d '{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"switch-test"}},{"key":"deployment.environment","value":{"stringValue":"dev"}}]},"scopeSpans":[{"spans":[{"traceId":"5b8efff798038103d269b633813fc60c","spanId":"eee19b7ec3c1b174","name":"switch-test","kind":1,"startTimeUnixNano":"'"$now"'","endTimeUnixNano":"'"$((now + 1000000))"'"}]}]}]}'
   ```
   In Grafana, Explore finds `{service_name="switch-test"}` in Loki and trace
   `5b8efff798038103d269b633813fc60c` in Tempo.

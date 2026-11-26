@@ -8,7 +8,11 @@ async fn task_lists_apply_the_reviewed_link_policy_to_each_task_and_folder() {
         (true, ImportVisibility::Shared),
     ] {
         let notion = FakeNotion {
+            views: Vec::new(),
             fetched: Mutex::new(0),
+            queries: Mutex::new(0),
+            scan_stop: None,
+            paginated: false,
             source: NotionDataSource {
                 id: id('e'),
                 database_id: id('f'),
@@ -42,6 +46,7 @@ async fn task_lists_apply_the_reviewed_link_policy_to_each_task_and_folder() {
             shared,
             &PeopleMap::new(),
             &tokio::sync::RwLock::new(NotionLinks::default()),
+            &HashMap::new(),
             &progress,
             &Cancel::default(),
             None,
@@ -67,7 +72,11 @@ async fn private_destinations_override_old_body_and_task_folder_markers() {
     use crate::domain::service::notion_workspace::write::write_tasks;
     for kind in [WrittenKind::BodiesFolder, WrittenKind::TasksFolder] {
         let notion = FakeNotion {
+            views: Vec::new(),
             fetched: Mutex::new(0),
+            queries: Mutex::new(0),
+            scan_stop: None,
+            paginated: false,
             source: NotionDataSource {
                 id: id('e'),
                 database_id: id('f'),
@@ -119,6 +128,7 @@ async fn private_destinations_override_old_body_and_task_folder_markers() {
                         false,
                         &PeopleMap::new(),
                         &tokio::sync::RwLock::new(NotionLinks::default()),
+                        &HashMap::new(),
                         &progress,
                         &Cancel::default(),
                         Some(private)
@@ -144,6 +154,7 @@ async fn private_destinations_override_old_body_and_task_folder_markers() {
                     true,
                     &PeopleMap::new(),
                     &tokio::sync::RwLock::new(NotionLinks::default()),
+                    &HashMap::new(),
                     &progress,
                     &Cancel::default(),
                     None,
@@ -206,7 +217,11 @@ async fn sharing_an_incomplete_source_reuses_only_that_sources_private_outputs()
     use crate::domain::service::notion_workspace::write::write_tasks;
     for kind in [WrittenKind::BodiesFolder, WrittenKind::TasksFolder] {
         let notion = FakeNotion {
+            views: Vec::new(),
             fetched: Mutex::new(0),
+            queries: Mutex::new(0),
+            scan_stop: None,
+            paginated: false,
             source: NotionDataSource {
                 id: id('e'),
                 database_id: id('f'),
@@ -250,6 +265,7 @@ async fn sharing_an_incomplete_source_reuses_only_that_sources_private_outputs()
                     (WrittenKind::Table, TABLE),
                     (WrittenKind::TitleColumn, TITLE_COLUMN),
                     (WrittenKind::Schema, DATABASE),
+                    (WrittenKind::SchemaPlan, derived_id(DATABASE, "schema/[]")),
                 ] {
                     previous.push(WrittenObject::own(item.import_id, kind, value));
                 }
@@ -285,6 +301,7 @@ async fn sharing_an_incomplete_source_reuses_only_that_sources_private_outputs()
                         true,
                         &PeopleMap::new(),
                         &tokio::sync::RwLock::new(NotionLinks::default()),
+                        &HashMap::new(),
                         &progress,
                         &Cancel::default(),
                         None
@@ -356,7 +373,11 @@ async fn a_shared_retry_reapplies_only_the_assignee_to_a_marked_notion_task() {
     )]
     .into();
     let notion = FakeNotion {
+        views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -397,6 +418,7 @@ async fn a_shared_retry_reapplies_only_the_assignee_to_a_marked_notion_task() {
         true,
         &people,
         &tokio::sync::RwLock::new(NotionLinks::default()),
+        &HashMap::new(),
         &progress,
         &Cancel::default(),
         None,
@@ -431,7 +453,11 @@ async fn an_assignee_replay_failure_is_reported_even_when_other_rows_succeed() {
     )]
     .into();
     let notion = FakeNotion {
+        views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -477,6 +503,7 @@ async fn an_assignee_replay_failure_is_reported_even_when_other_rows_succeed() {
         true,
         &people,
         &tokio::sync::RwLock::new(NotionLinks::default()),
+        &HashMap::new(),
         &progress,
         &Cancel::default(),
         None,
@@ -509,7 +536,11 @@ async fn a_shared_retry_preserves_assignments_without_an_omission_notice() {
     )]
     .into();
     let notion = FakeNotion {
+        views: Vec::new(),
         fetched: Mutex::new(0),
+        queries: Mutex::new(0),
+        scan_stop: None,
+        paginated: false,
         source: NotionDataSource {
             id: id('e'),
             database_id: id('f'),
@@ -550,6 +581,7 @@ async fn a_shared_retry_preserves_assignments_without_an_omission_notice() {
         true,
         &people,
         &tokio::sync::RwLock::new(NotionLinks::default()),
+        &HashMap::new(),
         &progress,
         &Cancel::default(),
         None,

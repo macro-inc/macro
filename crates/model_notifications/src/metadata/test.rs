@@ -141,9 +141,12 @@ fn channel_reaction_formats_push_copy() {
         reaction
             .format_title(Some(uid("macro|teo@macro.com")))
             .unwrap(),
-        "teo reacted with 👍 to “This is a useful message”"
+        "teo"
     );
-    assert_eq!(reaction.format_body(None).unwrap(), "#general");
+    assert_eq!(
+        reaction.format_body(None).unwrap(),
+        "Reacted 👍 to: “This is a useful message”\n#general"
+    );
     let apns = reaction
         .as_apns(
             Some(uid("macro|teo@macro.com")),
@@ -157,17 +160,70 @@ fn channel_reaction_formats_push_copy() {
             title: Some(ref title),
             body: Some(ref body),
             ..
-        })) if title == "teo reacted with 👍 to “This is a useful message”"
-            && body == "#general"
+        })) if title == "teo"
+            && body == "Reacted 👍 to: “This is a useful message”\n#general"
     ));
 
     let mut multiline = channel_reaction();
     multiline.message_content = "First line\nsecond line".to_string();
     assert_eq!(
-        multiline
-            .format_title(Some(uid("macro|teo@macro.com")))
-            .unwrap(),
-        "teo reacted with 👍 to “First line second line”"
+        multiline.format_body(None).unwrap(),
+        "Reacted 👍 to: “First line second line”\n#general"
+    );
+}
+
+#[test]
+fn channel_reaction_shortens_a_long_message_and_keeps_the_emoji_whole() {
+    let mut long = channel_reaction();
+    long.emoji = "🧑🏽‍💻".to_string();
+    long.message_content = "word ".repeat(40);
+    let body = long.format_body(None).unwrap();
+    let (reacted, place) = body.split_once('\n').unwrap();
+    assert!(reacted.starts_with("Reacted 🧑🏽‍💻 to: “word word"));
+    assert!(reacted.ends_with("…”"));
+    assert_eq!(
+        reacted.chars().count(),
+        "Reacted 🧑🏽‍💻 to: “”…".chars().count() + CHANNEL_REACTION_EXCERPT_MAX_CHARS
+    );
+    assert_eq!(place, "#general");
+}
+
+#[test]
+fn channel_reaction_never_cuts_a_character_in_half() {
+    let mut flag = channel_reaction();
+    flag.message_content = format!("{}🇨🇦 and more", "a".repeat(79));
+    let body = flag.format_body(None).unwrap();
+    assert_eq!(
+        body,
+        format!("Reacted 👍 to: “{}🇨🇦…”\n#general", "a".repeat(79))
+    );
+}
+
+#[test]
+fn channel_reaction_keeps_a_character_of_many_marks_within_the_push_budget() {
+    let mut marks = channel_reaction();
+    marks.message_content = format!("ok a{}", "\u{301}".repeat(2100));
+    let body = marks.format_body(None).unwrap();
+    assert_eq!(body, "Reacted 👍 to: “ok …”\n#general");
+}
+
+#[test]
+fn channel_reaction_to_a_message_without_text_names_your_message() {
+    let mut attachment = channel_reaction();
+    attachment.message_content = String::new();
+    assert_eq!(
+        attachment.format_body(None).unwrap(),
+        "Reacted 👍 to your message\n#general"
+    );
+}
+
+#[test]
+fn channel_reaction_in_a_direct_message_names_no_place() {
+    let mut dm = channel_reaction();
+    dm.common.channel_type = ChannelType::DirectMessage;
+    assert_eq!(
+        dm.format_body(None).unwrap(),
+        "Reacted 👍 to: “This is a useful message”"
     );
 }
 
@@ -1454,6 +1510,7 @@ fn routine_run_finished_names_the_routine_and_its_outcome() {
         routine_id: Uuid::nil(),
         routine_name: "Morning brief".to_string(),
         outcome: RoutineRunOutcome::Failed,
+        apps_to_connect: Vec::new(),
     };
     let succeeded = RoutineRunFinishedMetadata {
         outcome: RoutineRunOutcome::Succeeded,
@@ -1476,6 +1533,43 @@ fn routine_run_finished_names_the_routine_and_its_outcome() {
     }))
     .unwrap();
     assert!(matches!(event, NotifEvent::RoutineRunFinished(_)));
+    assert!(value.get("appsToConnect").is_none());
+}
+
+#[test]
+fn a_routine_run_refused_for_a_disconnected_app_says_which_to_reconnect() {
+    let one = RoutineRunFinishedMetadata {
+        routine_id: Uuid::nil(),
+        routine_name: "Morning brief".to_string(),
+        outcome: RoutineRunOutcome::Failed,
+        apps_to_connect: vec!["Linear".to_string()],
+    };
+    let several = RoutineRunFinishedMetadata {
+        apps_to_connect: vec!["Linear".into(), "Notion".into(), "Slack".into()],
+        ..one.clone()
+    };
+
+    assert_eq!(one.format_title(None).unwrap(), "Morning brief failed");
+    assert_eq!(
+        one.format_body(None).unwrap(),
+        "It needs Linear connected to run. Reconnect it."
+    );
+    assert_eq!(
+        several.format_body(None).unwrap(),
+        "It needs Linear, Notion and Slack connected to run. Reconnect them."
+    );
+    assert_eq!(
+        serde_json::to_value(&one).unwrap()["appsToConnect"],
+        serde_json::json!(["Linear"])
+    );
+    // Payloads stored before the field existed still read.
+    let stored: RoutineRunFinishedMetadata = serde_json::from_value(serde_json::json!({
+        "routineId": Uuid::nil(),
+        "routineName": "Morning brief",
+        "outcome": "failed",
+    }))
+    .unwrap();
+    assert!(stored.apps_to_connect.is_empty());
 }
 
 #[test]
@@ -1841,5 +1935,25 @@ fn a_ping_about_a_channel_message_opens_at_the_message() {
             .collapse_key(&channel)
             .into_hashed()
             .into_inner()
+    );
+}
+
+#[test]
+fn a_crm_email_sharing_notice_names_no_company_count_or_person() {
+    let notice = CrmEmailSharingChangedMetadata {
+        team_id: uuid::Uuid::nil(),
+        reason: CrmEmailSharingChangeReason::CompaniesMerged,
+    };
+    assert_eq!(
+        notice.format_title(None).unwrap(),
+        "Your CRM email sharing changed"
+    );
+    assert_eq!(
+        notice.format_body(None).unwrap(),
+        "Companies your sharing rules named were merged, so your rules were updated. Review them in CRM settings."
+    );
+    assert_eq!(
+        serde_json::to_value(&notice).unwrap(),
+        serde_json::json!({"teamId": "00000000-0000-0000-0000-000000000000", "reason": "companies_merged"})
     );
 }

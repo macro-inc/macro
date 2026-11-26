@@ -21,6 +21,7 @@ import type {
 } from '../context/email-policy';
 import type { CrmQueryDependencies } from './dependencies';
 import { crmKeys } from './keys';
+import { listReadsCrmEmail } from './list-refresh';
 
 type Dependencies = Pick<CrmQueryDependencies, 'client' | 'feedback'> & {
   policy: typeof crmEmailPolicyClient;
@@ -193,10 +194,7 @@ export function createEmailPolicySource(
               ),
               span.run(() =>
                 refreshActiveGraphqlSoupQueries({
-                  where: (body) =>
-                    typeof body === 'object' &&
-                    body !== null &&
-                    ('ecd' in body || 'eca' in body || 'crma' in body),
+                  where: listReadsCrmEmail,
                   throwOnError: true,
                 })
               ),

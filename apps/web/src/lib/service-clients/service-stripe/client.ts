@@ -1,16 +1,8 @@
+import { metaClickIds } from '@app/lib/analytics/metaClickIds';
 import { registerClient } from '@core/util/mockClient';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
-
-/**
- * Gets Meta _fbp (browser ID) and _fbc (click ID) values from cookies set by the Meta Pixel.
- */
-function getMetaIds(): { fbp: string | undefined; fbc: string | undefined } {
-  const cookies = document.cookie;
-  const fbp = cookies.match(/(?:^|; )_fbp=([^;]*)/)?.[1];
-  const fbc = cookies.match(/(?:^|; )_fbc=([^;]*)/)?.[1];
-  return { fbp, fbc };
-}
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 
 /**
  * Gets the Google Analytics client ID using gtag.
@@ -49,6 +41,8 @@ export const stripeServiceClient = {
       cancelUrl?: string;
       /** The plan to subscribe to; defaults to Premium. */
       plan?: PaidPlan;
+      /** How often it bills; defaults to monthly. Premium is monthly only. */
+      interval?: BillingInterval;
       /** Request the server-validated first-subscription trial. */
       onboardingTrial?: boolean;
     } = {}
@@ -59,10 +53,11 @@ export const stripeServiceClient = {
       successUrl,
       cancelUrl,
       plan,
+      interval,
       onboardingTrial,
     } = args;
     const gaClientId = await getGaClientId();
-    const { fbp, fbc } = getMetaIds();
+    const { fbp, fbc } = metaClickIds();
 
     const result = await authServiceClient.createCheckoutSessionV2({
       successUrl:
@@ -77,6 +72,7 @@ export const stripeServiceClient = {
         fbc: fbc ?? null,
       },
       plan,
+      interval,
       onboardingTrial,
     });
 

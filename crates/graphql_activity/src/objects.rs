@@ -1,5 +1,5 @@
-use activity::{Action, ActivityRecord, RecordedAction};
-use async_graphql::{ID, Json, SimpleObject, Union};
+use activity::{Action, ActivityRecord, RecordMerge, RecordedAction, TimeLog, TimeLogSource};
+use async_graphql::{Enum, ID, Json, SimpleObject, Union};
 use graphql_common::GraphqlEntityType;
 use serde_json::Value;
 
@@ -89,6 +89,10 @@ pub enum GraphqlActivityAction {
     TaskAdded(GraphqlActivityTaskAdded),
     /// A task was removed; references are resolved through authorized project history.
     TaskRemoved(GraphqlActivityTaskRemoved),
+    /// Time was logged on the entity (a task).
+    TimeLogged(GraphqlActivityTimeLogged),
+    /// Other records were merged into the entity (a CRM company or person).
+    RecordMerged(GraphqlActivityRecordMerged),
     /// An action outside this deployment's vocabulary, carried through raw.
     Unknown(GraphqlActivityUnknownAction),
 }
@@ -139,6 +143,60 @@ pub struct GraphqlActivityPropertyChanged {
     pub to: Option<Json<Value>>,
 }
 
+/// Records were merged into the entity, which they now name.
+#[derive(SimpleObject)]
+pub struct GraphqlActivityRecordMerged {
+    /// The records merged in, as they were named at the merge.
+    pub merged: Vec<GraphqlActivityMergedRecord>,
+    /// Team-visible values of the merged records that the entity's own
+    /// values replaced. Private values are never recorded here.
+    pub dropped: Vec<GraphqlActivityDroppedValue>,
+}
+
+/// A record merged into the entity.
+#[derive(SimpleObject)]
+pub struct GraphqlActivityMergedRecord {
+    /// Its id, which now opens the entity.
+    pub id: ID,
+    /// Its name at the merge.
+    pub name: Option<String>,
+}
+
+/// A value a merge dropped.
+#[derive(SimpleObject)]
+pub struct GraphqlActivityDroppedValue {
+    /// The property definition id.
+    pub property: String,
+    /// The merged record that held it.
+    pub record: ID,
+    /// The value.
+    pub value: Json<Value>,
+}
+
+impl From<RecordMerge> for GraphqlActivityRecordMerged {
+    fn from(merge: RecordMerge) -> Self {
+        Self {
+            merged: merge
+                .merged
+                .into_iter()
+                .map(|record| GraphqlActivityMergedRecord {
+                    id: ID(record.id),
+                    name: record.name,
+                })
+                .collect(),
+            dropped: merge
+                .dropped
+                .into_iter()
+                .map(|dropped| GraphqlActivityDroppedValue {
+                    property: dropped.property,
+                    record: ID(dropped.record),
+                    value: Json(dropped.value),
+                })
+                .collect(),
+        }
+    }
+}
+
 /// A principal was added to the entity.
 #[derive(SimpleObject)]
 pub struct GraphqlActivityParticipantAdded {
@@ -158,6 +216,40 @@ pub struct GraphqlActivityParticipantRemoved {
 pub struct GraphqlActivityCallStarted {
     /// The started call.
     pub call_id: ID,
+}
+
+/// Time was logged on the entity (a task). The entry's note is never part of
+/// activity.
+#[derive(SimpleObject)]
+pub struct GraphqlActivityTimeLogged {
+    /// Whole minutes logged.
+    pub minutes: i32,
+    /// The day the time counts for, in `YYYY-MM-DD` form, as the person chose it.
+    pub entry_date: String,
+    /// How the time was logged.
+    pub source: GraphqlActivityTimeLogSource,
+}
+
+/// How time was logged.
+#[derive(Enum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GraphqlActivityTimeLogSource {
+    /// Typed as a length.
+    Manual,
+    /// Saved by stopping a timer.
+    Timer,
+}
+
+impl From<TimeLog> for GraphqlActivityTimeLogged {
+    fn from(log: TimeLog) -> Self {
+        Self {
+            minutes: i32::try_from(log.minutes).unwrap_or(i32::MAX),
+            entry_date: log.entry_date.to_string(),
+            source: match log.source {
+                TimeLogSource::Manual => GraphqlActivityTimeLogSource::Manual,
+                TimeLogSource::Timer => GraphqlActivityTimeLogSource::Timer,
+            },
+        }
+    }
 }
 
 /// An action this deployment's vocabulary doesn't know.
@@ -203,6 +295,8 @@ impl From<RecordedAction> for GraphqlActivityAction {
             }
             RecordedAction::Known(Action::TaskAdded(_)) => Self::TaskAdded(Default::default()),
             RecordedAction::Known(Action::TaskRemoved(_)) => Self::TaskRemoved(Default::default()),
+            RecordedAction::Known(Action::TimeLogged(log)) => Self::TimeLogged(log.into()),
+            RecordedAction::Known(Action::RecordMerged(merge)) => Self::RecordMerged(merge.into()),
             RecordedAction::Known(
                 action @ (Action::Renamed(_)
                 | Action::AppearanceChanged(_)

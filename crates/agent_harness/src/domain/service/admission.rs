@@ -20,7 +20,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 >
     AgentHarnessInner<
@@ -32,7 +31,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -44,7 +42,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     /// Origin-bearing commands must be authorized even when they will only

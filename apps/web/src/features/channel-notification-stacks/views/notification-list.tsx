@@ -15,19 +15,16 @@ import { NotificationListPanel } from '../components/notification-list-panel';
 import type { SenderName } from '../components/stack-label';
 import {
   type ChannelStack,
-  type NotificationListView,
   type StackListStatus,
   stackIsUnread,
 } from '../core/channel-stacks';
 
 /** The gutter the toggle needs: itself plus its inset from the pane's edge. */
 const TOGGLE_MIN_GUTTER = 72;
-/** The gutter a docked list needs to keep its labels to two or three lines. */
+/** The gutter a docked list needs to fit most labels in their two lines. */
 const DOCKED_MIN_GUTTER = 240;
-/** The list's inset from the pane's left edge. */
+/** The list's inset from the pane's left edge and from the message column. */
 const EDGE_INSET = 12;
-/** The lane the per-message checks keep free beside the column. */
-const CHECK_LANE = 44;
 
 /**
  * The toggle in the channel's gutter and the list of stacks it shows: docked
@@ -39,25 +36,22 @@ export function NotificationList(props: {
   gutterWidth: Accessor<number>;
   open: Accessor<boolean>;
   onOpenChange: (open: boolean) => void;
-  view: Accessor<NotificationListView>;
-  onViewChange: (view: NotificationListView) => void;
-  notDone: Accessor<readonly ChannelStack[]>;
-  unread: Accessor<readonly ChannelStack[]>;
-  /** Whether a view's stacks are known yet. */
-  status: (view: NotificationListView) => StackListStatus;
-  onRetry: (view: NotificationListView) => void;
+  /** The listed stacks: unread when the channel opened, or since. */
+  stacks: Accessor<readonly ChannelStack[]>;
+  /** Whether the channel's unread notifications are known yet. */
+  status: Accessor<StackListStatus>;
+  onRetry: () => void;
   senderName: SenderName;
   onOpenStack: (stack: ChannelStack) => void;
   onMarkDone: (stacks: readonly ChannelStack[]) => void;
-  onMarkRead: (stacks: readonly ChannelStack[]) => void;
 }) {
   const [popoverOpen, setPopoverOpen] = createSignal(false);
-  // Only a channel with something left to mark done shows the toggle, so
-  // nothing shows while that is loading. A failed read keeps it, to retry.
+  // Only a channel with something listed shows the toggle, so nothing shows
+  // while that is loading. A failed read keeps it, to retry.
   const shown = () =>
-    props.status('not_done') === 'failed' ||
-    props.status('not_done') === 'retrying' ||
-    props.notDone().length > 0;
+    props.status() === 'failed' ||
+    props.status() === 'retrying' ||
+    props.stacks().length > 0;
   // Whenever the popover's toggle goes (the last stack marked done, or the
   // gutter docking or hiding it), the popover closes and stays closed.
   createEffect(() => {
@@ -65,41 +59,28 @@ export function NotificationList(props: {
       setPopoverOpen(false);
     }
   });
-  const stacks = () =>
-    props.view() === 'not_done' ? props.notDone() : props.unread();
   const docked = () => props.gutterWidth() >= DOCKED_MIN_GUTTER;
-  const dockedWidth = () => props.gutterWidth() - EDGE_INSET - CHECK_LANE;
-
-  const markOne = (stack: ChannelStack) =>
-    props.view() === 'not_done'
-      ? props.onMarkDone([stack])
-      : props.onMarkRead([stack]);
-  const markAll = () =>
-    props.view() === 'not_done'
-      ? props.onMarkDone(stacks())
-      : props.onMarkRead(stacks());
+  const dockedWidth = () => props.gutterWidth() - 2 * EDGE_INSET;
 
   const panel = (onOpenStack: (stack: ChannelStack) => void) => (
     <NotificationListPanel
-      view={props.view()}
-      onViewChange={props.onViewChange}
-      stacks={stacks()}
-      status={props.status(props.view())}
-      onRetry={() => props.onRetry(props.view())}
+      stacks={props.stacks()}
+      status={props.status()}
+      onRetry={() => props.onRetry()}
       senderName={props.senderName}
       onOpen={onOpenStack}
-      onAction={markOne}
-      onActionAll={markAll}
+      onMarkDone={(stack) => props.onMarkDone([stack])}
+      onMarkAllDone={() => props.onMarkDone(props.stacks())}
     />
   );
 
-  // Any not-done stack the viewer has not seen yet.
-  const hasUnread = () => props.notDone().some(stackIsUnread);
+  // Any listed stack the viewer has not read yet.
+  const hasUnread = () => props.stacks().some(stackIsUnread);
   const toggleContent = () => (
     <>
       <BellIcon class="size-4" />
-      <Show when={stacks().length > 0}>
-        <span class="tabular-nums">{stacks().length}</span>
+      <Show when={props.stacks().length > 0}>
+        <span class="tabular-nums">{props.stacks().length}</span>
       </Show>
       {/* The inbox's unread dot, in line after the count; the button's own
           gap spaces it like the bell and the count. */}

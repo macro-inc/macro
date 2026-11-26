@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_captcha_runs SET ended_at = now()\n               WHERE id = $1 AND user_id = $2 AND ended_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8ac71d4e3b050371e38de37e2a35f3232132c60f955482c1778254da2a6614e0"
+}

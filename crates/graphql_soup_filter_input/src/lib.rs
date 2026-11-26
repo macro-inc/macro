@@ -971,6 +971,9 @@ enum GraphqlEmailLiteral {
     CalendarOnly(bool),
     /// Threads with at least one attachment of this kind.
     Attachment(GraphqlAttachmentKind),
+    /// Threads with at least one message carrying this label of one of the
+    /// viewer's inboxes.
+    Label(ID),
     /// The created at option.
     CreatedAt(GraphqlDateLiteral),
     /// The updated at option.
@@ -1000,6 +1003,7 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::Shared(shared) => EmailLiteral::Shared(shared.into_model()),
             Self::CalendarOnly(calendar_only) => EmailLiteral::CalendarOnly(calendar_only),
             Self::Attachment(kind) => EmailLiteral::Attachment(kind.into_model()),
+            Self::Label(id) => EmailLiteral::Label(parse_id(id, "label")?),
             Self::CreatedAt(date) => EmailLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => EmailLiteral::UpdatedAt(date.into_ast()?),
             Self::ViewedAt(date) => EmailLiteral::ViewedAt(date.into_ast()?),
@@ -1109,7 +1113,8 @@ enum GraphqlChannelLiteral {
     Importance(bool),
     /// The is participant option. Filters by whether the requesting user is an
     /// active participant; its presence widens the candidate set to team channels
-    /// of the user's teams they have not joined.
+    /// of the user's teams they have not joined, and, when the filter admits only
+    /// channels it names by id, to public channels too.
     IsParticipant(bool),
     /// Exact notification state for the requester.
     NotificationState(GraphqlNotificationState),

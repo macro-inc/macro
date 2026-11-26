@@ -2,6 +2,7 @@ use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
+mod people_named;
 mod people_search;
 mod plans;
 
@@ -330,5 +331,90 @@ async fn inbox_contacts_are_the_owners_inbox_rows_once_each(pool: PgPool) {
             .await
             .unwrap(),
         [mid(VIEWER)]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("directory"))
+)]
+async fn list_members_are_each_lists_own_members_paged_without_repeats(pool: PgPool) {
+    let repository = DbContactsRepository::new(pool);
+    let cases = [
+        // t is a teammate too, which does not move them out of interacted.
+        (
+            ContactList::Interacted,
+            vec![
+                "macro|a@example.com",
+                "macro|b@example.com",
+                "macro|t@example.com",
+            ],
+        ),
+        (ContactList::Invited, vec!["macro|a@example.com"]),
+        // d is known through both inboxes and is in both inbox lists once.
+        (
+            ContactList::Gmail,
+            vec!["macro|c@example.com", "macro|d@example.com"],
+        ),
+        (
+            ContactList::Outlook,
+            vec!["macro|d@example.com", "macro|e@example.com"],
+        ),
+        // The legacy mixed-case teammate reads canonically; never the viewer.
+        (
+            ContactList::Teammates,
+            vec!["macro|legacy@example.com", "macro|t@example.com"],
+        ),
+    ];
+    for (list, expected) in cases {
+        for limit in [1, 2, 500] {
+            let members = all_pages(limit, |after| {
+                let repository = &repository;
+                async move {
+                    repository
+                        .list_members(mid(VIEWER), list, after.as_ref(), size(limit))
+                        .await
+                }
+            })
+            .await;
+            assert_eq!(members, expected, "{list:?} at {limit}");
+        }
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("directory"))
+)]
+async fn list_members_hold_only_the_owners_rows(pool: PgPool) {
+    let repository = DbContactsRepository::new(pool);
+    let members = |viewer: &'static str, list| {
+        let repository = &repository;
+        async move {
+            ids(&repository
+                .list_members(mid(viewer), list, None, ContactPageSize::MAX)
+                .await
+                .unwrap())
+        }
+    };
+
+    // s invited the viewer, and the viewer invited a: each sees only their own.
+    assert_eq!(
+        members("macro|s@example.com", ContactList::Invited).await,
+        [VIEWER]
+    );
+    assert_eq!(
+        members("macro|s@example.com", ContactList::Teammates).await,
+        ["macro|x@example.com"]
+    );
+    // g's inbox knows the viewer; the viewer's gmail list does not hold g.
+    assert_eq!(
+        members("macro|g@example.com", ContactList::Gmail).await,
+        [VIEWER]
+    );
+    assert!(
+        members("macro|stranger@example.com", ContactList::Teammates)
+            .await
+            .is_empty()
     );
 }

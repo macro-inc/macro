@@ -17,7 +17,7 @@ use crate::domain::ports::{SavedAction, ScheduledActionService};
 use crate::domain::target_validation::TargetValidationError;
 use crate::domain::templates::TemplateInputError;
 use agent_session::domain::routines::RoutineSessionError;
-use ai_billing::{AiAdmissionError, inbound::admission::AiAdmissionErrorBody};
+use ai_billing::{AiAdmissionError, PlanTier, inbound::admission::AiAdmissionErrorBody};
 use axum::extract::{FromRef, Path, Query, State, rejection::JsonRejection};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -233,6 +233,10 @@ where
             post(execute_action::<S, Svc, Auth>),
         )
         .route(
+            "/scheduled-actions/{id}/stop",
+            post(stop_run::<S, Svc, Auth>),
+        )
+        .route(
             "/scheduled-actions/{id}/history",
             get(list_history::<S, Svc, Auth>),
         )
@@ -377,6 +381,7 @@ where
         (status = 200, body = ScheduledActionResponse, description = "The sub-routine its key already named, updated"),
         (status = 400, body = String),
         (status = 401, body = String),
+        (status = 402, body = RoutineLimitErrorBody, description = "The owner's plan allows no more active routines"),
         (status = 403, body = String),
         (status = 409, body = String, description = "The routine already has the most active sub-routines it can"),
         (status = 500, body = String),
@@ -530,6 +535,7 @@ where
     responses(
         (status = 200, body = ScheduledActionResponse),
         (status = 400, body = String),
+        (status = 402, body = RoutineLimitErrorBody, description = "The owner's plan allows no more active routines"),
         (status = 409, body = String, description = "Configuration changed or execution is active"),
         (status = 401, body = String),
         (status = 404, body = String),
@@ -625,6 +631,7 @@ where
     responses(
         (status = 200, body = ScheduledActionResponse),
         (status = 400, body = String),
+        (status = 402, body = RoutineLimitErrorBody, description = "The owner's plan allows no more active routines"),
         (status = 409, body = String, description = "Configuration changed or execution is active"),
         (status = 401, body = String),
         (status = 404, body = String),
@@ -756,6 +763,36 @@ where
         .execute_action_now(entity_access_receipt)
         .await?;
     Ok(Json(execution))
+}
+
+#[utoipa::path(
+    post,
+    path = "/scheduled-actions/{id}/stop",
+    tag = "scheduled actions",
+    operation_id = "stop_scheduled_action_run",
+    description = "Stop the routine's run in progress. It ends as stopped shortly after; with no run in progress, nothing changes.",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    responses(
+        (status = 204, description = "The stop was sent, or nothing was running"),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn stop_run<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<OwnerAccessLevel, Svc, Auth>,
+) -> Result<StatusCode, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state.service.stop_run(entity_access_receipt).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
@@ -904,6 +941,25 @@ impl From<anyhow::Error> for ScheduledActionApiError {
     }
 }
 
+/// A write that would activate more routines than the owner's plan allows.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct RoutineLimitErrorBody {
+    /// Human-readable explanation.
+    pub error: String,
+    pub code: RoutineLimitCode,
+    /// How many routines the plan allows to be active at once.
+    pub limit: u32,
+    /// The plan the limit comes from.
+    pub plan: PlanTier,
+}
+
+/// Stable code clients match on, distinct from AI allowance codes.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RoutineLimitCode {
+    RoutineLimitReached,
+}
+
 impl IntoResponse for ScheduledActionApiError {
     fn into_response(self) -> axum::response::Response {
         let error = match self {
@@ -923,6 +979,18 @@ impl IntoResponse for ScheduledActionApiError {
         }
         if let Some(policy) = error.downcast_ref::<ActionPolicyError>() {
             let status = match policy {
+                ActionPolicyError::RoutineLimitReached(limit) => {
+                    return (
+                        StatusCode::PAYMENT_REQUIRED,
+                        Json(RoutineLimitErrorBody {
+                            error: policy.to_string(),
+                            code: RoutineLimitCode::RoutineLimitReached,
+                            limit: limit.max_active(),
+                            plan: limit.plan(),
+                        }),
+                    )
+                        .into_response();
+                }
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
                 ActionPolicyError::UpdateConflict
                 | ActionPolicyError::TooManySubRoutines
@@ -932,9 +1000,11 @@ impl IntoResponse for ScheduledActionApiError {
                 }
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
+                | ActionPolicyError::EmailLabelsDisabled
                 | ActionPolicyError::ConditionsDisabled
                 | ActionPolicyError::InvalidAppearance(_)
                 | ActionPolicyError::GithubNotLinked
+                | ActionPolicyError::UnknownInboxes
                 | ActionPolicyError::DescriptionTooLong
                 | ActionPolicyError::KeyOutsideRun
                 | ActionPolicyError::InvalidKey

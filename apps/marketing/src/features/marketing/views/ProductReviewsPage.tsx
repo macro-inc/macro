@@ -1,13 +1,10 @@
 import { setPageSeo } from '../../../app/utils/utilSeo';
-import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
-import { GithubCursorDemo } from '../components/reviews/GithubCursorDemo';
-import { GithubPasteDemo } from '../components/reviews/GithubPasteDemo';
-import { GithubTaskDemo } from '../components/reviews/GithubWorkflow';
-import { ReviewInboxDemo } from '../components/reviews/ReviewStories';
 import './product-reviews-page.css';
+import { FeaturePhoneScreens } from '../components/FeatureScreenshot';
+import { featureScreens, phoneScreens } from '../core/feature-screens';
 
 const githubFaq = [
   {
@@ -70,67 +67,39 @@ export function RouteGithub() {
       <div class="github-page">
         <ProductHero
           product="GitHub"
-          title={'From bug report\nto merged pull request.'}
-          description="Track a fix as a task, review and merge the linked pull request from chat, and get GitHub comments and @mentions in your inbox."
+          title="From bug report to merged PR."
+          description="Review diffs, read comments, and merge PRs inside Macro so engineering stays right beside the thread."
           cta="github_hero_get_started"
           tutorial="github"
         />
         <FeaturePageSection
           id="pr-links"
-          demo={{
-            tone: 'github',
-            glassFrame: false,
-          }}
           title={'Link the task, the chat,\nand the pull request.'}
-          description="Paste a GitHub link in chat or a document and hover to see its live status. When a linked pull request opens or merges, the task in Macro updates automatically."
-        >
-          <DemoInteractionBoundary
-            class="feature-page-visual"
-            label="GitHub link preview"
-            render={() => <GithubPasteDemo />}
-          />
-        </FeaturePageSection>
+          description="Paste a GitHub URL in Macro Chat or Macro Docs for live PR status on hover. The linked Macro Tasks item updates itself when the PR opens or merges."
+          screen={featureScreens['pr-links']}
+        />
         <FeaturePageSection
           id="coding-agents"
-          demo={{
-            tone: 'github',
-            glassFrame: false,
-          }}
           title="@mention Cursor, merge from Macro Chat."
-          description="Coding agents like Cursor live right in your channels. @mention one and ask it to fix something, and when the pull request is ready, merge it right from the channel. The task and the pull request link back to each other."
-        >
-          <DemoInteractionBoundary
-            class="feature-page-visual"
-            label="Cursor in chat"
-            render={() => <GithubCursorDemo />}
-          />
-        </FeaturePageSection>
+          description="Tag Cursor or another coding agent right inside Macro Chat to investigate and open a branch. Review the diff and merge the PR without leaving the channel."
+          screen={featureScreens['coding-agents']}
+        />
         <FeaturePageSection
           id="pr-tasks"
-          demo={{
-            tone: 'github',
-          }}
           title="Macro Tasks move as the pull request moves."
-          description="As you create, review, and merge a pull request, the linked task moves through In Progress, In Review, and Completed. Click the GitHub pill to go right to the pull request from the task, or vice versa. It opens in a split screen, so you don’t have to leave Macro."
-        >
-          <DemoInteractionBoundary
-            class="feature-page-visual"
-            render={() => <GithubTaskDemo />}
-          />
-        </FeaturePageSection>
+          description="The linked task moves through In Progress, In Review, and Completed as you create, review, and merge a pull request. Click the GitHub pill to jump between the task and PR in split screen without leaving Macro."
+          screen={featureScreens['pr-tasks']}
+        />
         <FeaturePageSection
           id="review-inbox"
-          demo={{
-            tone: 'github',
-          }}
           title="Pull requests in your inbox."
-          description="GitHub’s own notifications are not very good. When you get a comment on a pull request you authored, or you’re mentioned in one, it appears in your unified inbox alongside your messages, tasks, and important emails, so you never miss a pull request."
-        >
-          <DemoInteractionBoundary
-            class="feature-page-visual"
-            render={() => <ReviewInboxDemo />}
-          />
-        </FeaturePageSection>
+          description="GitHub’s notification inbox is easy to miss. PR comments and @mentions land straight in Macro Home beside your team chat, Macro Tasks, and priority Macro Mail."
+          screen={featureScreens['review-inbox']}
+        />
+        <FeaturePhoneScreens
+          screens={phoneScreens['github']}
+          product="GitHub"
+        />
         <FeaturePageFaq
           guide={{ href: '/github#guide', label: 'GitHub' }}
           id="github-faq"

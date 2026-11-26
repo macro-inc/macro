@@ -82,6 +82,41 @@ describe('team authorization invalidation', () => {
     unsubscribe();
   });
 
+  it.each(['overlay', 'identity'] as const)(
+    'keeps %s selection-reset policy on refresh failure without extending the data lease',
+    async (kind) => {
+      vi.useFakeTimers();
+      ensureTeamCalendarExpiry();
+      const queryKey =
+        kind === 'overlay'
+          ? calendarKeys.teamOutOfOffice('viewer', undefined, 'team').queryKey
+          : calendarTeamKeys.identity('viewer').queryKey;
+      queryClient.setQueryData(queryKey, 'cached');
+      const observer = new QueryObserver(queryClient, {
+        queryKey,
+        queryFn: async () => {
+          throw new Error('Refresh unavailable');
+        },
+        staleTime: Infinity,
+      });
+      const unsubscribe = observer.subscribe(() => {});
+      const closeSelection = vi.fn();
+      const unsubscribeReset = subscribeToTeamCalendarReset(closeSelection);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      await observer.refetch();
+      expect(observer.getCurrentResult().isError).toBe(true);
+      expect(observer.getCurrentResult().data).toBe('cached');
+      expect(closeSelection).toHaveBeenCalledTimes(kind === 'overlay' ? 0 : 1);
+
+      await vi.advanceTimersByTimeAsync(TEAM_CALENDAR_MAX_DATA_AGE_MS - 30_000);
+      expect(observer.getCurrentResult().data).toBeUndefined();
+      expect(closeSelection).toHaveBeenCalledTimes(kind === 'overlay' ? 1 : 2);
+      unsubscribeReset();
+      unsubscribe();
+    }
+  );
+
   it("keeps the viewer's own team and settings visible while they refetch", async () => {
     const identity = { userId: 'alice', teamId: 'team' };
     const keys = [

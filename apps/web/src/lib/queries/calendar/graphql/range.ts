@@ -386,14 +386,18 @@ async function readViewportItems(
   );
 }
 
-// The outstanding first read of each host that has not answered yet.
-const firstReads = new WeakMap<object, Promise<unknown>>();
+// Share one bounded startup wait until the underlying host read settles.
+const firstReads = new WeakMap<
+  object,
+  Promise<CalendarRangeCacheResult | 'not-ready'>
+>();
 
 export type CalendarRangeRead =
   | { kind: 'range'; data: CalendarOccurrencesData }
   /**
-   * The cache may be older than what REST already showed. `older` is what it
-   * holds for a covered week, for when REST cannot answer either.
+   * The cache may be older than what REST already showed or than a change it
+   * was told of. `older` is what it holds for a covered week, for when REST
+   * cannot answer either.
    */
   | { kind: 'behind'; older?: CalendarOccurrencesData }
   | { kind: 'unsupported' }
@@ -402,9 +406,8 @@ export type CalendarRangeRead =
 type TraceSpan = Pick<Span, 'setAttr'>;
 
 /**
- * Asks the host for a viewport. A host that has never answered gets a head
- * start; past it, or while an earlier first read is still outstanding, the
- * caller reads from REST instead of waiting on cache startup.
+ * Share the unanswered host's head start across concurrent viewports. Each
+ * caller then reads its own range; an expired startup falls back immediately.
  */
 async function askCalendarRange(
   host: Pick<CacheHost, 'calendarRange'>,
@@ -412,29 +415,60 @@ async function askCalendarRange(
   headStartMs: number
 ): Promise<CalendarRangeCacheResult | 'not-ready'> {
   if (calendarCacheAnswered(host)) return host.calendarRange(args);
-  if (firstReads.has(host)) return 'not-ready';
-  const answer = (async (): Promise<CalendarRangeCacheResult | 'not-ready'> => {
-    try {
-      const result = await host.calendarRange(args);
-      if (result.kind === 'range') markCalendarCacheAnswered(host);
-      return result;
-    } catch {
-      // A failed first read leaves the host unanswered: this viewport reads
-      // REST and the next read asks again.
-      return 'not-ready';
-    } finally {
-      firstReads.delete(host);
+  const pending = firstReads.get(host);
+  if (pending) {
+    const first = await pending;
+    if (first === 'not-ready' || first.kind !== 'range') return 'not-ready';
+    return host.calendarRange(args);
+  }
+  const answer = Promise.resolve().then(
+    async (): Promise<CalendarRangeCacheResult | 'not-ready'> => {
+      try {
+        const result = await host.calendarRange(args);
+        if (result.kind === 'range') markCalendarCacheAnswered(host);
+        return result;
+      } catch {
+        // A failed first read leaves the host unanswered: this viewport reads
+        // REST and the next read asks again.
+        return 'not-ready';
+      } finally {
+        firstReads.delete(host);
+      }
     }
-  })();
-  firstReads.set(host, answer);
-  return withinCacheHeadStart(answer, headStartMs);
+  );
+  const bounded = withinCacheHeadStart(answer, headStartMs);
+  firstReads.set(host, bounded);
+  return bounded;
+}
+
+/** Brings a cache that may be behind forward, unless a pending write shaped the week. */
+async function catchUpBeforeAnswering(
+  result: Extract<CalendarRangeCacheResult, { kind: 'range' }>,
+  options: {
+    sync?: Pick<CalendarSyncController, 'catchUp'>;
+    span?: TraceSpan;
+  }
+): Promise<CalendarCatchUp> {
+  if (!options.sync) return 'current';
+  if (result.optimistic) {
+    options.span?.setAttr('calendar.read.pending_write', true);
+    return 'current';
+  }
+  // Stays on a read whose deadline passes while the delta runs.
+  options.span?.setAttr('calendar.read.catch_up', 'waiting');
+  const catchUp = await options.sync.catchUp();
+  options.span?.setAttr('calendar.read.catch_up', catchUp);
+  return catchUp;
 }
 
 /**
  * Answers a viewport from the cache, fetching only spans never fetched and,
  * once per key, viewports whose cached occurrences cannot be read. When the
- * cache may be older than a REST answer already on screen, `sync` brings it
- * forward first; a cache it cannot bring forward answers `behind`.
+ * cache may be older than a REST answer already on screen or a change it was
+ * told of, `sync` brings it forward first; a cache it cannot bring forward
+ * answers `behind`. A week a pending write shaped answers from the cache
+ * without catching up: REST cannot show the write, and its settle refreshes
+ * the week.
  */
 export async function readCalendarRange(
   host: Pick<
@@ -462,13 +496,9 @@ export async function readCalendarRange(
   if (first === 'not-ready') return { kind: 'not-ready' };
   let result = first;
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
-  let catchUp: CalendarCatchUp = 'current';
-  if (behind && options.sync) {
-    // Stays on a read whose deadline passes while the delta runs.
-    options.span?.setAttr('calendar.read.catch_up', 'waiting');
-    catchUp = await options.sync.catchUp();
-    options.span?.setAttr('calendar.read.catch_up', catchUp);
-  }
+  const catchUp = behind
+    ? await catchUpBeforeAnswering(result, options)
+    : 'current';
   if (options.signal?.aborted) throw options.signal.reason;
   const current = await match(catchUp)
     // The cache moved on since the first read whenever it was behind then.

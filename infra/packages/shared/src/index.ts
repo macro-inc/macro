@@ -65,6 +65,7 @@ export { DopplerEcsEnvironment } from './doppler_environment';
 export {
   getAiToolsInfra,
   getAiToolsServiceRoleArns,
+  getMcpCredentialsKey,
   type AiToolsInfra,
 } from './ai_tools';
 export { getKafkaClusterPolicy } from './kafka_cluster_policy';

@@ -38,6 +38,9 @@ function reviewSummary(
   let summary: string;
   if (payload.outcome === 'dismissed') {
     summary = `${actor} dismissed ${count}`;
+  } else if (payload.outcome === 'refused') {
+    // Nothing started; the review is open again, unchanged.
+    return { summary: 'Not started · review still open', failed: true };
   } else if (settled) {
     summary = `Review finished · ${completed} of ${count} completed`;
   } else if (payload.outcome === 'approved') {
@@ -60,6 +63,7 @@ function importLabel(source: ImportWorkspace = 'notion') {
     .with('notion', () => 'Import')
     .with('linear', () => 'Linear import')
     .with('jira', () => 'Jira import')
+    .with('hubspot', () => 'HubSpot import')
     .exhaustive();
 }
 
@@ -78,9 +82,11 @@ function importPlanSummary(plan: ImportPlan) {
         ...(plan.copy ? [countLabel(plan.copy, 'project', 'projects')] : []),
       ].join(' · ')
     )
+    .with('hubspot', () => countLabel(plan.copy, 'record', 'records'))
     .exhaustive();
   let summary = `${importLabel(plan.source)} plan ready · ${counts}`;
-  if (plan.byHand) summary += ` · ${plan.byHand} by hand`;
+  if (plan.byHand)
+    summary += ` · ${plan.byHand} ${plan.byHand === 1 ? 'needs' : 'need'} you`;
   return { summary, failed: false };
 }
 
@@ -93,12 +99,18 @@ function importSettlementSummary(report: ImportSettlement) {
     .exhaustive();
   const heading = `${importLabel(report.source)} ${ending}`;
   let summary = `${heading} · ${report.imported} of ${report.planned} imported`;
-  if (report.failures.length) summary += ` · ${report.failures.length} failed`;
-  if (report.handItems.length)
-    summary += ` · ${report.handItems.length} by hand`;
+  const failures = report.failureCount ?? report.failures.length;
+  if (failures) summary += ` · ${failures} failed`;
+  if (report.partialDatabaseRows) {
+    const rows = report.partialDatabaseRows;
+    summary += ` · ${rows} ${rows === 1 ? 'row' : 'rows'} from unfinished databases`;
+  }
+  const handCount = report.handItems.length;
+  if (handCount)
+    summary += ` · ${handCount} ${handCount === 1 ? 'needs' : 'need'} you`;
   return {
     summary,
-    failed: report.outcome === 'failed' || report.failures.length > 0,
+    failed: report.outcome === 'failed' || failures > 0,
   };
 }
 

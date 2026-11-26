@@ -3,9 +3,10 @@ use ::contacts::domain::{
     models::{
         contact::{Contact, ContactId, ContactPage},
         page::{ContactCursor, ContactPageSize},
+        people::{NamedPeopleQuery, PeopleSearchLimit, PersonMatch},
         query::{ContactLookup, ContactSearch},
     },
-    ports::ContactDirectory,
+    ports::{ContactDirectory, PeopleNamingService},
 };
 use graphql_contacts::ContactsGraphqlContext;
 
@@ -51,14 +52,37 @@ impl ContactDirectory for Directory {
     }
 }
 
+impl PeopleNamingService for Directory {
+    async fn people_named(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        _query: &NamedPeopleQuery,
+        _limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        let page = self
+            .contact_page(viewer, None, ContactPageSize::DEFAULT)
+            .await?;
+        Ok(page
+            .contacts
+            .into_iter()
+            .map(|contact| PersonMatch {
+                contact,
+                is_teammate: false,
+                is_agent: false,
+            })
+            .collect())
+    }
+}
+
 #[tokio::test]
 async fn contacts_are_read_from_request_data_only_for_the_authenticated_viewer() {
     let harness = harness();
     let directory = Arc::new(Directory::default());
-    let context = ContactsGraphqlContext::new(directory.clone());
+    let context = ContactsGraphqlContext::new(directory.clone(), directory.clone());
     let query = r#"{ user { id contacts(limit: 2, search: "person", matching: EXACT) { nodes { id userId email name } nextCursor }
         contactsByUserIds(userIds: ["macro|person@example.com"]) { id }
         contactsByEmails(emails: ["person@example.com"]) { id }
+        contactsNamedBy(search: "per", limit: 50) { id userId }
     } }"#;
     // The enclosing user authentication gate runs before the directory resolver.
     for parts in [
@@ -95,7 +119,11 @@ async fn contacts_are_read_from_request_data_only_for_the_authenticated_viewer()
         "macro|person@example.com"
     );
     assert_eq!(
+        data["user"]["contactsNamedBy"][0]["userId"],
+        "macro|person@example.com"
+    );
+    assert_eq!(
         *directory.0.lock().unwrap(),
-        vec![VALID_USER_ID.to_owned(); 3]
+        vec![VALID_USER_ID.to_owned(); 4]
     );
 }

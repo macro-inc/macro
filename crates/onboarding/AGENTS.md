@@ -4,7 +4,7 @@
 
 Part of the onboarding feature (`/setup`). Tracks one row per user for
 whether they are still in the flow, and assembles the state the flow reads
-(connected MCP servers, a suggested team domain). Connecting an app during
+(usable connections, a suggested team domain). Connecting an app during
 onboarding does not start an import.
 
 ## Start here
@@ -22,7 +22,7 @@ onboarding does not start an import.
 
 ## Boundaries
 
-- Depends on: `mcp_client`, `generic_email_domains`, `macro_authorization`.
+- Depends on: `connectors`, `generic_email_domains`, `macro_authorization`.
 - Used by: `services/agent_harness_service`,
   `services/authentication_service` (onboarding deletes its row during
   account deletion).

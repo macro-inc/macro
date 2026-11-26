@@ -18,6 +18,8 @@ import { connect } from 'node:net';
 import { extname, join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { connect as connectSecurely } from 'node:tls';
+import type { CatalogPage } from '../../../src/lib/service-clients/service-cognition/generated/schemas/catalogPage';
+import type { Connector } from '../../../src/lib/service-clients/service-cognition/generated/schemas/connector';
 import { developmentAuthority, STACK_ADDRESS_FAMILY, send } from './http';
 
 export type SignedInUser = {
@@ -301,7 +303,13 @@ async function readBody(request: IncomingMessage): Promise<Buffer> {
 
 function builtInStubs(options: FrontOptions): Stub {
   const { user } = options;
-  return ({ path }) => {
+  return ({ method, path }) => {
+    if (method === 'GET' && path === '/cognition/connectors') {
+      return { json: [] satisfies Connector[] };
+    }
+    if (method === 'GET' && path === '/cognition/connectors/catalog') {
+      return { json: { apps: [], nextCursor: null } satisfies CatalogPage };
+    }
     if (path === '/auth/user/legacy_user_permissions') {
       return {
         json: {

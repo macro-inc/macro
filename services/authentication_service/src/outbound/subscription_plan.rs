@@ -4,12 +4,13 @@ use crate::service::subscription_plan::{
 };
 use crate::service::subscription_status::{SubscriptionPlanFacts, SubscriptionStatusGateway};
 use ai_billing::domain::SubscriptionScope;
+use hosted_runtimes::domain::models::BillingInterval;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use std::sync::Arc;
 use teams::domain::{
     customer_repo::CustomerRepository,
-    model::{SeatPlan, SeatPrices},
+    model::{SeatDowngrade, SeatPlan, SeatPrices},
 };
 /// Composed with the owning billing adapter through its domain port.
 #[derive(Clone)]
@@ -129,14 +130,18 @@ impl<
         target: SeatPlan,
         action: PlanAction,
     ) -> Result<(), PlanChangeError> {
-        self.prices
-            .price_id(target)
-            .map_err(|_| PlanChangeError::PlanUnavailable)?;
+        if !self.prices.is_sold(target) {
+            return Err(PlanChangeError::PlanUnavailable);
+        }
         let id = subscription.id.parse().map_err(anyhow::Error::from)?;
         match action {
             PlanAction::ScheduleDowngrade => {
+                let downgrade = SeatDowngrade {
+                    from: subscription.plan,
+                    to: target,
+                };
                 self.customer
-                    .schedule_seat_plan(&id, user, Some(target))
+                    .schedule_seat_plan(&id, user, Some(downgrade))
                     .await
             }
             PlanAction::KeepCurrent => self.customer.schedule_seat_plan(&id, user, None).await,
@@ -146,7 +151,14 @@ impl<
                     .await
             }
         }
-        .map_err(anyhow::Error::from)?;
+        .map_err(|error| match error {
+            // Not sold at the subscription's interval: Premium on an annual
+            // subscription.
+            teams::domain::model::CustomerError::PlanUnavailable(_) => {
+                PlanChangeError::PlanUnavailable
+            }
+            error => anyhow::Error::from(error).into(),
+        })?;
         Ok(())
     }
 }
@@ -186,8 +198,19 @@ impl<
                 .map_err(anyhow::Error::from)?,
             None => None,
         };
+        let interval = subscription
+            .items
+            .data
+            .iter()
+            .find_map(|item| item.price.as_ref()?.recurring.as_ref())
+            .and_then(|recurring| match recurring.interval {
+                stripe::RecurringInterval::Month => Some(BillingInterval::Month),
+                stripe::RecurringInterval::Year => Some(BillingInterval::Year),
+                stripe::RecurringInterval::Day | stripe::RecurringInterval::Week => None,
+            });
         Ok(Some(SubscriptionPlanFacts {
             period_end,
+            interval,
             scheduled_change,
             billing: if read_billing {
                 self.billing

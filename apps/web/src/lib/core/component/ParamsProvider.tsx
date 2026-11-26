@@ -72,6 +72,29 @@ export function createParamsState() {
 
 export type ParamsState = ReturnType<typeof createParamsState>;
 
+type SearchParams = ReturnType<typeof useSearchParams>[0];
+
+function resolveParam(
+  state: ParamsState,
+  searchParams: SearchParams,
+  param: string
+): Accessor<string | undefined> {
+  const blockValue = state.getParam(param);
+  return () => blockValue() ?? flattenParamValue(searchParams[param]);
+}
+
+/**
+ * `param` as a `ParamsProvider` over `state` resolves it for its children: the
+ * value the block was navigated to, else the URL's.
+ */
+export function useResolvedParam(
+  state: ParamsState,
+  param: string
+): Accessor<string | undefined> {
+  const [searchParams] = useSearchParams();
+  return resolveParam(state, searchParams, param);
+}
+
 export function ParamsProvider(
   props: ParentProps<{
     state?: ParamsState;
@@ -80,10 +103,7 @@ export function ParamsProvider(
   const [searchParams] = useSearchParams();
   const state = props.state ?? createParamsState();
   const context: ParamsContextValue = {
-    getParam: (param) => {
-      const blockValue = state.getParam(param);
-      return () => blockValue() ?? flattenParamValue(searchParams[param]);
-    },
+    getParam: (param) => resolveParam(state, searchParams, param),
     getNavigationCount: state.getNavigationCount,
   };
 

@@ -84,6 +84,13 @@ pub struct EmailSearchResponseItemWithMetadata {
     pub snippet: Option<String>,
     pub is_read: bool,
     pub inbox_visible: bool,
+    /// Whether the thread holds mail the user received, not only mail they
+    /// sent or drafted. A thread without any was never in the inbox, so it is
+    /// not archived when it is out of the inbox.
+    // Results recorded before this field (saved agent tool output) read as
+    // received, which is how they were shown.
+    #[serde(default = "received_mail_unknown")]
+    pub has_received_mail: bool,
     pub is_draft: bool,
     pub is_important: bool,
     /// Entity properties (e.g. tags) on the thread.
@@ -92,6 +99,10 @@ pub struct EmailSearchResponseItemWithMetadata {
     pub properties: Option<Vec<SoupProperty>>,
     #[serde(flatten)]
     pub extra: EmailSearchResponseItem,
+}
+
+fn received_mail_unknown() -> bool {
+    true
 }
 
 /// Metadata associated with Email Search

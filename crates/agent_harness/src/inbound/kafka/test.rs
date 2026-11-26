@@ -372,6 +372,7 @@ fn an_assignment_with_context_prompts_with_instructions_and_carries_the_task() {
             markdown: "The popover scrolls the page.".to_owned(),
             status: None,
             priority: None,
+            start: None,
             due: None,
             assignees: Vec::new(),
             project: None,
@@ -570,6 +571,7 @@ fn message_with_files(sender: ChannelSender<'static>) -> ChannelMessagePostedMet
             // Documents reach the agent as mentions, never as file links.
             attached("document", 0x11),
             attached("static/video", 0x12),
+            attached("static/audio", 0x13),
         ],
         ..message(sender)
     }
@@ -664,6 +666,11 @@ fn a_mention_with_attached_files_opens_with_them_as_prompt_attachments() {
                 "video",
             )
             .mime_type("video/*"),
+            PromptAttachment::new(
+                format!("https://static.example/file/{}", Uuid::from_u128(0x13)),
+                "audio",
+            )
+            .mime_type("audio/*"),
         ]
     );
 }
@@ -689,11 +696,12 @@ fn a_managed_channel_message_with_files_delivers_them_as_prompt_attachments() {
     assert_eq!(prompt.prompt, "@claude fix the tests");
     assert_eq!(
         prompt.attachments.len(),
-        2,
+        3,
         "the document is not a file link"
     );
     assert_eq!(prompt.attachments[0].mime_type.as_deref(), Some("image/*"));
     assert_eq!(prompt.attachments[1].mime_type.as_deref(), Some("video/*"));
+    assert_eq!(prompt.attachments[2].mime_type.as_deref(), Some("audio/*"));
 }
 
 #[test]

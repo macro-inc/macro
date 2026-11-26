@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO import_entity_written (import_id, kind, object, macro_id)\n               SELECT selected.import_id, 'dependency_included', $1, $3\n               FROM UNNEST($2::uuid[]) AS selected(import_id)\n               ON CONFLICT (import_id, kind, object) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "be84ea2510092ec97c10b31bacf5c2e82e2f7359f44e3cb86d45748d6324be7e"
+}

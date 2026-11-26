@@ -85,7 +85,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 >
     AgentHarnessInner<
@@ -97,7 +96,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -109,7 +107,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     /// The running turn a fold report is about, when this replica
@@ -409,7 +406,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 >
     AgentHarnessService<
@@ -421,7 +417,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -433,7 +428,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     /// Refresh the typing indicator of every turn running on this replica.

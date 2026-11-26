@@ -17,7 +17,8 @@ vi.mock('@core/user', () => ({
   tryMacroId: (id: string) => id,
 }));
 vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({ channelsById: () => new Map() }),
+  useChannelDirectory: () => ({ lookup: () => ({ status: 'missing' }) }),
+  loadedChannel: () => undefined,
 }));
 vi.mock('@entity', () => ({
   Entity: {

@@ -1,0 +1,49 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/captcha_vision_lab.rs
+name: CAPTCHA vision lab
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - packages/captcha-vision-lab/**
+      - .github/workflows/captcha_vision_lab.yml
+  schedule:
+    - cron: 0 6 * * *
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  lab:
+    name: CAPTCHA vision lab
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          clean: 'false'
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount /nix cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          seed-cache: sccache-ci
+      - name: Setup Nix dev shell
+        uses: ./.github/actions/setup-nix-dev-shell
+      - name: CAPTCHA Vision Lab Tests
+        run: |-
+          bun install --frozen-lockfile
+          ./node_modules/.bin/playwright install --with-deps chromium
+          env -u LD_LIBRARY_PATH -u BASH_ENV bun run check
+        working-directory: packages/captcha-vision-lab
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix

@@ -1,6 +1,7 @@
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { routineContent } from '../../routines/routine-navigation';
+import { agentsArchiveContent } from '../archive-navigation';
 import type { AgentsPage } from '../core/pages';
 
 /**
@@ -13,6 +14,13 @@ export function openAgentsPage(
   page: AgentsPage,
   params: Record<string, unknown> = {}
 ) {
+  if (page === 'archived') {
+    layout.openWithSplit(agentsArchiveContent(), {
+      activate: true,
+      search: {},
+    });
+    return;
+  }
   if (page === 'routines') {
     layout.openWithSplit(
       routineContent(

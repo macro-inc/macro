@@ -28,6 +28,7 @@ import { createMemo, type ParentProps, useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent, SplitPlacement } from '../layoutManager';
 import { shouldShowSplitCloseButton } from '../layoutUtils';
+import { canDuplicateSplit as canDuplicate } from '../utils/canDuplicateSplit';
 import { canSpotlight } from '../utils/canSpotlight';
 
 /** Split actions shared by legacy split chrome and composable view top bars. */
@@ -50,8 +51,9 @@ export function SplitHeaderContextMenu(props: ParentProps) {
   const canCloseSplit = createMemo(() =>
     shouldShowSplitCloseButton(layout.manager)
   );
-  const canDuplicateSplit = createMemo(
-    () => panel.handle.content().type === 'component'
+  const pane = panel.handle.id as string as PaneId;
+  const canDuplicateSplit = createMemo(() =>
+    canDuplicate(router, pane, panel.handle.content())
   );
   const canToggleSpotlight = createMemo(() => canSpotlight(layout.manager));
   const canSwapWith = (direction: 'left' | 'right') =>
@@ -88,7 +90,7 @@ export function SplitHeaderContextMenu(props: ParentProps) {
             activeSplitId: layout.manager.activeSplitId(),
             currentSplitId: panel.handle.id,
             currentSplitIndex: splitIndex(),
-            currentSplitUrl: router.href(panel.handle.id as string as PaneId),
+            currentSplitUrl: router.href(pane),
             splits: splits.map((split, index) => ({
               index,
               id: split.id,

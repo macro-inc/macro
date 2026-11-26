@@ -35,7 +35,7 @@ before touching the edit flow.
 - `src/provider-account.ts`: model middleware recording an
   `ai.provider_account_unavailable` span when a provider refuses Macro's
   account; `infra/stacks/monitoring/monitors/ai-providers.ts` alerts on it.
-- `src/sync-document.ts`: sync-service's `/state` and revision-checked
+- `src/sync-document.ts`: sync-service's shallow `/state` (current content, no history) and revision-checked
   `/update`, shared by spreadsheets and markdown bodies; callers word its typed
   failures for their users.
 - `src/markdown/body.ts`: `POST /markdown`, no model. Reads a markdown body with

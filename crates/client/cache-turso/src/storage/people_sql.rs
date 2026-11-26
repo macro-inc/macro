@@ -30,7 +30,7 @@ fn statement(plan: &PeopleSqlPlan) -> String {
     sql
 }
 
-pub(super) fn viewer(connection: &Arc<Connection>) -> Result<Option<String>, TursoStorageError> {
+pub(super) fn viewer(connection: &Db) -> Result<Option<String>, TursoStorageError> {
     let key = RecordKey::from_entity(&EntityKey(cache_core::engine::IDENTITY_META_KEY.into()))?;
     let rows = driver::query(
         connection,
@@ -58,7 +58,7 @@ pub(super) fn stamp(viewer: Option<&str>) -> String {
 }
 
 fn project(
-    connection: &Arc<Connection>,
+    connection: &Db,
     viewer: &str,
     key: &RecordKey,
     record: &Record,
@@ -68,13 +68,14 @@ fn project(
     write_projection_state(
         connection,
         &PredicateRecordKey::new(key.as_ref()).map_err(|_| invariant())?,
+        None,
         projection.as_ref(),
     )
 }
 
 /// Called inside the caller's transaction. Rebuild only on a profile/account
 /// transition, in bounded record batches, without changing normalized authority.
-fn ensure(connection: &Arc<Connection>, viewer: Option<&str>) -> Result<bool, TursoStorageError> {
+fn ensure(connection: &Db, viewer: Option<&str>) -> Result<bool, TursoStorageError> {
     let stamp = stamp(viewer);
     let versions = driver::query(
         connection,
@@ -125,17 +126,14 @@ fn ensure(connection: &Arc<Connection>, viewer: Option<&str>) -> Result<bool, Tu
     Ok(true)
 }
 
-pub(super) fn open(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+pub(super) fn open(connection: &Db) -> Result<(), TursoStorageError> {
     driver::write_transaction(connection, || {
         ensure(connection, viewer(connection)?.as_deref())?;
         Ok(())
     })
 }
 
-pub(super) fn write(
-    connection: &Arc<Connection>,
-    entries: &[EncodedRecord],
-) -> Result<(), TursoStorageError> {
+pub(super) fn write(connection: &Db, entries: &[EncodedRecord]) -> Result<(), TursoStorageError> {
     if !entries.iter().any(|entry| {
         entry.contact.is_some() || entry.key.typename == "__meta" && entry.key.id == "identity"
     }) {
@@ -163,86 +161,24 @@ pub(super) fn write(
         // but activity changes must not rewrite the name-word posting list.
         for ((key, next), previous) in projected.into_iter().zip(previous) {
             if next != previous {
-                write_delta(connection, &key, previous.as_ref(), next.as_ref())?;
+                write_projection_state(connection, &key, previous.as_ref(), next.as_ref())?;
             }
         }
     }
     Ok(())
 }
 
-fn write_delta(
-    connection: &Arc<Connection>,
-    key: &PredicateRecordKey,
-    previous: Option<&ProjectionState>,
-    next: Option<&ProjectionState>,
-) -> Result<(), TursoStorageError> {
-    if let (Some(ProjectionState::Complete(old)), Some(ProjectionState::Complete(next))) =
-        (previous, next)
-        && old.record_key == next.record_key
-        && old.profile == next.profile
-        && old.partition == next.partition
-        && old.integer_facts == next.integer_facts
-        && old.sort_facts == next.sort_facts
-    {
-        next.validate().map_err(|_| invariant())?;
-        let ids = driver::query(connection, INDEX_DOCUMENT_ID, vec![text(key.as_str())])?;
-        let [row] = ids.as_slice() else {
-            return Err(invariant());
-        };
-        let id = required_i64(row, 0)?;
-        // Both documents are canonicalized by projection/loading. Bound work to
-        // their facts and preserve the document ID, unrelated facts and indexes.
-        for fact in &old.exact_facts {
-            if next.exact_facts.binary_search(fact).is_err() {
-                require_changed(
-                    driver::execute(
-                        connection,
-                        "DELETE FROM exact_facts WHERE document_id = ? AND attribute = ? AND value = ?",
-                        vec![
-                            Value::from_i64(id),
-                            text(fact.attribute.as_str()),
-                            Value::from_blob(fact.value.as_bytes().to_vec()),
-                        ],
-                    )?,
-                    1,
-                )?;
-            }
-        }
-        for fact in &next.exact_facts {
-            if old.exact_facts.binary_search(fact).is_err() {
-                require_changed(
-                    driver::execute(
-                        connection,
-                        EXACT_FACT_INSERT,
-                        vec![
-                            Value::from_i64(id),
-                            text(fact.attribute.as_str()),
-                            Value::from_blob(fact.value.as_bytes().to_vec()),
-                        ],
-                    )?,
-                    1,
-                )?;
-            }
-        }
-        return Ok(());
-    }
-    write_projection_state(connection, key, next)
-}
-
-pub(super) fn delete(
-    connection: &Arc<Connection>,
-    keys: &[RecordKey],
-) -> Result<(), TursoStorageError> {
+pub(super) fn delete(connection: &Db, keys: &[RecordKey]) -> Result<(), TursoStorageError> {
     for key in keys.iter().filter(|key| key.typename == "GraphqlContact") {
         let key = PredicateRecordKey::new(key.clone().into_entity()?.as_ref())
             .map_err(|_| invariant())?;
-        write_projection_state(connection, &key, None)?;
+        write_projection_state(connection, &key, None, None)?;
     }
     Ok(())
 }
 
 pub(super) fn read(
-    connection: &Arc<Connection>,
+    connection: &Db,
     identity: &str,
     plan: &PeopleSqlPlan,
 ) -> Result<PeopleSqlResult, TursoStorageError> {

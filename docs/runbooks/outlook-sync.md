@@ -21,6 +21,7 @@ Graph and token spans, so find them by their fields:
 | Token lookups | Spans: `@outlook.token_cache:*` |
 | Deferral logs | Logs: `"mailbox sync work deferred"`, grouped by `@defer_reason` |
 | Accounts Graph serves no mailbox for | Logs: `"outlook mailbox health" @mailbox_unavailable:true`; their probes: spans `resource_name:outlook.sync.discover @outlook.defer_reason:no_mailbox`, field `@graph.error_code` ([No mailbox](#no-mailbox)) |
+| The folder claim line | Logs: `"outlook folder line"` once a minute (`@polls_due`, `@oldest_poll_due_seconds`, `@import_rounds_due`, `@oldest_import_round_due_seconds`); per claim, spans `resource_name:outlook.sync.enumerate`, field `@outlook.due_ms` (its wait after it came due), split by `@outlook.import_round` |
 | Its subscription upkeep | Spans: `resource_name:outlook.subscription.maintain @mailbox.link_id:<id>`, field `@outlook.upkeep_failures` (failed runs in a row); mailboxes whose upkeep Graph keeps refusing or failing: `"outlook mailbox health" @watch_failures:>0` (throttled and token-deferred runs are not counted; find those by `@outlook.defer_reason` on the spans) |
 
 Failed, deferred, throttled and slow (over 5 s) Outlook spans are always
@@ -40,16 +41,32 @@ mailbox may get no change notifications and syncs by polling alone (each
 folder about every 2 minutes). A run that works, a reconnect or a lifecycle
 event resets it.
 
+A finished folder is polled again 10 minutes after its last poll while its
+mailbox has a working subscription (one of the mailbox's current generation,
+registered with Graph, not expired, with no failed renewal since), and 2
+minutes after otherwise; a change notification or a `missed` lifecycle event
+makes it due at once either way. Each finished folder's enumerate span records
+the interval it scheduled in `@outlook.poll_interval_seconds` (600 or 120).
+Every folder of every mailbox waits in one claim line for the sync loops, so a
+due folder, notified or not, is read `@outlook.due_ms` after it came due.
+
 Sync work defers itself: a refused or failed unit is parked and retried
 later, so most of these alerts clear without action. Don't edit queue rows in
 production. An importing folder reads its next page only while its mailbox has
 fewer than 200 messages ready to import; until then its enumerate spans read
 `@outlook.outcome:paced`, which is the import keeping pace, not a stall.
-Messages backed off after their own failures don't count. Importing folders
-are claimed ahead of finished folders' polls that came due less than five
-minutes earlier, so a walk reads its next page soon after its import has
-room; a poll due longer than that goes first again. With the live pass
-on, the folder's new mail does not wait for its walk
+Messages backed off after their own failures don't count. Every other folder
+claim of a sync loop takes the longest-due importing folder first, so a walk
+reads its next page soon after its import has room however late the polls
+run; the other claims take the longest-due folder of either kind, where
+importing folders and polls compete by how long they have been due. Enumerate spans name the claim in
+`@outlook.claim` (`import_first`, `longest_due`, `live_pass`). A new import's Inbox
+round is due first and its Sent round next, so their pages are read before
+the other folders', which Graph lists alphabetically (Archive, Deleted Items).
+The snapshot's `import_round_wait_seconds` is how long the mailbox's
+longest-due import round has waited for a claim, normally a few seconds: a
+long wait means the import-first claims are not reaching it. With
+the live pass on, the folder's new mail does not wait for its walk
 ([New mail during an import](#new-mail-during-an-import)).
 
 A message whose own reads keep failing stops retrying: after 3 refusals Graph
@@ -225,7 +242,9 @@ needs a few more failures to alert.
 
 - Group `@outlook.token_cache:* @outlook.outcome:unavailable` spans by
   `@http.status_code`. 503 is authentication-service's own transient
-  failure; no status means the request never got an answer.
+  failure, including another refresh of the same grant in flight (each
+  replica refreshes once for its own cache, so a new grant's first seconds
+  see a few); no status means the request never got an answer.
 - Check authentication-service: errors on
   `GET /auth/internal/microsoft_access_token`, its recent deploys, and
   Microsoft's token endpoint (refresh failures in its logs).
@@ -235,10 +254,17 @@ needs a few more failures to alert.
 ## Reauthorization
 
 More Outlook mailboxes need reauthorization than an hour ago. Their sync stops
-until each user reconnects, so a spike is user-visible. Sync claims skip a
-flagged mailbox, so its queued work waits (`queued` stays above zero) without
-asking authentication-service for tokens; it resumes once a reconnect or a
-token that works again clears the flag.
+until each user reconnects, or Microsoft accepts the grant again, so a spike is
+user-visible. Sync claims skip a flagged mailbox, so its queued work waits
+(`queued` stays above zero); only its discovery is claimed, about once an hour,
+as the probe that asks authentication-service for a token. It resumes once a
+reconnect or a token that works again clears the flag.
+
+A refused refresh (`invalid_grant`, `interaction_required`, `consent_required`,
+or a response without the mail permissions) no longer revokes the grant:
+authentication-service records `refresh_refused_at` on it, answers it as needing
+a reconnect without asking Microsoft for an hour, then refreshes once more, and
+a refresh that works clears it. A disconnect or a replacing grant still revokes.
 
 - List them: `env:prod "outlook mailbox health" @needs_reauth:true`,
   grouped by `@link_id`.
@@ -246,8 +272,34 @@ token that works again clears the flag.
   the Microsoft app registration (an expired client secret, revoked consent),
   the encrypted grant store, or a refresh regression in a recent
   authentication-service deploy. Check its logs for refresh errors.
-- Levers: fix the shared credential or roll back. Mailboxes already marked
-  need their users to reconnect.
+- Why Microsoft refused: authentication-service logs `"microsoft refused a
+  token refresh"` with Microsoft's `@oauth.error` and AADSTS number
+  (`@microsoft.aadsts`), never its description, and `"microsoft refused a
+  grant's refresh; it is kept and retried in an hour"` with the `@grant_id`
+  and generation (`microsoft.token.refresh` span, `@microsoft.outcome`,
+  `@microsoft.refresh_refused`).
+- Levers: fix the shared credential or roll back. A marked mailbox comes back
+  on its own once Microsoft accepts its grant again; otherwise its user
+  reconnects. Grants revoked before refusals stopped revoking stay revoked.
+
+## Drafts that stop
+
+A draft step that gives up logs `email_send.draft_failed` (WARN) with `link_id`,
+`message_id`, the waiting `attempt_ids`, `code`, `stage`, and for a conflict
+`change` and `changed_fields`. `change=content` means the content Graph returns
+(raw, before Macro's sanitizer) differs from the last one Macro read or wrote, in
+the fields `changed_fields` names (`body`, `subject`, `toRecipients`, …);
+`change=unknown` means nothing was recorded to compare. A send admitted onto a
+draft that already stopped logs `email_send.admitted_stopped`. Every step is an
+`outlook.draft.step` span (`@draft.stage`, `@draft.error_code`) whose children
+are its Graph requests.
+
+A moved version goes on only when the content Macro last read or wrote is
+recorded and Graph still returns it: the step logs
+`email_send.draft_version_moved` (INFO). With nothing recorded the draft stops as
+`change=unknown`. On a mailbox whose tenant changes drafts on its own, the INFO
+lines show the rule at work, and a `change=content` line shows where it does not
+apply, with the field a tool rewrites.
 
 ## No mailbox
 

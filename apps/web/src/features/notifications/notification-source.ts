@@ -100,6 +100,13 @@ export type NotificationSource = {
     notification: UnifiedNotification
   ) => UnifiedNotification;
 
+  /**
+   * When this page marked a notification seen, by this device's clock, or
+   * undefined. Compare it with other local times; the server's `viewed_at` is
+   * on the server's clock.
+   */
+  localSeenAt?: (id: string) => string | undefined;
+
   /** Apply local intent to an unread witness without fetching full metadata. */
   withLocalState?: (
     notification: Pick<UnifiedNotification, 'id' | 'state'>
@@ -531,5 +538,6 @@ export function createNotificationSource(
     subscribe,
     withLocalOverrides: withNotificationOverrides,
     withLocalState: notificationStateWithLocalOverrides,
+    localSeenAt: (id) => seenOverrides[id]?.viewedAt,
   };
 }

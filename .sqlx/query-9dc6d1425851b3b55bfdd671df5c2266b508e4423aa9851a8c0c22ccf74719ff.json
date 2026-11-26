@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_runtime_update SET lease_until = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9dc6d1425851b3b55bfdd671df5c2266b508e4423aa9851a8c0c22ccf74719ff"
+}

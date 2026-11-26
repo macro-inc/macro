@@ -28,6 +28,7 @@ echo "\${MACRO_SETUP_TRACEPARENT-unset}" >"$root/bun.trace"
 echo "\${OTEL_EXPORTER_OTLP_ENDPOINT-unset}" >"$root/bun.otlp"
 echo "\${MACRO_LAUNCH_TIMINGS-unset}" >"$root/bun.launch"
 echo "\${OTEL_EXPORTER_OTLP_HEADERS-unset}" >"$root/bun.headers"
+echo "\${OTEL_DEPLOYMENT_ENVIRONMENT-unset}" >"$root/bun.deployment"
 EOF
 chmod +x "$root/bin/bun"
 export PATH=$root/bin:$PATH
@@ -313,6 +314,19 @@ check 'B12 without a computer id it sends no header' bash -c "[[ \$(cat '$root/b
 echo 'MACRO_COMPUTER_ID=01900000-0000-7000-8000-000000000001' >>"$root/case/agent.env"
 start
 check 'B12 and names its computer to the intake' bash -c "[[ \$(cat '$root/bun.headers') == x-macro-computer-id=01900000-0000-7000-8000-000000000001 ]]"
+check 'B12 without a deployment its spans are untagged' bash -c "[[ \$(cat '$root/bun.deployment') == unset ]]"
+echo 'OTEL_DEPLOYMENT_ENVIRONMENT="dev"' >>"$root/case/agent.env"
+start
+check 'B12 and tags them with the deployment agent.env names' bash -c "[[ \$(cat '$root/bun.deployment') == dev ]]"
+fresh
+echo 'OTEL_DEPLOYMENT_ENVIRONMENT="dev"' >>"$root/case/agent.env"
+start
+check 'B12 without an intake the deployment is not passed' bash -c "[[ \$(cat '$root/bun.deployment') == unset ]]"
+fresh
+echo 'OTEL_EXPORTER_OTLP_ENDPOINT="https://intake.test/i/otlp"' >>"$root/case/agent.env"
+echo 'OTEL_DEPLOYMENT_ENVIRONMENT="dev; rm -rf /"' >>"$root/case/agent.env"
+start
+check 'B12 a malformed deployment is ignored' bash -c "[[ \$(cat '$root/bun.deployment') == unset ]]"
 
 # --- B13: the runtime gets the times of start-agent's steps -------------------
 step='[0-9]{16}:[0-9]{16}'

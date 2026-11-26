@@ -10,6 +10,11 @@ export const ENTITY_ID_DATA_ATTRIBUTE = 'data-entity-id';
  * fall-through to 'global' is what mutes app hotkeys beneath them.
  */
 export const HOTKEY_SCOPE_NEUTRAL_DATA_ATTRIBUTE = 'data-hotkey-scope-neutral';
+/**
+ * Marks the app's own navigation outside the splits (the rail's views): a
+ * press there chooses what the active split shows and hands it back focus.
+ */
+export const APP_NAVIGATION_DATA_ATTRIBUTE = 'data-app-navigation';
 
 export const splitContainerAttribute = {
   [SPLIT_CONTAINER_DATA_ATTRIBUTE]: true,
@@ -26,8 +31,13 @@ export const hotkeyScopeNeutralAttribute = {
   [HOTKEY_SCOPE_NEUTRAL_DATA_ATTRIBUTE]: true,
 } as const;
 
+export const appNavigationAttribute = {
+  [APP_NAVIGATION_DATA_ATTRIBUTE]: true,
+} as const;
+
 export const splitContainerSelector = `[${SPLIT_CONTAINER_DATA_ATTRIBUTE}]`;
 export const hotkeyScopeNeutralSelector = `[${HOTKEY_SCOPE_NEUTRAL_DATA_ATTRIBUTE}]`;
+export const appNavigationSelector = `[${APP_NAVIGATION_DATA_ATTRIBUTE}]`;
 export const soupListContainerSelector = `[${SOUP_LIST_CONTAINER_DATA_ATTRIBUTE}]`;
 
 export function entityIdSelector(entityId: string): string {

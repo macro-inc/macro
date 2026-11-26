@@ -25,7 +25,7 @@ data:
         grafana.macro-internal.com grafana;
         otlp.macro-internal.com otlp;
       }
-    limit_req_zone $server_name zone=ingest:1m rate=100r/s;
+    limit_req_zone $server_name zone=ingest:1m rate=400r/s;
     map $http_upgrade $connection_upgrade {
       default upgrade;
       "" close;
@@ -57,7 +57,7 @@ data:
       location ~ ^/v1/(traces|logs|metrics)$ {
         if ($observability_host != otlp) { return 404; }
     limit_except POST { deny all; }
-    limit_req zone=ingest burst=200 nodelay;
+    limit_req zone=ingest burst=800 nodelay;
     limit_req_status 429;
     proxy_read_timeout 30s;
 
@@ -68,7 +68,7 @@ data:
       location = /api/v1/write {
         if ($observability_host != otlp) { return 404; }
     limit_except POST { deny all; }
-    limit_req zone=ingest burst=200 nodelay;
+    limit_req zone=ingest burst=800 nodelay;
     limit_req_status 429;
     proxy_read_timeout 30s;
     auth_basic "metrics";
@@ -82,7 +82,7 @@ data:
       location = /loki/api/v1/push {
         if ($observability_host != otlp) { return 404; }
     limit_except POST { deny all; }
-    limit_req zone=ingest burst=200 nodelay;
+    limit_req zone=ingest burst=800 nodelay;
     limit_req_status 429;
     proxy_read_timeout 30s;
     auth_basic "metrics";
@@ -94,6 +94,27 @@ data:
 
       }
     }
+    # Argo CD, which checks sign-in itself (Google through its Dex). Its UI
+    # streams application changes, so responses aren't buffered.
+    server {
+      listen 8080;
+      server_name argo.macro-internal.com;
+      add_header Strict-Transport-Security "max-age=31536000" always;
+      location / {
+        set $upstream http://argocd-server.argocd.svc.cluster.local:80;
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+
+      }
+    }
+
 
     }
 kind: ConfigMap

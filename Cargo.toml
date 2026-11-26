@@ -46,7 +46,10 @@ members = [
   "crates/calendar_scheduling",
   "crates/channel_bots",
   "crates/channel_labels",
+  "crates/client/cache-bench",
   "crates/client/cache-core",
+  "crates/client/cache-diff-fuzz",
+  "crates/client/cache-schema",
   "crates/client/cache-turso",
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
@@ -77,6 +80,7 @@ members = [
   "crates/dictation",
   "crates/email_api_client",
   "crates/email_e2e",
+  "crates/connectors_e2e",
   "crates/entity_mutation",
   "crates/entity_registry/entity_registry",
   "crates/entity_registry/entity_registry_db_utils",
@@ -108,10 +112,12 @@ members = [
   "crates/graphql_scheduled_action",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/graphql_time_tracking",
   "crates/graphql_registered_work",
   "crates/graphql_work_feed",
   "crates/gtm_invite",
   "crates/computer_id",
+  "crates/computer_screen",
   "crates/pairing_id",
   "crates/harness_id",
   "crates/harness_token",
@@ -128,6 +134,7 @@ members = [
   "crates/import_notion",
   "crates/import_tracker",
   "crates/import_linear",
+  "crates/import_hubspot",
   "crates/import_jira",
   "crates/initiative",
   "crates/initiative_description",
@@ -144,16 +151,16 @@ members = [
   "crates/memory",
   "crates/messages",
   "crates/model_owner",
-  "crates/mcp_select",
+  "crates/connectors",
   "crates/mcp_toolset",
   "crates/natural_time",
   "crates/notification_inbox",
   "crates/notification_state",
-  "crates/pipedream_mcp",
   "crates/granola_sync",
   "crates/onboarding",
   "crates/outlook_emulator",
   "crates/model_emulator",
+  "crates/capsolver_emulator",
   "crates/ai_engine",
   "crates/docx_engine",
   "crates/fig_engine",
@@ -174,6 +181,7 @@ members = [
   "crates/system_status",
   "crates/task_dedup",
   "crates/task_templates",
+  "crates/time_tracking",
   "crates/unfurl",
   "crates/single_flight",
   "crates/upstream_error",
@@ -398,6 +406,7 @@ md-5 = "0.10.6"
 merge = "0.2.0"
 mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
+zlib-rs = { version = "0.6.3", default-features = false, features = ["rust-allocator"] }
 mockall = "0.13"
 nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
 nom = "8"
@@ -601,6 +610,7 @@ zip-inflate = { package = "zip", version = "9.0.5", default-features = false, fe
 ammonia = "4.1.9"
 html-escape = "0.2"
 subtle = "2.6.1"
+zstd = "0.14.3"
 
 [patch.crates-io]
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.
@@ -609,6 +619,9 @@ tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a183
 utoipa-swagger-ui = { path = "vendor/utoipa-swagger-ui" }
 # Bundles a newer IANA tzdata release than crates.io; see vendor/chrono-tz/README-MACRO.md.
 chrono-tz = { path = "vendor/chrono-tz" }
+# A begin dropped mid-flight no longer strands its connection inside a
+# transaction; see vendor/sqlx-postgres/README-MACRO.md.
+sqlx-postgres = { path = "vendor/sqlx-postgres" }
 
 # cache-turso's storage tests load thousands of rows into the embedded SQL engine
 # to assert VM step budgets. Unoptimized, the engine made them the slowest tests

@@ -87,7 +87,7 @@ function setup() {
       affected?.([key]);
     },
     replace(storage: CacheGenerationChange['storage'] = 'preserved') {
-      generationChanged?.({ storage });
+      generationChanged?.({ storage, queue: storage });
     },
   };
 }

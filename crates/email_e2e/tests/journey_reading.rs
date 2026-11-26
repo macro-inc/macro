@@ -169,8 +169,7 @@ async fn read_everything_in_a_message(provider: Provider) -> Result<(), Report> 
         assert_eq!(downloaded.as_ref(), bytes, "{file}");
     }
 
-    // The message on its own (its headers, without the body), and in a
-    // batch with its body.
+    // The message on its own and in a batch.
     let single = inbox
         .get(&format!("/email/messages/{message_id}"))
         .await?

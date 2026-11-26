@@ -22,7 +22,7 @@ pub trait SyncRepository: Send + Sync {
     async fn finish(&self, job: &Job, success: bool) -> Result<()>;
 }
 
-/// Provider I/O uses the user's already-verified Pipedream account.
+/// Provider I/O goes through the user's Granola connection.
 #[async_trait]
 pub trait Granola: Send + Sync {
     async fn register(
@@ -36,12 +36,14 @@ pub trait Granola: Send + Sync {
     -> Result<Option<ImportedCall>>;
 }
 
-/// A credential connection is rechecked before ingesting, including after fetch.
+/// Whose Granola sync may run: a user whose Granola connection gives API
+/// access. Rechecked before ingesting, including after fetch.
 #[async_trait]
 pub trait Accounts: Send + Sync {
-    async fn account(&self, user: &MacroUserIdStr<'static>) -> Result<Option<String>>;
-    /// Every user with an enabled Granola account, with that account ID.
-    async fn connected(&self) -> Result<Vec<(MacroUserIdStr<'static>, String)>>;
+    /// Whether the user's Granola connection gives API access.
+    async fn connected(&self, user: &MacroUserIdStr<'static>) -> Result<bool>;
+    /// Every user whose Granola connection gives API access.
+    async fn holders(&self) -> Result<Vec<MacroUserIdStr<'static>>>;
 }
 
 pub trait DeliveryVerifier: Send + Sync {

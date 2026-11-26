@@ -25,6 +25,49 @@ if [ ! -s "$framework/Chromium Embedded Framework" ]; then
   echo "Signed DMG is missing the Chromium framework" >&2
   exit 1
 fi
+
+# macOS refuses to open the app below LSMinimumSystemVersion. It must be the
+# CEF config's minimum, and no lower than the newest macOS any binary in the
+# bundle was built for (its minos), since dyld won't load a library built for
+# a newer macOS than the one running.
+version_below() {
+  awk -v a="$1" -v b="$2" 'BEGIN {
+    split(a, x, "."); split(b, y, ".")
+    for (i = 1; i <= 3; i++) if (x[i] + 0 != y[i] + 0) exit !(x[i] + 0 < y[i] + 0)
+    exit 1
+  }'
+}
+expected_minimum=$(jq -er '.bundle.macOS.minimumSystemVersion' apps/web/tauri/desktop-cef/tauri.conf.json)
+app_minimum=$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist")
+if [ "$app_minimum" != "$expected_minimum" ]; then
+  echo "Info.plist LSMinimumSystemVersion is $app_minimum, expected $expected_minimum" >&2
+  exit 1
+fi
+binary_minimum() {
+  otool -l "$1" 2>/dev/null | awk '
+    $1 == "cmd" { cmd = $2 }
+    cmd == "LC_BUILD_VERSION" && $1 == "minos" { print $2; exit }
+    cmd == "LC_VERSION_MIN_MACOSX" && $1 == "version" { print $2; exit }
+  ' || true
+}
+highest_minimum=""
+highest_binary=""
+while IFS= read -r -d '' file; do
+  minimum=$(binary_minimum "$file")
+  if [ -n "$minimum" ] && { [ -z "$highest_minimum" ] || version_below "$highest_minimum" "$minimum"; }; then
+    highest_minimum=$minimum
+    highest_binary=$file
+  fi
+done < <(find "$app" -type f -print0)
+if [ -z "$(binary_minimum "$framework/Chromium Embedded Framework")" ]; then
+  echo "Could not read the minimum macOS of the app's binaries" >&2
+  exit 1
+fi
+if version_below "$app_minimum" "$highest_minimum"; then
+  echo "${highest_binary#"$app/"} needs macOS $highest_minimum; raise bundle.macOS.minimumSystemVersion in apps/web/tauri/desktop-cef/tauri.conf.json from $app_minimum" >&2
+  exit 1
+fi
+
 helpers=("$app"/Contents/Frameworks/*.app)
 if [ "${#helpers[@]}" -lt 5 ]; then
   echo "Signed DMG is missing Chromium helper apps" >&2
@@ -67,3 +110,27 @@ if [ -s "$dylib_refs" ]; then
   cat "$dylib_refs" >&2
   exit 1
 fi
+
+# Every binary must run on the Mac this DMG is for. The Intel app cross-compiles
+# on Apple silicon, so a slice built for the runner (a bundled Nix dylib, say)
+# would only fail when an Intel Mac launches it.
+expected_arch="${DESKTOP_MACH_O_ARCH:?}"
+wrong_arch=$(mktemp)
+mach_o_count=0
+while IFS= read -r -d '' file; do
+  archs=$(lipo -archs "$file" 2>/dev/null) || continue
+  mach_o_count=$((mach_o_count + 1))
+  if ! tr ' ' '\n' <<< "$archs" | grep -qxF "$expected_arch"; then
+    echo "${file#"$app/"}: $archs" >> "$wrong_arch"
+  fi
+done < <(find "$app" -type f -print0)
+if [ -s "$wrong_arch" ]; then
+  echo "App bundle has binaries without an $expected_arch slice:" >&2
+  cat "$wrong_arch" >&2
+  exit 1
+fi
+if ! lipo -archs "$framework/Chromium Embedded Framework" | tr ' ' '\n' | grep -qxF "$expected_arch"; then
+  echo "lipo could not read the Chromium framework, so the architecture check proves nothing" >&2
+  exit 1
+fi
+echo "All $mach_o_count Mach-O files in the app have an $expected_arch slice."

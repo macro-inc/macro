@@ -1,4 +1,6 @@
 #[cfg(test)]
+mod conflicts_test;
+#[cfg(test)]
 mod definitions_test;
 pub mod entity_info_queries;
 pub mod entity_properties_get_query;
@@ -17,6 +19,8 @@ pub mod properties_pg_repo;
 pub mod property_definition_queries;
 pub mod property_option_queries;
 pub mod query_error;
+/// Property values and references that follow a merged record.
+pub mod record_merge;
 pub mod tag_promotion_queries;
 #[cfg(test)]
 mod tag_promotion_test;

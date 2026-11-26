@@ -256,11 +256,7 @@ async fn search_inboxes_flag_a_mailbox_being_disconnected(
     insert_delegation(&pool, PRIMARY, CHILD, leaving).await;
     crate::links::delete::mark_link_deleting(&pool, leaving).await?;
 
-    let inbox = |id, deleting| SearchInbox {
-        id,
-        macro_id: CHILD.to_string(),
-        deleting,
-    };
+    let inbox = |id, deleting| SearchInbox { id, deleting };
     let mut owned = fetch_search_inboxes_for_macro_id(&pool, CHILD).await?;
     owned.sort_by_key(|inbox| inbox.id);
     let mut expected = vec![inbox(kept, false), inbox(leaving, true)];

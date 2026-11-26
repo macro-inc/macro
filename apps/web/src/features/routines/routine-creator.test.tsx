@@ -74,10 +74,42 @@ vi.mock('@service-scheduled-action/client', async (importOriginal) => {
     },
   };
 });
+vi.mock('@queries/email/labels', () => ({
+  useEmailUserLabelsQuery: () => ({
+    isPending: false,
+    isError: false,
+    data: {
+      labels: [
+        {
+          id: 'label-invoices',
+          linkId: 'link-1',
+          name: 'Invoices',
+          type: 'User',
+          labelListVisibility: 'label_show',
+          messageListVisibility: 'show',
+        },
+      ],
+    },
+  }),
+}));
+vi.mock('@queries/email/mail-accounts', () => ({
+  useMailAccountsQuery: () => ({
+    isPending: false,
+    isError: false,
+    data: {
+      links: [
+        { id: 'link-1', email_address: 'owner@example.com', provider: 'GMAIL' },
+      ],
+    },
+  }),
+}));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
     enabled: host.flags.has(flag.key),
   }),
+}));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'user',
 }));
 vi.mock('./queries/catalog', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./queries/catalog')>()),
@@ -304,41 +336,43 @@ function openPicker(): void {
   const trigger = screen.getByRole('button', {
     name: 'Choose an agent or model',
   });
-  trigger.focus();
-  fireEvent.keyDown(trigger, { key: 'Enter' });
+  if (trigger.getAttribute('aria-expanded') !== 'true')
+    fireEvent.click(trigger);
+  const dialog = screen.getByRole('dialog');
+  if (!within(dialog).queryByRole('textbox'))
+    fireEvent.click(within(dialog).getAllByRole('button')[0]);
 }
 
 async function selectTarget(
   target: 'model' | 'agent' | 'override'
 ): Promise<void> {
   openPicker();
-  if (target === 'agent') {
-    press(screen.getByRole('menuitemradio', { name: /^Researcher/ }), 'Enter');
-  } else {
-    let menu: HTMLElement | undefined;
+  if (target !== 'model') {
+    fireEvent.click(screen.getByRole('button', { name: 'See all' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Researcher/ }));
     if (target === 'override') {
-      press(
-        screen.getByRole('menuitemradio', { name: /^Researcher/ }),
-        'Enter'
-      );
-      const row = screen.getByRole('menuitem', { name: /^Model / });
-      row.focus();
-      fireEvent.keyDown(row, { key: 'ArrowRight' });
-      menu = await screen.findByRole('menu', { name: /^Model / });
+      fireEvent.click(screen.getByRole('button', { name: 'Sonnet' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Custom model' }));
     }
-    const item = (menu ? within(menu) : screen).getByRole('menuitemradio', {
-      name: 'Custom model',
-    });
-    item.focus();
-    fireEvent.keyDown(item, { key: 'Enter' });
+  } else {
+    fireEvent.input(
+      screen.getByRole('textbox', { name: 'Search agents and models' }),
+      { target: { value: 'Custom model' } }
+    );
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Models' })).getByRole(
+        'button',
+        { name: 'Custom model' }
+      )
+    );
   }
-  fireEvent.keyDown(document, { key: 'Escape' });
+  const trigger = screen.getByRole('button', {
+    name: 'Choose an agent or model',
+  });
+  if (trigger.getAttribute('aria-expanded') === 'true')
+    fireEvent.click(trigger);
   await waitFor(() =>
-    expect(
-      screen
-        .getByRole('button', { name: 'Choose an agent or model' })
-        .getAttribute('aria-expanded')
-    ).toBe('false')
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
   );
 }
 
@@ -694,6 +728,45 @@ describe('routine composer execution selection', () => {
           { events: ['task.created'] },
           { events: ['email.message_received'] },
         ],
+      },
+    });
+  });
+
+  it('offers Email labeled only with its rollout', async () => {
+    host.create.mockImplementation(async (body) => created(body));
+    await mount();
+    inputPrompt();
+    press(screen.getByRole('button', { name: 'Add trigger' }), 'Enter');
+    const search = screen.getByRole('textbox', { name: 'Search triggers' });
+    fireEvent.input(search, { target: { value: 'Email labeled' } });
+    expect(
+      screen.queryByRole('menuitem', { name: /^Email labeled/, hidden: true })
+    ).toBeNull();
+  });
+
+  it('saves the labels an Email labeled trigger watches', async () => {
+    host.create.mockImplementation(async (body) => created(body));
+    host.flags.add('enable-email-labeled-trigger');
+    await mount();
+    inputPrompt();
+    chooseTrigger('Email', 'Email labeled');
+    const panel = screen.getByRole('dialog', { name: 'Add trigger' });
+    expect(
+      within(panel)
+        .getByRole('button', { name: 'Any label' })
+        .getAttribute('aria-pressed')
+    ).toBe('true');
+    fireEvent.click(
+      within(panel).getByRole('button', { name: 'Choose labels' })
+    );
+    fireEvent.click(within(panel).getByRole('checkbox', { name: 'Invoices' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add trigger' }));
+    fireEvent.click(screen.getByRole('button', { name: /Create routine/i }));
+    await waitFor(() => expect(host.create).toHaveBeenCalledTimes(1));
+    expect(host.create.mock.calls[0][0]).toMatchObject({
+      trigger: {
+        type: 'events',
+        filters: [{ events: ['email.labeled'], labels: ['label-invoices'] }],
       },
     });
   });

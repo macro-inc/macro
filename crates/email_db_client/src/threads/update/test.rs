@@ -144,8 +144,8 @@ async fn backfill_only_sets_missing_kind_flags(pool: Pool<Postgres>) -> anyhow::
     let link_id = Uuid::parse_str(KIND_LINK)?;
 
     assert_eq!(
-        backfill_link_attachment_kind_flags(&pool, link_id).await?,
-        1
+        backfill_link_attachment_kind_flags(&pool, link_id, 10).await?,
+        LinkFlagBackfill::Flagged(1)
     );
     assert_eq!(
         fetch_kind_flags(&pool, KIND_THREAD_ALL_KINDS).await?,
@@ -159,8 +159,127 @@ async fn backfill_only_sets_missing_kind_flags(pool: Pool<Postgres>) -> anyhow::
 
     // A rerun has nothing left to set.
     assert_eq!(
-        backfill_link_attachment_kind_flags(&pool, link_id).await?,
-        0
+        backfill_link_attachment_kind_flags(&pool, link_id, 10).await?,
+        LinkFlagBackfill::Flagged(0)
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("sync_thread_attachment_kind_flags")
+    )
+)]
+async fn backfill_refuses_a_mailbox_over_the_thread_cap(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str(KIND_LINK)?;
+
+    assert_eq!(
+        backfill_link_attachment_kind_flags(&pool, link_id, 1).await?,
+        LinkFlagBackfill::TooManyThreads
+    );
+    assert_eq!(
+        fetch_kind_flags(&pool, KIND_THREAD_ALL_KINDS).await?,
+        (false, false, false)
+    );
+    Ok(())
+}
+
+async fn flag_all_blocks(pool: &Pool<Postgres>) -> anyhow::Result<AttachmentFlagBatch> {
+    let end = email_attachments_block_count(pool).await?;
+    backfill_attachment_kind_flags_in_blocks(pool, 0, end).await
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("sync_thread_attachment_kind_flags")
+    )
+)]
+async fn block_batch_only_sets_missing_kind_flags(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    assert_eq!(
+        flag_all_blocks(&pool).await?,
+        AttachmentFlagBatch {
+            missing: 1,
+            flagged: 1
+        }
+    );
+    assert_eq!(
+        fetch_kind_flags(&pool, KIND_THREAD_ALL_KINDS).await?,
+        (true, true, true)
+    );
+    // Clearing stale flags belongs to ingest and delete, not the backfill.
+    assert_eq!(
+        fetch_kind_flags(&pool, KIND_THREAD_STALE_NO_ATTACHMENTS).await?,
+        (true, true, true)
+    );
+
+    // A rerun has nothing left to set.
+    assert_eq!(
+        flag_all_blocks(&pool).await?,
+        AttachmentFlagBatch {
+            missing: 0,
+            flagged: 0
+        }
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("sync_thread_attachment_kind_flags")
+    )
+)]
+async fn block_batch_skips_a_thread_another_transaction_holds(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let mut sync = pool.begin().await?;
+    sqlx::query!(
+        "SELECT id FROM email_threads WHERE id = $1 FOR UPDATE",
+        Uuid::parse_str(KIND_THREAD_ALL_KINDS)?
+    )
+    .fetch_one(&mut *sync)
+    .await?;
+
+    assert_eq!(
+        flag_all_blocks(&pool).await?,
+        AttachmentFlagBatch {
+            missing: 1,
+            flagged: 0
+        }
+    );
+
+    sync.rollback().await?;
+    assert_eq!(flag_all_blocks(&pool).await?.flagged, 1);
+    assert_eq!(
+        fetch_kind_flags(&pool, KIND_THREAD_ALL_KINDS).await?,
+        (true, true, true)
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("sync_thread_attachment_kind_flags")
+    )
+)]
+async fn block_batch_past_the_last_block_flags_nothing(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let end = email_attachments_block_count(&pool).await?;
+
+    assert_eq!(
+        backfill_attachment_kind_flags_in_blocks(&pool, end, end + 10).await?,
+        AttachmentFlagBatch {
+            missing: 0,
+            flagged: 0
+        }
     );
     Ok(())
 }

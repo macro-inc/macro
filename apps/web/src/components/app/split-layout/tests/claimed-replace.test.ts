@@ -129,3 +129,24 @@ describe('replacing a split with content another pane claims', () => {
     ]);
   });
 });
+
+describe('opening a new split for content another pane claims', () => {
+  const projectId = '01a1899a-b629-7e50-8e65-079fca623856';
+
+  it('brings the claiming split forward instead of opening nothing', async () => {
+    const manager = setup(`/home/~/tasks/projects/${projectId}/overview`);
+    const [home, project] = manager.splits();
+    manager.activateSplit(home!.id);
+
+    manager.openWithSplit(projectHostedContent(projectId, 'overview'), {
+      handle: manager.getSplit(home!.id),
+      preferNewSplit: true,
+    });
+
+    await vi.waitFor(() => expect(manager.activeSplitId()).toBe(project!.id));
+    expect(manager.splits().map((split) => split.content.id)).toEqual([
+      'home',
+      'tasks',
+    ]);
+  });
+});

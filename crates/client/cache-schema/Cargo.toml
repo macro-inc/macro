@@ -1,0 +1,20 @@
+[package]
+edition = "2024"
+name = "cache-schema"
+publish = false
+version = "0.1.0"
+
+# The GraphQL cache's schema metadata, apart from the engine: `cache-wasm`'s
+# build script depends on it, and building `cache-core` there would compile
+# `database_sql` (a cdylib, so unhashed file names) a second time next to the
+# normal one and collide in native builds.
+
+[dependencies]
+apollo-compiler = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+
+[build-dependencies]
+sha2 = { workspace = true }

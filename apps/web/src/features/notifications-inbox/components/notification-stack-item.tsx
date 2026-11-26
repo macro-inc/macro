@@ -58,6 +58,7 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
       role="row"
       aria-selected={props.highlighted}
       data-stack-item=""
+      data-press-surface
       class={cn(
         'group/stack-item relative w-full min-w-0 flex-1',
         // A tap leaves the item focused, which mustn't look chosen on a phone.
@@ -118,8 +119,10 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
                 : 'text-ink-muted mobile:text-ink-extra-muted'
             )}
           >
-            {/* An agent's message can run to many paragraphs and lists. */}
+            {/* An agent's message can run to many paragraphs and lists. Its
+                links and mentions are inert: pressing them presses the item. */}
             <StaticMarkdown
+              inert
               markdown={props.text}
               singleLine
               theme={twoLineClampMarkdownTheme}

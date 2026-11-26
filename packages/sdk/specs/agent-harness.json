@@ -3811,6 +3811,58 @@
         ]
       }
     },
+    "/computers/{harness_id}/screen/tickets": {
+      "post": {
+        "tags": ["computers"],
+        "summary": "Issue a ticket to watch, or drive, a computer's screen.",
+        "operationId": "create_computer_screen_ticket",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScreenTicketRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenTicket"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "429": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/harnesses/{harness_id}/claude-mode": {
       "get": {
         "tags": ["computers"],
@@ -6134,30 +6186,19 @@
       "ConnectMcpServerResponse": {
         "type": "object",
         "description": "Response from [`ConnectMcpServer`].",
-        "required": [
-          "url",
-          "serverName",
-          "alreadyConnected",
-          "authenticated",
-          "enabled",
-          "summary"
-        ],
+        "required": ["url", "serverName", "status", "enabled", "summary"],
         "properties": {
-          "alreadyConnected": {
-            "type": "boolean",
-            "description": "Whether the user already had this server before the call."
-          },
-          "authenticated": {
-            "type": "boolean",
-            "description": "Whether the server holds the user's sign-in."
-          },
           "enabled": {
             "type": "boolean",
-            "description": "Whether the server's tools are turned on."
+            "description": "Whether its tools are turned on."
           },
           "serverName": {
             "type": "string",
-            "description": "The server's display name."
+            "description": "The connector's display name."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConnectorStatus",
+            "description": "Where the user stands with it."
           },
           "summary": {
             "type": "string",
@@ -6165,7 +6206,7 @@
           },
           "url": {
             "type": "string",
-            "description": "The server's URL."
+            "description": "The server's URL, normalized."
           }
         }
       },
@@ -6269,6 +6310,11 @@
             "description": "Apps whose tools could not be listed."
           }
         }
+      },
+      "ConnectorStatus": {
+        "type": "string",
+        "description": "Where a user stands with an app or server.",
+        "enum": ["connected", "disabled", "needsReauth", "notConnected"]
       },
       "ConnectorTool": {
         "type": "object",
@@ -6675,7 +6721,7 @@
               },
               "connected": {
                 "type": "boolean",
-                "description": "Whether this caller has an enabled connection. For an app that\nconnects through its own MCP server, that connection is checked\nthere, not in Pipedream."
+                "description": "Whether this caller's connection to the app is usable now."
               },
               "operation": {
                 "type": "string",
@@ -8289,6 +8335,48 @@
           "size": {
             "$ref": "#/components/schemas/SandboxSize",
             "description": "Named compute tier."
+          }
+        }
+      },
+      "ScreenTicket": {
+        "type": "object",
+        "description": "A single-use screen ticket.",
+        "required": ["ticket", "expiresAt", "url"],
+        "properties": {
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it stops working, a minute after it was issued."
+          },
+          "ticket": {
+            "type": "string",
+            "description": "The ticket, for the socket's `ticket` query parameter. Works once."
+          },
+          "url": {
+            "type": "string",
+            "description": "The socket's path under the agent harness service."
+          }
+        }
+      },
+      "ScreenTicketRequest": {
+        "type": "object",
+        "description": "`POST /computers/{harness_id}/screen/tickets` body.",
+        "required": ["transport", "surface", "mode"],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "`view` (watch) or `drive` (watch, and take over when free).",
+            "example": "view"
+          },
+          "surface": {
+            "type": "string",
+            "description": "What to show: `desktop`.",
+            "example": "desktop"
+          },
+          "transport": {
+            "type": "string",
+            "description": "How the screen reaches the browser.",
+            "example": "vnc"
           }
         }
       },

@@ -50,8 +50,15 @@
       allow_structured_metadata = true;
       volume_enabled = true;
       discover_log_levels = true;
-      ingestion_rate_mb = 8;
-      ingestion_burst_size_mb = 16;
+      # Every sender together, counting structured metadata.
+      ingestion_rate_mb = 24;
+      ingestion_burst_size_mb = 48;
+      # Our services' logs from one environment are one stream (they send no
+      # instance label), so this keeps one from using the whole rate. Sharding
+      # would split a busy stream and multiply it.
+      per_stream_rate_limit = "6MB";
+      per_stream_rate_limit_burst = "24MB";
+      shard_streams.enabled = false;
       max_query_parallelism = 4;
       # The CI dashboard groups PR steps by workflow, job and step: about 600 a day.
       max_query_series = 2000;
@@ -76,7 +83,6 @@
     metrics_generator = {
       ring.instance_addr = "127.0.0.1";
       processor = {
-        service_graphs.dimensions = [ "deployment.environment" ];
         local_blocks = {
           filter_server_spans = false;
           flush_to_storage = true;
@@ -84,30 +90,27 @@
           max_block_bytes = 50000000;
           concurrent_blocks = 2;
         };
-        span_metrics = {
-          # Keep unbounded span names out of Prometheus; they remain searchable in Tempo.
-          intrinsic_dimensions.span_name = false;
-          dimensions = [ "deployment.environment" ];
-        };
       };
       traces_storage.path = "/srv/observability/tempo/generator/traces";
-      storage = {
-        path = "/srv/observability/tempo/generator/wal";
-        remote_write = [
-          {
-            url = "http://127.0.0.1:9090/api/v1/write";
-            send_exemplars = true;
-          }
-        ];
-      };
+      storage.path = "/srv/observability/tempo/generator/wal";
+      # The sampler holds a trace 30s before sending it, and the generator drops
+      # spans that ended longer ago than this (30s by default).
+      metrics_ingestion_time_range_slack = "5m";
     };
     overrides.defaults.metrics_generator = {
-      processors = [
-        "local-blocks"
-        "span-metrics"
-        "service-graphs"
-      ];
-      max_active_series = 50000;
+      # Span metrics and service graphs come from the sampler, which sees the
+      # spans sampling drops.
+      processors = [ "local-blocks" ];
+    };
+    # Each distributor's. The sampler's budgets hold each service down; this
+    # holds their sum, at a few times what prod is expected to store.
+    overrides.defaults.ingestion = {
+      rate_strategy = "local";
+      rate_limit_bytes = 30000000;
+      burst_size_bytes = 40000000;
+      # Live traces of one ingester, and of one metrics generator's local
+      # blocks; dev alone peaked at 4k.
+      max_traces_per_user = 30000;
     };
     query_frontend.metrics.concurrent_jobs = 4;
     storage.trace = {

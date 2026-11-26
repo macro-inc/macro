@@ -7,7 +7,12 @@ import type { ImportProvider } from '../core/providers';
 
 export type ProviderRowState =
   /** Connections are still loading; no action is offered yet. */
-  'unknown' | 'disconnected' | 'connecting' | 'connected';
+  | 'unknown'
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  /** Connected, but the connection does not provide what the import reads. */
+  | 'connected-no-import';
 
 /** One app in the import dialog: connect it, then import with the agent. */
 export function ProviderRow(props: {
@@ -30,7 +35,12 @@ export function ProviderRow(props: {
       <span class="min-w-0 flex-1">
         <span class="flex items-center gap-1.5 text-sm font-medium text-ink">
           {props.provider.name}
-          <Show when={props.state === 'connected'}>
+          <Show
+            when={
+              props.state === 'connected' ||
+              props.state === 'connected-no-import'
+            }
+          >
             <CheckCircleIcon
               aria-hidden={false}
               class="size-3.5 text-success"
@@ -45,19 +55,21 @@ export function ProviderRow(props: {
       <Show
         when={props.state === 'connected'}
         fallback={
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={
-              props.disabled ||
-              props.state === 'unknown' ||
-              props.state === 'connecting'
-            }
-            aria-label={`Connect ${props.provider.name}`}
-            onClick={() => props.onConnect()}
-          >
-            {props.state === 'connecting' ? 'Connecting…' : 'Connect'}
-          </Button>
+          <Show when={props.state !== 'connected-no-import'}>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={
+                props.disabled ||
+                props.state === 'unknown' ||
+                props.state === 'connecting'
+              }
+              aria-label={`Connect ${props.provider.name}`}
+              onClick={() => props.onConnect()}
+            >
+              {props.state === 'connecting' ? 'Connecting…' : 'Connect'}
+            </Button>
+          </Show>
         }
       >
         <Button

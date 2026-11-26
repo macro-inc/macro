@@ -1,4 +1,5 @@
 import { ListColumnHeader } from '@app/components/list/ListColumnHeader';
+import { useProjectsContext } from './context/projects-context';
 import '@app/features/tasks-view/components/task-list/task-list.css';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -27,10 +28,14 @@ export function ProjectListHeader(props: {
   updatedSelected?: boolean;
   onTimestampWidthChange?: (width: number) => void;
 }) {
+  const projects = useProjectsContext();
   return (
     <div
       role="row"
-      class="task-grid-row task-grid-icon-creator project-grid-row grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted"
+      class={cn(
+        'task-grid-row task-grid-icon-creator project-grid-row grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted',
+        projects.startDatesEnabled?.() && 'task-grid-dates'
+      )}
       style={GRID_STYLE}
     >
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
@@ -113,6 +118,7 @@ export function ProjectRow(props: ProjectRowProps) {
         tabIndex={-1}
         onClick={props.onOpen}
         onMouseMove={props.onFocus}
+        data-press-surface
         class={cn(
           'soup-list-entity @container/entity relative flex min-h-10 w-[calc(100%-0.5rem)] flex-col rounded-xl py-0.5 mx-1 mobile:mx-0 mobile:py-0',
           {

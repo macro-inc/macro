@@ -1,0 +1,218 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/agent_runtime_rollout.rs
+name: Agent runtime rollout
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Development only
+        required: true
+        type: choice
+        options:
+          - dev
+      source_sha:
+        description: Full commit SHA on main
+        required: true
+        type: string
+      computer:
+        description: One agent teammate computer id
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  validate:
+    name: Validate the inputs
+    runs-on: namespace-profile-linux-small
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          clean: 'false'
+          fetch-depth: '0'
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Validate dev, main and one computer id
+        run: |
+          set -euo pipefail
+          [[ $ENVIRONMENT == dev && $GITHUB_REF == refs/heads/main ]] || {
+            echo 'Runtime rollout only accepts a dispatch from main to dev' >&2
+            exit 1
+          }
+          [[ $SOURCE_SHA =~ ^[0-9a-f]{40}$ ]] || {
+            echo 'Supply one full main commit SHA' >&2
+            exit 1
+          }
+          [[ $COMPUTER =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || {
+            echo 'Supply a single computer id' >&2
+            exit 1
+          }
+          git cat-file -e "$SOURCE_SHA^{commit}"
+          git merge-base --is-ancestor "$SOURCE_SHA" "$GITHUB_SHA"
+        shell: bash
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          COMPUTER: ${{ inputs.computer }}
+  build:
+    needs:
+      - validate
+    name: Build and publish the runtime
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=firecracker-image
+    env:
+      ARTIFACT_DIR: target/agent-runtime
+    timeout-minutes: 45
+    steps:
+      - name: Checkout the bundle commit
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount /nix cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+          nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Build, hash and publish the runtime
+        run: |
+          set -euo pipefail
+          [[ $ENVIRONMENT == dev && $(git rev-parse HEAD) == "$SOURCE_SHA" ]]
+          [[ $NIX_CACHE_URL =~ ^s3://([a-z0-9.-]+)\?(.*\&)?region=([a-z0-9-]+) ]]
+          bucket=${BASH_REMATCH[1]}
+          export AWS_DEFAULT_REGION=${BASH_REMATCH[3]}
+          prefix="agent-runtime-bundles/$SOURCE_SHA"
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          tool() { nix shell --inputs-from . nixpkgs#awscli2 nixpkgs#zstd nixpkgs#jq -c "$@"; }
+          jq() { tool jq "$@"; }
+
+          nix build --print-build-logs --out-link "$work/runtime" .#macro-agent-runtime
+          tar --hard-dereference --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+            -C "$work/runtime" -cf "$work/runtime.tar" bun.lock template.json node_modules
+          tool zstd -q -T1 -10 "$work/runtime.tar" -o "$work/runtime.tar.zst"
+          digest=$(sha256sum "$work/runtime.tar.zst" | cut -d' ' -f1)
+          mkdir -p "$ARTIFACT_DIR"
+          modules="$work/runtime/node_modules/@macro-inc"
+          jq -nS --arg version "$SOURCE_SHA" --arg digest "$digest" \
+            --slurpfile muppet "$modules/muppet/package.json" \
+            --slurpfile sdk "$modules/sdk/package.json" \
+            --slurpfile observability "$modules/observability/package.json" \
+            '{version: $version, digest: $digest, muppetApi: $muppet[0].apiLevel,
+              muppetVersion: $muppet[0].version, sdkVersion: $sdk[0].version,
+              observabilityVersion: $observability[0].version}' >"$ARTIFACT_DIR/manifest.json"
+
+          publish() {
+            local path=$1 name=$2
+            if tool aws s3api put-object --bucket "$bucket" --key "$prefix/$name" \
+              --if-none-match '*' --body "$path" >/dev/null; then
+              return
+            fi
+            # The key cannot be overwritten. A retry succeeds only if the bytes
+            # already published to the immutable key are exactly the same.
+            tool aws s3api get-object --bucket "$bucket" --key "$prefix/$name" "$work/published" >/dev/null
+            cmp --silent "$work/published" "$path" || {
+              echo "$SOURCE_SHA already has different $name bytes" >&2
+              exit 1
+            }
+          }
+          publish "$work/runtime.tar.zst" runtime.tar.zst
+          publish "$ARTIFACT_DIR/manifest.json" manifest.json
+          echo "Published runtime $SOURCE_SHA (SHA-256 $digest)"
+        shell: bash
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          COMPUTER: ${{ inputs.computer }}
+          NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Upload agent-runtime-manifest artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          path: target/agent-runtime
+          name: agent-runtime-manifest
+          if-no-files-found: error
+          retention-days: '30'
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
+  roll-out:
+    needs:
+      - build
+    name: Activate on the selected dev teammate
+    runs-on: db-migrator
+    env:
+      ARTIFACT_DIR: target/agent-runtime
+      SQLX_OFFLINE: 'true'
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          clean: 'false'
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          pattern: agent-runtime-manifest
+          path: target/agent-runtime
+          merge-multiple: 'true'
+      - name: Request the runtime update and wait for verification
+        run: |
+          set -euo pipefail
+          [[ $ENVIRONMENT == dev && $GITHUB_REF == refs/heads/main ]]
+          [[ $NIX_CACHE_URL =~ ^s3://([a-z0-9.-]+)\?(.*\&)?region=([a-z0-9-]+) ]]
+          bucket=${BASH_REMATCH[1]}
+          region=${BASH_REMATCH[3]}
+          secrets=$(mktemp -d "$RUNNER_TEMP/runtime-update.XXXXXX")
+          chmod 700 "$secrets"
+          trap 'rm -rf "$secrets"' EXIT
+
+          cargo build --release --locked -p hosted_runtimes --features runtime-update-cli --bin agent-runtime-update
+
+          manifest="$ARTIFACT_DIR/manifest.json"
+          digest=$(jq -er --arg version "$SOURCE_SHA" \
+            'select(.version == $version) | .digest | select(test("^[a-f0-9]{64}$"))' "$manifest")
+          url=$(AWS_DEFAULT_REGION=$region aws s3 presign --expires-in 7200 \
+            "s3://$bucket/agent-runtime-bundles/$SOURCE_SHA/runtime.tar.zst")
+          echo "::add-mask::$url"
+          jq -n --arg version "$SOURCE_SHA" --arg digest "$digest" --arg url "$url" \
+            '{version:$version,digest:$digest,url:$url}' >"$secrets/request.json"
+
+          database_url=$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY \
+            aws secretsmanager get-secret-value --secret-id macro-db-dev --query SecretString --output text)
+          if [[ $database_url != *sslmode=* ]]; then
+            if [[ $database_url == *"?"* ]]; then database_url="$database_url&sslmode=require"; else database_url="$database_url?sslmode=require"; fi
+          fi
+          echo "::add-mask::$database_url"
+          printf '%s' "$database_url" >"$secrets/database.url"
+
+          target/release/agent-runtime-update --environment dev --database-url-file "$secrets/database.url" \
+            --request "$secrets/request.json" --computer "$COMPUTER" | tee -a "$GITHUB_STEP_SUMMARY"
+        shell: bash
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          COMPUTER: ${{ inputs.computer }}
+          NIX_CACHE_URL: ${{ vars.NIX_CACHE_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+concurrency:
+  group: agent-runtime-rollout-${{ inputs.computer }}
+  cancel-in-progress: false

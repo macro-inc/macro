@@ -1,18 +1,26 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
-import { createSignal, For } from 'solid-js';
+import {
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '@components/app/split-layout/context';
+import { ToastRegion } from '@core/component/Toast/ToastRegion';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { createSignal, For, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import type {
+  RoutinesSource,
   SuggestionActions,
   SuggestionItemParts,
   SuggestionsSource,
 } from '../context/suggestions-source';
 import { layoutDay } from '../core/day';
 import type { Generation } from '../core/generation';
-import type { Suggestion, SuggestionFeed } from '../core/suggestion';
+import { FOR_YOU_LISTS, type ForYouList } from '../core/lists';
+import type { Suggestion, SuggestionFeed, Topic } from '../core/suggestion';
 import { createSuggestionsFeed } from '../primitives/feed';
 import { createRefresh } from '../primitives/refresh';
 import {
@@ -27,7 +35,7 @@ import {
   routineSuggestion,
   runningSuggestion,
 } from '../tests/fixtures';
-import { ForYouRefresh, ForYouView } from '../views/for-you-view';
+import { ForYouView } from '../views/for-you-view';
 import { HomePrioritiesView } from '../views/home-priorities-view';
 
 const PARAMS = new URLSearchParams(location.search);
@@ -53,7 +61,8 @@ const ALL: Suggestion[] = [
   waitingTwoDays(draftedReplySuggestion),
   backgroundSuggestion,
   composerSuggestion,
-  routineSuggestion,
+  // Proposed since the last visit: the sidebar marks Ideas.
+  { ...routineSuggestion, isNew: true },
   waitingTwoDays(replySuggestion),
   reviewSuggestion,
   quietBackgroundSuggestion,
@@ -61,6 +70,32 @@ const ALL: Suggestion[] = [
   failedSuggestion,
   doneSuggestion,
 ];
+
+const TOPICS: Topic[] = [
+  { key: 'event:offsite', name: 'Spring offsite' },
+  {
+    key: 'customer:acme',
+    name: 'Acme renewal',
+    reason: 'Renews December 1',
+  },
+  { key: 'project:launch', name: 'Launch page', reason: 'Due November 20' },
+];
+const TOPIC_OF: Record<string, string> = {
+  'suggestion-drafted-reply': 'customer:acme',
+  'suggestion-composer': 'event:offsite',
+  'suggestion-reply': 'customer:acme',
+  'suggestion-review': 'project:launch',
+  'suggestion-quiet': 'event:offsite',
+  'suggestion-running': 'customer:acme',
+};
+/** `ALL`, some of it in topics: two with several rows, one with a single row. */
+const IN_TOPICS: Suggestion[] = ALL.map((suggestion) => {
+  const topic = TOPICS.find(({ key }) => key === TOPIC_OF[suggestion.id]);
+
+  return topic
+    ? { ...suggestion, topic: { key: topic.key, name: topic.name } }
+    : suggestion;
+});
 
 /** Items by their ids, where the app would read their names and text. */
 const PARTS: SuggestionItemParts = {
@@ -83,22 +118,28 @@ function served(list: Suggestion[]): SuggestionFeed {
       ...list.filter((suggestion) => suggestion.status === 'done'),
     ],
     counts,
+    topics: TOPICS.filter(({ key }) =>
+      list.some(({ status, topic }) => status !== 'done' && topic?.key === key)
+    ),
   };
 }
 
 const REWRITTEN_AT = '2026-11-09T09:30:00Z';
 
+/** What a finished run says it did. */
+const RUN_REPORT = 'Posted the summary in #ops with six confirmed deliveries.';
+
 /** A scripted source: writes are recorded, and a run moves on when told to. */
 function Fixture() {
   const scenario = PARAMS.get('scenario');
   const [suggestions, setSuggestions] = createSignal<Suggestion[] | undefined>(
-    scenario === 'loading' || scenario === 'error'
-      ? undefined
-      : scenario === 'empty'
-        ? []
-        : scenario === 'done'
-          ? [doneSuggestion]
-          : ALL
+    match(scenario)
+      .returnType<Suggestion[] | undefined>()
+      .with('loading', 'error', () => undefined)
+      .with('empty', () => [])
+      .with('done', () => [doneSuggestion])
+      .with('topics', () => IN_TOPICS)
+      .otherwise(() => ALL)
   );
   const [failed, setFailed] = createSignal(scenario === 'error');
   const [log, setLog] = createSignal<string[]>([]);
@@ -127,13 +168,24 @@ function Fixture() {
     refresh: async () => {},
     accept: async ({ id, updatedAt }) => {
       record(`accept ${id}`);
+      if (scenario === 'accept-refused') throw new Error('refused');
+      if (scenario === 'slow-accept') {
+        await new Promise((done) => setTimeout(done, 800));
+      }
       if (scenario === 'changed' && updatedAt !== REWRITTEN_AT) {
         // Rewritten under the card: the server refuses and the feed is read again.
-        change(id, (suggestion) => ({
-          ...suggestion,
-          summary: 'Rewritten: the team moved the summary to Mondays.',
-          updatedAt: REWRITTEN_AT,
-        }));
+        // The rewrite moved where the run posts.
+        change(id, (suggestion) =>
+          match(suggestion)
+            .returnType<Suggestion>()
+            .with({ kind: 'prompt' }, (prompt) => ({
+              ...prompt,
+              summary: 'Rewritten: the team moved the summary to Mondays.',
+              sends: 'Posts the weekly status summary in #leadership',
+              updatedAt: REWRITTEN_AT,
+            }))
+            .otherwise((other) => ({ ...other, updatedAt: REWRITTEN_AT }))
+        );
         return 'changed';
       }
 
@@ -146,6 +198,7 @@ function Fixture() {
             run: {
               sessionId: `session-${id}`,
               startedAt: '2026-11-09T09:00:00Z',
+              stopping: false,
             },
           }))
           // Opening a reply suggestion takes it on; only the reply makes it done.
@@ -161,6 +214,7 @@ function Fixture() {
     dismiss: async (id) => {
       record(`dismiss ${id}`);
       if (scenario === 'dismiss-refused') throw new Error('refused');
+      await new Promise((done) => setTimeout(done, 800));
 
       const gone = suggestions()?.find((suggestion) => suggestion.id === id);
       if (gone) dismissedHere = [...dismissedHere, gone];
@@ -168,12 +222,32 @@ function Fixture() {
         list?.filter((suggestion) => suggestion.id !== id)
       );
     },
-    restore: async (id) => {
+    stop: async (id) => {
+      record(`stop ${id}`);
+      change(id, (suggestion) =>
+        suggestion.kind === 'prompt' &&
+        suggestion.runMode === 'background' &&
+        suggestion.run
+          ? { ...suggestion, run: { ...suggestion.run, stopping: true } }
+          : suggestion
+      );
+    },
+    restore: async ({ id }) => {
       record(`restore ${id}`);
       if (scenario === 'restore-refused') throw new Error('too late');
 
       const back = dismissedHere.find((suggestion) => suggestion.id === id);
-      if (!back) return;
+      // As the server: a routine suggestion leaves with its idea for good.
+      if (back?.kind === 'routine') throw new Error('not restorable');
+      if (!back) {
+        // Marked done here: Undo opens it again, in its place.
+        change(id, (suggestion) => ({
+          ...suggestion,
+          status: 'open',
+          result: undefined,
+        }));
+        return;
+      }
       // A run that the dismissal stopped stays stopped: it comes back open.
       const restored: Suggestion =
         back.status === 'running' ? { ...back, status: 'open' } : back;
@@ -194,6 +268,7 @@ function Fixture() {
       change('suggestion-routine', (suggestion) => ({
         ...suggestion,
         status: 'done',
+        result: { entityType: 'scheduled_action', entityId: 'routine-1' },
       }));
     },
   };
@@ -227,26 +302,85 @@ function Fixture() {
   /** End the generation, as the server's next status would. */
   const finishGeneration = () =>
     setGeneration({ state: 'idle', regenerateAvailableAt: cooldownEnd() });
-  /** Finish the fixture's runs, as the server's next answer would. */
+  /**
+   * Settle the fixture's runs, as the server's next answer would: one asked to
+   * stop is open again, and the rest finish with a line saying what they did.
+   */
   const finishRuns = () =>
     setSuggestions((list) =>
-      list?.map((suggestion) =>
-        suggestion.kind === 'prompt' &&
-        suggestion.runMode === 'background' &&
-        suggestion.status === 'running' &&
-        suggestion.run
-          ? {
-              ...suggestion,
-              status: 'done',
-              result: {
-                entityType: 'agent_session',
-                entityId: suggestion.run.sessionId,
-              },
-            }
-          : suggestion
-      )
-    );
+      list?.map((suggestion): Suggestion => {
+        if (
+          suggestion.kind !== 'prompt' ||
+          suggestion.runMode !== 'background' ||
+          suggestion.status !== 'running' ||
+          !suggestion.run
+        ) {
+          return suggestion;
+        }
+        if (suggestion.run.stopping) {
+          return { ...suggestion, status: 'open', run: undefined };
+        }
 
+        return {
+          ...suggestion,
+          status: 'done',
+          run: { ...suggestion.run, report: RUN_REPORT },
+          result: {
+            entityType: 'agent_session',
+            entityId: suggestion.run.sessionId,
+          },
+        };
+      })
+    );
+  // The person's routines: switching one is recorded and kept.
+  const [switchedOff, setSwitchedOff] = createSignal<string[]>([]);
+  const routines: RoutinesSource = {
+    ideas: () => 3,
+    routines: () => 6,
+    enabled: (routineId) => !switchedOff().includes(routineId),
+    setEnabled: async (routineId, enabled) => {
+      record(`routine ${routineId} ${enabled ? 'on' : 'off'}`);
+      setSwitchedOff((ids) =>
+        enabled ? ids.filter((id) => id !== routineId) : [...ids, routineId]
+      );
+    },
+    openRoutines: (routineId) =>
+      record(routineId ? `routines ${routineId}` : 'routines'),
+  };
+  // As the app's route: the list or the topic is in the URL, so Back changes
+  // it too.
+  const [search, setSearch] = createSignal(location.search);
+  const params = () => new URLSearchParams(search());
+  const list = () =>
+    FOR_YOU_LISTS.find((name) => name === params().get('list')) ?? 'today';
+  const at = (shown: { list?: ForYouList; topic?: string }) => {
+    const url = new URL(location.href);
+    url.searchParams.delete('list');
+    url.searchParams.delete('topic');
+    for (const [name, value] of Object.entries(shown)) {
+      url.searchParams.set(name, value);
+    }
+    return url;
+  };
+  const go = (shown: { list?: ForYouList; topic?: string }) => {
+    const url = at(shown);
+    history.pushState(null, '', url);
+    setSearch(url.search);
+  };
+  const followHistory = () => setSearch(location.search);
+  window.addEventListener('popstate', followHistory);
+  onCleanup(() => window.removeEventListener('popstate', followHistory));
+  const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('for-you');
+  const panel = {
+    handle: { isFirst: () => true, isPopover: () => false },
+    isPanelActive: () => true,
+    splitHotkeyScope: hotkeyScope,
+  } as unknown as SplitPanelContextType;
+
+  /** Answer with the feed as it is now, topics included. */
+  const readFeed = () => {
+    setSuggestions(IN_TOPICS.map((suggestion) => ({ ...suggestion })));
+  };
   /** Reply on the opened reply suggestions' threads, as the server's next answer would show. */
   const sendReplies = () =>
     setSuggestions((list) =>
@@ -259,19 +393,33 @@ function Fixture() {
 
   return (
     <main class="flex h-dvh bg-page p-1.5 font-sans text-ink">
-      <div class="flex min-w-0 flex-1 flex-col rounded-xl border border-edge-muted bg-panel">
-        <header class="flex h-12 shrink-0 items-center justify-end px-3">
-          <ForYouRefresh refresh={refresh} />
-        </header>
-        <ForYouView
-          feed={feed}
-          parts={PARTS}
-          focusedId={PARAMS.get('suggestion') ?? undefined}
-          onRetry={source.retry}
-        />
+      <ToastRegion />
+      <div class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-muted bg-panel">
+        <SplitPanelContext.Provider value={panel}>
+          <div ref={attachHotkeys} class="flex min-h-0 flex-1">
+            <ForYouView
+              feed={feed}
+              list={params().has('topic') ? 'today' : list()}
+              onSelectList={(next) => go({ list: next })}
+              topicKey={params().get('topic') ?? undefined}
+              onSelectTopic={(topic) => go({ topic })}
+              routines={routines}
+              parts={PARTS}
+              refresh={refresh}
+              focusedId={PARAMS.get('suggestion') ?? undefined}
+              onRetry={source.retry}
+            />
+          </div>
+        </SplitPanelContext.Provider>
         <footer class="flex shrink-0 items-center gap-3 border-t border-edge-muted px-4 py-2 text-xs text-ink-muted">
           <button type="button" onClick={finishRuns}>
             Finish runs
+          </button>
+          <button type="button" onClick={readFeed}>
+            Read feed
+          </button>
+          <button type="button" onClick={() => setSuggestions(ALL)}>
+            Lose topic
           </button>
           <button type="button" onClick={sendReplies}>
             Send replies

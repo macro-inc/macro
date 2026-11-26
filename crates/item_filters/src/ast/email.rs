@@ -125,6 +125,11 @@ pub enum EmailLiteral {
     CalendarOnly(bool),
     /// Threads with at least one attachment of this kind on any message.
     Attachment(AttachmentKind),
+    /// Threads with at least one message carrying this label
+    /// (`email_labels.id`). Only labels of inboxes the reader owns or manages
+    /// match, so the label of an inbox a thread was shared from never does.
+    /// Several `Label` literals OR together.
+    Label(Uuid),
     /// Filter by thread created_at timestamp
     #[serde(rename = "ca")]
     CreatedAt(DateLiteral),
@@ -145,6 +150,9 @@ pub enum EmailLiteral {
 impl ExpandFrame<EmailLiteral> for EmailFilters {
     type Err = ExpandErr;
     fn expand_ast(input: Self) -> Result<Option<filter_ast::Expr<EmailLiteral>>, Self::Err> {
+        if let Some(filter) = input.search_only_filter() {
+            return Err(ExpandErr::SearchOnlyEmailFilter(filter));
+        }
         let EmailFilters {
             senders,
             cc,
@@ -164,12 +172,15 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             crm_addresses,
             calendar_only,
             attachments,
-            view,
+            view: _,
+            exclude_views: _,
+            text_matches: _,
+            label_names: _,
+            favorite: _,
+            has_attachment: _,
+            sent_after: _,
+            sent_before: _,
         } = input;
-
-        if view.is_some() {
-            return Err(ExpandErr::SearchOnlyEmailView);
-        }
 
         // Expand crm_domains / crm_addresses via the shared helper so the
         // raw AST endpoint and the typed POST stay byte-identical. We

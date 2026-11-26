@@ -3,8 +3,7 @@ import type { ServerResponse } from 'node:http';
 import type { Connect, Plugin } from 'vite';
 
 const PREFIX = '/@macro-sourcemap/';
-const INLINE_MAP =
-  /\n(\/\/# sourceMappingURL=|\/\*# sourceMappingURL=)data:application\/json;(?:charset=utf-8;)?base64,([A-Za-z0-9+/=]+)( \*\/)?\s*$/;
+const SOURCE_MAP_MARKER = 'sourceMappingURL=';
 /** Maps are content-addressed, so this bounds memory, not correctness. */
 const MAX_MAPS = 20_000;
 
@@ -71,11 +70,30 @@ function linkInlineMaps(res: ServerResponse, store: (map: Buffer) => string) {
         : Buffer.isBuffer(body)
           ? body.toString('utf8')
           : undefined;
-    const match = text === undefined ? null : INLINE_MAP.exec(text);
-    if (!text || !match) return end.apply(this, args as Parameters<typeof end>);
-    const [inline, comment, base64, close = ''] = match;
-    const url = store(Buffer.from(base64 ?? '', 'base64'));
-    const linked = `${text.slice(0, text.length - inline.length)}\n${comment}${url}${close}`;
+    if (text === undefined)
+      return end.apply(this, args as Parameters<typeof end>);
+    // Inspect only the final map trailer. Running a capturing regex over a large
+    // generated module or its inline map can exhaust the regexp engine's stack.
+    const marker = text.lastIndexOf(SOURCE_MAP_MARKER);
+    const start = marker - '\n//# '.length;
+    const comment = text.slice(start, marker);
+    if (marker < 0 || (comment !== '\n//# ' && comment !== '\n/*# '))
+      return end.apply(this, args as Parameters<typeof end>);
+    let tail = text.slice(marker + SOURCE_MAP_MARKER.length).trimEnd();
+    const close = tail.endsWith(' */') ? ' */' : '';
+    if (close) tail = tail.slice(0, -close.length);
+    const prefix = tail.startsWith(
+      'data:application/json;charset=utf-8;base64,'
+    )
+      ? 'data:application/json;charset=utf-8;base64,'
+      : 'data:application/json;base64,';
+    if (!tail.startsWith(prefix))
+      return end.apply(this, args as Parameters<typeof end>);
+    const base64 = tail.slice(prefix.length);
+    if (!base64 || /[^A-Za-z0-9+/=]/.test(base64))
+      return end.apply(this, args as Parameters<typeof end>);
+    const url = store(Buffer.from(base64, 'base64'));
+    const linked = `${text.slice(0, start)}${comment}${SOURCE_MAP_MARKER}${url}${close}`;
     return endWith.call(this, linked);
   } as typeof end;
 }

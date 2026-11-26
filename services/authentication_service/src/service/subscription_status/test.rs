@@ -101,6 +101,7 @@ fn service_with_rollout(
             billing_reads: Mutex::new(vec![]),
             facts: Some(SubscriptionPlanFacts {
                 period_end: date("2026-11-01T12:00:00Z"),
+                interval: Some(BillingInterval::Year),
                 scheduled_change: change,
                 billing: None,
             }),
@@ -125,6 +126,8 @@ async fn returns_pending_downgrade_from_the_authenticated_personal_scope() {
     let status = service.status(&user()).await.unwrap();
     assert_eq!(status.scheduled_change.unwrap().plan, SeatPlan::Premium);
     assert_eq!(status.renewal_date, Some(date("2026-11-01T12:00:00Z")));
+    // The interval is reported to every subscriber, not only billing admins.
+    assert_eq!(status.interval, Some(BillingInterval::Year));
     assert_eq!(
         *service.gateway.calls.lock().unwrap(),
         vec![(

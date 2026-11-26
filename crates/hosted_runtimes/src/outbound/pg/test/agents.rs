@@ -3,7 +3,7 @@ use crate::domain::agent::ComputerAgents;
 use crate::outbound::pg::PgComputerAgents;
 use harnesses::domain::ports::ComputerTeamAgents;
 
-async fn insert_agent(pool: &PgPool) -> MacroUserIdStr<'static> {
+pub(super) async fn insert_agent(pool: &PgPool) -> MacroUserIdStr<'static> {
     let macro_user_id = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0022);
     sqlx::query!(
         r#"
@@ -107,6 +107,62 @@ async fn a_purchase_for_an_agent_links_it_while_confirming_and_after(pool: PgPoo
         Some(id)
     );
     assert!(!repo.has_live_computer(TEAM, &agent).await.unwrap());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_purchase_trace_records_only_the_agent_computer_insert_commit(pool: PgPool) {
+    use opentelemetry::{KeyValue, trace::TracerProvider as _};
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use tracing::instrument::WithSubscriber as _;
+    use tracing_subscriber::prelude::*;
+
+    insert_team(&pool).await;
+    let repo = PgComputerRepo::new(pool.clone(), policy());
+    host(&repo, "commit-test-host", 31, 7, 3).await;
+    let mut for_agent = standard(1);
+    for_agent.agent = Some(insert_agent(&pool).await);
+    let reservation = reserve(&repo, for_agent).await;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+
+    async {
+        bought(&repo, 2).await;
+        let inserted = repo
+            .convert_reservation(reservation.id, active(1), now())
+            .await
+            .expect("agent computer transaction");
+        assert!(inserted.is_some());
+        let repeated = repo
+            .convert_reservation(reservation.id, active(1), now())
+            .await
+            .expect("repeated conversion");
+        assert!(repeated.is_none());
+    }
+    .with_subscriber(subscriber)
+    .await;
+
+    provider.force_flush().expect("flush spans");
+    let spans = exporter.get_finished_spans().expect("purchase trace");
+    let phases: Vec<_> = spans
+        .iter()
+        .filter(|span| span.name == "computer.purchase.invite_phase")
+        .collect();
+    assert_eq!(phases.len(), 1);
+    assert!(
+        phases[0]
+            .attributes
+            .contains(&KeyValue::new("phase", "commit"))
+    );
+    assert!(
+        phases[0]
+            .attributes
+            .contains(&KeyValue::new("outcome", "ok"))
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

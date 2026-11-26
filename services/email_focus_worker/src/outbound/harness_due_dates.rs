@@ -32,7 +32,8 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Asks the harness for the days a thread's mail names, acting as its owner,
-/// and counts each ask, its failures, and the tokens and cost the harness reports.
+/// and counts each ask, its failures and rejected answers, and the tokens and
+/// cost the harness reports.
 pub struct HarnessDueDates {
     client: Client,
     url: Url,
@@ -131,7 +132,12 @@ impl DueDateExtractor for HarnessDueDates {
             return Err(rootcause::report!("the harness answered {status}"));
         }
         let answer: ThreadDueDateResponse = response.json().await.map_err(request_failed)?;
-        outcome.finish(None);
+        // A rejected answer holds no dates, as one naming none would; asking
+        // again would get the same answer from the same mail.
+        outcome.finish(answer.rejected.then_some(Metric::DueDateRejected));
+        if answer.rejected {
+            tracing::info!("the harness rejected the model's due date answer");
+        }
         if let Some(usage) = &answer.usage {
             self.count_usage(usage);
         }

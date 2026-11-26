@@ -1,11 +1,11 @@
 //! Issue tracker planning and writes. The shared workspace engine owns jobs,
 //! leases, approval, cancellation, adoption and session notifications.
 
+use connectors::McpConnectionsService;
 use futures::StreamExt;
 use import_notion::domain::ports::NotionConnections;
 use import_tracker::domain::model::{Group, Inventory, Issue, TrackerError};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tracing::Instrument;
@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use super::notion_workspace::{sharing, triage};
 use super::workspace::run::{JobControl, WriteSet};
-use super::{ImportServiceImpl, NOTION_IMPORT_MODEL, NotionWorkspaceImporter};
+use super::{ImportServiceImpl, NOTION_IMPORT_MODEL};
 use crate::domain::models::{
     ImportEntity, ImportKind, ImportSource, ImportStatus, NotionDecision, NotionImportReport,
     NotionJob, NotionPlanItem, NotionSharing, NotionWriteChoices, RunStatus, ScanCounts, TeamClaim,
@@ -25,7 +25,7 @@ use crate::domain::ports::{
     SlackWorkspaceSource, TrackerTaskRelations, WorkspaceWriter, WrittenObjects,
 };
 
-mod claim;
+pub(in crate::domain::service) mod claim;
 pub(in crate::domain::service) mod plan;
 pub(in crate::domain::service) mod values;
 
@@ -39,6 +39,13 @@ mod test;
 enum TrackerObject {
     Group(Group),
     Issue(Box<Issue>),
+}
+
+/// The plan of any reviewed source's row; approval reads nothing else, so
+/// tracker and HubSpot plans share it.
+#[derive(Debug, Clone, Deserialize)]
+struct Planned {
+    plan: NotionPlanItem,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,7 +62,7 @@ struct TrackerMeta {
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
@@ -162,28 +169,20 @@ where
                 Some(self.workspace_source),
                 Some(ImportStatus::Staged),
             )
-            .await?;
+            .await
+            .map_err(ImportError::not_started)?;
         let planned: Vec<_> = rows
             .into_iter()
             .filter(|row| row.review_id == Some(review) && row.user_id == user.as_ref())
             .collect();
         if planned.is_empty() {
-            return Err(ImportError::NotReady(
-                "This plan has nothing left to import.",
-            ));
-        }
-        // A source's current run and exact review must both match. A stale
-        // card can never approve the replacement plan.
-        let report = self.current_report(user).await?;
-        if report.review_id != Some(review) || report.status != Some(RunStatus::Ready) {
-            return Err(ImportError::NotReady(
-                "This import plan is not ready for this review.",
-            ));
+            return Err(crate::domain::ports::UnreviewableRun::NothingLeft.into());
         }
         let mut shared = Vec::new();
         let mut personal = Vec::new();
         for row in &planned {
-            let meta: TrackerMeta = serde_json::from_value(row.metadata.clone())?;
+            let meta: Planned = serde_json::from_value(row.metadata.clone())
+                .map_err(|error| ImportError::from(error).not_started())?;
             if meta.plan.shareable {
                 if choices.personal.contains(&row.id) {
                     personal.push(row.id);
@@ -192,21 +191,16 @@ where
                 }
             }
         }
-        self.repo.set_plan_sharing(user, &shared, &personal).await?;
-        if !self
+        // The fence first: a stale card never approves the replacement plan,
+        // and a refused write changes nothing about it.
+        let from = self
             .repo
-            .transition_run(
-                user,
-                self.workspace_source,
-                &[RunStatus::Ready],
-                RunStatus::Importing,
-                None,
-            )
-            .await?
-        {
-            return Err(ImportError::NotReady(
-                "This import is already being written.",
-            ));
+            .start_reviewed_write(user, self.workspace_source, review)
+            .await
+            .map_err(ImportError::not_started)?;
+        if let Err(error) = self.repo.set_plan_sharing(user, &shared, &personal).await {
+            self.reopen_plan(user, from).await;
+            return Err(error.not_started());
         }
         self.hold_new_run(
             user,
@@ -218,7 +212,7 @@ where
         // Claims are taken per object during writing, so one failed claimant
         // does not prevent unrelated rows being copied.
         for row in &planned {
-            let meta: TrackerMeta = serde_json::from_value(row.metadata.clone())?;
+            let meta: Planned = serde_json::from_value(row.metadata.clone())?;
             if choices.excluded.contains(&row.id)
                 || meta.plan.decision == Some(NotionDecision::Skip)
             {
@@ -244,7 +238,7 @@ where
             }
             .in_current_span(),
         );
-        self.notion_import_report(user).await
+        Ok(self.report_after_start(user).await)
     }
 
     #[tracing::instrument(skip_all, fields(source = self.workspace_source.as_ref(), %review), err)]
@@ -285,9 +279,14 @@ where
                     .write_tracker_object(user, row, &meta, team, control)
                     .await
                 {
+                    tracing::warn!(error = ?error, "tracker object was not imported");
                     failed += 1;
                     self.repo
-                        .mark_import_failed(user, row.id, &error.to_string())
+                        .mark_import_failed(
+                            user,
+                            row.id,
+                            &super::notion_workspace::failure_text(&error, self.workspace_source),
+                        )
                         .await?;
                 }
                 self.notify(user).await;
@@ -440,9 +439,17 @@ where
                         .await?;
                 }
                 Err(error) => {
+                    tracing::warn!(error = ?error, "tracker task was not imported");
                     failed += 1;
                     self.repo
-                        .mark_import_failed(user, row.id, &error.to_string())
+                        .mark_import_failed(
+                            user,
+                            row.id,
+                            &super::notion_workspace::failure_text(
+                                &ImportError::Other(error),
+                                self.workspace_source,
+                            ),
+                        )
                         .await?;
                 }
             }

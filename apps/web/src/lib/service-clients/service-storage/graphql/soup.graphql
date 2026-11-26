@@ -11,6 +11,22 @@ query Soup($input: SoupInput!) {
 	}
 }
 
+# One-shot reads (exports, previews, recently viewed): the list rows without
+# their notifications, which these readers never show and the server would
+# otherwise look up for every row.
+query SoupPreviewPage($input: SoupInput!) {
+	user {
+		id
+		emailLinks @cacheOnly { ...MailAccountFields }
+		soup(input: $input) {
+			items {
+				...SoupItemPreviewFields
+			}
+			nextCursor
+		}
+	}
+}
+
 query SoupBackfill($input: SoupInput!) {
 	user {
 		id @cacheOnly
@@ -251,6 +267,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		ownerId
 		organizationId
 		channelTeamId: teamId
+		autoJoinTeam
 		createdAt
 		updatedAt
 		viewedAt
@@ -262,6 +279,20 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 			role
 			joinedAt
 			leftAt
+		}
+		# Every channel write carries the directory's fields (ChannelDirectoryFields),
+		# because a record missing one is omitted from directory reads.
+		botParticipants {
+			channelId
+			botId
+			role
+			joinedAt
+			leftAt
+		}
+		agentDm {
+			botId
+			name
+			avatarUrl
 		}
 		latestMessage {
 			...SoupChannelMessageFields
@@ -307,6 +338,11 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		}
 	}
 	...GraphqlCrmContactFields
+	... on GraphqlSoupCrmContact {
+		properties {
+			...SoupPropertyFields
+		}
+	}
 	... on GraphqlSoupCrmCompany {
 		crmTeamId: teamId
 		crmCompanyName: name
@@ -425,6 +461,7 @@ fragment SoupPropertyValueFields on GraphqlPropertyValue {
 	}
 	... on GraphqlDatePropertyValue {
 		dateValue: value
+		dateHasTime: hasTime
 	}
 	... on GraphqlDateRangePropertyValue {
 		rangeStart: start
@@ -652,6 +689,10 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	}
 	... on GraphqlInboxReauthRequiredMetadata {
 		inboxReauthRequiredEmailAddress: emailAddress
+	}
+	... on GraphqlCrmEmailSharingChangedMetadata {
+		crmEmailSharingChangedTeamId: teamId
+		crmEmailSharingChangedReason: reason
 	}
 	... on GraphqlRoutineRunFinishedMetadata {
 		routineRunFinishedRoutineId: routineId

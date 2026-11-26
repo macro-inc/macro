@@ -5,8 +5,8 @@
 //! reporting whether it happened via `RETURNING` / rows-affected.
 
 use crate::domain::models::{
-    ImportEntity, ImportKind, ImportRun, ImportSource, ImportStatus, Initiator, RunStatus,
-    ScanCounts, TEAMMATE_STOPPED,
+    ImportEntity, ImportKind, ImportRun, ImportSource, ImportStatus, Initiator, RunErrorKind,
+    RunStatus, ScanCounts, TEAMMATE_STOPPED,
 };
 use crate::domain::ports::{ImportError, ImportRepo, Result};
 use agent_session::domain::notifications::NotificationWriter;
@@ -122,11 +122,22 @@ struct ImportRunDbRow {
     source: String,
     status: String,
     error: Option<String>,
+    error_kind: Option<String>,
     updated_at: DateTime<Utc>,
     scanned_pages: Option<i32>,
     scanned_data_sources: Option<i32>,
     review_id: Option<Uuid>,
     review_session_id: Option<Uuid>,
+}
+
+/// A stored error kind; one this build does not know (written by a newer
+/// one) reads as `Internal`, so a list or report still loads.
+pub(super) fn decode_error_kind(kind: Option<String>) -> Option<RunErrorKind> {
+    let kind = kind?;
+    Some(RunErrorKind::from_str(&kind).unwrap_or_else(|_| {
+        tracing::warn!(kind, "unknown import run error kind");
+        RunErrorKind::Internal
+    }))
 }
 
 impl TryFrom<ImportRunDbRow> for ImportRun {
@@ -148,6 +159,7 @@ impl TryFrom<ImportRunDbRow> for ImportRun {
             source,
             status,
             error: row.error,
+            error_kind: decode_error_kind(row.error_kind),
             updated_at: row.updated_at,
             scanned,
             review_id: row.review_id,
@@ -354,6 +366,10 @@ impl ImportRepo for PgImportRepo {
         source: Option<ImportSource>,
         status: Option<ImportStatus>,
     ) -> Result<Vec<ImportEntity>> {
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *transaction)
+            .await?;
         let rows = sqlx::query_as!(
             ImportEntityDbRow,
             r#"
@@ -367,14 +383,15 @@ impl ImportRepo for PgImportRepo {
             )
             AND ($2::text IS NULL OR source = $2)
             AND ($3::text IS NULL OR status = $3)
-            ORDER BY (user_id = $1) DESC, created_at DESC
+            ORDER BY (user_id = $1) DESC, created_at DESC, id ASC
             "#,
             user.as_ref(),
             source.map(|s| s.as_ref().to_string()) as Option<String>,
             status.map(|s| s.as_ref().to_string()) as Option<String>,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *transaction)
         .await?;
+        transaction.commit().await?;
 
         // Own rows come first (see ORDER BY); drop teammate rows that
         // duplicate an own row on (source, foreign_id), then restore
@@ -402,7 +419,11 @@ impl ImportRepo for PgImportRepo {
                 }
             }
         }
-        entities.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        entities.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| a.id.cmp(&b.id))
+        });
         Ok(entities)
     }
 
@@ -526,7 +547,7 @@ impl ImportRepo for PgImportRepo {
                 last_error = 'the import was interrupted — select it again to retry',
                 updated_at = NOW()
             WHERE user_id = $1 AND status = 'importing'
-              AND NOT (source IN ('notion', 'linear', 'jira') AND metadata->'plan' IS NOT NULL)
+              AND NOT (source IN ('notion', 'linear', 'jira', 'hubspot') AND metadata->'plan' IS NOT NULL)
               AND updated_at < NOW() - ($2::double precision * interval '1 second')
             "#,
             user.as_ref(),
@@ -602,7 +623,7 @@ impl ImportRepo for PgImportRepo {
         let rows = sqlx::query_as!(
             ImportRunDbRow,
             r#"
-            SELECT source, status::text AS "status!", error, updated_at,
+            SELECT source, status::text AS "status!", error, error_kind, updated_at,
                    CASE WHEN status = 'running' THEN scanned_pages END AS scanned_pages,
                    CASE WHEN status = 'running' THEN scanned_data_sources END
                        AS scanned_data_sources,
@@ -630,10 +651,10 @@ impl ImportRepo for PgImportRepo {
             INSERT INTO import_run (user_id, source, status)
             VALUES ($1, $2, 'running')
             ON CONFLICT (user_id, source) DO UPDATE
-            SET status = 'running', error = NULL, updated_at = NOW(),
+            SET status = 'running', error = NULL, error_kind = NULL, updated_at = NOW(),
                 scanned_pages = NULL, scanned_data_sources = NULL,
                 lease_owner = NULL, lease_expires_at = NULL, adoptions = 0,
-                review_session_id = NULL, review_id = NULL
+                review_session_id = NULL, review_id = NULL, write_review_id = NULL
             WHERE import_run.status::text = ANY($3::text[])
             "#,
             user.as_ref(),
@@ -656,8 +677,9 @@ impl ImportRepo for PgImportRepo {
             UPDATE import_run
             SET status = 'failed',
                 error = 'discovery was interrupted — try again',
+                error_kind = 'interrupted',
                 updated_at = NOW()
-            WHERE user_id = $1 AND status IN ('running', 'importing') AND source NOT IN ('notion', 'linear', 'jira')
+            WHERE user_id = $1 AND status IN ('running', 'importing') AND source NOT IN ('notion', 'linear', 'jira', 'hubspot')
               AND updated_at < NOW() - ($2::double precision * interval '1 second')
             "#,
             user.as_ref(),
@@ -668,7 +690,7 @@ impl ImportRepo for PgImportRepo {
         Ok(result.rows_affected())
     }
 
-    #[tracing::instrument(skip(self, user), err)]
+    #[tracing::instrument(skip(self, user, error), err)]
     async fn finish_run(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -681,6 +703,7 @@ impl ImportRepo for PgImportRepo {
             UPDATE import_run
             SET status = $3::text::import_run_status,
                 error = $4,
+                error_kind = NULL,
                 updated_at = NOW()
             WHERE user_id = $1 AND source = $2 AND status = 'running'
             "#,

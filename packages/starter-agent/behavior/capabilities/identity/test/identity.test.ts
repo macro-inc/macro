@@ -1,12 +1,17 @@
 import { expect, test } from 'bun:test';
+import type { Agent } from '@macro-inc/muppet/core/agent';
+import { behavior } from '@macro-inc/muppet/core/behavior';
+import { source } from '@macro-inc/muppet/core/event';
+import { simple } from '@macro-inc/muppet/runtimes/simple';
 import { memoryStore, scheduler } from '@macro-inc/muppet/utilities/schedules';
 import { invoke } from '../../../../test/invoke.ts';
 import {
   ensureIntroduction,
+  identityHandlers,
   introduction,
 } from '../../../events/handlers/identity.ts';
 import { identityModule, readIdentity, writeIdentity } from '../index.ts';
-import { introduce, known, unknown } from '../prompt.ts';
+import { introduce, known } from '../prompt.ts';
 
 const now = Temporal.Instant.from('2026-01-05T10:00:00Z');
 const clock = { now: () => now, sleep: async () => {} };
@@ -29,13 +34,99 @@ const fake = () => {
   };
 };
 
-test('a new agent has no identity, and is told so, with the questions to ask', async () => {
-  const context = fake();
-  expect(await readIdentity(context)).toBeUndefined();
-  expect(unknown).toContain('Who am I?');
-  expect(unknown).toContain('What is my purpose?');
-  expect(unknown).toContain('writeIdentity');
-});
+test.each([
+  {
+    scenario: 'a configured name',
+    name: '  Agent  ',
+    identity: undefined,
+    asksForName: false,
+  },
+  {
+    scenario: 'an empty name',
+    name: '',
+    identity: undefined,
+    asksForName: true,
+  },
+  {
+    scenario: 'a whitespace-only name',
+    name: '  ',
+    identity: undefined,
+    asksForName: true,
+  },
+  {
+    scenario: 'saved identity',
+    name: 'Agent',
+    identity: 'I am Pip, and I keep the calendar.',
+    asksForName: false,
+  },
+])(
+  'the identity hook handles $scenario on each wake',
+  async ({ name, identity, asksForName }) => {
+    const context = fake();
+    if (identity !== undefined)
+      await writeIdentity(context, { markdown: identity });
+
+    const prompts: string[] = [];
+    const failures: unknown[] = [];
+    const agent: Agent = {
+      wake: async ({ systemPrompt }) => {
+        prompts.push(systemPrompt);
+        return { kind: 'done', reply: '' };
+      },
+    };
+    const wakes = async function* () {
+      yield introduce;
+      yield 'Reply to the owner';
+    };
+
+    await behavior()
+      .decorate({
+        ...context,
+        config: { identity: { name, email: 'agent@example.com' } },
+        agent,
+      })
+      .use(identityHandlers())
+      .source({ wakes: source(wakes()) })
+      .on(
+        (sources) => sources.wakes,
+        async (request, { wake }) => {
+          await wake(request);
+        }
+      )
+      .on(
+        (sources) => sources.hooks.failed,
+        async (failure) => {
+          failures.push(failure);
+        }
+      )
+      .run(
+        simple({
+          systemPrompt: '',
+          load: async () => {
+            throw new Error('no script is run');
+          },
+          signatures: async () => '',
+          script: { file: import.meta.path, name: 'Script' },
+        })
+      );
+
+    expect(failures).toEqual([]);
+    expect(prompts).toHaveLength(2);
+    for (const prompt of prompts) {
+      expect(prompt.includes('What should I be called?')).toBe(asksForName);
+      if (identity !== undefined) {
+        expect(prompt).toContain(identity);
+        expect(prompt).not.toContain('Your name is "Agent"');
+      } else {
+        expect(prompt).toContain('What is my purpose?');
+        if (!asksForName) {
+          expect(prompt).toContain('Your name is "Agent"');
+          expect(prompt).toContain('never ask what to call yourself');
+        }
+      }
+    }
+  }
+);
 
 test('what it writes is what it reads back, whole, and what every wake is shown', async () => {
   const context = fake();

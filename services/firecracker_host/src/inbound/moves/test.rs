@@ -121,6 +121,7 @@ impl MoveOperations for FakeOperations {
             generation: request.generation,
             pairing_id: PairingId::new_from_uuid(Uuid::from_u128(9)),
             image: GuestImage::try_new("macro-box/1").unwrap(),
+            previous_image: None,
             role: ComputerRole::Person,
             resources: ComputerResources {
                 vcpus: 2,

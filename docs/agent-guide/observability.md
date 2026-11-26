@@ -22,6 +22,21 @@ Expected shape today: a `web-app` CLIENT span (`http POST /dss/...`, attributes 
 Secondary key: the HTTP response header `x-request-id` equals the server span's `request.id`
 attribute.
 
+## VNC viewer attempts
+
+Find `computer.screen.connect` by `screen.journey.id` and compare
+`screen.connect_generation` across reconnects. The browser's `screen.attempt`
+retains the retry counter used for backoff. The span records `screen.terminal_stage`
+and `screen.close_reason` once, at the first decoded frame or when setup ends.
+Use the ticket trace to find the corresponding `computer.screen.session` relay
+span. Its `screen.relay.stage` and `screen.relay.close_reason` identify guest
+or socket failures. An `aborted` relay stopped before its task recorded an
+ordinary end. `screen.bytes_written` counts binary bytes after a
+successful socket write. The `computer.screen.tunnel` child identifies the
+guest image and the relay or input role. The session's
+`macrod.connection.epoch` identifies a runtime connection observed on that
+harness replica.
+
 ## Finding traces without a reqid (TraceQL)
 
 - Discover services: `tempo_get-attribute-values` on `resource.service.name`.
@@ -216,6 +231,23 @@ The rollout's numbers are CloudWatch metrics, not spans: the worker publishes
 line "focus usage this minute" carries that minute's tokens and dollars. The
 **Email Focus rollout** Grafana dashboard draws them; see
 [the runbook](../runbooks/email-focus.md).
+
+## Email thread opens
+
+An open thread, from Mail, a reference in a message or a link, is the routed
+view's flow (`view.mail-thread` in Mail). Its `email.thread` phase lasts until
+the first page of messages loads. Inside it, `email.thread.identity` is the wait
+for the local cache to say whether the route is an unsynced local draft; the
+thread request starts only after that answer. Both carry `email.thread_id`.
+
+When the cache has not answered within a second, or the lookup fails, the
+thread is read from the server without storing the answer, and an
+always-exported `email.thread.identity_fallback` span records
+`email.thread_id`, `email.thread.identity_fallback_reason` (`timeout` or
+`error`) and `email.thread.identity_wait_ms`. Search Tempo for
+`{ name="email.thread.identity_fallback" }` to find opens a slow or stalled
+cache held up. The span joins the view's trace when that trace is sampled, and
+starts its own otherwise.
 
 ## Contact searches
 
@@ -424,6 +456,23 @@ flow node and carry `traceparent` to the backend. They hang under the flow
 watches the query. A refetch after the flow settled, and global background
 queries (pending sends, Command-K sources), start their own traces.
 
+Entity writes (`entity.trash`, `entity.delete_permanently`, `entity.restore`,
+`entity.duplicate`, `entity.update_share_policy`, `entity.move`,
+`entity.rename`) name their span as the mutation's trace parent
+(`TRACE_PARENT_CONTEXT_KEY` in the urql operation context); other mutations
+join no trace. A write without an optimistic response sends `graphql.transport`
+under it, then applies the response's cache effects in
+`graphql.mutation.cache_effects` (`cache.effect_count`,
+`cache.deleted_record_count`, `cache.effects_applied`, `cache.failure`), with a
+`graphql.mutation.cache_write` or `cache_delete` child per effect and, in the
+native apps, the `graphql_cache.ipc.request` spans for each host call under
+those (subscription effects nest theirs the same way). The caller waits for
+both phases. An IPC span exported inside such a trace keeps its own `perf`
+class and rate tags, so don't weight those by `1 / macro.sampling.rate`. A queued write (`entity.move`, `entity.rename`) holds
+`graphql.mutation_queue.enqueue` and, when the page that queued it sends it,
+`graphql.mutation_queue.attempt`, which can end after its parent; a replay
+after a reload starts its own trace, found by `mutation_queue.item_id`.
+
 ### Request and response body timing
 
 HTTP client spans (`http <METHOD> <path>`, from `safeFetch`) end when the
@@ -502,7 +551,8 @@ Phases you will see:
   `agent.session.load.projection_ms` with its message count; do not add the two.
   A slow fold with a similarly slow projection is main-thread store work, not
   WASM.
-- Lists and details: `channel.messages`, `channel.detail`, `email.thread`,
+- Lists and details: `channel.messages`, `channel.detail`, `email.thread`
+  (with `email.thread.identity` inside it; see [Email thread opens](#email-thread-opens)),
   `database.detail`, `database.rows`, `calendar.target`, `calendar.occurrences`
   (per mounted page), `activity.feed`, `activity.overview`, `home.items`,
   `home.list`, `drive.items`, `reviews.items`, `settings.plan`, shared Soup

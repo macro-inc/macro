@@ -23,7 +23,17 @@ export const EMPTY_GROUP_PROPERTY_IDS: Partial<Record<TaskGroupBy, string>> = {
   project: SYSTEM_PROPERTY_IDS.PROJECT,
   assignee: SYSTEM_PROPERTY_IDS.ASSIGNEES,
   date: SYSTEM_PROPERTY_IDS.DUE_DATE,
+  due_date: SYSTEM_PROPERTY_IDS.DUE_DATE,
+  start_date: SYSTEM_PROPERTY_IDS.START_DATE,
 };
+
+/** The group of tasks without the date a date grouping buckets by. */
+export function isNoDateGroup(groupBy: TaskGroupBy, groupId: string) {
+  return (
+    (groupBy === 'due_date' && groupId === 'no_due_date') ||
+    (groupBy === 'start_date' && groupId === 'no_start_date')
+  );
+}
 
 export const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
   [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
@@ -150,8 +160,7 @@ export function TaskGroupHeader(props: {
                     <Match
                       when={
                         !props.row.groupId ||
-                        (props.groupBy === 'date' &&
-                          props.row.groupId === 'no_due_date')
+                        isNoDateGroup(props.groupBy, props.row.groupId)
                       }
                     >
                       <PropertyEmptyIcon

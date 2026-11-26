@@ -9,11 +9,15 @@ import { useEmailFilters } from './use-email-filters';
 
 const mocks = vi.hoisted(() => ({
   view: undefined as unknown,
+  labels: undefined as unknown,
 }));
 
 vi.mock('../email-view-context', () => ({ useEmailView: () => mocks.view }));
 vi.mock('@property/tags/use-tag-filter-group', () => ({
   useTagFilterGroup: () => () => ({ id: 'tags', label: 'Tags', options: [] }),
+}));
+vi.mock('./use-label-filter-group', () => ({
+  useLabelFilterGroup: () => () => mocks.labels,
 }));
 vi.mock('../queries/use-email-participant-suggestions', () => ({
   useEmailParticipantSuggestions: () => () => [
@@ -24,7 +28,10 @@ vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 
 let dispose: (() => void) | undefined;
-afterEach(() => dispose?.());
+afterEach(() => {
+  dispose?.();
+  mocks.labels = undefined;
+});
 
 /** A list on `tab` with the view's filter writes, and two linked inboxes. */
 function mountFilters(tab: EmailTab) {
@@ -171,5 +178,38 @@ describe('useEmailFilters', () => {
 
     expect(state.inboxIds).toEqual(['inbox-a', 'inbox-b']);
     expect(filters.activeCount()).toBe(1);
+  });
+
+  it('filters by any of the ticked labels after tags, except on Reminders', () => {
+    mocks.labels = {
+      id: 'labels',
+      label: 'Labels',
+      options: [
+        { id: 'label-customers', label: 'Customers' },
+        { id: 'label-larkspur', label: 'Customers / Larkspur' },
+      ],
+    };
+    const { filters, state } = mountFilters('sent');
+
+    expect(groupIds(filters)).toEqual([
+      'read',
+      'done',
+      'has',
+      'attachments',
+      'labels',
+      'inboxes',
+    ]);
+    filters.setSelected('labels', 'label-larkspur', true);
+    filters.setSelected('labels', 'label-customers', true);
+    expect(state.facets.labels).toEqual(['label-customers', 'label-larkspur']);
+    expect(filters.isSelected('labels', 'label-larkspur')).toBe(true);
+    expect(filters.activeCount()).toBe(1);
+    dispose?.();
+
+    const view = mountFilters('important');
+    expect(groupIds(view.filters).slice(0, 2)).toEqual(['people', 'labels']);
+    dispose?.();
+
+    expect(groupIds(mountFilters('reminders').filters)).not.toContain('labels');
   });
 });

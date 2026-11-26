@@ -36,7 +36,7 @@ pub use models::{
     OVERAGE_CHARGE_THRESHOLD_CENTS, OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS,
     OpenPeriodStart, OverageChargeStatus, PayerScope, PeriodAllowance, PeriodLedger, PlanTier,
     Result, SeatAllowance, SeatGeneration, SeatUsage, SubscriptionScope, UsagePolicy,
-    UsageSnapshot,
+    UsageSnapshot, UserPlan,
 };
 pub use ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, CreditReloadRequest, EntitlementSource,

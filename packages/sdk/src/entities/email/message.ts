@@ -293,7 +293,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
   }
 
   /**
-   * The files attached to this message, from its thread's first 100 messages.
+   * The files a received or sent message carries, from its thread's first 100 messages; a draft's files are `EmailDraft.draftAttachments()`.
    *
    * @readonly
    */

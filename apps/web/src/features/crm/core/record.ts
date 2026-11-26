@@ -44,6 +44,9 @@ export type CrmRecordRef = {
   name: string;
 };
 
+/** The record a merged company or contact went into. */
+export type CrmMergeSurvivor = Pick<CrmRecordRef, 'type' | 'id'>;
+
 /** Tabs of a CRM record, in display order per record type. */
 export const COMPANY_SECTIONS = [
   'overview',
@@ -64,3 +67,17 @@ export const CONTACT_SECTIONS = [
 export type CompanySection = (typeof COMPANY_SECTIONS)[number];
 export type ContactSection = (typeof CONTACT_SECTIONS)[number];
 export type CrmRecordSection = CompanySection | ContactSection;
+
+/**
+ * Information panel order for both records: details, then Properties ahead of
+ * References as in the app's other side panels, with the company's own
+ * sections between them and References last.
+ */
+export const RECORD_PANEL_ORDER = {
+  details: 10,
+  properties: 20,
+  lists: 30,
+  sharing: 40,
+  activity: 45,
+  references: 50,
+} as const;

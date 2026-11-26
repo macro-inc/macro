@@ -26,18 +26,23 @@ import {
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordTabs } from '../components/record-tabs';
 import { useCrmContext } from '../context/crm-context';
-import type { CrmCommentTarget } from '../context/workspace-context';
+import type {
+  CrmCommentTarget,
+  CrmRecordOpenOptions,
+} from '../context/workspace-context';
 import {
   COMPANY_SECTIONS,
   CONTACT_SECTIONS,
   type CompanySection,
   type ContactSection,
+  type CrmMergeSurvivor,
   type CrmRecordRef,
   type CrmRecordSection,
 } from '../core/record';
 import { Company } from './company-detail';
 import { Contact } from './contact-detail';
 import { RecordHeaderActions } from './record-header-actions';
+import { useRecordTabKeys } from './record-tab-keys';
 import { useCompanyQuery, useContactQuery } from './use-crm';
 
 const recordKey = (record: CrmRecordRef) => `${record.type}:${record.id}`;
@@ -74,9 +79,14 @@ type CrmRecordDetailProps = {
   section: CrmRecordSection | undefined;
   commentTarget?: CrmCommentTarget;
   viewName: string;
-  onOpen: (records: readonly CrmRecordRef[]) => void;
+  onOpen: (
+    records: readonly CrmRecordRef[],
+    options?: CrmRecordOpenOptions
+  ) => void;
   onSectionChange: (section: CrmRecordSection) => void;
   onClose: () => void;
+  /** Shows the company or contact the shown one was merged into, in its place. */
+  onMerged?: (survivor: CrmMergeSurvivor) => void;
   navigation: JSX.Element;
   onOpenPipeline?: (pipelineId: string) => void;
 };
@@ -93,16 +103,23 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
     sectionOf(COMPANY_SECTIONS, props.section);
   const contactSection = (): ContactSection =>
     sectionOf(CONTACT_SECTIONS, props.section);
-  const returnTo = (index: number) => {
+  const recordTabsRef = useRecordTabKeys<CrmRecordSection>({
+    sections: () =>
+      current().type === 'contact' ? CONTACT_SECTIONS : COMPANY_SECTIONS,
+    value: () =>
+      current().type === 'contact' ? contactSection() : companySection(),
+    onChange: (section) => props.onSectionChange(section),
+  });
+  const returnTo = (index: number, options?: CrmRecordOpenOptions) => {
     if (index === trail().length - 1) return;
-    props.onOpen(trail().slice(0, index + 1));
+    props.onOpen(trail().slice(0, index + 1), options);
   };
-  const open = (record: CrmRecordRef) => {
+  const open = (record: CrmRecordRef, options?: CrmRecordOpenOptions) => {
     const index = trail().findIndex(
       (entry) => recordKey(entry) === recordKey(record)
     );
-    if (index !== -1) return returnTo(index);
-    props.onOpen([...trail(), record]);
+    if (index !== -1) return returnTo(index, options);
+    props.onOpen([...trail(), record], options);
   };
   const back = () =>
     trail().length > 1 ? returnTo(trail().length - 2) : props.onClose();
@@ -176,6 +193,7 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
         <div
           ref={container}
           tabindex={-1}
+          data-pane-focus=""
           class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
         >
           <div class="flex h-12 min-w-0 shrink-0 items-center gap-2 px-3 touch:gap-3 touch:border-b touch:border-edge-muted touch:px-4 touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:pb-2 mobile:flex-wrap">
@@ -193,6 +211,7 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
                     compact={compactTabs()}
                     value={companySection()}
                     onChange={props.onSectionChange}
+                    tabsRef={recordTabsRef}
                   />
                 }
               >
@@ -201,6 +220,7 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
                   compact={compactTabs()}
                   value={contactSection()}
                   onChange={props.onSectionChange}
+                  tabsRef={recordTabsRef}
                 />
               </Show>
             </div>
@@ -223,6 +243,9 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
                         section={companySection()}
                         headerToggle={false}
                         onOpenPipeline={props.onOpenPipeline}
+                        onMerged={(id) =>
+                          props.onMerged?.({ type: 'company', id })
+                        }
                         onOpenContact={(contact) =>
                           open({
                             type: 'contact',
@@ -238,8 +261,14 @@ export function CrmRecordDetail(props: CrmRecordDetailProps) {
                       section={contactSection()}
                       headerToggle={false}
                       onOpenPipeline={props.onOpenPipeline}
+                      onMerged={(id) =>
+                        props.onMerged?.({ type: 'contact', id })
+                      }
                       onOpenCompany={(companyId) => {
-                        open({ type: 'company', id: companyId, name: '' });
+                        open(
+                          { type: 'company', id: companyId, name: '' },
+                          { followLink: true }
+                        );
                         return true;
                       }}
                     />

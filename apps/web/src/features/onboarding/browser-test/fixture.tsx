@@ -1,6 +1,6 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
-import { createEffect, For, Match, Switch } from 'solid-js';
+import { createEffect, createSignal, For, Match, Switch } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { render } from 'solid-js/web';
 import { OnboardingProvider } from '../context/onboarding-context';
@@ -11,6 +11,7 @@ import {
   type FakeOnboardingWorld,
 } from '../tests/fake-onboarding-context';
 import { renderInviteOfferStub } from '../tests/invite-offer-stub';
+import { DesktopHandoffView } from '../views/desktop-handoff-view';
 import { OnboardingFlowView } from '../views/onboarding-flow-view';
 import { SignupJourneyView } from '../views/signup-journey-view';
 import { FIXTURE_KEYS, type FixtureLanding } from './fixture-keys';
@@ -118,7 +119,20 @@ window.onboardingFixture = {
     }),
 };
 
+// `?handoff`: a phone browser's last screen, "Macro is better on desktop";
+// `?handoff=android` shows the Google Play button. Kept in sessionStorage so
+// it survives the simulated Stripe round-trip.
+if (params.handoff !== undefined) {
+  sessionStorage.setItem(
+    FIXTURE_KEYS.handoff,
+    params.handoff === 'android' ? 'android' : 'ios'
+  );
+}
+const handoffPlatform = sessionStorage.getItem(FIXTURE_KEYS.handoff);
+const handoff = handoffPlatform !== null;
+
 function Fixture() {
+  const [handoffTarget, setHandoffTarget] = createSignal<string>();
   return (
     <OnboardingProvider value={fake.context}>
       <Switch>
@@ -137,12 +151,28 @@ function Fixture() {
             showingEmail={false}
           />
         </Match>
+        <Match when={handoffTarget()}>
+          {(target) => (
+            <DesktopHandoffView
+              storeUrl={
+                handoffPlatform === 'android'
+                  ? 'https://play.google.com/store/apps/details?id=com.macro.workspace.mobile'
+                  : 'https://apps.apple.com/us/app/macro-app/id6743133649'
+              }
+              platform={handoffPlatform === 'android' ? 'android' : 'ios'}
+              onContinue={() => land({ t: 'app', target: target() })}
+            />
+          )}
+        </Match>
         <Match when={true}>
           <OnboardingFlowView
             next={params.next}
             step={params.step}
             checkoutReturn={parseCheckoutReturn(params)}
             onNavigate={(target) => land({ t: 'app', target })}
+            onFinished={
+              handoff ? (target) => setHandoffTarget(target) : undefined
+            }
             onRedirect={(url) => location.assign(url)}
             onSignedOut={() => land({ t: 'signed-out' })}
             renderInviteOffer={renderInviteOfferStub}

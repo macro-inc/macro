@@ -1,4 +1,5 @@
 import type { ImportEntity, NotionImportReport } from '@queries/import';
+import { parseRunErrorKind } from '@service-cognition/import';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 import type {
@@ -10,6 +11,8 @@ import type {
 const planMetadataSchema = z.object({
   title: z.string(),
   plan: z.object({
+    dependencyOf: z.array(z.string()).optional(),
+    inlineOn: z.array(z.string()).optional(),
     // Absent while planning has not decided the object yet.
     decision: z.enum(['copy', 'tasks', 'skip', 'hand']).nullish(),
     reason: z.string().nullish(),
@@ -41,17 +44,35 @@ export function decodePlanEntries(
   entities: ImportEntity[],
   reviewId: string
 ): ImportPlanEntry[] {
+  const titles = new Map(
+    entities
+      .filter((entity) => entity.review_id === reviewId)
+      .flatMap((entity) => {
+        const metadata = planMetadataSchema.safeParse(entity.metadata);
+        return metadata.success
+          ? [[entity.foreign_id, metadata.data.title] as const]
+          : [];
+      })
+  );
   return entities.flatMap((entity): ImportPlanEntry[] => {
     if (
-      !['notion', 'linear', 'jira'].includes(entity.source) ||
+      !['notion', 'linear', 'jira', 'hubspot'].includes(entity.source) ||
       entity.review_id !== reviewId
     )
       return [];
     const metadata = planMetadataSchema.safeParse(entity.metadata);
     if (!metadata.success) return [];
     const plan = metadata.data.plan;
+    const linkedFrom =
+      plan.dependencyOf?.map((id) => titles.get(id) ?? 'a row page') ?? [];
+    const dependency = linkedFrom.length > 0 ? { linkedFrom } : {};
+    const inlineOn =
+      plan.inlineOn?.map((id) => titles.get(id) ?? 'a row page') ?? [];
+    const placement = inlineOn.length > 0 ? { inlineOn } : {};
     return [
       {
+        ...dependency,
+        ...placement,
         id: entity.id,
         parentId: entity.parent_id ?? null,
         kind: match(entity.kind)
@@ -63,6 +84,10 @@ export function decodePlanEntries(
             'jira_epic',
             () => 'project' as const
           )
+          .with('hubspot_pipeline', () => 'pipeline' as const)
+          .with('hubspot_company', () => 'company' as const)
+          .with('hubspot_contact', () => 'contact' as const)
+          .with('hubspot_deal', () => 'deal' as const)
           .otherwise(() => 'page' as const),
         title: metadata.data.title,
         decision: plan.decision ?? null,
@@ -94,8 +119,12 @@ export function decodeImportProgress(
 ): ImportProgress {
   return {
     warnings: report.warnings ?? [],
+    details: report.details,
+    confirmed: report.confirmed,
+    failureCount: report.failureCount,
     reviewId: report.reviewId ?? null,
     status: report.status ?? null,
+    errorKind: parseRunErrorKind(report.errorKind),
     error: report.error ?? null,
     scanned: report.scanned
       ? {
@@ -122,5 +151,14 @@ export function decodeImportProgress(
       title: item.title,
       reason: item.reason ?? '',
     })),
+    hubspot: report.hubspot
+      ? {
+          owners: report.hubspot.owners,
+          ownersMatched: report.hubspot.ownersMatched,
+          created: report.hubspot.created ?? 0,
+          linked: report.hubspot.linked ?? 0,
+          losses: report.hubspot.losses,
+        }
+      : null,
   };
 }

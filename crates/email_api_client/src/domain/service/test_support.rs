@@ -5,9 +5,9 @@ use models_email::service::contact::Contact;
 use uuid::Uuid;
 
 use super::super::models::{
-    AccessToken, ApiOperationKind, ChangePage, ContactPage, EmailApiError, ProviderSubscription,
-    RateLimitRefusal, RequestPermit, SendRequest, SentIds, SyncCursor, ThreadListPage, TokenError,
-    TokenFreshness,
+    AccessToken, ApiOperationKind, ChangePage, ContactPage, EmailApiError, MessageIdPage,
+    ProviderSubscription, RateLimitRefusal, RequestPermit, SendRequest, SentIds, SyncCursor,
+    ThreadListPage, TokenError, TokenFreshness,
 };
 use super::super::ports::{
     MailboxAttachmentClient, MailboxBlocklistClient, MailboxContactsClient, MailboxLabelClient,
@@ -202,6 +202,17 @@ impl MailboxMessageClient for FakeRepository {
         _: &[&str],
     ) -> Result<Vec<String>, EmailApiError> {
         self.unavailable("list_messages")
+    }
+
+    async fn list_messages_since(
+        &self,
+        _: &AccessToken,
+        _: u32,
+        _: &[&str],
+        _: chrono::DateTime<chrono::Utc>,
+        _: Option<&str>,
+    ) -> Result<MessageIdPage, EmailApiError> {
+        self.unavailable("list_messages_since")
     }
 
     async fn get_message_ids_for_thread(
