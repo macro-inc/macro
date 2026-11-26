@@ -32,17 +32,17 @@ use gh_workflow::{
 use xtask_paths::RepoGlob;
 
 use crate::workflows::actions::{
-    CallCargoDeny, CallCargoWorkspaceDependencyCheck, CallCheckGenerated, CallCheckNodeModulesNix,
-    CallCheckTauriLockfiles, CallCodeCheckCloudStorage, CallCodeCheckConventions,
-    CallCodeCheckInfra, CallDesktopCheck, CallDesktopWindows, CallObservabilityAws,
-    CallObservabilityCluster, CallObservabilityImage, CallSdkCheck, CallTestMacrodUpdate,
-    CallWebAppCheckMain, DornyPathsFilter,
+    CallCargoDeny, CallCargoWorkspaceDependencyCheck, CallCheckDeployNixSources,
+    CallCheckGenerated, CallCheckNodeModulesNix, CallCheckTauriLockfiles,
+    CallCodeCheckCloudStorage, CallCodeCheckConventions, CallCodeCheckInfra, CallDesktopCheck,
+    CallDesktopWindows, CallObservabilityAws, CallObservabilityCluster, CallObservabilityImage,
+    CallSdkCheck, CallTestMacrodUpdate, CallWebAppCheckMain, DornyPathsFilter,
 };
 use crate::workflows::{
-    cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
-    check_tauri_lockfiles, code_check_conventions, code_check_infra, desktop_check,
-    desktop_windows, observability_aws, observability_cluster, observability_image, runners,
-    sdk_check, steps, test_macrod_update,
+    cargo_deny, cargo_workspace_dependency_check, check_deploy_nix_sources, check_generated,
+    check_node_modules_nix, check_tauri_lockfiles, code_check_conventions, code_check_infra,
+    desktop_check, desktop_windows, observability_aws, observability_cluster, observability_image,
+    runners, sdk_check, steps, test_macrod_update,
 };
 
 #[cfg(test)]
@@ -145,6 +145,13 @@ const CALLS: &[Call] = &[
         name: "node_modules nix",
         workflow: || CallCheckNodeModulesNix::new().job(),
         paths: Some(check_node_modules_nix::PATHS),
+        gating: true,
+    },
+    Call {
+        id: "deploy-nix-sources",
+        name: "Deploy nix sources",
+        workflow: || CallCheckDeployNixSources::new().job(),
+        paths: Some(check_deploy_nix_sources::PATHS),
         gating: true,
     },
     Call {
