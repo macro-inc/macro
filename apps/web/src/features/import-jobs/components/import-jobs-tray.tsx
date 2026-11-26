@@ -6,7 +6,9 @@ import IconLinear from '@icon/mcp-linear.svg';
 import IconSlack from '@icon/slack-color.svg';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import CaretUp from '@icon/system/regular/caret-up.svg';
+import TrayArrowDown from '@icon/system/regular/tray-arrow-down.svg';
 import X from '@icon/system/regular/x.svg';
+import { Popover } from '@kobalte/core/popover';
 import type { ImportSource, RunErrorKind } from '@service-cognition/import';
 import { Button, cn, Item, ProgressRing, Surface } from '@ui';
 import { type Component, Index, type JSX, Show } from 'solid-js';
@@ -138,8 +140,11 @@ function ImportJobRow(props: {
         <Dynamic component={source().icon} />
       </Item.Icon>
       <Item.Content>
-        <Item.Title>{source().name}</Item.Title>
-        <Item.Description>{label()}</Item.Description>
+        {/* The status stays whole on one line; a long name gives way. */}
+        <Item.Title class="truncate" title={source().name}>
+          {source().name}
+        </Item.Title>
+        <Item.Description class="whitespace-nowrap">{label()}</Item.Description>
       </Item.Content>
       <Item.Actions>
         <Show when={!props.job.dismissable}>
@@ -205,10 +210,130 @@ function ImportJobRow(props: {
 }
 
 /**
- * Background imports as a pill in the corner that opens into one row per
- * job. Moving jobs show their progress; settled ones can be dismissed.
+ * Background imports as a rail button beside Help and Settings, opening
+ * into one row per job, so nothing floats over the page. The button shows a
+ * ring while a job moves and a dot when one failed.
  */
-export function ImportJobsTray(props: {
+export function ImportJobsRailButton(props: {
+  jobs: readonly ImportJob[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onOpen: (job: ImportJob) => void;
+  onDismiss: (job: ImportJob) => void;
+  onReconnect: (job: ImportJob) => void;
+}) {
+  const moving = () => props.jobs.some((job) => !job.dismissable);
+  const failed = () => props.jobs.some((job) => job.phase.kind === 'failed');
+  const label = () => t('importJobs.summary', { count: props.jobs.length });
+  let openingSession = false;
+  // The dot is only visual and the list stays closed, so name the failed
+  // source in a polite live region, mounted before anything fails.
+  const announcement = () => {
+    const job = props.jobs.find((each) => each.phase.kind === 'failed');
+    return job
+      ? t('importJobs.failedAnnouncement', { source: SOURCES[job.source].name })
+      : '';
+  };
+  return (
+    <>
+      <span role="status" aria-live="polite" class="sr-only">
+        {announcement()}
+      </span>
+      <Show when={props.jobs.length > 0}>
+        <Popover
+          open={props.open}
+          onOpenChange={props.onOpenChange}
+          placement="right-end"
+          gutter={8}
+        >
+          <Popover.Trigger
+            as={Button}
+            variant="ghost"
+            size="icon-md"
+            class={cn(
+              'size-10 cursor-default rounded-xl',
+              // Escape returns focus here; keep it visible from hover.
+              'focus-visible:ring-2 focus-visible:ring-accent',
+              props.open && 'bg-hover text-ink'
+            )}
+            aria-label={label()}
+            aria-description={
+              failed() ? t('importJobs.somethingFailed') : undefined
+            }
+            // The open list already says what this is; a tooltip would cover it.
+            tooltip={
+              props.open ? undefined : { content: label(), placement: 'right' }
+            }
+            draggable={false}
+            data-sidebar-next-item="imports"
+          >
+            <span class="pointer-events-none relative flex size-6 items-center justify-center">
+              <TrayArrowDown
+                data-testid="imports-icon"
+                class={moving() ? 'size-3.5' : 'size-5'}
+                aria-hidden="true"
+              />
+              <Show when={moving()}>
+                <span class="absolute inset-0">
+                  <ProgressRing
+                    size="xl"
+                    strongTrack
+                    fraction={overallFraction(props.jobs)}
+                  />
+                </span>
+              </Show>
+              <Show when={failed()}>
+                <span
+                  aria-hidden="true"
+                  data-testid="imports-failed-dot"
+                  class="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-failure"
+                />
+              </Show>
+            </span>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content
+              class="menu-surface z-modal w-[420px] max-w-[calc(100vw-5rem)] p-1 outline-none animate-menu-open"
+              onCloseAutoFocus={(event) => {
+                // The opened session's split takes focus; Escape and the
+                // trigger still return it to the button.
+                if (!openingSession) return;
+                openingSession = false;
+                event.preventDefault();
+              }}
+            >
+              <Popover.Title class="px-2 pb-1 pt-1.5 text-xs font-medium text-ink-muted">
+                {t('importJobs.heading', { count: props.jobs.length })}
+              </Popover.Title>
+              <div role="list">
+                <Index each={props.jobs}>
+                  {(job) => (
+                    <ImportJobRow
+                      job={job()}
+                      onOpen={(opened) => {
+                        openingSession = true;
+                        props.onOpen(opened);
+                      }}
+                      onDismiss={props.onDismiss}
+                      onReconnect={props.onReconnect}
+                    />
+                  )}
+                </Index>
+              </div>
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover>
+      </Show>
+    </>
+  );
+}
+
+/**
+ * Background imports as a pill in the corner that opens into one row per
+ * job, for touch layouts wide enough to show it but without the rail
+ * (tablets). Moving jobs show their progress; settled ones can be dismissed.
+ */
+export function ImportJobsCornerTray(props: {
   jobs: readonly ImportJob[];
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
@@ -218,9 +343,14 @@ export function ImportJobsTray(props: {
 }) {
   return (
     <Show when={props.jobs.length > 0}>
+      {/* Above the touch layout's bottom-right buttons, which publish their
+          height as the bottom content inset. */}
       <section
         aria-label={t('importJobs.trayLabel')}
-        class="pointer-events-auto flex flex-col items-end gap-2"
+        class="pointer-events-auto fixed right-5 z-toast-region flex w-[420px] max-w-[calc(100vw-32px)] flex-col items-end gap-2"
+        style={{
+          bottom: 'calc(1.25rem + var(--mobile-content-inset-bottom, 0px))',
+        }}
       >
         <Show when={props.expanded}>
           <Surface

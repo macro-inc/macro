@@ -2032,9 +2032,10 @@ While any rows are undecided, the summary says
 **Deciding what to import…** rather than describing an empty import. Imported
 approximated views use a short **≈** suffix; never parse user-visible view names
 to infer typed view state.
-Desktop shows every import run in the corner's import tray
-(`features/import-jobs`, in `ToastRegion`), independent of the import dialog
-and never on phones. Its backend-free check is
+Desktop shows every import run behind the rail footer's imports button
+(`features/import-jobs`, in `FooterActions`); tablets, which have no rail, keep
+the corner pill in `ToastRegion`; phones never show it. Both are independent of
+the import dialog. Its backend-free check is
 `bunx playwright test --config src/features/import-jobs/browser-test/playwright.config.ts`.
 
 ### Agent backend hosting

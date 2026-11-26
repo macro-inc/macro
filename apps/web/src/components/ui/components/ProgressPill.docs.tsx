@@ -45,6 +45,7 @@ function RingSizesDemo() {
       <ProgressRing fraction={0.4} size="sm" />
       <ProgressRing fraction={0.4} />
       <ProgressRing fraction={0.4} size="lg" />
+      <ProgressRing fraction={0.4} size="xl" strongTrack />
     </div>
   );
 }

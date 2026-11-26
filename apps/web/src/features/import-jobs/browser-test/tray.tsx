@@ -2,13 +2,16 @@ import '@app/index.css';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import type { ImportRun, NotionImportReport } from '@service-cognition/import';
 import { Button } from '@ui';
-import { createSignal } from 'solid-js';
+import { createSignal, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import type { ImportJobsContext } from '../context/contracts';
 import { ImportJobsProvider } from '../context/import-jobs-context';
-import { ImportJobsTrayView } from '../views/import-jobs-tray';
+import {
+  ImportJobsCornerView,
+  ImportJobsRailView,
+} from '../views/import-jobs-tray';
 
-// The real tray over in-memory runs and reports. The buttons move a Notion
+// The real rail button over in-memory runs and reports. The buttons move a Notion
 // import through planning, writing and done, and fail a Jira one.
 const [runs, setRuns] = createSignal<readonly ImportRun[]>([]);
 const [notionReport, setNotionReport] = createSignal<NotionImportReport>();
@@ -100,6 +103,19 @@ function failJira() {
   });
 }
 
+const CORNER = new URLSearchParams(location.search).get('layout') === 'corner';
+let help: HTMLButtonElement | undefined;
+
+function failLinear() {
+  setRun({
+    source: 'linear',
+    status: 'failed',
+    error_kind: 'forbidden',
+    updated_at: new Date().toISOString(),
+    review_session_id: 'linear-session',
+  });
+}
+
 function Fixture() {
   return (
     <ImportJobsProvider context={context}>
@@ -116,13 +132,45 @@ function Fixture() {
         <Button variant="secondary" onClick={failJira}>
           Fail Jira
         </Button>
+        <Button variant="secondary" onClick={failLinear}>
+          Fail Linear
+        </Button>
         <output aria-label="Opened session" class="text-xs text-ink-muted">
           {opened()}
         </output>
       </main>
-      <div class="fixed bottom-5 right-5 flex w-[380px] flex-col items-stretch pointer-events-none">
-        <ImportJobsTrayView />
-      </div>
+      <Show
+        when={CORNER}
+        fallback={
+          // Stands in for the rail's footer.
+          <div class="fixed bottom-4 left-2 flex w-12 flex-col items-center gap-1">
+            <ImportJobsRailView onEmptied={() => help?.focus()} />
+            <Button ref={help} variant="ghost" size="sm">
+              Help
+            </Button>
+          </div>
+        }
+      >
+        {/* Stands in for a tablet's bottom-right buttons, which publish
+            their height as the bottom content inset. */}
+        <div
+          ref={(element) =>
+            onMount(() =>
+              document.documentElement.style.setProperty(
+                '--mobile-content-inset-bottom',
+                `${element.offsetHeight + 12}px`
+              )
+            )
+          }
+          class="fixed bottom-3 right-3 flex flex-col items-end gap-2"
+        >
+          <Button variant="secondary">+ New</Button>
+          <Button variant="secondary" size="icon-md" aria-label="Search">
+            ?
+          </Button>
+        </div>
+        <ImportJobsCornerView />
+      </Show>
     </ImportJobsProvider>
   );
 }

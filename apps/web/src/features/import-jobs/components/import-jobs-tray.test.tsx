@@ -6,9 +6,10 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ImportJob } from '../core/import-job';
-import { ImportJobsTray } from './import-jobs-tray';
+import { ImportJobsRailButton } from './import-jobs-tray';
 
 afterEach(cleanup);
 
@@ -17,10 +18,10 @@ function tray(
   handlers: { onOpen?: () => void; onReconnect?: () => void } = {}
 ) {
   render(() => (
-    <ImportJobsTray
+    <ImportJobsRailButton
       jobs={jobs}
-      expanded
-      onExpandedChange={vi.fn()}
+      open
+      onOpenChange={vi.fn()}
       onOpen={handlers.onOpen ?? vi.fn()}
       onDismiss={vi.fn()}
       onReconnect={handlers.onReconnect ?? vi.fn()}
@@ -29,6 +30,93 @@ function tray(
 }
 
 describe('import jobs tray', () => {
+  it('rings the rail button while an import moves, with no failure dot', () => {
+    tray([
+      {
+        key: 'notion:running:1',
+        source: 'notion',
+        phase: { kind: 'importing', done: 1, total: 4 },
+        sessionId: 'session',
+        dismissable: false,
+      },
+    ]);
+    const button = screen.getByRole('button', { name: '1 import' });
+    expect(button.querySelector('svg circle')).toBeTruthy();
+    expect(button.getAttribute('aria-description')).toBeNull();
+    expect(within(button).queryByTestId('imports-failed-dot')).toBeNull();
+  });
+
+  it('tells assistive tech politely when a run fails, with the list closed', () => {
+    const [jobs, setJobs] = createSignal<ImportJob[]>([]);
+    render(() => (
+      <ImportJobsRailButton
+        jobs={jobs()}
+        open={false}
+        onOpenChange={vi.fn()}
+        onOpen={vi.fn()}
+        onDismiss={vi.fn()}
+        onReconnect={vi.fn()}
+      />
+    ));
+    // Mounted before anything fails, so the change is announced.
+    const status = screen.getByRole('status');
+    expect(status.getAttribute('aria-live')).toBe('polite');
+    expect(status.textContent).toBe('');
+
+    setJobs([
+      {
+        key: 'jira:failed:1',
+        source: 'jira',
+        phase: { kind: 'failed', errorKind: 'access_lost' },
+        sessionId: undefined,
+        dismissable: true,
+      },
+    ]);
+    expect(status.textContent).toBe('Jira import failed');
+  });
+
+  it('heads the list with the count of the runs it lists', () => {
+    tray([
+      {
+        key: 'notion:running:1',
+        source: 'notion',
+        phase: { kind: 'importing', done: 1, total: 4 },
+        sessionId: 'session',
+        dismissable: false,
+      },
+      {
+        key: 'jira:failed:1',
+        source: 'jira',
+        phase: { kind: 'failed', errorKind: 'access_lost' },
+        sessionId: undefined,
+        dismissable: true,
+      },
+    ]);
+    const list = screen.getByRole('dialog', { name: 'Imports · 2' });
+    expect(within(list).getByRole('heading').textContent).toBe('Imports · 2');
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('keeps the imports icon inside the ring while a run moves', () => {
+    tray([
+      {
+        key: 'notion:running:1',
+        source: 'notion',
+        phase: { kind: 'importing', done: 1, total: 4 },
+        sessionId: 'session',
+        dismissable: false,
+      },
+    ]);
+    const button = screen.getByRole('button', { name: '1 import' });
+    expect(within(button).getByTestId('imports-icon')).toBeTruthy();
+    expect(button.querySelector('svg circle')).toBeTruthy();
+  });
+
+  it('shows nothing in the rail when there are no imports', () => {
+    tray([]);
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
   it('says why an import failed, with no progress ring', () => {
     tray([
       {
@@ -42,12 +130,11 @@ describe('import jobs tray', () => {
     const row = screen.getByRole('listitem', { name: 'Notion' });
     expect(within(row).getByText('Failed: couldn’t use Notion')).toBeTruthy();
     expect(within(row).queryByRole('progressbar')).toBeNull();
-    // Nothing is moving, so the pill has no ring either.
-    expect(
-      screen
-        .getByRole('button', { name: 'Hide imports' })
-        .querySelector('svg circle')
-    ).toBeNull();
+    // Nothing is moving, so the rail button has no ring, but a failure dot.
+    const button = screen.getByRole('button', { name: '1 import' });
+    expect(button.querySelector('svg circle')).toBeNull();
+    expect(button.getAttribute('aria-description')).toBe('An import failed');
+    expect(within(button).getByTestId('imports-failed-dot')).toBeTruthy();
     expect(
       within(row).getByRole('button', { name: 'Dismiss the Notion import' })
     ).toBeTruthy();
@@ -108,7 +195,7 @@ describe('a failed import offers what to do next', () => {
 });
 
 describe('failed import labels', () => {
-  it('stay short enough for two lines beside the row actions', () => {
+  it('stay short enough for one line beside the row actions', () => {
     for (const errorKind of [
       'not_found',
       'forbidden',
@@ -137,7 +224,7 @@ describe('failed import labels', () => {
       expect(
         label?.textContent?.length ?? 0,
         String(errorKind)
-      ).toBeLessThanOrEqual(40);
+      ).toBeLessThanOrEqual(32);
     }
   });
 });
