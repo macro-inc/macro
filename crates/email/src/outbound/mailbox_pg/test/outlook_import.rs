@@ -149,7 +149,7 @@ async fn stored(db: &PgPool, link: Uuid, provider_id: &str) -> bool {
 async fn a_large_folder_imports_newest_first_and_stores_new_mail_during_its_import(db: PgPool) {
     let emulator = OutlookEmulator::start(seed()).await.unwrap();
     let link = connected(&db).await;
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let live_pass = LiveImportPass::default();
     live_pass.set(true);
     let service = MailboxSyncService::new(
@@ -277,7 +277,7 @@ async fn mail_moved_or_deleted_after_the_import_listed_it_settles_on_its_first_r
     .unwrap();
     let emulator = OutlookEmulator::start(seed).await.unwrap();
     let link = connected(&db).await;
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let service = MailboxSyncService::new(
         repo.clone(),
         gateway(&emulator),
@@ -368,7 +368,7 @@ async fn mail_of_a_folder_deleted_for_good_is_read_once_when_graph_refuses_it(db
     .unwrap();
     let emulator = OutlookEmulator::start(seed).await.unwrap();
     let link = connected(&db).await;
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let service = MailboxSyncService::new(
         repo.clone(),
         gateway(&emulator),

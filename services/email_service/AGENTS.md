@@ -8,6 +8,18 @@ the gateway `/email` prefix.
 
 ## Start here
 
+- `api/imap.rs` exposes connection suggestion, discovery and IMAP linking under
+  `/email/links`; `outbound/imap_connection.rs` stores retry-safe promotion
+  attempts. `outbound/email_api/imap.rs` implements the existing mailbox,
+  command, attachment and draft ports through the internal engine client.
+  `imap_runtime.rs` schedules bounded interrupted credential-free promotions;
+  `outbound/imap_connection/recovery.rs` commits each nonce claim before RPC.
+  Keep activate/abandon/defer fenced, with no pooled connection across engine IO.
+  Established IMAP work has no service-wide rollout polling.
+  Only a typed engine `SendUnavailable` proves no message-body byte was submitted and
+  terminates the draft as failed. Keep generic 503/timeouts uncertain; never
+  infer safe resubmission from them or from the presence of a remote draft.
+
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.
 - `src/composition/api.rs`: production API dependencies and service wiring.
@@ -93,7 +105,10 @@ the gateway `/email` prefix.
   `pubsub_workers`. It requires no enrichment-provider key or selection flag.
 - `src/mailbox_sync_worker.rs`: the Outlook mailbox loops (sync, projections,
   contacts, drafts, commands, settings, watches) and `run_health`, the
-  per-minute Outlook health snapshot.
+  per-minute Outlook health snapshot. `run_parked_work_recovery` shares one
+  bounded recovery cursor across parked projection, streams and reconciliation;
+  progress re-polls without an idle sleep, yielding and checking shutdown after
+  each bounded cycle.
 - `src/bin/`: standalone binaries — `pubsub_workers` (the queue consumer
   process), plus one-off backfill/cleanup scripts.
 
@@ -128,6 +143,14 @@ the gateway `/email` prefix.
   capabilities in `outbound/backfill_jobs/worker/` and its durable publication
   in `email::domain::backfill_jobs::outbox`.
 
+Organization-action writers use the shared default-off
+`enable-mailbox-action-chunks` service flag (`email-mailbox-actions` context).
+Composition owns the cancellable 60-second poll and injects one switch into the
+API and message-label repositories; enable only after all grouped-receipt
+readers are deployed. Agent-harness and ai_tools still write the legacy shape
+and block removal of the wide-command allowance under `mac-imap-smtp.116`.
+Missing or failed reads preserve the single-command writer.
+
 ## Checks
 
 - `cargo test -p email_service` (`SQLX_OFFLINE` unset; the `label_write_sim`
@@ -151,6 +174,7 @@ the gateway `/email` prefix.
   in `#[tracing::instrument]` and record `link_id` or provider ids instead.
 
 - Provider-sync deletions deferred by active sends publish no deletion event; scheduled recovery reconciles the retained marker before trying to claim delivery.
+- Scheduled wakes can route a single due legacy draft to its owning provider. The mailbox draft worker retains the delivery lease and submission; the scheduled-queue sender claims Gmail only.
 - Scheduled delivery calls the email domain for durable claims, completion fences, provider identity adoption and retained deletions; its PostgreSQL capabilities are wired by `email::outbound::scheduled_delivery_pg`. The worker adapter retains provider I/O, event publication and attachment cleanup.
 
 - Draft edit routes carry `draft_generation` from the editing lifetime, including attachments, deletion, transfer, and schedules; regenerate OpenAPI clients when this contract changes.
@@ -190,7 +214,7 @@ the gateway `/email` prefix.
   is due, so folder catalogs are checked again before more pages are read.
 - Outlook sync flags are PostHog flags for the service context
   `outlook-mailbox-sync`, each read about once a minute into a domain switch
-  by `outlook_flags::run` (one `outlook.feature_flag.refresh` span per read,
+  by `outlook_flags::run` (one `feature_flag.refresh` span per read,
   `feature_flag.key` names it). `pubsub_workers` reads
   `enable-outlook-import-live-pass` into the sync's `LiveImportPass`:
   newest-first imports and the live pass beside each folder's import round
@@ -414,8 +438,21 @@ the gateway `/email` prefix.
   wrapper in the `pubsub_workers` binary. Pixels use `EmailServiceUrl`, so the
   local Docker stack embeds an in-network host recipients cannot load.
 
+- Derive discovery and connection addresses from authentication. Keep
+  connection refusals typed and regenerate the public contracts when they
+  change. Keep the engine notification route internal.
+- Keep interactive and background IMAP client classes separate. Preserve
+  typed provider pacing, credential health, content limits and SMTP refusals.
+- Use fresh organization state for command reconciliation. Keyword discovery
+  and deletion need metadata only.
+- Keep parking and host catch-up in the pubsub worker on its existing pools.
+  Follow the [recovery bounds](../../docs/architecture/imap-engine.md#host-catch-up-after-restart)
+  for timeouts, fences and provider deadlines.
+- Return the typed unsupported reason for IMAP recent-mail requests outside
+  the supported Inbox scope and retain healthy results from other mailboxes.
+
 ## Related
 
-- Rules: `.agents/rules/config-and-service-urls.md` · Skill: `new-service`
-
-- Validate optional agent correlation at the HTTP boundary; delayed Gmail completion restores it from the scheduled-message row.
+- [Service URL rules](../../.agents/rules/config-and-service-urls.md)
+- [Service registration guide](../../.agents/skills/new-service/SKILL.md)
+- [Email backend architecture](../../docs/architecture/email-backend.md)

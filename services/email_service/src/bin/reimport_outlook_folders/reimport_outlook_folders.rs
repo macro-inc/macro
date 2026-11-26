@@ -58,7 +58,7 @@ async fn run() -> Result<(), Report> {
         .context("could not connect to the database")?;
 
     let service = FolderReimportService::new(
-        PgMailboxSync::new(db_pool),
+        PgMailboxSync::new(db_pool, email::domain::models::UserProvider::Outlook),
         <OutlookApiClientRepository as FolderChangeReader>::READER_REVISION,
     );
     let links = service

@@ -101,7 +101,14 @@ async fn user(db: &PgPool, name: &str) -> Uuid {
     id
 }
 async fn shared(db: &PgPool) -> (PgMailboxSync, Uuid, Uuid) {
-    let (repo, link) = super::super::test::fixture(db).await;
+    shared_for_provider(db, crate::domain::models::UserProvider::Outlook).await
+}
+
+async fn shared_for_provider(
+    db: &PgPool,
+    provider: crate::domain::models::UserProvider,
+) -> (PgMailboxSync, Uuid, Uuid) {
+    let (repo, link) = super::super::test::fixture_for_provider(db, provider).await;
     for name in ["shared", "leaving", "remaining"] {
         user(db, name).await;
     }
@@ -551,6 +558,7 @@ async fn generation_bumps_delete_superseded_sync_work(db: PgPool) {
         repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
             .await
             .unwrap()
+            .into_lease()
             .is_some()
     );
 
@@ -608,6 +616,7 @@ async fn final_shared_disconnect_freezes_ingestion_and_keeps_revocation_after_ca
         repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
     sqlx::query!("DELETE FROM email_links WHERE id = $1", link)
@@ -669,6 +678,7 @@ async fn outlook_resync_fences_page_workers_and_never_creates_a_gmail_backfill(d
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sqlx::query!(
         "UPDATE email_sync_streams SET initial_complete = true,attachments_rechecked=true WHERE link_id = $1",
@@ -758,14 +768,9 @@ async fn outlook_resync_starts_a_new_import_run_once(db: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn gmail_resync_commits_the_backfill_with_durable_publication(db: PgPool) {
-    let (repo, link, _) = shared(&db).await;
-    sqlx::query!(
-        "UPDATE email_links SET provider = 'GMAIL' WHERE id = $1",
-        link
-    )
-    .execute(&db)
-    .await
-    .unwrap();
+    let (repo, link, _) =
+        shared_for_provider(&db, crate::domain::models::UserProvider::Gmail).await;
+
     let service = InboxLifecycleService::new(repo, Effects);
     let first = service.resync(&actor("remaining"), link).await.unwrap();
     assert!(!first.already_in_progress);
@@ -943,4 +948,73 @@ async fn a_disconnect_behind_a_share_locked_link_fails_fast_then_disconnects(db:
     .unwrap();
     assert!(!row.is_sync_active);
     assert!(row.disconnect_requested_at.is_some());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_imap_resync_reports_and_preserves_the_provider_pause(db: PgPool) {
+    let (repo, link, _) = shared_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
+    sqlx::query!(
+        r#"
+        UPDATE email_sync_streams
+        SET provider_retry_at = now() + interval '1 hour',
+            next_run_at = now() + interval '1 hour',
+            initial_complete = true
+        WHERE link_id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_mailbox_folders (link_id, provider_id, display_name, role, catalog_generation)
+        VALUES ($1, 'folder', 'Inbox', 'inbox', 1), ($1, 'archive', 'Archive', 'archive', 1)
+        "#,
+        link,
+    ).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_sync_streams (
+            id, link_id, generation, kind, scope_id, initial_complete, provider_retry_at, next_run_at
+        )
+        VALUES ($1, $2, 1, 'mail_folder', 'archive', true, now() + interval '2 hours', now() + interval '2 hours')
+        "#,
+        Uuid::now_v7(),
+        link,
+    ).execute(&db).await.unwrap();
+    let floor = sqlx::query_scalar!(
+        "SELECT provider_retry_at FROM email_sync_streams WHERE link_id = $1 AND scope_id = 'folder'",
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(floor.is_some());
+    let service = InboxLifecycleService::new(repo.clone(), Effects);
+    let requested = service.resync(&actor("remaining"), link).await.unwrap();
+    assert_eq!(requested.provider_retry_at, floor);
+    let catalog = sqlx::query!(
+        r#"
+        SELECT provider_retry_at, next_run_at >= provider_retry_at AS "paced!"
+        FROM email_sync_streams
+        WHERE id = $1
+        "#,
+        requested.run_id,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(catalog.provider_retry_at, floor);
+    assert!(catalog.paced);
+    sqlx::query!(
+        "UPDATE email_sync_streams SET provider_retry_at = NULL, initial_complete = true WHERE link_id = $1 AND scope_id <> 'archive'",
+        link,
+    ).execute(&db).await.unwrap();
+    let ready_inbox = service.resync(&actor("remaining"), link).await.unwrap();
+    assert!(
+        ready_inbox.provider_retry_at.is_none(),
+        "a paused Archive must not claim Inbox is paused"
+    );
 }

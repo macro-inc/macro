@@ -101,6 +101,12 @@ threads, pins, recents, notifications, folders, activity.
 - Add a config value or feature-gated behavior: `src/config.rs` → the
   `[features]` table in `Cargo.toml` if it should be independently toggleable.
 
+Organization-action writers use the shared default-off
+`enable-mailbox-action-chunks` service flag (`email-mailbox-actions` context).
+Composition owns the cancellable 60-second poll and injects one switch into the
+email repository; enable only after all grouped-receipt readers are deployed.
+Missing or failed reads preserve the single-command writer.
+
 ## Checks
 
 - `cargo test -p document_storage_service` (`SQLX_OFFLINE` unset; needs

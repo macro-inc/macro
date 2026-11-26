@@ -312,3 +312,65 @@ async fn the_orphan_pass_removes_rows_deleted_accounts_left(pool: PgPool) {
     );
     assert!(inbox_rows(&pool).await.is_empty());
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("directory"))
+)]
+async fn an_imap_owner_does_not_stop_a_later_gmail_owner_from_being_backfilled(pool: PgPool) {
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'IMAP'
+        WHERE
+            macro_id = $1
+        "#,
+        "macro|a@example.com",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'GMAIL'
+        WHERE
+            macro_id = $1
+        "#,
+        "macro|f@example.com",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut backfill = backfill(&pool);
+    // Put the later Gmail owner on a separate page, beyond the IMAP owner.
+    backfill.settings.page_size = 1;
+    let mut request = request(None);
+    request.passes = BTreeSet::from([BackfillPass::Inbox]);
+    let report = backfill.backfill(&request).await.unwrap().inbox.unwrap();
+    assert_eq!((report.owners, report.written.added_rows), (2, 3));
+    assert_eq!(
+        inbox_rows(&pool).await,
+        [
+            (
+                "macro|a@example.com".to_owned(),
+                "macro|d@example.com".to_owned(),
+                "imap".to_owned()
+            ),
+            (
+                "macro|a@example.com".to_owned(),
+                "macro|x@example.org".to_owned(),
+                "imap".to_owned()
+            ),
+            (
+                "macro|f@example.com".to_owned(),
+                "macro|a@example.com".to_owned(),
+                "gmail".to_owned()
+            ),
+        ]
+    );
+}

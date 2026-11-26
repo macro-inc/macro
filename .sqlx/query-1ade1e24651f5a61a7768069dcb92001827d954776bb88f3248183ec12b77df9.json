@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_mailbox_commands (id,link_id,generation,actor_id,intent,status,action_id)\n            VALUES ($1,$2,$3,$4,$5,'pending',$6)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text",
+        "Jsonb",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1ade1e24651f5a61a7768069dcb92001827d954776bb88f3248183ec12b77df9"
+}

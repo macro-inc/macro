@@ -37,6 +37,7 @@ fn settings_mailbox(
         },
         provider: match provider {
             "OUTLOOK" => UserProvider::Outlook,
+            "IMAP" => UserProvider::Imap,
             "GMAIL" => UserProvider::Gmail,
             _ => return Err(MailboxError::Persistence),
         },
@@ -166,7 +167,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
     ) -> Result<(), MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
-        if lease.kind != "create_label"
+        if lease.kind != SettingsWorkKind::CreateLabel
             || label.link_id != lease.mailbox.key.link_id
             || label.provider_label_id != lease.resource
         {
@@ -176,7 +177,12 @@ impl MailboxSettingsRepository for PgMailboxSync {
         sqlx::query!("UPDATE email_mailbox_settings_work SET completed_revision=revision,lease_id=NULL,lease_until=NULL,failure=NULL WHERE id=$1",lease.id)
             .execute(&mut *tx).await.map_err(db_error)?;
         changed(&mut tx, lease.mailbox.key).await?;
-        tx.commit().await.map_err(db_error)
+        self.commit_mutation_and_wake(
+            tx,
+            lease.mailbox.key,
+            super::mutation_claims::MutationWake::Label(lease.resource.clone()),
+        )
+        .await
     }
     async fn delete_label(
         &self,
@@ -247,11 +253,15 @@ impl MailboxSettingsRepository for PgMailboxSync {
             .map(|r| {
                 Ok(MailboxSettingsOperation {
                     id: r.id,
-                    kind: match r.kind.as_str() {
-                        "create_label" => MailboxSettingsChange::CreateLabel,
-                        "delete_label" => MailboxSettingsChange::DeleteLabel,
-                        "sender_block" => MailboxSettingsChange::SenderBlock,
-                        _ => return Err(MailboxError::Persistence),
+                    kind: match r
+                        .kind
+                        .parse::<SettingsWorkKind>()
+                        .map_err(|_| MailboxError::Persistence)?
+                    {
+                        SettingsWorkKind::CreateLabel => MailboxSettingsChange::CreateLabel,
+                        SettingsWorkKind::DeleteLabel => MailboxSettingsChange::DeleteLabel,
+                        SettingsWorkKind::SenderBlock => MailboxSettingsChange::SenderBlock,
+                        SettingsWorkKind::Catalog => return Err(MailboxError::Persistence),
                     },
                     resource: r.resource_key,
                     enabled: r.desired,
@@ -266,26 +276,95 @@ impl MailboxSettingsRepository for PgMailboxSync {
         outlook_sync: bool,
         outlook_writes: bool,
     ) -> Result<Option<SettingsLease>, MailboxError> {
-        let row=sqlx::query!(r#"WITH candidate AS (
-            SELECT s.id FROM email_links l JOIN email_mailbox_settings_work s ON s.link_id=l.id
-            WHERE (l.provider<>'OUTLOOK' OR (s.kind='catalog' AND $2) OR (s.kind<>'catalog' AND $3))
-            AND l.is_sync_active AND l.disconnect_requested_at IS NULL AND l.mailbox_unavailable_at IS NULL AND s.next_run_at<=now() AND (s.kind='catalog' OR s.revision>s.completed_revision)
-            AND (s.lease_until IS NULL OR s.lease_until<now())
-            AND (s.kind<>'delete_label' OR NOT EXISTS(SELECT 1 FROM email_mailbox_commands c
-                WHERE c.link_id=s.link_id AND c.generation=l.sync_generation AND c.status IN ('pending','running','confirming')
-                AND c.intent->>'kind'='category' AND c.intent->'value'->>'name'=s.resource_key))
-            AND NOT EXISTS(SELECT 1 FROM email_mailbox_settings_work busy WHERE busy.link_id=l.id AND busy.lease_until>now())
-            ORDER BY s.next_run_at,s.id LIMIT 1 FOR UPDATE OF l,s SKIP LOCKED
-        ) UPDATE email_mailbox_settings_work s SET lease_id=$1,lease_until=now()+interval '3 minutes',attempts=attempts+1
-        FROM candidate c,email_links l WHERE s.id=c.id AND l.id=s.link_id
-        RETURNING s.id,s.link_id,s.revision,s.kind,s.resource_key,s.desired,l.sync_generation,l.grant_generation,l.provider::text AS "provider!""#,lease_id,outlook_sync,outlook_writes)
-            .fetch_optional(&self.db).await.map_err(db_error)?;
+        let row = sqlx::query!(
+            r#"
+            WITH candidate AS (
+                SELECT
+                    s.id
+                FROM
+                    email_links l
+                    JOIN email_mailbox_settings_work s ON s.link_id = l.id
+                WHERE (l.provider = 'GMAIL'
+                    OR (s.kind = 'catalog'
+                        AND $2)
+                    OR (s.kind <> 'catalog'
+                        AND $3))
+                AND (l.provider = $4::text::email_user_provider_enum
+                    OR (l.provider = 'GMAIL'
+                        AND $4 = 'OUTLOOK'))
+                AND l.is_sync_active
+                AND l.disconnect_requested_at IS NULL
+                AND l.mailbox_unavailable_at IS NULL
+                AND s.next_run_at <= now()
+                AND (s.kind = 'catalog'
+                    OR s.revision > s.completed_revision)
+                AND (s.lease_until IS NULL
+                    OR s.lease_until < now())
+                AND (s.kind <> 'delete_label'
+                    OR NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            email_mailbox_commands c
+                        WHERE
+                            c.link_id = s.link_id
+                            AND c.generation = l.sync_generation
+                            AND c.status IN ('pending', 'running', 'confirming')
+                            AND c.intent ->> 'kind' = 'category'
+                            AND c.intent -> 'value' ->> 'name' = s.resource_key))
+                AND NOT EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        email_mailbox_settings_work busy
+                    WHERE
+                        busy.link_id = l.id
+                        AND busy.lease_until > now())
+            ORDER BY
+                s.next_run_at,
+                s.id
+            LIMIT 1
+            FOR UPDATE
+                OF l,
+                s SKIP LOCKED
+            )
+            UPDATE
+                email_mailbox_settings_work s
+            SET
+                lease_id = $1,
+                lease_until = now() + interval '3 minutes',
+                attempts = attempts + 1
+            FROM
+                candidate c,
+                email_links l
+            WHERE
+                s.id = c.id
+                AND l.id = s.link_id
+            RETURNING
+                s.id,
+                s.link_id,
+                s.revision,
+                s.kind,
+                s.resource_key,
+                s.desired,
+                l.sync_generation,
+                l.grant_generation,
+                l.provider::text AS "provider!"
+            "#,
+            lease_id,
+            outlook_sync,
+            outlook_writes,
+            self.provider.as_str(),
+        )
+        .fetch_optional(&self.db)
+        .await
+        .map_err(db_error)?;
         row.map(|r| {
             Ok(SettingsLease {
                 id: r.id,
                 lease_id,
                 revision: r.revision,
-                kind: r.kind,
+                kind: r.kind.parse().map_err(|_| MailboxError::Persistence)?,
                 resource: r.resource_key,
                 desired: r.desired,
                 mailbox: SettingsMailbox {
@@ -297,6 +376,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
                     provider: match r.provider.as_str() {
                         "GMAIL" => UserProvider::Gmail,
                         "OUTLOOK" => UserProvider::Outlook,
+                        "IMAP" => UserProvider::Imap,
                         _ => return Err(MailboxError::Persistence),
                     },
                 },
@@ -356,7 +436,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
     ) -> Result<(), MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
-        if complete && lease.kind == "delete_label" {
+        if complete && lease.kind == SettingsWorkKind::DeleteLabel {
             sqlx::query!("DELETE FROM email_message_labels m USING email_labels l WHERE m.label_id=l.id AND l.link_id=$1 AND l.provider_label_id=$2",lease.mailbox.key.link_id,lease.resource)
                 .execute(&mut *tx).await.map_err(db_error)?;
             sqlx::query!(
@@ -374,6 +454,15 @@ impl MailboxSettingsRepository for PgMailboxSync {
         if complete {
             changed(&mut tx, lease.mailbox.key).await?;
         }
-        tx.commit().await.map_err(db_error)
+        if complete && lease.kind == SettingsWorkKind::CreateLabel {
+            self.commit_mutation_and_wake(
+                tx,
+                lease.mailbox.key,
+                super::mutation_claims::MutationWake::Label(lease.resource.clone()),
+            )
+            .await
+        } else {
+            tx.commit().await.map_err(db_error)
+        }
     }
 }

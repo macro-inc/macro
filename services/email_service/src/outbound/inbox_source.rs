@@ -13,6 +13,7 @@ pub fn inbox_provider(provider: UserProvider) -> InboxProvider {
     match provider {
         UserProvider::Gmail => InboxProvider::Gmail,
         UserProvider::Outlook => InboxProvider::Outlook,
+        UserProvider::Imap => InboxProvider::Imap,
     }
 }
 

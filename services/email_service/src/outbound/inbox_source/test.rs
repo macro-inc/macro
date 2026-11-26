@@ -26,6 +26,7 @@ fn an_inbox_records_its_contacts_in_its_owners_list_for_its_provider() {
     for (provider, list) in [
         (UserProvider::Gmail, ContactList::Gmail),
         (UserProvider::Outlook, ContactList::Outlook),
+        (UserProvider::Imap, ContactList::Imap),
     ] {
         let link = link(provider);
         let source = inbox_source(&link);

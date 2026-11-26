@@ -10,6 +10,37 @@ export type ClientOptions = {
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
 /**
+ * Sanitized owner-only mailbox configuration. Endpoint has no password field.
+ */
+export type AccountMailSettings = {
+    features?: null | ServerFeatures;
+    /**
+     * Recently listed folders, including manually excluded folders.
+     */
+    folders: Array<FolderSetting>;
+    /**
+     * Official instructions supplied by the catalog.
+     */
+    helpUrl?: string | null;
+    /**
+     * Incoming mail server, security mode and username.
+     */
+    imap: Endpoint;
+    /**
+     * Catalog name for the provider, when known.
+     */
+    provider?: string | null;
+    /**
+     * Version for compare-and-swap edits.
+     */
+    revision: number;
+    /**
+     * Submission server, security mode and username.
+     */
+    smtp: Endpoint;
+};
+
+/**
  * The request passed to send a message
  */
 export type AddDraftAttachmentRequest = {
@@ -396,6 +427,8 @@ export type ApiMessageOperation = {
     issue?: null | ApiMessageOperationIssue;
     remote_version?: string | null;
     revision: string;
+    send_refusal?: null | SubmissionRefusal;
+    send_rejection_reason?: null | ApiSendRejectionReason;
     state: ApiMessageOperationState;
 };
 
@@ -418,6 +451,11 @@ export type ApiPaginatedThreadCursor = {
     items: Array<ApiThreadPreviewCursor>;
     next_cursor?: string | null;
 };
+
+/**
+ * Definite non-submission evidence; absent for legacy and uncertain outcomes.
+ */
+export type ApiSendRejectionReason = 'PROVIDER_REJECTED' | 'CONNECTION_UNAVAILABLE';
 
 /**
  * common types of sorts based on timestamps
@@ -1010,6 +1048,16 @@ export type ContactInfoWithInteraction = ContactInfoLegacy & {
     last_interaction: string;
 };
 
+export type ContentTooLargeCode = 'message_too_large';
+
+/**
+ * Closed content-limit response shared by provider-backed message paths.
+ */
+export type ContentTooLargeResponse = {
+    code: ContentTooLargeCode;
+    message: string;
+};
+
 /**
  * Request body adding a shared event to the requester's calendar.
  */
@@ -1059,6 +1107,32 @@ export type CreateLabelResponse = {
     label: Label;
 };
 
+/**
+ * Mailbox-independent provider settings returned without accepting a password.
+ */
+export type Discovery = {
+    /**
+     * Provider's application-password instructions.
+     */
+    helpUrl?: string | null;
+    /**
+     * Explicit endpoint confirmation is required before sending any password.
+     */
+    hostConfirmationRequired: boolean;
+    imap?: null | Endpoint;
+    /**
+     * Known provider identifier.
+     */
+    provider?: string | null;
+    smtp?: null | Endpoint;
+    steer?: null | DiscoverySteer;
+};
+
+/**
+ * Closed provider guidance; password connections remain a separate user choice.
+ */
+export type DiscoverySteer = 'gmail' | 'outlook' | 'none';
+
 export type EmlFile = Blob | File;
 
 /**
@@ -1066,6 +1140,29 @@ export type EmlFile = Blob | File;
  */
 export type EmptyResponse = {
     [key: string]: unknown;
+};
+
+/**
+ * User-confirmed submission or mailbox endpoint.
+ */
+export type Endpoint = {
+    /**
+     * Fully qualified TLS identity.
+     */
+    host: string;
+    /**
+     * Standard submission or mailbox port.
+     */
+    port: number;
+    /**
+     * Required TLS policy.
+     */
+    tls: TlsMode;
+    /**
+     * Raw protocol login: providers may require a local part or account ID
+     * rather than an email address.
+     */
+    username: string;
 };
 
 /**
@@ -1165,6 +1262,46 @@ export type EventType = 'default' | 'out_of_office' | 'focus_time' | 'working_lo
  * Visibility of event details.
  */
 export type EventVisibility = 'default' | 'public' | 'private' | 'confidential';
+
+/**
+ * Physical folder purpose, resolved by the engine.
+ */
+export type FolderRole = 'inbox' | 'sent' | 'drafts' | 'archive' | 'trash' | 'junk' | 'other';
+
+/**
+ * Folder name and the actual and configured routing roles, without message data.
+ */
+export type FolderSetting = {
+    /**
+     * Automatic role before applying the user's override.
+     */
+    detectedRole: FolderRole;
+    /**
+     * Resolved destination used by the engine.
+     */
+    effectiveRole: FolderRole;
+    /**
+     * Whether the user has excluded this folder from message sync.
+     */
+    excluded: boolean;
+    /**
+     * Opaque identifier belonging to this account.
+     */
+    id: string;
+    /**
+     * Whether this folder was included in the latest synchronization.
+     */
+    monitored?: boolean;
+    /**
+     * Display name from the most recent listing.
+     */
+    name: string;
+    roleOverride?: null | FolderRole;
+    /**
+     * Whether this folder is selected for a dedicated watch.
+     */
+    watched: boolean;
+};
 
 /**
  * A refused or failed forward.
@@ -1297,6 +1434,56 @@ export type GuestPolicy = {
      * Whether guests may see the guest list.
      */
     canSeeOtherGuests: boolean;
+};
+
+/**
+ * Public input never carries an owner identity or a credential binding.
+ */
+export type ImapConnectRequest = {
+    /**
+     * Endpoints the user explicitly approved before credentials leave Macro.
+     */
+    confirmedHosts: Array<string>;
+    /**
+     * IMAP login.
+     */
+    imap: Login;
+    /**
+     * Required by a reconnect surface to reject stale settings dialogs.
+     */
+    linkId?: string | null;
+    /**
+     * One id retained when retrying a connect request after a lost response.
+     */
+    requestId: string;
+    /**
+     * SMTP login.
+     */
+    smtp: Login;
+};
+
+export type ImapConnectResponse = {
+    linkId: string;
+};
+
+/**
+ * Machine-readable reason an IMAP connection or settings request was refused.
+ */
+export type ImapConnectionErrorCode = 'disabled' | 'address_unverified' | 'provider_conflict' | 'connection_changed' | 'payment_required' | 'connection_unavailable' | 'invalid' | 'forbidden' | 'person_required' | 'not_found' | 'conflict' | 'credentials_rejected' | 'credentials_unreadable' | 'credentials_unavailable' | 'throttled' | 'dns_unavailable' | 'tcp_unavailable' | 'tls_unavailable' | 'connection_timed_out';
+
+export type ImapConnectionErrorResponse = {
+    code: ImapConnectionErrorCode;
+    message: string;
+};
+
+/**
+ * Provider offered using a catalog entry or a domain-only DNS hint.
+ */
+export type ImapConnectionOffer = 'none' | 'gmail' | 'outlook' | 'imap';
+
+export type ImapSuggestion = {
+    email: string;
+    offer: ImapConnectionOffer;
 };
 
 /**
@@ -1501,6 +1688,11 @@ export type Link = {
     is_primary: boolean;
     is_sync_active: boolean;
     macro_id: string;
+    mailbox_issue?: null | MailboxIssue;
+    /**
+     * Next automatic retry for a paused mailbox sync.
+     */
+    mailbox_retry_at?: string | null;
     /**
      * Whether the link's Google grant is missing the calendar scope. True for
      * inboxes connected before the calendar capability existed (and for
@@ -1574,6 +1766,20 @@ export type ListLinksResponse = {
 };
 
 /**
+ * Credentials for one protocol; Debug never includes the password.
+ */
+export type Login = {
+    /**
+     * Endpoint and account login.
+     */
+    endpoint: Endpoint;
+    /**
+     * Protocol password, kept distinct for providers with separate SMTP credentials.
+     */
+    password: Secret;
+};
+
+/**
  * Desired organization state. Categories never stand in for folders or flags.
  */
 export type MailboxAction = {
@@ -1616,6 +1822,11 @@ export type MailboxAction = {
         present: boolean;
     };
 };
+
+/**
+ * Sanitized mailbox health independent of provider authentication.
+ */
+export type MailboxIssue = 'snapshot_too_large' | 'credentials_unreadable' | 'unknown';
 
 /**
  * Durable outcome of an accepted organization action.
@@ -1810,12 +2021,21 @@ export type ResyncResponse = {
      * the one already in progress.
      */
     backfill_job_id: string;
+    /**
+     * Provider pacing remains in force even when the owner requests a resync.
+     */
+    provider_retry_at?: string | null;
 };
 
 /**
  * The user-visible delivery state of an unsent scheduled message.
  */
 export type ScheduledSendStatus = 'pending' | 'sending' | 'failed' | 'unconfirmed';
+
+/**
+ * Password held only for one connection or encrypted immediately.
+ */
+export type Secret = string;
 
 /**
  * Request body for sending a message (backward-compatible with `{ message: MessageToSend }`).
@@ -1837,6 +2057,52 @@ export type SendMessageResponse = {
     message: ApiDraftOutput;
 };
 
+/**
+ * Negotiated capability flags. Provider banners and EHLO arguments are never retained.
+ */
+export type ServerFeatures = {
+    /**
+     * Incoming server advertises CONDSTORE.
+     */
+    condstore?: boolean;
+    /**
+     * Submission server accepts 8BITMIME payloads.
+     */
+    eightBitMime?: boolean;
+    /**
+     * Incoming server advertises Gmail's IMAP extension.
+     */
+    gmailExtensions?: boolean;
+    /**
+     * Incoming server advertises IDLE.
+     */
+    idle?: boolean;
+    /**
+     * Incoming server supports the MOVE command.
+     */
+    moveMessages?: boolean;
+    /**
+     * Incoming server supplies RFC 8474 object identifiers.
+     */
+    objectId?: boolean;
+    /**
+     * Server-advertised positive SIZE limit in bytes.
+     */
+    sendLimitBytes?: number | null;
+    /**
+     * Submission server accepts SMTPUTF8 envelopes.
+     */
+    smtpUtf8?: boolean;
+    /**
+     * Incoming server supports per-UID copy and expunge receipts.
+     */
+    uidPlus?: boolean;
+    /**
+     * When both authenticated endpoints last answered the capability check.
+     */
+    verifiedAt?: string | null;
+};
+
 export type Settings = {
     /**
      * Whether messages sent from this inbox carry an open-tracking pixel.
@@ -1850,6 +2116,31 @@ export type Settings = {
     signature?: string | null;
     signature_on_replies_forwards?: boolean | null;
 };
+
+/**
+ * Non-submission evidence without provider text or recipient addresses.
+ */
+export type SubmissionRefusal = {
+    /**
+     * Which command was refused.
+     */
+    phase: SubmissionRefusalPhase;
+    /**
+     * Zero-based position in the frozen To, Cc, then Bcc envelope; recipient refusals only.
+     */
+    recipient_index?: number | null;
+    reply_class?: null | SubmissionRefusalClass;
+};
+
+/**
+ * Closed SMTP refusal class; neither variant authorizes automatic resubmission.
+ */
+export type SubmissionRefusalClass = 'temporary' | 'permanent';
+
+/**
+ * The SMTP command refused before any message body byte was sent.
+ */
+export type SubmissionRefusalPhase = 'sender' | 'recipient' | 'message';
 
 /**
  * Coarse sync state for an inbox, used to render a one-line hint in the
@@ -1919,6 +2210,11 @@ export type ThreadSummary = {
 };
 
 /**
+ * Required TLS mode. There is deliberately no plaintext variant.
+ */
+export type TlsMode = 'implicit' | 'start_tls';
+
+/**
  * Reuse the same operation ID when retrying after a lost response.
  */
 export type TransferDraftRequest = {
@@ -1963,6 +2259,30 @@ export type UnblockSenderRequest = {
  */
 export type UnresolvedSignatureImagesError = {
     unresolved_image_count: number;
+};
+
+/**
+ * Replace all routing overrides atomically. A stale revision returns a conflict.
+ */
+export type UpdateFolderSettings = {
+    /**
+     * Empty set re-enables all folders.
+     */
+    excludedFolderIds: Array<string>;
+    /**
+     * Version returned by the last settings read.
+     */
+    expectedRevision: number;
+    /**
+     * Empty map restores automatic folder routing.
+     */
+    roleOverrides: {
+        [key: string]: FolderRole;
+    };
+    /**
+     * At most one extra included folder may hold a live IDLE watcher.
+     */
+    watchedFolderIds?: Array<string>;
 };
 
 export type UpdateLabelBatchRequest = {
@@ -2068,7 +2388,7 @@ export type UpsertScheduledResponse = {
     send_time: string;
 };
 
-export type UserProvider = 'GMAIL' | 'OUTLOOK';
+export type UserProvider = 'GMAIL' | 'OUTLOOK' | 'IMAP';
 
 export type Value = unknown;
 
@@ -2121,6 +2441,7 @@ export type GetAttachmentErrors = {
     403: ErrorResponse;
     404: ErrorResponse;
     409: ErrorResponse;
+    413: ContentTooLargeResponse;
     429: ErrorResponse;
     500: ErrorResponse;
 };
@@ -2998,6 +3319,78 @@ export type HealthCheckLinksResponses = {
 
 export type HealthCheckLinksResponse = HealthCheckLinksResponses[keyof HealthCheckLinksResponses];
 
+export type ImapConnectData = {
+    body: ImapConnectRequest;
+    path?: never;
+    query?: never;
+    url: '/email/links/imap';
+};
+
+export type ImapConnectErrors = {
+    400: ImapConnectionErrorResponse;
+    402: ImapConnectionErrorResponse;
+    403: ImapConnectionErrorResponse;
+    404: ImapConnectionErrorResponse;
+    409: ImapConnectionErrorResponse;
+    422: ImapConnectionErrorResponse;
+    429: ImapConnectionErrorResponse;
+    502: ImapConnectionErrorResponse;
+    503: ImapConnectionErrorResponse;
+    504: ImapConnectionErrorResponse;
+};
+
+export type ImapConnectError = ImapConnectErrors[keyof ImapConnectErrors];
+
+export type ImapConnectResponses = {
+    200: ImapConnectResponse;
+};
+
+export type ImapConnectResponse2 = ImapConnectResponses[keyof ImapConnectResponses];
+
+export type ImapDiscoverData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/email/links/imap/discover';
+};
+
+export type ImapDiscoverErrors = {
+    401: ErrorResponse;
+    403: ImapConnectionErrorResponse;
+    429: ImapConnectionErrorResponse;
+    502: ImapConnectionErrorResponse;
+    503: ImapConnectionErrorResponse;
+    504: ImapConnectionErrorResponse;
+};
+
+export type ImapDiscoverError = ImapDiscoverErrors[keyof ImapDiscoverErrors];
+
+export type ImapDiscoverResponses = {
+    200: Discovery;
+};
+
+export type ImapDiscoverResponse = ImapDiscoverResponses[keyof ImapDiscoverResponses];
+
+export type ImapSuggestionData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/email/links/suggestion';
+};
+
+export type ImapSuggestionErrors = {
+    401: ErrorResponse;
+    503: ImapConnectionErrorResponse;
+};
+
+export type ImapSuggestionError = ImapSuggestionErrors[keyof ImapSuggestionErrors];
+
+export type ImapSuggestionResponses = {
+    200: ImapSuggestion;
+};
+
+export type ImapSuggestionResponse = ImapSuggestionResponses[keyof ImapSuggestionResponses];
+
 export type DeleteLinkData = {
     body?: never;
     path: {
@@ -3051,6 +3444,50 @@ export type DisableLinkCalendarResponses = {
 };
 
 export type DisableLinkCalendarResponse = DisableLinkCalendarResponses[keyof DisableLinkCalendarResponses];
+
+export type GetImapMailboxSettingsData = {
+    body?: never;
+    path: {
+        link_id: string;
+    };
+    query?: never;
+    url: '/email/links/{link_id}/imap/settings';
+};
+
+export type GetImapMailboxSettingsErrors = {
+    404: ImapConnectionErrorResponse;
+};
+
+export type GetImapMailboxSettingsError = GetImapMailboxSettingsErrors[keyof GetImapMailboxSettingsErrors];
+
+export type GetImapMailboxSettingsResponses = {
+    200: AccountMailSettings;
+};
+
+export type GetImapMailboxSettingsResponse = GetImapMailboxSettingsResponses[keyof GetImapMailboxSettingsResponses];
+
+export type UpdateImapMailboxSettingsData = {
+    body: UpdateFolderSettings;
+    path: {
+        link_id: string;
+    };
+    query?: never;
+    url: '/email/links/{link_id}/imap/settings';
+};
+
+export type UpdateImapMailboxSettingsErrors = {
+    400: ImapConnectionErrorResponse;
+    404: ImapConnectionErrorResponse;
+    409: ImapConnectionErrorResponse;
+};
+
+export type UpdateImapMailboxSettingsError = UpdateImapMailboxSettingsErrors[keyof UpdateImapMailboxSettingsErrors];
+
+export type UpdateImapMailboxSettingsResponses = {
+    200: AccountMailSettings;
+};
+
+export type UpdateImapMailboxSettingsResponse = UpdateImapMailboxSettingsResponses[keyof UpdateImapMailboxSettingsResponses];
 
 export type ResyncLinkData = {
     body?: never;
@@ -3192,6 +3629,7 @@ export type GetMessageEmlErrors = {
     403: ErrorResponse;
     404: ErrorResponse;
     409: ErrorResponse;
+    413: ContentTooLargeResponse;
     429: ErrorResponse;
     503: ErrorResponse;
 };

@@ -90,6 +90,9 @@ pub enum FolderRole {
 /// A physical folder; tags/categories are modeled separately.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MailFolder {
+    /// Whether this folder admits background synchronization; roles remain visible when paused.
+    #[serde(default = "default_sync_enabled")]
+    pub sync_enabled: bool,
     /// Mailbox-scoped provider identity.
     pub id: ProviderId,
     /// Parent identity, when exposed.
@@ -104,6 +107,10 @@ pub struct MailFolder {
     /// listed, whether or not they have been imported yet.
     #[serde(default)]
     pub total_items: Option<u32>,
+}
+
+fn default_sync_enabled() -> bool {
+    true
 }
 
 impl MailFolder {

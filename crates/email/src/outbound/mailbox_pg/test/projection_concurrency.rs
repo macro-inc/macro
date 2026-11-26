@@ -1,0 +1,457 @@
+//! Concurrency contracts for projection claim snapshots, finishes and recovery.
+use super::*;
+use crate::domain::mailbox::MessageRetry;
+use crate::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository;
+use crate::domain::mailbox::projection::{
+    MailboxProjectionRepository, ProjectionClaim, ProjectionLease,
+};
+use std::time::Duration;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_post_commit_wake_does_not_fail_a_committed_finish(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    sqlx::query!(
+        r#"CREATE FUNCTION fail_only_post_commit_projection_wake() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+            IF current_setting('application_name')='projection-post-wake-failure' THEN
+                IF NULLIF(current_setting('projection_test.first_wake_xid',true),'') IS NULL THEN
+                    PERFORM set_config('projection_test.first_wake_xid',txid_current()::text,false);
+                ELSIF current_setting('projection_test.first_wake_xid')<>txid_current()::text THEN
+                    RAISE EXCEPTION 'injected post-commit wake lock timeout' USING ERRCODE='55P03';
+                END IF;
+            END IF;
+            RETURN NULL;
+        END $$"#
+    ).execute(&db).await.unwrap();
+    sqlx::query!(
+        "CREATE TRIGGER fail_only_post_commit_projection_wake AFTER UPDATE ON email_projection_outbox FOR EACH STATEMENT EXECUTE FUNCTION fail_only_post_commit_projection_wake()"
+    ).execute(&db).await.unwrap();
+    let telemetry = crate::telemetry_capture::Telemetry::default();
+    let _guard = telemetry.install();
+    for retry in [None, Some(MessageRetry::Abandon)] {
+        sqlx::query!(
+            "INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}')",
+            Uuid::now_v7(),link
+        ).execute(&db).await.unwrap();
+        let ProjectionClaim::Acquired(head) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+        else {
+            panic!("the head must be claimable")
+        };
+        let options = (*db.connect_options())
+            .clone()
+            .application_name("projection-post-wake-failure");
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let finisher =
+            PgMailboxSync::new(pool.clone(), crate::domain::models::UserProvider::Outlook);
+        let result = finisher.finish_projection(&head, retry).await;
+        let retained = sqlx::query_scalar!(
+            "SELECT count(*) FROM email_projection_outbox WHERE id=$1",
+            head.id
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        pool.close().await;
+        assert_eq!(
+            retained,
+            Some(0),
+            "the first finish transaction must already have committed"
+        );
+        assert!(
+            result.is_ok(),
+            "a failed best-effort wake must not turn a committed finish into failure: {result:?}"
+        );
+    }
+    let warnings = telemetry.events("projection successor wake retained for backstop");
+    assert_eq!(warnings.len(), 2);
+    for (_, fields) in warnings {
+        assert_eq!(fields["projection.post_commit_wake"], "failed");
+        assert_eq!(fields["link_id"], link.to_string());
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_projection_inserted_after_the_first_wake_is_woken_after_commit(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}')",
+        Uuid::now_v7(),link
+    ).execute(&db).await.unwrap();
+    let ProjectionClaim::Acquired(head) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the first event must be leased")
+    };
+    // An AFTER UPDATE statement trigger pauses after the first wake has found
+    // no successor, without changing the real table, indexes or claim plans.
+    sqlx::query!(
+        r#"CREATE FUNCTION pause_after_projection_wake() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+            IF current_setting('application_name')='projection-finish-race' THEN
+                PERFORM pg_advisory_xact_lock_shared(91,6);
+            END IF;
+            RETURN NULL;
+        END $$"#
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "CREATE TRIGGER pause_after_projection_wake AFTER UPDATE ON email_projection_outbox FOR EACH STATEMENT EXECUTE FUNCTION pause_after_projection_wake()"
+    ).execute(&db).await.unwrap();
+    let options = (*db.connect_options())
+        .clone()
+        .application_name("projection-finish-race");
+    let finish_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await
+        .unwrap();
+    let finisher = PgMailboxSync::new(
+        finish_pool.clone(),
+        crate::domain::models::UserProvider::Outlook,
+    );
+    let mut gate = db.begin().await.unwrap();
+    sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(91,6)")
+        .fetch_one(&mut *gate)
+        .await
+        .unwrap();
+    let finish = tokio::spawn(async move { finisher.finish_projection(&head, None).await });
+    let paused = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let paused = sqlx::query_scalar!(
+                r#"SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+                    AND application_name='projection-finish-race' AND wait_event_type='Lock') AS "paused!""#
+            ).fetch_one(&db).await.unwrap();
+            if paused { break; }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    }).await;
+    assert!(
+        paused.is_ok(),
+        "the real finish must pause after its first wake"
+    );
+    let next = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}')",
+        next,link
+    ).execute(&db).await.unwrap();
+    assert!(matches!(
+        repo.claim_projection(Uuid::now_v7()).await.unwrap(),
+        ProjectionClaim::Progress
+    ));
+    gate.commit().await.unwrap();
+    finish.await.unwrap().unwrap();
+    let blocked = sqlx::query_scalar!(
+        "SELECT blocked_until FROM email_projection_outbox WHERE id=$1",
+        next
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(
+        blocked.is_none(),
+        "the post-commit wake must clear a successor deferred during the first commit window"
+    );
+    let ProjectionClaim::Acquired(successor) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the newly inserted successor must be immediately claimable")
+    };
+    assert_eq!(successor.id, next);
+    finish_pool.close().await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_cancelled_projection_probe_retains_its_attempt_fields(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox (id,link_id,generation,payload,parked_at) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}',now())",
+        Uuid::now_v7(),link
+    ).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"CREATE FUNCTION pause_projection_unpark() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN PERFORM pg_sleep(1); RETURN NEW; END $$"#
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "CREATE TRIGGER pause_projection_unpark BEFORE UPDATE ON email_projection_outbox FOR EACH ROW EXECUTE FUNCTION pause_projection_unpark()"
+    ).execute(&db).await.unwrap();
+    let telemetry = crate::telemetry_capture::Telemetry::default();
+    let _guard = telemetry.install();
+    let mut page = Box::pin(repo.recover_page(64));
+    let sleeping = async {
+        loop {
+            let sleeping = sqlx::query_scalar!(
+                r#"SELECT EXISTS(SELECT 1 FROM pg_stat_activity
+                    WHERE datname=current_database() AND wait_event='PgSleep') AS "sleeping!""#
+            )
+            .fetch_one(&db)
+            .await
+            .unwrap();
+            if sleeping {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    };
+    tokio::select! {
+        result = &mut page => panic!("the probe completed before its controlled pause: {result:?}"),
+        result = tokio::time::timeout(Duration::from_secs(2),sleeping) => result.expect("the probe must enter its unpark attempt"),
+    }
+    // An absolute timeout or shutdown drops the same future. Observe the
+    // cancelled probe without waiting for its SQL statement to complete.
+    drop(page);
+    let spans = telemetry.spans("email.mailbox.unpark_probe");
+    let span = spans.last().expect("the cancelled probe span must close");
+    assert_eq!(span["mailbox.unpark_attempts"], "1");
+    assert_eq!(span["mailbox.unpark_limit"], "64");
+}
+
+async fn leased_head_and_new_successor(db: &PgPool) -> (PgMailboxSync, Box<ProjectionLease>, Uuid) {
+    let (repo, link) = fixture(db).await;
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}')",
+        Uuid::now_v7(),link
+    ).execute(db).await.unwrap();
+    let ProjectionClaim::Acquired(head) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the head must be claimable")
+    };
+    let next = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}')",
+        next,link
+    ).execute(db).await.unwrap();
+    (repo, head, next)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn projection_eligibility_uses_a_fresh_snapshot_after_locking_its_window(db: PgPool) {
+    let (repo, head, next) = leased_head_and_new_successor(&db).await;
+    let mut claim = repo.begin_claim().await.unwrap();
+    let ids = repo.lock_projection_window(&mut claim).await.unwrap();
+    assert_eq!(ids, [next]);
+    // The original single-statement race needs a mid-scan pause. Check the
+    // fresh-snapshot contract directly, without a production test hook. An
+    // old-binary fenced delete can commit here; a new finish would wait on S.
+    let deleted = sqlx::query!(
+        "DELETE FROM email_projection_outbox WHERE id=$1 AND lease_id=$2 AND lease_until>now()",
+        head.id,
+        head.lease_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert_eq!(deleted.rows_affected(), 1);
+    let result = repo
+        .claim_locked_projection(&mut claim, Uuid::now_v7(), &ids)
+        .await
+        .unwrap();
+    claim.commit().await.unwrap();
+    let ProjectionClaim::Acquired(successor) = result.claim else {
+        panic!("the fresh statement must see the completed head and claim its successor")
+    };
+    assert_eq!(successor.id, next);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_projection_finish_waiting_on_the_window_wakes_after_its_deferral(db: PgPool) {
+    let (repo, head, next) = leased_head_and_new_successor(&db).await;
+    let mut claim = repo.begin_claim().await.unwrap();
+    let ids = repo.lock_projection_window(&mut claim).await.unwrap();
+    assert_eq!(ids, [next]);
+    let other = repo.clone();
+    let finish = tokio::spawn(async move { other.finish_projection(&head, None).await });
+    let waited = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let waiting = sqlx::query_scalar!(
+                r#"SELECT EXISTS(SELECT 1 FROM pg_stat_activity
+                    WHERE datname=current_database() AND wait_event_type='Lock') AS "waiting!""#
+            )
+            .fetch_one(&db)
+            .await
+            .unwrap();
+            if waiting {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    assert!(matches!(
+        repo.claim_locked_projection(&mut claim, Uuid::now_v7(), &ids)
+            .await
+            .unwrap()
+            .claim,
+        ProjectionClaim::Progress
+    ));
+    claim.commit().await.unwrap();
+    finish.await.unwrap().unwrap();
+    assert!(
+        waited.is_ok(),
+        "the finish must wait on the locked successor"
+    );
+    let blocked = sqlx::query_scalar!(
+        "SELECT blocked_until FROM email_projection_outbox WHERE id=$1",
+        next
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(
+        blocked.is_none(),
+        "the finishing worker's later wake must win over the deferral"
+    );
+    let ProjectionClaim::Acquired(successor) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the concurrent finish must leave the successor immediately claimable")
+    };
+    assert_eq!(successor.id, next);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn projection_backstop_deadlines_are_jittered_within_the_recheck_window(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    let head = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox (id,link_id,generation,payload,available_at) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}',now()+interval '1 day')",
+        head,link
+    ).execute(&db).await.unwrap();
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox (id,link_id,generation,payload) SELECT gen_random_uuid(),$1,1,'{\"kind\":\"link_changed\"}' FROM generate_series(1,64)",
+        link
+    ).execute(&db).await.unwrap();
+    let before_claim = sqlx::query_scalar!(r#"SELECT now() AS "before_claim!""#)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert!(matches!(
+        repo.claim_projection(Uuid::now_v7()).await.unwrap(),
+        ProjectionClaim::Progress
+    ));
+    let deadlines = sqlx::query!(
+        r#"SELECT count(DISTINCT blocked_until) AS "deadlines!",
+            bool_and(blocked_until >= $3::timestamptz + interval '2 minutes'
+                AND blocked_until <= now() + interval '3 minutes') AS "bounded!"
+        FROM email_projection_outbox WHERE link_id=$1 AND id<>$2"#,
+        link,
+        head,
+        before_claim
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(
+        deadlines.deadlines > 1,
+        "the backstop must not create one synchronized burst"
+    );
+    assert!(
+        deadlines.bounded,
+        "jitter must keep every deadline inside the two- to three-minute window"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn projection_finishes_serialize_before_taking_any_child_row_lock(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    let later = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox (id,link_id,generation,payload,seq) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}',2)",
+        later, link
+    ).execute(&db).await.unwrap();
+    let ProjectionClaim::Acquired(first) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the committed producer must be claimable")
+    };
+    // A different producer allocated an earlier sequence, but committed later.
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox (id,link_id,generation,payload,seq) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}',1)",
+        Uuid::now_v7(), link
+    ).execute(&db).await.unwrap();
+    let ProjectionClaim::Acquired(second) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the earlier allocation can coexist with the first lease")
+    };
+    let mut fence = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.projection.finish:' || $1::uuid::text,0))",
+        link
+    )
+    .fetch_one(&mut *fence)
+    .await
+    .unwrap();
+    let other = repo.clone();
+    let a = tokio::spawn(async move { other.finish_projection(&first, None).await });
+    let b = tokio::spawn(async move { repo.finish_projection(&second, None).await });
+    let queued = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let waiting = sqlx::query_scalar!(
+                r#"SELECT count(*) AS "count!" FROM pg_locks
+                WHERE locktype='advisory' AND NOT granted
+                    AND database=(SELECT oid FROM pg_database WHERE datname=current_database())"#
+            )
+            .fetch_one(&db)
+            .await
+            .unwrap();
+            if waiting == 2 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    let retained = sqlx::query_scalar!(
+        "SELECT count(*) FROM email_projection_outbox WHERE link_id=$1",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    fence.rollback().await.unwrap();
+    let outcomes = (a.await.unwrap(), b.await.unwrap());
+    assert!(
+        queued.is_ok(),
+        "both finishes must wait on the link fence before deleting either row"
+    );
+    assert_eq!(retained, Some(2));
+    assert!(
+        outcomes.0.is_ok() && outcomes.1.is_ok(),
+        "serialized finishes must not deadlock"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn parked_work_recovery_retries_discovery_from_the_same_cursor(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox (id,link_id,generation,payload,parked_at) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}',now())",
+        Uuid::now_v7(),link
+    ).execute(&db).await.unwrap();
+    let mut blocker = db.begin().await.unwrap();
+    sqlx::query!("LOCK TABLE email_projection_outbox IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+    let result = repo.recover_page(1).await;
+    blocker.rollback().await.unwrap();
+    assert!(matches!(
+        result,
+        Err(MailboxError::Database(
+            crate::domain::mailbox::DatabaseFailure::DeadlineExceeded
+        ))
+    ));
+    let cursor = sqlx::query_scalar!("SELECT link_after FROM email_projection_unpark_sweep")
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(cursor, Uuid::nil());
+    assert_eq!(
+        repo.recover_page(64).await.unwrap().unwrap().rows_unparked,
+        1
+    );
+}

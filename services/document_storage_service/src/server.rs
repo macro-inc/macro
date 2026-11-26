@@ -464,6 +464,23 @@ async fn run_server() -> anyhow::Result<()> {
         config.environment,
     )
     .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    let mailbox_action_chunks =
+        email::domain::models::mailbox_action::MailboxActionChunking::default();
+    consumer_tracker.spawn(feature_flags::polling::run(
+        Some(flags.clone()),
+        feature_flags::polling::DefaultOffFlag {
+            key: email::domain::models::mailbox_action::MAILBOX_ACTION_CHUNKS_FLAG,
+            name: "mailbox action chunks",
+            context: feature_flags::ServiceContext::new(
+                email::domain::models::mailbox_action::MAILBOX_ACTION_FLAGS_CONTEXT,
+            ),
+            set: {
+                let switch = mailbox_action_chunks.clone();
+                move |enabled| switch.set(enabled)
+            },
+        },
+        consumer_cancellation_token.clone().cancelled_owned(),
+    ));
     // DSS only reads CRM rows — no-op resolver keeps reqwest/scraper
     // out of this binary.
     let crm_service = crm::domain::service::CrmServiceImpl::new(
@@ -491,9 +508,11 @@ async fn run_server() -> anyhow::Result<()> {
         macro_service_urls::AuthServiceUrl::new()?.to_string(),
     ));
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
-            crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
-        )),
+        EmailPgRepo::new(db.clone())
+            .with_rule_discovery(Arc::new(
+                crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+            ))
+            .with_action_chunking(mailbox_action_chunks),
         frecency_service.clone(),
         sqs_client.clone(),
         crm_service.clone(),

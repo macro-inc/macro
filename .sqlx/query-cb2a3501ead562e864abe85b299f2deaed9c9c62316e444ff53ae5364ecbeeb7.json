@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            s.processing,\n            s.delivery_started_at,\n            s.delivery_claim_id,\n            s.delivery_status,\n            s.sent,\n            d.checkpoint\n        FROM\n            email_scheduled_messages s\n        JOIN\n            email_mailbox_drafts d ON d.message_id = s.message_id\n        WHERE\n            s.message_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "processing",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "delivery_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "delivery_claim_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "delivery_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "checkpoint",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "cb2a3501ead562e864abe85b299f2deaed9c9c62316e444ff53ae5364ecbeeb7"
+}

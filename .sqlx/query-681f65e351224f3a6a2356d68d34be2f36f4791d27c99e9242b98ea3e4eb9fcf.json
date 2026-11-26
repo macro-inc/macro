@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)\n            VALUES ($1, 'macro|owner@example.com', 'owner', 'owner@example.com', 'GMAIL')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "681f65e351224f3a6a2356d68d34be2f36f4791d27c99e9242b98ea3e4eb9fcf"
+}

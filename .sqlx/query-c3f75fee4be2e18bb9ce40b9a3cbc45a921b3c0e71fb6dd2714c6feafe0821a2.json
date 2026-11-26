@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT provider_retry_at FROM email_sync_streams WHERE link_id = $1 AND generation = $2 AND kind = 'folder_catalog'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider_retry_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "c3f75fee4be2e18bb9ce40b9a3cbc45a921b3c0e71fb6dd2714c6feafe0821a2"
+}

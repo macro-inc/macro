@@ -312,13 +312,18 @@ concurrent build needs its INVALID index inspected and removed before retry.
 `email_links.mailbox_issue` and `mailbox_retry_at` are nullable sync-health
 projections, separate from `needs_reauth`; old binaries ignore them. Migration
 259 installs these and the three ordered IMAP-notification fields in one
-nullable, metadata-only ALTER, so the parent queues one exclusive lock.
+nullable, metadata-only ALTER, so the parent queues one exclusive lock. The
+undeployed 260/267 files were folded into it; preserve the documented local
+checksum/missing-version disposition.
 
 Work provider columns use a constant Outlook default without a heap rewrite.
 Streams were Outlook-only; legacy reconciliation may include Gmail cleanup.
 Claims relabel legacy reconciliation routing in bounded due windows; no
 background repair table, completion marker or runtime DDL is needed. Keep
-provider derivation active for old inserts and rollback.
+provider derivation active for old inserts and rollback. See the
+[routing runbook](../../docs/runbooks/email-provider-routing.md) for removed
+undeployed migrations and the preserved local preview's scoped adaptation;
+never edit its migration ledger to hide incompatibility.
 
 Migration 20261123181251 builds the IMAP-only non-null provider-retry index concurrently for reconnect’s maximum-wait lookup. Inspect and drop an interrupted INVALID index before retrying; old binaries and the original query remain compatible.
 

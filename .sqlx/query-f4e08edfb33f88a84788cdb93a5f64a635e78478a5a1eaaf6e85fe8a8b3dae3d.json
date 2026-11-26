@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DROP TRIGGER IF EXISTS fail_first_catchup_row ON email_sync_streams",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "f4e08edfb33f88a84788cdb93a5f64a635e78478a5a1eaaf6e85fe8a8b3dae3d"
+}

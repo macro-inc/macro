@@ -547,4 +547,24 @@ pub struct RecentInboxMessage {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RecentInboxMessagesResponse {
     pub messages: Vec<RecentInboxMessage>,
+    /// Mailboxes omitted from this read; messages from healthy mailboxes remain.
+    #[serde(default)]
+    pub unreadable_mailboxes: Vec<UnreadableMailbox>,
+}
+
+/// An owned mailbox whose requested recent-mail context could not be read.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UnreadableMailbox {
+    pub link_id: Uuid,
+    pub reason: UnreadableMailboxReason,
+}
+
+/// Why recent-mail context is partial, without provider prose or credentials.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UnreadableMailboxReason {
+    /// This provider cannot fulfill the requested folder, date or size window.
+    Unsupported,
+    /// The provider read failed; other mailboxes may still be available.
+    ProviderError,
 }

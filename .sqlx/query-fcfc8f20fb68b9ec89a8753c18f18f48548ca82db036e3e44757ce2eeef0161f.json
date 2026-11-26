@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sync_streams SET provider_retry_at = NULL, initial_complete = true WHERE link_id = $1 AND scope_id <> 'archive'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fcfc8f20fb68b9ec89a8753c18f18f48548ca82db036e3e44757ce2eeef0161f"
+}

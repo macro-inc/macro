@@ -144,3 +144,59 @@ async fn a_directed_row_is_searchable_only_by_its_owner(pool: PgPool) {
         )]
     );
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("people_search"))
+)]
+async fn imap_contacts_rank_with_other_inbox_providers(pool: PgPool) {
+    let inbox = uuid::Uuid::parse_str("00000000-0000-4000-a000-000000000002").unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            provider = 'IMAP'
+        WHERE
+            id = $1
+        "#,
+        inbox,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            contact_inbox_members
+        SET
+            list_key = 'imap'
+        WHERE
+            link_id = $1
+        "#,
+        inbox,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let people = DbContactsRepository::new(pool)
+        .search_listed_people(mid(VIEWER), "sam", limit(50))
+        .await
+        .unwrap();
+    assert_eq!(
+        people
+            .iter()
+            .map(|person| person.contact.user_id.email_str())
+            .collect::<Vec<_>>(),
+        [
+            "t@example.com",
+            "a@example.com",
+            "g@example.com",
+            "n@example.com",
+            "d@example.com",
+            "sam.o@example.org",
+            "samuel.e@example.org"
+        ]
+    );
+    assert_eq!(people[5].contact.lists, [ContactList::Imap]);
+}

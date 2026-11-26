@@ -88,7 +88,10 @@ pub(crate) fn context(
 ) -> InboxSyncContext {
     let effects = InboxSyncEffects {
         gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService(
-            email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+            email::outbound::mailbox_pg::PgMailboxSync::new(
+                db.clone(),
+                email::domain::models::UserProvider::Outlook,
+            ),
         ),
         invitation_extractor: crate::composition::workers::invitation_extractor(
             db.clone(),

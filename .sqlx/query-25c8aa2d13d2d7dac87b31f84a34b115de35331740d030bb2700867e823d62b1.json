@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_imap_host_catchup_deferred SET available_at = now() WHERE stream_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "25c8aa2d13d2d7dac87b31f84a34b115de35331740d030bb2700867e823d62b1"
+}

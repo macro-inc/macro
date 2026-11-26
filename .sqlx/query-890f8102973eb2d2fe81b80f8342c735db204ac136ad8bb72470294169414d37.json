@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT q.work_id,q.link_id,l.sync_generation,l.grant_generation\n            FROM email_mailbox_work_quarantine q\n            JOIN email_links l ON l.id=q.link_id\n            WHERE q.work='commands' AND q.cleanup_at<=now()\n            ORDER BY q.cleanup_at,q.work_id\n            LIMIT 1 FOR UPDATE OF q SKIP LOCKED\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "work_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "890f8102973eb2d2fe81b80f8342c735db204ac136ad8bb72470294169414d37"
+}

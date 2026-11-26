@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM in_progress_user_link\n            WHERE id = $1\n                AND macro_user_id = $2\n                AND email_provider = 'OUTLOOK'\n                AND linked_email = $3\n                AND created_at > now() - interval '24 hours'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d003f2567a5d7ed2b1f61d3ce4671a67e5346208ab77e131b3e68a6274792f62"
+}

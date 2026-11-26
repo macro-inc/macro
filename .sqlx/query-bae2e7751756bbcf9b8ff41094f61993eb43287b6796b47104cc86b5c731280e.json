@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_imap_host_catchup_deferred SET available_at = now(), created_at = now() - interval '10 minutes'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "bae2e7751756bbcf9b8ff41094f61993eb43287b6796b47104cc86b5c731280e"
+}

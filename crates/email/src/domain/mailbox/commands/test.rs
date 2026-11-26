@@ -14,6 +14,7 @@ fn restoring_junk_chooses_drafts_for_drafts_and_inbox_for_received_mail() {
     let folders: Vec<_> = [("drafts", FolderRole::Drafts), ("inbox", FolderRole::Inbox)]
         .into_iter()
         .map(|(id, role)| MailFolder {
+            sync_enabled: true,
             id: ProviderId::try_from(id.to_string()).unwrap(),
             parent_id: None,
             name: id.into(),
@@ -46,6 +47,7 @@ fn restoring_junk_chooses_drafts_for_drafts_and_inbox_for_received_mail() {
 #[test]
 fn restoring_a_conversation_leaves_its_drafts_in_drafts() {
     let folders = vec![MailFolder {
+        sync_enabled: true,
         id: ProviderId::try_from("inbox".to_string()).unwrap(),
         parent_id: None,
         name: "inbox".into(),
@@ -88,7 +90,10 @@ struct Harness(Arc<Mutex<State>>);
 #[derive(Default)]
 struct State {
     claimed: bool,
+    claim_progress: bool,
+    generation: Option<i64>,
     applies: u32,
+    confirmations: u32,
     /// Write-version records that time out on a busy mailbox.
     locked_records: u32,
     record_attempts: u32,
@@ -105,14 +110,26 @@ fn mailbox() -> MailboxKey {
 }
 
 impl MailboxCommandRepository for Harness {
-    async fn claim_command(&self, lease_id: Uuid) -> Result<Option<CommandLease>, MailboxError> {
-        if std::mem::replace(&mut self.0.lock().unwrap().claimed, true) {
-            return Ok(None);
+    async fn claim_command(
+        &self,
+        lease_id: Uuid,
+    ) -> Result<super::SyncClaim<CommandLease>, MailboxError> {
+        if std::mem::take(&mut self.0.lock().unwrap().claim_progress) {
+            return Ok(super::SyncClaim::Progress);
         }
-        Ok(Some(CommandLease {
+        let mut state = self.0.lock().unwrap();
+        if std::mem::replace(&mut state.claimed, true) {
+            return Ok(super::SyncClaim::Idle);
+        }
+        let mut mailbox = mailbox();
+        if let Some(generation) = state.generation {
+            mailbox.sync_generation = generation;
+            mailbox.grant_generation = generation;
+        }
+        Ok(super::SyncClaim::Acquired(CommandLease {
             id: Uuid::now_v7(),
             lease_id,
-            mailbox: mailbox(),
+            mailbox,
             action: MailboxAction::Flagged(true),
             attempts: 1,
         }))
@@ -161,6 +178,7 @@ impl MailboxCommandRepository for Harness {
         _: &CommandTarget,
         _: Option<&MailboxOrganization>,
     ) -> Result<(), MailboxError> {
+        self.0.lock().unwrap().confirmations += 1;
         Ok(())
     }
     async fn fail_target(
@@ -182,6 +200,24 @@ impl MailboxCommandRepository for Harness {
     ) -> Result<(), MailboxError> {
         Ok(())
     }
+}
+
+#[tokio::test]
+async fn a_reclaimed_command_confirms_an_applied_write_after_reconnect() {
+    let harness = Harness::default();
+    let service = MailboxCommandService::new(harness.clone(), harness.clone());
+    service.execute_once().await.unwrap();
+    {
+        let mut state = harness.0.lock().unwrap();
+        assert_eq!(state.applies, 1);
+        assert_eq!(state.confirmations, 0);
+        state.claimed = false;
+        state.generation = Some(2);
+    }
+    service.execute_once().await.unwrap();
+    let state = harness.0.lock().unwrap();
+    assert_eq!(state.applies, 1);
+    assert_eq!(state.confirmations, 1);
 }
 
 impl MailboxGateway for Harness {
@@ -280,4 +316,20 @@ async fn a_write_version_that_stays_locked_gives_up_inside_the_lease() {
     assert_eq!(s.applies, 1);
     assert_eq!(s.recorded, None);
     assert_eq!(s.released, Some(30));
+}
+
+#[tokio::test]
+async fn maintained_command_claim_is_progress_without_provider_work() {
+    let h = Harness::default();
+    h.0.lock().unwrap().claim_progress = true;
+    assert!(
+        MailboxCommandService::new(h.clone(), h.clone())
+            .execute_once()
+            .await
+            .unwrap()
+    );
+    let state = h.0.lock().unwrap();
+    assert_eq!(state.applies, 0);
+    assert!(!state.claimed);
+    assert!(state.released.is_none());
 }

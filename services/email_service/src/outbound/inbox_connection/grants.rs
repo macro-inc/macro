@@ -48,12 +48,16 @@ impl<R: CalendarRepository> ConnectionGrants for GoogleConnectionGrants<R> {
     }
 
     async fn clear_reauth(&self, email_link_id: Uuid) {
-        email_db_client::links::update::clear_link_needs_reauth(&self.db, email_link_id)
+        let cleared = email_db_client::links::update::clear_link_needs_reauth(&self.db, email_link_id)
             .await
             .inspect_err(|error| {
                 tracing::warn!(error = ?error, link_id = %email_link_id, "failed to clear the reauth flag after a completed consent");
             })
-            .ok();
+            .is_ok();
+        if cleared {
+            email::outbound::mailbox_pg::parked_work_recovery::resume_link(&self.db, email_link_id)
+                .await;
+        }
     }
 }
 

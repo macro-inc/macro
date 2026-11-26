@@ -59,7 +59,7 @@ type Credentials = MailboxCredentials<PgMailboxSync, SignIn>;
 type Sync = MailboxSyncService<PgMailboxSync, Gateway<Credentials>, PgMailboxSync>;
 
 fn service(db: &PgPool, emulator: &OutlookEmulator, sign_in: &SignIn) -> Sync {
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let url = MicrosoftGraphUrl::from(emulator.graph_url());
     let gateway = || {
         Gateway(MailboxApiService::new(

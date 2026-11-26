@@ -1,10 +1,15 @@
 //! When a projection event that keeps failing, or keeps ending unfinished,
 //! is given up, and what is left of it.
 
-use super::fixture;
+use super::{fixture, page, snapshot};
 use crate::domain::events::EmailMacroEvent;
+use crate::domain::mailbox::claim::StreamClaim;
+use crate::domain::mailbox::projection::ProjectionClaim;
 use crate::domain::mailbox::projection::*;
-use crate::domain::mailbox::{MailboxError, MailboxKey};
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
+use crate::domain::mailbox::{
+    MailboxError, MailboxIngest, MailboxKey, MailboxSyncRepository, MessageRetry,
+};
 use crate::telemetry_capture::Telemetry;
 use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -20,6 +25,9 @@ use uuid::Uuid;
 struct FailingRefresh {
     error: fn() -> MailboxError,
     refreshes: Arc<AtomicUsize>,
+    contacts: Arc<AtomicUsize>,
+    attachments: Arc<AtomicUsize>,
+    published: Arc<AtomicUsize>,
 }
 
 impl FailingRefresh {
@@ -27,12 +35,23 @@ impl FailingRefresh {
         Self {
             error,
             refreshes: Arc::new(AtomicUsize::new(0)),
+            contacts: Arc::new(AtomicUsize::new(0)),
+            attachments: Arc::new(AtomicUsize::new(0)),
+            published: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
 
 impl MailboxProjectionEffects for FailingRefresh {
+    async fn import_completed(
+        &self,
+        link: Uuid,
+        viewers: &HashSet<MacroUserIdStr<'static>>,
+    ) -> Result<(), MailboxError> {
+        self.refresh(link, viewers).await
+    }
     async fn publish(&self, _: EmailMacroEvent) -> Result<(), MailboxError> {
+        self.published.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
     async fn refresh(
@@ -47,6 +66,7 @@ impl MailboxProjectionEffects for FailingRefresh {
         Ok(())
     }
     async fn contacts(&self, _: CorrespondenceProjection) -> Result<(), MailboxError> {
+        self.contacts.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
     async fn attachments(
@@ -55,6 +75,7 @@ impl MailboxProjectionEffects for FailingRefresh {
         _: &ProjectionContext,
         _: bool,
     ) -> Result<(), MailboxError> {
+        self.attachments.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
     async fn invitations(
@@ -136,7 +157,10 @@ async fn a_projection_that_keeps_failing_is_deleted_at_the_bound_and_logged_once
     assert!(service.project_once().await.is_err());
 
     assert_eq!(attempts(&db, id).await, None);
-    assert!(!service.project_once().await.unwrap());
+    assert!(matches!(
+        service.project_once().await.unwrap(),
+        ProjectionTick::Idle | ProjectionTick::Progress
+    ));
     assert_eq!(
         outcomes(&telemetry),
         [
@@ -193,8 +217,10 @@ async fn throttling_never_moves_a_projection_toward_abandonment(db: PgPool) {
 
 /// Ends the current claim as a worker that stopped would: its lease runs out.
 async fn expire_lease(db: &PgPool, id: Uuid) {
+    // Advance both representations of the same lease deadline; real retry
+    // availability stays unchanged.
     sqlx::query!(
-        "UPDATE email_projection_outbox SET lease_until = now() - interval '1 second' WHERE id = $1",
+        "UPDATE email_projection_outbox SET lease_until = now() - interval '1 second', blocked_until = now() - interval '1 second' WHERE id = $1",
         id
     )
     .execute(db)
@@ -209,11 +235,10 @@ async fn a_projection_whose_claims_keep_ending_unfinished_is_abandoned_unproject
     let (repo, link) = fixture(&db).await;
     let id = queue(&db, link, 0).await;
     for claimed_after in 0..5 {
-        let lease = repo
-            .claim_projection(Uuid::now_v7())
-            .await
-            .unwrap()
-            .unwrap();
+        let ProjectionClaim::Acquired(lease) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+        else {
+            panic!("expected a projection lease");
+        };
         assert_eq!(lease.unfinished_claims, claimed_after);
         expire_lease(&db, id).await;
     }
@@ -247,18 +272,17 @@ async fn a_worker_that_lost_its_lease_cannot_abandon_the_entry_a_second_time(db:
     let (repo, link) = fixture(&db).await;
     let id = queue(&db, link, 0).await;
     for _ in 0..5 {
-        repo.claim_projection(Uuid::now_v7())
-            .await
-            .unwrap()
-            .unwrap();
+        assert!(matches!(
+            repo.claim_projection(Uuid::now_v7()).await.unwrap(),
+            ProjectionClaim::Acquired(_)
+        ));
         expire_lease(&db, id).await;
     }
     // This worker claims the entry to give it up, then pauses past its lease.
-    let paused = repo
-        .claim_projection(Uuid::now_v7())
-        .await
-        .unwrap()
-        .unwrap();
+    let ProjectionClaim::Acquired(paused) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
     expire_lease(&db, id).await;
     let next_worker = MailboxProjectionService::new(repo.clone(), FailingRefresh::new(downstream));
     assert!(matches!(
@@ -279,17 +303,17 @@ async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPoo
     let (repo, link) = fixture(&db).await;
     let id = queue(&db, link, 0).await;
     for _ in 0..3 {
-        repo.claim_projection(Uuid::now_v7())
-            .await
-            .unwrap()
-            .unwrap();
+        assert!(matches!(
+            repo.claim_projection(Uuid::now_v7()).await.unwrap(),
+            ProjectionClaim::Acquired(_)
+        ));
         expire_lease(&db, id).await;
     }
-    let unfinished = repo
-        .claim_projection(Uuid::now_v7())
-        .await
-        .unwrap()
-        .unwrap();
+    let ProjectionClaim::Acquired(unfinished) =
+        repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
     assert_eq!(unfinished.unfinished_claims, 3);
 
     repo.finish_projection(
@@ -303,11 +327,10 @@ async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPoo
     .unwrap();
     make_due(&db, id).await;
 
-    let next = repo
-        .claim_projection(Uuid::now_v7())
-        .await
-        .unwrap()
-        .unwrap();
+    let ProjectionClaim::Acquired(next) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
     assert_eq!(next.unfinished_claims, 0);
 }
 
@@ -315,11 +338,10 @@ async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPoo
 async fn a_retry_recorded_after_the_lease_ran_out_still_counts_as_unfinished(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let id = queue(&db, link, 0).await;
-    let late = repo
-        .claim_projection(Uuid::now_v7())
-        .await
-        .unwrap()
-        .unwrap();
+    let ProjectionClaim::Acquired(late) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
     expire_lease(&db, id).await;
 
     repo.finish_projection(
@@ -333,10 +355,74 @@ async fn a_retry_recorded_after_the_lease_ran_out_still_counts_as_unfinished(db:
     .unwrap();
 
     // The late retry neither cleared the lease nor gave its claim back.
-    let next = repo
-        .claim_projection(Uuid::now_v7())
+    let ProjectionClaim::Acquired(next) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
+    assert_eq!((next.attempts, next.unfinished_claims), (2, 1));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn failed_refresh_does_not_repeat_independent_message_effects(db: PgPool) {
+    let telemetry = Telemetry::default();
+    let _guard = telemetry.install();
+    let (repo, link) = fixture(&db).await;
+    let stream = repo
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
-    assert_eq!((next.attempts, next.unfinished_claims), (2, 1));
+    repo.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
+    let work = repo
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    repo.ingest(
+        &work,
+        snapshot(link, work.provider_id.as_str(), Default::default(), "v1"),
+    )
+    .await
+    .unwrap();
+    let ProjectionClaim::Acquired(event) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
+    assert!(matches!(event.event, ProjectionEvent::Message { .. }));
+    repo.finish_projection(
+        &event,
+        Some(MessageRetry::After {
+            seconds: 0,
+            counted: false,
+        }),
+    )
+    .await
+    .unwrap();
+    let effects = FailingRefresh::new(downstream);
+    let contacts = effects.contacts.clone();
+    let attachments = effects.attachments.clone();
+    let published = effects.published.clone();
+    let service = MailboxProjectionService::new(repo, effects);
+
+    assert!(matches!(
+        service.project_once().await.unwrap(),
+        ProjectionTick::Projected
+    ));
+    assert!(matches!(
+        service.project_once().await.unwrap(),
+        ProjectionTick::Idle
+    ));
+    assert_eq!(attempts(&db, event.id).await, None);
+    assert_eq!(contacts.load(Ordering::SeqCst), 1);
+    assert_eq!(attachments.load(Ordering::SeqCst), 1);
+    assert!(published.load(Ordering::SeqCst) >= 1);
+
+    let spans = telemetry.spans("outlook.sync.project");
+    assert_eq!(spans.len(), 1);
+    assert_eq!(spans[0]["outlook.refreshes"], "0");
+    assert_eq!(spans[0]["outlook.reindex_events"], "1");
 }

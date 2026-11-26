@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sync_streams SET leased_notification_revision = notification_revision",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "5fe396d69574ecce2f56610085821f346665f9e3c77a7dca275b78d704d87d64"
+}

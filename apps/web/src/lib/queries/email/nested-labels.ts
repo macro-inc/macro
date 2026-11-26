@@ -1,3 +1,6 @@
+import type { GraphqlEmailProvider } from '@service-storage/graphql/generated/graphql';
+import { match } from 'ts-pattern';
+
 export type NestedLabel<Label> = {
   label: Label;
   /** The label's own name, after its parents: "Larkspur". */
@@ -9,16 +12,17 @@ export type NestedLabel<Label> = {
 /**
  * One inbox's labels as a tree, flattened with each parent right before its
  * children. Gmail writes nesting into the name ("Customers/Larkspur") and nests
- * only under a label that exists; a slash in an Outlook category is just a slash.
+ * only under a label that exists. Outlook and IMAP label names stay flat.
  */
 export function nestLabels<Label extends { name: string }>(
   labels: readonly Label[],
-  provider: 'GMAIL' | 'OUTLOOK'
+  provider: GraphqlEmailProvider
 ): NestedLabel<Label>[] {
+  const nested = hasNestedLabelNames(provider);
   const names = new Set(labels.map((label) => label.name));
 
   const pathOf = (name: string): string[] => {
-    if (provider !== 'GMAIL') return [name];
+    if (!nested) return [name];
     let slash = name.lastIndexOf('/');
     while (slash > 0) {
       const parent = name.slice(0, slash);
@@ -34,6 +38,13 @@ export function nestLabels<Label extends { name: string }>(
       return { label, leaf: path.at(-1) ?? label.name, path };
     })
     .sort((left, right) => comparePaths(left.path, right.path));
+}
+
+function hasNestedLabelNames(provider: GraphqlEmailProvider): boolean {
+  return match(provider)
+    .with('GMAIL', () => true)
+    .with('IMAP', 'OUTLOOK', () => false)
+    .exhaustive(() => false);
 }
 
 /** A label's whole name in words: "Customers / Larkspur". */

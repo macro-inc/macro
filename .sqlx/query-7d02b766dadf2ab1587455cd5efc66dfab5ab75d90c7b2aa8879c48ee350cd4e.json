@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_sync_streams (\n            id, link_id, generation, kind, scope_id, initial_complete, provider_retry_at, next_run_at\n        )\n        VALUES ($1, $2, 1, 'mail_folder', 'archive', true, now() + interval '2 hours', now() + interval '2 hours')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7d02b766dadf2ab1587455cd5efc66dfab5ab75d90c7b2aa8879c48ee350cd4e"
+}

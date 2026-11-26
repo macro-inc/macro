@@ -15,9 +15,16 @@ thread/message API types, DB row types, and Gmail API response shapes.
 
 ## Scope
 
+- `UserProvider` includes Gmail, Outlook and IMAP. API spelling is uppercase;
+  service variants are explicit. Use `uses_mailbox_framework` to distinguish
+  durable organization/draft work from Gmail's queue operations.
+
 - Owns: email/Gmail wire and DB-row models shared across email services.
+- `service::message::SendRejectionReason` is the shared closed non-submission
+  fact used by provider errors and durable operation status. Keep it independent
+  of provider adapters so the email `ports` feature can expose it alone.
 - Not here: calendar sync (moved out, see `#6826`) → `calendar_events`;
-  actual IMAP/SMTP or Gmail API calls → `email_service`, `gmail_client`.
+  actual IMAP/SMTP calls → `imap_engine`; Gmail API calls → `gmail_client`.
 
 ## Boundaries
 
@@ -49,3 +56,11 @@ rolling upgrades; decoding old payloads must never attach a current generation.
 - Scheduled-message models retain optional agent correlation for delayed delivery; older rows decode without attribution.
 
 - `sign_in_email` recognises Macro's own sign-in emails by sender: the addresses FusionAuth and the auth service send sign-in mail from, which send nothing else. Its tests read the FusionAuth stack's per-environment config and the local kickstart, so a changed sender fails them; update `SIGN_IN_SENDERS` with it.
+
+Optional MailboxIssue is sync health independent of authentication; retain a generic unknown fallback at deployed boundaries. API links expose it without widening the service Link database row.
+
+SubmissionRefusal carries a closed command phase, reply class and optional
+recipient position. Preserve the frozen To/Cc/Bcc ordering across adapters;
+never put recipient addresses or provider prose in the refusal detail.
+
+Recent-mail responses retain healthy messages and a typed `unreadable_mailboxes` list; older responses default that list to empty. Do not infer complete context from an empty messages list.

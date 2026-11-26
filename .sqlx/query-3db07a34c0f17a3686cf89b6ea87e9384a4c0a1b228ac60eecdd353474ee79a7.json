@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_mailbox_work_quarantine (work,work_id,link_id,reason,cleanup_at)\n        VALUES ($1,$2,$3,$4,CASE WHEN $1='commands' THEN now() END)\n        ON CONFLICT (work,work_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3db07a34c0f17a3686cf89b6ea87e9384a4c0a1b228ac60eecdd353474ee79a7"
+}

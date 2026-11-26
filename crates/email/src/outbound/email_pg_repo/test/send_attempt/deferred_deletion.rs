@@ -286,7 +286,10 @@ async fn explicit_inbox_purge_removes_an_accepted_send_and_its_retained_deletion
     .await?;
     assert!(!delete_db_message(&pool, message()).await?);
     let summary = crate::domain::mailbox::link_manager::purge::LinkPurgeService {
-        repository: crate::outbound::mailbox_pg::PgMailboxSync::new(pool.clone()),
+        repository: crate::outbound::mailbox_pg::PgMailboxSync::new(
+            pool.clone(),
+            crate::domain::models::UserProvider::Outlook,
+        ),
     }
     .purge_link(
         link(),

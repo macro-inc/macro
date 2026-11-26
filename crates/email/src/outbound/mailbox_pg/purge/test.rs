@@ -552,7 +552,7 @@ async fn purge_link(
     pacing: PurgePacing,
 ) -> anyhow::Result<PurgeSummary> {
     LinkPurgeService {
-        repository: PgMailboxSync::new(pool.clone()),
+        repository: PgMailboxSync::new(pool.clone(), crate::domain::models::UserProvider::Outlook),
     }
     .purge_link(link_id, pacing)
     .await
@@ -564,7 +564,7 @@ async fn purge_message_batch(
     limit: NonZeroU32,
 ) -> anyhow::Result<MessageBatch> {
     LinkPurgeService {
-        repository: PgMailboxSync::new(pool.clone()),
+        repository: PgMailboxSync::new(pool.clone(), crate::domain::models::UserProvider::Outlook),
     }
     .purge_message_batch(link_id, cursor, limit)
     .await

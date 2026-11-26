@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH locked AS MATERIALIZED (\n            SELECT id, completed, lease_until\n            FROM email_imap_connection_attempts\n            WHERE id = $1 AND user_id = $2\n            FOR UPDATE\n        )\n        UPDATE email_imap_connection_attempts a\n        SET lease_id = $3,\n            lease_until = now() + interval '5 minutes',\n            updated_at = now()\n        FROM locked\n        WHERE a.id = $1 AND a.id = locked.id\n            AND NOT locked.completed\n            AND (locked.lease_until IS NULL OR locked.lease_until <= now())\n        RETURNING EXTRACT(epoch FROM now() - a.created_at)::bigint AS \"age_seconds!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "age_seconds!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6a2936822f34f0b6749206cac3e98d3f9f2bd458243893b77f051135ec29f204"
+}

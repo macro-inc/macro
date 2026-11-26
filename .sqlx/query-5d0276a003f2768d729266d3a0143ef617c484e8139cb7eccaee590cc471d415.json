@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                stream_id,\n                attempts,\n                floor(EXTRACT(EPOCH FROM clock_timestamp() - created_at))::bigint AS \"age!\"\n            FROM\n                email_imap_host_catchup_deferred\n            WHERE\n                available_at <= now()\n            ORDER BY\n                available_at,\n                stream_id\n            LIMIT\n                $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "stream_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "age!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "5d0276a003f2768d729266d3a0143ef617c484e8139cb7eccaee590cc471d415"
+}

@@ -10,7 +10,9 @@ use email_service_client::EmailServiceClient;
 use email_service_client::get_recent_inbox_messages::{InboxWindow, RecentMailFolder};
 use entity_access::domain::ports::AccessRepository;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::message::RecentInboxMessage;
+use models_email::email::service::message::{
+    RecentInboxMessage, RecentInboxMessagesResponse, UnreadableMailboxReason,
+};
 use scheduled_action::domain::suggestions::ports::{InboxMessage, SuggestionSources, WorkModel};
 use uuid::Uuid;
 
@@ -46,7 +48,7 @@ where
             .email
             .get_recent_inbox_messages_with_snippets(user.as_ref(), limit, Some(SNIPPET_CHARS))
             .await?;
-        Ok(response.messages.into_iter().map(inbox_message).collect())
+        Ok(inbox_messages(response))
     }
 
     async fn inbox_window(
@@ -98,8 +100,41 @@ impl<S, Teams, Crm> HarnessSuggestionSources<S, Teams, Crm> {
             snippet_chars: SNIPPET_CHARS,
         };
         let response = self.email.get_inbox_window(user.as_ref(), window).await?;
-        Ok(response.messages.into_iter().map(inbox_message).collect())
+        Ok(inbox_messages(response))
     }
+}
+
+/// Preserve best-effort messages while recording why their context is partial.
+#[tracing::instrument(
+    name = "routine_suggestions.mail_context",
+    skip_all,
+    fields(
+        unreadable_mailbox_count,
+        unsupported_mailbox_count,
+        provider_error_mailbox_count
+    )
+)]
+fn inbox_messages(response: RecentInboxMessagesResponse) -> Vec<InboxMessage> {
+    let mut unsupported = 0i64;
+    let mut provider_error = 0i64;
+    for mailbox in &response.unreadable_mailboxes {
+        match mailbox.reason {
+            UnreadableMailboxReason::Unsupported => unsupported += 1,
+            UnreadableMailboxReason::ProviderError => provider_error += 1,
+        }
+    }
+    let span = tracing::Span::current();
+    span.record("unreadable_mailbox_count", unsupported + provider_error);
+    span.record("unsupported_mailbox_count", unsupported);
+    span.record("provider_error_mailbox_count", provider_error);
+    if provider_error > 0 {
+        tracing::warn!(
+            reason = ?UnreadableMailboxReason::ProviderError,
+            count = provider_error,
+            "routine suggestions use partial recent-mail context"
+        );
+    }
+    response.messages.into_iter().map(inbox_message).collect()
 }
 
 fn inbox_message(message: RecentInboxMessage) -> InboxMessage {

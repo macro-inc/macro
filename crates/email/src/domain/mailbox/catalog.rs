@@ -1,7 +1,9 @@
 //! One provider-neutral inbox catalog for connection and feature state.
 
 use super::*;
-use crate::domain::models::{EmailBackfillStatus, EmailSyncStatus};
+use crate::domain::models::{
+    EmailBackfillStatus, EmailSyncStatus, link::calendar_permission_required,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{
     link::{Link, UserProvider},
@@ -9,6 +11,8 @@ use models_email::service::{
 };
 
 pub struct InboxCatalogFacts {
+    pub mailbox_issue: Option<models_email::service::link::MailboxIssue>,
+    pub mailbox_retry_at: Option<chrono::DateTime<chrono::Utc>>,
     pub link: Link,
     pub settings: Settings,
     pub latest_backfill_status: Option<EmailBackfillStatus>,
@@ -60,28 +64,24 @@ impl<R: InboxCatalogRepository> InboxCatalogService<R> {
             .await?
             .into_iter()
             .map(|facts| {
-                let sync_status = EmailSyncStatus::derive(
+                let mut sync_status = EmailSyncStatus::derive(
                     facts.link.is_sync_active,
                     facts.link.needs_reauth,
                     facts.mailbox_unavailable,
                     facts.latest_backfill_status,
                 );
-                let has_calendar = match facts.link.provider {
-                    UserProvider::Gmail => {
-                        calendar_events::domain::models::GoogleScopeSet::from_scopes(
-                            facts.granted_scopes.clone(),
-                        )
-                        .has_calendar_capability()
-                    }
-                    UserProvider::Outlook => facts.granted_scopes.iter().any(|scope| {
-                        scope
-                            .rsplit('/')
-                            .next()
-                            .is_some_and(|scope| scope.eq_ignore_ascii_case("Calendars.ReadWrite"))
-                    }),
-                };
+                if facts.mailbox_issue.is_some()
+                    && facts.link.is_sync_active
+                    && !facts.link.needs_reauth
+                {
+                    sync_status = EmailSyncStatus::Error;
+                }
                 InboxCatalogEntry {
-                    needs_calendar_permission: facts.calendar_disabled || !has_calendar,
+                    needs_calendar_permission: calendar_permission_required(
+                        facts.link.provider,
+                        &facts.granted_scopes,
+                        facts.calendar_disabled,
+                    ),
                     sync_status,
                     facts,
                 }

@@ -23,6 +23,8 @@ pub enum AttachmentError {
     DeliveryConflict,
     #[error("{0}")]
     Invalid(&'static str),
+    #[error("This message is too large to open in Macro (over 25 MB).")]
+    ContentTooLarge,
     #[error("Attachment storage is temporarily unavailable")]
     Infrastructure,
     /// Another transaction held the inbox's rows past the lock timeout.
@@ -85,10 +87,7 @@ pub fn validate_attachment_edit(
     if facts.scheduled || !facts.generation_matches {
         return Err(AttachmentError::DeliveryConflict);
     }
-    let maximum = match facts.provider {
-        UserProvider::Gmail => 18_000_000,
-        UserProvider::Outlook => 150_000_000,
-    };
+    let maximum = u64::from(facts.provider.max_message_bytes());
     if added_bytes > 0 && facts.total_bytes.saturating_add(added_bytes) > maximum {
         return Err(AttachmentError::Invalid(
             "Combined attachment size exceeds this provider's upload limit",
@@ -210,7 +209,7 @@ impl<R: DraftAttachmentRepository, S: DraftAttachmentStorage, A: EntityAccessSer
         let provider = self.inbox(actor, link).await?;
         // Existing Gmail clients predate upload completion. Outlook and every
         // client supplying an idempotency key use the verified upload protocol.
-        let upload_pending = upload_id.is_some() || provider == UserProvider::Outlook;
+        let upload_pending = upload_id.is_some() || provider.uses_mailbox_framework();
         let id = upload_id.unwrap_or_else(macro_uuid::generate_uuid_v7);
         let attachment = AttachmentDraft {
             id,

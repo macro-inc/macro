@@ -44,6 +44,194 @@ acknowledgement and visibility renewal. Backfill's visibility heartbeat remains
 around its operation; link manager's visibility-renewal wrapper remains around
 each delivery. Those are transport lifecycles, distinct from domain retry policy.
 
+## IMAP integration
+
+The [private engine architecture](imap-engine.md) covers protocol, credential,
+connection ownership and deployment boundaries.
+
+IMAP uses the existing durable folder-stream, reconciliation, command, draft
+and projection workflows. Protocol workers bind `PgMailboxSync` to one provider:
+an Outlook gateway can never claim IMAP work. Projection uses one shared claimer
+across providers and routes attachment reads through `ProviderAttachmentBytes`
+using the current link provider. Gmail's legacy history ingestion stays separate.
+IMAP skips OAuth token acquisition,
+Graph watches, address-book streams and calendar grants. The engine posts committed
+change or credential-failure hints to `/internal/imap/notifications`; the domain
+ignores stale generations, wakes folder work, and records reconnect state once.
+Periodic polling recovers lost hints.
+
+The projection claim locks at most 64 due rows, then checks unfinished heads in
+a fresh READ COMMITTED statement. Within a link it orders events by thread, or
+by message when the event has no thread. Link-level event kinds have independent
+order. An event in backoff therefore preserves order for its own entity while
+other events, including reauthorization notices, can proceed. Within each
+entity, order by `(seq NULLS FIRST, id)`; locked and delayed predecessors block.
+Sequence allocation does not define the order of independent producer
+commits. The draining NULL-sequence cohort has only v7 IDs, which do not order
+different producers within a millisecond. Keep local blocking in
+`blocked_until` and real retry times in `available_at`. Finishes serialize
+per link and wake one successor for their entity
+in their transaction and again after commit to catch a concurrent insert. The
+post-commit wake is best effort: its failure is logged while the committed
+finish stays successful. A keyed quarantine wakes its successor after the
+quarantine commits. Wakes write only when clearing a deferral. New successor
+deferrals use a two- to three-minute jittered backstop if a wake is missed.
+A maintenance-only claim polls for more work immediately.
+Inactive work parks outside the due index. Catalog, folder/live streams and
+reconciliation use bounded 64-row due windows followed by a fresh-snapshot claim;
+independent folders and messages have no per-mailbox FIFO floor. Exact indexed
+eligibility includes the lease deadline, real due time and provider retry floor.
+Claim maintenance relabels legacy stream and reconciliation routing to match
+the link's provider. Sync claims take no fleet-wide advisory lock. Mutation
+claims serialize per provider. Outlook also takes the legacy advisory lock
+first so rolling binaries share the same serialization. Both take short
+parent locks only before parking candidates.
+
+Draft and command claims use provider-scoped indexed windows, never one probe
+per link. Drafts inspect at most 32 native and 32 legacy NULL-provider keys;
+commands use 32 native and 16 legacy keys to bound routing writes. Both limit keys
+before skipping held rows. New writers derive routing from the parent; bounded claim
+maintenance labels old NULL rows without a rollout backfill. Acquisition compares
+the copied provider and generation with the current parent, so routing metadata
+cannot authorize a different gateway. Exact finite CASE indexes include the real
+due time, live lease and separate local blocker. Terminal and resting work stay
+outside the due range; normal and uncertainty-recovery modes retain distinct
+partial predicates for generic plans. A maintained window reports Progress; only
+an empty window lets the worker sleep.
+The per-draft schedule recheck first limits a lookup by (link_id, message_id),
+then applies due/sent/processing eligibility outside that lookup. Time predicates
+cannot select a global schedule range under misleading due-time statistics.
+
+Mutation dependency checks run lazily over ordered locked IDs with a shared
+budget of 128 reserved probes per claim; the first eligible row stops the walk.
+Commands charge their target count, drafts charge their candidate scope's live
+lease count; early EXISTS exits may execute fewer probes than reserved. One
+loop bounds evaluation to two seconds, with a one-second database statement
+limit. A corrupt mutation is marked terminal within its claim transaction. The
+quarantine records only its work identity and a closed reason. Command overlay
+cleanup runs in the parked-work worker, in separate bounded, retryable pages.
+Commit is
+awaited separately so the evaluation timer cannot report a committed lease
+as an evaluation timeout; transport failures at commit can still be ambiguous. A 65-row count
+prefix identifies wide old-format commands, an explicit exception to the probe
+budget. They are evaluated alone and either leased or deferred for 60 seconds
+without rewriting orders or targets. Old
+writers and the default-off or failed flag path can still create these commands;
+this is a recurring cost until that enqueue path is retired, not a one-time
+deployment drain.
+
+Flagged new organization actions enqueue atomic chunks of at most 64 targets
+with one action ID (the first command ID). Disjoint chunks need no consecutive
+identity orders. The grouped receipt remains Pending until every chunk finishes,
+then Cancelled (including unknown) before Failed, otherwise Applied, preserving
+the single-command policy. An unrecognized terminal status fails decoding
+instead of reading as success. A terminal chunk from an older generation still
+contributes after reconnect. Email-service API and message-label writers share
+one snapshot of the default-off `enable-mailbox-action-chunks` flag; GraphQL
+polls the same `email-mailbox-actions` context. Agent-harness and ai_tools still write the legacy shape. Authorization remains
+in the action service.
+
+Overlapping-target command predecessors are found through a partial target index
+on copied parent link, generation and accepted order where the parent is
+unfinished. The database derives those index facts on insert and maintains them
+on parent terminal/generation changes, including writes from rolling binaries;
+nonterminal status transitions do not rewrite targets. The same transaction that
+installs the triggers fills only the existing unfinished backlog. Terminal
+receipts remain retained without backfilling their historical targets. Claims
+and wakes recheck the authoritative parent by primary key. Draft exclusion starts
+from a candidate draft's live-lease range by link, generation and expiry, capped
+at the remaining budget plus one sentinel. Each inspected lease probes only the
+(command_id, message_id) target key, independent of command width. A scope that
+exceeds the remaining budget waits for the next claim's fresh budget. If even
+128 probes cannot prove exclusion safe, a 60-second local deferral waits for
+orphaned leases to expire; it never changes real retries or leases. The span
+records overflow and the lease-count lower bound. Unleased commands can wait for
+draft synchronization without blocking it. No runtime target repair or legacy-history scan is needed.
+
+Drafts, autosaves and sends have no mailbox-wide FIFO. Their existing schedule
+and per-draft lease rules remain; editing or rescheduling re-arms a resting
+synced draft. Commands retain accepted-order FIFO only where unfinished commands
+share a target in the same generation. Delayed, leased and confirming predecessors
+still block, while terminal predecessors and unrelated targets do not. Parent
+ineligibility parks work for the shared sweep. Local dependency deferrals expire
+within 60 seconds, plus the ordinary worker poll and available database/service
+capacity; they never replace a real retry or lease floor. Fenced completion wakes
+bounded target successors only after commit, in key order with SKIP LOCKED. A failed best-effort
+wake leaves the committed result successful and the local deadline as backstop.
+A command with more than 64 targets can leave later targets to that backstop.
+The temporary NULL lanes/indexes retire only after an authorized zero check and
+old-writer review.
+
+An IMAP reconnect rebinds unresolved message commands to the new generation.
+The worker reads fresh provider flags, keywords and folder state before
+applying any difference. A target already in the intended state only needs
+confirmation. An unsettled move waits for the provider location to resolve.
+Compose and organization projection preserve agent correlation in the
+scheduled row and projection payload so delayed activity retains attribution.
+
+The parked-work recovery sweep visits parked links rather than their backlogs,
+using one next-link index probe per family and one shared cursor. Its 64-row
+page shares quota among projection, streams, reconciliation, drafts and commands,
+then borrows unused room once; this guarantees room for each family with at most
+ten bounded updates.
+New activation and recovery paths clear bounded pages immediately. If a
+probe exceeds its statement limit, its savepoint rolls back and the next
+attempt halves the link's row limit. A link that fails with a one-row quota
+waits for the next sweep. The cursor commits after each link probe. The
+two-second page deadline rolls back the outstanding probe only.
+Old-binary link changes converge through the five-minute sweep.
+
+The public IMAP API derives the mail address and owner from the authenticated
+session. The service checks provider conflicts, entitlement, and the expected
+reconnect link before the engine verifies the confirmed hosts. The reservation
+repeats those checks under its locks and owns an inactive provisional link
+before engine promotion.
+Interactive requests and recovery share a five-minute per-attempt nonce lease.
+Recovery locks one due attempt at a time through the indexed effective deadline,
+commits before the bounded engine RPC, and handles at most 32 attempts per cycle.
+A fresh reservation stays out of recovery for two minutes. Activation,
+abandonment and deferral require the live nonce; completed receipts remain
+replayable without probing credentials or recreating a disconnected inbox.
+Completed receipts live with their owning user for replay; they map to infinite
+eligibility and stay outside the finite-deadline recovery index.
+A lease miss is re-read: completed returns the receipt, in-flight is retryable.
+
+Transient failures defer by one quarter of the attempt's database age, clamped
+to one through 30 minutes. Proven invalid, forbidden, missing or changed engine
+attempts and credential rejection are terminal. Engine verification expiry
+rejects an unconsumed token while preserving consumed-token replay. An HTTP
+401 from internal authentication proves nothing about consumption: the client
+logs an auth failure distinctly and recovery defers it. Attempts still unresolved
+after 24 hours expire with a warning and an explicit span field. Each failure
+is settled independently, so an old poisoned prefix cannot hide healthy work.
+The reconnect retry-floor lookup keeps its original maximum over all IMAP streams.
+A partial `(link_id, generation, provider_retry_at)` index includes only IMAP
+rows with a retry time. The original query narrows through this index to
+the link, generation and future-wait range rather than scanning the stream
+table.
+No passwords or database connections are retained across engine IO. Gmail, Outlook and IMAP
+initialization serialize address collisions through the same advisory lock.
+
+`enable-imap-connections` is the single user-scoped IMAP enrollment flag for
+suggestion, discovery, verification and connection requests. Established IMAP
+sync and authorized sends, moves and deletes have no PostHog polling or runtime
+rollout snapshot. Ownership, active/reauth state, generation and lease fences,
+and explicit pause/disconnect/delete controls continue to apply. Uncertain send
+outcomes remain observable without resubmission. Outlook's rollout is separate.
+
+The IMAP gateway adapts the internal engine's stable message ids and journal
+positions to the mailbox ports. It decodes MIME, sanitizes HTML, exposes decoded
+attachments and calendar parts, and retains independent Sent provenance. Local
+versioned drafts use the existing coordinator, scheduled delivery and attachment
+materializer. Opaque upload capabilities contain the owning link id and are never
+fetched as user-supplied HTTP URLs. Disconnect records engine credential teardown
+as a prerequisite of local inbox purge.
+
+IMAP keywords have no independent server catalog, so Macro keeps their display
+names locally and writes assignments with the message command flow. Blocking a
+sender is a local intent: reconciliation chooses an existing Junk or Trash folder
+and atomically queues a recoverable move with ingestion, never permanent deletion.
+
 ## Queue workflows
 
 | Worker | Domain owner | Service adapter |
@@ -115,3 +303,25 @@ clean scan does not prove that every outbound helper is free of workflow policy.
 Review these workflows individually. Preserve codecs, row mapping and atomic SQL
 guards where they belong; move use-case decisions through domain ports with
 behavioral coverage.
+
+IMAP engine persistence stores folders, message metadata, remote locations, retained
+journal entries, drafts, draft attachments and uploads in indexed, link-scoped
+`imap_state_entries` rows. Account JSON contains only health and send admission
+counters. Individual message and draft operations load selected keys; initial
+folder scans use a message-id keyset and incremental scans use journal sequences.
+Differential saves update only changed loaded rows under the account lease and
+compare-and-swap revision. Health-only saves bypass the index rows entirely.
+Upload bytes use `bytea`. Full metadata hydration is
+restricted to two concurrent synchronization passes per engine instance.
+
+Organization writes fetch the current headers and flags for one UID, validate the
+observed version, and apply a conditional MODSEQ where supported. UIDPLUS COPYUID
+updates the exact destination locator after MOVE. When a server omits COPYUID, a
+zero-UID destination membership retains the logical identity until the next sync;
+reads and writes retry instead of issuing a command against an invented UID.
+
+Folder exclusions preserve the complete catalog, including role ancestry and
+retained messages. The provider's `syncEnabled` admission flag is persisted in
+`email_mailbox_folders.sync_enabled`; catalog commits create streams only for
+enabled folders and retire paused streams without queuing message rechecks.
+Re-enabling a folder creates a new stream while retaining its known messages.

@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            l.id,\n            l.sync_generation\n        FROM\n            email_links l\n            JOIN email_messages m ON m.link_id = l.id\n        WHERE\n            m.id = $1\n            AND m.thread_id = $2\n            AND l.id = ANY ($3)\n            AND l.provider IN ('OUTLOOK', 'IMAP')\n            AND ($4::text = l.macro_id\n                OR EXISTS (\n                    SELECT\n                        1\n                    FROM\n                        macro_user_links u\n                    WHERE\n                        u.link_id = l.id\n                        AND u.primary_macro_id = $4))\n            FOR SHARE OF l\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "c084a0ea281446a5e0f30cad39783d1f1156510a92ae22358d65c3b1e40e85dc"
+}

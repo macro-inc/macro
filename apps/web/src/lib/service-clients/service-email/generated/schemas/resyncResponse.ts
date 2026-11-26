@@ -4,6 +4,7 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ResyncResponseProviderRetryAt } from './resyncResponseProviderRetryAt';
 
 /**
  * The response returned from the resync endpoint.
@@ -14,4 +15,6 @@ export interface ResyncResponse {
   /** Opaque ID of the backfill job or provider sync stream driving the resync.
 the one already in progress. */
   backfill_job_id: string;
+  /** Provider pacing remains in force even when the owner requests a resync. */
+  provider_retry_at?: ResyncResponseProviderRetryAt;
 }

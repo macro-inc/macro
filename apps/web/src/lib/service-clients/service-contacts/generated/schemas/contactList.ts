@@ -19,4 +19,5 @@ export const ContactList = {
   invited: 'invited',
   gmail: 'gmail',
   outlook: 'outlook',
+  imap: 'imap',
 } as const;

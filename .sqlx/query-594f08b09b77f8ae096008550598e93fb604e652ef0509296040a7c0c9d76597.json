@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH owned AS MATERIALIZED (\n                SELECT\n                    id\n                FROM\n                    email_imap_host_catchup\n                WHERE\n                    id = 1\n                    AND lease_id = $1\n                    AND lease_until > clock_timestamp()\n                FOR UPDATE\n            ), candidate AS MATERIALIZED (\n                SELECT\n                    s.id,\n                    (\n                        l.is_sync_active\n                        AND NOT l.needs_reauth\n                        AND l.mailbox_unavailable_at IS NULL\n                        AND s.generation = l.sync_generation\n                        AND l.provider = 'IMAP'\n                    ) AS eligible\n                FROM\n                    email_sync_streams s\n                JOIN\n                    email_links l ON l.id = s.link_id\n                CROSS JOIN\n                    owned\n                WHERE\n                    s.id = $2\n                    AND s.provider = 'IMAP'\n                    AND s.kind IN ('folder_catalog', 'mail_folder')\n                FOR UPDATE OF s SKIP LOCKED\n                FOR KEY SHARE OF l SKIP LOCKED\n            ), updated AS (\n                UPDATE\n                    email_sync_streams s\n                SET\n                    notified_at = CASE\n                        WHEN c.eligible THEN clock_timestamp()\n                        ELSE s.notified_at\n                    END,\n                    notified_traceparent = CASE\n                        WHEN c.eligible THEN $4\n                        ELSE s.notified_traceparent\n                    END,\n                    notification_revision = CASE\n                        WHEN c.eligible AND $3 THEN s.notification_revision + 1\n                        ELSE s.notification_revision\n                    END,\n                    leased_notification_revision = CASE\n                        WHEN NOT c.eligible AND (s.lease_id IS NULL OR s.lease_until < now())\n                            THEN s.notification_revision\n                        ELSE s.leased_notification_revision\n                    END,\n                    next_run_at = CASE\n                        WHEN c.eligible THEN GREATEST(\n                            LEAST(s.next_run_at, clock_timestamp()),\n                            s.provider_retry_at\n                        )\n                        ELSE s.next_run_at\n                    END\n                FROM\n                    candidate c\n                WHERE\n                    s.id = c.id\n                    AND (\n                        (c.eligible AND ($3 OR s.next_run_at > GREATEST(clock_timestamp(), s.provider_retry_at)))\n                        OR (NOT c.eligible AND s.notification_revision > s.leased_notification_revision)\n                    )\n                RETURNING\n                    c.eligible AS woken\n            )\n            SELECT\n                (\n                    SELECT\n                        eligible\n                    FROM\n                        candidate\n                ) AS woken,\n                EXISTS (\n                    SELECT\n                        1\n                    FROM\n                        email_sync_streams\n                    WHERE\n                        id = $2\n                ) AS \"exists!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "woken",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "594f08b09b77f8ae096008550598e93fb604e652ef0509296040a7c0c9d76597"
+}

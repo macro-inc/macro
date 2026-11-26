@@ -10,7 +10,6 @@ import type { LocalDraft } from '../core/local-draft';
 import type { DraftFormAttachment } from '../primitives/email-form-state';
 
 export interface EmailInbox extends SenderInbox {
-  provider?: 'GMAIL' | 'OUTLOOK';
   settings: {
     signature?: string | null;
     signature_on_replies_forwards?: boolean | null;
@@ -262,7 +261,7 @@ export interface EmailDelivery {
   sendLocked?: (draftId: string | undefined) => boolean;
   /** Durable sends on their way; cancelled, failed and scheduled sends are excluded. */
   outgoing?: () => OutgoingEmail[];
-  /** Reports each change until the send is sent, fails, is cancelled, or leaves this device. */
+  /** Emits only changed progress and stops after a final outcome or when the send leaves this device. */
   watchSend?(
     sendAttemptId: string,
     changed: (progress: EmailSendProgress) => void

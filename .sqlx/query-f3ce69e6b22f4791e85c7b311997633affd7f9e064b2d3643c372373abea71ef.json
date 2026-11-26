@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH parent AS MATERIALIZED (\n            SELECT sync_generation FROM email_links\n            WHERE id = $1 AND is_sync_active AND NOT needs_reauth\n                AND mailbox_unavailable_at IS NULL\n        ), parked AS MATERIALIZED (\n            SELECT q.link_id, q.generation, q.provider_id\n            FROM parent p JOIN email_message_reconciliation q\n                ON q.link_id = $1 AND q.generation = p.sync_generation\n            WHERE q.parked_at IS NOT NULL\n            ORDER BY q.provider_id LIMIT $2 FOR UPDATE OF q SKIP LOCKED\n        )\n        UPDATE email_message_reconciliation q SET parked_at = NULL\n        FROM parked p WHERE (q.link_id, q.generation, q.provider_id) =\n            (p.link_id, p.generation, p.provider_id)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f3ce69e6b22f4791e85c7b311997633affd7f9e064b2d3643c372373abea71ef"
+}

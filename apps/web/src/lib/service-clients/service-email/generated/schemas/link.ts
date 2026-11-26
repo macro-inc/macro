@@ -4,6 +4,8 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+import type { LinkMailboxIssue } from './linkMailboxIssue';
+import type { LinkMailboxRetryAt } from './linkMailboxRetryAt';
 import type { LinkPhotoUrl } from './linkPhotoUrl';
 import type { Settings } from './settings';
 import type { SyncStatus } from './syncStatus';
@@ -28,6 +30,9 @@ that no longer recognizes an older grant. */
   is_primary: boolean;
   is_sync_active: boolean;
   macro_id: string;
+  mailbox_issue?: LinkMailboxIssue;
+  /** Next automatic retry for a paused mailbox sync. */
+  mailbox_retry_at?: LinkMailboxRetryAt;
   /** Whether the link's Google grant is missing the calendar scope. True for
 inboxes connected before the calendar capability existed (and for
 grants where the user declined it); drives the per-inbox calendar

@@ -11,4 +11,5 @@ export type UserProvider = (typeof UserProvider)[keyof typeof UserProvider];
 export const UserProvider = {
   GMAIL: 'GMAIL',
   OUTLOOK: 'OUTLOOK',
+  IMAP: 'IMAP',
 } as const;

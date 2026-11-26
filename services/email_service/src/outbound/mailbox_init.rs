@@ -59,6 +59,38 @@ pub async fn lock_gmail_connection(
     .fetch_one(&mut *conn)
     .await
     .map_err(unavailable)?;
+    sqlx::query!(
+        r#"
+        SELECT
+            1 AS locked
+        FROM
+            pg_advisory_xact_lock(hashtextextended($1, 0))
+        "#,
+        address.to_ascii_lowercase(),
+    )
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(unavailable)?;
+    let conflicting = sqlx::query_scalar!(
+        r#"
+        SELECT
+            EXISTS (
+                SELECT
+                    1
+                FROM
+                    email_links
+                WHERE
+                    lower(email_address) = lower($1)
+                    AND provider <> 'GMAIL') AS "conflict!"
+        "#,
+        address,
+    )
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(unavailable)?;
+    if conflicting {
+        return Err(InitializationError::IdentityConflict);
+    }
     let facts=sqlx::query!(r#"SELECT
         EXISTS(SELECT 1 FROM "RolesOnUsers" ru JOIN "RolesOnPermissions" rp ON rp."roleId"=ru."roleId"
             WHERE ru."userId"=$1 AND rp."permissionId"='read:professional_features') AS "professional!",
@@ -93,6 +125,26 @@ async fn snapshot(
     request: &InitializeMailbox,
     grant: &VerifiedMailboxGrant,
 ) -> Result<InitializationSnapshot, InitializationError> {
+    let conflicting = sqlx::query_scalar!(
+        r#"
+        SELECT
+            EXISTS (
+                SELECT
+                    1
+                FROM
+                    email_links
+                WHERE
+                    lower(email_address) = lower($1)
+                    AND provider <> 'OUTLOOK') AS "conflict!"
+        "#,
+        grant.email,
+    )
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(unavailable)?;
+    if conflicting {
+        return Err(InitializationError::IdentityConflict);
+    }
     let row = sqlx::query!(r#"
         SELECT l.id,l.macro_id,l.grant_id,l.grant_generation,l.sync_generation,
             l.provider_tenant_id,l.provider_mailbox_id,
@@ -223,8 +275,13 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         .await
         .map_err(unavailable)?;
         sqlx::query!(
-            "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1,0))",
-            grant.email
+            r#"
+            SELECT
+                1 AS locked
+            FROM
+                pg_advisory_xact_lock(hashtextextended($1, 0))
+            "#,
+            grant.email.to_ascii_lowercase(),
         )
         .fetch_one(&mut *tx)
         .await
@@ -238,13 +295,16 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         }
         let consumed = sqlx::query!(
             r#"
-            DELETE FROM in_progress_user_link WHERE id = $1 AND macro_user_id = $2
-                AND email_provider = 'OUTLOOK' AND linked_email = $3
+            DELETE FROM in_progress_user_link
+            WHERE id = $1
+                AND macro_user_id = $2
+                AND email_provider = 'OUTLOOK'
+                AND linked_email = $3
                 AND created_at > now() - interval '24 hours'
-        "#,
+            "#,
             request.attempt,
             request.actor_fusion_id,
-            grant.email
+            grant.email.to_ascii_lowercase(),
         )
         .execute(&mut *tx)
         .await
@@ -339,14 +399,24 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
             RETURNING l.sync_generation,previous.mailbox_unavailable_at IS NOT NULL AS "had_no_mailbox!"
         "#,link_id,grant.id,grant.generation,grant.owner.to_string(),grant.email,restart,current.existing.is_some())
             .fetch_one(&mut *tx).await.map_err(unavailable)?;
+        email::outbound::mailbox_pg::parked_work_recovery::unpark_link_page(&mut tx, link_id, 64)
+            .await
+            .map_err(unavailable)?;
         if link.had_no_mailbox && !restart {
             // The same grant, so no new generation resets the work the mark
-            // held: make it due at once, as the catalog commit that finds the
-            // mailbox does.
+            // held: wake it without moving earlier than a provider retry floor,
+            // as the catalog commit that finds the mailbox does.
             sqlx::query!(
-                "UPDATE email_sync_streams SET next_run_at = now() WHERE link_id = $1 AND generation = $2 AND next_run_at > now()",
+                r#"
+                UPDATE
+                    email_sync_streams
+                SET
+                    next_run_at = GREATEST(now(), provider_retry_at)
+                WHERE
+                    link_id = $1 AND generation = $2 AND next_run_at > now()
+                "#,
                 link_id,
-                link.sync_generation
+                link.sync_generation,
             )
             .execute(&mut *tx)
             .await
@@ -465,6 +535,7 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         if restart {
             email::domain::mailbox::progress::log_import_started(link_id, link.sync_generation);
         }
+        email::outbound::mailbox_pg::parked_work_recovery::resume_link(&self.0, link_id).await;
         Ok(link_id)
     }
 }

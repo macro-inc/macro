@@ -29,7 +29,7 @@ async fn removing_category_is_durable_and_foreign_inbox_cannot_queue_cleanup(db:
         .unwrap()
         .unwrap();
     assert_eq!(lease.resource, "Projects");
-    assert_eq!(lease.kind, "delete_label");
+    assert_eq!(lease.kind, SettingsWorkKind::DeleteLabel);
     assert!(
         repo.claim_settings(Uuid::now_v7(), true, true)
             .await
@@ -218,7 +218,7 @@ async fn category_creation_is_durable_paused_and_fenced_by_deletion(db: PgPool) 
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(create.kind, "create_label");
+    assert_eq!(create.kind, SettingsWorkKind::CreateLabel);
     assert_eq!(create.revision, 1);
     repo.delete_label(&actor(), link, label.id.unwrap())
         .await
@@ -250,7 +250,7 @@ async fn category_creation_is_durable_paused_and_fenced_by_deletion(db: PgPool) 
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(delete.kind, "delete_label");
+    assert_eq!(delete.kind, SettingsWorkKind::DeleteLabel);
     repo.finish_settings(&delete, true, 0, None).await.unwrap();
     let recreated = repo
         .queue_label_creation(&actor(), mailbox, "New category")
@@ -285,7 +285,7 @@ async fn catalog_refresh_keeps_optimistic_category_until_creation_finishes(db: P
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(catalog.kind, "catalog");
+    assert_eq!(catalog.kind, SettingsWorkKind::Catalog);
     repo.commit_labels(&catalog, &[]).await.unwrap();
     assert!(
         sqlx::query!("SELECT id FROM email_labels WHERE id=$1", label.id)

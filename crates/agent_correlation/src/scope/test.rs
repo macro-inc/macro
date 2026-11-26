@@ -178,6 +178,9 @@ fn a_run_that_sends_nothing_reaches_nobody() {
         ("POST", "/email/drafts"),
         ("POST", "/dss/search"),
         ("PATCH", "/email/threads/01a1/archived"),
+        ("PATCH", "/email/links/01a1/imap/settings"),
+        // Route authentication still requires an internal service credential.
+        ("POST", "/internal/imap/notifications"),
         // Presenting a review asks the person; removing a queued prompt
         // starts nothing.
         ("POST", "/agent-harness/agent-sessions/01a1/reviews"),
@@ -187,6 +190,9 @@ fn a_run_that_sends_nothing_reaches_nobody() {
     }
     for (method, path) in [
         ("POST", "/email/messages"),
+        ("POST", "/email/links/imap"),
+        ("POST", "/email/links/imap/discover"),
+        ("POST", "/email/v1/email/links/imap/discover"),
         ("POST", "/cognition/email/send-confirmed"),
         // Booking changes the guest or host hears of.
         ("POST", "/calendar/scheduling/bookings/01a1/approve"),

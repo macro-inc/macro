@@ -27,6 +27,14 @@ pub(crate) fn settings_error(
     error: email::domain::mailbox::MailboxError,
 ) -> axum::response::Response {
     use axum::response::IntoResponse;
+    if matches!(
+        &error,
+        email::domain::mailbox::MailboxError::Provider(
+            email_api_client::domain::models::EmailApiError::ContentTooLarge
+        )
+    ) {
+        return super::provider_error::ContentTooLargeResponse::default().into_response();
+    }
     let (status, headers) = match &error {
         email::domain::mailbox::MailboxError::InvalidInput(_) => {
             (axum::http::StatusCode::BAD_REQUEST, Default::default())

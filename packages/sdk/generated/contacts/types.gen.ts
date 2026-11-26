@@ -19,7 +19,7 @@ export type AddContactRequest = {
  * in at least one of the owner's lists. The key (`as_ref`, parsed back with
  * `FromStr`, and the same in serde) is what storage and clients see.
  */
-export type ContactList = 'teammates' | 'interacted' | 'invited' | 'gmail' | 'outlook';
+export type ContactList = 'teammates' | 'interacted' | 'invited' | 'gmail' | 'outlook' | 'imap';
 
 /**
  * Response body for GET /contacts.
@@ -54,7 +54,7 @@ export type SearchPeopleResponse = {
      * Matches ranked by group, then prefix matches, then by name or email.
      * Teammates come first. For a viewer on the list-aware directory,
      * `interacted` and `invited` people come next, then `gmail` and
-     * `outlook` contacts.
+     * `outlook` and `imap` contacts.
      */
     people: Array<SearchedPerson>;
 };
@@ -73,7 +73,7 @@ export type SearchedPerson = {
     isTeammate: boolean;
     /**
      * The keys of the viewer's contact lists the person is in (`teammates`,
-     * `interacted`, `invited`, `gmail`, `outlook`; more may be added). Empty
+     * `interacted`, `invited`, `gmail`, `outlook`, `imap`; more may be added). Empty
      * for the viewer and for a contact only the legacy directory knows.
      */
     lists: Array<string>;

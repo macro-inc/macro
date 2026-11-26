@@ -41,13 +41,19 @@ async fn a_confirmed_outlook_send_is_in_sent_before_the_provider_copy_syncs(db: 
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let mut cp = checkpoint(&lease, DraftStage::Confirming);
     cp.draft.as_mut().unwrap().is_draft = false;
     sync.confirm_sent(&lease, &cp).await.unwrap();
     assert_eq!(sent_threads(&repo, link).await, vec![input.thread_db_id]);
 
-    let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let work = sync
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let mut remote = snapshot(link, "a", MailboxState::default(), "v2");
     remote.content.message.is_sent = true;
     sync.ingest(&work, remote).await.unwrap();
@@ -79,6 +85,7 @@ async fn an_old_outlook_draft_sorts_in_sent_by_when_it_was_sent(db: PgPool) {
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let mut cp = checkpoint(&lease, DraftStage::Confirming);
     cp.draft.as_mut().unwrap().is_draft = false;

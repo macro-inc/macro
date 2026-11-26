@@ -12,6 +12,10 @@ pub struct AttachmentApiError(#[from] pub AttachmentError);
 impl IntoResponse for AttachmentApiError {
     fn into_response(self) -> Response {
         let status = match &self.0 {
+            AttachmentError::ContentTooLarge => {
+                return crate::api::email::provider_error::ContentTooLargeResponse::default()
+                    .into_response();
+            }
             AttachmentError::NotFound => StatusCode::NOT_FOUND,
             AttachmentError::Forbidden => StatusCode::FORBIDDEN,
             AttachmentError::DeliveryConflict => StatusCode::CONFLICT,

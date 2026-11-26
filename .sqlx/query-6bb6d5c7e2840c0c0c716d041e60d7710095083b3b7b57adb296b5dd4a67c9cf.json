@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM\n                email_imap_host_catchup_deferred\n            WHERE\n                stream_id = ANY($1)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6bb6d5c7e2840c0c0c716d041e60d7710095083b3b7b57adb296b5dd4a67c9cf"
+}

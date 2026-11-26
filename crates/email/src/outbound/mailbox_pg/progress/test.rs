@@ -1,5 +1,7 @@
 use super::*;
 use crate::domain::mailbox::progress::MailboxProgressService;
+use crate::domain::mailbox::projection::ProjectionClaim;
+use crate::domain::mailbox::projection::{MailboxProjectionRepository, ProjectionEvent};
 use crate::telemetry_capture::Telemetry;
 use email_api_client::domain::models::{
     EmailApiError, GateLimit, MailFolderCatalog, MailboxMessage, RateLimitOrigin, RoundStart,
@@ -144,6 +146,22 @@ async fn import_completes_once_when_its_last_import_row_settles(db: PgPool) {
     assert_eq!(reconciled[0]["outlook.is_import"], "true");
     assert_eq!(reconciled[0]["outlook.attempts"], "1");
     assert_eq!(reconciled[0]["outlook.graph_calls"], "2");
+    let ProjectionClaim::Acquired(completion) = repo
+        .claim_projection(macro_uuid::generate_uuid_v7())
+        .await
+        .unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
+    assert!(matches!(completion.event, ProjectionEvent::ImportCompleted));
+    assert_eq!(completion.mailbox.link_id, link);
+    assert!(completion.from_current_generation);
+    assert!(matches!(
+        repo.claim_projection(macro_uuid::generate_uuid_v7())
+            .await
+            .unwrap(),
+        ProjectionClaim::Idle | ProjectionClaim::Progress
+    ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -160,6 +178,60 @@ async fn workers_finishing_the_last_rows_together_report_one_completion(db: PgPo
 
     assert!(a.unwrap() && b.unwrap());
     assert_eq!(telemetry.events("outlook import completed").len(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_empty_import_persists_one_completion_and_rolls_it_back_with_the_import(db: PgPool) {
+    let (repo, link) = enumerated_mailbox(&db).await;
+    let mailbox = MailboxKey {
+        link_id: link,
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    let mut tx = db.begin().await.unwrap();
+    assert!(
+        PgMailboxSync::settle_import(&mut tx, mailbox)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    tx.rollback().await.unwrap();
+    assert!(matches!(
+        repo.claim_projection(macro_uuid::generate_uuid_v7())
+            .await
+            .unwrap(),
+        ProjectionClaim::Idle | ProjectionClaim::Progress
+    ));
+
+    let mut tx = db.begin().await.unwrap();
+    assert!(
+        PgMailboxSync::settle_import(&mut tx, mailbox)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        PgMailboxSync::settle_import(&mut tx, mailbox)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    tx.commit().await.unwrap();
+    let ProjectionClaim::Acquired(completion) = repo
+        .claim_projection(macro_uuid::generate_uuid_v7())
+        .await
+        .unwrap()
+    else {
+        panic!("expected a projection lease");
+    };
+    assert!(matches!(completion.event, ProjectionEvent::ImportCompleted));
+    assert_eq!(completion.mailbox.link_id, link);
+    assert!(matches!(
+        repo.claim_projection(macro_uuid::generate_uuid_v7())
+            .await
+            .unwrap(),
+        ProjectionClaim::Idle | ProjectionClaim::Progress
+    ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -352,6 +424,13 @@ async fn persistence_errors_name_their_sqlstate(db: PgPool) {
 struct PendingUpload(Uuid);
 
 impl crate::domain::mailbox::projection::MailboxProjectionEffects for PendingUpload {
+    async fn import_completed(
+        &self,
+        link: Uuid,
+        viewers: &std::collections::HashSet<macro_user_id::user_id::MacroUserIdStr<'static>>,
+    ) -> Result<(), MailboxError> {
+        self.refresh(link, viewers).await
+    }
     async fn publish(&self, _: crate::domain::events::EmailMacroEvent) -> Result<(), MailboxError> {
         Ok(())
     }
@@ -584,22 +663,24 @@ async fn health_snapshot_counts_the_current_queue_streams_and_recent_imports(db:
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_folder_line_counts_what_a_claim_could_take_with_the_longest_wait(db: PgPool) {
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     let active = outlook_link(&db, "active@example.com", true, false).await;
     let paused = outlook_link(&db, "paused@example.com", true, true).await;
     sqlx::query!(
-        r#"INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,next_run_at,lease_id,lease_until)
-        SELECT gen_random_uuid(), link_id, generation, kind, scope_id, initial_complete, now() - make_interval(secs => due_seconds_ago), lease_id, lease_until
+        r#"INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,next_run_at,lease_id,lease_until,provider_retry_at,parked_at)
+        SELECT gen_random_uuid(), link_id, generation, kind, scope_id, initial_complete, now() - make_interval(secs => due_seconds_ago), lease_id, lease_until, provider_retry_at, parked_at
         FROM (VALUES
-            ($1::uuid, 1::bigint, 'mail_folder', 'polled long ago', true, 300.0::float8, NULL::uuid, NULL::timestamptz),
-            ($1, 1, 'mail_folder', 'polled lately', true, 60.0, NULL, NULL),
-            ($1, 1, 'mail_folder', 'not due', true, -60.0, NULL, NULL),
-            ($1, 1, 'mail_folder', 'claimed', true, 900.0, $3, now() + interval '1 minute'),
-            ($1, 1, 'mail_folder', 'importing', false, 30.0, NULL, NULL),
-            ($1, 0, 'mail_folder', 'older generation', true, 3600.0, NULL, NULL),
-            ($1, 1, 'contacts', 'contacts', true, 3600.0, NULL, NULL),
-            ($2, 1, 'mail_folder', 'needs reauthorization', false, 3600.0, NULL, NULL)
-        ) AS streams(link_id, generation, kind, scope_id, initial_complete, due_seconds_ago, lease_id, lease_until)"#,
+            ($1::uuid, 1::bigint, 'mail_folder', 'polled long ago', true, 300.0::float8, NULL::uuid, NULL::timestamptz, now() - interval '75 seconds', NULL::timestamptz),
+            ($1, 1, 'mail_folder', 'polled lately', true, 60.0, NULL, NULL, NULL, NULL),
+            ($1, 1, 'mail_folder', 'not due', true, -60.0, NULL, NULL, NULL, NULL),
+            ($1, 1, 'mail_folder', 'claimed', true, 900.0, $3, now() + interval '1 minute', NULL, NULL),
+            ($1, 1, 'mail_folder', 'retry deferred', true, 900.0, NULL, NULL, now() + interval '1 minute', NULL),
+            ($1, 1, 'mail_folder', 'parked', false, 900.0, NULL, NULL, NULL, now()),
+            ($1, 1, 'mail_folder', 'importing', false, 30.0, NULL, NULL, NULL, NULL),
+            ($1, 0, 'mail_folder', 'older generation', true, 3600.0, NULL, NULL, NULL, NULL),
+            ($1, 1, 'contacts', 'contacts', true, 3600.0, NULL, NULL, NULL, NULL),
+            ($2, 1, 'mail_folder', 'needs reauthorization', false, 3600.0, NULL, NULL, NULL, NULL)
+        ) AS streams(link_id, generation, kind, scope_id, initial_complete, due_seconds_ago, lease_id, lease_until, provider_retry_at, parked_at)"#,
         active,
         paused,
         macro_uuid::generate_uuid_v7()
@@ -612,7 +693,7 @@ async fn the_folder_line_counts_what_a_claim_could_take_with_the_longest_wait(db
 
     assert_eq!((line.polls_due, line.import_rounds_due), (2, 1), "{line:?}");
     assert!(
-        (300..=302).contains(&line.oldest_poll_due_seconds),
+        (75..=77).contains(&line.oldest_poll_due_seconds),
         "{line:?}"
     );
     assert!(

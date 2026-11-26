@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_mailbox_folders (link_id, provider_id, display_name, role, catalog_generation)\n        VALUES ($1, 'folder', 'Inbox', 'inbox', 1), ($1, 'archive', 'Archive', 'archive', 1)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6a2e10db3d356bd7fce5566d459484a8891039b42c7274785bc66a54df7ea92f"
+}

@@ -59,6 +59,14 @@ Outlook (Microsoft Graph) outbound adapters.
 
 ## Gotchas
 
+- Treat `SendRejected` as definite non-submission, including an explicit typed
+  connection failure before any message-body byte. Never derive it from a generic HTTP outage,
+  timeout, malformed success or a negative acknowledgment after DATA.
+
+- `SendRequest::build_mime` accepts stored bracketed or bare reply/reference IDs
+  and removes their surrounding pair before mail-builder supplies RFC delimiters;
+  keep the stable outgoing Message-ID contract bare.
+
 - The Microsoft gate's `Import` budget stops below the shared limits (two of
   the three slots, 7,500 of the 9,000 window), so an import never takes the
   last slot or the window's tail from calendar and live sync. A refused import
@@ -222,6 +230,8 @@ Outlook (Microsoft Graph) outbound adapters.
 - Same-mailbox Outlook replies use `createReply`. When Graph refuses it with
   400 `ErrorInvalidOperation`, `create_draft` creates a standalone draft that
   carries the same correlation and RFC reply headers.
+- Keep `ContentTooLarge` distinct from transient provider faults and expose a
+  coded 413 at public download boundaries.
 
 ## Related
 

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO imap_state_entries (link_id, kind, key, folder_id, message_id, document)\n        SELECT\n            $1,\n            'location',\n            'inbox:1:' || n,\n            'inbox',\n            'm:' || lpad(n::text, 6, '0'),\n            jsonb_build_object(\n                'folder_id', 'inbox',\n                'uid_validity', 1,\n                'uid', n,\n                'message_id', 'm:' || lpad(n::text, 6, '0'),\n                'fingerprint', 'fp:' || n\n            )\n        FROM\n            generate_series(1, 100000) n\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9ca507561713cb75d608e29fb670f8c9de6552f48daf4f24acbb829db4988471"
+}

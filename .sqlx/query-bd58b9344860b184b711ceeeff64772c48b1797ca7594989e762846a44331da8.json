@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH eligible AS (\n                SELECT s.initial_complete,\n                    GREATEST(s.next_run_at,\n                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),\n                        COALESCE(s.lease_until, '-infinity'::timestamptz)) AS due_at\n                FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id\n                WHERE s.kind = 'mail_folder' AND s.parked_at IS NULL\n                    AND s.provider = $1::text::email_user_provider_enum\n                    AND l.provider = s.provider AND l.sync_generation = s.generation\n                    AND l.is_sync_active AND NOT l.needs_reauth AND l.mailbox_unavailable_at IS NULL\n            )\n            SELECT count(*) FILTER (WHERE initial_complete) AS \"polls_due!\",\n                COALESCE(floor(EXTRACT(EPOCH FROM now() - min(due_at) FILTER (WHERE initial_complete))), 0)::bigint AS \"oldest_poll_due_seconds!\",\n                count(*) FILTER (WHERE NOT initial_complete) AS \"import_rounds_due!\",\n                COALESCE(floor(EXTRACT(EPOCH FROM now() - min(due_at) FILTER (WHERE NOT initial_complete))), 0)::bigint AS \"oldest_import_round_due_seconds!\"\n            FROM eligible\n            WHERE due_at <= now()\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "polls_due!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "oldest_poll_due_seconds!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "import_rounds_due!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "oldest_import_round_due_seconds!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "bd58b9344860b184b711ceeeff64772c48b1797ca7594989e762846a44331da8"
+}

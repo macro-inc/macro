@@ -1,6 +1,26 @@
-//! Which due folder stream a sync loop's turn claims.
+//! Claims of due mailbox work: a bounded window can make progress without a
+//! lease (`SyncClaim`), and which due folder stream a sync loop's turn takes
+//! (`StreamClaim`).
 
 use std::sync::atomic::{AtomicU32, Ordering};
+
+#[derive(Debug)]
+pub enum SyncClaim<T> {
+    Acquired(T),
+    Progress,
+    Idle,
+}
+
+impl<T> SyncClaim<T> {
+    /// Extract the lease when inspecting a single claim; runners must distinguish
+    /// Progress from Idle so maintenance never inserts an idle sleep.
+    pub fn into_lease(self) -> Option<T> {
+        match self {
+            Self::Acquired(lease) => Some(lease),
+            Self::Progress | Self::Idle => None,
+        }
+    }
+}
 
 /// Which due folder stream a claim takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

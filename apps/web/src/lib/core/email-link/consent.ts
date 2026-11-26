@@ -10,7 +10,10 @@ type CalendarAccess = Pick<
 >;
 
 /** Repair the capabilities an inbox used before its Google grant expired. */
-export function reconnectScopes(link: CalendarAccess): ConsentScopes {
+export function reconnectScopes(
+  link: CalendarAccess & Partial<Pick<Link, 'provider'>>
+): ConsentScopes {
+  if (link.provider === 'IMAP') return 'gmail';
   return !link.calendar_disabled &&
     (!link.needs_calendar_permission || link.has_calendar_data)
     ? 'gmail_and_calendar'

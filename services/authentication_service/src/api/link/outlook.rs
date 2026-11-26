@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use feature_flags::FeatureFlags;
 use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use macro_middleware::tracking::ClientIp;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -186,6 +187,8 @@ fn map_domain_error(error: MicrosoftAuthError) -> InitOutlookLinkError {
 #[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct EmailConnectionProviders {
     pub gmail: bool,
+    /// Whether the user may connect a mailbox with IMAP and SMTP.
+    pub imap: bool,
     /// Whether this user may start a new Outlook connection: the deployment
     /// switch and their `enable-outlook` flag.
     pub outlook: bool,
@@ -234,6 +237,7 @@ pub async fn email_connection_providers(
             &authorization.authorization.user.macro_user_id,
             original_url,
             ctx.calendar_scope_enabled,
+            ctx.email_connection_flags.as_ref(),
         )
         .await,
     ))
@@ -244,6 +248,7 @@ async fn connection_providers(
     user: &MacroUserIdStr<'_>,
     original_url: Option<Url>,
     calendar_scope_enabled: bool,
+    flags: Option<&impl FeatureFlags>,
 ) -> EmailConnectionProviders {
     // The consent URL is an optional extra; a failure to sign it must not hide
     // which providers are available. It stays independent of the flag: an
@@ -261,13 +266,30 @@ async fn connection_providers(
             .ok(),
         _ => None,
     };
-    let outlook = match microsoft_auth {
-        Some(service) => service.new_connections_enabled(user).await,
-        None => false,
-    };
+    let (outlook, imap) = tokio::join!(
+        async {
+            match microsoft_auth {
+                Some(service) => service.new_connections_enabled(user).await,
+                None => false,
+            }
+        },
+        async {
+            match flags {
+                Some(flags) => flags
+                    .load(user)
+                    .await
+                    .inspect_err(|_| tracing::warn!("IMAP connection rollout unavailable"))
+                    .is_ok_and(|snapshot| {
+                        snapshot.is_enabled(models_email::service::link::IMAP_CONNECTIONS_FLAG)
+                    }),
+                None => false,
+            }
+        }
+    );
     EmailConnectionProviders {
         gmail: true,
         outlook,
+        imap,
         outlook_admin_consent_url,
     }
 }

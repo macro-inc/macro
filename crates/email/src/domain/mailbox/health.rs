@@ -1,7 +1,7 @@
 //! Authorized inbox health checks and provider-specific maintenance scheduling.
 
 use super::*;
-use email_api_client::domain::models::{AccessToken, TokenFreshness};
+use email_api_client::domain::models::TokenFreshness;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::link::{Link, UserProvider};
 
@@ -34,7 +34,7 @@ pub trait InboxHealthGateway: Send + Sync + 'static {
         &self,
         binding: &InboxHealthBinding,
         freshness: TokenFreshness,
-    ) -> impl Future<Output = Result<AccessToken, EmailApiError>> + Send;
+    ) -> impl Future<Output = Result<(), EmailApiError>> + Send;
     fn renew_gmail_watch(
         &self,
         link: &Link,
@@ -105,7 +105,9 @@ impl<R: InboxHealthRepository, G: InboxHealthGateway> InboxHealthService<R, G> {
                 self.renew_gmail_watch(&binding.link).await?;
                 self.gateway.sync_gmail_contacts(&binding.link).await
             }
-            UserProvider::Outlook => self.repository.wake_streams(binding).await,
+            UserProvider::Outlook | UserProvider::Imap => {
+                self.repository.wake_streams(binding).await
+            }
         }
     }
 

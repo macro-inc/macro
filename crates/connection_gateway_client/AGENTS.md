@@ -48,3 +48,5 @@ connected users.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/observability.md`
+
+- Keep email refresh payloads and viewer addresses out of trace attributes.

@@ -193,6 +193,37 @@ pub async fn run_drafts<R, G, M>(
     }
 }
 
+/// Recover parked links independently of provider sync and startup catch-up.
+pub async fn run_parked_work_recovery<R>(
+    service: email::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryService<R>,
+    cancellation: CancellationToken,
+) where
+    R: email::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository,
+{
+    loop {
+        let result = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return,
+            result = service.tick(64) => result,
+        };
+        let progressing = match result {
+            Ok(Some(page)) => !page.complete,
+            Ok(None) => false,
+            Err(error) => {
+                tracing::warn!(?error, "parked mailbox work recovery page deferred");
+                false
+            }
+        };
+        if !progressing {
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => return,
+                _ = tokio::time::sleep(Duration::from_secs(5)) => {},
+            }
+        }
+    }
+}
+
 /// Run downstream projections independently so slow uploads do not hold sync pages.
 pub async fn run_projections<R, E>(
     service: email::domain::mailbox::projection::MailboxProjectionService<R, E>,
@@ -201,12 +232,17 @@ pub async fn run_projections<R, E>(
     R: email::domain::mailbox::projection::MailboxProjectionRepository,
     E: email::domain::mailbox::projection::MailboxProjectionEffects,
 {
+    use email::domain::mailbox::projection::ProjectionTick;
     loop {
-        let worked = tokio::select! {
+        let tick = tokio::select! {
             biased;
             _ = cancellation.cancelled() => return,
-            result = service.project_once() => reported(result),
+            result = service.project_once() => result,
         };
+        let worked = reported(tick.map(|tick| match tick {
+            ProjectionTick::Projected | ProjectionTick::Progress => true,
+            ProjectionTick::Idle => false,
+        }));
         if !worked {
             tokio::select! {
                 biased;

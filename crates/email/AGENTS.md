@@ -8,6 +8,15 @@ tools — hexagonal, heavily feature-gated.
 
 ## Start here
 
+- `domain/mailbox/imap_connection.rs`: verified-address IMAP connection policy,
+  durable promotion recovery and enrollment; its ports keep credentials and SQL
+  outside the email domain. Provider-bound repositories isolate IMAP and
+  Outlook work without a shared rollout snapshot.
+
+- Durable send failures retain the compatible `send_rejected` code and an
+  optional typed checkpoint/status reason. Persist that fact before settlement
+  so recovery fails without another submit; legacy checkpoints have no inferred reason.
+
 - `src/domain/service.rs` + `src/domain/ports.rs`: the domain service and the
   traits its adapters implement.
 - `src/domain/message_reads.rs` (feature `mailbox`): synced message/thread
@@ -90,7 +99,8 @@ tools — hexagonal, heavily feature-gated.
   (`domain/event_forward.rs`): that same file, or, for an organizer outside
   Google, a real invitation (`METHOD:REQUEST`) sent as the message's calendar
   body to the recipients and the organizer, whichever the calendar decides.
-- Provider protocol implementations live in `email_api_client`; HTTP/queue
+- Gmail/Graph API adapters live in `email_api_client`; IMAP/SMTP protocol
+  implementations live in `imap_engine`, behind `imap_service`. HTTP/queue
   hosting lives in `services/email_service`; HTML parsing/sanitization lives in
   `email_utils`. PostgreSQL adapters in this crate and `email_db_client` perform
   database I/O; domain modules call their ports.
@@ -442,6 +452,8 @@ tools — hexagonal, heavily feature-gated.
   inbox's whole folder.
 - Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
   attempts to mark clean drafts as junk.
+- Follow the [bounded draft claim protocol](../../docs/architecture/email-backend.md#imap-integration)
+  when changing eligibility, leases, or command exclusions.
 - Include a reader’s cross-inbox reply draft on a shared thread at Edit only
   when it belongs to an inbox in the reader’s Drafts scope. Apply the same
   rule to full and parsed thread reads.
@@ -464,7 +476,8 @@ tools — hexagonal, heavily feature-gated.
   keep relational guards in SQL. Compose `ScheduledDeliveryService` once while
   keeping claims and transactions per delivery. Scheduled page validation and
   expansion sequencing live in `domain/scheduled/drafts.rs`.
-- Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.
+- Durable send admission supports Gmail, Outlook and IMAP; Outlook and IMAP delivery use the mailbox draft coordinator.
+- Treat a typed pre-DATA send rejection as terminal failure and keep uncertain-send reconciliation bounded even when provider reads fail.
 - Carry the captured `draft_generation` through every draft mutation; advance it on send acceptance/cancellation under the message lock and preserve attempt tombstones after message deletion.
 
 - Gmail thread label writes stage each thread's DB change, then enqueue one
@@ -474,7 +487,8 @@ tools — hexagonal, heavily feature-gated.
   Message-label batches go through `domain/message_labels.rs`, with their atomic
   staging and unqueued-write undo behind `MessageLabelRepository`. A thread on
   an Outlook inbox, or a message batch whose first message resolves to one,
-  takes its label as one category mailbox command (`enqueue_mailbox_action`)
+  takes its label as one category action (`enqueue_mailbox_action`), using
+  bounded command chunks when the shared snapshot enables them,
   instead of a Gmail label write. The queued
   half lives in `domain/message_labels/gmail_ops.rs`: it owns turn ordering,
   partial acceptance/reversion, retry routing, and delivery dispositions through
@@ -688,9 +702,11 @@ tools — hexagonal, heavily feature-gated.
 - Open every `mailbox_pg` transaction with `PgMailboxSync::begin`, which sets a
   5 s `lock_timeout`, so a write queued behind a long lock holder (a CRM
   population share-locks its link) fails instead of holding a pooled
-  connection; a locking read runs in one too. Pre-checks that a write repeats
+  connection; a locking read runs in one too. Retain the 15 s statement bound
+  on mutation/projection claims and backlog scans. Pre-checks that a write repeats
   under the lock (settings access) and credential health that has not changed
-  read without the lock, so reads and Graph calls never wait on it. The
+  read without the lock, so reads and provider calls never wait on it; compare
+  Microsoft scope snapshots only for Outlook. The
   timeout is SQLSTATE 55P03
   (`MailboxError::is_lock_timeout`, `InboxLifecycleError::Contended`) and every
   caller retries it: lease release or expiry, message backoff, redelivery, a
@@ -742,7 +758,7 @@ tools — hexagonal, heavily feature-gated.
   after their own failures don't count, so they never hold the walk. The count
   reads the partial index `email_message_reconciliation_import_queued`; keep
   its predicate and the query's identical, or a mailbox with fewer due rows
-  than the cap reads the whole table. Message claims are first in, first out
+  than the cap reads the whole table. Message claims take the oldest due work
   across mailboxes, so a walk that ran ahead would put every other mailbox's
   import, and any message that waited for room, behind its whole backlog.
   Gmail's backfill lists its next page behind the threads it queued for the
@@ -753,15 +769,16 @@ tools — hexagonal, heavily feature-gated.
   of either kind (`LongestDue`), where rounds and polls compete by how long
   they have been due. `domain/mailbox/claim.rs`'s `ClaimTurns` counts the
   claims (a turn that claims a live pass counts none), and
-  `IMPORT_FIRST_EVERY` caps the rounds' head start. Polls of every finished
-  folder share the sync loops and run minutes late, and a round that waited
-  behind them read a page only every few minutes while its import sat empty;
-  the import-first claims keep an import reading once its mailbox has room,
-  whatever the line's length, and the cap keeps a large import from taking
-  every claim. The
-  import round comes off the partial index
-  `email_sync_streams_import_round_claim`; keep its predicate and the query's
-  identical, or each claim reads every due finished folder. Enumerate spans
+  `IMPORT_FIRST_EVERY` caps the rounds' head start. Both claims choose from
+  the bounded window `lock_stream_window` locks in `claims.rs`, which merges
+  a 32-row import walk and a 32-row due walk; the import walk uses
+  `email_sync_streams_unparked_import_due`, whose predicate and exact
+  eligibility expression must match the query so finished folders and held
+  leases stay outside it. Polls of every finished folder share the sync loops
+  and run minutes late, and a round that waited behind them read a page only
+  every few minutes while its import sat empty; the import-first claims keep
+  an import reading once its mailbox has room, whatever the line's length,
+  and the cap keeps a large import from taking every claim. Enumerate spans
   record the claim in `outlook.claim` (`import_first`, `longest_due`,
   `live_pass`). A round waiting for room reads nothing: paced, or its page
   refused by the request gate while its mailbox's message reads hold the
@@ -837,6 +854,12 @@ tools — hexagonal, heavily feature-gated.
   does a transient provider failure (Graph 5xx or 408, a request Graph never
   answered) or a lock timeout once its backoff is at 30 minutes, so a provider
   outage or a busy mailbox never abandons a message.
+- Keep projection claims provider-neutral and order unfinished predecessors
+  within each entity or link-level event kind. Preserve real retry deadlines and
+  wake the successor after a quarantine commit. Keep the jittered two- to
+  three-minute successor deferral as the backstop for a missed wake.
+  See the [projection claim protocol](../../docs/architecture/email-backend.md#imap-integration)
+  and the [query rehearsal](../../docs/runbooks/email-provider-routing.md#projection-and-sync-claim-rehearsal).
 - A projection event that keeps failing is given up as a message read is:
   `MailboxProjectionService::project_leased` decides with `message_retry`
   (backoff included), and `finish_projection` gives an uncounted claim back to
@@ -869,11 +892,16 @@ tools — hexagonal, heavily feature-gated.
   `is_import` on a row it merges into (`ON CONFLICT ... is_import = false`, or
   `AND EXCLUDED.is_import` for folder pages); keep that in a new one.
 - Outlook sync claims (folder streams, messages, contacts) skip a link with
-  `needs_reauth`; clearing the flag resumes them. Discovery still claims it, as
-  the probe that asks for a token again, and waits an hour after a refusal
+  `needs_reauth`. Outlook discovery still claims it, as the probe that asks
+  for a token again, and waits an hour after a refusal
   (`REAUTHORIZATION_PROBE_SECONDS`); the token that works clears the flag
   (`credentials.rs`), so a refusal that clears at Microsoft resumes sync
-  without a reconnect.
+  without a reconnect. IMAP discovery skips the flag and waits for a
+  reconnect rather than retrying a rejected login; the claim window keeps
+  Outlook catalog streams unparked for the probe. Current credential and
+  Google-consent/token-success paths clear the flag and resume bounded parked
+  pages; old binaries, or an interrupted recovery tail, converge through the
+  five-minute sweep.
 - A folder discovery that Graph answers 404 at the Inbox
   (`MailFolderCatalog::NoMailbox`: the account has no mailbox Graph serves)
   marks the link `mailbox_unavailable_at` (`defer_reason=no_mailbox`, the
@@ -889,7 +917,9 @@ tools — hexagonal, heavily feature-gated.
   it too, and with the same grant, which starts no new generation, makes
   the same work and discovery due itself; keep the two wakes alike. Any
   other discovery failure, a 5xx included, stays a provider error. The
-  inbox's sync status reads `MailboxUnavailable`.
+  inbox's sync status reads `MailboxUnavailable`. Keep an IMAP private-catalog
+  404 as `NotFound` and a successful empty catalog as `Folders([])`; neither
+  is Graph's missing-mailbox diagnosis.
 - Process deleted-user bindings in the domain by link id, custodian before
   owner, then actor id, retaining one binding per link and actor; the repository
   returns each binding's kind so custody cleanup runs before an owner disconnect
@@ -925,10 +955,16 @@ tools — hexagonal, heavily feature-gated.
   and Sent first, through the Outlook resync's reset limited to those folders;
   a new query that copies or resets streams keeps the column consistent.
   `PgMailboxSync::with_imports_paused` makes `claim_message` take only live
-  rows (`is_import IN (false,$2)` keeps both values named for the claim index).
+  rows through the constant `is_import = false` index walk. With imports enabled,
+  a serial Append fills the live branch first and uses imports only for the
+  remaining room under the outer 64-row limit; never replace these constant
+  branches with an IN/range that sorts the entire due queue under custom plans.
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.
+- Reconcile command targets with `MailboxCommandGateway::live_organization` before
+  Apply; retain `organization` for cached catalog reads. IMAP refreshes one UID
+  through the bounded provider pool so retries do not reuse a stale sync version.
 - Outlook organization commands only run in their link's current
   `sync_generation`. Anything that bumps it must rebind unfinished commands as
   `pending`, since claims skip `confirming` ones while those still block later
@@ -938,8 +974,22 @@ tools — hexagonal, heavily feature-gated.
   `email_message_reconciliation` rows: claims never take them, and left in place
   they stay due and every lease claim reads past them.
 
+- Keep paused folders in the full role catalog with `sync_enabled = false` so
+  existing Trash descendants keep their treatment.
+- Persist `ImportCompleted` with the generation's completion marker, including
+  empty imports. Treat message list refresh as best-effort and continue the
+  other projection effects if refresh fails.
+- Follow the [mailbox worker architecture](../../docs/architecture/email-backend.md#imap-integration)
+  when changing bounded claims, rollback compatibility, or parking. For plan
+  fixtures and cutover checks, see the
+  [provider routing runbook](../../docs/runbooks/email-provider-routing.md).
+- Preserve typed content limits, local contention, provider pacing and
+  credential health through the draft, attachment and notification ports.
+- Decode settings-work kinds before dispatch, and report partial recent-mail
+  results with typed omissions so healthy mailboxes stay visible.
+
 ## Related
 
-- Rules: `.agents/rules/rust/architecture.md`
-
-- Persist agent correlation with scheduled delivery and organization projection payloads, then restore it when publishing delayed activity.
+- Rules are in [Rust architecture](../../.agents/rules/rust/architecture.md).
+- [IMAP engine architecture](../../docs/architecture/imap-engine.md) covers
+  promotion, provider operations, and host catch-up.

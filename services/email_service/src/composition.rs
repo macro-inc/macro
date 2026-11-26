@@ -22,6 +22,30 @@ use feature_flags::outbound::posthog::PostHogFeatureFlags;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use tokio_util::task::TaskTracker;
 
+/// Build the IMAP gateway once at a composition root.
+pub fn imap_gateway(
+    db: sqlx::PgPool,
+    internal_key: &str,
+) -> anyhow::Result<crate::outbound::email_api::imap::ImapMailboxGateway> {
+    let url = macro_service_urls::ImapServiceUrl::new()?;
+    Ok(crate::outbound::email_api::imap::ImapMailboxGateway {
+        client: imap_service_client::ImapServiceClient::new(
+            url.to_string(),
+            internal_key.to_owned(),
+        )?,
+        health: PgMailboxSync::new(db, email::domain::models::UserProvider::Imap),
+    })
+}
+
+/// Construct the shared flag loader; a missing project key fails the rollout closed.
+pub fn imap_enrollment(
+    config: &crate::config::Config,
+) -> anyhow::Result<crate::outbound::imap_connection::ImapEnrollment> {
+    Ok(crate::outbound::imap_connection::ImapEnrollment(
+        crate::outlook_flags::posthog(config)?,
+    ))
+}
+
 /// The contacts queue every email path publishes through: legacy messages
 /// always, list-aware ones only once `contacts-list-writes` is on.
 pub type ContactsProducer =
@@ -48,6 +72,7 @@ pub type InboxLifecycle = email::domain::mailbox::lifecycle::InboxLifecycleServi
     crate::outbound::inbox_lifecycle::InboxLifecycleClients,
 >;
 pub fn inbox_lifecycle(
+    imap: imap_service_client::ImapServiceClient,
     outlook: email_api_client::OutlookApiClientRepository,
     db: sqlx::PgPool,
     auth: authentication_service_client::AuthServiceClient,
@@ -55,8 +80,9 @@ pub fn inbox_lifecycle(
     gateway: connection_gateway_client::client::ConnectionGatewayClient,
 ) -> InboxLifecycle {
     email::domain::mailbox::lifecycle::InboxLifecycleService::new(
-        PgMailboxSync::new(db),
+        PgMailboxSync::new(db, email::domain::models::UserProvider::Outlook),
         crate::outbound::inbox_lifecycle::InboxLifecycleClients {
+            imap,
             outlook,
             auth,
             queue,
@@ -76,24 +102,22 @@ pub type InboxHealth = InboxHealthService<
 >;
 
 pub fn inbox_health(
-    db: sqlx::PgPool,
+    repository: PgInboxHealth,
+    imap: crate::outbound::email_api::imap::ImapMailboxGateway,
     gmail: GmailApi,
     auth: authentication_service_client::AuthServiceClient,
-    redis: crate::util::redis::RedisClient,
-    queue: sqs_client::SQS,
     broker: MacroEventBrokerService<KafkaEventPublisher, TaskTracker>,
     contacts: std::sync::Arc<ContactsProducer>,
 ) -> InboxHealth {
+    let db = repository.db.clone();
+    let queue = repository.queue.clone();
     InboxHealthService::new(
-        PgInboxHealth {
-            db: db.clone(),
-            redis,
-            queue: queue.clone(),
-        },
+        repository,
         ProviderInboxHealth {
+            imap,
             gmail,
             outlook: MicrosoftTokens::new(
-                PgMailboxSync::new(db.clone()),
+                PgMailboxSync::new(db.clone(), email::domain::models::UserProvider::Outlook),
                 MicrosoftCredentialsClient(auth),
             ),
             db,

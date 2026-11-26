@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_mailbox_commands (id, link_id, generation, actor_id, intent, status)\n        VALUES ($1, $2, 1, 'macro|outlook-test@example.com', '{\"kind\":\"read\",\"value\":true}', 'pending')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7e0783dd35c8c7e15748305418dd05ba4254ebcec2877275d029edd127e88301"
+}

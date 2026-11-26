@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE\n            email_mailbox_drafts\n        SET\n            revision = revision + 1\n        WHERE\n            message_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "278de29f795b91c84c75d33074fdb25a8d022ef7a400a76eeff8670e9a95e096"
+}

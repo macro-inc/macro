@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT\n                        id\n                    FROM\n                        email_links\n                    WHERE\n                        id = $1\n                        AND provider IN ('OUTLOOK', 'IMAP')\n                        FOR SHARE\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "963ccd74851c34ec7b69afb18755c1db5ac1d03874490768e382b6a65963e4ee"
+}

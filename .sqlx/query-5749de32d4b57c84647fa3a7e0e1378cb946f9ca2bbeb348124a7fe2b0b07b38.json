@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                max(s.provider_retry_at)\n            FROM\n                email_sync_streams s\n            LEFT JOIN LATERAL (\n                SELECT\n                    f.role\n                FROM\n                    email_mailbox_folders f\n                WHERE\n                    f.link_id = s.link_id\n                    AND f.provider_id = s.scope_id\n                    AND f.deleted_at IS NULL\n                LIMIT 1\n            ) f ON true\n            WHERE\n                s.link_id = $1\n                AND s.generation = $2\n                AND s.provider = 'IMAP'\n                AND s.provider_retry_at > now()\n                AND (s.kind = 'folder_catalog' OR f.role = 'inbox')\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "max",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5749de32d4b57c84647fa3a7e0e1378cb946f9ca2bbeb348124a7fe2b0b07b38"
+}

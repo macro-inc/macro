@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            count(*) AS \"commands!\"\n        FROM\n            email_mailbox_commands c\n            JOIN email_mailbox_command_targets t ON t.command_id = c.id\n            JOIN email_messages m ON m.id = t.message_id\n        WHERE\n            c.link_id = $1\n            AND m.provider_id = $2\n            AND c.intent = '{\"kind\":\"junk\",\"value\":true}'::jsonb\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "commands!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cf5c42de36a17450ac565ceae41caf05e8dc6362fd5a467daf04e75725473bd2"
+}

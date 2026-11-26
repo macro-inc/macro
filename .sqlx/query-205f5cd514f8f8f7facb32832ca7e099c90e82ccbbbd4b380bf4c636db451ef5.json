@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE\n            email_mailbox_drafts\n        SET\n            available_at = now() - interval '1 minute'\n        WHERE\n            message_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "205f5cd514f8f8f7facb32832ca7e099c90e82ccbbbd4b380bf4c636db451ef5"
+}

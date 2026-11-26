@@ -1,0 +1,1117 @@
+use super::*;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn imap_and_outlook_workers_claim_their_own_provider_without_rollout_evaluation(db: PgPool) {
+    use crate::domain::mailbox::progress::MailboxProgressRepository;
+
+    let (outlook, outlook_link) = fixture(&db).await;
+    let imap_link = Uuid::from_u128(42);
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, grant_generation)
+            VALUES ($1, 'macro|imap@example.com', 'imap-owner', 'imap@example.com', 'IMAP', 1)
+        "#,
+        imap_link,
+    ).execute(&db).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_sync_streams (id, link_id, generation, kind, scope_id)
+            VALUES ($1, $2, 1, 'mail_folder', 'folder')
+        "#,
+        Uuid::from_u128(43),
+        imap_link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let imap = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
+    let immediate = imap
+        .claim_stream(Uuid::from_u128(44), StreamClaim::LongestDue)
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    assert_eq!(immediate.mailbox.link_id, imap_link);
+    imap.release_stream(&immediate, SyncRetry::Local(0))
+        .await
+        .unwrap();
+    let lease = outlook
+        .claim_stream(Uuid::from_u128(45), StreamClaim::LongestDue)
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    assert_eq!(lease.mailbox.link_id, outlook_link);
+    assert!(
+        outlook
+            .claim_stream(Uuid::from_u128(46), StreamClaim::LongestDue)
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none()
+    );
+    // Graph's missing-mailbox diagnosis must not pause the IMAP inbox.
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            mailbox_unavailable_at = now()
+        WHERE
+            id = $1
+        "#,
+        outlook_link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let lease = imap
+        .claim_stream(Uuid::from_u128(47), StreamClaim::LongestDue)
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    assert_eq!(lease.mailbox.link_id, imap_link);
+    let backlogs = imap.backlogs().await.unwrap();
+    assert_eq!(backlogs.len(), 1);
+    assert_eq!(backlogs[0].link_id, imap_link);
+    assert!(!backlogs[0].mailbox_unavailable);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn blocked_imap_ingestion_records_one_recoverable_move_with_the_message(db: PgPool) {
+    use email_api_client::domain::models::MailboxState;
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
+    let stream = repo
+        .claim_stream(Uuid::from_u128(100), StreamClaim::LongestDue)
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    repo.commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
+    let work = repo
+        .claim_message(Uuid::from_u128(101))
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_mailbox_settings_work (id, link_id, kind, resource_key, desired)
+            VALUES ($1, $2, 'sender_block', 'blocked@example.com', true)
+        "#,
+        Uuid::from_u128(102),
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(
+        repo.sender_blocked(work.mailbox, "BLOCKED@example.com")
+            .await
+            .unwrap()
+    );
+    assert!(
+        !repo
+            .sender_blocked(work.mailbox, "other@example.com")
+            .await
+            .unwrap()
+    );
+    let message = snapshot(
+        link,
+        work.provider_id.as_str(),
+        MailboxState {
+            in_inbox: true,
+            ..Default::default()
+        },
+        "v1",
+    );
+    repo.ingest_blocked(&work, message.clone(), BlockedSenderDestination::Junk)
+        .await
+        .unwrap();
+    repo.ingest_blocked(&work, message, BlockedSenderDestination::Junk)
+        .await
+        .unwrap();
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            count(*) AS "commands!"
+        FROM
+            email_mailbox_commands c
+            JOIN email_mailbox_command_targets t ON t.command_id = c.id
+            JOIN email_messages m ON m.id = t.message_id
+        WHERE
+            c.link_id = $1
+            AND m.provider_id = $2
+            AND c.intent = '{"kind":"junk","value":true}'::jsonb
+        "#,
+        link,
+        work.provider_id.as_str(),
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(row.commands, 1);
+    let visible = sqlx::query_scalar!(
+        r#"
+        SELECT
+            inbox_visible
+        FROM
+            email_threads
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(!visible);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn imap_notification_does_not_wait_for_a_foreign_key_reader(db: PgPool) {
+    use crate::domain::mailbox::imap_notifications::ImapNotificationRepository;
+
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
+    let mut foreign_key_reader = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_links WHERE id = $1 FOR KEY SHARE",
+        link
+    )
+    .fetch_one(&mut *foreign_key_reader)
+    .await
+    .unwrap();
+
+    // The key reader remains open throughout the notification. Updating health
+    // never changes the referenced link key, so these operations must coexist.
+    tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        repo.commit(
+            MailboxKey {
+                link_id: link,
+                sync_generation: 1,
+                grant_generation: 1,
+            },
+            false,
+            Some(1),
+            Some(models_email::service::link::MailboxIssue::SnapshotTooLarge),
+            None,
+        ),
+    )
+    .await
+    .expect("health notification waited for a foreign-key key-share reader")
+    .unwrap();
+    foreign_key_reader.rollback().await.unwrap();
+
+    let issue = sqlx::query_scalar!("SELECT mailbox_issue FROM email_links WHERE id = $1", link)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(issue.as_deref(), Some("snapshot_too_large"));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn imap_notifications_cannot_wake_or_revoke_a_reconnected_binding(db: PgPool) {
+    use crate::domain::mailbox::imap_notifications::ImapNotificationService;
+    use imap_engine::domain::models::{Binding, Notification};
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            sync_generation = 2
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_sync_streams
+        SET
+            generation = 2,
+            next_run_at = now() + interval '1 day'
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let service = ImapNotificationService(PgMailboxSync::new(
+        db.clone(),
+        crate::domain::models::UserProvider::Imap,
+    ));
+    service
+        .receive(Notification {
+            binding: Binding {
+                link_id: link,
+                sync_generation: 1,
+                grant_generation: 1,
+            },
+            credentials_rejected: true,
+            revision: None,
+            mailbox_issue: None,
+            sync_retry_at: None,
+        })
+        .await
+        .unwrap();
+    let reauth = sqlx::query_scalar!(
+        r#"
+        SELECT
+            needs_reauth
+        FROM
+            email_links
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(!reauth);
+    service
+        .receive(Notification {
+            binding: Binding {
+                link_id: link,
+                sync_generation: 2,
+                grant_generation: 1,
+            },
+            credentials_rejected: false,
+            revision: None,
+            mailbox_issue: None,
+            sync_retry_at: None,
+        })
+        .await
+        .unwrap();
+    let due = sqlx::query_scalar!(
+        r#"
+        SELECT
+            next_run_at <= now() AS "due!"
+        FROM
+            email_sync_streams
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(due);
+    for _ in 0..2 {
+        service
+            .receive(Notification {
+                binding: Binding {
+                    link_id: link,
+                    sync_generation: 2,
+                    grant_generation: 1,
+                },
+                credentials_rejected: true,
+                revision: None,
+                mailbox_issue: None,
+                sync_retry_at: None,
+            })
+            .await
+            .unwrap();
+    }
+    let notifications = sqlx::query_scalar!(
+        r#"
+        SELECT
+            count(*) AS "count!"
+        FROM
+            email_projection_outbox
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(notifications, 1);
+}
+
+#[derive(Clone, Copy)]
+struct MalformedThenValid;
+impl MailboxGateway for MalformedThenValid {
+    async fn folders(
+        &self,
+        _: MailboxKey,
+    ) -> Result<
+        email_api_client::domain::models::MailFolderCatalog,
+        email_api_client::domain::models::EmailApiError,
+    > {
+        unreachable!()
+    }
+    async fn changes(
+        &self,
+        _: MailboxKey,
+        _: &ProviderId,
+        _: Option<&StreamToken>,
+        _: email_api_client::domain::models::RoundStart,
+    ) -> Result<MailboxChangePage, email_api_client::domain::models::EmailApiError> {
+        unreachable!()
+    }
+    async fn message(
+        &self,
+        mailbox: MailboxKey,
+        id: &ProviderId,
+        _: &[MailFolder],
+    ) -> Result<
+        Option<email_api_client::domain::models::MailboxMessage>,
+        email_api_client::domain::models::EmailApiError,
+    > {
+        if id.as_str() == "a-malformed" {
+            return Err(email_api_client::domain::models::EmailApiError::Permanent {
+                message: "IMAP message MIME is invalid or exceeds parsing limits".into(),
+            });
+        }
+        Ok(Some(snapshot(
+            mailbox.link_id,
+            id.as_str(),
+            email_api_client::domain::models::MailboxState {
+                in_inbox: true,
+                ..Default::default()
+            },
+            "v1",
+        )))
+    }
+    async fn admitted_requests(&self, _: MailboxKey) -> Option<u64> {
+        None
+    }
+}
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn malformed_imap_mail_does_not_hold_later_messages_behind_it(db: PgPool) {
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
+    sqlx::query!(
+        r#"
+        INSERT INTO email_message_reconciliation (link_id, generation, provider_id, is_import)
+        VALUES
+            ($1, 1, 'a-malformed', true),
+            ($1, 1, 'b-good', true)
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
+    let service =
+        MailboxSyncService::new(repo.clone(), MalformedThenValid, MalformedThenValid, repo);
+    assert!(matches!(
+        service.reconcile_once().await,
+        Err(MailboxError::Provider(
+            email_api_client::domain::models::EmailApiError::Permanent { .. }
+        ))
+    ));
+    assert!(service.reconcile_once().await.unwrap());
+    let stored = sqlx::query_scalar!(
+        r#"
+        SELECT
+            provider_id
+        FROM
+            email_messages
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_all(&db)
+    .await
+    .unwrap();
+    assert_eq!(stored, vec![Some("b-good".into())]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn imap_excluded_trash_and_ancestors_preserve_roles_without_scheduling_body_rechecks(
+    db: PgPool,
+) {
+    use email_api_client::domain::models::{FolderRole, MailboxState};
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Imap);
+    sqlx::query!(
+        r#"
+        INSERT INTO email_sync_streams (id, link_id, generation, kind, scope_id)
+            VALUES ($1, $2, 1, 'folder_catalog', 'mail')
+        "#,
+        Uuid::now_v7(),
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let mut folders = vec![
+        MailFolder {
+            sync_enabled: true,
+            id: ProviderId::new("trash").unwrap(),
+            parent_id: None,
+            name: "Trash".into(),
+            role: FolderRole::Trash,
+            has_children: true,
+            total_items: Some(0),
+        },
+        MailFolder {
+            sync_enabled: true,
+            id: ProviderId::new("folder").unwrap(),
+            parent_id: Some(ProviderId::new("trash").unwrap()),
+            name: "Retained".into(),
+            role: FolderRole::Other,
+            has_children: false,
+            total_items: Some(1),
+        },
+    ];
+    let catalog = repo
+        .claim_catalog(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    repo.commit_catalog(&catalog, &folders).await.unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_message_reconciliation (link_id, generation, provider_id, is_import)
+            VALUES ($1, 1, 'same-message', true)
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let work = repo
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    repo.ingest(
+        &work,
+        snapshot(
+            link,
+            "same-message",
+            MailboxState {
+                in_trash: true,
+                ..Default::default()
+            },
+            "stable",
+        ),
+    )
+    .await
+    .unwrap();
+    repo.complete_message(&work).await.unwrap();
+    for excluded in [0, 1] {
+        for (index, folder) in folders.iter_mut().enumerate() {
+            folder.sync_enabled = index != excluded;
+        }
+        sqlx::query!(
+            r#"
+            UPDATE
+                email_sync_streams
+            SET
+                next_run_at = now()
+            WHERE
+                link_id = $1
+                AND kind = 'folder_catalog'
+            "#,
+            link,
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        let catalog = repo
+            .claim_catalog(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .unwrap();
+        repo.commit_catalog(&catalog, &folders).await.unwrap();
+        let retained = repo.folders(catalog.mailbox).await.unwrap();
+        assert_eq!(
+            retained.len(),
+            2,
+            "paused folders remain a complete role catalog"
+        );
+        assert_eq!(
+            MailFolder::effective_role(&retained, Some(&folders[1].id)),
+            FolderRole::Trash
+        );
+        assert!(
+            !retained
+                .iter()
+                .find(|f| f.id == folders[excluded].id)
+                .unwrap()
+                .sync_enabled
+        );
+        let active = sqlx::query_scalar!(
+            r#"
+            SELECT
+                count(*)
+            FROM
+                email_sync_streams
+            WHERE
+                link_id = $1
+                AND kind = 'mail_folder'
+                AND scope_id = $2
+            "#,
+            link,
+            folders[excluded].id.as_str(),
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(active, Some(0));
+        assert!(
+            repo.claim_message(Uuid::now_v7())
+                .await
+                .unwrap()
+                .into_lease()
+                .is_none(),
+            "pausing a folder must not schedule downloads of retained message bodies"
+        );
+        let state = sqlx::query_scalar!(
+            r#"
+            SELECT
+                (mailbox_state ->> 'in_trash')::boolean
+            FROM
+                email_messages
+            WHERE
+                link_id = $1
+                AND provider_id = 'same-message'
+            "#,
+            link,
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(state, Some(true));
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn size_health_is_fenced_edge_triggered_and_cleared_without_reauth(db: PgPool) {
+    use crate::domain::mailbox::imap_notifications::ImapNotificationService;
+    use imap_engine::domain::models::{Binding, Notification};
+    use models_email::service::link::MailboxIssue;
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            sync_generation = 2
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let service = ImapNotificationService(PgMailboxSync::new(
+        db.clone(),
+        crate::domain::models::UserProvider::Imap,
+    ));
+    let binding = Binding {
+        link_id: link,
+        sync_generation: 2,
+        grant_generation: 1,
+    };
+    let count_before = sqlx::query_scalar!(
+        r#"
+        SELECT
+            count(*) AS "count!"
+        FROM
+            email_projection_outbox
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    let retry_at = chrono::Utc::now() + chrono::Duration::hours(1);
+    for _ in 0..2 {
+        service
+            .receive(Notification {
+                binding,
+                credentials_rejected: false,
+                revision: None,
+                mailbox_issue: Some(MailboxIssue::SnapshotTooLarge),
+                sync_retry_at: Some(retry_at),
+            })
+            .await
+            .unwrap();
+    }
+    service
+        .receive(Notification {
+            binding: Binding {
+                sync_generation: 1,
+                ..binding
+            },
+            credentials_rejected: false,
+            revision: None,
+            mailbox_issue: None,
+            sync_retry_at: None,
+        })
+        .await
+        .unwrap();
+    let current = sqlx::query!(
+        r#"
+        SELECT
+            mailbox_issue,
+            mailbox_retry_at,
+            needs_reauth
+        FROM
+            email_links
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(current.mailbox_issue.as_deref(), Some("snapshot_too_large"));
+    assert!(!current.needs_reauth);
+    assert_eq!(
+        current.mailbox_retry_at.map(|value| value.timestamp()),
+        Some(retry_at.timestamp())
+    );
+    let count_after = sqlx::query_scalar!(
+        r#"
+        SELECT
+            count(*) AS "count!"
+        FROM
+            email_projection_outbox
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(count_after, count_before + 1);
+    service
+        .receive(Notification {
+            binding,
+            credentials_rejected: false,
+            revision: None,
+            mailbox_issue: Some(MailboxIssue::SnapshotTooLarge),
+            sync_retry_at: Some(retry_at + chrono::Duration::hours(1)),
+        })
+        .await
+        .unwrap();
+    let later_deadline_event = sqlx::query_scalar!(
+        r#"
+        SELECT
+            count(*) AS "count!"
+        FROM
+            email_projection_outbox
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(later_deadline_event, count_before + 2);
+
+    service
+        .receive(Notification {
+            binding,
+            credentials_rejected: false,
+            revision: None,
+            mailbox_issue: None,
+            sync_retry_at: None,
+        })
+        .await
+        .unwrap();
+    let cleared = sqlx::query!(
+        r#"
+        SELECT
+            mailbox_issue,
+            mailbox_retry_at,
+            needs_reauth
+        FROM
+            email_links
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(cleared.mailbox_issue.is_none());
+    assert!(cleared.mailbox_retry_at.is_none());
+    assert!(!cleared.needs_reauth);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unreadable_credentials_require_reconnect_without_claiming_a_provider_refusal(db: PgPool) {
+    use crate::domain::mailbox::imap_notifications::ImapNotificationService;
+    use imap_engine::domain::models::{Binding, Notification};
+    use models_email::service::link::MailboxIssue;
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+    sqlx::query!(
+        r#"
+        UPDATE
+            email_links
+        SET
+            sync_generation = 2
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let service = ImapNotificationService(PgMailboxSync::new(
+        db.clone(),
+        crate::domain::models::UserProvider::Imap,
+    ));
+    let binding = Binding {
+        link_id: link,
+        sync_generation: 2,
+        grant_generation: 1,
+    };
+    for _ in 0..2 {
+        service
+            .receive(Notification {
+                binding,
+                credentials_rejected: false,
+                revision: None,
+                mailbox_issue: Some(MailboxIssue::CredentialsUnreadable),
+                sync_retry_at: None,
+            })
+            .await
+            .unwrap();
+    }
+    // An old actor cannot replace the current reconnect reason.
+    service
+        .receive(Notification {
+            binding: Binding {
+                sync_generation: 1,
+                ..binding
+            },
+            credentials_rejected: true,
+            revision: None,
+            mailbox_issue: None,
+            sync_retry_at: None,
+        })
+        .await
+        .unwrap();
+    let current = sqlx::query!(
+        r#"
+        SELECT
+            mailbox_issue,
+            needs_reauth,
+            last_sync_error_at
+        FROM
+            email_links
+        WHERE
+            id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(current.needs_reauth);
+    assert_eq!(
+        current.mailbox_issue.as_deref(),
+        Some("credentials_unreadable")
+    );
+    assert!(current.last_sync_error_at.is_none());
+    let events = sqlx::query_scalar!(
+        r#"
+        SELECT
+            count(*) AS "count!"
+        FROM
+            email_projection_outbox
+        WHERE
+            link_id = $1
+        "#,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(events, 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reordered_host_hints_cannot_clear_newer_mailbox_health(db: PgPool) {
+    use imap_engine::domain::models::{Binding, Notification};
+    use models_email::service::link::MailboxIssue;
+    let (_, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+
+    let service = crate::domain::mailbox::imap_notifications::ImapNotificationService(
+        PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook),
+    );
+    let binding = Binding {
+        link_id: link,
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    for (revision, issue) in [(2, Some(MailboxIssue::SnapshotTooLarge)), (1, None)] {
+        let mut value = serde_json::to_value(Notification {
+            binding,
+            credentials_rejected: false,
+            revision: None,
+            mailbox_issue: issue,
+            sync_retry_at: None,
+        })
+        .unwrap();
+        value["revision"] = serde_json::json!(revision);
+        service
+            .receive(serde_json::from_value(value).unwrap())
+            .await
+            .unwrap();
+    }
+    let issue = sqlx::query_scalar!("SELECT mailbox_issue FROM email_links WHERE id = $1", link)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(issue.as_deref(), Some("snapshot_too_large"));
+    service
+        .receive(Notification {
+            binding,
+            credentials_rejected: true,
+            revision: Some(0),
+            mailbox_issue: None,
+            sync_retry_at: None,
+        })
+        .await
+        .unwrap();
+    let reauth = sqlx::query_scalar!("SELECT needs_reauth FROM email_links WHERE id = $1", link)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert!(
+        !reauth,
+        "an older refusal cannot park a newer healthy binding"
+    );
+    sqlx::query!(
+        "UPDATE email_links SET sync_generation = 2 WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    service
+        .receive(Notification {
+            binding: Binding {
+                sync_generation: 2,
+                ..binding
+            },
+            credentials_rejected: false,
+            revision: Some(1),
+            mailbox_issue: None,
+            sync_retry_at: None,
+        })
+        .await
+        .unwrap();
+    let issue = sqlx::query_scalar!("SELECT mailbox_issue FROM email_links WHERE id = $1", link)
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert!(issue.is_none(), "a new binding starts a new revision scope");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_imap_checkpoint_polls_every_two_minutes_unless_a_newer_revision_arrived(db: PgPool) {
+    let (repo, link) = fixture_for_provider(&db, crate::domain::models::UserProvider::Imap).await;
+    // A working Graph subscription row on the link: IMAP must not take
+    // Outlook's subscribed interval from it.
+    sqlx::query!(
+        "INSERT INTO email_mailbox_watch_work (link_id, failures) VALUES ($1, 0)",
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_provider_subscriptions (id, link_id, generation, provider_id, client_state_hash, expires_at)
+            VALUES ($1, $2, 1, 'graph-subscription', '\x00', now() + interval '3 days')
+        "#,
+        Uuid::from_u128(200),
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let stream = repo
+        .claim_stream(Uuid::from_u128(201), StreamClaim::LongestDue)
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+
+    let committed = repo
+        .commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        committed.next_poll_seconds,
+        Some(POLL_INTERVALS.unsubscribed)
+    );
+    let interval = sqlx::query_scalar!(
+        r#"
+        SELECT EXTRACT(EPOCH FROM next_run_at - last_completed_at)::float8 AS "seconds!"
+        FROM email_sync_streams
+        WHERE id = $1
+        "#,
+        stream.id,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(interval, f64::from(POLL_INTERVALS.unsubscribed));
+
+    sqlx::query!(
+        "UPDATE email_sync_streams SET next_run_at = now() WHERE id = $1",
+        stream.id,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let stream = repo
+        .claim_stream(Uuid::from_u128(202), StreamClaim::LongestDue)
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    sqlx::query!(
+        r#"
+        UPDATE email_sync_streams
+        SET notification_revision = notification_revision + 1
+        WHERE id = $1
+        "#,
+        stream.id,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    let committed = repo
+        .commit_page(&stream, &page(), POLL_INTERVALS)
+        .await
+        .unwrap();
+
+    assert_eq!(committed.next_poll_seconds, None);
+    let due = sqlx::query_scalar!(
+        r#"SELECT next_run_at <= clock_timestamp() AS "due!" FROM email_sync_streams WHERE id = $1"#,
+        stream.id,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(
+        due,
+        "a revision that arrived during the read keeps the folder due"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn imap_discovery_skips_a_mailbox_that_needs_reauth_while_outlook_probes_it(db: PgPool) {
+    use crate::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository;
+    use crate::domain::models::UserProvider;
+
+    let (imap, imap_link) = fixture_for_provider(&db, UserProvider::Imap).await;
+    let outlook_link = Uuid::from_u128(300);
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, grant_generation)
+            VALUES ($1, 'macro|outlook-reauth@example.com', 'outlook-owner', 'outlook-reauth@example.com', 'OUTLOOK', 1)
+        "#,
+        outlook_link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    for link in [imap_link, outlook_link] {
+        sqlx::query!(
+            "INSERT INTO email_sync_streams (id, link_id, generation, kind, scope_id) VALUES ($1, $2, 1, 'folder_catalog', 'mail')",
+            Uuid::now_v7(),
+            link,
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        "UPDATE email_links SET needs_reauth = true WHERE id = ANY($1)",
+        &[imap_link, outlook_link],
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let outlook = PgMailboxSync::new(db.clone(), UserProvider::Outlook);
+
+    // A rejected IMAP login is not retried: its catalog is parked, never leased.
+    let mut claims = 0;
+    loop {
+        match imap.claim_catalog(Uuid::now_v7()).await.unwrap() {
+            SyncClaim::Acquired(lease) => panic!("claimed {:?}", lease.mailbox),
+            SyncClaim::Progress => claims += 1,
+            SyncClaim::Idle => break,
+        }
+        assert!(claims < 4, "the window kept maintaining the same stream");
+    }
+    let parked = sqlx::query_scalar!(
+        r#"SELECT parked_at IS NOT NULL AS "parked!" FROM email_sync_streams WHERE link_id = $1 AND kind = 'folder_catalog'"#,
+        imap_link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(parked);
+    // Outlook discovery is the probe that asks for a token again.
+    let probe = outlook
+        .claim_catalog(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    assert_eq!(probe.mailbox.link_id, outlook_link);
+
+    // Clearing the flag resumes IMAP discovery after the bounded sweep.
+    sqlx::query!(
+        "UPDATE email_links SET needs_reauth = false WHERE id = $1",
+        imap_link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    imap.recover_page(64).await.unwrap().unwrap();
+    let lease = imap
+        .claim_catalog(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    assert_eq!(lease.mailbox.link_id, imap_link);
+}

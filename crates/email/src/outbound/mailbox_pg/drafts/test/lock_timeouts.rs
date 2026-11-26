@@ -10,6 +10,7 @@ async fn a_checkpoint_behind_a_locked_draft_message_fails_fast_then_commits(db: 
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let stored = sqlx::query_scalar!(
         "SELECT checkpoint FROM email_mailbox_drafts WHERE message_id = $1",
@@ -76,6 +77,7 @@ async fn a_conflict_resolution_runs_beside_a_population_and_gives_up_behind_a_wo
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sync.fail_draft(&lease, DraftFailure::Conflict)
         .await

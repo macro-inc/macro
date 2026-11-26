@@ -66,12 +66,12 @@ impl Output {
             .count()
     }
 
-    pub(in crate::domain::mailbox::link_manager) fn subscriber(
-        &self,
-    ) -> impl tracing::Subscriber + Send + Sync + 'static {
-        tracing_subscriber::registry()
-            .with(tracing_subscriber::filter::LevelFilter::TRACE)
-            .with(Capture(self.clone()))
+    pub(in crate::domain::mailbox::link_manager) fn subscriber(&self) -> tracing::Dispatch {
+        crate::telemetry_capture::capture_dispatch(
+            tracing_subscriber::registry()
+                .with(tracing_subscriber::filter::LevelFilter::TRACE)
+                .with(Capture(self.clone())),
+        )
     }
 }
 
@@ -89,11 +89,7 @@ pub(in crate::domain::mailbox::link_manager) fn assert_event(
         .collect();
     assert_eq!(matching.len(), 1, "{records:?}");
     assert_eq!(matching[0].level, level);
-    assert!(
-        matching[0].spans.iter().any(|name| *name == span),
-        "{:?}",
-        matching[0]
-    );
+    assert!(matching[0].spans.contains(&span), "{:?}", matching[0]);
     assert_eq!(
         matching[0].fields,
         fields

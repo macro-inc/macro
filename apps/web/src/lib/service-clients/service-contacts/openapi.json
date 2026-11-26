@@ -268,7 +268,14 @@
       "ContactList": {
         "type": "string",
         "description": "One list in a user's directory. A person is in the directory when they are\nin at least one of the owner's lists. The key (`as_ref`, parsed back with\n`FromStr`, and the same in serde) is what storage and clients see.",
-        "enum": ["teammates", "interacted", "invited", "gmail", "outlook"]
+        "enum": [
+          "teammates",
+          "interacted",
+          "invited",
+          "gmail",
+          "outlook",
+          "imap"
+        ]
       },
       "GetContactsResponse": {
         "type": "object",
@@ -312,7 +319,7 @@
             "items": {
               "$ref": "#/components/schemas/SearchedPerson"
             },
-            "description": "Matches ranked by group, then prefix matches, then by name or email.\nTeammates come first. For a viewer on the list-aware directory,\n`interacted` and `invited` people come next, then `gmail` and\n`outlook` contacts."
+            "description": "Matches ranked by group, then prefix matches, then by name or email.\nTeammates come first. For a viewer on the list-aware directory,\n`interacted` and `invited` people come next, then `gmail` and\n`outlook` and `imap` contacts."
           }
         }
       },
@@ -334,7 +341,7 @@
             "items": {
               "type": "string"
             },
-            "description": "The keys of the viewer's contact lists the person is in (`teammates`,\n`interacted`, `invited`, `gmail`, `outlook`; more may be added). Empty\nfor the viewer and for a contact only the legacy directory knows."
+            "description": "The keys of the viewer's contact lists the person is in (`teammates`,\n`interacted`, `invited`, `gmail`, `outlook`, `imap`; more may be added). Empty\nfor the viewer and for a contact only the legacy directory knows."
           },
           "name": {
             "type": ["string", "null"],
