@@ -26,6 +26,9 @@ synthetic team and offer responses. See [Hire checkout](HIRE.md).
   Replace the reader at the composition boundary when the backend contract is
   available. Access has a reserved component seam.
 - `src/return-intent.ts`, `src/draft.ts`, and `src/session.ts` own the handoff.
+- `src/brain-access.tsx` renders inline Access with an injected source scoped to
+  the viewer, team, and agent. `src/brain-access-fixture.ts` provides the local
+  simulation for an explicitly selected viewer role.
 - `scripts/verify-bots-boundary.ts` and `scripts/botsBoundary.ts` enforce isolation.
   Keep imports inside this app or an explicitly allowed workspace package.
 
