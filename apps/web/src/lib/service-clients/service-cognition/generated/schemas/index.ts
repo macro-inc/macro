@@ -252,6 +252,7 @@ export * from './notionImportReportError';
 export * from './notionImportReportErrorKind';
 export * from './notionImportReportHubspot';
 export * from './notionImportReportReviewId';
+export * from './notionImportReportSalesforce';
 export * from './notionImportReportScanned';
 export * from './notionImportReportStatus';
 export * from './notionPlanItem';

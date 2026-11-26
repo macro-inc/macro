@@ -559,3 +559,17 @@ only a company the owner left out leaves its contacts without one
 (`ContactWithoutCompany`, counted for this review only). Left open: a crash between creating a name-only company, an
 address-less contact or a pipeline and recording its marker duplicates that
 one record. Deleted CRM copies are not re-imported (their targets read as live).
+
+### Salesforce
+
+`ImportFromSalesforce` is a second CRM source (`domain/service/salesforce_workspace.rs`
++ `plan`): the host registers an `import_salesforce::domain::SalesforceConnections`
+reader with `with_salesforce`, and the shared CRM writer. Its converter turns the
+org into a `CrmInventory`: the org's active opportunity stages become one pipeline
+(`{org}:pipeline:opportunities`), accounts are companies keyed by their website's
+host, contacts keep their one account, and opportunities keep how they closed
+(`CrmDeal::outcome`, which overrides the stage's outcome). An opportunity in a stage
+the org no longer uses gets no stage (`CrmLoss::ArchivedStage`). Rows are keyed
+`{org}:{type}:{id}`; record links use the org's instance from userinfo, and none
+when it is unknown (the deal entry then carries its key). `ImportSource::is_crm`
+marks both CRM sources wherever the engine treats them alike.

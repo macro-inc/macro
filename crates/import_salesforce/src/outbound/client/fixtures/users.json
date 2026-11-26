@@ -1,0 +1,9 @@
+{
+  "totalSize": 3,
+  "done": true,
+  "records": [
+    {"attributes": {"type": "User", "url": "/services/data/v62.0/sobjects/User/0055g00000ExAmPAA1"}, "Id": "0055g00000ExAmPAA1", "Email": "Importer@Example.com", "IsActive": true},
+    {"attributes": {"type": "User", "url": "/services/data/v62.0/sobjects/User/0055g00000ExAmQAA1"}, "Id": "0055g00000ExAmQAA1", "Email": "seller@example.org", "IsActive": true},
+    {"attributes": {"type": "User", "url": "/services/data/v62.0/sobjects/User/0055g00000ExAmRAA1"}, "Id": "0055g00000ExAmRAA1", "Email": "former@example.net", "IsActive": false}
+  ]
+}

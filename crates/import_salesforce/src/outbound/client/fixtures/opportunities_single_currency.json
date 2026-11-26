@@ -1,0 +1,7 @@
+{
+  "totalSize": 1,
+  "done": true,
+  "records": [
+    {"attributes": {"type": "Opportunity", "url": "/services/data/v62.0/sobjects/Opportunity/0065g00000OppAAAA1"}, "Id": "0065g00000OppAAAA1", "Name": "Acme renewal", "StageName": "Closed_Won", "Amount": 12500.5, "CloseDate": "2026-03-01", "AccountId": "0015g00000AcmeAAA1", "OwnerId": "0055g00000ExAmQAA1", "IsClosed": true, "IsWon": true}
+  ]
+}

@@ -56,7 +56,9 @@ export function decodePlanEntries(
   );
   return entities.flatMap((entity): ImportPlanEntry[] => {
     if (
-      !['notion', 'linear', 'jira', 'hubspot'].includes(entity.source) ||
+      !['notion', 'linear', 'jira', 'hubspot', 'salesforce'].includes(
+        entity.source
+      ) ||
       entity.review_id !== reviewId
     )
       return [];
@@ -84,10 +86,22 @@ export function decodePlanEntries(
             'jira_epic',
             () => 'project' as const
           )
-          .with('hubspot_pipeline', () => 'pipeline' as const)
-          .with('hubspot_company', () => 'company' as const)
-          .with('hubspot_contact', () => 'contact' as const)
-          .with('hubspot_deal', () => 'deal' as const)
+          .with(
+            'hubspot_pipeline',
+            'salesforce_pipeline',
+            () => 'pipeline' as const
+          )
+          .with(
+            'hubspot_company',
+            'salesforce_company',
+            () => 'company' as const
+          )
+          .with(
+            'hubspot_contact',
+            'salesforce_contact',
+            () => 'contact' as const
+          )
+          .with('hubspot_deal', 'salesforce_deal', () => 'deal' as const)
           .otherwise(() => 'page' as const),
         title: metadata.data.title,
         decision: plan.decision ?? null,
@@ -158,6 +172,15 @@ export function decodeImportProgress(
           created: report.hubspot.created ?? 0,
           linked: report.hubspot.linked ?? 0,
           losses: report.hubspot.losses,
+        }
+      : null,
+    salesforce: report.salesforce
+      ? {
+          owners: report.salesforce.owners,
+          ownersMatched: report.salesforce.ownersMatched,
+          created: report.salesforce.created ?? 0,
+          linked: report.salesforce.linked ?? 0,
+          losses: report.salesforce.losses,
         }
       : null,
   };

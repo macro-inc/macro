@@ -4,7 +4,9 @@ export const importKeys = createQueryKeys('import', {
   /** Discovery runs plus visible ledger rows. */
   state: null,
   /** Report for one reviewed workspace source. */
-  workspace: (source: 'notion' | 'linear' | 'jira' | 'hubspot') => [source],
+  workspace: (
+    source: 'notion' | 'linear' | 'jira' | 'hubspot' | 'salesforce'
+  ) => [source],
   /** The Notion workspace import report. */
   notion: null,
 });

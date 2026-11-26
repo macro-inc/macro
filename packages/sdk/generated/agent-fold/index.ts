@@ -1243,7 +1243,9 @@ export type ImportWorkspace =
 /**  Jira projects, epics and issues. */
 "jira" |
 /**  HubSpot deal pipelines, companies, contacts and deals. */
-"hubspot";
+"hubspot" |
+/**  Salesforce opportunity stages, accounts, contacts and opportunities. */
+"salesforce";
 
 /**  Review item state, shared with notification consumers. */
 export type ItemStatus =

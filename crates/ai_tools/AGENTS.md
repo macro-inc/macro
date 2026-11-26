@@ -143,5 +143,5 @@ project, parent and label writes pass through the owning property services.
 `CrmImportWriter`: CRM records and pipeline entries through
 `crm::domain::record_import` as Macro AI for the user, with the team roster
 for owner matching. Every host that builds the import service registers it
-with the `import_hubspot` reader.
+with the `import_hubspot` and `import_salesforce` readers.
 

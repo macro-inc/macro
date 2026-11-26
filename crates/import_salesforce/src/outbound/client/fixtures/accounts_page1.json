@@ -1,0 +1,9 @@
+{
+  "totalSize": 3,
+  "done": false,
+  "nextRecordsUrl": "/services/data/v62.0/query/01g5g00000ExAmPAAT-2000",
+  "records": [
+    {"attributes": {"type": "Account", "url": "/services/data/v62.0/sobjects/Account/0015g00000AcmeAAA1"}, "Id": "0015g00000AcmeAAA1", "Name": "Acme", "Website": "https://acme.example", "OwnerId": "0055g00000ExAmQAA1"},
+    {"attributes": {"type": "Account", "url": "/services/data/v62.0/sobjects/Account/0015g00000GlobAAA1"}, "Id": "0015g00000GlobAAA1", "Name": "  ", "Website": null, "OwnerId": "0055g00000ExAmRAA1"}
+  ]
+}

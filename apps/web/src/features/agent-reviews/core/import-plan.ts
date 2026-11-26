@@ -156,9 +156,14 @@ export type ImportProgress = {
   failureCount?: number;
   /** A HubSpot plan's owners and what it cannot carry over. */
   hubspot: HubspotPlanReport | null;
+  /** A Salesforce plan's owners and what it cannot carry over. */
+  salesforce: SalesforcePlanReport | null;
 };
 
-/** What CRM cannot hold of a HubSpot portal, by kind. */
+/**
+ * What CRM cannot hold of a CRM source, by kind. Every CRM source shares
+ * these; `archived_stage` is Salesforce's only, so far.
+ */
 export type HubspotLoss =
   | 'owner_not_member'
   | 'deal_without_company'
@@ -170,7 +175,8 @@ export type HubspotLoss =
   | 'company_owner'
   | 'merged_company'
   | 'merged_contact'
-  | 'contact_without_company';
+  | 'contact_without_company'
+  | 'archived_stage';
 
 /** A HubSpot plan's owner matching and losses. */
 export type HubspotPlanReport = {
@@ -180,6 +186,19 @@ export type HubspotPlanReport = {
   created: number;
   linked: number;
   losses: { loss: HubspotLoss; count: number }[];
+};
+
+/** What CRM cannot hold of a Salesforce org: the shared CRM losses. */
+export type SalesforceLoss = HubspotLoss;
+
+/** A Salesforce plan's owner matching and losses. */
+export type SalesforcePlanReport = {
+  owners: number;
+  ownersMatched: number;
+  /** Records the write created, and records it matched to ones already there. */
+  created: number;
+  linked: number;
+  losses: { loss: SalesforceLoss; count: number }[];
 };
 
 export type ImportReviewPhase =
@@ -608,14 +627,17 @@ function hubspotLossLabel(loss: HubspotLoss): string {
     .with('merged_company', () => 'Companies merged by domain')
     .with('merged_contact', () => 'Contacts merged by email')
     .with('contact_without_company', () => 'Contacts without their company')
+    .with('archived_stage', () => 'Deals in inactive stages')
     .exhaustive();
 }
 
-/** A HubSpot plan's owner matching and what it leaves behind. */
-export function hubspotTotals(
-  report: HubspotPlanReport | null | undefined
+/** A CRM plan's owner matching and what its write created or matched. */
+function crmOutcomeTotals(
+  report: Pick<
+    HubspotPlanReport,
+    'owners' | 'ownersMatched' | 'created' | 'linked'
+  >
 ): ImportTotal[] {
-  if (!report) return [];
   return [
     ...(report.owners > 0
       ? [
@@ -631,8 +653,50 @@ export function hubspotTotals(
     ...(report.linked > 0
       ? [{ label: 'Matched existing', value: `${report.linked}` }]
       : []),
+  ];
+}
+
+/** A HubSpot plan's owner matching and what it leaves behind. */
+export function hubspotTotals(
+  report: HubspotPlanReport | null | undefined
+): ImportTotal[] {
+  if (!report) return [];
+  return [
+    ...crmOutcomeTotals(report),
     ...report.losses.map((loss) => ({
       label: hubspotLossLabel(loss.loss),
+      value: `${loss.count}`,
+    })),
+  ];
+}
+
+/** How each Salesforce loss reads in the plan's totals. */
+function salesforceLossLabel(loss: SalesforceLoss): string {
+  return match(loss)
+    .with('owner_not_member', () => 'Owners not on your team')
+    .with('deal_without_company', () => 'Opportunities without an account')
+    .with('archived_stage', () => 'Opportunities in inactive stages')
+    .with('deal_without_pipeline', () => 'Opportunities without a pipeline')
+    .with('extra_company_links', () => 'Records with more than one account')
+    .with('additional_domains', () => 'Extra websites not kept')
+    .with('domain_rejected', () => 'Websites not used as a domain')
+    .with('unsupported_currency', () => 'Unsupported currencies')
+    .with('company_owner', () => 'Account owners not kept')
+    .with('merged_company', () => 'Accounts merged by domain')
+    .with('merged_contact', () => 'Contacts merged by email')
+    .with('contact_without_company', () => 'Contacts without their account')
+    .exhaustive();
+}
+
+/** A Salesforce plan's owner matching and what it leaves behind. */
+export function salesforceTotals(
+  report: SalesforcePlanReport | null | undefined
+): ImportTotal[] {
+  if (!report) return [];
+  return [
+    ...crmOutcomeTotals(report),
+    ...report.losses.map((loss) => ({
+      label: salesforceLossLabel(loss.loss),
       value: `${loss.count}`,
     })),
   ];
@@ -768,6 +832,7 @@ export function progressFromEntries(
         reason: entry.error ?? '',
       })),
     hubspot: null,
+    salesforce: null,
   };
 }
 
@@ -832,11 +897,12 @@ export function sourceLabel(source: ImportDraft['source']): string {
     .with('linear', () => 'Linear')
     .with('jira', () => 'Jira')
     .with('hubspot', () => 'HubSpot')
+    .with('salesforce', () => 'Salesforce')
     .exhaustive();
 }
 
 /** What a source's scan counts, singular and plural: Notion pages and
- * databases, tracker issues and projects, HubSpot records and pipelines. */
+ * databases, tracker issues and projects, CRM records and pipelines. */
 function scanUnits(source: ImportDraft['source']): {
   items: [string, string];
   groups: [string, string];
@@ -850,7 +916,7 @@ function scanUnits(source: ImportDraft['source']): {
       items: ['issue', 'issues'] as [string, string],
       groups: ['project', 'projects'] as [string, string],
     }))
-    .with('hubspot', () => ({
+    .with('hubspot', 'salesforce', () => ({
       items: ['record', 'records'] as [string, string],
       groups: ['pipeline', 'pipelines'] as [string, string],
     }))

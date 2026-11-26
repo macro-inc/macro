@@ -4344,7 +4344,8 @@
           "company_owner",
           "merged_company",
           "merged_contact",
-          "contact_without_company"
+          "contact_without_company",
+          "archived_stage"
         ]
       },
       "CrmLossCount": {
@@ -5642,7 +5643,11 @@
           "hubspot_pipeline",
           "hubspot_company",
           "hubspot_contact",
-          "hubspot_deal"
+          "hubspot_deal",
+          "salesforce_pipeline",
+          "salesforce_company",
+          "salesforce_contact",
+          "salesforce_deal"
         ]
       },
       "ImportNotionPageRequest": {
@@ -5741,7 +5746,7 @@
       "ImportSource": {
         "type": "string",
         "description": "External systems items can be imported from.",
-        "enum": ["linear", "jira", "notion", "slack", "hubspot"]
+        "enum": ["linear", "jira", "notion", "slack", "hubspot", "salesforce"]
       },
       "ImportState": {
         "type": "object",
@@ -6268,6 +6273,17 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The review the plan is tied to, once presented."
+          },
+          "salesforce": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CrmReport",
+                "description": "A Salesforce plan's counts, owners and losses."
+              }
+            ]
           },
           "scanned": {
             "oneOf": [

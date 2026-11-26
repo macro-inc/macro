@@ -5,12 +5,10 @@ import { IMPORT_CATEGORIES } from './catalog';
 describe('agent import handoff', () => {
   it('asks before creating and never writes back to the source', () => {
     const crm = IMPORT_CATEGORIES.crm;
-    const salesforce = crm.providers.find(
-      (p) => p.appSlug === 'salesforce_rest_api'
-    )!;
-    const handoff = agentImportHandoff(crm, salesforce);
+    const close = crm.providers.find((p) => p.appSlug === 'close')!;
+    const handoff = agentImportHandoff(crm, close);
     expect(handoff.input).toBe(
-      'Import my most recent companies and contacts from Salesforce into the Macro CRM.'
+      'Import my most recent companies and contacts from Close into the Macro CRM.'
     );
     expect(handoff.instructions).toContain('ask which ones to bring over');
     expect(handoff.instructions).toContain('CreateCompany');
@@ -23,6 +21,18 @@ describe('agent import handoff', () => {
     const handoff = agentImportHandoff(crm, hubspot);
     expect(handoff.input).toBe('Import my HubSpot CRM into Macro.');
     expect(handoff.instructions).toContain('ImportFromHubspot');
+    expect(handoff.instructions).not.toContain('CreateCompany');
+    expect(handoff.instructions).not.toContain('CreateImportEntity');
+  });
+
+  it("imports Salesforce through Macro's CRM importer", () => {
+    const crm = IMPORT_CATEGORIES.crm;
+    const salesforce = crm.providers.find(
+      (p) => p.appSlug === 'salesforce_rest_api'
+    )!;
+    const handoff = agentImportHandoff(crm, salesforce);
+    expect(handoff.input).toBe('Import my Salesforce CRM into Macro.');
+    expect(handoff.instructions).toContain('ImportFromSalesforce');
     expect(handoff.instructions).not.toContain('CreateCompany');
     expect(handoff.instructions).not.toContain('CreateImportEntity');
   });

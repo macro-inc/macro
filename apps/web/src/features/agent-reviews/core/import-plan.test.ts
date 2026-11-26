@@ -17,6 +17,7 @@ import {
   planSummary,
   planTotals,
   planTreeEntries,
+  salesforceTotals,
   setExcluded,
   setShared,
   sharingSummary,
@@ -320,6 +321,7 @@ describe('importReviewPhase', () => {
     writing: 1,
     failures: [],
     hubspot: null,
+    salesforce: null,
   };
 
   it('follows the review item until the plan is approved', () => {
@@ -484,6 +486,7 @@ describe('planning', () => {
     writing: 0,
     failures: [],
     hubspot: null,
+    salesforce: null,
   };
 
   it('reads Notion until the plan is staged, then counts what is decided', () => {
@@ -652,5 +655,67 @@ describe('HubSpot plans', () => {
       { label: 'Deals without a company', value: '10' },
     ]);
     expect(hubspotTotals(null)).toEqual([]);
+  });
+});
+
+describe('Salesforce plans', () => {
+  it('lists owners, outcomes and a line per loss', () => {
+    expect(
+      salesforceTotals({
+        owners: 3,
+        ownersMatched: 2,
+        created: 4,
+        linked: 1,
+        losses: [
+          { loss: 'owner_not_member', count: 9 },
+          { loss: 'deal_without_company', count: 8 },
+          { loss: 'archived_stage', count: 7 },
+          { loss: 'domain_rejected', count: 6 },
+          { loss: 'unsupported_currency', count: 5 },
+          { loss: 'company_owner', count: 4 },
+          { loss: 'merged_company', count: 3 },
+          { loss: 'merged_contact', count: 2 },
+          { loss: 'contact_without_company', count: 1 },
+        ],
+      })
+    ).toEqual([
+      { label: 'Owners matched', value: '2 of 3' },
+      { label: 'Created', value: '4' },
+      { label: 'Matched existing', value: '1' },
+      { label: 'Owners not on your team', value: '9' },
+      { label: 'Opportunities without an account', value: '8' },
+      { label: 'Opportunities in inactive stages', value: '7' },
+      { label: 'Websites not used as a domain', value: '6' },
+      { label: 'Unsupported currencies', value: '5' },
+      { label: 'Account owners not kept', value: '4' },
+      { label: 'Accounts merged by domain', value: '3' },
+      { label: 'Contacts merged by email', value: '2' },
+      { label: 'Contacts without their account', value: '1' },
+    ]);
+    expect(salesforceTotals(null)).toEqual([]);
+  });
+
+  it('reads Salesforce as records and pipelines', () => {
+    expect(
+      planningStatus(
+        {
+          reviewId: 'review',
+          status: 'running',
+          errorKind: null,
+          error: null,
+          scanned: { pages: 12, databases: 1 },
+          onTeam: true,
+          counts: planCounts([]),
+          imported: 0,
+          waiting: 0,
+          writing: 0,
+          failures: [],
+          hubspot: null,
+          salesforce: null,
+        },
+        [],
+        'salesforce'
+      )
+    ).toBe('Reading Salesforce: 12 records, 1 pipeline');
   });
 });

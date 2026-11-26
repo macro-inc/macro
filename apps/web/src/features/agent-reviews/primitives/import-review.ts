@@ -25,6 +25,7 @@ import {
   planTotals,
   planTreeEntries,
   progressFromEntries,
+  salesforceTotals,
   setExcluded,
   setShared,
   sharingSummary,
@@ -244,6 +245,11 @@ export function createImportReview(sources: ImportReviewSources) {
       ...hubspotTotals(
         sources.report()?.reviewId === record().id
           ? sources.report()?.hubspot
+          : undefined
+      ),
+      ...salesforceTotals(
+        sources.report()?.reviewId === record().id
+          ? sources.report()?.salesforce
           : undefined
       ),
     ],

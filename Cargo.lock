@@ -739,6 +739,7 @@ dependencies = [
  "import_jira",
  "import_linear",
  "import_notion",
+ "import_salesforce",
  "initiative",
  "jev",
  "jsonwebtoken 10.3.0",
@@ -1300,6 +1301,7 @@ dependencies = [
  "import_jira",
  "import_linear",
  "import_notion",
+ "import_salesforce",
  "initiative",
  "initiative_description",
  "item_filters",
@@ -11533,6 +11535,7 @@ dependencies = [
  "futures",
  "import_hubspot",
  "import_notion",
+ "import_salesforce",
  "import_tracker",
  "macro_authorization",
  "macro_db_migrator",
@@ -11640,6 +11643,25 @@ dependencies = [
  "tracing-subscriber",
  "urlencoding",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "import_salesforce"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "connectors",
+ "http 1.4.0",
+ "import_tracker",
+ "macro_user_id",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
  "workspace-hack",
 ]
 

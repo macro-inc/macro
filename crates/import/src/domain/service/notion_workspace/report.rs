@@ -51,7 +51,7 @@ pub(in crate::domain::service) fn report(
         error: run
             .filter(|run| {
                 run.error_kind.is_some()
-                    || (run.source == ImportSource::Hubspot && run.status == RunStatus::Completed)
+                    || (run.source.is_crm() && run.status == RunStatus::Completed)
             })
             .and_then(|run| run.error.clone()),
         error_kind: run.and_then(|run| run.error_kind),
@@ -353,9 +353,8 @@ pub(in crate::domain::service) fn report(
     report.already_imported_by = importers;
     report.details = details.map(details::Details::finish);
     // A settled run can still carry the completion summary from an older writer.
-    if run.is_some_and(|run| {
-        run.source != ImportSource::Hubspot && run.status == RunStatus::Completed
-    }) && let Some(error) = run.and_then(|run| run.error.as_deref())
+    if run.is_some_and(|run| !run.source.is_crm() && run.status == RunStatus::Completed)
+        && let Some(error) = run.and_then(|run| run.error.as_deref())
         && let Some((count, summary)) = error.split_once(' ')
         && let Ok(count) = count.parse::<usize>()
         && (error == partial_write_error(count)
@@ -372,6 +371,8 @@ pub(in crate::domain::service) fn report(
     }
     report.hubspot =
         super::super::hubspot_workspace::report(review_id, current.iter().map(|(row, _)| *row));
+    report.salesforce =
+        super::super::salesforce_workspace::report(review_id, current.iter().map(|(row, _)| *row));
     Ok(report)
 }
 

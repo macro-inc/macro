@@ -24,6 +24,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 mod import_from_hubspot;
+mod import_from_salesforce;
 
 /// What the agent does after a workspace plan failed: tell the user once,
 /// instead of planning again, which fails the same way.
@@ -38,6 +39,7 @@ fn failure_reason(source: ImportSource, kind: Option<RunErrorKind>) -> String {
 mod import_from_notion;
 mod import_from_tracker;
 pub use import_from_hubspot::{HubspotImportResponse, ImportFromHubspot};
+pub use import_from_salesforce::{ImportFromSalesforce, SalesforceImportResponse};
 pub use import_from_tracker::{ImportFromJira, ImportFromLinear, TrackerImportResponse};
 
 pub use import_from_notion::{ImportFromNotion, ImportFromNotionResponse, NotionImportAction};
@@ -96,6 +98,7 @@ pub fn import_toolset<T: ImportStager + NotionPageImporter + WorkspaceImporter>(
         .add_tool::<ImportFromLinear, ImportToolContext<T>>()
         .add_tool::<ImportFromJira, ImportToolContext<T>>()
         .add_tool::<ImportFromHubspot, ImportToolContext<T>>()
+        .add_tool::<ImportFromSalesforce, ImportToolContext<T>>()
         .add_tool::<DeleteImportEntity, ImportToolContext<T>>()
         .add_tool::<ListImportEntities, ImportToolContext<T>>()
 }

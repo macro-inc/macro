@@ -63,6 +63,9 @@ pub enum ImportError {
     /// The connected HubSpot portal could not be read.
     #[error(transparent)]
     Hubspot(#[from] import_hubspot::domain::HubspotError),
+    /// The connected Salesforce org could not be read.
+    #[error(transparent)]
+    Salesforce(#[from] import_salesforce::domain::SalesforceError),
     /// A CRM import needs a team whose CRM the user may use.
     #[error("importing into the CRM needs a team with CRM access")]
     CrmAccessRequired,

@@ -69,12 +69,26 @@ const HUBSPOT_HANDOFF: AgentImportHandoff = {
   ].join(' '),
 };
 
+/**
+ * Salesforce runs Macro's CRM importer: accounts, contacts, opportunity stages
+ * and opportunities, planned with ImportFromSalesforce and presented for review.
+ */
+const SALESFORCE_HANDOFF: AgentImportHandoff = {
+  input: 'Import my Salesforce CRM into Macro.',
+  instructions: [
+    "The user started this from Macro's import dialog and has just connected Salesforce.",
+    'Use ImportFromSalesforce to plan it and present the import review right away.',
+    'Never recreate accounts, contacts or opportunities with other tools, and never edit or delete anything in Salesforce.',
+  ].join(' '),
+};
+
 export function agentImportHandoff(
   config: ImportCategoryConfig,
   provider: ImportProvider
 ): AgentImportHandoff {
   if (provider.ledger === 'notion') return NOTION_WORKSPACE_HANDOFF;
   if (provider.ledger === 'hubspot') return HUBSPOT_HANDOFF;
+  if (provider.ledger === 'salesforce') return SALESFORCE_HANDOFF;
   if (provider.ledger === 'linear' || provider.ledger === 'jira') {
     return {
       input: `Import my ${provider.name} workspace into Macro.`,

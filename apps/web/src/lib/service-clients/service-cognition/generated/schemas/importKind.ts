@@ -29,4 +29,8 @@ export const ImportKind = {
   hubspot_company: 'hubspot_company',
   hubspot_contact: 'hubspot_contact',
   hubspot_deal: 'hubspot_deal',
+  salesforce_pipeline: 'salesforce_pipeline',
+  salesforce_company: 'salesforce_company',
+  salesforce_contact: 'salesforce_contact',
+  salesforce_deal: 'salesforce_deal',
 } as const;

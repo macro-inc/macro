@@ -1,0 +1,8 @@
+{
+  "totalSize": 2,
+  "done": true,
+  "records": [
+    {"attributes": {"type": "Contact", "url": "/services/data/v62.0/sobjects/Contact/0035g00000ConAAAA1"}, "Id": "0035g00000ConAAAA1", "FirstName": "Pat", "LastName": "Example", "Email": "pat@acme.example", "AccountId": "0015g00000AcmeAAA1", "OwnerId": "0055g00000ExAmQAA1"},
+    {"attributes": {"type": "Contact", "url": "/services/data/v62.0/sobjects/Contact/0035g00000ConBAAA1"}, "Id": "0035g00000ConBAAA1", "FirstName": null, "LastName": "Sample", "Email": null, "AccountId": null, "OwnerId": "0055g00000ExAmPAA1"}
+  ]
+}

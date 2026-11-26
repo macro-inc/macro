@@ -722,6 +722,9 @@ pub async fn build(
         .with_hubspot(Arc::new(import_hubspot::outbound::client::HubspotApi::new(
             Arc::clone(&connections),
         )))
+        .with_salesforce(Arc::new(
+            import_salesforce::outbound::client::SalesforceApi::new(Arc::clone(&connections)),
+        ))
         .with_crm_writer(Arc::new(ai_tools::CrmRecordWriter::new(
             &crm_tool_context,
             &pipeline_tool_context,
