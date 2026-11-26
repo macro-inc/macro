@@ -182,7 +182,7 @@ function GithubCommentMessage(props: {
             )}
           </Show>
           <div class="grow shrink-0 min-w-0 flex items-center gap-1.5 justify-end">
-            <Message.Timestamp class="ml-auto shrink-0" format="dateAndTime" />
+            <Message.Timestamp class="ml-auto shrink-0" />
           </div>
         </Message.Slot>
         <Message.Slot placement="content" class="ph-no-capture">
