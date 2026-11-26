@@ -453,6 +453,7 @@ fn native_channel_batches_bench() {
             handle.entity_filter(second).await.unwrap();
         }
         let rss_second = live_kb();
+        let hot = handle.inner.lock().await.engine.hot_tier_size();
         handle.shutdown().unwrap();
         println!(
             "{}",
@@ -474,6 +475,8 @@ fn native_channel_batches_bench() {
                     "viewRowJsonKb": view_row_bytes / 1024,
                     "rssBeforeSecondViewsKb": rss_before_second,
                     "rssWithSecondViewsKb": rss_second,
+                    "hotRecords": hot.records,
+                    "hotKb": hot.bytes / 1024,
                     "peakRssKb": memory_kb("VmHWM"),
                 },
             }))
