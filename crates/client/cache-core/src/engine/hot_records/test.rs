@@ -73,6 +73,7 @@ fn replacing_popping_and_clearing_keep_the_byte_count() {
     assert_eq!(hot.size().bytes, record_bytes(&key("b"), &record(50)));
     assert_eq!(hot.pop(&key("a")), None);
     hot.clear();
+    assert!(hot.is_empty());
     assert_eq!(
         hot.size(),
         HotTierSize {

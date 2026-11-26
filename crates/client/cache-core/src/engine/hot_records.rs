@@ -86,6 +86,11 @@ impl HotRecords {
         self.bytes = 0;
     }
 
+    #[cfg(test)]
+    pub fn is_empty(&self) -> bool {
+        self.records.is_empty()
+    }
+
     pub fn size(&self) -> HotTierSize {
         HotTierSize {
             records: self.records.len(),
