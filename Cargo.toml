@@ -7,6 +7,8 @@ exclude = ["vendor", "crates/password_import/fuzz"]
 members = [
   "crates/egress_guard",
   "crates/imap_engine",
+  "crates/imap_service_client",
+  "services/imap_service",
   "crates/passwords",
   "crates/password_events",
   "crates/password_import",
@@ -262,6 +264,7 @@ hickory-resolver = "0.26.3"
 quick-xml = "0.41"
 egress_guard = { path = "crates/egress_guard" }
 async-imap = { version = "0.12.0", default-features = false, features = ["runtime-tokio"] }
+imap_engine = { path = "crates/imap_engine" }
 computer_id = { path = "crates/computer_id" }
 harnessd_protocol = { path = "crates/harnessd_protocol" }
 pairing_id = { path = "crates/pairing_id" }

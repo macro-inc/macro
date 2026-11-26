@@ -379,6 +379,10 @@ impl InfraEnv {
             "http://calendar-service:8080".into(),
         );
         env.insert(
+            "OVERRIDE_IMAP_SERVICE_URL".into(),
+            "http://imap-service:8080".into(),
+        );
+        env.insert(
             "OVERRIDE_AUTH_SERVICE_URL".into(),
             "http://authentication-service:8080".into(),
         );
@@ -428,6 +432,10 @@ impl InfraEnv {
         env.insert(
             "MCP_OAUTH_KMS_KEY_ID".into(),
             resources::MCP_OAUTH_KMS_ALIAS.into(),
+        );
+        env.insert(
+            "IMAP_CREDENTIAL_KMS_KEY_ID".into(),
+            resources::IMAP_CREDENTIAL_KMS_ALIAS.into(),
         );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());

@@ -459,3 +459,17 @@ and preserve the existing adopted-resource constraints above. An offline Pulumi
 mock run checks resource definitions and routing but does not validate Datadog
 query syntax or inspect production drift. No monitor deployment is implied by
 merging this code.
+
+## IMAP saved credential recovery
+
+`monitors/imap-credentials.ts` declares two span counters, a dashboard and two non-paging monitors: five verified damage classifications in ten minutes, or any five-percent fleet-guard activation. Counts are classification attempts, not distinct accounts. The engine guard itself uses distinct accounts. Only env is a metric dimension; credentials, mailbox ids, key ARNs and contexts never appear. These resources are new and are not deployed by this PR. See [recovery and triage](../../../docs/architecture/imap-engine.md#saved-credential-recovery).
+
+## IMAP host catch-up
+
+`monitors/imap-host-catchup.ts` declares two span counters, one dashboard and
+two non-paging monitors. One counts callback attempts still pending after five
+minutes; the other counts catch-up pages with failed rows or deferred work aged
+at least five minutes. The ten-minute window can outlast recovery. These are
+repeated attempts, not distinct accounts, and only env is a metric dimension.
+They are code-only resources, not deployed by this PR. See
+[host catch-up triage](../../../docs/architecture/imap-engine.md#host-catch-up-after-restart).

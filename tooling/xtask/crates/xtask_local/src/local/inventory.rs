@@ -237,6 +237,17 @@ pub const RUST_SERVICES: &[RustService] = &[
         opt_in: false,
     },
     RustService {
+        compose_name: "imap_service",
+        cargo_bin: "imap_service",
+        package: "imap_service",
+        host_port: Some(Port::Imap),
+        path_prefix: None,
+        is_websocket: false,
+        // Account actors must never run against shared dev mailbox credentials.
+        modes: &[Mode::Local],
+        opt_in: false,
+    },
+    RustService {
         compose_name: "notification_service",
         cargo_bin: "notification_service",
         package: "notification_service",

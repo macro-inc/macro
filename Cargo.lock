@@ -11593,6 +11593,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "imap_service"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-kms",
+ "axum",
+ "database_env_vars",
+ "doppler-config",
+ "imap_engine",
+ "log",
+ "macro_aws_config",
+ "macro_config",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_service_urls",
+ "macro_tower_layers",
+ "rootcause",
+ "rustls",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "imap_service_client"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "imap_engine",
+ "macro_tower_layers",
+ "macro_user_id",
+ "progenitor-client",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
 name = "imgref"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

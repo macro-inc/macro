@@ -1,5 +1,15 @@
 {
   "services": {
+    "imap-service": {
+      "source_paths": [
+        "services/imap_service/**",
+        "crates/imap_engine/**",
+        "crates/imap_service_client/**"
+      ],
+      "stack_path": "infra/stacks/imap-service/**",
+      "deploy_binaries": ["imap_service"],
+      "bootstrap_pending": "Provision dedicated mail egress, KMS and Doppler configuration before first deploy"
+    },
     "agent-harness-service": {
       "source_paths": [
         "services/agent_harness_service/**",
