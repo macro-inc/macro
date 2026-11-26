@@ -1,3 +1,7 @@
+import {
+  type PriorityCollapser,
+  useRegisterPriorityCollapseItem,
+} from '@app/components/priority-collapse/createPriorityCollapser';
 import { t } from '@app/lib/i18n';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { useUserId } from '@core/context/user';
@@ -5,7 +9,7 @@ import { isAgentAccount, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import { Button, Spinner } from '@ui';
+import { Button, cn, Spinner } from '@ui';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { TeamAgentRunState } from '../core/team-agent-setup';
@@ -27,7 +31,7 @@ function useDmAgentAccount(channelId: () => string) {
   };
 }
 
-type NotRunning = Exclude<TeamAgentRunState, 'running'>;
+export type NotRunning = Exclude<TeamAgentRunState, 'running'>;
 
 function notRunning(
   state: TeamAgentRunState | undefined
@@ -116,37 +120,72 @@ export function TeamAgentStatusBanner(props: { userId: string | undefined }) {
 }
 
 /** In a DM's header: a short word for an agent teammate that isn't running. */
-export function TeamAgentDmStatusChip(props: { channelId: string }) {
+/**
+ * The chip in the DM's header. Given the header's `collapser`, it gives up
+ * its label for a dot before the agent's name would be truncated.
+ */
+export function TeamAgentDmStatusChip(props: {
+  channelId: string;
+  collapser?: PriorityCollapser;
+}) {
   const agentUserId = useDmAgentAccount(() => props.channelId);
-  return <TeamAgentStatusChip userId={agentUserId()} />;
+  return (
+    <TeamAgentStatusChip userId={agentUserId()} collapser={props.collapser} />
+  );
 }
 
 /** The chip for the agent teammate `userId` names; nothing for anyone else. */
-export function TeamAgentStatusChip(props: { userId: string | undefined }) {
+export function TeamAgentStatusChip(props: {
+  userId: string | undefined;
+  collapser?: PriorityCollapser;
+}) {
   const status = useTeamAgentStatus(() => props.userId);
   const state = () => notRunning(status.state());
 
   return (
     <Show when={status.agent() && state()}>
       {(current) => (
-        <span
-          data-agent-dm-chip={current()}
-          class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-edge-muted px-2 py-0.5 text-xs text-ink-muted"
-        >
-          <Show
-            when={current() === 'setting_up'}
-            fallback={
-              <span
-                aria-hidden="true"
-                class="size-1.5 shrink-0 rounded-full bg-ink-extra-muted"
-              />
-            }
-          >
-            <Spinner size="sm" decorative />
-          </Show>
-          {chipText(current())}
-        </span>
+        <TeamAgentRunStateChip state={current()} collapser={props.collapser} />
       )}
     </Show>
+  );
+}
+
+/** The chip itself, for a state that is not `running`. */
+export function TeamAgentRunStateChip(props: {
+  state: NotRunning;
+  collapser: PriorityCollapser | undefined;
+}) {
+  // Registered only while the chip shows, so an empty slot never collapses.
+  const compact = props.collapser
+    ? useRegisterPriorityCollapseItem(props.collapser, {
+        id: 'team-agent-status',
+        priority: 2,
+      })
+    : () => false;
+
+  return (
+    <span
+      data-agent-dm-chip={props.state}
+      data-compact={compact() ? '' : undefined}
+      title={compact() ? chipText(props.state) : undefined}
+      class={cn(
+        'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-edge-muted py-0.5 text-xs text-ink-muted',
+        compact() ? 'h-5 px-1.5' : 'px-2'
+      )}
+    >
+      <Show
+        when={props.state === 'setting_up'}
+        fallback={
+          <span
+            aria-hidden="true"
+            class="size-1.5 shrink-0 rounded-full bg-ink-extra-muted"
+          />
+        }
+      >
+        <Spinner size="sm" decorative />
+      </Show>
+      <span classList={{ 'sr-only': compact() }}>{chipText(props.state)}</span>
+    </span>
   );
 }

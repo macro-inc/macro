@@ -4,8 +4,395 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::models::{
-    ImportSource, Initiator, NotionAlreadyImported, NotionPlanItem, ScanCounts,
+    FidelityWarning, ImportSource, Initiator, NotionAlreadyImported, NotionPlanItem,
+    NotionReviewOmissionKind, NotionViewChangeKind, RunErrorKind, ScanCounts, ViewWarning,
 };
+
+#[test]
+fn partial_write_error_agrees_with_one_and_two_items() {
+    for (count, noun) in [(1, "item"), (2, "items")] {
+        assert_eq!(
+            partial_write_error(count),
+            format!("{count} {noun} couldn’t be imported.")
+        );
+    }
+}
+
+#[test]
+fn completed_reports_only_hide_the_summary_when_failures_are_itemized() {
+    let failed = row(
+        "Guide",
+        ImportKind::Page,
+        ImportStatus::Staged,
+        NotionDecision::Copy,
+        None,
+        Some("Notion couldn’t return this item’s content."),
+    );
+    let mut run = ImportRun {
+        source: ImportSource::Notion,
+        status: RunStatus::Completed,
+        error: Some("1 objects could not be fully imported. See the report for details.".into()),
+        updated_at: Utc::now(),
+        scanned: None,
+        review_id: None,
+        review_session_id: None,
+        error_kind: None,
+    };
+    let rows = std::slice::from_ref(&failed);
+    assert_eq!(report(Some(&run), rows).failure_count, 1);
+    assert_eq!(report(Some(&run), rows).error, None);
+    assert_eq!(
+        report(Some(&run), &[]).error.as_deref(),
+        Some("1 item couldn’t be imported.")
+    );
+
+    run.error = Some(partial_write_error(1));
+    assert_eq!(report(Some(&run), rows).error, None);
+
+    // Text the run kept without a kind may predate Macro writing it
+    // (a provider's text), so the report leaves it out.
+    run.error = Some("Notion stopped responding".into());
+    assert_eq!(report(Some(&run), rows).error, None);
+    run.error_kind = Some(RunErrorKind::Unreachable);
+    assert_eq!(report(Some(&run), rows).error, run.error);
+}
+
+#[test]
+fn a_legacy_run_error_without_a_kind_is_never_reported() {
+    let run = ImportRun {
+        source: ImportSource::Notion,
+        status: RunStatus::Failed,
+        error: Some("Notion could not complete the request: provider-secret-body".into()),
+        updated_at: Utc::now(),
+        scanned: None,
+        review_id: None,
+        review_session_id: None,
+        error_kind: None,
+    };
+    let report = report(Some(&run), &[]);
+    assert_eq!(report.status, Some(RunStatus::Failed));
+    assert_eq!(report.error, None);
+    assert_eq!(report.error_kind, None);
+    let json = serde_json::to_string(&report).unwrap();
+    assert!(!json.contains("provider-secret-body"), "{json}");
+}
+
+#[test]
+fn workspace_notion_failures_use_safe_copy_for_direct_and_wrapped_provider_errors() {
+    use crate::domain::ports::ImportError;
+    use import_notion::domain::ports::NotionError;
+
+    let rejected = || NotionError::Upstream {
+        status: 400,
+        body: "Provider diagnostics".into(),
+    };
+    for error in [
+        ImportError::from(rejected()),
+        ImportError::Other(anyhow::Error::new(rejected()).context("could not fetch content")),
+    ] {
+        assert_eq!(
+            super::super::failure_text(&error, ImportSource::Notion),
+            "Notion couldn’t return this item’s content."
+        );
+    }
+}
+
+#[test]
+fn reports_an_unavailable_source_once_with_its_page_context() {
+    use crate::domain::models::{ImportNotice, ImportNoticeKind};
+    use import_notion::domain::{
+        databases::{DatabaseLoss, ReadFailure},
+        model::NotionId,
+    };
+
+    let mut page = row(
+        "Project",
+        ImportKind::Page,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    let source_id = NotionId::parse("dddddddddddddddddddddddddddddddd").unwrap();
+    let unavailable = |reason| DatabaseLoss::SourceUnavailable {
+        source_id: source_id.clone(),
+        reason,
+    };
+    let notice = |source: &str, kind| FidelityWarning::Notice {
+        notice: ImportNotice {
+            object: source_id.clone(),
+            source: source.into(),
+            kind,
+        },
+    };
+    page.metadata["warnings"] = serde_json::json!([
+        notice(
+            "Renamed archive",
+            ImportNoticeKind::DatabaseOccurrence {
+                loss: unavailable(ReadFailure::NotFound),
+            },
+        ),
+        notice(
+            "Project",
+            ImportNoticeKind::PageDatabaseOccurrence {
+                database: "Archive".into(),
+                loss: unavailable(ReadFailure::NotFound),
+            },
+        ),
+        notice(
+            "Archive",
+            ImportNoticeKind::DatabaseOccurrence {
+                loss: unavailable(ReadFailure::Forbidden),
+            },
+        ),
+    ]);
+    let report = report(None, &[page]);
+    let notes = report.details.unwrap().notes;
+    assert_eq!(notes.len(), 2);
+    assert!(notes.iter().any(|note| {
+        note.message
+            .starts_with("Page “Project”, database “Archive”")
+    }));
+    assert!(notes.iter().all(|note| note.message.ends_with('.')));
+}
+
+#[test]
+fn report_counts_omissions_failures_and_notices_beyond_its_sample() {
+    let limit = REPORT_LIST_LIMIT;
+    let input = 0..limit + 5;
+    let rows: Vec<_> = input
+        .flat_map(|index| {
+            let mut failure = row(
+                &format!("Database {index}"),
+                ImportKind::DataSource,
+                ImportStatus::Staged,
+                NotionDecision::Copy,
+                None,
+                None,
+            );
+            failure.last_error = Some("Database write stopped".into());
+            failure.metadata["warnings"] = serde_json::json!([format!("Import notice {index}")]);
+            let omitted = row(
+                &format!("Template {index}"),
+                ImportKind::Page,
+                ImportStatus::Discarded,
+                NotionDecision::Skip,
+                None,
+                None,
+            );
+            [failure, omitted]
+        })
+        .collect();
+    let report = serde_json::to_value(report(None, &rows)).unwrap();
+    assert_eq!(report["failures"].as_array().unwrap().len(), limit);
+    assert_eq!(report["failureCount"], limit + 5);
+    assert_eq!(report["warnings"].as_array().unwrap().len(), limit);
+    let details = &report["details"];
+    assert_eq!(details["notImported"].as_array().unwrap().len(), limit);
+    assert_eq!(details["omissionCounts"][0]["pages"], limit + 5);
+    assert_eq!(details["notes"].as_array().unwrap().len(), limit);
+    assert_eq!(details["noteCounts"][0]["lines"], limit + 5);
+}
+
+#[test]
+fn report_bounds_view_and_placement_samples_but_keeps_totals() {
+    use import_notion::domain::{
+        model::NotionId,
+        views::{ViewLossKind, ViewSetting, ViewType},
+    };
+    let id = |index| NotionId::parse(&format!("{index:032x}")).unwrap();
+    let mut database = row(
+        "Projects",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    let count = REPORT_LIST_LIMIT + 5;
+    let warnings: Vec<_> = (1..=count)
+        .flat_map(|index| {
+            let view_id = id(index);
+            let main = ViewWarning {
+                source_id: id(0),
+                view_id: view_id.clone(),
+                source: "Projects".into(),
+                view: format!("View {index}"),
+                kind: ViewLossKind::Layout,
+                setting: ViewSetting::Other,
+                layout: ViewType::Table,
+                properties: Vec::new(),
+                count: 1,
+            };
+            [
+                FidelityWarning::ViewLoss(main.clone()),
+                FidelityWarning::ViewLoss(ViewWarning {
+                    kind: ViewLossKind::Sort,
+                    ..main
+                }),
+                FidelityWarning::Notice {
+                    notice: crate::domain::models::ImportNotice::new(
+                        &id(0),
+                        "Projects",
+                        crate::domain::models::ImportNoticeKind::TabChosen {
+                            view_id,
+                            view: format!("View {index}"),
+                            page_id: Some(id(index + count)),
+                            container_title: Some(format!("Page {index}")),
+                        },
+                    ),
+                },
+            ]
+        })
+        .collect();
+    database.metadata["warnings"] = serde_json::json!(warnings);
+    let details = report(None, &[database]).details.unwrap();
+    assert_eq!(details.view_count, count as u32);
+    assert_eq!(details.view_change_count, (2 * count) as u32);
+    assert_eq!(details.view_changes[0].views.len(), REPORT_LIST_LIMIT);
+    assert_eq!(details.tab_choice_count, count as u32);
+    assert_eq!(details.tab_choices.len(), REPORT_LIST_LIMIT);
+}
+
+#[test]
+fn tab_choices_keep_each_containing_page_and_its_title() {
+    let mut database = row(
+        "Projects",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    let notice = |page_id, container_title| {
+        serde_json::json!({
+            "notice": {
+                "object": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "source": "Projects",
+                "kind": {
+                    "type": "tab_chosen",
+                    "view_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "view": "Board",
+                    "page_id": page_id,
+                    "container_title": container_title,
+                }
+            }
+        })
+    };
+    let project = notice("cccccccccccccccccccccccccccccccc", "Project Home");
+    let teams = notice("dddddddddddddddddddddddddddddddd", "Team Home");
+    database.metadata["warnings"] = serde_json::json!([project.clone(), teams, project]);
+    let details = report(None, &[database]).details.unwrap();
+    let choices = serde_json::to_value(details).unwrap();
+    assert_eq!(choices["tabChoices"].as_array().unwrap().len(), 2);
+    assert_eq!(choices["tabChoices"][0]["containerTitle"], "Project Home");
+    assert_eq!(choices["tabChoices"][1]["containerTitle"], "Team Home");
+}
+
+#[test]
+fn view_changes_keep_ids_counts_and_impact_and_review_skips_keep_reasons() {
+    use import_notion::domain::{
+        model::NotionId,
+        views::{ViewLossKind, ViewSetting, ViewType},
+    };
+    let id = |ch: char| NotionId::parse(&ch.to_string().repeat(32)).unwrap();
+    let review = Uuid::now_v7();
+    let warning = |view_id, kind, setting, properties, count| {
+        FidelityWarning::ViewLoss(ViewWarning {
+            source_id: id('a'),
+            view_id,
+            source: "Projects".into(),
+            view: "Same title".into(),
+            kind,
+            setting,
+            layout: ViewType::Table,
+            properties,
+            count,
+        })
+    };
+    let mut database = row(
+        "Projects",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        Some(review),
+        None,
+    );
+    database.metadata["warnings"] = serde_json::json!([
+        warning(
+            id('c'),
+            ViewLossKind::Setting,
+            ViewSetting::ColumnWidth,
+            vec![],
+            1
+        ),
+        warning(
+            id('b'),
+            ViewLossKind::Setting,
+            ViewSetting::HiddenColumn,
+            vec!["Meeting".into()],
+            1
+        ),
+        warning(
+            id('b'),
+            ViewLossKind::Setting,
+            ViewSetting::HiddenColumn,
+            vec!["Notes".into()],
+            1
+        ),
+        warning(
+            id('b'),
+            ViewLossKind::FilterIncludesBlankStatus,
+            ViewSetting::Other,
+            vec!["Status".into()],
+            3
+        ),
+    ]);
+    let mut template = row(
+        "Template",
+        ImportKind::Page,
+        ImportStatus::Discarded,
+        NotionDecision::Skip,
+        Some(review),
+        None,
+    );
+    template.metadata["plan"]["reason"] = serde_json::json!("Empty template");
+    let excluded = row(
+        "Unselected",
+        ImportKind::Page,
+        ImportStatus::Discarded,
+        NotionDecision::Copy,
+        Some(review),
+        None,
+    );
+    let details = report(None, &[database, template, excluded])
+        .details
+        .unwrap();
+    assert_eq!(
+        details.not_imported[0].kind,
+        NotionReviewOmissionKind::LeftOut
+    );
+    assert_eq!(
+        details.not_imported[0].item.reason.as_deref(),
+        Some("Empty template")
+    );
+    assert_eq!(
+        details.not_imported[1].kind,
+        NotionReviewOmissionKind::Excluded
+    );
+    assert_eq!(details.view_changes.len(), 1);
+    let views = &details.view_changes[0].views;
+    assert_eq!(views.len(), 2, "equal titles do not merge distinct views");
+    assert_eq!(views[0].view_id, id('b').to_string());
+    assert_eq!(views[0].changes[0].kind, NotionViewChangeKind::Filter);
+    assert_eq!(views[0].changes[0].count, 3);
+    assert_eq!(views[0].changes[1].count, 2);
+    assert_eq!(
+        views[0].changes[1].message,
+        "Shown here, hidden in Notion: Meeting, Notes."
+    );
+    assert_eq!(views[1].changes[0].kind, NotionViewChangeKind::Display);
+}
 
 fn row(
     title: &str,
@@ -16,6 +403,8 @@ fn row(
     last_error: Option<&str>,
 ) -> ImportEntity {
     let plan = NotionPlanItem {
+        dependency_of: Vec::new(),
+        inline_on: Vec::new(),
         decision: Some(decision),
         reason: (decision == NotionDecision::Hand).then(|| "Mixed records".to_string()),
         path: Vec::new(),
@@ -484,4 +873,167 @@ fn shared_re_reviews_hide_historical_personal_relocations() {
             .iter()
             .all(|warning| !warning.contains("kept in Notion (personal)"))
     );
+}
+
+#[test]
+fn resumed_warning_snapshots_keep_counts_without_adding_them_twice() {
+    use crate::domain::models::{FidelityWarning, ReferenceLossReason};
+    let mut source = row(
+        "Work",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    source.metadata["warnings"] = serde_json::json!([
+        FidelityWarning::References {
+            reason: ReferenceLossReason::NotReviewed,
+            title: "External plans".into(),
+            count: 3
+        },
+        FidelityWarning::References {
+            reason: ReferenceLossReason::NotReviewed,
+            title: "External plans".into(),
+            count: 8
+        },
+        FidelityWarning::Text("A saved sort was omitted".into()),
+    ]);
+    let report = report(None, &[source]);
+    assert_eq!(report.warnings.len(), 2);
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("8 references") && warning.contains("External plans"))
+    );
+}
+
+#[test]
+fn review_counted_warnings_remain_scoped_to_their_containing_sources() {
+    use crate::domain::models::{FidelityWarning, ReferenceLossReason};
+    let mut source = row(
+        "Work",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    source.metadata["warnings"] = serde_json::json!([FidelityWarning::References {
+        reason: ReferenceLossReason::NotReviewed,
+        title: "External plans".into(),
+        count: 3
+    }]);
+    let mut other = source.clone();
+    other.id = Uuid::now_v7();
+    other.foreign_id = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".into();
+    other.metadata["title"] = serde_json::json!("Roadmap");
+    let report = report(None, &[source, other]);
+    assert_eq!(
+        report.warnings.len(),
+        2,
+        "distinct source counts must not collapse into one line"
+    );
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Work") && warning.contains("3 references"))
+    );
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Roadmap") && warning.contains("3 references"))
+    );
+}
+
+#[test]
+fn typed_people_counts_from_identically_named_sources_stay_distinct() {
+    use crate::domain::models::FidelityWarning;
+    let mut source = row(
+        "Tasks",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    source.metadata["warnings"] = serde_json::json!([FidelityWarning::UnmappedPeople {
+        source: "Tasks".into(),
+        property: "Owner".into(),
+        count: 2
+    }]);
+    let mut other = source.clone();
+    other.id = Uuid::now_v7();
+    other.foreign_id = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".into();
+    let report = report(None, &[source, other]);
+    assert_eq!(
+        report.warnings,
+        vec![
+            "2 people assignments in database “Tasks”, property “Owner”, could not be matched to Macro users and were omitted.",
+            "2 people assignments in database “Tasks”, property “Owner”, could not be matched to Macro users and were omitted.",
+        ]
+    );
+}
+
+#[test]
+fn unknown_warning_entries_do_not_hide_known_report_losses() {
+    let mut source = row(
+        "Work",
+        ImportKind::DataSource,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    source.metadata["warnings"] = serde_json::json!([
+        "A saved sort was omitted",
+        {"future_warning_kind": "not understood"},
+        {"another_future_kind": true}
+    ]);
+    let report = report(None, &[source]);
+    assert_eq!(report.warnings.len(), 2);
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|line| line == "A saved sort was omitted")
+    );
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|line| line.contains("2 unsupported warning entries"))
+    );
+}
+
+#[test]
+fn identical_missing_container_notices_are_reported_once() {
+    use crate::domain::models::{FidelityWarning, ImportNotice, ImportNoticeKind};
+    use import_notion::domain::model::NotionId;
+    let mut source = row(
+        "Work",
+        ImportKind::Page,
+        ImportStatus::Imported,
+        NotionDecision::Copy,
+        None,
+        None,
+    );
+    let object = NotionId::parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+    source.metadata["warnings"] = serde_json::json!([
+        FidelityWarning::Notice {
+            notice: ImportNotice::new(&object, "First", ImportNoticeKind::MissingContainerIdentity)
+        },
+        FidelityWarning::Notice {
+            notice: ImportNotice::new(
+                &object,
+                "Second",
+                ImportNoticeKind::MissingContainerIdentity
+            )
+        }
+    ]);
+    let report = report(None, &[source]);
+    assert_eq!(report.warnings.len(), 1);
 }

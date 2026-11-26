@@ -1,3 +1,14 @@
+import {
+  SearchOperatorOverlay,
+  type SearchTextPart,
+} from '@app/components/view-shell/search-operator-text';
+import { SearchTipsSheet } from '@app/components/view-shell/search-tips';
+import { SEARCH_OPERATORS_DOCS_URL } from '@app/constants/docs-links';
+import {
+  type SearchOperatorBinding,
+  searchOperatorSpans,
+} from '@app/features/next-soup/core/search-operators';
+import { searchViewTips } from '@app/features/next-soup/soup-view/search-tips';
 import { t } from '@app/lib/i18n';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import {
@@ -6,12 +17,30 @@ import {
 } from '@components/app/mobile/use-mobile-nav';
 import { usePreserveFocusOnButtonTaps } from '@core/mobile/usePreserveFocusOnButtonTaps';
 import { lazyNamed } from '@core/util/lazyNamed';
+import InfoIcon from '@icon/system/regular/info.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { CommandMenuSearchInput } from '@ui';
-import { createSignal, Show, Suspense } from 'solid-js';
+import { createEffect, createSignal, on, Show, Suspense } from 'solid-js';
 import { useUniversalInputEnabled } from '../../universal-input/use-universal-input';
 import { SearchState } from './mobileSearchState';
+
+/** The field's text with the operators the search reads marked, to draw. */
+function operatorParts(
+  text: string,
+  bindings: readonly SearchOperatorBinding[]
+): SearchTextPart[] {
+  const parts: SearchTextPart[] = [];
+  let at = 0;
+  for (const { start, end } of searchOperatorSpans(text, bindings)) {
+    if (start > at)
+      parts.push({ text: text.slice(at, start), operator: false });
+    parts.push({ text: text.slice(start, end), operator: true });
+    at = end;
+  }
+  if (at < text.length) parts.push({ text: text.slice(at), operator: false });
+  return parts;
+}
 
 const MobileUniversalInput = lazyNamed(
   () => import('../../universal-input/universal-input'),
@@ -26,6 +55,11 @@ export function MobileSearchInput() {
   let inputRef: HTMLTextAreaElement | undefined;
   const universalInputEnabled = useUniversalInputEnabled();
   const [sending, setSending] = createSignal(false);
+  // The text as shown, a word being composed included, which the search
+  // only takes once it commits.
+  const [shown, setShown] = createSignal(SearchState.query());
+  const [tipsOpen, setTipsOpen] = createSignal(false);
+  createEffect(on(SearchState.query, setShown));
 
   const foregroundView = useForegroundMobileView();
   const navigate = useMobileNavNavigate();
@@ -96,28 +130,51 @@ export function MobileSearchInput() {
         ref={setContainer}
         class="island pointer-events-auto flex min-h-11 min-w-0 flex-1 items-end gap-1 rounded-[22px] py-1 pr-1 pl-4"
       >
-        <CommandMenuSearchInput
-          as="textarea"
-          ref={inputRef}
-          id="mobile-search-input"
-          aria-label={
-            universalInputEnabled()
-              ? t('commandMenu.mobileSearchOrCreate')
-              : t('commandMenu.hintSearch')
-          }
-          readOnly={sending()}
-          aria-busy={sending()}
-          enterkeyhint="enter"
-          class="min-h-9 max-h-32 py-1.5 text-base text-ink"
-          placeholder={t('commandMenu.mobileSearchPlaceholder')}
-          value={SearchState.query()}
-          // Blurring never ends the session — the keyboard drops but search
-          // mode stays until the X is pressed or navigation covers this entry.
-          onInput={(e) => {
-            if (!e.isComposing) SearchState.setQuery(e.currentTarget.value);
-          }}
-          onCompositionEnd={(e) => SearchState.setQuery(e.currentTarget.value)}
-        />
+        {/* Operators (`type:task`) are drawn as tokens behind the text. */}
+        <div class="relative flex min-w-0 flex-1">
+          <SearchOperatorOverlay
+            multiline
+            parts={operatorParts(shown(), SearchState.session().bindings())}
+            input={() => inputRef}
+            class="py-1.5 text-base text-ink"
+          />
+          <CommandMenuSearchInput
+            as="textarea"
+            ref={inputRef}
+            id="mobile-search-input"
+            aria-label={
+              universalInputEnabled()
+                ? t('commandMenu.mobileSearchOrCreate')
+                : t('commandMenu.hintSearch')
+            }
+            readOnly={sending()}
+            aria-busy={sending()}
+            enterkeyhint="enter"
+            class="min-h-9 max-h-32 py-1.5 text-base text-transparent caret-ink"
+            placeholder={t('commandMenu.mobileSearchPlaceholder')}
+            value={SearchState.query()}
+            // Blurring never ends the session — the keyboard drops but search
+            // mode stays until the X is pressed or navigation covers this entry.
+            onInput={(e) => {
+              setShown(e.currentTarget.value);
+              if (!e.isComposing) SearchState.setQuery(e.currentTarget.value);
+            }}
+            onCompositionEnd={(e) =>
+              SearchState.setQuery(e.currentTarget.value)
+            }
+          />
+        </div>
+        {/* The empty field offers its tips beside the X, as Mail's does. */}
+        <Show when={!shown().trim()}>
+          <button
+            type="button"
+            class="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-muted"
+            aria-label={t('searchOperators.tips')}
+            onClick={() => setTipsOpen(true)}
+          >
+            <InfoIcon class="size-4" />
+          </button>
+        </Show>
         {/* The input only mounts while a session is open, so the X is always
           available as the exit. */}
         <button
@@ -132,6 +189,12 @@ export function MobileSearchInput() {
           <XIcon class="size-4" />
         </button>
       </div>
+      <SearchTipsSheet
+        tips={searchViewTips()}
+        docsUrl={SEARCH_OPERATORS_DOCS_URL}
+        open={tipsOpen()}
+        onOpenChange={setTipsOpen}
+      />
     </>
   );
 }

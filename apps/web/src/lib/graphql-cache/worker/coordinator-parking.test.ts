@@ -12,6 +12,7 @@ function ready(core: CoordinatorCore, tabId: string, ownerEpoch: number) {
     ownerLockHeld: true,
     databaseActionProof: 'opened-existing',
     openOutcome: 'opened-existing',
+    queue: 'preserved',
   });
 }
 
@@ -47,10 +48,16 @@ it('closes on last-visible exit, keeps clients, and routes an old settlement bef
   ready(core, 'a', 1);
   core.registerTab('b', false);
   core.setTabVisibility('a', false);
+  core.drainHiddenOwner(1);
   expect(core.state.kind).toBe('draining');
   expect(core.engineDrained('a', 1)).toEqual([
     { kind: 'close-engine-route', tabId: 'a', ownerEpoch: 1 },
-    { kind: 'release-owner', tabId: 'a', ownerEpoch: 1 },
+    {
+      kind: 'release-owner',
+      tabId: 'a',
+      ownerEpoch: 1,
+      reason: 'visibility handoff drained',
+    },
   ]);
   expect(core.state).toEqual({
     kind: 'parked',
@@ -105,6 +112,7 @@ it('retains an accepted settlement after its caller leaves, without retaining ab
   ready(core, 'a', 1);
   core.registerTab('b', false);
   core.setTabVisibility('a', false);
+  core.drainHiddenOwner(1);
   core.engineDrained('a', 1);
   core.request('a', {
     id: 7,
@@ -156,6 +164,7 @@ it('does not cancel a storage open on hide and parks only after its drain acknow
     ownerLockHeld: true,
     databaseActionProof: 'opened-existing',
     openOutcome: 'opened-existing',
+    queue: 'preserved',
   });
   expect(actions).toEqual([
     { kind: 'drain-owner', tabId: 'a', ownerEpoch: 1, handoff: true },
@@ -170,6 +179,7 @@ it('retains a real abrupt-loss reset requirement through all-hidden recovery', (
   core.registerTab('a');
   ready(core, 'a', 1);
   core.setTabVisibility('a', false);
+  core.drainHiddenOwner(1);
   core.ownerLost('a', 1, 'runtime failure');
   expect(core.resumeAfterLoss()).toEqual([]);
   expect(core.state).toEqual({

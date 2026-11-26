@@ -60,6 +60,36 @@ struct Pages {
 }
 
 impl NotionApi for Pages {
+    async fn list_views(
+        &self,
+        _scope: &import_notion::domain::views::ViewScope,
+        _cursor: Option<String>,
+    ) -> std::result::Result<Paged<NotionId>, NotionError> {
+        Err(NotionError::NotFound)
+    }
+
+    async fn retrieve_view(
+        &self,
+        id: &NotionId,
+    ) -> std::result::Result<import_notion::domain::views::NotionView, NotionError> {
+        if *id != page_id('1') && *id != page_id('2') {
+            return Err(NotionError::NotFound);
+        }
+        Ok(import_notion::domain::views::NotionView {
+            id: id.clone(),
+            parent: import_notion::domain::views::ViewParent {
+                database_id: page_id('6'),
+            },
+            name: "Work Board".to_owned(),
+            data_source_id: Some(page_id('5')),
+            kind: import_notion::domain::views::ViewType::Board,
+            filter: None,
+            sorts: None,
+            configuration: None,
+            extra: Default::default(),
+        })
+    }
+
     async fn search(
         &self,
         _: SearchObject,
@@ -120,7 +150,7 @@ impl NotionApi for Pages {
         &self,
         _: &NotionId,
     ) -> std::result::Result<Vec<NotionId>, NotionError> {
-        unimplemented!("only pages here")
+        Ok(Vec::new())
     }
 
     async fn query_data_source(
@@ -204,6 +234,7 @@ impl NotionConnections for AfterReplacement {
     }
 }
 
+mod links;
 mod writer;
 use writer::Writer;
 
@@ -244,6 +275,8 @@ fn page(hex: char, title: &str) -> PlanRow {
 /// A page planned as a document, shared with the team or not.
 fn planned_page(hex: char, title: &str, shared: bool) -> PlanRow {
     let plan = NotionPlanItem {
+        dependency_of: Vec::new(),
+        inline_on: Vec::new(),
         decision: Some(NotionDecision::Copy),
         reason: None,
         path: Vec::new(),
@@ -289,6 +322,22 @@ async fn approved_source(
     source: ImportSource,
 ) -> (Uuid, Vec<Uuid>) {
     let repo = PgImportRepo::new(pool.clone());
+    // A review is presented while its plan is being made. A user approving
+    // again plans again, which replaces the earlier run and the review that
+    // held it (each review holds its own plan), before the new plan is staged.
+    repo.start_run(
+        owner,
+        source,
+        &[
+            RunStatus::Running,
+            RunStatus::Ready,
+            RunStatus::Completed,
+            RunStatus::Failed,
+            RunStatus::Dismissed,
+        ],
+    )
+    .await
+    .unwrap();
     let staged = repo.replace_plan(owner, source, rows).await.unwrap();
     let session = Uuid::now_v7();
     sqlx::query!(
@@ -308,8 +357,6 @@ async fn approved_source(
     .execute(pool)
     .await
     .unwrap();
-    // A review is presented while its plan is being made.
-    repo.start_run(owner, source, &[]).await.unwrap();
     repo.attach_review(
         owner,
         source,
@@ -381,12 +428,89 @@ async fn a_write_cut_off_by_shutdown_hands_its_run_over(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool: PgPool) {
-    let owner = user("adopt");
-    let (review, rows) = approved_plan(&pool, &owner).await;
+async fn a_failed_database_keeps_confirmed_rows_without_counting_a_completed_copy(pool: PgPool) {
+    use crate::domain::models::{WrittenKind, WrittenObject};
+
+    let owner = user("partial-database");
+    let mut source = planned_page('c', "Projects", false);
+    source.kind = ImportKind::DataSource;
+    source.metadata["plan"]["rows"] = serde_json::json!(99);
     let repo = PgImportRepo::new(pool.clone());
-    // The first process wrote Roadmap and died while writing Spec; its
-    // lease has lapsed.
+    repo.start_run(&owner, ImportSource::Notion, &[])
+        .await
+        .unwrap();
+    let (review, rows) = approved(&pool, &owner, &[source]).await;
+    let id = rows[0];
+    repo.transition_run(
+        &owner,
+        ImportSource::Notion,
+        &[RunStatus::Running],
+        RunStatus::Importing,
+        None,
+    )
+    .await
+    .unwrap();
+    repo.mark_importing(&owner, &rows).await.unwrap();
+    let first = WrittenObject::for_row(id, WrittenKind::Row, &page_id('e'), Uuid::now_v7());
+    repo.record_written(
+        &owner,
+        &[
+            WrittenObject::own(id, WrittenKind::Database, Uuid::now_v7()),
+            first.clone(),
+            first,
+            WrittenObject::for_row(id, WrittenKind::Row, &page_id('f'), Uuid::now_v7()),
+        ],
+    )
+    .await
+    .unwrap();
+    assert!(
+        repo.mark_import_failed(&owner, id, "Database write stopped")
+            .await
+            .unwrap()
+    );
+    let service = ImportServiceImpl::new(
+        repo,
+        no_connections(),
+        Arc::new(Writer::default()),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(Connected));
+
+    // A per-source failure still lets the writer account for the remaining plan.
+    assert!(
+        service
+            .end_write(&owner, RunStatus::Completed, None, None)
+            .await
+            .unwrap()
+    );
+    let report = service.current_report(&owner).await.unwrap();
+    assert_eq!(report.review_id, Some(review));
+    assert_eq!(report.failures.len(), 1);
+    assert_eq!(report.database_rows, 2);
+    assert_eq!(report.imported, 0);
+    assert_eq!(report.databases, 0);
+    assert_eq!(
+        serde_json::to_value(report.confirmed.unwrap()).unwrap()["partialDatabaseRows"],
+        2,
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool: PgPool) {
+    use crate::domain::models::{WrittenKind, WrittenObject};
+
+    let owner = user("adopt");
+    let mut source = planned_page('c', "Tasks", false);
+    source.kind = ImportKind::DataSource;
+    source.metadata["plan"]["rows"] = serde_json::json!(99);
+    let (review, rows) = approved(
+        &pool,
+        &owner,
+        &[page('a', "Roadmap"), page('b', "Spec"), source],
+    )
+    .await;
+    let repo = PgImportRepo::new(pool.clone());
+    // The first process finished Roadmap and Tasks before its lease lapsed.
     repo.start_run(&owner, ImportSource::Notion, &[])
         .await
         .unwrap();
@@ -411,12 +535,38 @@ async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool
     repo.set_root_folder(&owner, root).await.unwrap();
     repo.mark_importing(&owner, &rows).await.unwrap();
     let roadmap = write::document_id(rows[0]);
+    let database = Uuid::now_v7();
+    let table = Uuid::now_v7();
+    repo.record_written(
+        &owner,
+        &[
+            WrittenObject::for_row(rows[0], WrittenKind::Document, &page_id('a'), roadmap),
+            WrittenObject::own(rows[2], WrittenKind::Database, database),
+            WrittenObject::own(rows[2], WrittenKind::Table, table),
+            WrittenObject::for_row(rows[2], WrittenKind::Row, &page_id('e'), Uuid::now_v7()),
+        ],
+    )
+    .await
+    .unwrap();
     repo.mark_imported(&owner, rows[0], &roadmap.to_string(), "md", None)
+        .await
+        .unwrap();
+    repo.mark_imported(&owner, rows[2], &database.to_string(), "database", None)
         .await
         .unwrap();
 
     let tracker = TaskTracker::new();
-    let writer = Arc::new(Writer::default());
+    let writer = Arc::new(Writer {
+        link_inputs: [(
+            write::document_id(rows[1]),
+            vec![crate::domain::ports::NotionLinkReference {
+                id: page_id('a'),
+                view_id: None,
+            }],
+        )]
+        .into(),
+        ..Default::default()
+    });
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
         no_connections(),
@@ -435,10 +585,17 @@ async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool
     let (spec, name, links) = &documents[0];
     assert_eq!(name, "Spec");
     assert_eq!(*spec, write::document_id(rows[1]));
+    assert!(links.pages.is_empty());
     assert_eq!(
-        links.pages[&page_id('a')].document_id,
-        roadmap,
-        "Spec still mentions the Roadmap written before"
+        writer.replaced_links.lock().unwrap()[spec],
+        vec![(
+            crate::domain::ports::NotionLinkReference {
+                id: page_id('a'),
+                view_id: None
+            },
+            crate::domain::ports::NotionLinkDestination::Page(roadmap),
+        )],
+        "Spec links to the Roadmap written before the lease was adopted"
     );
     assert!(
         writer.folders.lock().unwrap().is_empty(),
@@ -446,7 +603,17 @@ async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool
     );
     let report = service.notion_import_report(&owner).await.unwrap();
     assert_eq!(report.status, Some(RunStatus::Completed));
-    assert_eq!(report.imported, 2);
+    assert_eq!(report.imported, 3);
+    let confirmed = report.confirmed.unwrap();
+    assert_eq!(
+        (
+            confirmed.documents,
+            confirmed.databases,
+            confirmed.database_rows
+        ),
+        (2, 1, 1),
+        "count the writes from before adoption once, ignoring the 99-row estimate"
+    );
     assert_eq!(report.writing, 0);
     let spec_row = repo.get(&owner, rows[1]).await.unwrap().unwrap();
     assert_eq!(spec_row.entity_id, Some(spec.to_string()));
@@ -921,6 +1088,8 @@ async fn a_plan_presented_while_planning_fills_in_batch_by_batch_and_restages_on
 }
 
 mod events;
+mod hubspot;
+mod inline;
 mod reimport;
 /// The session events the import produces, in order.
 mod root;
@@ -1089,7 +1258,15 @@ fn a_failure_reads_from_its_kind_never_the_providers_text() {
         }),
         ImportSource::Notion,
     );
-    assert_eq!(text, "Notion couldn't be reached.");
+    // Notion's own failures keep Macro's finer copy (from #11655).
+    assert_eq!(text, "Notion couldn’t return this item’s content.");
+    assert!(!text.contains("provider-secret-body"));
+    // A lost connection reads from its kind, which says how to fix it.
+    let lost = crate::domain::service::notion_workspace::failure_text(
+        &ImportError::Notion(NotionError::AccessLost),
+        ImportSource::Notion,
+    );
+    assert!(lost.contains("Notion no longer accepts Macro"), "{lost}");
 }
 
 /// A yes the chat sends while the plan is being made approves nothing, and

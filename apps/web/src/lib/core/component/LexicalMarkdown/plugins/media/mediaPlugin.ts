@@ -18,6 +18,7 @@ import {
   $createVideoNode,
   $isImageNode,
   $isVideoNode,
+  BACKGROUND_UPDATE_TAGS,
   ImageNode,
   type MediaType,
   VideoNode,
@@ -293,11 +294,12 @@ export function $upgradeDSSMediaUrl(
   const node = $getNodeByKey(key);
   if (!node) return;
 
-  if (mediaType === 'image' && $isImageNode(node)) {
-    node.setUrl(url, false);
-  } else if (mediaType === 'video' && $isVideoNode(node)) {
-    node.setUrl(url, false);
-  }
+  const media =
+    (mediaType === 'image' && $isImageNode(node)) ||
+    (mediaType === 'video' && $isVideoNode(node))
+      ? node
+      : undefined;
+  if (media && media.getUrl() !== url) media.setUrl(url, false);
 }
 
 function registerMediaPlugin(editor: LexicalEditor) {
@@ -319,7 +321,8 @@ function registerMediaPlugin(editor: LexicalEditor) {
           mediaType,
         ]);
       },
-      { discrete: true, tag: 'historic' }
+      // An upload can finish after the person has moved to another split.
+      { discrete: true, tag: BACKGROUND_UPDATE_TAGS }
     );
   };
 
@@ -540,15 +543,23 @@ function registerMediaPlugin(editor: LexicalEditor) {
             const node = $getNodeByKey(key);
             if (!node) return;
 
-            if (mediaType === 'image' && $isImageNode(node)) {
-              node.setWidth(size.width, false);
-              node.setHeight(size.height, false);
-            } else if (mediaType === 'video' && $isVideoNode(node)) {
-              node.setWidth(size.width, false);
-              node.setHeight(size.height, false);
-            }
+            const media =
+              (mediaType === 'image' && $isImageNode(node)) ||
+              (mediaType === 'video' && $isVideoNode(node))
+                ? node
+                : undefined;
+            if (
+              !media ||
+              (media.getWidth() === size.width &&
+                media.getHeight() === size.height)
+            )
+              return;
+            media.setWidth(size.width, false);
+            media.setHeight(size.height, false);
           },
-          { discrete: true, tag: 'historic' }
+          // A picture reports its size whenever it loads, often in a document
+          // the person is not typing in.
+          { discrete: true, tag: BACKGROUND_UPDATE_TAGS }
         );
         return true;
       },

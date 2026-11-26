@@ -12,7 +12,7 @@ vi.mock('@icon/system/regular/caret-right.svg', () => ({
 afterEach(cleanup);
 
 describe('ToolCard', () => {
-  it('says only a failure and only shimmers while the tool is active', async () => {
+  it('never names a failure and only shimmers while the tool is active', async () => {
     const [status, setStatus] = createSignal<
       'running' | 'completed' | 'failed'
     >('running');
@@ -28,7 +28,10 @@ describe('ToolCard', () => {
       expect(view.container.querySelector('.magic-chip-shimmer')).toBeNull()
     );
     setStatus('failed');
-    expect(view.getByText('Failed')).toBeTruthy();
+    const row = view.container.querySelector('[data-tool-row]');
+    expect(row?.getAttribute('data-tool-status')).toBe('failed');
+    expect(row?.textContent).not.toMatch(/failed/i);
+    expect(row?.querySelector('.text-failure')).toBeNull();
     expect(view.getByRole('button').getAttribute('aria-expanded')).toBe(
       'false'
     );

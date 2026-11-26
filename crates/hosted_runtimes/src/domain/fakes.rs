@@ -27,6 +27,8 @@ use crate::domain::ports::{
 use crate::domain::service::Clock;
 use crate::domain::size::ComputerResources;
 
+mod image_upgrades;
+pub use image_upgrades::StoredUpgrade;
 mod moves;
 mod overcommit;
 #[cfg(test)]
@@ -133,6 +135,8 @@ pub struct FakeRepo {
     pub usage: Mutex<HashMap<ComputerId, Vec<crate::domain::usage::StoredSample>>>,
     /// Moves (`domain::moves`), in the order created.
     pub moves: Mutex<Vec<crate::domain::moves::ComputerMove>>,
+    /// Image upgrades.
+    pub image_upgrades: Mutex<Vec<StoredUpgrade>>,
 }
 
 impl crate::domain::agent::ComputerAgents for FakeRepo {
@@ -445,6 +449,12 @@ impl ComputerRepo for FakeRepo {
             .lock()
             .unwrap()
             .push((computer_id, event.clone()));
+        if matches!(
+            event,
+            Event::MacrodConnected | Event::MacrodConnectedWithoutAgentHandOff
+        ) {
+            self.note_upgrade_reconnect(computer_id, now);
+        }
         let mut computers = self.computers.lock().unwrap();
         let Some(computer) = computers.get_mut(&computer_id) else {
             return Ok(None);

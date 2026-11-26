@@ -412,7 +412,7 @@ impl State {
             Some(labels) => labels.clone(),
             None => {
                 let mut labels = BTreeSet::from([INBOX.to_string(), UNREAD.to_string()]);
-                mailbox.filtered_labels(&raw, &mut labels);
+                mailbox.filtered_labels(&raw, now_ms, &mut labels);
                 labels.into_iter().collect()
             }
         };
@@ -469,7 +469,7 @@ impl State {
                 continue;
             };
             let mut labels = BTreeSet::from([INBOX.to_string(), UNREAD.to_string()]);
-            mailbox.filtered_labels(&delivered_raw, &mut labels);
+            mailbox.filtered_labels(&delivered_raw, now_ms, &mut labels);
             let labels: Vec<String> = labels.into_iter().collect();
             mailbox.insert(
                 &mut self.ids,

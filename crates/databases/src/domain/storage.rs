@@ -119,3 +119,22 @@ pub trait DatabaseStorageService: Send + Sync + 'static {
         batch: OpBatch,
     ) -> impl Future<Output = Result<AppliedOps, DatabaseError>> + Send;
 }
+
+/// [`DatabaseStorageService`] writes committed with a consumer's own
+/// transaction, so a domain changing rows of several owners commits them
+/// together. The batch is planned from committed state and applied under the
+/// transaction's locks.
+pub trait DatabaseStorageTransactions: DatabaseStorageService {
+    /// Opaque transaction supplied by the storage adapter.
+    type Transaction: Send;
+    /// As [`DatabaseStorageService::apply_storage_ops`], in `transaction`. On
+    /// any error the batch may be partly written there, so the caller must
+    /// roll back instead of committing.
+    fn apply_storage_ops_in(
+        &self,
+        transaction: &mut Self::Transaction,
+        id: DatabaseId,
+        viewer: Viewer,
+        batch: OpBatch,
+    ) -> impl Future<Output = Result<AppliedOps, DatabaseError>> + Send;
+}

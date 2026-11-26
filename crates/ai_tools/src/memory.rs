@@ -44,15 +44,30 @@ impl<R: TeamRepository> MemoryTeams for MemoryTeamRepository<R> {
 }
 
 /// Activity presence comes from the activity log, which records authored
-/// documents, task changes, sent email and channel messages.
+/// documents, task changes, sent email and channel messages; whether the user
+/// is around comes from the activity crate's `UserActivity` check.
 struct MemoryActivityLog<R>(R);
 #[async_trait::async_trait]
-impl<R: activity::SubjectActivityPresence + Send + Sync> MemoryActivity for MemoryActivityLog<R> {
+impl<R> MemoryActivity for MemoryActivityLog<R>
+where
+    R: activity::SubjectActivityPresence + activity::UserActivity + Send + Sync,
+{
     #[tracing::instrument(skip_all, fields(date = %date), err)]
     async fn acted_on(&self, user: &MacroUserIdStr<'_>, date: chrono::NaiveDate) -> Result<bool> {
         let from = date.and_time(chrono::NaiveTime::MIN).and_utc();
         self.0
             .touched_between(user.as_ref(), from, from + chrono::Duration::days(1))
+            .await
+            .map_err(|e| MemoryError::Db(rootcause::report!(e).into_dynamic()))
+    }
+
+    async fn used_since(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        since: chrono::DateTime<chrono::Utc>,
+    ) -> Result<bool> {
+        self.0
+            .is_active(user, since)
             .await
             .map_err(|e| MemoryError::Db(rootcause::report!(e).into_dynamic()))
     }
@@ -150,3 +165,6 @@ pub fn build_memory_tool_context(
         )),
     }
 }
+
+#[cfg(test)]
+mod test;

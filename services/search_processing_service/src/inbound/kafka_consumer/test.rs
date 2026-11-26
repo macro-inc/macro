@@ -326,6 +326,7 @@ fn received_email_event(is_spam_or_trash: bool) -> EmailTopicEvent {
         attachment_count: 1,
         is_spam_or_trash,
         received_at: Some(Utc::now()),
+        labels_gained: Vec::new(),
     })
 }
 
@@ -620,6 +621,9 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
                 added: vec![],
                 removed: vec![],
                 origin: EmailEventOrigin::ProviderSync,
+                message_id: None,
+                labels_gained: Vec::new(),
+                automated: false,
             }),
             EmailEventDescription {
                 action: EmailIndexAction::ReindexThread {
@@ -4087,4 +4091,44 @@ async fn an_event_whose_source_is_gone_ends_without_a_replay() {
     assert_eq!(record.outcome, EventOutcome::SourceMissing);
     assert_eq!(record.failure, None);
     assert!(replays.0.lock().unwrap().is_empty());
+}
+
+/// A re-sync whose message gave its thread a label now publishes a provider
+/// `thread_labels_updated` in place of a one-thread reindex request. Search
+/// rereads that thread for it, as it did for the request.
+#[test]
+fn a_resync_label_event_reindexes_the_thread_the_request_did() {
+    let message_id = Uuid::from_u128(0x77);
+    let label_id = Uuid::from_u128(0x99);
+    let published: EmailTopicEvent = serde_json::from_value(serde_json::json!({
+        "event_type": "email.thread_labels_updated",
+        "metadata": {
+            "link_id": EMAIL_LINK_ID, "owner": user_id(), "actor": null,
+            "thread_id": EMAIL_THREAD_ID, "added": [], "removed": [],
+            "origin": "provider_sync", "message_id": message_id,
+            "labels_gained": [label_id],
+        },
+    }))
+    .unwrap();
+    let replaced = EmailTopicEvent::ThreadsReindexRequested(ThreadsReindexRequestedMetadata {
+        link_id: EMAIL_LINK_ID,
+        owner: user_id(),
+        thread_ids: vec![EMAIL_THREAD_ID],
+        reason: ThreadsReindexReason::ProviderChanged,
+    });
+
+    assert_eq!(
+        describe_email_event(&published).action,
+        EmailIndexAction::ReindexThread {
+            thread_id: EMAIL_THREAD_ID,
+            owner: user_id().to_string(),
+        }
+    );
+    assert_eq!(
+        describe_email_event(&replaced).action,
+        EmailIndexAction::ReindexThreads {
+            thread_ids: vec![EMAIL_THREAD_ID],
+            owner: user_id().to_string(),
+        }
+    );
 }

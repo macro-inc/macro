@@ -455,6 +455,7 @@ async fn channel_types_narrow_the_search(pool: Pool<Postgres>) -> anyhow::Result
         ChannelNameSearchScope {
             channel_ids: &[],
             channel_types: &[ChannelType::DirectMessage],
+            excluded_terms: &[],
         },
         "des".to_string(),
         false,
@@ -470,6 +471,7 @@ async fn channel_types_narrow_the_search(pool: Pool<Postgres>) -> anyhow::Result
         ChannelNameSearchScope {
             channel_ids: &[],
             channel_types: &[ChannelType::Public, ChannelType::Private, ChannelType::Team],
+            excluded_terms: &[],
         },
         "des".to_string(),
         false,
@@ -492,6 +494,7 @@ async fn channel_ids_narrow_the_search(pool: Pool<Postgres>) -> anyhow::Result<(
         ChannelNameSearchScope {
             channel_ids: &[MACRO.parse()?],
             channel_types: &[],
+            excluded_terms: &[],
         },
         "mac".to_string(),
         false,
@@ -647,5 +650,50 @@ async fn results_match_the_names_the_viewer_sees(pool: Pool<Postgres>) -> anyhow
             "every hit for {term:?} is highlighted"
         );
     }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("channel"))
+)]
+async fn a_left_out_word_drops_channels_whose_name_as_the_viewer_sees_it_holds_it(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let search = |term: &'static str, left_out: &'static [&'static str], exact_match: bool| {
+        let pool = pool.clone();
+        async move {
+            let excluded_terms: Vec<String> =
+                left_out.iter().map(|word| word.to_string()).collect();
+            search_channel_names(
+                &pool,
+                &user(MEMBER),
+                ChannelNameSearchScope {
+                    excluded_terms: &excluded_terms,
+                    ..ChannelNameSearchScope::default()
+                },
+                term.to_string(),
+                exact_match,
+                10,
+                None,
+            )
+            .await
+        }
+    };
+
+    let by_stored_name = search("mac", &["planning"], false).await?;
+    assert_eq!(ids(&by_stored_name), [MACARONI, MACRO]);
+
+    let by_another_participant = search("chinman", &["nys"], false).await?;
+    assert!(ids(&by_another_participant).is_empty());
+    let by_nobody_in_it = search("chinman", &["gabriel"], false).await?;
+    assert_eq!(ids(&by_nobody_in_it), [PETER_TEO_GROUP]);
+
+    // A left-out word matches as the search's own words do: a substring, or
+    // a whole word in an exact search.
+    let partial = search("macro", &["plan"], false).await?;
+    assert_eq!(ids(&partial), [MACRO]);
+    let exact = search("macro", &["plan"], true).await?;
+    assert_eq!(ids(&exact), [MACRO_PLANNING, MACRO]);
     Ok(())
 }

@@ -2824,3 +2824,109 @@ async fn a_calendar_shared_read_only_keeps_its_two_minute_rounds(pool: PgPool) {
     assert!((110..=120).contains(&wait), "next round in {wait} s");
     assert_eq!(due_after, 0);
 }
+
+/// The calendars a mailbox lists: its own calendar and holidays, a calendar
+/// a colleague shares read-only, and one subscribed from the web, which Graph
+/// lists as read-only with no owner.
+fn calendars_with_a_web_subscription(mailbox: &str) -> Vec<OutlookCalendar> {
+    [
+        ("primary", "writer", Some(mailbox), false),
+        ("holidays", "reader", Some(mailbox), false),
+        ("ada", "reader", Some("ada@example.com"), true),
+        ("web", "reader", None, true),
+    ]
+    .into_iter()
+    .map(|(id, access_role, owner, shared_with_me)| {
+        let mut calendar = discovered_calendar(id);
+        calendar.calendar.name = id.into();
+        calendar.calendar.access_role = Some(access_role.into());
+        calendar.owner_address = owner.map(str::to_owned);
+        calendar.shared_with_me = shared_with_me;
+        calendar
+    })
+    .collect()
+}
+
+async fn subscriptions(repo: &PgCalendarRepository, owner: &str) -> Vec<(String, bool)> {
+    let mut marked = repo
+        .list_visible_calendars(owner)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|calendar| (calendar.name, calendar.is_subscription))
+        .collect::<Vec<_>>();
+    marked.sort();
+    marked
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn discovery_marks_a_calendar_subscribed_from_the_web_as_a_subscription(pool: PgPool) {
+    let (repo, link, owner) = mailbox(&pool).await;
+    let discovery = claim(&repo).await.unwrap();
+    let mailbox_address = discovery.token_identity.email_address.clone();
+    repo.commit_outlook_calendars(
+        &discovery,
+        calendars_with_a_web_subscription(&mailbox_address),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        subscriptions(&repo, &owner).await,
+        [
+            ("ada".to_string(), false),
+            ("holidays".to_string(), false),
+            ("primary".to_string(), false),
+            ("web".to_string(), true),
+        ],
+        "only the web subscription; the mailbox's own holidays keep Outlook's look"
+    );
+
+    // As a calendar stored before discovery marked subscriptions.
+    sqlx::query!("UPDATE calendars SET web_subscription=false")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let web = sqlx::query_scalar!("SELECT id FROM calendars WHERE provider_calendar_id='web'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let before = counter(&pool, link).await;
+    let discovery = reclaim(&pool, &repo, discovery.id).await;
+    let change = repo
+        .commit_outlook_calendars(
+            &discovery,
+            calendars_with_a_web_subscription(&mailbox_address),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        change,
+        OutlookCalendarsChange {
+            changed: true,
+            team_ooo_changed: false,
+        },
+        "viewers refresh to see it; no out-of-office row moves"
+    );
+    assert_eq!(
+        ops_after(&pool, link, before).await,
+        vec![CalendarChangeOp::UpsertCalendar(web)],
+        "calendar caches refetch the calendar"
+    );
+    assert!(
+        subscriptions(&repo, &owner)
+            .await
+            .contains(&("web".to_string(), true))
+    );
+
+    let before = counter(&pool, link).await;
+    let discovery = reclaim(&pool, &repo, discovery.id).await;
+    let change = repo
+        .commit_outlook_calendars(
+            &discovery,
+            calendars_with_a_web_subscription(&mailbox_address),
+        )
+        .await
+        .unwrap();
+    assert_eq!(change, OutlookCalendarsChange::default());
+    assert_eq!(ops_after(&pool, link, before).await, vec![]);
+}

@@ -3,6 +3,7 @@ import {
   MAX_RECORDING_BYTES,
   MAX_RECORDING_MS,
   RECORDING_CHUNK_MS,
+  VOICE_MEMO_FORMATS,
 } from '../core/recording';
 import { VOLUME_INTERVAL_MS } from '../core/volume';
 import {
@@ -338,5 +339,24 @@ describe('AudioRecorder', () => {
     expect(one.recording).toBe(false);
     expect(two.recording).toBe(true);
     two.cancel();
+  });
+
+  it('records voice memos as AAC in MP4 where the browser can', async () => {
+    FakeMediaRecorder.isTypeSupported.mockImplementation(
+      (type: string) =>
+        type === 'audio/mp4;codecs=mp4a.40.2' ||
+        type === 'audio/webm;codecs=opus'
+    );
+    await manager.createSession(callbacks(), VOICE_MEMO_FORMATS).start();
+    expect(latest().mimeType).toBe('audio/mp4;codecs=mp4a.40.2');
+  });
+
+  it('falls back to WebM Opus for voice memos where MP4 is not recordable', async () => {
+    FakeMediaRecorder.isTypeSupported.mockImplementation(
+      (type: string) => type === 'audio/webm;codecs=opus'
+    );
+    expect(AudioRecorder.isSupported(VOICE_MEMO_FORMATS)).toBe(true);
+    await manager.createSession(callbacks(), VOICE_MEMO_FORMATS).start();
+    expect(latest().mimeType).toBe('audio/webm;codecs=opus');
   });
 });

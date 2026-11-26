@@ -9,8 +9,9 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
-use crate::domain::models::{
-    EntryValues, LoggedTime, NewEntryRow, RunningTimer, TimeEntry, TimeEntryCursor,
+use crate::domain::{
+    models::{EntryValues, LoggedTime, NewEntryRow, RunningTimer, TimeEntry, TimeEntryCursor},
+    report::{ExportEntry, ReportTask, SummarySum, TimeBreakdown, TimePeriod},
 };
 
 /// Source of the current time, injected so timer limits can be tested.
@@ -38,6 +39,25 @@ impl Clock for SystemClock {
 pub trait TimeTrackingRollout: Send + Sync {
     /// True when the person may write time; any failure to decide is false.
     async fn enabled_for(&self, user_id: &MacroUserIdStr<'_>) -> bool;
+}
+
+/// What changed in a person's time tracking. Their open sessions read it
+/// again; nothing else travels.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimeTrackingChange {
+    /// Their running timer started, stopped or was discarded.
+    pub timer: bool,
+    /// The task whose entries changed, when any did.
+    pub task_id: Option<String>,
+}
+
+/// Tells every open session of a person (another tab, their phone) that their
+/// time tracking changed, so each reads it again.
+pub trait TimeTrackingUpdates: Send + Sync + 'static {
+    /// Best effort, after the change committed: a failure is logged by the
+    /// adapter, never returned, and a session that misses it reads again when
+    /// it reconnects.
+    fn changed(&self, user_id: &MacroUserIdStr<'static>, change: TimeTrackingChange);
 }
 
 /// What the domain needs to know about a repository failure.
@@ -193,4 +213,92 @@ pub trait TimeTrackingRepository: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         timer_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Which copy of the data a report reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReportRead {
+    /// The latest writes, for what is read again after a change: a total the
+    /// person just changed must show the change.
+    Latest,
+    /// A copy that may lag the latest writes by seconds.
+    MayLag,
+}
+
+/// Where a report finds a project's tasks.
+pub trait ProjectTasks: Send + Sync + 'static {
+    /// The error type returned by the lookup.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// The first `limit` tasks whose Project property names the project, in
+    /// id order, whether or not the caller can see them.
+    fn project_task_ids(
+        &self,
+        project_id: Uuid,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+}
+
+/// The entries a report reads: those on `task_ids` (live tasks the caller can
+/// see) in `period`, and only `people`'s when given.
+#[derive(Debug, Clone, Copy)]
+pub struct ReportFilter<'a> {
+    /// Live tasks the caller can see.
+    pub task_ids: &'a [String],
+    /// Only these people's entries; everyone's when absent.
+    pub people: Option<&'a [MacroUserIdStr<'static>]>,
+    /// The days.
+    pub period: TimePeriod,
+}
+
+/// Outbound reads behind reports. Every read is bounded by its arguments,
+/// planned for them, and gives up after a statement timeout.
+pub trait TimeReportRepository: Send + Sync + 'static {
+    /// The error type returned by repository operations.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// The current members of the person's team, the person included, in id
+    /// order; only the person when they have no team.
+    fn team_members(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        read: ReportRead,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
+
+    /// The first `limit` tasks, in id order, that any of `people` logged time
+    /// on in the period.
+    fn people_task_ids(
+        &self,
+        people: &[MacroUserIdStr<'static>],
+        period: TimePeriod,
+        limit: u16,
+        read: ReportRead,
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+
+    /// The tasks that are out of the Trash, with their names, in id order.
+    /// The access check keeps trashed documents, so reports pass only these
+    /// to the reads below.
+    fn live_tasks(
+        &self,
+        task_ids: &[String],
+        read: ReportRead,
+    ) -> impl Future<Output = Result<Vec<ReportTask>, Self::Err>> + Send;
+
+    /// The filtered entries summed as the breakdown groups them: the whole
+    /// period, each group, and with a second grouping each group's split and
+    /// that grouping's totals.
+    fn summary_sums(
+        &self,
+        filter: ReportFilter<'_>,
+        breakdown: TimeBreakdown,
+        read: ReportRead,
+    ) -> impl Future<Output = Result<Vec<SummarySum>, Self::Err>> + Send;
+
+    /// Up to `limit` filtered entries, oldest day first.
+    fn export_entries(
+        &self,
+        filter: ReportFilter<'_>,
+        limit: u16,
+        read: ReportRead,
+    ) -> impl Future<Output = Result<Vec<ExportEntry>, Self::Err>> + Send;
 }

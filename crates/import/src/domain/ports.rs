@@ -15,12 +15,57 @@ use std::time::Duration;
 use thiserror::Error;
 use uuid::Uuid;
 
+/// Host database failures classified without exposing provider details.
+#[derive(Debug, Clone, Copy, Error)]
+pub enum DatabaseWriteFailure {
+    /// A source-specific validation failure.
+    #[error("the source schema was rejected")]
+    InvalidSchema,
+    /// A source destination no longer exists.
+    #[error("the source database destination was not found")]
+    NotFound,
+    /// The owner cannot access this source destination.
+    #[error("the source database destination is not permitted")]
+    PermissionDenied,
+    /// The original starter table was removed from a reserved database.
+    #[error("the reserved database starter table is missing")]
+    MissingStarterTable,
+    /// The original title column was removed from a reserved database.
+    #[error("the reserved database title column is missing")]
+    MissingTitleColumn,
+    /// Filing folder access must be checked again on the next run.
+    #[error("the import folder is inaccessible; retry the import")]
+    FolderUnavailable,
+    /// A source version changed during its reservation.
+    #[error("the source database changed during reservation")]
+    Conflict,
+    /// Service authentication failed for the entire request.
+    #[error("database service authentication is unavailable; retry the import")]
+    Authentication,
+    /// Storage or the database service is unavailable for the run.
+    #[error("the database service is unavailable; retry the import")]
+    Unavailable,
+}
+
+impl DatabaseWriteFailure {
+    /// Untyped Macro service errors are run-wide; explicit destination errors retain scope.
+    pub fn from_backend(error: anyhow::Error) -> Self {
+        error.downcast::<Self>().unwrap_or(Self::Unavailable)
+    }
+}
+
 /// Errors surfaced by the import service and repository.
 #[derive(Debug, Error)]
 pub enum ImportError {
     /// Connected issue tracker read failed.
     #[error(transparent)]
     Tracker(#[from] import_tracker::domain::model::TrackerError),
+    /// The connected HubSpot portal could not be read.
+    #[error(transparent)]
+    Hubspot(#[from] import_hubspot::domain::HubspotError),
+    /// A CRM import needs a team whose CRM the user may use.
+    #[error("importing into the CRM needs a team with CRM access")]
+    CrmAccessRequired,
     /// AI work was refused or usage validation is temporarily unavailable.
     #[error(transparent)]
     Admission(#[from] ai_billing::AiAdmissionError),
@@ -568,10 +613,95 @@ pub enum ImportedDocumentPropertyValue {
 /// with live mentions instead of links back to Notion.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct NotionLinks {
+    /// Page-local database placements, counted per container.
+    pub databases: Vec<NotionDatabaseOccurrence>,
     /// Notion page → the Macro document it becomes.
     pub pages: HashMap<NotionId, NotionPageLink>,
     /// Notion person → the Macro user they are.
     pub users: HashMap<NotionId, NotionUserLink>,
+}
+
+/// A reference parsed from an imported body.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct NotionLinkReference {
+    /// Exact Notion page or database container.
+    pub id: NotionId,
+    /// The selected view, when one was specified.
+    pub view_id: Option<NotionId>,
+}
+
+/// A currently available, confirmed import destination.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotionLinkDestination {
+    /// Imported page identity.
+    Page(Uuid),
+    /// Imported database, starter table and optional saved view.
+    Database {
+        /// Database identity.
+        database: Uuid,
+        /// Recorded table identity.
+        table: models_databases::TableId,
+        /// Selected existing view.
+        view: Option<models_databases::views::ViewId>,
+    },
+}
+
+/// A Notion body read at its import-produced revision.
+pub struct ImportedLinkBody {
+    /// The collaborative state used to prepare a delta.
+    pub snapshot: Vec<u8>,
+    /// The expected version vector for compare-and-set.
+    pub revision: Vec<u8>,
+    /// Exact references represented by owned hyperlink nodes.
+    pub references: Vec<NotionLinkReference>,
+}
+
+/// Output of a workspace body write, including an optional deferred-link receipt.
+pub struct CreatedImportDocument {
+    /// Destination document identifier.
+    pub id: String,
+    /// Fingerprint of the initial body revision, minted only on creation.
+    pub link_revision: Option<Uuid>,
+}
+
+/// A resolved or unavailable database placement in one body.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NotionDatabaseOccurrence {
+    /// Container id from the URL pathname.
+    pub container_id: NotionId,
+    /// Zero-based ordinal for that container in this body.
+    pub ordinal: usize,
+    /// The destination or explicit fallback.
+    pub target: NotionDatabaseTarget,
+}
+
+/// Database cards require an existing destination and a translated selected view.
+#[derive(Debug, Clone, PartialEq)]
+pub enum NotionDatabaseTarget {
+    /// An editable database card.
+    Resolved {
+        /// Destination database.
+        database_id: Uuid,
+        /// Destination table.
+        table_id: models_databases::TableId,
+        /// Translated saved view, when available.
+        view_id: Option<models_databases::views::ViewId>,
+    },
+    /// A named source link with a typed reason.
+    Fallback(NotionDatabaseFallback),
+}
+
+/// Why a placement cannot become a card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotionDatabaseFallback {
+    /// Connection lacks permission.
+    NoAccess,
+    /// Source or container does not exist.
+    NotFound,
+    /// Review excluded the source or selected another representation.
+    NotImported,
+    /// Identity or selected view cannot be resolved.
+    Unresolved,
 }
 
 /// The Macro document a Notion page becomes.
@@ -654,6 +784,28 @@ pub struct NewDatabase {
     pub table: models_databases::TableId,
     /// That table's title column.
     pub title_column: models_databases::ColumnId,
+}
+
+/// The source holder's durable table identity and fidelity report.
+#[derive(Debug, Clone)]
+pub struct RecordedDatabaseMapping {
+    /// The exact imported table, regardless of its current UI tab position.
+    pub table: models_databases::TableId,
+    /// Exact saved view receipt, if a Notion view was requested.
+    pub view: Option<models_databases::views::ViewId>,
+    /// Losses from the copy being reused.
+    pub warnings: Vec<crate::domain::models::FidelityWarning>,
+}
+
+/// An accessible destination, including the saved views that actually exist.
+#[derive(Debug, Clone)]
+pub struct ImportedDatabase {
+    /// Starter table identity.
+    pub database_id: Uuid,
+    /// The exact table recorded by the source's holder.
+    pub table: models_databases::TableId,
+    /// Existing views of that table.
+    pub views: Vec<models_databases::views::ViewId>,
 }
 
 /// Something a workspace import shares with the user's team.
@@ -860,7 +1012,32 @@ pub trait WorkspaceWriter: ImportedTargetReader {
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
         visibility: ImportVisibility,
-    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+    ) -> impl Future<Output = anyhow::Result<CreatedImportDocument>> + Send;
+
+    /// Verify the actual owner of a personal link destination. An owned
+    /// ledger row can point at a teammate's copy the user adopted earlier.
+    fn owns_notion_link_target(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        target: ImportedTarget,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
+
+    /// Read link candidates only if the owner and the import-produced revision still match.
+    fn inspect_import_links(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        document: Uuid,
+        receipt: Uuid,
+    ) -> impl Future<Output = anyhow::Result<Option<ImportedLinkBody>>> + Send;
+
+    /// Apply only the resolved hyperlink replacements at the inspected revision.
+    fn rewrite_import_links(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        document: Uuid,
+        body: ImportedLinkBody,
+        links: &[(NotionLinkReference, NotionLinkDestination)],
+    ) -> impl Future<Output = anyhow::Result<usize>> + Send;
 
     /// Reapply a marked task's assignee under its current reviewed visibility.
     /// Preserve its content and other properties; return property-write failures.
@@ -893,11 +1070,38 @@ pub trait WorkspaceWriter: ImportedTargetReader {
         visibility: ImportVisibility,
     ) -> impl Future<Output = anyhow::Result<CreatedImportTask>> + Send;
 
-    /// Create an empty database named `name`.
+    /// Check current view access before reading another holder's table marker.
+    fn database_access(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
+
+    /// Verify the recorded table belongs to an accessible database and read its views.
+    fn database(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        table: models_databases::TableId,
+    ) -> impl Future<Output = anyhow::Result<ImportedDatabase>> + Send;
+
+    /// Create a deterministic saved view once, reusing it after a lost marker.
+    fn ensure_database_view(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        database: Uuid,
+        table: models_databases::TableId,
+        id: models_databases::views::ViewId,
+        view: models_databases::views::NewView,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Create owner-only database `id` atomically in the reviewed folder.
     fn create_database(
         &self,
         user: &MacroUserIdStr<'static>,
+        id: Uuid,
         name: &str,
+        folder: Option<Uuid>,
     ) -> impl Future<Output = anyhow::Result<NewDatabase>> + Send;
 
     /// Apply `ops` to a database `user` created, in one transaction. Ops may
@@ -1011,6 +1215,13 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
         rows: &[PlanRow],
     ) -> impl Future<Output = Result<u64>> + Send;
 
+    /// External dependency ids in this owner's exact staged Notion review.
+    fn dependency_ids(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        review: Uuid,
+    ) -> impl Future<Output = Result<Vec<Uuid>>> + Send;
+
     /// Teammates' rows for the Notion objects `foreign_ids` that hold the
     /// user's team's claim (`importing` or `imported`, shared with the team).
     fn team_copies(
@@ -1095,13 +1306,18 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
     /// it (`import_run.review_id`, or, for a plan presented before the run
     /// recorded its review, staged rows tied to it). Otherwise change nothing
     /// and refuse with [`ImportError::RunNotReviewable`]: still planning,
-    /// another review's plan, or a failed, finished, cancelled or missing run.
+    /// another review's plan, or a failed, finished, cancelled or missing run
+    /// (except below). The first start records the review it admitted
+    /// (`import_run.write_review_id`, cleared by a new plan); a write that
+    /// then failed may be started again by that review alone, once no
+    /// earlier writer's lease is live, with its adoptions reset. Returns the
+    /// status the write started from (`ready` or `failed`).
     fn start_reviewed_write(
         &self,
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
         review_id: Uuid,
-    ) -> impl Future<Output = Result<()>> + Send;
+    ) -> impl Future<Output = Result<RunStatus>> + Send;
 
     /// Move `user`'s run for `source` to `to` when it is in one of `from`,
     /// dropping any lease on it. Returns whether the run moved.
@@ -1276,6 +1492,41 @@ pub trait NotionRunRepo: Send + Sync + 'static {
 /// What workspace writes created for each ledger row, recorded as they go so
 /// a resumed write reuses it instead of creating it again.
 pub trait WrittenObjects: Send + Sync + 'static {
+    /// Count durable output markers for completed, caller-owned Notion rows.
+    fn confirmed_notion_writes(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_ids: &[Uuid],
+    ) -> impl Future<Output = Result<crate::domain::models::ConfirmedNotionWrites>> + Send;
+
+    /// Clear only this owned source's consecutive reservation failure receipts.
+    fn clear_database_reservation_failures(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Atomically replace only this active source review's outage snapshot.
+    /// The expected payload fences stale reads; output/ordinary/terminal facts survive.
+    fn replace_database_outage(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        review_id: Uuid,
+        expected: Option<&str>,
+        facts: &[WrittenObject],
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Replace only this owned review's dependency consent. The selected ids
+    /// must be a subset of its staged source ids; created-object markers stay immutable.
+    fn replace_dependency_inclusions(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        review: Uuid,
+        import_ids: &[Uuid],
+        included: &[Uuid],
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Persist a task notice once by task id, so resumed writes do not inflate report counts.
     fn record_task_notice(
         &self,
@@ -1299,6 +1550,24 @@ pub trait WrittenObjects: Send + Sync + 'static {
         import_id: Uuid,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Read the imported source holder's exact table marker, scoped to this user
+    /// or team. The caller must first verify current database view access.
+    fn database_mapping(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: &NotionId,
+        database: Uuid,
+        view: Option<&NotionId>,
+    ) -> impl Future<Output = Result<Option<RecordedDatabaseMapping>>> + Send;
+
+    /// Retain distinct fidelity losses on a plan row across attempts.
+    fn record_warnings(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        warnings: &[crate::domain::models::FidelityWarning],
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Everything recorded for the user's ledger rows `import_ids`.
     fn written(
         &self,
@@ -1314,4 +1583,132 @@ pub trait WrittenObjects: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         objects: &[WrittenObject],
     ) -> impl Future<Output = Result<Vec<WrittenObject>>> + Send;
+}
+
+/// A team's CRM as a HubSpot import writes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmTeam {
+    /// The team whose CRM receives the records.
+    pub team_id: Uuid,
+    /// Its members, for matching HubSpot owners.
+    pub members: Vec<CrmMember>,
+}
+
+/// A team member HubSpot owners are matched against.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmMember {
+    /// Login email, lowercased; matched against the owner's email.
+    pub email: String,
+    /// The Macro user id the matched owner is stored as.
+    pub user_id: String,
+}
+
+/// A contact to create in the team's CRM.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewCrmContact {
+    /// Display name.
+    pub name: String,
+    /// Email addresses, primary first; may be empty.
+    pub emails: Vec<String>,
+    /// The CRM company to file it under, when its HubSpot company was imported.
+    pub company: Option<Uuid>,
+}
+
+/// Where a deal stands, as a Sales pipeline's Outcome records it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DealOutcome {
+    /// Still open.
+    Open,
+    /// Closed won.
+    Won,
+    /// Closed lost.
+    Lost,
+}
+
+/// A deal to add as an entry of an imported pipeline.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NewDealEntry {
+    /// The CRM company the entry tracks.
+    pub company: Uuid,
+    /// The deal's name.
+    pub name: String,
+    /// Stage label, one of the pipeline's stages.
+    pub stage: Option<String>,
+    /// Outcome.
+    pub outcome: DealOutcome,
+    /// Amount.
+    pub amount: Option<f64>,
+    /// ISO 4217 code Macro supports, for `amount`.
+    pub currency: Option<String>,
+    /// Close date, `YYYY-MM-DD`.
+    pub close_date: Option<String>,
+    /// The owning team member's Macro user id.
+    pub owner: Option<String>,
+    /// The deal's HubSpot URL; unique per deal, so it is the entry's
+    /// identity on resume.
+    pub link: String,
+}
+
+/// Writes a HubSpot import into the team's CRM through the CRM services,
+/// with the importing user's permissions. Object-safe so the import service
+/// holds it without a type parameter.
+#[async_trait::async_trait]
+pub trait CrmImportWriter: Send + Sync + 'static {
+    /// The user's team, when they may use its CRM.
+    async fn crm_team(&self, user: &MacroUserIdStr<'static>) -> anyhow::Result<Option<CrmTeam>>;
+    /// The domain CRM keys a company by, or `None` when CRM would not
+    /// accept `raw` as a company domain (a personal email provider, not a domain).
+    fn company_domain(&self, raw: &str) -> Option<String>;
+    /// Whether a Sales pipeline amount may carry this currency code.
+    fn supports_currency(&self, code: &str) -> bool;
+    /// The team's company for `domain`, including hidden ones.
+    async fn company_by_domain(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        domain: &str,
+    ) -> anyhow::Result<Option<Uuid>>;
+    /// Create a company; `domain` was accepted by [`Self::company_domain`].
+    async fn create_company(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        domain: Option<&str>,
+    ) -> anyhow::Result<Uuid>;
+    /// The team's contact holding `email` as any of its addresses.
+    async fn contact_by_email(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        email: &str,
+    ) -> anyhow::Result<Option<Uuid>>;
+    /// Create a contact with every address it can take.
+    async fn create_contact(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        contact: &NewCrmContact,
+    ) -> anyhow::Result<Uuid>;
+    /// Create a company-tracking pipeline with these stages, in order, and
+    /// the fields deal entries fill.
+    async fn create_deal_pipeline(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        stages: &[String],
+    ) -> anyhow::Result<Uuid>;
+    /// The entries of `pipeline` tracking `company`, by the deal link each
+    /// carries: deals a stopped write already added. Read once per company
+    /// and pipeline per write.
+    async fn deal_entries(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        pipeline: Uuid,
+        company: Uuid,
+    ) -> anyhow::Result<HashMap<String, Uuid>>;
+    /// Add a deal as a pipeline entry.
+    async fn add_deal_entry(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        pipeline: Uuid,
+        deal: &NewDealEntry,
+    ) -> anyhow::Result<Uuid>;
 }

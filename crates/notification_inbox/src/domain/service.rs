@@ -29,8 +29,8 @@ use super::{
     models::{
         ClearAction, ClearCursor, ClearPass, ClearRun, InboxChange, InboxClearRequest,
         InboxDoneOutcome, InboxEntry, InboxNotificationDoneOutcome, InboxPage, InboxQuery,
-        InboxRow, InboxRowId, InboxRowTarget, InboxRowType, InboxScope, StartedClear,
-        UNREAD_ROWS_COUNTED, UnreadRows,
+        InboxRow, InboxRowId, InboxRowTarget, InboxRowType, InboxScope, StartedClear, UnreadRow,
+        UnreadRows,
     },
     policy,
     ports::ClearUpdates,
@@ -157,8 +157,8 @@ pub trait NotificationInboxService: Send + Sync + 'static {
 
     /// Count the unread rows of the viewer's whole inbox, by kind, without
     /// paging it: only groups that may hold an unread row are read, and an
-    /// entity type's groups stop being read once they hold
-    /// [`UNREAD_ROWS_COUNTED`] unread rows.
+    /// entity type's groups stop being read once they hold enough unread
+    /// rows.
     fn unread_rows(
         &self,
         viewer: FeedViewer,
@@ -166,7 +166,7 @@ pub trait NotificationInboxService: Send + Sync + 'static {
 
     /// Bring `unread` up to date after `groups` changed, reading those
     /// groups alone. Everything is counted again only when a count that had
-    /// stopped at [`UNREAD_ROWS_COUNTED`] falls back under it.
+    /// stopped at enough unread rows no longer holds enough.
     fn recount_unread_rows(
         &self,
         viewer: FeedViewer,
@@ -1120,6 +1120,7 @@ where
             user = %viewer.user,
             groups = tracing::field::Empty,
             rows = tracing::field::Empty,
+            chat_rows = tracing::field::Empty,
         ),
         err
     )]
@@ -1128,6 +1129,7 @@ where
         let span = tracing::Span::current();
         span.record("groups", unread.groups.len());
         span.record("rows", unread.groups.values().map(Vec::len).sum::<usize>());
+        span.record("chat_rows", unread.chat_counts().values().sum::<u32>());
         Ok(unread)
     }
 

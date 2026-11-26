@@ -1,3 +1,4 @@
+import type { NotionImportReport } from '@queries/import';
 import type { ImportDraft as SavedImportDraft } from '@service-agent-reviews/generated/types';
 import type { RunErrorKind } from '@service-cognition/import';
 import { match } from 'ts-pattern';
@@ -16,9 +17,21 @@ export type ImportTaskFields = {
 
 /** One Notion object in an import plan. */
 export type ImportPlanEntry = {
+  /** Titles of planned objects requiring this linked source. */
+  linkedFrom?: string[];
+  /** Titles of planned objects displaying this source inline. */
+  inlineOn?: string[];
   id: string;
   parentId: string | null;
-  kind: 'page' | 'database' | 'task' | 'project';
+  kind:
+    | 'page'
+    | 'database'
+    | 'task'
+    | 'project'
+    | 'pipeline'
+    | 'company'
+    | 'contact'
+    | 'deal';
   title: string;
   /** `null` while planning has not decided it yet. */
   decision: ImportPlanDecision | null;
@@ -68,9 +81,56 @@ export type ImportPlanCounts = {
 
 export type ImportReportItem = { id: string; title: string; reason: string };
 
+export type ReviewOmission = NonNullable<
+  NotionImportReport['details']
+>['notImported'][number];
+
+/** Count review skips by default, using samples only for older reports. */
+export function omissionTotals(
+  details: NotionImportReport['details'],
+  kind?: ReviewOmission['kind']
+) {
+  const includes = (choice: ReviewOmission['kind']) =>
+    kind ? choice === kind : choice !== 'by_hand';
+  const totals = { pages: 0, databases: 0, other: 0, total: 0 };
+  if (details?.omissionCounts) {
+    for (const count of details.omissionCounts) {
+      if (!includes(count.kind)) continue;
+      totals.pages += count.pages;
+      totals.databases += count.databases;
+      totals.other += count.other;
+    }
+  } else {
+    for (const omission of details?.notImported ?? []) {
+      if (!includes(omission.kind)) continue;
+      if (omission.item.kind === 'page') totals.pages += 1;
+      else if (omission.item.kind === 'data_source') totals.databases += 1;
+      else totals.other += 1;
+    }
+  }
+  totals.total = totals.pages + totals.databases + totals.other;
+  return totals;
+}
+
+/** Use the same noun for a choice's total and sample size. */
+export function omissionNoun(totals: ReturnType<typeof omissionTotals>) {
+  if (totals.total === totals.pages) return 'page';
+  if (totals.total === totals.databases) return 'database';
+  return 'item';
+}
+
+export function omissionCountLabel(
+  totals: ReturnType<typeof omissionTotals>
+): string {
+  const noun = omissionNoun(totals);
+  return plural(totals.total, noun, noun + 's');
+}
+
 /** Where the import run stands, as the server reports it. */
 export type ImportProgress = {
   warnings?: string[];
+  details?: NotionImportReport['details'];
+  confirmed?: NotionImportReport['confirmed'];
   reviewId: string | null;
   status:
     | 'running'
@@ -82,6 +142,8 @@ export type ImportProgress = {
     | null;
   /** Why the run failed, when it did and the server recorded the kind. */
   errorKind: RunErrorKind | null;
+  /** The run's report text, written by Macro (never a provider's text). */
+  error: string | null;
   /** What planning has found in Notion so far, while it reads it. */
   scanned: { pages: number; databases: number } | null;
   /** Without a team, everything stays with the owner. */
@@ -91,6 +153,33 @@ export type ImportProgress = {
   waiting: number;
   writing: number;
   failures: ImportReportItem[];
+  failureCount?: number;
+  /** A HubSpot plan's owners and what it cannot carry over. */
+  hubspot: HubspotPlanReport | null;
+};
+
+/** What CRM cannot hold of a HubSpot portal, by kind. */
+export type HubspotLoss =
+  | 'owner_not_member'
+  | 'deal_without_company'
+  | 'deal_without_pipeline'
+  | 'extra_company_links'
+  | 'domain_rejected'
+  | 'unsupported_currency'
+  | 'additional_domains'
+  | 'company_owner'
+  | 'merged_company'
+  | 'merged_contact'
+  | 'contact_without_company';
+
+/** A HubSpot plan's owner matching and losses. */
+export type HubspotPlanReport = {
+  owners: number;
+  ownersMatched: number;
+  /** Records the write created, and records it matched to ones already there. */
+  created: number;
+  linked: number;
+  losses: { loss: HubspotLoss; count: number }[];
 };
 
 export type ImportReviewPhase =
@@ -288,7 +377,14 @@ export function setExcluded(
   const written = new Set(
     nodes.filter((node) => isWritten(node.decision)).map((node) => node.id)
   );
-  const affected = subtree(nodes, id).filter((entry) => written.has(entry));
+  const dependencies = new Set(
+    nodes.filter((node) => node.linkedFrom?.length).map((node) => node.id)
+  );
+  const affected = subtree(nodes, id).filter(
+    (entry) =>
+      written.has(entry) &&
+      (excluded || entry === id || !dependencies.has(entry))
+  );
   const next = draft.excluded.filter((entry) => !affected.includes(entry));
   return {
     ...draft,
@@ -386,6 +482,11 @@ export function importCount(
 /** What approving the plan writes, in real numbers: every row is counted. */
 export type ImportVolume = {
   projects: number;
+  /** HubSpot deal pipelines, companies, contacts and deals. */
+  pipelines: number;
+  companies: number;
+  contacts: number;
+  deals: number;
   documents: number;
   databases: number;
   rows: number;
@@ -400,6 +501,10 @@ export function importVolume(
 ): ImportVolume {
   const volume: ImportVolume = {
     projects: 0,
+    pipelines: 0,
+    companies: 0,
+    contacts: 0,
+    deals: 0,
     documents: 0,
     databases: 0,
     rows: 0,
@@ -417,6 +522,14 @@ export function importVolume(
           volume.tasks += 1;
         } else if (entry.kind === 'project') {
           volume.projects += 1;
+        } else if (entry.kind === 'pipeline') {
+          volume.pipelines += 1;
+        } else if (entry.kind === 'company') {
+          volume.companies += 1;
+        } else if (entry.kind === 'contact') {
+          volume.contacts += 1;
+        } else if (entry.kind === 'deal') {
+          volume.deals += 1;
         } else {
           volume.documents += 1;
         }
@@ -448,6 +561,16 @@ export function planTotals(
     volume.projects > 0
       ? { label: 'Projects', value: `${volume.projects}` }
       : null,
+    volume.pipelines > 0
+      ? { label: 'Pipelines', value: `${volume.pipelines}` }
+      : null,
+    volume.companies > 0
+      ? { label: 'Companies', value: `${volume.companies}` }
+      : null,
+    volume.contacts > 0
+      ? { label: 'Contacts', value: `${volume.contacts}` }
+      : null,
+    volume.deals > 0 ? { label: 'Deals', value: `${volume.deals}` } : null,
     volume.tasks > 0 && volume.taskLists === 0
       ? { label: 'Tasks', value: `${volume.tasks}` }
       : null,
@@ -471,6 +594,50 @@ export function planTotals(
   ].filter((total): total is ImportTotal => total !== null);
 }
 
+/** How each HubSpot loss reads in the plan's totals. */
+function hubspotLossLabel(loss: HubspotLoss): string {
+  return match(loss)
+    .with('owner_not_member', () => 'Owners not on your team')
+    .with('deal_without_company', () => 'Deals without a company')
+    .with('deal_without_pipeline', () => 'Deals in archived pipelines')
+    .with('extra_company_links', () => 'Extra company links')
+    .with('domain_rejected', () => 'Companies without a usable domain')
+    .with('unsupported_currency', () => 'Unsupported currencies')
+    .with('additional_domains', () => 'Extra company domains')
+    .with('company_owner', () => 'Company owners')
+    .with('merged_company', () => 'Companies merged by domain')
+    .with('merged_contact', () => 'Contacts merged by email')
+    .with('contact_without_company', () => 'Contacts without their company')
+    .exhaustive();
+}
+
+/** A HubSpot plan's owner matching and what it leaves behind. */
+export function hubspotTotals(
+  report: HubspotPlanReport | null | undefined
+): ImportTotal[] {
+  if (!report) return [];
+  return [
+    ...(report.owners > 0
+      ? [
+          {
+            label: 'Owners matched',
+            value: `${report.ownersMatched} of ${report.owners}`,
+          },
+        ]
+      : []),
+    ...(report.created > 0
+      ? [{ label: 'Created', value: `${report.created}` }]
+      : []),
+    ...(report.linked > 0
+      ? [{ label: 'Matched existing', value: `${report.linked}` }]
+      : []),
+    ...report.losses.map((loss) => ({
+      label: hubspotLossLabel(loss.loss),
+      value: `${loss.count}`,
+    })),
+  ];
+}
+
 /**
  * What planning is doing: reading Notion until the plan is staged, then
  * deciding each object, e.g. "Deciding what to import: 40 of 84 decided".
@@ -483,7 +650,7 @@ export function planningStatus(
   if (entries.length === 0) {
     const scanned = progress?.scanned;
     return scanned
-      ? `Reading ${sourceLabel(source)}: ${plural(scanned.pages, source === 'notion' ? 'page' : 'issue', source === 'notion' ? 'pages' : 'issues')}, ${plural(scanned.databases, source === 'notion' ? 'database' : 'project', source === 'notion' ? 'databases' : 'projects')}`
+      ? `Reading ${sourceLabel(source)}: ${plural(scanned.pages, ...scanUnits(source).items)}, ${plural(scanned.databases, ...scanUnits(source).groups)}`
       : `Reading ${sourceLabel(source)}…`;
   }
   const decided = entries.filter((entry) => entry.decision !== null).length;
@@ -499,6 +666,14 @@ export function volumeLabel(volume: ImportVolume): string {
       : '',
     volume.tasks > 0 ? plural(volume.tasks, 'task', 'tasks') : '',
     volume.projects > 0 ? plural(volume.projects, 'project', 'projects') : '',
+    volume.pipelines > 0
+      ? plural(volume.pipelines, 'pipeline', 'pipelines')
+      : '',
+    volume.companies > 0
+      ? plural(volume.companies, 'company', 'companies')
+      : '',
+    volume.contacts > 0 ? plural(volume.contacts, 'contact', 'contacts') : '',
+    volume.deals > 0 ? plural(volume.deals, 'deal', 'deals') : '',
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(', ') : 'nothing';
 }
@@ -514,7 +689,11 @@ export function planCounts(entries: ImportPlanEntry[]): ImportPlanCounts {
     deciding: 0,
   };
   for (const entry of entries) {
-    if (entry.kind === 'database' || entry.kind === 'project')
+    if (
+      entry.kind === 'database' ||
+      entry.kind === 'project' ||
+      entry.kind === 'pipeline'
+    )
       counts.databases += 1;
     else counts.pages += 1;
     counts[entry.decision ?? 'deciding'] += 1;
@@ -536,19 +715,9 @@ export function planSummary(
   source: ImportDraft['source'] = 'notion'
 ): string {
   const shared = [
-    counts.pages > 0
-      ? plural(
-          counts.pages,
-          source === 'notion' ? 'page' : 'issue',
-          source === 'notion' ? 'pages' : 'issues'
-        )
-      : '',
+    counts.pages > 0 ? plural(counts.pages, ...scanUnits(source).items) : '',
     counts.databases > 0
-      ? plural(
-          counts.databases,
-          source === 'notion' ? 'database' : 'project',
-          source === 'notion' ? 'databases' : 'projects'
-        )
+      ? plural(counts.databases, ...scanUnits(source).groups)
       : '',
   ]
     .filter(Boolean)
@@ -563,7 +732,9 @@ export function planSummary(
     .join(', ');
   return [
     shared ? `${sourceLabel(source)} shared ${shared}` : '',
-    `importing ${volumeLabel(volume)}`,
+    counts.deciding > 0
+      ? 'Deciding what to import…'
+      : `importing ${volumeLabel(volume)}`,
   ]
     .filter(Boolean)
     .join(' — ')
@@ -582,6 +753,7 @@ export function progressFromEntries(
     reviewId,
     status: null,
     errorKind: null,
+    error: null,
     scanned: null,
     onTeam: true,
     counts: planCounts(entries),
@@ -595,6 +767,7 @@ export function progressFromEntries(
         title: entry.title,
         reason: entry.error ?? '',
       })),
+    hubspot: null,
   };
 }
 
@@ -658,6 +831,29 @@ export function sourceLabel(source: ImportDraft['source']): string {
     .with('notion', () => 'Notion')
     .with('linear', () => 'Linear')
     .with('jira', () => 'Jira')
+    .with('hubspot', () => 'HubSpot')
+    .exhaustive();
+}
+
+/** What a source's scan counts, singular and plural: Notion pages and
+ * databases, tracker issues and projects, HubSpot records and pipelines. */
+function scanUnits(source: ImportDraft['source']): {
+  items: [string, string];
+  groups: [string, string];
+} {
+  return match(source)
+    .with('notion', () => ({
+      items: ['page', 'pages'] as [string, string],
+      groups: ['database', 'databases'] as [string, string],
+    }))
+    .with('linear', 'jira', () => ({
+      items: ['issue', 'issues'] as [string, string],
+      groups: ['project', 'projects'] as [string, string],
+    }))
+    .with('hubspot', () => ({
+      items: ['record', 'records'] as [string, string],
+      groups: ['pipeline', 'pipelines'] as [string, string],
+    }))
     .exhaustive();
 }
 

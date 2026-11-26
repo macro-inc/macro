@@ -16,10 +16,19 @@ export type ConversationRowProps = {
   children: JSX.Element;
 };
 
-export const ConversationRowContext = createContext<ConversationRowProps>();
+export const ConversationRowContext = createContext<{
+  row: ConversationRowProps;
+  setTitleElement: (element: HTMLSpanElement) => void;
+}>();
 
 export function useConversationRow() {
   const context = useContext(ConversationRowContext);
   if (!context) throw new Error('ConversationRowRoot is required');
-  return context;
+  return context.row;
+}
+
+export function useConversationRowTitleRef() {
+  const context = useContext(ConversationRowContext);
+  if (!context) throw new Error('ConversationRowRoot is required');
+  return context.setTitleElement;
 }

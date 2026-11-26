@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE computer_screen_drives\n            SET thaw_tried_at = now(),\n                thaw_failures = CASE WHEN $2 THEN thaw_failures + 1 ELSE 0 END,\n                thaw_first_failed_at = CASE WHEN $2 THEN coalesce(thaw_first_failed_at, now())\n                                            ELSE NULL END\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cf0addc4bc6b728d6287812897465567db743ab44fec741f75dc956e331f34f3"
+}

@@ -56,6 +56,7 @@ import {
   parseCacheRevision,
   type QueryUpdate,
   type ReadResult,
+  WRITE_NOT_ADMITTED_ERROR_CODE,
   type WriteResult,
 } from '../protocol';
 import { cacheSessionGeneration } from '../session-generation';
@@ -134,6 +135,13 @@ const SUBSCRIPTION = gql`
     }
   }
 `;
+
+const REMOVE_ITEM = {
+  query: 'query CachedList { cachedList { id } }',
+  variablesJson: '{}',
+  path: [{ field: 'cachedList' }],
+  operation: { kind: 'remove' as const, entityKey: 'Item:1' },
+};
 
 const MUTATION = gql`
   mutation SetEntityProperty($input: SetEntityPropertyInput!) {
@@ -292,7 +300,7 @@ function makeFakeHost(): FakeHost {
       queue.length = 0;
       nextTransaction = 0;
       readResult = { kind: 'miss' };
-      host.pushGeneration({ storage: 'reset' });
+      host.pushGeneration({ storage: 'reset', queue: 'reset' });
     },
     reads: [],
     writes: [],
@@ -764,6 +772,32 @@ describe('normalizedCacheExchange', () => {
     } finally {
       listen.mockRestore();
     }
+  });
+
+  it('lets its queue owner go when its client lifetime ends', async () => {
+    const held = vi.fn();
+    const letGo = vi.fn();
+    const mutationQueueLocks = {
+      request: async (name: string, callback: () => Promise<void>) => {
+        held(name);
+        await callback();
+        letGo(name);
+      },
+    } as unknown as LockManager;
+    const lifetime = new AbortController();
+    controlledQueryHarness(host, {
+      signal: lifetime.signal,
+      mutationQueueLocks,
+    });
+    expect(held).toHaveBeenCalledOnce();
+    await Promise.resolve();
+    expect(letGo).not.toHaveBeenCalled();
+
+    lifetime.abort();
+
+    await vi.waitFor(() =>
+      expect(letGo).toHaveBeenCalledExactlyOnceWith(held.mock.calls[0]?.[0])
+    );
   });
 
   it.each([false, true, 'owner unavailable'] as const)(
@@ -2846,9 +2880,12 @@ describe('normalizedCacheExchange', () => {
     });
   });
 
-  it.each(['read', 'write'] as const)(
-    'recovers owner loss reported by a concurrent %s without another API request',
-    async (failureSource) => {
+  it.each([
+    ['read', 'owner-epoch-lost'],
+    ['write', 'owner-epoch-lost'],
+  ] as const)(
+    'recovers an engine lost to a concurrent %s (%s) without another API request',
+    async (failureSource, errorCode) => {
       const read = deferred<ReadResult>();
       const write = deferred<WriteResult>();
       host.readQuery = vi.fn(() => read.promise);
@@ -2863,7 +2900,7 @@ describe('normalizedCacheExchange', () => {
       expect(host.writeQuery).toHaveBeenCalledOnce();
 
       const ownerLost = Object.assign(new Error('old owner lost'), {
-        errorCode: 'owner-epoch-lost',
+        errorCode,
       });
       if (failureSource === 'read') {
         read.reject(ownerLost);
@@ -2894,6 +2931,239 @@ describe('normalizedCacheExchange', () => {
       expect(client.reexecuteOperation).not.toHaveBeenCalled();
     }
   );
+
+  it.each(['read', 'write'] as const)(
+    'asks again for what it fetched in an outage, seen by a %s',
+    async (failureSource) => {
+      const outage = Object.assign(new Error('nothing can open it'), {
+        errorCode: OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
+      });
+      host.readQuery = vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          throw failureSource === 'read'
+            ? outage
+            : Object.assign(new Error('old owner lost'), {
+                errorCode: 'owner-epoch-lost',
+              });
+        })
+        .mockImplementation(async () => ({ kind: 'miss' }));
+      const originalWrite = host.writeQuery;
+      host.writeQuery = vi
+        .fn()
+        .mockRejectedValueOnce(
+          failureSource === 'write' ? outage : new Error('not ready')
+        )
+        .mockImplementation(originalWrite);
+      const { ops, network, forwarded, client } = controlledQueryHarness(host);
+      ops.next(makeOp(44));
+      await tick();
+      const answer = (from: string) => ({
+        operation: forwarded.at(-1)!,
+        data: { from },
+        error: undefined,
+        extensions: undefined,
+        stale: false,
+        hasNext: false,
+      });
+      network.next(answer('outage'));
+      await tick();
+      expect(host.writeQuery).toHaveBeenCalledOnce();
+
+      // Another page was served first, and has written a newer answer.
+      host.pushAffected([44]);
+      await tick();
+      expect(host.writeQuery).toHaveBeenCalledOnce();
+      expect(client.reexecuteOperation).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          key: 44,
+          context: expect.objectContaining({ requestPolicy: 'network-only' }),
+        })
+      );
+
+      expect(forwarded).toHaveLength(2);
+      network.next(answer('after'));
+      await tick();
+      expect(host.writeQuery).toHaveBeenCalledTimes(2);
+      expect(host.writeQuery).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: { from: 'after' },
+          registerDependencies: true,
+        })
+      );
+    }
+  );
+
+  it('asks the network again for every mounted query when updates were missed', async () => {
+    host.readQuery = async () => ({ kind: 'hit', data: { from: 'cache' } });
+    let refetch = () => {};
+    const unbound = vi.fn();
+    const lifetime = new AbortController();
+    const { ops, network, forwarded, results } = controlledQueryHarness(host, {
+      signal: lifetime.signal,
+      onUpdatesMissed: (listener) => {
+        refetch = listener;
+        return unbound;
+      },
+    });
+    const cacheOnly = makeOp(46);
+    ops.next(makeOp(44));
+    ops.next(makeOp(45));
+    ops.next(
+      makeOperation('query', cacheOnly, {
+        ...cacheOnly.context,
+        requestPolicy: 'cache-only',
+      })
+    );
+    ops.next(makeHydrationOp(47));
+    ops.next(teardownOf(makeOp(45)));
+    await tick();
+    const before = forwarded.length;
+
+    refetch();
+    await tick();
+    const asked = forwarded.slice(before);
+    expect(asked.map((op) => [op.key, op.context.requestPolicy])).toEqual([
+      [44, 'network-only'],
+    ]);
+    network.next(queryResult(asked[0]!, { from: 'after' }));
+    await tick();
+    expect(results.at(-1)?.data).toEqual({ from: 'after' });
+    expect(host.writes.at(-1)?.data).toEqual({ from: 'after' });
+
+    lifetime.abort();
+    expect(unbound).toHaveBeenCalledOnce();
+  });
+
+  /** A client whose answers the test sends, and which can miss updates. */
+  function clientMissingUpdates() {
+    let refetch = () => {};
+    const network = makeSubject<OperationResult>();
+    const forwarded: Operation[] = [];
+    const client = createClient({
+      url: 'http://localhost/graphql',
+      exchanges: [
+        normalizedCacheExchange(host, {
+          onUpdatesMissed: (listener) => {
+            refetch = listener;
+            return () => {};
+          },
+        }),
+        () => (ops$) => {
+          pipe(
+            ops$,
+            subscribe((operation) => forwarded.push(operation))
+          );
+          return network.source;
+        },
+      ],
+    });
+    return { client, network, forwarded, missUpdates: () => refetch() };
+  }
+
+  it('asks again for a query whose earlier answer was on its way when updates were missed', async () => {
+    const { client, network, forwarded, missUpdates } = clientMissingUpdates();
+    const shown: unknown[] = [];
+    const { unsubscribe } = pipe(
+      client.query(QUERY, { input: { limit: 2 } }),
+      subscribe((result) => shown.push(result.data))
+    );
+    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+
+    missUpdates();
+    await tick();
+    expect(forwarded).toHaveLength(1);
+    network.next(queryResult(forwarded[0]!, { from: 'before' }));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
+    network.next(queryResult(forwarded[1]!, { from: 'after' }));
+    await tick();
+
+    expect(shown.at(-1)).toEqual({ from: 'after' });
+    expect(forwarded).toHaveLength(2);
+    unsubscribe();
+  });
+
+  it('asks again only once the earlier answer is there, not for what the cache shows meanwhile', async () => {
+    const read = deferred<ReadResult>();
+    host.readQuery = vi.fn(() => read.promise);
+    const { client, network, forwarded, missUpdates } = clientMissingUpdates();
+    const { unsubscribe } = pipe(
+      client.query(
+        QUERY,
+        { input: { limit: 2 } },
+        { requestPolicy: 'cache-and-network' }
+      ),
+      subscribe(() => {})
+    );
+    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+
+    missUpdates();
+    await tick();
+    read.resolve({ kind: 'hit', data: { from: 'cache' } });
+    await tick();
+    expect(forwarded).toHaveLength(1);
+    network.next(queryResult(forwarded[0]!, { from: 'before' }));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
+    unsubscribe();
+  });
+
+  it('asks again although the earlier answer starts a cache read of the same query', async () => {
+    const { client, network, forwarded, missUpdates } = clientMissingUpdates();
+    const open: { unsubscribe(): void }[] = [];
+    const readCache = () =>
+      open.push(
+        pipe(
+          client.query(
+            QUERY,
+            { input: { limit: 2 } },
+            { requestPolicy: 'cache-only' }
+          ),
+          subscribe(() => {})
+        )
+      );
+    open.push(
+      pipe(
+        client.query(QUERY, { input: { limit: 2 } }),
+        subscribe((result) => {
+          if (result.data?.from === 'before' && open.length === 1) readCache();
+        })
+      )
+    );
+    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+
+    missUpdates();
+    await tick();
+    network.next(queryResult(forwarded[0]!, { from: 'before' }));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
+    network.next(queryResult(forwarded[1]!, { from: 'after' }));
+    await tick();
+    expect(forwarded).toHaveLength(2);
+    for (const subscription of open) subscription.unsubscribe();
+  });
+
+  it('lets its queue owner go when a sent request was given up by its caller', async () => {
+    const letGo = vi.fn();
+    const mutationQueueLocks = {
+      request: async (_name: string, callback: () => Promise<void>) => {
+        await callback();
+        letGo();
+      },
+    } as unknown as LockManager;
+    const lifetime = new AbortController();
+    const { ops, forwarded } = controlledQueryHarness(host, {
+      signal: lifetime.signal,
+      mutationQueueLocks,
+    });
+    const mutation = makeMutationOp(51, { saved: true });
+    ops.next(mutation);
+    await vi.waitFor(() =>
+      expect(forwarded.map(({ key }) => key)).toContain(51)
+    );
+    // Unsubscribing cancels the request: nobody answers it.
+    ops.next(teardownOf(mutation));
+    lifetime.abort();
+    await vi.waitFor(() => expect(letGo).toHaveBeenCalledOnce());
+  });
 
   it('registers a slow fallback write without a replacement reread', async () => {
     let readCount = 0;
@@ -4485,6 +4755,39 @@ describe('normalizedCacheExchange', () => {
       }
     });
 
+    it('drains again as soon as a paused host has an engine', async () => {
+      vi.useFakeTimers();
+      try {
+        let paused = false;
+        let ownerReady = () => {};
+        const pausing: CacheHost = Object.assign(
+          createRetirableCacheHost(host),
+          {
+            onOwnerReady(callback: () => void) {
+              ownerReady = callback;
+              return () => {};
+            },
+          }
+        );
+        Object.defineProperty(pausing, 'disabled', { get: () => paused });
+        const drained = vi.spyOn(pausing, 'currentRevision');
+        harness(pausing);
+        await vi.advanceTimersByTimeAsync(10);
+        expect(drained).toHaveBeenCalledOnce();
+
+        paused = true;
+        await vi.advanceTimersByTimeAsync(120_000);
+        expect(drained).toHaveBeenCalledOnce();
+
+        paused = false;
+        ownerReady();
+        await vi.advanceTimersByTimeAsync(10);
+        expect(drained).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('stops polling once its host is retired', async () => {
       vi.useFakeTimers();
       try {
@@ -4914,11 +5217,34 @@ describe('normalizedCacheExchange', () => {
         vi.restoreAllMocks();
       });
 
+      it('commits a mutation in flight when a reset database keeps its queue', async () => {
+        const { ops, network, forwarded } = controlledQueryHarness(host);
+        const data = { setEntityProperty: { id: 'in-flight' } };
+        ops.next(makeMutationOp(1, data));
+        await vi.advanceTimersByTimeAsync(1);
+        expect(forwarded).toHaveLength(1);
+
+        host.pushGeneration({ storage: 'reset', queue: 'preserved' });
+        await vi.advanceTimersByTimeAsync(1);
+        network.next(queryResult(forwarded[0], data));
+        await vi.advanceTimersByTimeAsync(300_000);
+
+        expect(host.commits).toEqual([
+          {
+            transactionId: '1',
+            query: stringifyDocument(MUTATION),
+            data,
+          },
+        ]);
+        expect(host.claims).toEqual(['1']);
+        expect(forwarded).toHaveLength(1);
+      });
+
       it('backs off empty cache wakeups while offline without spinning', async () => {
         vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
         const claim = vi.spyOn(host, 'claimNextMutation');
         const { forwarded } = harness(host);
-        host.pushGeneration({ storage: 'reset' });
+        host.pushGeneration({ storage: 'reset', queue: 'reset' });
         await vi.advanceTimersByTimeAsync(1_000);
         expect(claim).toHaveBeenCalledOnce();
         expect(host.claims).toEqual([]);
@@ -4955,14 +5281,15 @@ describe('normalizedCacheExchange', () => {
               await ready.promise;
               return await claimNext(...args);
             });
-          if (wake === 'restore') host.pushGeneration({ storage: 'preserved' });
+          if (wake === 'restore')
+            host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
           if (wake === 'online') events.dispatchEvent(new Event('online'));
           await vi.advanceTimersByTimeAsync(wake === 'poll' ? 30_000 : 0);
           const claimsBeforeReady = claim.mock.calls.length;
           await vi.advanceTimersByTimeAsync(5_000);
           // BFCache readiness conservatively invalidates the local epoch even
           // when the durable database (including this queued head) survived.
-          host.pushGeneration({ storage: 'reset' });
+          host.pushGeneration({ storage: 'reset', queue: 'reset' });
           const readyAt = Date.now();
           ready.resolve();
           await vi.advanceTimersByTimeAsync(1);
@@ -5084,7 +5411,8 @@ describe('normalizedCacheExchange', () => {
             const sendsBeforeWake = forwarded.length;
             await vi.advanceTimersByTimeAsync(100);
             if (wake === 'online') events.dispatchEvent(new Event('online'));
-            else host.pushGeneration({ storage: 'preserved' });
+            else
+              host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
             deferring.resolve();
             await vi.advanceTimersByTimeAsync(1);
@@ -5115,7 +5443,7 @@ describe('normalizedCacheExchange', () => {
           .spyOn(host, 'claimNextMutation')
           .mockResolvedValue(undefined);
         await vi.advanceTimersByTimeAsync(100);
-        host.pushGeneration({ storage: 'preserved' });
+        host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
         await vi.advanceTimersByTimeAsync(0);
         expect(claim).toHaveBeenCalledOnce();
         await vi.advanceTimersByTimeAsync(1_000);
@@ -5140,7 +5468,7 @@ describe('normalizedCacheExchange', () => {
           expect(claim).toHaveBeenCalledOnce();
 
           if (restoreWhilePending) {
-            host.pushGeneration({ storage: 'preserved' });
+            host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
             expect(claim).toHaveBeenCalledOnce();
           }
@@ -5148,7 +5476,7 @@ describe('normalizedCacheExchange', () => {
           await vi.advanceTimersByTimeAsync(1);
           if (!restoreWhilePending) {
             expect(forwarded).toHaveLength(0);
-            host.pushGeneration({ storage: 'preserved' });
+            host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
           }
 
@@ -5189,14 +5517,14 @@ describe('normalizedCacheExchange', () => {
           const claimsBeforeRestore = claim.mock.calls.length;
 
           if (restoreWhilePending) {
-            host.pushGeneration({ storage: 'preserved' });
+            host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
             expect(claim).toHaveBeenCalledTimes(claimsBeforeRestore);
           }
           pendingCommit.reject(new CacheNavigationError());
           await vi.advanceTimersByTimeAsync(1);
           if (!restoreWhilePending) {
-            host.pushGeneration({ storage: 'preserved' });
+            host.pushGeneration({ storage: 'preserved', queue: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
           }
 
@@ -5607,6 +5935,86 @@ describe('normalizedCacheExchange', () => {
       });
       expect(onCacheError).toHaveBeenCalledOnce();
     });
+
+    it.each([
+      {
+        name: 'without link patches',
+        linkPatches: [],
+        refusedAt: 1,
+        storageChanges: false,
+      },
+      {
+        name: 'with link patches',
+        linkPatches: [REMOVE_ITEM],
+        refusedAt: 1,
+        storageChanges: false,
+      },
+      {
+        name: 'as the retry without its link patches',
+        linkPatches: [REMOVE_ITEM],
+        refusedAt: 2,
+        storageChanges: false,
+      },
+      // The write is in neither the old storage nor the new.
+      {
+        name: 'when storage changed while it waited',
+        linkPatches: [],
+        refusedAt: 1,
+        storageChanges: true,
+      },
+      {
+        name: 'when storage changed while the retry waited',
+        linkPatches: [REMOVE_ITEM],
+        refusedAt: 2,
+        storageChanges: true,
+      },
+    ])(
+      'returns the refusal of a write no owner took, and never sends it, $name',
+      async ({ linkPatches, refusedAt, storageChanges }) => {
+        const refusal = Object.assign(new Error('no owner took it'), {
+          errorCode: WRITE_NOT_ADMITTED_ERROR_CODE,
+        });
+        const enqueueAttempts = vi.fn(async () => {
+          if (enqueueAttempts.mock.calls.length < refusedAt)
+            throw new Error('a patch no longer fits');
+          if (storageChanges)
+            host.pushGeneration({ storage: 'reset', queue: 'reset' });
+          throw refusal;
+        });
+        host.enqueueOptimisticMutation = enqueueAttempts;
+        const warn = vi
+          .spyOn(console, 'warn')
+          .mockImplementation(() => undefined);
+        const onCacheError = vi.fn();
+        const { ops, results, forwarded } = harness(host, undefined, {
+          onCacheError,
+        });
+        const base = makeMutationOp(1, optimistic);
+        ops.next(
+          makeOperation(base.kind, base, {
+            ...base.context,
+            normalizedCacheOptimistic: {
+              uuid: crypto.randomUUID(),
+              optimisticResponse: optimistic,
+              linkPatches,
+              revalidations: [],
+            },
+          })
+        );
+        await tick();
+        warn.mockRestore();
+
+        expect(enqueueAttempts).toHaveBeenCalledTimes(refusedAt);
+        expect(forwarded).toHaveLength(0);
+        expect(results).toHaveLength(1);
+        expect(results[0]?.data).toBeUndefined();
+        expect(results[0]?.error?.networkError).toBe(refusal);
+        expect(onCacheError).toHaveBeenLastCalledWith(
+          refusal,
+          expect.objectContaining({ key: 1 })
+        );
+      }
+    );
 
     it('replays an older returned claim and reports the new caller as queued', async () => {
       host.seedQueued({

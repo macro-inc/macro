@@ -1,19 +1,18 @@
 import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
 import { useViewTabHotkeys } from '@app/components/view-shell';
-import { t } from '@app/lib/i18n';
 import {
   splitRootScope,
   useSplitPanel,
 } from '@components/app/split-layout/layoutUtils';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { createSignal, Show } from 'solid-js';
-import { match } from 'ts-pattern';
 import type { ProjectSection } from '../core/project';
 import type { ProjectDetailHeaderProps } from '../project-detail';
 import { ProjectTitleMenu } from '../project-title-menu';
-import { ProjectSectionTabs } from './shared/project-section-tabs';
-
-const PROJECT_SECTIONS: readonly ProjectSection[] = ['overview', 'tasks'];
+import {
+  ProjectSectionTabs,
+  projectSectionLabel,
+} from './shared/project-section-tabs';
 
 export function ProjectDetailHeader(props: ProjectDetailHeaderProps) {
   const [tabs, setTabs] = createSignal<HTMLElement>();
@@ -23,14 +22,10 @@ export function ProjectDetailHeader(props: ProjectDetailHeaderProps) {
       scopeId: splitRootScope(panel),
       enabled: panel.isPanelActive,
       tabs,
-      ids: () => PROJECT_SECTIONS,
+      ids: () => props.sections,
       activeId: () => props.section,
       setActiveId: props.onSectionChange,
-      label: (section) =>
-        match(section)
-          .with('overview', () => t('tabs.project-overview'))
-          .with('tasks', () => t('tabs.project-tasks'))
-          .exhaustive(),
+      label: projectSectionLabel,
     });
   }
 
@@ -54,6 +49,7 @@ export function ProjectDetailHeader(props: ProjectDetailHeaderProps) {
         <ProjectSectionTabs
           ref={setTabs}
           compact={compact}
+          sections={props.sections}
           section={props.section}
           onChange={props.onSectionChange}
         />

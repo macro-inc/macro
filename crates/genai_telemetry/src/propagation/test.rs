@@ -144,6 +144,7 @@ fn mcp_meta_carries_context_under_the_sep_414_keys() {
         "stale context is cleared"
     );
     assert_eq!(meta["progressToken"], json!(7));
+    assert!(!mcp_withholds_content(&meta), "{meta:?}");
 
     let orphan = tracing::info_span!(parent: None, "orphan");
     let before = orphan.context().span().span_context().trace_id();
@@ -152,4 +153,27 @@ fn mcp_meta_carries_context_under_the_sep_414_keys() {
         &Map::from_iter([("traceparent".to_owned(), json!("bad"))]),
     );
     assert_eq!(orphan.context().span().span_context().trace_id(), before);
+}
+
+#[tokio::test]
+async fn a_withheld_caller_marks_its_mcp_requests_withheld_and_no_other_does() {
+    let mut meta = Map::from_iter([("progressToken".to_owned(), json!(7))]);
+    crate::withhold_content(async {
+        inject_mcp(&tracing::Span::none(), &mut meta);
+    })
+    .await;
+    // Over the wire, as the server reads it.
+    let wire = serde_json::to_string(&meta).expect("serialize metadata");
+    let received: Map<String, Value> = serde_json::from_str(&wire).expect("deserialize");
+    assert!(mcp_withholds_content(&received), "{received:?}");
+    assert_eq!(received["progressToken"], json!(7));
+
+    // The same metadata sent again from outside the scope loses the mark.
+    let mut again = received;
+    inject_mcp(&tracing::Span::none(), &mut again);
+    assert!(!mcp_withholds_content(&again), "{again:?}");
+    assert!(!mcp_withholds_content(&Map::from_iter([(
+        "macro.dev/withhold-content".to_owned(),
+        json!("yes")
+    )])));
 }

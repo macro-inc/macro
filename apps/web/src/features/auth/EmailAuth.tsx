@@ -348,7 +348,6 @@ function EmailLinkCallbackHandler(props: Pick<EmailAuthParams, 'successPath'>) {
     // return straight to it. Landing in mail settings would mount the app
     // shell mid-onboarding just for NewOnboardingRedirect to bounce back.
     if (
-      !isMobile() &&
       !isNativeMobilePlatform() &&
       userInfoQuery.data?.tutorialComplete === false &&
       !userInfoQuery.data.isAgent

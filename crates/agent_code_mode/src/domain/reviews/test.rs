@@ -140,6 +140,7 @@ struct Actions {
     refuse_presentation: Mutex<Option<String>>,
     /// Why a saved review can never be presented, found while presenting it.
     unpresentable: Mutex<Option<String>>,
+    dependency: Mutex<Option<Uuid>>,
 }
 impl Actions {
     async fn act(&self, account_holder: &MacroUserIdStr<'static>, call: String) {
@@ -153,6 +154,19 @@ impl Actions {
 }
 #[async_trait]
 impl ReviewActions for Actions {
+    async fn normalize(&self, record: &mut ReviewRecord) -> Result<bool, CodeModeError> {
+        let Some(dependency) = *self.dependency.lock().unwrap() else {
+            return Ok(false);
+        };
+        if let ReviewItems::Import(items) = &mut record.items {
+            if !items[0].draft.excluded.contains(&dependency) {
+                items[0].draft.excluded.push(dependency);
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     async fn session(&self, _: AgentSessionId) -> Result<ReviewSession, CodeModeError> {
         Ok(ReviewSession {
             owner: self.owner.clone(),
@@ -295,6 +309,7 @@ impl Fixture {
             released: Mutex::new(Vec::new()),
             refuse_presentation: Mutex::new(None),
             unpresentable: Mutex::new(None),
+            dependency: Mutex::new(None),
         });
         let service = ReviewService::new(
             store.clone(),
@@ -1706,4 +1721,32 @@ async fn an_early_yes_to_an_import_starts_nothing_and_a_yes_once_ready_starts_it
         Err(CodeModeError::Conflict)
     ));
     assert_eq!(*f.actions.calls.lock().unwrap(), vec!["import".to_string()]);
+}
+
+#[tokio::test]
+async fn external_dependencies_are_seeded_into_the_saved_presented_draft() {
+    let f = Fixture::new();
+    let dependency = Uuid::from_u128(42);
+    *f.actions.dependency.lock().unwrap() = Some(dependency);
+    let input = decode::<CreateReview>(
+        &serde_json::to_vec(
+            &json!({"title":"Import", "kind":"import", "drafts":[{"source":"notion"}]}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let record = f
+        .service
+        .create(&f.edit(), &f.actions.owner, input)
+        .await
+        .unwrap();
+    let ReviewItems::Import(items) = &record.items else {
+        panic!("import review");
+    };
+    assert_eq!(items[0].draft.excluded, vec![dependency]);
+    let saved = f.store.get(f.session, record.id).await.unwrap();
+    let ReviewItems::Import(items) = &saved.items else {
+        panic!("import review");
+    };
+    assert_eq!(items[0].draft.excluded, vec![dependency]);
 }

@@ -13,7 +13,7 @@ mod test;
 mod update_labels;
 mod upsert_message;
 
-pub use catalog::{LabelCatalogRepository, sync_labels};
+pub use catalog::{LabelCatalogRepository, ThreadReindexQueue, sync_labels};
 pub use error_policy::handle_operation_error;
 pub use gmail_message::{ensure_recovery_backfill_job, repair_stale_cursor};
 pub use import_ports::*;

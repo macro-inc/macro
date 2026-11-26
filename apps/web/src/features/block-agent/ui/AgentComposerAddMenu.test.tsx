@@ -113,6 +113,7 @@ function setup(imageUnsupportedReason?: string) {
     openImages: vi.fn(),
     openLibrary: vi.fn(),
     openSkills: vi.fn(),
+    onFocusScopeChange: vi.fn(),
   };
   render(() => (
     <>
@@ -216,6 +217,42 @@ it('hands the mobile sheet off to connection settings', async () => {
   setup();
   fireEvent.click(await screen.findByRole('button', { name: /GitHub/ }));
   expect(await screen.findByText('Settings for github')).toBeTruthy();
+});
+
+it.each([false, true])(
+  'retains composer focus through a settings handoff (mobile: %s)',
+  async (mobile) => {
+    state.mobile = mobile;
+    const computedStyle = window.getComputedStyle;
+    vi.stubGlobal('getComputedStyle', (element: Element) => {
+      const style = computedStyle(element);
+      style.transitionDuration ||= '0s';
+      style.animationName ||= 'none';
+      return style;
+    });
+    const actions = setup();
+    expect(actions.onFocusScopeChange).toHaveBeenLastCalledWith(true);
+    if (mobile)
+      fireEvent.click(await screen.findByRole('button', { name: /GitHub/ }));
+    else
+      fireEvent.keyDown(screen.getByRole('menuitem', { name: /GitHub/ }), {
+        key: 'Enter',
+      });
+    await screen.findByText('Settings for github');
+    expect(actions.onFocusScopeChange).not.toHaveBeenCalledWith(false);
+    if (mobile) fireEvent.keyDown(document, { key: 'Escape' });
+    else fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() =>
+      expect(actions.onFocusScopeChange).toHaveBeenLastCalledWith(false)
+    );
+  }
+);
+
+it('releases composer focus when an open menu unmounts', () => {
+  const actions = setup();
+  expect(actions.onFocusScopeChange).toHaveBeenLastCalledWith(true);
+  cleanup();
+  expect(actions.onFocusScopeChange).toHaveBeenLastCalledWith(false);
 });
 
 it('refuses photos on a text-only model while keeping the file action usable', () => {

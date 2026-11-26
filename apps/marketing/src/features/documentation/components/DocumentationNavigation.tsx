@@ -177,7 +177,7 @@ const mainBenefits = guideNavigation.filter(
 const agentGuides = guideNavigation.filter(
   (entry) => typeof entry !== 'string' && entry.group === 'Agent setup'
 );
-const moreLinks = [
+const moreLinks: { href: string; title: string; desktopOnly?: boolean }[] = [
   { href: '/pricing', title: 'Pricing' },
   { href: '/docs/account/teams', title: 'Teams & Admin' },
   { href: '/docs/security', title: 'Security' },
@@ -186,7 +186,8 @@ const moreLinks = [
   { href: '/posts', title: 'Blog' },
   { href: '/partners', title: 'Partners' },
   { href: '/jobs', title: 'Jobs' },
-  { href: '/download', title: 'Download Macro' },
+  // The desktop download page is not offered on phones.
+  { href: '/download', title: 'Download Macro', desktopOnly: true },
   { href: '/legal', title: 'Legal' },
 ];
 
@@ -478,6 +479,9 @@ export function DocumentationNavigation(props: { currentPath: string }) {
                 {(page) => (
                   <a
                     href={page.href}
+                    class={
+                      page.desktopOnly ? 'doc-nav-desktop-only' : undefined
+                    }
                     aria-current={
                       props.currentPath.replace(/\/$/, '') === page.href
                         ? 'page'

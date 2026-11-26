@@ -157,31 +157,33 @@ it.each([true, false])(
       });
       fireEvent.input(
         within(dialog).getByRole('textbox', { name: 'Search models' }),
-        { target: { value: 'GPT-5.6' } }
+        { target: { value: 'GPT-6 Luna' } }
       );
-      fireEvent.click(within(dialog).getByRole('radio', { name: 'GPT-5.6' }));
+      fireEvent.click(
+        within(dialog).getByRole('radio', { name: 'GPT-6 Luna' })
+      );
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     } else {
       fireEvent.input(
         await screen.findByRole('textbox', { name: 'Search models' }),
-        { target: { value: 'GPT-5.6' } }
+        { target: { value: 'GPT-6 Luna' } }
       );
       fireEvent.keyDown(
-        screen.getByRole('menuitem', { name: /^GPT-5\.6 OpenAI$/ }),
+        screen.getByRole('menuitem', { name: /^GPT-6 Luna OpenAI$/ }),
         {
           key: 'Enter',
         }
       );
       await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     }
-    expect(screen.getByTestId('model').textContent).toBe(Model.gpt56);
+    expect(screen.getByTestId('model').textContent).toBe(Model.gpt6Luna);
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(onSend).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: Model.gpt56,
+        model: Model.gpt6Luna,
         content: 'Test first message',
       })
     );
-    expect(screen.getByTestId('model').textContent).toBe(Model.gpt56);
+    expect(screen.getByTestId('model').textContent).toBe(Model.gpt6Luna);
   }
 );

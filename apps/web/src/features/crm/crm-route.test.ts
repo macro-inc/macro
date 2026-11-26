@@ -225,6 +225,18 @@ describe('CRM item URLs', () => {
     }
   );
 
+  it('treats a document link without a file type as an unknown file, not a note', () => {
+    expect(crmItemRoute.claim?.({ itemType: 'document', itemId })).toEqual({
+      namespace: 'block',
+      id: `unknown:${itemId}`,
+    });
+    expect(resolveMention(appUrl(`/companies/document/${itemId}`))).toEqual({
+      id: itemId,
+      block: 'unknown',
+      params: {},
+    });
+  });
+
   it('claims a compact task as the same document as its generic and Tasks URLs', () => {
     const decoded = crmRecordItemParams.safeParse(
       leafOf(`companies/company/${companyId}/tasks/${itemId}`)?.params
@@ -388,22 +400,28 @@ const legacyEntry = (type: string, id: string): Entry => ({
 const recordEntry = (
   recordType: 'company' | 'contact',
   recordId: string,
-  pipelineId?: string
-): Entry => ({
-  id: 'entry',
-  location: {
-    route: pipelineId
-      ? paneRoute(
-          { id: companiesRoute.id, params: {} },
-          { id: crmPipelineRoute.id, params: { pipelineId } },
-          { id: crmPipelineRecordRoute.id, params: { recordType, recordId } }
-        )
-      : paneRoute(
-          { id: companiesRoute.id, params: {} },
-          { id: crmRecordRoute.id, params: { recordType, recordId } }
-        ),
-  },
-});
+  pipelineId?: string,
+  section?: string
+): Entry => {
+  const params = section
+    ? { recordType, recordId, section }
+    : { recordType, recordId };
+  return {
+    id: 'entry',
+    location: {
+      route: pipelineId
+        ? paneRoute(
+            { id: companiesRoute.id, params: {} },
+            { id: crmPipelineRoute.id, params: { pipelineId } },
+            { id: crmPipelineRecordRoute.id, params }
+          )
+        : paneRoute(
+            { id: companiesRoute.id, params: {} },
+            { id: crmRecordRoute.id, params }
+          ),
+    },
+  };
+};
 
 describe('legacy CRM URLs', () => {
   const run = (
@@ -553,6 +571,41 @@ describe('legacy CRM URLs', () => {
       run(recordEntry('contact', contactId, pipelineId), { touch: true })
     ).toEqual({ type: 'redirect', to: `/contact/${contactId}` });
     expect(run(recordEntry('company', companyId))).toBeUndefined();
+  });
+
+  it('opens a Customers record tab link on that section of the record page on touch', () => {
+    for (const [type, id, section, pipeline] of [
+      ['company', companyId, 'team', undefined],
+      ['contact', contactId, 'tasks', undefined],
+      ['contact', contactId, 'emails', pipelineId],
+    ] as const) {
+      const result = run(recordEntry(type, id, pipeline, section), {
+        touch: true,
+      });
+      if (result?.type !== 'redirect') throw new Error('Expected a redirect');
+      const url = new URL(result.to, window.location.origin);
+      expect(url.pathname).toBe(`/${type}/${id}`);
+      expect(url.searchParams.get('s0.crm-section.section')).toBe(section);
+    }
+  });
+
+  it('keeps the Discussion message a touch record tab link carries', () => {
+    const entry = recordEntry('company', companyId, undefined, 'team');
+    const result = run(
+      {
+        ...entry,
+        location: {
+          ...entry.location,
+          search: { 'crm-record': { commentId: ['message'], seek: ['s'] } },
+        },
+      },
+      { touch: true }
+    );
+    if (result?.type !== 'redirect') throw new Error('Expected a redirect');
+    const url = new URL(result.to, window.location.origin);
+    expect(url.pathname).toBe(`/company/${companyId}`);
+    expect(url.searchParams.get('s0.crm-section.section')).toBe('team');
+    expect(url.searchParams.get('s0.crm-record.commentId')).toBe('message');
   });
 
   it('keeps a record item link inside Customers on touch instead of dropping the item', () => {

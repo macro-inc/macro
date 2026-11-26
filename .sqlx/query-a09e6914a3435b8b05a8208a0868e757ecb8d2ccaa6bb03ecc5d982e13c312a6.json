@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT teammate.user_id AS \"user_id!\"\n            FROM team_user viewer\n            JOIN team_user teammate ON teammate.team_id = viewer.team_id\n            WHERE viewer.user_id = $1\n            UNION\n            SELECT $1::text\n            ORDER BY 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a09e6914a3435b8b05a8208a0868e757ecb8d2ccaa6bb03ecc5d982e13c312a6"
+}

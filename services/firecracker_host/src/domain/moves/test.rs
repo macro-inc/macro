@@ -337,6 +337,7 @@ fn computer(computer_id: ComputerId) -> Computer {
         generation: EnrollmentGeneration::new(3),
         pairing_id: PairingId::new_from_uuid(uuid::Uuid::nil()),
         image: firecracker_host_api::GuestImage::try_new("img").unwrap(),
+        previous_image: None,
         role: ComputerRole::Person,
         resources: ComputerResources {
             vcpus: 2,
