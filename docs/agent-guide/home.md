@@ -337,10 +337,11 @@ when a routine was proposed since the last visit) and **Your routines**, both
 opening Agents → Routines. The page shows the chosen list under its name and
 the date as rows, each 56px: a tile tinted by kind, a title,
 and one line, cut where the row ends (hover shows the rest). Today groups the
-rows that share a topic (a result they all end at, such as a renewal or an event) when two or more do:
-each group has the topic's name and, when there is one, a line saying why it
-matters now, and the rest come last under **Everything else**. The sidebar's
-**Topics** lists the same topics with how many of their rows wait; choosing one
+rows that share a topic (a result they all end at, such as a renewal or an
+event) when two or more do: each group has the topic's name and, when there
+is one, a line saying why it matters now, and the rest come last under
+**Everything else**. The sidebar's **Topics** lists the same topics with how
+many of their rows wait; choosing one
 shows its rows alone (`sN.forYou.topic`; one that groups nothing shows Today), and
 tiles are tinted by topic instead of kind. With no such topic, Today is one flat list. The other lists are always
 flat. A row's age sits
