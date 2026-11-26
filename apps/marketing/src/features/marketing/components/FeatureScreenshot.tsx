@@ -19,6 +19,7 @@ export function FeatureScreenshot(props: {
       class="feature-screenshot"
       classList={{ 'feature-screenshot--wallpaper': Boolean(props.wallpaper) }}
       data-narrow={props.screen.narrow ? '' : undefined}
+      data-light={props.screen.lightSrc ? '' : undefined}
       data-wallpaper-variant={
         props.wallpaper ? (props.variant ?? 0) % 4 : undefined
       }
@@ -131,13 +132,12 @@ function ScreenCanvas(props: {
         class="feature-screenshot-canvas"
         style={{ '--phone-canvas-width': phoneWidth() }}
       >
-        <img
+        <PaletteImage
           src={props.frame.src}
+          lightSrc={props.frame.lightSrc}
           width={props.frame.width}
           height={props.frame.height}
           alt={props.alt}
-          loading="lazy"
-          decoding="async"
         />
         <Show when={clampedFocus()}>
           {(focus) => (
@@ -171,15 +171,14 @@ export function FeaturePhoneScreens(props: {
       <ul class="feature-phone-screens">
         <For each={props.screens}>
           {(screen) => (
-            <li>
+            <li data-light={screen.lightSrc ? '' : undefined}>
               <div class="feature-phone-screen">
-                <img
+                <PaletteImage
                   src={screen.src}
+                  lightSrc={screen.lightSrc}
                   width={screen.width}
                   height={screen.height}
                   alt={screen.alt}
-                  loading="lazy"
-                  decoding="async"
                 />
               </div>
               <h3>{screen.title}</h3>
@@ -189,5 +188,44 @@ export function FeaturePhoneScreens(props: {
         </For>
       </ul>
     </section>
+  );
+}
+
+/**
+ * A capture, with its Macro Light frame for the cream palette when there is one.
+ * CSS shows the frame for the palette; the hidden lazy image is never fetched.
+ */
+function PaletteImage(props: {
+  src: string;
+  lightSrc?: string;
+  width: number;
+  height: number;
+  alt: string;
+}) {
+  return (
+    <>
+      <img
+        class={props.lightSrc ? 'palette-dark-only' : undefined}
+        src={props.src}
+        width={props.width}
+        height={props.height}
+        alt={props.alt}
+        loading="lazy"
+        decoding="async"
+      />
+      <Show when={props.lightSrc}>
+        {(lightSrc) => (
+          <img
+            class="palette-light-only"
+            src={lightSrc()}
+            width={props.width}
+            height={props.height}
+            alt={props.alt}
+            loading="lazy"
+            decoding="async"
+          />
+        )}
+      </Show>
+    </>
   );
 }

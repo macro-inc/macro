@@ -160,6 +160,8 @@ import tasksTaskAssignees from '../assets/screens/tasks-task-assignees.webp';
 
 export type FeatureScreenFrame = {
   src: string;
+  /** The same frame in Macro Light, from the same page state, for the cream palette. */
+  lightSrc?: string;
   width: number;
   height: number;
   focus?: { x: number; y: number; width: number; height: number };
@@ -173,6 +175,8 @@ export type FeatureScreen = FeatureScreenFrame & {
 
 export type PhoneScreen = {
   src: string;
+  /** The same screen in Macro Light, for the cream palette. */
+  lightSrc?: string;
   width: number;
   height: number;
   alt: string;
