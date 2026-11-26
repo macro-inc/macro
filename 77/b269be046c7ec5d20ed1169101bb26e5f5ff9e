@@ -1,0 +1,19 @@
+apps/web/src/components/ui/components/SnapPager/SnapPager.tsx
+  s_d4d343a5430ac0::t_9d42402db933eb 30-31,164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "77b269be046c7ec5d20ed1169101bb26e5f5ff9e",
+  "prompts": {},
+  "sessions": {
+    "s_d4d343a5430ac0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0cf7975f-6934-4d95-8cc0-552ee919097a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
