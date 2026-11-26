@@ -93,9 +93,6 @@ nav {
   border-left: 1px solid var(--border);
   padding-left: 10px;
 }
-main[data-route="/"] {
-  background: #030303;
-}
 .creator {
   display: grid;
   grid-template-columns: minmax(240px, 334px) minmax(210px, 1fr) minmax(

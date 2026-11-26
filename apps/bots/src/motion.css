@@ -1,7 +1,7 @@
 /* Motion and terrain for the Bots shell.
    Only opacity and the transform family (transform, translate, scale) animate,
-   so nothing here can move layout. Entry settles within 400ms and never gates
-   input. Reduced motion lands every rule on its final frame. */
+   so nothing here can move layout. Content entry settles within 400ms and
+   never gates input. Reduced motion lands every rule on its final frame. */
 
 :root {
   --motion-tap: 70ms;
@@ -20,7 +20,6 @@
   position: fixed;
   inset: 0;
   z-index: -1;
-  height: 100lvh;
   overflow: hidden;
   pointer-events: none;
   contain: strict;
@@ -54,19 +53,25 @@
 .beacon-pulse {
   opacity: 0.65;
 }
-main[data-route="/"] {
-  background: transparent;
-}
 body:has(main:not([data-route="/"], [data-route="/sign-in"])) .terrain {
   opacity: 0.6;
 }
 body:has(main:is([data-route="/passwords"], [data-route="/billing"])) .terrain {
   opacity: 0.3;
+  transition: none;
+}
+/* Zero timing, not `animation: none`: removing the animation would replay
+   the reveal on the next route. */
+body:has(main:is([data-route="/passwords"], [data-route="/billing"]))
+  .terrain
+  g {
+  animation-duration: 0s;
+  animation-delay: 0s;
 }
 
 /* Entry: a short fade that settles 4px downward. Moving down from above keeps
    the page's scrollable area unchanged while it plays. */
-.sign-in,
+main[data-route="/sign-in"] .sign-in,
 .creator > *,
 .fleet-tower,
 .brain-frame,
@@ -98,10 +103,10 @@ body:has(main:is([data-route="/passwords"], [data-route="/billing"])) .terrain {
 }
 
 /* The sign-in card carries the terrain's amber and cyan datum line. */
-.sign-in {
+main[data-route="/sign-in"] .sign-in {
   position: relative;
 }
-.sign-in::before {
+main[data-route="/sign-in"] .sign-in::before {
   content: "";
   position: absolute;
   top: -1px;
@@ -238,8 +243,8 @@ body:has(main:is([data-route="/passwords"], [data-route="/billing"])) .terrain {
   .terrain-mid,
   .terrain-near,
   .terrain-river,
-  .sign-in,
-  .sign-in::before,
+  main[data-route="/sign-in"] .sign-in,
+  main[data-route="/sign-in"] .sign-in::before,
   .creator > *,
   .fleet-tower,
   .brain-frame,
