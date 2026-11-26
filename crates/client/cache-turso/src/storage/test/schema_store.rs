@@ -198,10 +198,11 @@ fn an_empty_cache_takes_the_schema_and_reopens_without_sorting() {
 }
 
 #[test]
-fn index_documents_under_no_stored_schema_are_sorted_like_records() {
+fn derived_rows_under_no_stored_schema_are_sorted_like_records() {
     block_on(async {
-        // A projection is written without its record, so a cache that stores
-        // no schema can hold index documents and nothing else.
+        // A projection is written without its record, and a span with no
+        // events stores only its coverage, so a cache that stores no schema
+        // can hold derived rows and nothing else.
         let mut storage = TursoStorage::open_in_memory("schema-documents").unwrap();
         storage
             .put_batch_with_projections(
@@ -224,6 +225,31 @@ fn index_documents_under_no_stored_schema_are_sorted_like_records() {
             .unwrap();
         assert_eq!(adoption.change, types(&["Thing"], false));
         assert_eq!(count(&storage, documents), 0);
+
+        let storage = TursoStorage::open_in_memory("schema-coverage").unwrap();
+        raw_execute(
+            &storage,
+            "INSERT INTO calendar_coverage (kind, start, end) VALUES (0, 0, 10)",
+            Vec::new(),
+        );
+        let retyped = CALENDARS.replace("name: String", "name: Int");
+        let adoption = storage
+            .adopt_schema(
+                &schema(&retyped),
+                &ProjectionInputs::none(),
+                Unrecorded::Known(schema(CALENDARS)),
+            )
+            .unwrap();
+        assert!(
+            matches!(
+                &adoption.change,
+                Some(Tier::Types { changed, .. })
+                    if changed.contains(cache_core::calendar::CALENDAR_TYPENAME)
+            ),
+            "{:?}",
+            adoption.change
+        );
+        assert_eq!(calendar_rows(&storage), 0);
     });
 }
 

@@ -59,8 +59,6 @@ const SEVERAL_BUILDS: &str = "several-builds";
 /// Whether the cache holds a record besides storage's own metadata.
 const ANY_RECORD: &str = "SELECT 1 FROM records WHERE __typename <> '__meta' LIMIT 1";
 const ANY_QUEUED: &str = "SELECT 1 FROM mutation_queue LIMIT 1";
-/// Projections write index documents without their records.
-const ANY_INDEX_DOCUMENT: &str = "SELECT 1 FROM index_documents LIMIT 1";
 const TYPE_RECORDS_DELETE: &str = "DELETE FROM records WHERE __typename = ?1";
 /// A type's index documents, by the `Typename:` prefix of their record keys
 /// ([`key_ranges`]). Their facts go first: a cascade deletes them one document
@@ -320,11 +318,23 @@ fn resets_after(error: TursoStorageError) -> bool {
     }
 }
 
-/// Whether the cache holds no record, no queued write and no index document:
-/// nothing a schema shaped.
+/// Whether the cache holds no record, no queued write and no row of a table
+/// records feed: nothing a schema shaped. Projections write index documents
+/// without their records, and a span with no events stores only its coverage.
 pub(super) fn is_empty(connection: &Db) -> Result<bool, TursoStorageError> {
-    for sql in [ANY_RECORD, ANY_QUEUED, ANY_INDEX_DOCUMENT] {
-        if !driver::query(connection, sql, Vec::new())?.is_empty() {
+    let derived = DERIVED_TABLES
+        .into_iter()
+        .chain(
+            DERIVED_STORES
+                .iter()
+                .flat_map(|store| store.tables.iter().copied()),
+        )
+        .map(|table| format!("SELECT 1 FROM {table} LIMIT 1"));
+    for sql in [ANY_RECORD.to_owned(), ANY_QUEUED.to_owned()]
+        .into_iter()
+        .chain(derived)
+    {
+        if !driver::query(connection, &sql, Vec::new())?.is_empty() {
             return Ok(false);
         }
     }
