@@ -146,11 +146,11 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
 
     /// Records on its span whether GitHub was asked (`checked`, `rejected`)
     /// or a token it accepted within [`TOKEN_VALIDATION_WINDOW`] was reused
-    /// (`cached`).
+    /// (`cached`). No `err`: a missing or rejected token is an expected
+    /// answer; only failed FusionAuth and GitHub calls log an error.
     #[tracing::instrument(
         name = "github.link_access_token",
         skip_all,
-        err,
         fields(token_check = tracing::field::Empty)
     )]
     async fn validated_link_access_token(
@@ -165,7 +165,10 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
                 &link.github_user_id,
             )
             .await
-            .map_err(Into::into)?
+            .map_err(Into::into)
+            .inspect_err(|error| {
+                tracing::error!(error = ?error, "could not read the link token");
+            })?
             .ok_or(GithubError::ReauthenticationRequired)?;
 
         let span = tracing::Span::current();
@@ -178,7 +181,10 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
             .oauth
             .is_access_token_expired(access_token.as_str())
             .await
-            .map_err(Into::into)?;
+            .map_err(Into::into)
+            .inspect_err(|error| {
+                tracing::error!(error = ?error, "could not check the link token with GitHub");
+            })?;
 
         if token_is_expired {
             span.record("token_check", "rejected");
