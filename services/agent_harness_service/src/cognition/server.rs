@@ -679,10 +679,12 @@ pub async fn build(
             granola: granola_sync::outbound::api::GranolaApi(Arc::clone(&connections)),
             accounts: granola_sync::outbound::accounts::ConnectedAccounts(Arc::clone(&connections)),
             verifier: granola_sync::outbound::signature::StandardWebhooks,
-            calls: Arc::new(database_syncs::inbound::call_imports::SyncOnCallImport::new(
-                imported_calls.clone(),
-                database_syncs_service.clone(),
-            )),
+            calls: Arc::new(
+                database_syncs::inbound::call_imports::SyncOnCallImport::new(
+                    imported_calls.clone(),
+                    database_syncs_service.clone(),
+                ),
+            ),
             public_url: public_url.to_string(),
         })
             as Arc<dyn granola_sync::domain::service::SyncService>);
