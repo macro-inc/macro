@@ -16,6 +16,7 @@
 // revision the sets build against and how to update the site's WebP files.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -87,6 +88,15 @@ rewrite((t) =>
 );
 
 const port = Number(process.env.PORT || 5560);
+// Only capture from the Vite this run starts: refuse a port something already holds.
+await new Promise((resolve) => {
+  const probe = net.createServer();
+  probe.once('error', () => {
+    console.error(`Port ${port} is in use; set PORT to a free one.`);
+    process.exit(1);
+  });
+  probe.listen(port, '127.0.0.1', () => probe.close(resolve));
+});
 const vite = spawn(process.execPath, [`${MACRO}/node_modules/vite/bin/vite.js`, '--config', `${dest}/vite.config.ts`, '--port', String(port), '--strictPort'], {
   cwd: dest,
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -109,7 +119,8 @@ for (let i = 0; ; i++) {
     process.exit(1);
   }
   try {
-    if ((await fetch(base)).ok) break;
+    // Ready once this Vite reports its own URL and serves it.
+    if (log.includes(`:${port}/`) && (await fetch(base)).ok) break;
   } catch {}
   if (i > 240) {
     console.log(log);
