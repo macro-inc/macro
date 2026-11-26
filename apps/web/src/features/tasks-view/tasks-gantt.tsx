@@ -12,8 +12,8 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getTaskStatusOptionId, type TaskEntityWithProperties } from '@entity';
+import { TaskPropertyControl } from '@entity/extractors-property/task-property-control';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
-import { PropertyValueIcon } from '@property/component/propertyValue';
 import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
@@ -113,11 +113,8 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
           title={task().name}
           deadlineWarning={deadlineWarning()}
           onClick={(event) => onOpen(task(), event)}
+          leading={<TaskPropertyControl entity={task()} property="status" />}
         >
-          <PropertyValueIcon
-            optionId={getTaskStatusOptionId(task()) ?? ''}
-            class="size-3.5 shrink-0"
-          />
           <Gantt.BarTitle>{task().name}</Gantt.BarTitle>
         </Gantt.Bar>
       </SoupEntityContextMenu>

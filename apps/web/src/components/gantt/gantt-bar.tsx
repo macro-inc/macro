@@ -1,6 +1,7 @@
 import { cn, Layer } from '@ui';
 import { endOfDay, startOfDay } from 'date-fns';
 import {
+  children,
   createMemo,
   createSignal,
   type JSX,
@@ -10,6 +11,7 @@ import {
   Show,
   splitProps,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import type { GanttCreation } from './create-gantt-creation';
 import { createGanttReschedule } from './create-gantt-reschedule';
 import { GanttCalendarClip } from './gantt-clip';
@@ -78,6 +80,8 @@ export function GanttBar(
     regroup?: boolean;
     /** A CSS color the bar is tinted by: a soft fill and a solid left edge. */
     tint?: string;
+    /** An interactive icon beside the opening button, kept with the sticky label. */
+    leading?: JSX.Element;
     /** Shown at the bar's right end, outside its button, such as markers or a menu button. */
     trailing?: JSX.Element;
     /** Shown over the bar in place of its label while set, such as a name field. */
@@ -96,12 +100,14 @@ export function GanttBar(
     'onReschedule',
     'regroup',
     'tint',
+    'leading',
     'trailing',
     'editor',
     'class',
     'children',
     'title',
   ]);
+  const leading = children(() => local.leading);
   // On a timed bar an end saved without a time covers its whole day.
   const times = (start: GanttDate, end: GanttDate): GanttTimes | undefined => {
     const exactFirst = toGanttInstant(start);
@@ -301,14 +307,33 @@ export function GanttBar(
                       />
                     )}
                   </Show>
-                  <button
-                    {...rest}
-                    type="button"
+                  <Show when={leading()}>
+                    <button
+                      {...rest}
+                      type="button"
+                      data-gantt-no-drag={reschedulable() ? '' : undefined}
+                      title={description()}
+                      aria-label={rest['aria-label'] ?? description()}
+                      class={cn(
+                        'absolute inset-0 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-current',
+                        local.editor && 'invisible'
+                      )}
+                    />
+                  </Show>
+                  <Dynamic
+                    component={leading() ? 'span' : 'button'}
+                    {...(leading() ? {} : rest)}
+                    type={leading() ? undefined : 'button'}
                     data-gantt-no-drag={reschedulable() ? '' : undefined}
-                    title={description()}
-                    aria-label={rest['aria-label'] ?? description()}
+                    title={leading() ? undefined : description()}
+                    aria-label={
+                      leading()
+                        ? undefined
+                        : (rest['aria-label'] ?? description())
+                    }
                     class={cn(
                       'relative h-full min-w-0 flex-1 text-left whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-current',
+                      leading() && 'pointer-events-none',
                       local.editor && 'invisible'
                     )}
                   >
@@ -324,10 +349,21 @@ export function GanttBar(
                       }}
                     >
                       <span class="flex min-w-0 items-center gap-1.5">
+                        <Show when={leading()}>
+                          {(control) => (
+                            <span
+                              class="pointer-events-auto shrink-0"
+                              data-gantt-no-drag
+                              onPointerDown={(event) => event.stopPropagation()}
+                            >
+                              {control()}
+                            </span>
+                          )}
+                        </Show>
                         {local.children}
                       </span>
                     </span>
-                  </button>
+                  </Dynamic>
                   <Show when={local.trailing}>
                     <span class="relative flex max-w-[50%] shrink-0 items-center overflow-hidden">
                       {local.trailing}

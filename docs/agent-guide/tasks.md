@@ -643,6 +643,9 @@ viewport is measurable. Refetches and later resizes do not reset the scroll.
 Bars use the app's neutral depth-two surface without an outline, with a small
 status-colored indicator. In light mode, bars have a stronger solid neutral fill,
 and item panels have a subtle neutral fill and clearer border.
+Click the task status icon in either a bar or the item list to open the same
+status selector as List view. Choosing a status updates the task without opening
+its details or dragging it; clicking the title or the rest of the bar opens it.
 Dark-mode base surfaces stay unchanged. Active items due within seven calendar
 days use a danger-color background gradient at the due-date edge, blending into
 the neutral fill toward the left and strengthening as the deadline approaches.
