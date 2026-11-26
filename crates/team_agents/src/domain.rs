@@ -2,6 +2,7 @@
 
 pub mod admission;
 pub mod inbox;
+pub mod mailbox_read;
 pub mod models;
 pub mod ports;
 pub mod service;
