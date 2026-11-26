@@ -346,6 +346,11 @@ Rereads of mounted queries are `user-visible` reads, ahead of ordinary ones. A
 query that feeds app state rather than a view sets `backgroundReader` in its
 operation context and is reread at ordinary rank, behind the views on screen;
 the notification feed (500 entities with their notifications) does.
+An operation's teardown orders only the requests about that operation
+(`worker/operation-order.ts`): those queued before it run before it, those
+queued after it run after it, and a read never shares an answer across it.
+Other requests pass it by priority, and a remount's read lends its priority
+to the teardown and the read it waits for.
 The engine worker does not start a request the moment it arrives. The browser
 delivers one message per task and engine calls run to completion, so a request
 started on arrival usually finishes before the next is seen: the queue would
