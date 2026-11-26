@@ -2,7 +2,9 @@
 //! readers read every live view again after each changing write (what the
 //! page did before writes carried `unchangedViews`), and one whose readers
 //! skip the views the write proved unchanged. After every write each view
-//! must hold the same rows in the same order in both.
+//! must hold the same rows in the same order in both. Half the projects exist
+//! only once a write creates them, and each view sends only part of its members
+//! as server evidence, so writes bring entrants into windows.
 use super::*;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -79,6 +81,8 @@ fn members(ids: &[u16]) -> Value {
 struct View {
     id: String,
     members: Vec<u16>,
+    /// The server evidence the view sends: some members, not all.
+    baseline: Vec<u16>,
     limit: usize,
     revision: Option<String>,
     observation: Option<String>,
@@ -103,7 +107,7 @@ impl View {
                 "foreignEntityFilter": {"literal": {"id": nil}},
             },
             "sortMethod": "UPDATED_AT", "sortDirection": "DESC", "limit": self.limit,
-            "baseline": self.members.iter().map(|n| json!({
+            "baseline": self.baseline.iter().map(|n| json!({
                 "key": format!("GraphqlSoupProject:{}", id(*n)), "sortTimestamp": TIMES[0],
             })).collect::<Vec<_>>(),
             "liveQuery": {"id": self.id, "document": FRAGMENT, "fragmentName": "Item",
@@ -173,6 +177,11 @@ fn views(rng: &mut Rng) -> Vec<View> {
             View {
                 id: format!("fuzz-{n}"),
                 limit: 2 + rng.below(members.len() as u64 + 2) as usize,
+                baseline: members
+                    .iter()
+                    .copied()
+                    .filter(|_| rng.below(2) == 0)
+                    .collect(),
                 members,
                 revision: None,
                 observation: None,
@@ -194,7 +203,9 @@ fn run(seed: u64) -> (usize, usize) {
             parent: None,
         })
         .collect();
+    // Half the projects exist at first; the rest enter views as writes create them.
     let everything: Vec<Value> = (1..=PROJECTS + 4)
+        .filter(|_| rng.below(2) == 0)
         .map(|n| item(n, &projects[n as usize]))
         .collect();
     write(&old, everything.clone());
