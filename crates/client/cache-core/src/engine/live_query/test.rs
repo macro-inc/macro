@@ -755,3 +755,74 @@ fn rotating_subscribers_beyond_one_pane_keep_receiving_deltas() {
         }
     });
 }
+
+#[test]
+fn a_window_read_under_optimism_is_never_proven_unchanged() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        seed(&mut engine, "a", 1).await;
+        // An optimistic edit to a row the view never shows, in its scope.
+        let variables = json!({"input":{"threadId":"c"}})
+            .as_object()
+            .unwrap()
+            .clone();
+        let (id, _) = engine.begin_optimistic_write_with_projections(None, BeginOptimisticWrite {
+            client_metadata: None,
+            uuid: "00000000-0000-4000-8000-000000000002",
+            query: "mutation Read($input: MarkEmailThreadSeenInput!) { markEmailThreadSeen(input: $input) { id isRead } }",
+            operation_name: None, variables: &variables, data: &json!({"markEmailThreadSeen":{"id":"c","isRead":true}}),
+            link_patches: &[], revalidations: &[], identity_bindings: &[], created_at_ms: 0,
+        }, vec![OptimisticProjectionMutation::Replace(projection("c", true, 3))]).await.unwrap();
+        let shown = engine.read_live_query("view", spec(), None).await.unwrap();
+        assert!(shown.optimistic);
+        let claim = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "test".into(),
+                now_ms: 1,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        engine
+            .rollback_optimistic_write(
+                id,
+                MutationClaimToken {
+                    owner: "test".into(),
+                    generation: claim.lease_generation,
+                },
+            )
+            .await
+            .unwrap();
+        // An unrelated write: the window's rows are as they were, but a read
+        // now reports it is no longer optimistic, so it is not unchanged.
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    EntityKey::entity("GraphqlUser", &["viewer"]),
+                    Record {
+                        fields: BTreeMap::from([(
+                            "id".into(),
+                            CacheValue::String("viewer".into()),
+                        )]),
+                    },
+                )],
+                vec![],
+            )
+            .await
+            .unwrap();
+        assert!(
+            !engine
+                .unchanged_observed_windows()
+                .await
+                .unwrap()
+                .contains(&shown.observation_id)
+        );
+        let again = engine
+            .read_live_query("view", spec(), Some(shown.revision.parse().unwrap()))
+            .await
+            .unwrap();
+        assert!(!again.optimistic);
+    });
+}
