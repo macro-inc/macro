@@ -1,27 +1,29 @@
 import { type Browser, expect } from '@playwright/test';
 
+const productRoutes = [
+  '/email',
+  '/tasks',
+  '/channels',
+  '/documents',
+  '/calls',
+  '/crm',
+  '/agents',
+  '/github',
+  '/forms',
+  '/spreadsheets',
+  '/databases',
+  '/drive',
+  '/calendar',
+  '/booking-links',
+  '/canvas',
+  '/snippets',
+  '/routines',
+  '/skills',
+];
+
 /** Check each product page's first paint and real app screens in the built site. */
 export async function verifyProductPages(browser: Browser, origin: string) {
-  for (const route of [
-    '/email',
-    '/tasks',
-    '/channels',
-    '/documents',
-    '/calls',
-    '/crm',
-    '/agents',
-    '/github',
-    '/forms',
-    '/spreadsheets',
-    '/databases',
-    '/drive',
-    '/calendar',
-    '/booking-links',
-    '/canvas',
-    '/snippets',
-    '/routines',
-    '/skills',
-  ]) {
+  for (const route of productRoutes) {
     const page = await browser.newPage({
       viewport: { width: 390, height: 844 },
       isMobile: true,
@@ -126,6 +128,22 @@ export async function verifyProductPages(browser: Browser, origin: string) {
       );
     } finally {
       releaseScripts();
+      await page.close();
+    }
+  }
+  // On the cream palette, every screen with a Macro Light frame shows it.
+  for (const route of productRoutes) {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    try {
+      await page.goto(`${origin}${route}?theme=cream`, { waitUntil: 'load' });
+      const dark = await page.evaluate(() =>
+        [...document.querySelectorAll('[data-light] img')]
+          .filter((img) => img.getClientRects().length > 0)
+          .filter((img) => !img.classList.contains('palette-light-only'))
+          .map((img) => img.getAttribute('src'))
+      );
+      expect(dark, `${route}: light screens on the cream palette`).toEqual([]);
+    } finally {
       await page.close();
     }
   }

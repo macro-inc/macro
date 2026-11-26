@@ -396,12 +396,27 @@ meta-ads repository's tutorial sets, taken at about 1000×600 in dark mode at 2x
 and stored as WebP in `src/features/marketing/assets/screens/`. Register each
 capture in `core/feature-screens.ts` with its alt text and an optional `focus`
 rectangle (capture pixels) that `FeatureScreenshot` outlines in the app accent.
-These screens have no light counterpart yet: the tutorial sets they come from
-build against older app revisions, so they stay dark on the light palette, on
-their wallpaper stage or, on pages without one, a solid dark mat
-(`--feature-screenshot-stage`). Recapture them in the app's light theme from
-those sets, at the same sizes so each `focus` rectangle still lines up, then
-render both with the `palette-dark-only` / `palette-light-only` classes.
+Each frame has a Macro Light twin (`lightSrc`, `<name>-light.webp`) taken
+from the same page state, so its `focus` lines up; `FeatureScreenshot` and
+`FeaturePhoneScreens` render both with the `palette-dark-only` /
+`palette-light-only` classes, and on the cream palette a screen with a light
+frame (`data-light`) gets a light stage and phone screen. A screen without one
+stays dark on a solid dark mat (`--feature-screenshot-stage`). The build checks
+that every light frame shows on `?theme=cream`.
+
+To recapture a screen, run `scripts/capture-app-screens.mjs` with the set's
+scene file from meta-ads `site-screens/` (its README lists the sets and
+shots). It needs an app checkout at the revision the sets build against
+(`54058bdb8`) with dependencies installed:
+
+```sh
+MACRO=../macro-at-54058bdb8 ADS=../meta-ads node scripts/capture-app-screens.mjs chat ../meta-ads/site-screens/chat.mjs p-thread
+```
+
+It writes `<set>-<shot>-dark.png` and `-light.png` (plus `-narrow-*` for
+shots with a `focus`) at 2x; convert them to WebP (quality 80) under the
+names in `core/feature-screens.ts`. The Docs history screen has no scene and
+no light frame: the set does not mock the sync service's edit history.
 On feature pages with their own hero palette, the screen sits on a toned `TutorialWallpaper` stage (varied per section with a subtle dark atmospheric scrim and grain); pages without a dedicated feature palette keep the flat 50% `#101010` stage.
 On phones the canvas is up to 640px wide, sized so the focus fits, and scrolls sideways starting on it.
 When the focus is too wide for that (about 580 capture pixels or more), add a

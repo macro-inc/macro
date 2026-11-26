@@ -145,6 +145,8 @@ async function take(shot) {
     });
   }
   await page.goto(`${base}?${shot.q || ''}`, { timeout: 300000 });
+  // Vite can reload the first page of a fresh copy while it bundles; wait for the set to mount.
+  await page.waitForFunction(() => Boolean(window.__applyTheme), null, { timeout: 120000 });
   await page.waitForTimeout(shot.wait ?? 5000);
   try {
     if (shot.act) await shot.act(page);
