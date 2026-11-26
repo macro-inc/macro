@@ -6,15 +6,27 @@
  * `/bench-data/` and orchestrates pages; this page only measures.
  */
 import { stringifyDocument } from '@urql/core';
+import { createRoot } from 'solid-js';
 import * as generated from '../../../service-clients/service-storage/graphql/generated/graphql';
+import { selectRecords } from '../../exchange/record-selection';
 import type { CacheHost } from '../../host/types';
 import { createWorkerCacheHost } from '../../host/worker-host';
 import { captureContactWriteScope } from '../../people/sync';
-import type { EntityFilterCacheArgs } from '../../protocol';
+import type {
+  CacheChangeHints,
+  CacheRevision,
+  EntityFilterCacheArgs,
+  HydrationResult,
+  WriteResult,
+} from '../../protocol';
 import type {
   CacheTelemetryObservation,
   CacheTelemetryRecorderLike,
 } from '../../telemetry';
+import {
+  createPredicateQuery,
+  type PredicateQueryRequest,
+} from '../../../queries/soup/graphql/create-predicate-query';
 import mailTabs from './bench-mail-tabs.json';
 
 const resultElement = document.querySelector<HTMLElement>('#result');
@@ -117,6 +129,13 @@ const HIGH_VOLUME = new Set([
 ]);
 
 async function apply(op: BenchOp): Promise<number> {
+  const [ms] = await applyResult(op);
+  return ms;
+}
+
+async function applyResult(
+  op: BenchOp
+): Promise<[number, WriteResult | HydrationResult]> {
   const target = requireHost();
   const query = documentText(op.doc);
   const authority = target.authority;
@@ -141,28 +160,28 @@ async function apply(op: BenchOp): Promise<number> {
     if (!guarded) throw new Error('cache host has no contact fence');
     return guarded;
   };
-  const [ms] = await timed(async () =>
-    op.op === 'hydrate'
-      ? target.hydrateQuery({
-          generation,
-          query,
-          operationName: op.operationName,
-          variables: op.variables,
-          data: op.data,
-          identity,
-          hydrationScope: await hydrationScope(),
-        })
-      : target.writeQuery({
-          opKey: opKey++,
-          generation,
-          query,
-          operationName: op.operationName,
-          variables: op.variables,
-          data: op.data,
-          identity,
-        })
+  return timed(
+    async (): Promise<WriteResult | HydrationResult> =>
+      op.op === 'hydrate'
+        ? target.hydrateQuery({
+            generation,
+            query,
+            operationName: op.operationName,
+            variables: op.variables,
+            data: op.data,
+            identity,
+            hydrationScope: await hydrationScope(),
+          })
+        : target.writeQuery({
+            opKey: opKey++,
+            generation,
+            query,
+            operationName: op.operationName,
+            variables: op.variables,
+            data: op.data,
+            identity,
+          })
   );
-  return ms;
 }
 
 /** Applies dataset ops in order; reports each op's latency and payload size. */
@@ -375,6 +394,144 @@ async function contended(
   return { ...reads, background };
 }
 
+type ChannelSource = PredicateQueryRequest<object>['source'];
+
+/**
+ * The Chat sidebar's 500-ID channel batches (`channelsByIdsQueryArgs`) as the
+ * app's own `createPredicateQuery` readers, then each write and the reads its
+ * push makes them run, until every reader has settled. The readers are this
+ * build's, so the pass measures what this build's page does on a push.
+ * Inputs come from the native bench's `CACHE_BENCH_CHANNEL_DUMP`, so both
+ * engines replay the same bytes.
+ */
+async function channelPass(viewCount: number, writeCount: number) {
+  const target = requireHost();
+  const steps: Step[] = [];
+  const counts: Record<string, number[]> = {};
+  const count = (name: string, value: number) =>
+    (counts[name] ??= []).push(value);
+  let inFlight = 0;
+  let reads = 0;
+  let rows = 0;
+  let wakeSettled: (() => void) | undefined;
+  const readers: Pick<
+    CacheHost,
+    'entityFilter' | 'onCacheChanged' | 'onCacheGenerationChanged'
+  > = {
+    entityFilter: async (args) => {
+      inFlight += 1;
+      if (!args.liveQuery?.release) reads += 1;
+      try {
+        const result = await target.entityFilter(args);
+        if (result.kind === 'live-query')
+          rows += result.upserts.length + result.patches.length;
+        return result;
+      } finally {
+        inFlight -= 1;
+        if (inFlight === 0) wakeSettled?.();
+      }
+    },
+    onCacheChanged: (cb, options) => target.onCacheChanged(cb, options),
+    onCacheGenerationChanged: (cb) => target.onCacheGenerationChanged(cb),
+  };
+  // Settled: no reader read in flight, and none started by the next task.
+  const settled = async () => {
+    for (;;) {
+      if (inFlight > 0)
+        await new Promise<void>((wake) => {
+          wakeSettled = wake;
+        });
+      await new Promise((wake) => setTimeout(wake, 0));
+      if (inFlight === 0) return;
+    }
+  };
+  const pushes: Array<{
+    revision: CacheRevision;
+    hints?: CacheChangeHints;
+    at: number;
+  }> = [];
+  let wakePush: (() => void) | undefined;
+  // Subscribed before the readers, so a push reaches it first.
+  const unsubscribe = target.onCacheChanged((revision, hints) => {
+    pushes.push({ revision, hints, at: performance.now() });
+    wakePush?.();
+  });
+  const pushFor = async (revision: CacheRevision) => {
+    for (;;) {
+      const push = pushes.find(
+        (each) => BigInt(each.revision) >= BigInt(revision)
+      );
+      if (push) return push;
+      await new Promise<void>((wake) => {
+        wakePush = wake;
+      });
+    }
+  };
+  const disposers: Array<() => void> = [];
+  try {
+    for (let index = 0; index < viewCount; index++) {
+      const op = await fetchOp(`/bench-data/channels-by-ids/${index}`);
+      steps.push({ name: 'channels.byIds.write', ms: await apply(op) });
+    }
+    const requests = (await (
+      await fetch('/bench-data/channels-requests/0')
+    ).json()) as EntityFilterCacheArgs[];
+    const select = selectRecords(
+      documents.ChannelListItemFieldsFragmentDoc as Parameters<
+        typeof selectRecords<object, unknown>
+      >[0]
+    );
+    const started = performance.now();
+    const queries = requests.map((request) =>
+      createRoot((dispose) => {
+        disposers.push(dispose);
+        const { liveQuery: _live, ...source } = request;
+        return createPredicateQuery<object>({
+          host: () => readers,
+          query: () => ({ source: source as ChannelSource, select }),
+        });
+      })
+    );
+    await settled();
+    steps.push({
+      name: 'channels.live.first.all',
+      ms: performance.now() - started,
+    });
+    const notReady = queries.filter((query) => query.status() !== 'ready');
+    if (notReady.length > 0)
+      throw new Error(`${notReady.length} channel readers are not ready`);
+    count('channels.live.first.rows', rows);
+    for (let index = 0; index < writeCount; index++) {
+      const op = await fetchOp(`/bench-data/channels-writes/${index}`);
+      pushes.length = 0;
+      const readsBefore = reads;
+      const rowsBefore = rows;
+      const started = performance.now();
+      const [writeMs, written] = await applyResult(op);
+      steps.push({ name: `write.${op.lane}`, ms: writeMs });
+      if ('revisionAdvanced' in written && written.revisionAdvanced) {
+        const push = await pushFor(written.revision);
+        steps.push({ name: `push.arrived.${op.lane}`, ms: push.at - started });
+        count(
+          `push.unchangedViews.${op.lane}`,
+          push.hints?.unchangedViews?.length ?? -1
+        );
+      }
+      await settled();
+      steps.push({
+        name: `push.total.${op.lane}`,
+        ms: performance.now() - started,
+      });
+      count(`views.read.${op.lane}`, reads - readsBefore);
+      count(`rows.${op.lane}`, rows - rowsBefore);
+    }
+  } finally {
+    unsubscribe();
+    for (const dispose of disposers) dispose();
+  }
+  return { steps, counts };
+}
+
 async function storage() {
   const estimate = await navigator.storage.estimate();
   const root = await navigator.storage.getDirectory();
@@ -439,6 +596,7 @@ Object.assign(window, {
     readPass,
     writePass,
     contended,
+    channelPass,
     storage,
     telemetry,
     clearTelemetry: () => {
