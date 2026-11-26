@@ -388,6 +388,9 @@ fn native_channel_batches_bench() {
         let mut proven = BTreeMap::<&str, Vec<usize>>::new();
         let mut reread_rows = BTreeMap::<&str, Vec<usize>>::new();
         let mut views_read = BTreeMap::<&str, Vec<usize>>::new();
+        // `CACHE_BENCH_IGNORE_PROOF=1` reads every view after a changing write, as
+        // a bundle older than the proof-reading page reader does on a newer engine.
+        let ignore_proof = std::env::var_os("CACHE_BENCH_IGNORE_PROOF").is_some();
         for round in 0..rounds {
             for step in ["unrelated", "one_channel"] {
                 let op = match step {
@@ -412,7 +415,9 @@ fn native_channel_batches_bench() {
                 let mut rows = 0;
                 let mut reads = 0;
                 for (batch, ids) in batches.iter().enumerate() {
-                    if !written.revision_advanced || unchanged.contains(&observations[batch]) {
+                    if !written.revision_advanced
+                        || (!ignore_proof && unchanged.contains(&observations[batch]))
+                    {
                         continue;
                     }
                     reads += 1;
