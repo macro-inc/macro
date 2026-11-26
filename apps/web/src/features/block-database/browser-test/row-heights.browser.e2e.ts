@@ -17,6 +17,8 @@ function misplacedRows(page: Page) {
         ),
       }))
       .sort((a, b) => a.index - b.index);
+    // A blank or single-row window has no neighbours to compare.
+    if (rows.length < 2) return [{ index: -1, height: 0, gap: rows.length }];
     return rows.flatMap((row, position) => {
       const next = rows[position + 1];
       const gap =
