@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { type Accessor, createSignal } from 'solid-js';
+import { type Accessor, createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type Knob, withKnobValue } from '../core/knobs';
 import { KnobSettings, StepSentence } from './routine-step-knobs';
@@ -9,6 +9,16 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => touch.value,
 }));
 const NAMES: Record<string, string> = { c1: 'bug-reports', c2: 'triage' };
+// jsdom has no layout, so the virtualized list would render no rows.
+vi.mock('virtua/solid', async () => {
+  const { For } = await import('solid-js');
+  return {
+    Virtualizer: (props: {
+      data: readonly unknown[];
+      children: (item: unknown, index: () => number) => JSX.Element;
+    }) => <For each={props.data}>{props.children}</For>,
+  };
+});
 vi.mock('@property/hooks', () => ({
   usePropertyEntityDisplay: (id: Accessor<string>) => ({
     name: () => NAMES[id()] ?? 'Unknown',

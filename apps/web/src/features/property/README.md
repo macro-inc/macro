@@ -244,6 +244,10 @@ Kobalte can prevent the arrow key's default before a document listener runs.
 Ignore IME confirmation keys, including WebKit's key code 229; composing Escape
 must cancel composition without dismissing the popover.
 
+Its list is uncapped for kinds without an explicit pool (every channel, say), so
+it virtualizes and mounts only the rows in view (`PropertyEntityRow`). Browser
+tests reach a row further down with `browser-test/entity-list.ts`.
+
 ## References kept across updates
 
 A property read from a query is a store, and an update rewrites the objects of
