@@ -207,6 +207,13 @@ those. Token counts, models, operations, outcomes, `error.type` and the
 `macro.genai.*` sizes stay. A new attribute that carries content belongs in its
 `ai_content` statements.
 
+It also replaces every email address with its SHA-256, in attributes, log
+bodies, span and event names and status messages (`emails`): user IDs are
+`macro|<address>`. The hash is of the address as written, so a user's logs and
+traces are found by hashing theirs. Values inside lists and maps aren't reached;
+send opaque IDs there, or add the key to the statements that turn
+`presence.user_ids` into text first.
+
 ### Pinned exporter limits
 
 A small metadata preflight rejects runs that the upstream action cannot export

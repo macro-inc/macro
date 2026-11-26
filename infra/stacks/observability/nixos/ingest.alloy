@@ -42,7 +42,7 @@ otelcol.processor.filter "local_logs" {
       `(resource.attributes["deployment.environment"] == "local" or resource.attributes["deployment.environment.name"] == "local") and resource.attributes["service.name"] != "local-telemetry"`,
     ]
   }
-  output { logs = [otelcol.processor.batch.ingest.input] }
+  output { logs = [otelcol.processor.transform.emails.input] }
 }
 
 // What people and models wrote never reaches storage. Token counts, models,
@@ -75,7 +75,54 @@ otelcol.processor.transform "ai_content" {
       `keep_keys(attributes, ["level", "target"]) where IsMatch(attributes["target"], "^rig")`,
     ]
   }
-  output { traces = [otelcol.processor.batch.ingest.input] }
+  output { traces = [otelcol.processor.transform.emails.input] }
+}
+
+// User IDs are email addresses, and logs and errors quote them. Each address,
+// wherever it appears, becomes its SHA-256 ("macro|<hash>"), so one user's
+// telemetry can still be found by hashing their address as written. Values
+// nested in a list or map aren't reached; the one list of user IDs we send
+// becomes its JSON text first. A statement runs only on what holds an "@" or a
+// "%40": the pattern alone tripled ingest's CPU on spans with long attributes.
+otelcol.processor.transform "emails" {
+  error_mode = "propagate"
+  log_statements {
+    context = "resource"
+    statements = [`replace_all_patterns(attributes, "value", "([A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})", "$1", SHA256) where (IsMatch(attributes, "@") or IsMatch(attributes, "%40"))`]
+  }
+  log_statements {
+    context = "log"
+    statements = [
+      `set(attributes["presence.user_ids"], String(attributes["presence.user_ids"])) where IsList(attributes["presence.user_ids"])`,
+      `replace_all_patterns(attributes, "value", "([A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})", "$1", SHA256) where (IsMatch(attributes, "@") or IsMatch(attributes, "%40"))`,
+      `replace_pattern(body, "([A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})", "$1", SHA256) where IsString(body) and (IsMatch(body, "@") or IsMatch(body, "%40"))`,
+      `replace_all_patterns(body, "value", "([A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})", "$1", SHA256) where IsMap(body) and (IsMatch(body, "@") or IsMatch(body, "%40"))`,
+    ]
+  }
+  trace_statements {
+    context = "resource"
+    statements = [`replace_all_patterns(attributes, "value", "([A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})", "$1", SHA256) where (IsMatch(attributes, "@") or IsMatch(attributes, "%40"))`]
+  }
+  trace_statements {
+    context = "span"
+    statements = [
+      `set(attributes["presence.user_ids"], String(attributes["presence.user_ids"])) where IsList(attributes["presence.user_ids"])`,
+      `replace_all_patterns(attributes, "value", "([A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})", "$1", SHA256) where (IsMatch(attributes, "@") or IsMatch(attributes, "%40"))`,
+      `replace_pattern(name, "([A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})", "$1", SHA256) where (IsMatch(name, "@") or IsMatch(name, "%40"))`,
+      `replace_pattern(status.message, "([A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})", "$1", SHA256) where (IsMatch(status.message, "@") or IsMatch(status.message, "%40"))`,
+    ]
+  }
+  trace_statements {
+    context = "spanevent"
+    statements = [
+      `replace_all_patterns(attributes, "value", "([A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})", "$1", SHA256) where (IsMatch(attributes, "@") or IsMatch(attributes, "%40"))`,
+      `replace_pattern(name, "([A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})", "$1", SHA256) where (IsMatch(name, "@") or IsMatch(name, "%40"))`,
+    ]
+  }
+  output {
+    logs = [otelcol.processor.batch.ingest.input]
+    traces = [otelcol.processor.batch.ingest.input]
+  }
 }
 
 otelcol.processor.batch "ingest" {
