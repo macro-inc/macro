@@ -4,6 +4,7 @@
 
 import { devices, expect, type Locator, type Page } from '@playwright/test';
 import type { Mailbox } from './fixtures';
+import { streamedSyncFinished } from './front';
 import { type ReadMessage, readMailbox } from './journeys';
 import type { Provider } from './stack';
 
@@ -82,15 +83,16 @@ export async function addContacts(
 
 /**
  * Waits until the open app has read the account into its cache once: every
- * lane of items (it keeps a checkpoint per lane, and reads CRM entities
- * last) and the contacts. Until then, each page it writes makes the
- * recipient suggestions read their first window again, which takes back a
- * window a test just asked for. (The item lanes as `backfilled` in
+ * lane of items (the paged backfill keeps a checkpoint per lane, and reads
+ * CRM entities last; the streamed cache sync, when it runs instead, ends with
+ * its second pass) and the contacts. Until then, each page it writes makes
+ * the recipient suggestions read their first window again, which takes back
+ * a window a test just asked for. (The item lanes as `backfilled` in
  * `full-stack-notifications.spec.ts` reads them.)
  */
 export async function cacheFilled(page: Page): Promise<void> {
-  const filled = () =>
-    page.evaluate(() => {
+  const filled = async () => {
+    const { items, contacts } = await page.evaluate(() => {
       const done = (key: string, field: string) =>
         !!JSON.parse(localStorage.getItem(key) ?? '{}')[field];
       const keys = Object.keys(localStorage);
@@ -99,16 +101,19 @@ export async function cacheFilled(page: Page): Promise<void> {
           key.startsWith('graphql-soup-backfill:') &&
           !key.endsWith(':coordinator')
       );
-      return (
-        lanes.some((key) => key.endsWith(':auxiliary-entities')) &&
-        lanes.every((key) => done(key, 'completed')) &&
-        keys.some(
+      return {
+        items:
+          lanes.some((key) => key.endsWith(':auxiliary-entities')) &&
+          lanes.every((key) => done(key, 'completed')),
+        contacts: keys.some(
           (key) =>
             key.startsWith('graphql-contacts-backfill:') &&
             done(key, 'completedAt')
-        )
-      );
+        ),
+      };
     });
+    return (items || streamedSyncFinished(page)) && contacts;
+  };
   await expect
     .poll(filled, { message: 'the app never finished filling its cache' })
     .toBe(true);

@@ -105,6 +105,14 @@ test('a reply goes out in the thread', async ({ page, mailbox }) => {
   `lapseGrant` (`harness/ways-elsewhere.ts`) revokes the grant at the
   emulator. Setting `needs_reauth` with `stack.sql` alone lasts only until the
   services get a token for the inbox from a provider that still grants it.
+- The app fills its cache in the background with the streamed cache sync
+  (`POST /dss/items/soup/graphql/stream`, from the cache worker; on in this
+  development build) or, when that is off or refused, the paged backfill's
+  `…Backfill` GraphQL requests. A test that waits for, holds or fails that
+  fill covers both: `catchUpFinished` and `cacheFilled` accept either, the
+  front records each sync stream (`front.syncStreams`, `streamedSyncListed`),
+  and `front.hold` and `front.stub` hold or fail the stream, which
+  `page.route` may not see.
 - Failures of what the app depends on: `stack.failNextServiceRequest`,
   `stack.refuseQueueSends`, emulator faults, and Playwright's `page.route`.
 - Mark what the test covers: `did('AL-171')` where it performs an action of

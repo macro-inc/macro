@@ -1,10 +1,10 @@
-use async_graphql::{Context, Enum, ID, Object, SimpleObject, Union, dataloader::DataLoader};
+use async_graphql::{Context, Enum, ID, Object, SimpleObject, Union};
 use graphql_common::GraphqlPropertyEntityType;
 use models_properties::service::{
     entity_property_with_definition::EntityPropertyWithDefinition, property_value::PropertyValue,
 };
 
-use crate::loaders::{EntityPropertiesLoader, EntityPropertyReader};
+use crate::loaders::{EntityPropertiesDataLoader, EntityPropertyReader};
 
 /// A property definition's supported value type.
 #[derive(Enum, Clone, Copy, PartialEq, Eq)]
@@ -57,7 +57,7 @@ pub async fn load_entity_properties<R>(
 where
     R: EntityPropertyReader,
 {
-    let loader = ctx.data::<DataLoader<EntityPropertiesLoader<R>>>()?;
+    let loader = ctx.data::<EntityPropertiesDataLoader<R>>()?;
     let properties = loader
         .load_one(model_entity::OwnedEntity::from(entity))
         .await

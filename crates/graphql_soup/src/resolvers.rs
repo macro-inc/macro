@@ -26,10 +26,11 @@ use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionServic
 
 use crate::{
     inputs::{GroupedSoupInput, SoupChannelReads, SoupInput},
+    lane_list::{ListedFields, SoupLaneLists, selects_ids_only},
     loaders::{AgentSessionEntityLoader, PrimarySoupItemLoader, SoupItemDataLoader},
     objects::{
-        GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup,
-        SoupEntityEdges, SoupPage, SoupPatch,
+        EmailThreadPrefetch, EntityPrefetch, GraphqlSoupAgentSession, GraphqlSoupEmailThread,
+        GraphqlSoupEntity, GroupedSoup, SoupEntityEdges, SoupPage, SoupPagePrefetch, SoupPatch,
     },
 };
 
@@ -380,7 +381,27 @@ where
     let Cached(MultiEmailLinkExtractor(links, _)) =
         extract_part::<Cached<MultiEmailLinkExtractor<E, Auth>>, St>(ctx).await?;
     let link_ids: Vec<_> = links.into_iter().map(|link| link.id).collect();
-    let request = input.into_request(macro_user_id.clone(), link_ids.clone())?;
+    let include_frecency = ctx
+        .look_ahead()
+        .field("items")
+        .field("frecencyScore")
+        .exists();
+    // A sync stream's lane is served from its list. Frecency scores are not
+    // part of a list, so a page that selects them runs like any other.
+    let lane_list = ctx.data_opt::<SoupLaneLists>().and_then(|lists| {
+        if selects_ids_only(ctx) {
+            Some((lists, ListedFields::Ids))
+        } else if include_frecency {
+            None
+        } else {
+            Some((lists, ListedFields::Items))
+        }
+    });
+    let continuation = input.continuation_cursor().map(str::to_owned);
+    let (request, sort_key) = match lane_list {
+        Some(_) => input.into_keyed_request(macro_user_id, link_ids)?,
+        None => (input.into_request(macro_user_id, link_ids)?, None),
+    };
     span.record("limit", request.limit);
     if channel_reads == SoupChannelReads::Primary && !request.is_channel_directory_page() {
         return Err(async_graphql::Error::new(PRIMARY_CHANNEL_READS_REFUSED));
@@ -395,25 +416,72 @@ where
     .await?;
     let team_receipt = team.entity_access_receipt;
 
-    let include_frecency = ctx
-        .look_ahead()
-        .field("items")
-        .field("frecencyScore")
-        .exists();
-
-    if include_frecency {
+    // A timestamp-sorted page of a sync stream is a slice of the lane's
+    // ordered list.
+    let page = if let Some((lists, fields)) = lane_list
+        && let Some(sort_key) = sort_key
+    {
+        let page = lists
+            .page(
+                service,
+                request,
+                sort_key,
+                fields,
+                continuation.as_deref(),
+                team_receipt,
+            )
+            .await?;
+        SoupPage::new_with_projection(page)
+    } else if include_frecency {
         let page = service
             .get_user_soup_with_frecency_and_projection(request, team_receipt)
             .await?;
-        Ok(SoupPage::new_from_enriched_with_projection(
-            page.type_erase(),
-        ))
+        SoupPage::new_from_enriched_with_projection(page.type_erase())
     } else {
         let page = service
             .get_user_soup_with_projection(request, team_receipt)
             .await?;
-        Ok(SoupPage::new_with_projection(page.type_erase()))
+        SoupPage::new_with_projection(page.type_erase())
+    };
+    if ctx.data_opt::<SoupPagePrefetch>().is_some() {
+        let entities = EntityPrefetch::for_soup_items(ctx);
+        let threads = EmailThreadPrefetch::for_soup_items(ctx);
+        let thread_ids = page.email_thread_ids();
+        tokio::join!(
+            async {
+                if entities.any() {
+                    prefetch_entities::<Edges>(ctx, page.edges(), entities).await;
+                }
+            },
+            async {
+                if threads.any() && !thread_ids.is_empty() {
+                    prefetch_email_threads::<Edges>(ctx, thread_ids, threads).await;
+                }
+            },
+        );
     }
+    Ok(page)
+}
+
+/// Loads the page's entities' per-entity data in one batch per loader. Boxed
+/// for the reason [`prefetch_email_threads`] is.
+fn prefetch_entities<'a, Edges: SoupEntityEdges>(
+    ctx: &'a Context<'_>,
+    edges: Vec<Edges>,
+    prefetch: EntityPrefetch,
+) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    Box::pin(Edges::prefetch_entities(ctx, edges, prefetch))
+}
+
+/// Loads the page's email threads' per-thread data in one batch per loader.
+/// Boxed so its loaders' futures get no slot in the resolver's poll frame
+/// (see `SoupLaneLists::page`).
+fn prefetch_email_threads<'a, Edges: SoupEntityEdges>(
+    ctx: &'a Context<'_>,
+    thread_ids: Vec<uuid::Uuid>,
+    prefetch: EmailThreadPrefetch,
+) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    Box::pin(Edges::prefetch_email_threads(ctx, thread_ids, prefetch))
 }
 
 #[cfg(test)]

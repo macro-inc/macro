@@ -1,4 +1,8 @@
-import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  ENABLE_GRAPHQL_BACKFILL,
+  enableStreamedCacheSync,
+} from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -24,7 +28,13 @@ import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
 import * as Fiber from 'effect/Fiber';
 import * as Schedule from 'effect/Schedule';
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import { CHANNEL_DIRECTORY_LANE } from '../channel/directory-lane';
 import {
   ChannelDirectoryPassUnproven,
@@ -50,6 +60,8 @@ import {
   soupBackfillLaneContract,
   soupBackfillLaneLocks,
 } from './backfill-contract';
+import { isSyncHost } from './sync/host';
+import { runStreamedSyncUntilDone } from './sync/stream';
 
 const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
@@ -1051,6 +1063,25 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
   }
 });
 
+/**
+ * Keeps the cache synced: through the streamed sync when `streamed` is on and
+ * the host can stream, otherwise through the paged backfill. A host that
+ * reports it cannot stream (an older native build), or a server that refuses
+ * the stream (`unsupportedWhenRefused`), falls back to the paged backfill
+ * too. A streamed sync that stops after its retries runs again once
+ * the device is back online, the app is back in the foreground, or a pause
+ * ran out.
+ */
+export function runCacheSync(
+  userId: string,
+  host: CacheHost,
+  streamed: boolean
+): Effect.Effect<void> {
+  const paged = runSoupBackfills(userId, host).pipe(Effect.ignore);
+  if (!streamed || !isSyncHost(host)) return paged;
+  return runStreamedSyncUntilDone(host).pipe(Effect.catch(() => paged));
+}
+
 const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
   const host = getGraphqlSoupCacheHost();
   return !host || host.disabled
@@ -1064,22 +1095,25 @@ const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
 );
 
 /**
- * Runs the checkpointed backfill Effect while this tab owns leadership.
- * Interrupting the fiber cancels cache readiness waits, active fetches, and
- * inter-page sleeps. Engine handoffs resume durable checkpoints; only loss of
- * stored cache data resets cursors so they cannot point past wiped records.
+ * Keeps the signed-in user's cache synced while this tab owns leadership;
+ * waits while `userId` is unknown. A user, leadership, flag or cache
+ * generation change interrupts the run (stopping the host's stream) and starts
+ * another, which resumes from the state saved in the cache database.
+ * `directoryChannels` feeds contact facts: the complete channel directory.
  */
-/** Runs the signed-in user's soup backfills; waits while `userId` is unknown.
- * `directoryChannels` feeds contact facts: the complete channel directory. */
 export function useSoupBackfills(
   userId: Accessor<string | undefined>,
   directoryChannels: Accessor<readonly ContextChannel[] | undefined>
 ): void {
+  const streamedSyncFlag = useFeatureFlag(enableStreamedCacheSync);
+  // Only `enabled` picks the sync: the flag's value also changes when
+  // PostHog finishes loading, which must not restart a running backfill.
+  const streamedSync = createMemo(() => streamedSyncFlag().enabled);
   const isLeader = createTabLeaderSignal(
     soupBackfillCoordinatorKey(DEFAULT_SOUP_BACKFILL_LANES)
   );
   // Sender metadata must be durable before the first composer is opened.
-  // This small catalog runs alongside the paged backfill, never behind it.
+  // This small catalog runs alongside the sync, never behind it.
   useMailAccountsQuery(
     () => ENABLE_GRAPHQL_BACKFILL && isLeader() && !!userId()
   );
@@ -1122,9 +1156,7 @@ export function useSoupBackfills(
     if (!host || !id) return;
     cacheGeneration();
 
-    const fiber = Effect.runFork(
-      runSoupBackfills(id, host).pipe(Effect.ignore)
-    );
+    const fiber = Effect.runFork(runCacheSync(id, host, streamedSync()));
     onCleanup(() => {
       Effect.runFork(Fiber.interrupt(fiber));
     });

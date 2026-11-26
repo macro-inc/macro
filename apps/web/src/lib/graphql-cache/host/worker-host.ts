@@ -42,6 +42,7 @@ import {
   isCachePush,
   isCacheResponse,
   isTypedSearch,
+  isValidSyncStartArgs,
   type MutationClaim,
   type MutationSettlement,
   OWNER_EPOCH_LOST_ERROR_CODE,
@@ -59,6 +60,11 @@ import {
   validateRecordSelectionKeys,
   type WriteResult,
 } from '../protocol';
+import type {
+  SyncLaneState,
+  SyncRunOutcome,
+  SyncStartArgs,
+} from '../sync-protocol';
 import {
   type CacheRolloutCohort,
   type CacheTelemetryRecorderLike,
@@ -144,6 +150,15 @@ function isMutationSettlement(kind: CacheRequest['kind']): boolean {
 /** What the coordinator keeps for a later engine while none can open. */
 function isHeldThroughOutage(kind: CacheRequest['kind']): boolean {
   return isInitializationRequest(kind) || isMutationSettlement(kind);
+}
+
+/**
+ * Reads give up after `requestTimeoutMs`. `sync-stop` is admitted like a read
+ * but resolves only once the run has stopped, which can take one page write
+ * longer: a caller told it stopped earlier would start the next run as busy.
+ */
+function hasReadTimeout(kind: CacheRequest['kind']): boolean {
+  return isReadOnlyCacheRequest(kind) && kind !== 'sync-stop';
 }
 
 function admissionOf(kind: CacheRequest['kind']): 'read' | 'write' | 'held' {
@@ -605,7 +620,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     for (const [id, entry] of pending) {
       if (isInitializationRequest(entry.kind))
         armRequestTimeout(id, entry, initializationTimeoutMs);
-      else if (isReadOnlyCacheRequest(entry.kind))
+      else if (hasReadTimeout(entry.kind))
         armRequestTimeout(id, entry, requestTimeoutMs);
     }
   }
@@ -634,7 +649,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         entry.stopTimeout?.();
         entry.stopTimeout = undefined;
       } else if (
-        isReadOnlyCacheRequest(entry.kind) &&
+        hasReadTimeout(entry.kind) &&
         !entry.waiting &&
         !entry.keptForOwner
       ) {
@@ -1181,6 +1196,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       leave('leaving');
       return;
     }
+    // A sync run replies only when it ends; stop it so disposal can drain.
+    if ([...pending.values()].some((entry) => entry.kind === 'sync-start')) {
+      fireAndForget(request({ kind: 'sync-stop' }), 'graphql-cache-host');
+    }
     // Stop admission first, but keep the requester/standby connected until
     // every already-admitted RPC has a response or its existing read timer.
     // Mutations deliberately have no arbitrary disposal timeout.
@@ -1393,7 +1412,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   /** Bounds a request as it is admitted. A write has no deadline here. */
   function boundRequest(id: number, entry: Pending): void {
     const waiting = readAvailability.timeoutsPaused;
-    if (isReadOnlyCacheRequest(entry.kind))
+    if (hasReadTimeout(entry.kind))
       armRequestTimeout(id, entry, requestTimeoutMs, waiting);
     else if (isInitializationRequest(entry.kind) && !waiting)
       armRequestTimeout(id, entry, initializationTimeoutMs);
@@ -2124,6 +2143,49 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         keys,
         generation: authorityGeneration,
       })) as AffectedOperationsResult;
+    },
+
+    async syncStart(args: SyncStartArgs): Promise<SyncRunOutcome> {
+      // An invalid request would be a coordinator protocol violation.
+      if (!isValidSyncStartArgs(args)) {
+        return {
+          ok: false,
+          failure: { kind: 'stream', message: 'invalid sync arguments' },
+        };
+      }
+      try {
+        return (await initializedRequest({
+          kind: 'sync-start',
+          args,
+        })) as SyncRunOutcome;
+      } catch {
+        // Navigation, disposal, owner loss, or a restarted coordinator: the
+        // run stopped with its engine and is never replayed. Saved state
+        // resumes it on the next start.
+        return { ok: false, failure: { kind: 'aborted' } };
+      }
+    },
+
+    async syncStop(): Promise<void> {
+      try {
+        await initializedRequest({ kind: 'sync-stop' });
+      } catch {
+        // No reachable engine means no run to stop: parking already ended it.
+      }
+    },
+
+    async syncFence(keys: string[]): Promise<void> {
+      try {
+        await initializedRequest({ kind: 'sync-fence', keys });
+      } catch {
+        // No reachable engine means no run to fence.
+      }
+    },
+
+    async syncState(): Promise<SyncLaneState[]> {
+      return (await initializedRequest({
+        kind: 'sync-state',
+      })) as SyncLaneState[];
     },
 
     async teardown(opKey: number): Promise<void> {

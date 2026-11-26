@@ -16,6 +16,7 @@ pub use staged_hydrate::StagedHydrate;
 mod test;
 
 pub mod live_query;
+pub mod sync;
 pub mod watch_query;
 mod window_observation;
 
@@ -498,6 +499,13 @@ pub struct Engine<S: Storage> {
     optimistic_hydrated: bool,
     /// What the last projection passes read, for the write that follows.
     kept_reads: Option<pass_reads::KeptReads>,
+    /// Renewed whenever the cache's contents stop being the ones a sync run
+    /// began against (`clear`, an account reset, `external_reset`); a run
+    /// begun under another epoch applies nothing more.
+    reset_epoch: Uuid,
+    /// Records server-confirmed edits wrote, which sync runs begun before
+    /// them leave as they are (see [`sync::SyncFence`]).
+    sync_fence: sync::SyncFence,
 }
 
 impl<S: Storage> Engine<S> {
@@ -533,6 +541,8 @@ impl<S: Storage> Engine<S> {
             optimistic: Vec::new(),
             optimistic_hydrated: false,
             kept_reads: None,
+            reset_epoch: Uuid::now_v7(),
+            sync_fence: sync::SyncFence::default(),
         }
     }
 
@@ -1662,6 +1672,7 @@ impl<S: Storage> Engine<S> {
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
         let is_query = op.kind == OperationKind::Query;
+        let is_mutation = op.kind == OperationKind::Mutation;
         // A subscription event is a network snapshot of its records like a
         // query response, so the same before/after comparison is exact for it.
         // Leaving it unscoped made every open Quick Access list replay its
@@ -1774,6 +1785,8 @@ impl<S: Storage> Engine<S> {
             let after = effective_records(&staged_bases, &replacement, &candidates);
             Some((candidates, before, replacement, after))
         };
+        // A mutation's response is the server's state after the edit.
+        let mutation_keys = is_mutation.then(|| updates.keys().cloned().collect::<Vec<_>>());
         let PersistedChanges {
             mut field_changes,
             changed,
@@ -1782,6 +1795,9 @@ impl<S: Storage> Engine<S> {
             mut search_changed_buckets,
             viewer_fields: mut viewer_changes,
         } = self.persist_updates(updates, projections).await?;
+        if let Some(keys) = mutation_keys {
+            self.sync_fence.fence(keys);
+        }
 
         let visible_changed =
             if let Some((candidates, before, replacement, after)) = optimistic_update {
@@ -3061,6 +3077,7 @@ impl<S: Storage> Engine<S> {
             .position(|layer| layer.id == transaction)
             .ok_or(EngineError::UnknownTransaction(transaction))?;
         let mutation_uuid = Some(self.optimistic[index].uuid.to_string());
+        let edited = layer_keys(std::slice::from_ref(&self.optimistic[index]));
         let mut bindings = self.optimistic[index].identity_bindings.clone();
         let mut identity_errors = Vec::new();
         let identities = match identity::resolve(&bindings, data) {
@@ -3231,12 +3248,20 @@ impl<S: Storage> Engine<S> {
             return Err(EngineError::StaleMutationClaim(transaction));
         }
         let revision = self.advance_revision()?;
+        let entries_keys = entries
+            .iter()
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
         for (key, record) in entries {
             self.hot.put(key, record);
         }
 
         // No fallible reads after settlement: publish exactly the staged view.
         self.optimistic = replacement;
+        // What the server confirmed: a sync page read before it must not
+        // write back the state it replaced.
+        self.sync_fence
+            .fence(edited.into_iter().chain(entries_keys));
         live_projection_keys.extend(live_query::projection_keys(&self.optimistic));
         let live_records = candidates.clone();
         let visible_changed: BTreeSet<EntityKey<'static>> = candidates
@@ -3536,6 +3561,8 @@ impl<S: Storage> Engine<S> {
         self.optimistic_hydrated = false;
         self.identity = IdentityState::NotHydrated;
         self.authority = std::sync::OnceLock::new();
+        self.reset_epoch = Uuid::now_v7();
+        self.sync_fence.forget_all();
         let affected = self.deps.all_ops();
         self.advance_revision()?;
         Ok(self.revisioned(affected))
@@ -3557,9 +3584,11 @@ impl<S: Storage> Engine<S> {
     }
 
     /// Handles records invalidated from outside a write, such as a push:
-    /// evicts them from the hot tier so the next read hits storage, and returns
-    /// the local active operations that depend on them. One engine owns a
-    /// database at a time, so no other engine instance changes its records.
+    /// evicts them from the hot tier so the next read
+    /// hits storage, and returns the local active operations that depend on
+    /// them. A sync run begun before leaves them as they are, since its pages
+    /// may predate the change. One engine owns a database at a time, so no
+    /// other engine instance changes its records.
     pub fn invalidate_keys<'k>(
         &mut self,
         keys: impl IntoIterator<Item = &'k EntityKey<'static>>,
@@ -3575,7 +3604,9 @@ impl<S: Storage> Engine<S> {
         keys: impl IntoIterator<Item = &'k EntityKey<'static>>,
     ) -> BTreeSet<OpId> {
         let mut affected = BTreeSet::new();
+        let mut fenced = Vec::new();
         for key in keys {
+            fenced.push(key.clone());
             if key.typename() == Some("GraphqlContact") {
                 self.contact_fence = Uuid::now_v7();
             }
@@ -3585,6 +3616,7 @@ impl<S: Storage> Engine<S> {
             self.hot.pop(key);
             affected.extend(self.deps.ops_for_keys([key]));
         }
+        self.sync_fence.fence(fenced);
         affected
     }
 
@@ -3637,6 +3669,8 @@ impl<S: Storage> Engine<S> {
         // The wipe below removes the binding record too.
         self.identity = IdentityState::Missing;
         self.authority = std::sync::OnceLock::from(None);
+        self.reset_epoch = Uuid::now_v7();
+        self.sync_fence.forget_all();
         self.advance_revision()
     }
 

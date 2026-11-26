@@ -369,6 +369,57 @@ describe('coordinator runtime protocol', () => {
     ).toBe(false);
   });
 
+  it('validates streamed sync requests', () => {
+    const args = {
+      url: 'https://api.example.test/items/soup/graphql/stream',
+      headers: { 'x-macro-mail-cache-profile': 'v2' },
+      pass: 'second',
+      maxPages: 20,
+      calendar: { timeZone: 'Europe/Berlin' },
+      completedSince: '2026-11-01T00:00:00.000Z',
+      skipLanes: ['email-older'],
+      queries: { SoupBackfill: 'query SoupBackfill { user { id } }' },
+    };
+    const valid = (value: unknown) =>
+      isCacheRequest({ id: 1, kind: 'sync-start', args: value });
+    expect(valid(args)).toBe(true);
+    expect(
+      valid({
+        url: args.url,
+        headers: {},
+        pass: 'first',
+        maxPages: 0,
+        queries: {},
+      })
+    ).toBe(true);
+    expect(isCacheRequest({ id: 1, kind: 'sync-stop' })).toBe(true);
+    expect(isCacheRequest({ id: 1, kind: 'sync-state' })).toBe(true);
+    for (const invalid of [
+      { ...args, url: 'file:///stream' },
+      { ...args, headers: { bad: 1 } },
+      { ...args, pass: undefined },
+      { ...args, pass: 'third' },
+      { ...args, maxPages: -1 },
+      { ...args, extra: true },
+      { ...args, lanes: [] },
+      { ...args, calendar: { timeZone: '' } },
+      { ...args, calendar: { timeZone: 'UTC', coverage: [] } },
+      { ...args, completedSince: 5 },
+      { ...args, skipLanes: ['Tasks'] },
+      { ...args, skipLanes: Array(257).fill('tasks') },
+      { ...args, queries: undefined },
+      { ...args, queries: { SoupBackfill: 1 } },
+      {
+        ...args,
+        queries: Object.fromEntries(
+          Array.from({ length: 65 }, (_, index) => [`Q${index}`, 'query'])
+        ),
+      },
+    ]) {
+      expect(valid(invalid)).toBe(false);
+    }
+  });
+
   it('validates calendar range, commit, and uncertain-event requests', () => {
     const range = { startMs: 0, endMs: 10, startDay: 0, endDay: 1 };
     const rangeRequest = (request: unknown) =>
@@ -997,10 +1048,10 @@ describe('coordinator runtime protocol', () => {
     // The current versions moved past the unversioned name, so the lock
     // names the versioned database that builds before them never held.
     expect(databaseOwnerLockName('scope')).toBe(
-      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v4.t12'
+      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v4.t13'
     );
     expect(databaseOwnerLockName('é')).toBe(
-      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v4.t12'
+      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v4.t13'
     );
   });
 

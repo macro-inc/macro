@@ -528,6 +528,19 @@ impl CalendarRangeStorage for TursoStorage {
         self.latch_result(result)
     }
 
+    async fn load_calendar_coverage(&self) -> Result<Vec<CalendarSpan>, Self::Error> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        let result = driver::read_transaction(&connection, || {
+            let spans = driver::query(&connection, COVERAGE_ALL, Vec::new())?
+                .iter()
+                .map(|row| parse_span(row))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(merge_spans(spans))
+        });
+        self.latch_result(result)
+    }
+
     async fn calendar_commit(
         &mut self,
         commit: &CalendarCommit,

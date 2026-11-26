@@ -11,7 +11,7 @@ use axum::{
     extract::{OriginalUri, State},
     http::{StatusCode, request::Parts},
     response::{Html, IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
 use axum_extra::extract::Cached;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
@@ -24,19 +24,24 @@ use macro_authorization::{
     UserOrInternalServiceAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use soup_sync_stream::PageBudget;
 use uuid::Uuid;
 
+mod stream;
 mod websocket;
 
 use websocket::GraphqlWebSocketUpgrade;
 
 pub(crate) const GRAPHQL_PATH: &str = "/soup/graphql";
 pub(crate) const GRAPHQL_SUBSCRIPTION_PATH: &str = "/soup/graphql/ws";
+/// Streamed cache sync: paged Soup and calendar queries as one NDJSON response.
+const GRAPHQL_STREAM_PATH: &str = "/soup/graphql/stream";
 
 pub(crate) fn router() -> Router<ApiContext> {
     Router::new()
         .route(GRAPHQL_PATH, get(graphiql).post(graphql_handler))
         .route(GRAPHQL_SUBSCRIPTION_PATH, get(subscription_handler))
+        .route(GRAPHQL_STREAM_PATH, post(stream::sync_stream_handler))
 }
 
 async fn graphiql(OriginalUri(uri): OriginalUri) -> Html<String> {
@@ -76,6 +81,7 @@ async fn graphql_handler(
             acting_user.map(|user| user.macro_user_id.clone()),
             acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
             acting_user.and_then(opaque_viewer_id),
+            ContextScope::Request,
         );
         state.graphql_soup_schema.execute(
             request
@@ -136,8 +142,46 @@ fn graphql_subscription_context_data(
     viewer_id: Option<Uuid>,
 ) -> Data {
     let mut data = Data::default();
-    insert_graphql_context_data(&mut data, state, Some(user), organization_id, viewer_id);
+    insert_graphql_context_data(
+        &mut data,
+        state,
+        Some(user),
+        organization_id,
+        viewer_id,
+        ContextScope::Subscription,
+    );
     data
+}
+
+/// What the GraphQL context data serves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ContextScope {
+    /// One `POST /soup/graphql` request: queries or mutations.
+    Request,
+    /// One page of a streamed sync: a query only. Email loaders cache, so a
+    /// Soup page prefetches its threads' data in one batch. The page's lane
+    /// sets its email-content budget: one operation's, or the email-content
+    /// lane's whole page.
+    SyncStreamPage(PageBudget),
+    /// A subscription connection, whose data outlives each payload.
+    Subscription,
+}
+
+/// The email-content budget of one request: a stream page of the
+/// email-content lane loads that lane's page, everything else one
+/// operation's.
+fn email_content_limits(scope: ContextScope) -> complete_graph::EmailContentLimits {
+    match scope {
+        ContextScope::SyncStreamPage(PageBudget::EmailContent { threads, messages }) => {
+            complete_graph::EmailContentLimits {
+                max_keys: threads as usize,
+                max_messages: messages as usize,
+            }
+        }
+        ContextScope::SyncStreamPage(PageBudget::Operation)
+        | ContextScope::Request
+        | ContextScope::Subscription => complete_graph::EmailContentLimits::PER_OPERATION,
+    }
 }
 
 fn graphql_query_context_data(
@@ -146,6 +190,7 @@ fn graphql_query_context_data(
     macro_user_id: Option<MacroUserIdStr<'static>>,
     organization_id: Option<i64>,
     viewer_id: Option<Uuid>,
+    scope: ContextScope,
 ) -> async_graphql::Request {
     insert_graphql_context_data(
         &mut req.data,
@@ -153,6 +198,7 @@ fn graphql_query_context_data(
         macro_user_id,
         organization_id,
         viewer_id,
+        scope,
     );
     req
 }
@@ -163,6 +209,7 @@ fn insert_graphql_context_data(
     macro_user_id: Option<MacroUserIdStr<'static>>,
     organization_id: Option<i64>,
     viewer_id: Option<Uuid>,
+    scope: ContextScope,
 ) {
     data.insert(state.clone());
     let saved_views: std::sync::Arc<dyn saved_views::domain::SavedViewApi> =
@@ -259,24 +306,41 @@ fn insert_graphql_context_data(
             OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(state.db.clone()))),
         ),
     ));
-    data.insert(complete_graph::entity_properties_loader(
-        macro_user_id.clone(),
-        property_reader,
-    ));
+    let stream_page = matches!(scope, ContextScope::SyncStreamPage(_));
+    let properties =
+        complete_graph::entity_properties_loader(macro_user_id.clone(), property_reader);
     data.insert(complete_graph::email_content_loader(
         macro_user_id.clone(),
         email_content_reader.clone(),
+        email_content_limits(scope),
     ));
-    data.insert(complete_graph::email_thread_metadata_loader(
+    let metadata = complete_graph::email_thread_metadata_loader(
         macro_user_id.clone(),
         viewer_id,
         email_content_reader.clone(),
-    ));
-    data.insert(complete_graph::email_thread_mail_projection_loader(
+    );
+    let projections = complete_graph::email_thread_mail_projection_loader(
         macro_user_id.clone(),
         viewer_id,
         email_content_reader,
-    ));
+    );
+    let permissions = complete_graph::entity_permission_loader(
+        macro_user_id.clone(),
+        organization_id,
+        state.entity_access_service.clone(),
+    );
+    if stream_page {
+        // A stream page is one query: nothing it reads changes under it.
+        metadata.enable_all_cache(true);
+        projections.enable_all_cache(true);
+        permissions.enable_all_cache(true);
+        properties.enable_all_cache(true);
+        data.insert(graphql_soup::SoupPagePrefetch);
+    }
+    data.insert(metadata);
+    data.insert(projections);
+    data.insert(permissions);
+    data.insert(properties);
     data.insert(complete_graph::EmailFocusContext(
         state.email_focus_reader.clone(),
     ));
@@ -287,11 +351,6 @@ fn insert_graphql_context_data(
     data.insert(complete_graph::entity_favorite_loader(
         macro_user_id.clone(),
         state.favorites_service.clone(),
-    ));
-    data.insert(complete_graph::entity_permission_loader(
-        macro_user_id.clone(),
-        organization_id,
-        state.entity_access_service.clone(),
     ));
     data.insert(property_writer);
     data.insert(complete_graph::entity_notifications_loader(

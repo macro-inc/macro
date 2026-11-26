@@ -1,12 +1,12 @@
 //! The viewer's tag sets: TAG-typed property definitions whose options are labels.
 
-use async_graphql::{Context, Enum, Object, dataloader::DataLoader};
+use async_graphql::{Context, Enum, Object};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use properties::domain::model::{TagScope, TagSet};
 
 use crate::{
-    EntityPropertiesLoader, EntityPropertyReader, GraphqlPropertyDefinition, GraphqlPropertyOption,
-    definitions::catalog_read_error,
+    EntityPropertiesDataLoader, EntityPropertyReader, GraphqlPropertyDefinition,
+    GraphqlPropertyOption, definitions::catalog_read_error,
 };
 
 /// Which owner a tag set belongs to.
@@ -80,7 +80,7 @@ impl<R: EntityPropertyReader> GraphqlTagSet<R> {
 pub async fn load_tag_sets<R: EntityPropertyReader>(
     ctx: &Context<'_>,
 ) -> async_graphql::Result<Vec<GraphqlTagSet<R>>> {
-    let loader = ctx.data::<DataLoader<EntityPropertiesLoader<R>>>()?;
+    let loader = ctx.data::<EntityPropertiesDataLoader<R>>()?;
     let sets = loader
         .loader()
         .tag_sets()

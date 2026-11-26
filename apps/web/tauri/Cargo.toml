@@ -34,6 +34,7 @@ debug-assertions = false
 webauthn-authenticator-rs = { git = "https://github.com/beeper/webauthn-rs", rev = "579f9144d37161bedf25ed1236d73486ce303de6", default-features = false }
 webauthn-rs-proto = { git = "https://github.com/beeper/webauthn-rs", rev = "579f9144d37161bedf25ed1236d73486ce303de6" }
 
+async-trait = "0.1"
 # Crash reports: reads Chromium's minidumps; tests build synthetic ones.
 minidump = "0.27"
 minidump-synth = "0.27"
@@ -47,6 +48,7 @@ test-assembler = "0.1.6"
 tauri = "2.11"
 thiserror = "2"
 tokio = "1"
+tokio-util = "0.7"
 tracing = "0.1"
 url = "2.5.4"
 uuid = "1"

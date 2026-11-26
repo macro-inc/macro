@@ -10,6 +10,7 @@ import type {
   CacheHost,
 } from '@graphql-cache/host/types';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
+import type { SyncLaneState } from '@graphql-cache/sync-protocol';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import type { ChannelMembershipPatch } from '@service-storage/channel-membership';
 import {
@@ -94,6 +95,13 @@ import {
 import { type DirectoryChannel, toDirectoryChannel } from './directory-core';
 import type { RemoveUnreadableResult } from './directory-departures';
 import { CHANNEL_DIRECTORY_LANE } from './directory-lane';
+import {
+  checkpointLaneProgress,
+  eitherLaneProgress,
+  type LaneProgressSource,
+  STREAMED_CHANNEL_LANE,
+  streamedLaneProgress,
+} from './directory-lane-progress';
 import { channelKeys } from './keys';
 import { OWN_WRITE_HOLD_MS, ownChannelWrites } from './own-writes';
 import { channelName, channelUuid } from './tests/channel-uuid';
@@ -1048,6 +1056,8 @@ type CachedDirectoryOptions = {
   byIdGate?: Promise<void>;
   /** When the page loaded, for `viewsCurrent`. */
   sessionStartedAt?: number;
+  /** The backfill's progress; the paged lane's checkpoint when left out. */
+  laneProgress?: LaneProgressSource;
   /** The client whose own writes the directory shows. */
   queryClient?: QueryClient;
   /** Deletes channels the primary no longer shows the viewer; from the
@@ -1180,6 +1190,7 @@ function mountCachedDirectory(
       stampView,
       ownWrites: ownChannelWrites(options.queryClient ?? new QueryClient()),
       sessionStartedAt: options.sessionStartedAt,
+      laneProgress: options.laneProgress,
       departureRechecksMs: options.departureRechecksMs,
       subscribeMembership: options.subscribeMembership,
     });
@@ -2045,6 +2056,89 @@ describe('cached channel directory', () => {
       await vi.advanceTimersByTimeAsync(10_000);
 
       expect(pageAll).toHaveBeenCalledOnce();
+    });
+
+    it('never pages the network once the streamed sync finished the channel lane', async () => {
+      let states: SyncLaneState[] = [];
+      const { cache, directory, pageAll } = mountCachedDirectory([], {
+        laneProgress: streamedLaneProgress(
+          {
+            syncState: async () => states,
+            onCacheGenerationChanged: () => () => {},
+          },
+          Date.parse('2026-11-20T00:00:00Z')
+        ),
+      });
+      cache.put(channelRecord('a'));
+      await vi.advanceTimersByTimeAsync(20_000);
+      states = [
+        {
+          id: STREAMED_CHANNEL_LANE,
+          resume: null,
+          pages: 1,
+          items: 1,
+          passStartedAt: null,
+          completedAt: '2026-11-25T00:00:05Z',
+          watermark: '2026-11-25T00:00:00Z',
+        },
+      ];
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(pageAll).not.toHaveBeenCalled();
+      expect(directory.complete()).toBe(true);
+      expect(directory.viewsCurrent()).toBe(true);
+      expect(ids(directory.channels())).toEqual(['a']);
+    });
+
+    it('waits on a healthy stream despite a paged failure an earlier session left', async () => {
+      // An earlier session paged the lane and gave up; storage is the same.
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_LANE, 'g1');
+      const { pageAll } = mountCachedDirectory([], {
+        laneProgress: eitherLaneProgress(
+          checkpointLaneProgress(VIEWER, 0, { failures: false }),
+          streamedLaneProgress(
+            {
+              syncState: async () => [
+                {
+                  id: STREAMED_CHANNEL_LANE,
+                  resume: null,
+                  pages: 1,
+                  items: 1,
+                  passStartedAt: null,
+                  completedAt: null,
+                  watermark: null,
+                },
+              ],
+              onCacheGenerationChanged: () => () => {},
+            },
+            0
+          )
+        ),
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      expect(pageAll).not.toHaveBeenCalled();
+    });
+
+    it('completes from the paged lane when the streamed sync fell back to paging', async () => {
+      completeLane('g1');
+      const { directory, pageAll } = mountCachedDirectory([], {
+        laneProgress: eitherLaneProgress(
+          checkpointLaneProgress(VIEWER, 0),
+          streamedLaneProgress(
+            {
+              // The stream never ran: no lane state.
+              syncState: async () => [],
+              onCacheGenerationChanged: () => () => {},
+            },
+            0
+          )
+        ),
+      });
+      await vi.advanceTimersByTimeAsync(31_000);
+
+      expect(pageAll).not.toHaveBeenCalled();
+      expect(directory.complete()).toBe(true);
     });
 
     it('never pages the network for a finished lane while the cache is slow to list it', async () => {

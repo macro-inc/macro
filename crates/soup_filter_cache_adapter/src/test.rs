@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 use super::*;
 
 mod file_type;
+mod sync_lane_requirements;
+mod sync_minimal_fields;
 
 #[test]
 fn optimistic_soup_payloads_compile_to_durable_projection_layers() {

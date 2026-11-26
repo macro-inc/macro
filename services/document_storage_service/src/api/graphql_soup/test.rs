@@ -57,3 +57,54 @@ fn no_scope_reaches_graphql_where_it_is_mounted() {
         }
     }
 }
+
+/// The sync stream runs only its lane documents' query operations
+/// (`soup_sync_stream` refuses any other), so it writes nothing and a
+/// `NoSend` run may reach it. A generation session or a dry run makes only
+/// the POSTs its scope lists, which leave the stream out.
+#[test]
+fn only_no_send_reaches_the_sync_stream_where_it_is_mounted() {
+    use agent_correlation::scope::SessionScope;
+    for prefix in ["", "/dss"] {
+        for version in ["", "/v1"] {
+            let path = format!(
+                "{prefix}{version}{}{}",
+                crate::api::ITEMS_PATH,
+                super::GRAPHQL_STREAM_PATH
+            );
+            for scope in [SessionScope::Generation, SessionScope::DryRun] {
+                assert!(!scope.allows("POST", &path), "{scope:?} {path}");
+            }
+            assert!(SessionScope::NoSend.allows("POST", &path), "{path}");
+        }
+    }
+}
+
+#[test]
+fn only_an_email_content_stream_page_loads_more_than_one_operation_may() {
+    use super::{ContextScope, email_content_limits};
+    use complete_graph::EmailContentLimits;
+    use soup_sync_stream::PageBudget;
+
+    assert_eq!(
+        email_content_limits(ContextScope::SyncStreamPage(PageBudget::EmailContent {
+            threads: 200,
+            messages: 4_000,
+        })),
+        EmailContentLimits {
+            max_keys: 200,
+            max_messages: 4_000,
+        }
+    );
+    // A document sent for any other lane runs as it would on `/soup/graphql`.
+    for scope in [
+        ContextScope::SyncStreamPage(PageBudget::Operation),
+        ContextScope::Request,
+        ContextScope::Subscription,
+    ] {
+        assert_eq!(
+            email_content_limits(scope),
+            EmailContentLimits::PER_OPERATION
+        );
+    }
+}

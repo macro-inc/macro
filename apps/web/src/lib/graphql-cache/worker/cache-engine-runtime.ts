@@ -87,6 +87,8 @@ interface CacheWorkerCoreLike {
     request: CacheRequest
   ): Promise<void>;
   drain(): Promise<void>;
+  /** Ends a streamed sync run, whose request otherwise outlasts the drain. */
+  abortSync?(): void;
   recordCachedQueueDiagnostics?(): void;
   queueLossTold?(): Promise<void>;
 }
@@ -438,6 +440,8 @@ async function activate(
         .with({ kind: 'drain-engine' }, () => {
           if (draining) return;
           draining = true;
+          // Admissions drain before the core does; a sync run would hold them.
+          core.abortSync?.();
           const drainFiber = runLifecycle(
             Effect.gen(function* () {
               yield* FiberSet.awaitEmpty(admissions);

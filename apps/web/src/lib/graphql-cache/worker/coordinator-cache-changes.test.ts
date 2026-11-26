@@ -357,3 +357,78 @@ it('keeps ordinary single-request updates immediate', () => {
     { kind: 'broadcast-push', push: { kind: 'cache-changed', revision: '1' } },
   ]);
 });
+
+it('never holds hydration hints behind a streamed sync run that stays in flight', () => {
+  const { push, reply } = resume([
+    {
+      id: 1,
+      kind: 'sync-start',
+      args: {
+        url: 'https://api.example.test/stream',
+        headers: {},
+        pass: 'first',
+        queries: {},
+      },
+    },
+    { id: 2, kind: 'read', query: 'query Viewer { user { id } }' },
+  ]);
+  // Only the read is a reply that ends cache work, so each page's hint flushes.
+  expect(
+    push({ kind: 'cache-hydrated', revision: parseCacheRevision('1') })
+  ).toEqual([
+    {
+      kind: 'broadcast-push',
+      push: { kind: 'cache-hydrated', revision: '1' },
+    },
+  ]);
+  expect(reply(1)).toHaveLength(1);
+  expect(
+    push({ kind: 'cache-hydrated', revision: parseCacheRevision('2') })
+  ).toEqual([
+    {
+      kind: 'broadcast-push',
+      push: { kind: 'cache-hydrated', revision: '2' },
+    },
+  ]);
+  expect(reply(0)).toHaveLength(1);
+});
+
+it('flushes a held hint when the last read replies while a sync run stays in flight', () => {
+  const { push, reply } = resume([
+    {
+      id: 1,
+      kind: 'sync-start',
+      args: {
+        url: 'https://api.example.test/stream',
+        headers: {},
+        pass: 'first',
+        queries: {},
+      },
+    },
+    { id: 2, kind: 'read', query: 'query Viewer { user { id } }' },
+    { id: 3, kind: 'read', query: 'query Viewer { user { id } }' },
+  ]);
+  // Two reads remain, so the page's hint waits for them.
+  expect(
+    push({ kind: 'cache-hydrated', revision: parseCacheRevision('1') })
+  ).toEqual([]);
+  expect(reply(1)).toEqual([
+    {
+      kind: 'deliver-response',
+      tabId: 'a',
+      response: { id: 2, ok: true, result: null },
+    },
+  ]);
+  // The run's own request never counts as work still to reply.
+  expect(reply(2)).toEqual([
+    {
+      kind: 'broadcast-push',
+      push: { kind: 'cache-hydrated', revision: '1' },
+    },
+    {
+      kind: 'deliver-response',
+      tabId: 'a',
+      response: { id: 3, ok: true, result: null },
+    },
+  ]);
+});

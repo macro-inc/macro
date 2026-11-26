@@ -37,7 +37,8 @@ edge.
   under a definition it cannot read answers as gone. A conflict names what it collided with in `extensions.reason`
   (`RESERVED_NAME`, `NAME_TAKEN`, `OPTION_VALUE_TAKEN`); `addPropertyOption`
   sent again with its id answers with the option it made.
-- `src/loaders.rs`: `EntityPropertiesLoader` batching.
+- `src/loaders.rs`: `EntityPropertiesLoader` batching. The loader's cache is
+  off unless the request turns it on (stream pages).
 
 ## Scope
 

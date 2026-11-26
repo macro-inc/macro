@@ -333,7 +333,7 @@ fn key(index: usize) -> EmailContentKey {
 async fn batches_distinct_threads_in_one_reader_call() {
     let reader = RecordingReader::default();
     let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
-    let loader = email_content_loader(user_id, reader.clone());
+    let loader = email_content_loader(user_id, reader.clone(), EmailContentLimits::PER_OPERATION);
     let first = key(1);
     let second = key(2);
 
@@ -404,8 +404,11 @@ async fn batches_email_thread_mail_projections_in_one_reader_call() {
 async fn rejects_oversized_batches_without_calling_the_reader() {
     let reader = RecordingReader::default();
     let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
-    let loader = EmailContentLoader::new(user_id, reader.clone());
-    let keys = (0..=MAX_EMAIL_CONTENT_KEYS).map(key).collect::<Vec<_>>();
+    let loader =
+        EmailContentLoader::new(user_id, reader.clone(), EmailContentLimits::PER_OPERATION);
+    let keys = (0..=EmailContentLimits::PER_OPERATION.max_keys)
+        .map(key)
+        .collect::<Vec<_>>();
 
     let error = loader.load(&keys).await.unwrap_err();
 
@@ -414,10 +417,26 @@ async fn rejects_oversized_batches_without_calling_the_reader() {
 }
 
 #[tokio::test]
+async fn an_operation_over_the_thread_limit_fails_through_the_data_loader() {
+    let reader = RecordingReader::default();
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let loader = email_content_loader(user_id, reader.clone(), EmailContentLimits::PER_OPERATION);
+    let loads = (0..=EmailContentLimits::PER_OPERATION.max_keys)
+        .map(|index| loader.load_one(key(index)))
+        .collect::<Vec<_>>();
+
+    let results = futures::future::join_all(loads).await;
+
+    assert!(results.iter().all(Result::is_err));
+    assert_eq!(reader.calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn rejects_excessive_requested_messages_without_calling_the_reader() {
     let reader = RecordingReader::default();
     let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
-    let loader = EmailContentLoader::new(user_id, reader.clone());
+    let loader =
+        EmailContentLoader::new(user_id, reader.clone(), EmailContentLimits::PER_OPERATION);
     let keys = vec![
         EmailContentKey::page(Uuid::from_u128(1), 0, 51),
         EmailContentKey::page(Uuid::from_u128(2), 0, 50),
@@ -427,6 +446,32 @@ async fn rejects_excessive_requested_messages_without_calling_the_reader() {
 
     assert_eq!(reader.calls.load(Ordering::SeqCst), 0);
     assert!(error.to_string().contains("at most 100 requested messages"));
+}
+
+#[tokio::test]
+async fn a_larger_budget_takes_a_page_of_threads_in_one_batch() {
+    let reader = RecordingReader::default();
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    // The sync's email-content lane: 200 threads at 20 messages.
+    let limits = EmailContentLimits {
+        max_keys: 200,
+        max_messages: 4_000,
+    };
+    let loader = EmailContentLoader::new(user_id, reader.clone(), limits);
+    let page = (0..200)
+        .map(|thread| EmailContentKey::page(Uuid::from_u128(thread), 0, 20))
+        .collect::<Vec<_>>();
+    let oversized = vec![EmailContentKey::page(Uuid::from_u128(1), 0, 4_001)];
+
+    loader.load(&page).await.unwrap();
+    let error = loader.load(&oversized).await.unwrap_err();
+
+    assert_eq!(reader.calls.load(Ordering::SeqCst), 1);
+    assert!(
+        error
+            .to_string()
+            .contains("at most 4000 requested messages")
+    );
 }
 
 #[tokio::test]

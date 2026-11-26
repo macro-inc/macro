@@ -62,3 +62,15 @@ viewer pattern), which apply to every type defined here.
   cursors carry their own sort tag and string identifiers, separate from timestamp and selected-property cursors.
 - External chats are intentionally excluded from Soup hydration; use the `/external-chats` API.
 - `SoupPatch::hydrate_updated` omits kinds without a `GraphqlSoupEntityType` (databases, forms, external chats), so a committed mutation on them returns empty effects, not a GraphQL error.
+- `SoupLaneLists` (request data, one per sync stream) makes timestamp-sorted
+  `soup` pages slices of the lane's ordered list, fetched many pages per
+  statement (`lane_list.rs`): 65,535 items for pages that select only
+  `__typename id`, 5,000 with projection facts for any other, which are
+  served for at most 30 seconds (`ITEM_LIST_MAX_AGE`) and then read again. A
+  page that selects `frecencyScore`, and any page of a request without the
+  lists, runs like any other.
+- `SoupPagePrefetch` (request data) lets `resolve_soup` load a page's
+  per-entity data in one batch per loader: viewer permissions and properties
+  (`SoupEntityEdges::prefetch_entities`) and email thread projections and
+  metadata (`prefetch_email_threads`). Insert it only when the request's
+  loaders cache (stream pages), or the entities load twice.

@@ -12,7 +12,7 @@ use crate::ID;
 #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct GraphqlReminderBinaryExpr {
+pub struct GraphqlReminderBinaryExpr {
     /// Left expression.
     left: Box<GraphqlReminderExpr>,
     /// Right expression.
@@ -23,7 +23,7 @@ pub(crate) struct GraphqlReminderBinaryExpr {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) enum GraphqlReminderExpr {
+pub enum GraphqlReminderExpr {
     /// Both expressions must match.
     And(GraphqlReminderBinaryExpr),
     /// Either expression may match.
@@ -38,7 +38,7 @@ pub(crate) enum GraphqlReminderExpr {
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) enum GraphqlReminderLiteral {
+pub enum GraphqlReminderLiteral {
     /// Opt the query into reminders.
     Include(bool),
     /// The reminder id.

@@ -41,6 +41,17 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `src/engine/people/sync.rs`: capture the single-owner engine's contact write fence, optionally scan at most 500 raw contact records by key, and reconcile complete exact-ID evidence. Never delete from scan omissions; reject stale fences, foreign/duplicate evidence and omitted self. Removal clears durable/hot records and invalidates dependent reads; context-only stubs are not membership. Engine replacement, clear and contact invalidation/deletion invalidate admission.
 - `src/page_retention.rs`: shared Soup/database/contact snapshot budget; hydration drops viewer page/lookup wrappers, not normalized descendants. Public profiles do not prove contact membership; only `GraphqlContact` projects into `person`.
 - `src/queue.rs`: the optimistic mutation queue.
+- `src/sync.rs` + `src/engine/sync.rs`: streamed sync runs (`Engine::sync_begin`
+  builds the request from the pass, every lane's saved state, the calendar
+  coverage and the app's lane documents (`SyncStartArgs::queries`); the server
+  plans the lanes and declares each on a `lane` line, and a lane's pages are
+  written with the document the request sent for its operation),
+  the NDJSON frame decoder, and `Engine::sync_apply_next` (host-neutral; hosts
+  open the stream and supply `SyncHooks`). A lane's `resume` checkpoint is the
+  server's, stored and sent back unread. `SYNC_PROTOCOL` is the version every
+  request carries; line types the engine does not know are skipped
+  (`SyncFrame::Unrecognized`), anything else new needs a new version (see
+  `docs/architecture/streamed-cache-sync.md`).
 - `tests/`: the primary spec for engine behavior — one file per concern
   (optimistic updates, calendar range, search, subscriptions, fuzz).
 
@@ -88,6 +99,29 @@ eviction and reset make it miss. A miss requires full registration and never reu
 
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 
+- Sync pages write through `Engine::sync_write_page` (`src/engine/sync.rs`),
+  not `hydrate_query`: records, projections and lane state in one
+  `SyncStorage::write_sync_page` transaction, without field changes, viewer
+  fields, dependency fan-out or new hot-tier entries. It falls back to the
+  general write for identity changes and pending optimistic layers; keep its
+  merge semantics in step with `write_network` / `persist_updates`.
+- A sync page leaves alone the records a confirmed edit wrote after its run
+  began (`SyncFence` in `src/engine/sync.rs`): settled optimistic mutations,
+  mutation responses, `invalidate_keys` and `fence_sync_records` (a REST
+  edit). A new write path for server-confirmed edits fences its keys too, or
+  a page read before the edit writes the old state back. The fence records
+  only while a run lives (its `fence_token`), so it holds nothing between
+  runs.
+- A sync run applies frames only under the reset epoch and authority
+  generation `sync_begin` recorded; renew `Engine::reset_epoch` on every path
+  that wipes or rebinds the cache (`clear`, `external_reset`, which the
+  account-reset branch of hydration calls). A reset its own page made ends
+  the run too, without saving that lane's state. A frame is a bounded amount
+  of work, not one write.
+- A complete membership listing that names a key no scope lane holds clears
+  the scope lanes' `watermark` and `completedAt` once every scope lane has
+  completed, so the next run fetches them whole (catch-up passes never return
+  unchanged records newly shared with the viewer).
 - Opaque JSON scalars must preserve floating-point values on reparse — `serde_json`
   is pulled in with the `float_roundtrip` feature; don't drop it.
 - `StoredMutation.created_at_ms` is the first-enqueue time hosts report as

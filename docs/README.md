@@ -28,6 +28,8 @@ Billing: the [Stripe event inbox](architecture/stripe-event-inbox.md).
 Contacts: [disk-backed directory implementation plan](design/disk-backed-contacts.md),
 [approved name-focused search design](design/contact-name-search-proposal.md) (implementation in progress).
 
+Local cache fill: [streamed cache sync](architecture/streamed-cache-sync.md).
+
 Agent guidance per SDK area: [`@routing` and `@agent`](architecture/agent-sdk-guidance.md).
 
 MCP servers: [public MCP and the ChatGPT server](architecture/mcp-surfaces.md).

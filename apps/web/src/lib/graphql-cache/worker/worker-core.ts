@@ -6,6 +6,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
+import type { CacheAuthority } from '../authority';
 import {
   cacheRequestStamp,
   isReadOnlyCacheRequest,
@@ -16,6 +17,7 @@ import type {
   CachePush,
   CacheRequest,
   CacheResponse,
+  CacheRevision,
   CacheRevisionResult,
   CalendarCommitCacheResult,
   CalendarRangeCacheResult,
@@ -45,6 +47,12 @@ import {
   type CacheQueueState,
   cacheDatabaseIdentity,
 } from './coordinator-protocol';
+import {
+  CacheSyncDriver,
+  type SyncAppliedWire,
+  type SyncEngine,
+  type SyncStep,
+} from './sync-driver';
 import {
   type CacheEngine,
   type CacheEngineHydrationResult,
@@ -87,8 +95,18 @@ type RequestWaiter = {
   reject: (error: unknown) => void;
 };
 
+/** One step of the worker's own streamed sync run, queued like a hydrate. */
+type SyncTask = {
+  kind: 'sync-task';
+  step: SyncStep;
+  run: (engine: CacheEngine) => Promise<unknown>;
+};
+
+/** A routed request, or a step of a sync run. */
+type QueuedWork = CacheRequest | SyncTask;
+
 type QueuedEngineRequest = {
-  request: CacheRequest;
+  request: QueuedWork;
   priority: number;
   readSignature?: string;
   waiters: RequestWaiter[];
@@ -173,7 +191,7 @@ const TYPED_SEARCH_PRIORITY = 2;
 const CACHE_WRITE_PRIORITY = 3;
 
 /** Reads may reorder while they overlap, but never across lifecycle barriers. */
-function isOrderingBarrier(request: CacheRequest): boolean {
+function isOrderingBarrier(request: QueuedWork): boolean {
   return (
     request.kind === 'current-authority' ||
     request.kind === 'transition-authority' ||
@@ -185,7 +203,7 @@ function isOrderingBarrier(request: CacheRequest): boolean {
 }
 
 /** A new engine or cleared storage: not even a typed search runs ahead. */
-function stopsTypedSearch(request: CacheRequest): boolean {
+function stopsTypedSearch(request: QueuedWork): boolean {
   return (
     request.kind === 'init' ||
     request.kind === 'clear' ||
@@ -194,7 +212,7 @@ function stopsTypedSearch(request: CacheRequest): boolean {
 }
 
 /** A change made on this device rather than a result from the network. */
-function isLocalChange(request: CacheRequest): boolean {
+function isLocalChange(request: QueuedWork): boolean {
   return (
     request.kind === 'enqueue-optimistic-mutation' ||
     request.kind === 'defer-optimistic-write' ||
@@ -203,10 +221,12 @@ function isLocalChange(request: CacheRequest): boolean {
   );
 }
 
-function isAuthoritativeWrite(request: CacheRequest): boolean {
+function isAuthoritativeWrite(request: QueuedWork): boolean {
   // A calendar commit records coverage for data written just before it, so it
-  // must never overtake that write or hydration.
+  // must never overtake that write or hydration. Sync writes are hydration:
+  // they keep arrival order with other writes.
   return (
+    request.kind === 'sync-task' ||
     request.kind === 'write' ||
     request.kind === 'hydrate' ||
     request.kind === 'people-update' ||
@@ -244,8 +264,12 @@ function revisionAdvancementCategory(
     .otherwise(() => undefined);
 }
 
-function requestPriority(request: CacheRequest): number {
-  if (request.kind === 'hydrate' || request.kind === 'people-update')
+function requestPriority(request: QueuedWork): number {
+  if (
+    request.kind === 'sync-task' ||
+    request.kind === 'hydrate' ||
+    request.kind === 'people-update'
+  )
     return BACKGROUND_HYDRATION_PRIORITY;
   if (isTypedSearch(request)) return TYPED_SEARCH_PRIORITY;
   if (request.kind === 'read') {
@@ -269,7 +293,7 @@ function requestPriority(request: CacheRequest): number {
 }
 
 /** Exact active-operation reads can share one denormalization/storage pass. */
-function readSignature(request: CacheRequest): string | undefined {
+function readSignature(request: QueuedWork): string | undefined {
   if (request.kind !== 'read' || request.opId === undefined) return;
   return JSON.stringify([
     request.generation ?? null,
@@ -313,6 +337,12 @@ export class CacheWorkerCore {
     | { depth: number; oldestCreatedAtMs?: number }
     | undefined;
   private cancelQueueDiagnostics: (() => void) | undefined;
+  /** At most one streamed sync run per engine (one engine per database). */
+  private readonly sync = new CacheSyncDriver({
+    runTask: (task, step) => this.enqueueSyncTask(task, step),
+    publish: (applied) => this.publishSync(applied),
+    reportEngineError: (error) => this.reportResetRequired(error),
+  });
 
   constructor(private readonly options: CacheWorkerCoreOptions = {}) {
     this.telemetry = isolateCacheTelemetry(options.telemetry);
@@ -358,7 +388,7 @@ export class CacheWorkerCore {
 
     this.activeRequestHandlers += 1;
     try {
-      const envelope = (await this.enqueue(request)) as {
+      const envelope = (await this.admit(request)) as {
         result: unknown;
         authorityGeneration?: string;
       };
@@ -457,9 +487,15 @@ export class CacheWorkerCore {
     }
   }
 
+  /** Stops a streamed sync run without waiting; its reply is `aborted`. */
+  abortSync(): void {
+    this.sync.abort();
+  }
+
   /** Stops admission, drains every earlier request/response, then closes OPFS. */
   async drain(): Promise<void> {
     this.acceptingRequests = false;
+    this.sync.abort();
     // A best-effort observation may never delay correctness teardown.
     this.cancelQueueDiagnostics?.();
     this.cancelIdleCheckpoint?.();
@@ -497,15 +533,73 @@ export class CacheWorkerCore {
    * must show in rows read after it, so behind one of those a row read orders
    * like any other record read.
    */
-  private arrivalPriority(request: CacheRequest): number {
-    if (!isTypedSearchRowRead(request)) return requestPriority(request);
+  private arrivalPriority(request: QueuedWork): number {
+    if (request.kind === 'sync-task' || !isTypedSearchRowRead(request))
+      return requestPriority(request);
 
     return this.queue.some((queued) => isLocalChange(queued.request))
       ? NORMAL_READ_PRIORITY
       : TYPED_SEARCH_PRIORITY;
   }
 
-  private enqueue(request: CacheRequest): Promise<unknown> {
+  /**
+   * A sync run drives its own queued tasks, so its start and stop bypass the
+   * queue; every engine call they make goes through it.
+   */
+  private async admit(request: CacheRequest): Promise<unknown> {
+    if (request.kind === 'sync-start')
+      return { result: await this.sync.start(request.args) };
+    if (request.kind === 'sync-stop') return { result: await this.sync.stop() };
+    return await this.enqueue(request);
+  }
+
+  private async enqueueSyncTask<T>(
+    task: (engine: SyncEngine) => Promise<T>,
+    step: SyncStep
+  ): Promise<T> {
+    return (await this.enqueue({ kind: 'sync-task', step, run: task })) as T;
+  }
+
+  /** Publishes one sync frame like the request it stands in for. */
+  private publishSync(applied: SyncAppliedWire): void {
+    match(applied)
+      .with({ kind: 'idle' }, { kind: 'recorded' }, () => undefined)
+      .with({ kind: 'hydrated' }, ({ write }) => {
+        write.revision = parseCacheRevision(write.revision);
+        // Like `hydrate`: only cache-only consumers observe background pages.
+        if (write.reset) this.fanOut(write, true);
+        else if (write.revisionAdvanced) {
+          this.push({
+            kind: 'cache-hydrated',
+            revision: write.revision,
+            ...(write.searchChangedBuckets !== undefined
+              ? { searchChangedBuckets: write.searchChangedBuckets }
+              : {}),
+          });
+        }
+      })
+      .with({ kind: 'deleted' }, (deleted) => {
+        // Like `delete-records`: a server-confirmed deletion.
+        this.fanOut(
+          {
+            revision: parseCacheRevision(deleted.revision),
+            revisionAdvanced: true,
+            changed: deleted.changed,
+            affectedOps: deleted.affectedOps,
+            reset: false,
+            revalidations: [],
+          },
+          true
+        );
+      })
+      .with({ kind: 'calendar' }, ({ write }) => {
+        write.revision = parseCacheRevision(write.revision);
+        this.fanOut(write, true);
+      })
+      .exhaustive(() => undefined);
+  }
+
+  private enqueue(request: QueuedWork): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const priority = this.arrivalPriority(request);
       const signature = readSignature(request);
@@ -590,13 +684,16 @@ export class CacheWorkerCore {
     this.running = true;
     const startedAt = this.now();
     const queueDepth = this.queue.length;
-    void this.dispatch(queued.request)
+    void this.runQueued(queued.request)
       .then(
         async (result) => {
           this.recordSlowRequest(queued, startedAt, queueDepth);
           // Resolve the cache result before the bounded observation checkpoint.
           for (const waiter of queued.waiters) waiter.resolve(result);
-          if (isStorageTransactionRequest(queued.request)) {
+          if (
+            queued.request.kind !== 'sync-task' &&
+            isStorageTransactionRequest(queued.request)
+          ) {
             await this.refreshQueueDiagnostics(false);
           }
         },
@@ -607,7 +704,10 @@ export class CacheWorkerCore {
       )
       .finally(() => {
         this.running = false;
-        if (!isReadOnlyCacheRequest(queued.request.kind)) {
+        if (
+          queued.request.kind === 'sync-task' ||
+          !isReadOnlyCacheRequest(queued.request.kind)
+        ) {
           this.checkpointPending = true;
         }
         this.collectArrivalsThenDrain();
@@ -707,6 +807,8 @@ export class CacheWorkerCore {
   ): void {
     const finishedAt = this.now();
     if (finishedAt - queued.enqueuedAt < SLOW_REQUEST_MS) return;
+    // A sync run reports its own write time.
+    if (queued.request.kind === 'sync-task') return;
     this.telemetry.record({
       name: 'graphql_cache.slow_request',
       operationCategory: operationCategoryForRequest(queued.request),
@@ -779,7 +881,9 @@ export class CacheWorkerCore {
     }
     index = this.pickPastFences(index, priority, segmentEnd);
     const picked = this.queue[index];
-    return picked && isReadOnlyCacheRequest(picked.request.kind)
+    return picked &&
+      picked.request.kind !== 'sync-task' &&
+      isReadOnlyCacheRequest(picked.request.kind)
       ? index
       : undefined;
   }
@@ -813,7 +917,7 @@ export class CacheWorkerCore {
         const startedAt = this.now();
         const queueDepth = this.queue.length;
         try {
-          const result = await this.dispatch(queued.request);
+          const result = await this.runQueued(queued.request);
           this.recordSlowRequest(queued, startedAt, queueDepth);
           for (const waiter of queued.waiters) waiter.resolve(result);
         } catch (error) {
@@ -882,7 +986,12 @@ export class CacheWorkerCore {
 
     // Nothing still on its way would be picked ahead of a typed search, and
     // it is the one request someone is waiting on.
-    if (this.queue.every((queued) => isTypedSearch(queued.request))) {
+    if (
+      this.queue.every(
+        (queued) =>
+          queued.request.kind !== 'sync-task' && isTypedSearch(queued.request)
+      )
+    ) {
       this.drainQueue();
       return;
     }
@@ -906,6 +1015,77 @@ export class CacheWorkerCore {
       this.yielding = false;
       this.drainQueue();
     }
+  }
+
+  private async runQueued(request: QueuedWork): Promise<unknown> {
+    return request.kind === 'sync-task'
+      ? await this.runSyncTask(request)
+      : await this.dispatch(request);
+  }
+
+  /**
+   * One step of a sync run. The engine fences the run itself: once the
+   * authority generation it began under changes (a clear, a permission
+   * transition, another account, including its own page's), its next write
+   * fails as `aborted`. Here `begin` and `apply` only keep the published
+   * authority current, reading it again after each write. The other steps
+   * write no records, and `finish` and `abort` must still end the engine's
+   * run when the authority cannot be read.
+   */
+  private async runSyncTask(task: SyncTask): Promise<unknown> {
+    const engine = this.requireEngine();
+    if (task.step !== 'begin' && task.step !== 'apply')
+      return await task.run(engine);
+
+    const authority = await engine.currentAuthority(this.scope!);
+    if (this.executingAuthority !== authority.generation)
+      this.push({ kind: 'authority-changed', authority });
+    this.executingAuthority = authority.generation;
+    if (task.step === 'begin') return await task.run(engine);
+
+    let result: unknown;
+    let after: CacheAuthority;
+    try {
+      result = await task.run(engine);
+      after = await engine.currentAuthority(this.scope!);
+    } catch (error) {
+      await this.publishFailedSyncWrite(engine, error);
+      this.executingAuthority = undefined;
+      throw error;
+    }
+    if (after.generation !== this.executingAuthority)
+      this.push({ kind: 'authority-changed', authority: after });
+    this.executingAuthority = after.generation;
+    return result;
+  }
+
+  /**
+   * A sync write that fails in the engine may have committed part of its
+   * work first (a page written before its lane state, the first chunks of a
+   * membership deletion, a whole page whose authority could not be read
+   * after), which its frame's publication never announces.
+   * Every open view refreshes from the engine's revision instead. Failures
+   * the engine marks (stream, aborted) wrote nothing.
+   */
+  private async publishFailedSyncWrite(
+    engine: CacheEngine,
+    error: unknown
+  ): Promise<void> {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'cacheSyncFailure' in error
+    )
+      return;
+    let revision: CacheRevision;
+    try {
+      revision = parseCacheRevision(await engine.currentRevision());
+    } catch {
+      // An engine that cannot answer is latched for replacement, which
+      // refreshes every view anyway.
+      return;
+    }
+    this.push({ kind: 'cache-changed', revision });
   }
 
   private async dispatch(request: CacheRequest): Promise<unknown> {
@@ -1009,6 +1189,8 @@ export class CacheWorkerCore {
         );
         this.executingAuthority = result.authority.generation;
         if (result.changed) {
+          // The run's pages were fetched under the retired generation.
+          this.sync.abort();
           this.push({ kind: 'authority-changed', authority: result.authority });
           this.push({
             kind: 'ops-affected',
@@ -1364,12 +1546,25 @@ export class CacheWorkerCore {
         return null;
       })
       .with({ kind: 'clear' }, async () => {
+        // The run's saved state and pages belong to the cache being wiped.
+        this.sync.abort();
         const result: CacheRevisionResult = await this.requireEngine().clear();
         this.executingAuthority = undefined;
         const revision = parseCacheRevision(result.revision);
         this.push({ kind: 'cache-changed', revision, reset: true });
         return revision;
       })
+      .with(
+        { kind: 'sync-state' },
+        async () => await this.requireEngine().syncState()
+      )
+      .with({ kind: 'sync-fence' }, async (request) => {
+        await this.requireEngine().syncFence(request.keys);
+        return undefined;
+      })
+      .with({ kind: 'sync-start' }, { kind: 'sync-stop' }, () =>
+        Promise.reject(new Error('sync runs are not queued requests'))
+      )
       .exhaustive(() =>
         Promise.reject(new Error('Unknown cache worker request'))
       );

@@ -42,10 +42,16 @@ pub(super) struct StorageUpgradeStep {
 /// Registered steps, oldest first, contiguous, and ending at the current
 /// version. Bumping [`STORAGE_SCHEMA_VERSION`] needs a step here; clearing the
 /// list instead declares that every older file is reset.
-const STEPS: &[StorageUpgradeStep] = &[StorageUpgradeStep {
-    from: 11,
-    apply: &upgrade_11_to_12,
-}];
+const STEPS: &[StorageUpgradeStep] = &[
+    StorageUpgradeStep {
+        from: 11,
+        apply: &upgrade_11_to_12,
+    },
+    StorageUpgradeStep {
+        from: 12,
+        apply: &upgrade_12_to_13,
+    },
+];
 
 const _: () = assert!(
     steps_reach_current_version(),
@@ -162,6 +168,20 @@ fn upgrade_11_to_12(connection: &Db) -> Result<(), TursoStorageError> {
     Ok(())
 }
 
+/// Storage 13 adds the streamed sync's lane state and lane membership, empty:
+/// a file's records stay, and the sync's first run fills both.
+pub(super) const UPGRADE_12_TO_13: [&str; 2] = [
+    "CREATE TABLE sync_lanes (id TEXT PRIMARY KEY, state TEXT NOT NULL)",
+    "CREATE TABLE sync_members (lane TEXT NOT NULL, record_key TEXT NOT NULL, PRIMARY KEY (lane, record_key))",
+];
+
+fn upgrade_12_to_13(connection: &Db) -> Result<(), TursoStorageError> {
+    for sql in UPGRADE_12_TO_13 {
+        driver::execute(connection, sql, Vec::new())?;
+    }
+    Ok(())
+}
+
 /// Hooks that stop an upgrade between steps, for tests and the differential
 /// fuzzer. Not part of the production build.
 #[cfg(any(test, feature = "migration-test-hooks"))]
@@ -207,6 +227,9 @@ pub mod test_hooks {
         let connection = storage.connection();
         storage.latch_result(driver::write_transaction(&connection, || {
             for sql in [
+                // Storage 13's streamed-sync tables.
+                "DROP TABLE sync_members",
+                "DROP TABLE sync_lanes",
                 "DROP INDEX records_contacts_cover_idx",
                 "DROP INDEX search_documents_browse_idx",
                 "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id)",
@@ -216,6 +239,23 @@ pub mod test_hooks {
             }
             for part in Storage11DerivedState::ALL {
                 rewind(&connection, part)?;
+            }
+            Ok(())
+        }))
+    }
+
+    /// Rewrites a database of this build as a storage 12 build left it: no
+    /// streamed-sync tables.
+    pub fn rewrite_as_storage_12(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
+        storage.require_healthy()?;
+        let connection = storage.connection();
+        storage.latch_result(driver::write_transaction(&connection, || {
+            for sql in [
+                "DROP TABLE sync_members",
+                "DROP TABLE sync_lanes",
+                "UPDATE meta SET value = '12' WHERE key = 'storage_schema_version'",
+            ] {
+                driver::execute(&connection, sql, Vec::new())?;
             }
             Ok(())
         }))

@@ -45,6 +45,7 @@ mod authority;
 mod calendar;
 mod people;
 mod salvage;
+mod sync;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
@@ -564,6 +565,8 @@ struct CacheState {
     scope: String,
     hot_capacity: Option<u32>,
     reset_required: bool,
+    /// The streamed sync run in progress, if any (one per database).
+    sync_run: Option<cache_core::sync::SyncRun>,
     /// A hydrate whose projections were computed and whose write is still to
     /// run (`prepareHydrate`, then `commitHydrate`).
     prepared_hydrate: Option<PreparedHydrate>,
@@ -889,6 +892,20 @@ impl CacheState {
         result: Result<T, EngineError<TursoStorageError>>,
     ) -> Result<T, JsValue> {
         result.map_err(|error| self.engine_error(error))
+    }
+
+    fn projection_failure(
+        &mut self,
+        failure: soup_filter_cache_adapter::host_projections::ProjectionFailure<TursoStorageError>,
+    ) -> JsValue {
+        use soup_filter_cache_adapter::host_projections::ProjectionFailure;
+        match failure {
+            ProjectionFailure::Engine(error) => self.engine_error(error),
+            ProjectionFailure::Adapter(error) => err_js(error),
+            ProjectionFailure::Passes(WritePassError::Notification(error)) => err_js(error),
+            ProjectionFailure::Passes(WritePassError::Projection(error))
+            | ProjectionFailure::Projection(error) => self.mail_projection_error(error),
+        }
     }
 
     fn mail_projection_error(&mut self, error: MailProjectionError<TursoStorageError>) -> JsValue {
@@ -1249,6 +1266,7 @@ async fn open_cache_inner(
                 scope,
                 hot_capacity,
                 reset_required: false,
+                sync_run: None,
                 prepared_hydrate: None,
                 #[cfg(test)]
                 projection_reads: 0,
@@ -3067,6 +3085,8 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.forget_prepared_projections();
+            // A run's saved state goes with the records it described.
+            state.sync_run = None;
             let forgotten = salvage::forget(&state.sidecar).await;
             let result = state.engine_mut()?.clear().await;
             let revision = state.engine_result(result)?;
@@ -3095,6 +3115,8 @@ impl CacheEngine {
                     closed_js_error()
                 }
             })?;
+            // A run's saved state goes with the database it described.
+            state.sync_run = None;
             let scope = state.scope.clone();
             let hot_capacity = state.hot_capacity;
             let owner = match discard_storage(engine.into_storage(), &state.sidecar).await {
@@ -3135,6 +3157,7 @@ impl CacheEngine {
                     closed_js_error()
                 }
             })?;
+            state.sync_run = None;
             let closed =
                 close_storage(&state.scope, engine.into_storage(), state.reset_required).await;
             let owner = match closed {

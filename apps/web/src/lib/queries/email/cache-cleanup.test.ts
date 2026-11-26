@@ -3,26 +3,34 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   deleteRecords: vi.fn(),
+  syncFence: vi.fn(async () => {}),
   query: vi.fn(),
   updateThreadLabel: vi.fn(),
+  updateThreadState: vi.fn(),
   error: vi.fn(),
   enabled: true,
 }));
 vi.mock('@service-email/client', () => ({
-  emailClient: { updateThreadLabel: mocks.updateThreadLabel },
+  emailClient: {
+    updateThreadLabel: mocks.updateThreadLabel,
+    updateThreadState: mocks.updateThreadState,
+  },
 }));
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: { error: mocks.error },
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlCacheHost: () =>
-    mocks.enabled ? { deleteRecords: mocks.deleteRecords } : undefined,
+    mocks.enabled
+      ? { deleteRecords: mocks.deleteRecords, syncFence: mocks.syncFence }
+      : undefined,
   getGraphqlSoupClient: () => ({ query: mocks.query }),
 }));
 
 import {
   refreshEmailThreadCache,
   updateEmailThreadLabel,
+  updateEmailThreadState,
 } from './cache-cleanup';
 
 beforeEach(() => {
@@ -67,6 +75,52 @@ describe('REST thread cache cleanup', () => {
     mocks.updateThreadLabel.mockResolvedValue(ok({}));
     await updateEmailThreadLabel(args);
     expect(mocks.deleteRecords).not.toHaveBeenCalled();
+  });
+
+  // A background sync page read before the edit must not write the thread's
+  // old state back over it.
+  it('fences the thread a successful REST edit changed', async () => {
+    mocks.updateThreadState.mockResolvedValue(ok(undefined));
+    await updateEmailThreadState({
+      thread_id: 'thread-1',
+      field: 'trashed',
+      value: true,
+    });
+    expect(mocks.syncFence).toHaveBeenCalledWith([
+      'GraphqlSoupEmailThread:thread-1',
+    ]);
+
+    mocks.syncFence.mockClear();
+    mocks.updateThreadLabel.mockResolvedValue(ok({}));
+    await updateEmailThreadLabel(args);
+    expect(mocks.syncFence).toHaveBeenCalledWith([
+      'GraphqlSoupEmailThread:thread-1',
+    ]);
+  });
+
+  it('leaves the thread alone when the REST edit failed', async () => {
+    mocks.updateThreadState.mockResolvedValue(
+      err([{ code: 'SERVER_ERROR', message: 'failed' }])
+    );
+    await updateEmailThreadState({
+      thread_id: 'thread-1',
+      field: 'trashed',
+      value: true,
+    });
+    expect(mocks.syncFence).not.toHaveBeenCalled();
+  });
+
+  it('returns an edit without waiting for the cache to fence it', async () => {
+    const result = ok(undefined);
+    mocks.updateThreadState.mockResolvedValue(result);
+    mocks.syncFence.mockReturnValue(new Promise(() => {}));
+    expect(
+      await updateEmailThreadState({
+        thread_id: 'thread-1',
+        field: 'trashed',
+        value: true,
+      })
+    ).toBe(result);
   });
 
   it('checks the server after REST discard instead of assuming the thread is empty', async () => {

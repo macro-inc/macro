@@ -18,6 +18,7 @@ import type {
   PeopleSearch,
   PeopleSqlRequest,
 } from './people/generated';
+import type { SyncStartArgs } from './sync-protocol';
 
 /**
  * Wire protocol between page contexts and the cache worker (the `CacheHost`
@@ -538,6 +539,66 @@ export function isValidCalendarCommitArgs(
   );
 }
 
+/** Lanes one sync request may skip; the server refuses more. */
+const MAX_SKIPPED_SYNC_LANES = 256;
+const SYNC_LANE_ID = /^[a-z0-9-]{1,64}$/;
+
+const isSyncLaneId = (value: unknown): value is string =>
+  typeof value === 'string' && SYNC_LANE_ID.test(value);
+
+const isValidSyncCalendar = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOnlyCalendarKeys(value, ['timeZone']) &&
+    typeof value.timeZone === 'string' &&
+    value.timeZone.length > 0);
+
+/** Lane documents one sync request may carry; the server refuses more. */
+const MAX_SYNC_LANE_QUERIES = 64;
+
+const isValidSyncLaneQueries = (value: unknown): boolean =>
+  isRecord(value) &&
+  Object.keys(value).length <= MAX_SYNC_LANE_QUERIES &&
+  Object.values(value).every((query) => typeof query === 'string');
+
+const isValidSkipLanes = (value: unknown): boolean =>
+  value === undefined ||
+  (Array.isArray(value) &&
+    value.length <= MAX_SKIPPED_SYNC_LANES &&
+    value.every(isSyncLaneId));
+
+/** Non-throwing sync argument validation for wire ingress; the engine re-checks it. */
+export function isValidSyncStartArgs(value: unknown): value is SyncStartArgs {
+  return (
+    isRecord(value) &&
+    hasOnlyCalendarKeys(value, [
+      'url',
+      'headers',
+      'pass',
+      'maxPages',
+      'calendar',
+      'completedSince',
+      'skipLanes',
+      'queries',
+    ]) &&
+    typeof value.url === 'string' &&
+    /^https?:\/\//.test(value.url) &&
+    isRecord(value.headers) &&
+    Object.values(value.headers).every(
+      (header) => typeof header === 'string'
+    ) &&
+    (value.pass === 'first' || value.pass === 'second') &&
+    (value.maxPages === undefined ||
+      (Number.isSafeInteger(value.maxPages) &&
+        (value.maxPages as number) >= 0)) &&
+    isValidSyncCalendar(value.calendar) &&
+    (value.completedSince === undefined ||
+      typeof value.completedSince === 'string') &&
+    isValidSkipLanes(value.skipLanes) &&
+    isValidSyncLaneQueries(value.queries)
+  );
+}
+
 export function validateRecordSelectionKeys(keys: string[]): string[] {
   if (keys.length > MAX_RECORD_SELECTION_PAGE_SIZE) {
     throw new RangeError(
@@ -1000,6 +1061,16 @@ export type CacheRequest = {
   /** Apply explicit server-provided cache-deletion effects. */
   | { kind: 'delete-records'; keys: string[] }
   | { kind: 'clear' }
+  /**
+   * Streamed cache sync: the engine worker opens the stream and writes it.
+   * Replies with a `SyncRunOutcome` when the run ends; never replayed.
+   */
+  | { kind: 'sync-start'; args: SyncStartArgs }
+  /** Stops the run in progress, if any, after its current write. */
+  | { kind: 'sync-stop' }
+  | { kind: 'sync-fence'; keys: string[] }
+  /** Saved lane state (`SyncLaneState[]`). */
+  | { kind: 'sync-state' }
 );
 
 /** Stable machine-readable cache RPC rejection codes. */

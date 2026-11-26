@@ -52,11 +52,17 @@ import type {
 } from '../protocol';
 import {
   isRecordFieldChanges,
+  isValidSyncStartArgs,
   parseCacheRevision,
   parseStorageGeneration,
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
 } from '../protocol';
+import type {
+  SyncLaneState,
+  SyncRunOutcome,
+  SyncStartArgs,
+} from '../sync-protocol';
 import type {
   AffectedOperationsListener,
   CacheChangeListener,
@@ -76,7 +82,8 @@ import type {
 const OPS_AFFECTED_EVENT = 'graphql-cache://ops-affected';
 /** Keep in sync with `CACHE_CHANGED_EVENT` in the native plugin. */
 const CACHE_CHANGED_EVENT = 'graphql-cache://cache-changed';
-// Published by the JS host after hydration, including on older native binaries.
+// Published by the JS host after hydration, including on older native binaries,
+// and by graphql_cache_plugin (`CACHE_HYDRATED_EVENT`) for streamed sync pages.
 const CACHE_HYDRATED_EVENT = 'graphql-cache://cache-hydrated';
 /** Keep in sync with `MUTATION_SETTLED_EVENT` in graphql_cache_plugin. */
 const MUTATION_SETTLED_EVENT = 'graphql-cache://mutation-settled';
@@ -129,6 +136,10 @@ const WATCH_COMMAND = 'graphql_cache_watch';
 const CALENDAR_RANGE_COMMAND = 'graphql_cache_calendar_range';
 const CALENDAR_COMMIT_COMMAND = 'graphql_cache_calendar_commit';
 const INSPECT_MUTATIONS_COMMAND = 'graphql_cache_inspect_mutations';
+const SYNC_START_COMMAND = 'graphql_cache_sync_start';
+const SYNC_STOP_COMMAND = 'graphql_cache_sync_stop';
+const SYNC_FENCE_COMMAND = 'graphql_cache_sync_fence';
+const SYNC_STATE_COMMAND = 'graphql_cache_sync_state';
 
 const INIT_COMMAND = 'graphql_cache_init_with_schema';
 const ABANDON_COMMAND = 'graphql_cache_abandon';
@@ -238,6 +249,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   let entityFilterUnavailable = false;
   // Binaries before incremental watches still serve full reads.
   let watchUnavailable = false;
+  // An older native build has no sync fence; after its first refusal no edit
+  // calls it again.
+  let syncFenceUnavailable = false;
   let peopleUnavailable = false;
   let peopleSqlUnavailable = false;
   let contactSyncUnavailable = false;
@@ -1209,6 +1223,72 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       return parseCacheRevision(
         await request<string>('graphql_cache_clear', {})
       );
+    },
+
+    // The native plugin opens the stream and writes every page itself; this
+    // webview only starts the run and reads its outcome. Pages arrive as
+    // ordinary cache-change and hydration events.
+    async syncStart(args: SyncStartArgs): Promise<SyncRunOutcome> {
+      if (!isValidSyncStartArgs(args)) {
+        return {
+          ok: false,
+          failure: { kind: 'stream', message: 'invalid sync arguments' },
+        };
+      }
+      try {
+        await ready;
+        // A run lasts as long as its stream, so it has no IPC timeout.
+        return await request<SyncRunOutcome>(SYNC_START_COMMAND, { args });
+      } catch (error) {
+        // An older native build has no sync; the app keeps its paged backfill.
+        if (isMissingCommand(error, SYNC_START_COMMAND)) {
+          return { ok: false, failure: { kind: 'unsupported' } };
+        }
+        // No initialized cache, or the IPC call failed. A native run that did
+        // start keeps writing; its saved state resumes the next start.
+        return { ok: false, failure: { kind: 'aborted' } };
+      }
+    },
+
+    async syncFence(keys: string[]): Promise<void> {
+      if (syncFenceUnavailable) return;
+      try {
+        await ready;
+        await request<void>(SYNC_FENCE_COMMAND, { keys });
+      } catch (error) {
+        // An older build without the command runs no streamed sync, and a
+        // cache that cannot answer holds no run: either way no run can write
+        // the records back.
+        if (isMissingCommand(error, SYNC_FENCE_COMMAND))
+          syncFenceUnavailable = true;
+      }
+    },
+
+    async syncStop(): Promise<void> {
+      try {
+        await ready;
+      } catch {
+        // No native cache, so no run to stop.
+        return;
+      }
+      try {
+        // Resolves once the run has stopped, which can take one page write.
+        await request<void>(SYNC_STOP_COMMAND, {});
+      } catch (error) {
+        // An older native build never started a run.
+        if (!isMissingCommand(error, SYNC_STOP_COMMAND)) throw error;
+      }
+    },
+
+    async syncState(): Promise<SyncLaneState[]> {
+      await ready;
+      try {
+        return await request<SyncLaneState[]>(SYNC_STATE_COMMAND, {});
+      } catch (error) {
+        // An older native build has no saved sync state.
+        if (isMissingCommand(error, SYNC_STATE_COMMAND)) return [];
+        throw error;
+      }
     },
 
     onOpsAffected(cb: AffectedOperationsListener): () => void {

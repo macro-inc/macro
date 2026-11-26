@@ -83,6 +83,9 @@ pub struct GroupedSoupCursorParams {
 #[cfg(test)]
 mod tests;
 
+/// Largest page a client may ask for.
+const MAX_PAGE_LIMIT: u16 = 500;
+
 /// Query parameters shared by soup endpoints.
 #[derive(Debug, Default, serde::Deserialize, IntoParams, ToSchema)]
 #[into_params(parameter_in = Query)]
@@ -710,7 +713,7 @@ where
                         Some(true) | None => SoupType::Expanded,
                         Some(false) => SoupType::UnExpanded,
                     },
-                    limit: params.limit.unwrap_or(20),
+                    limit: params.limit.unwrap_or(20).clamp(1, MAX_PAGE_LIMIT),
                     cursor,
                     sort_direction,
                     user: macro_user_id,

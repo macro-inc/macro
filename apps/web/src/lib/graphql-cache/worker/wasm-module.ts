@@ -54,6 +54,7 @@ import type { CacheQueueOutcome } from '../telemetry';
 import { workerCacheTelemetry } from '../telemetry-relay';
 import type { CompiledEngineExchange } from './compiled-engine';
 import type { StaleDatabaseRemovalOutcome } from './stale-databases';
+import type { SyncEngine } from './sync-driver';
 import { compileCacheWasm } from './wasm-compile';
 
 /** Stable, payload-free marker latched on reset-required WASM errors. */
@@ -116,7 +117,7 @@ export type CacheEngineHydrationResult = WriteResult &
     projectionsReread?: true;
   };
 
-export interface CacheEngine {
+export interface CacheEngine extends SyncEngine {
   currentAuthority(
     identity: string
   ): Promise<import('../authority').CacheAuthority>;

@@ -22,6 +22,9 @@ use tracing::Level;
 use uuid::Uuid;
 
 const MAX_CONCURRENT_BATCH_ACCESS_CHECKS: usize = 8;
+/// Entities a batch looks up one at a time at once, as the GraphQL permission
+/// loader did before batches settled documents and owned threads.
+const MAX_CONCURRENT_PERMISSION_LOOKUPS: usize = 16;
 
 /// Implementation of the [`EntityAccessService`].
 ///
@@ -96,6 +99,100 @@ where
             }
             _ => unreachable!("Only optimized types should call this method"),
         }
+    }
+
+    /// What a lookup for the whole batch settles for each of `entities`: every
+    /// document, and the email threads the user owns. `None` leaves the entity
+    /// to its own lookup, as does a batch lookup that fails.
+    async fn batch_settled_permissions(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        entities: &[model_entity::Entity<'_>],
+    ) -> Vec<Option<Result<EntityPermission, AccessError>>> {
+        let documents: Vec<(usize, String)> = entities
+            .iter()
+            .enumerate()
+            .filter(|(_, entity)| entity.entity_type == EntityType::Document)
+            .map(|(index, entity)| (index, entity.entity_id.to_string()))
+            .collect();
+        let threads: Vec<(usize, Uuid)> = entities
+            .iter()
+            .enumerate()
+            .filter(|(_, entity)| entity.entity_type == EntityType::EmailThread)
+            .filter_map(|(index, entity)| Some((index, Uuid::parse_str(&entity.entity_id).ok()?)))
+            .collect();
+
+        let document_ids = documents
+            .iter()
+            .map(|(_, id)| id.clone())
+            .collect::<Vec<_>>();
+        let thread_ids = threads.iter().map(|(_, id)| *id).collect::<Vec<_>>();
+        let (document_levels, owned_threads) = futures::join!(
+            async {
+                if document_ids.is_empty() {
+                    return Ok(HashMap::new());
+                }
+                self.repo.get_documents_access(&document_ids, user_id).await
+            },
+            async {
+                if thread_ids.is_empty() {
+                    return Ok(Vec::new());
+                }
+                self.repo
+                    .get_owned_email_thread_ids(&thread_ids, user_id)
+                    .await
+            },
+        );
+
+        let mut settled: Vec<Option<Result<EntityPermission, AccessError>>> =
+            entities.iter().map(|_| None).collect();
+        let mut settle = |index: usize, permission: Result<EntityPermission, AccessError>| {
+            if let Some(slot) = settled.get_mut(index) {
+                *slot = Some(permission);
+            }
+        };
+
+        match document_levels {
+            Ok(levels) => {
+                for (index, id) in documents {
+                    settle(
+                        index,
+                        levels
+                            .get(&id)
+                            .map(|access_level| EntityPermission::AccessLevel {
+                                access_level: *access_level,
+                            })
+                            .ok_or(AccessError::Unauthorized),
+                    );
+                }
+            }
+            // Each document takes its own lookup instead.
+            Err(error) => {
+                tracing::warn!(?error, "bulk document access check failed");
+            }
+        }
+
+        match owned_threads {
+            Ok(owned) => {
+                let owned = owned.into_iter().collect::<std::collections::HashSet<_>>();
+                for (index, id) in threads {
+                    if owned.contains(&id) {
+                        settle(
+                            index,
+                            Ok(EntityPermission::AccessLevel {
+                                access_level: AccessLevel::Owner,
+                            }),
+                        );
+                    }
+                }
+            }
+            // Each thread takes its own lookup instead.
+            Err(error) => {
+                tracing::warn!(?error, "bulk email thread ownership check failed");
+            }
+        }
+
+        settled
     }
 
     /// Get access level for a channel.
@@ -786,6 +883,71 @@ where
             }
             _ => Err(AccessError::BadRequest("Unsupported entity type")),
         }
+    }
+
+    #[tracing::instrument(skip_all, fields(entity_count = entities.len()))]
+    async fn generate_view_access_receipts(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        user_org_id: Option<i64>,
+        entities: &[model_entity::Entity<'_>],
+    ) -> Vec<Result<EntityAccessReceipt<ViewAccessLevel>, AccessError>> {
+        let permissions = self
+            .get_entity_permissions(user_id, user_org_id, entities)
+            .await;
+
+        entities
+            .iter()
+            .zip(permissions)
+            .map(|(entity, permission)| {
+                EntityAccessReceipt::try_new_authenticated_user(
+                    MacroUserIdStr(user_id.clone().into_owned()),
+                    Entity {
+                        entity_id: entity.entity_id.to_string(),
+                        entity_type: entity.entity_type,
+                    },
+                    permission?,
+                )
+            })
+            .collect()
+    }
+
+    #[tracing::instrument(skip_all, fields(entity_count = entities.len()))]
+    async fn get_entity_permissions(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        user_org_id: Option<i64>,
+        entities: &[model_entity::Entity<'_>],
+    ) -> Vec<Result<EntityPermission, AccessError>> {
+        let settled = self.batch_settled_permissions(user_id, entities).await;
+        // Owned ids, so the lookups below borrow nothing from `entities`.
+        let lookups = entities
+            .iter()
+            .zip(settled)
+            .map(|(entity, settled)| (entity.entity_id.to_string(), entity.entity_type, settled))
+            .collect::<Vec<_>>();
+
+        stream::iter(
+            lookups
+                .into_iter()
+                .map(|(entity_id, entity_type, settled)| async move {
+                    match settled {
+                        Some(permission) => permission,
+                        None => {
+                            self.get_entity_permission(
+                                Some(user_id),
+                                &entity_id,
+                                entity_type,
+                                user_org_id,
+                            )
+                            .await
+                        }
+                    }
+                }),
+        )
+        .buffered(MAX_CONCURRENT_PERMISSION_LOOKUPS)
+        .collect()
+        .await
     }
 
     #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]

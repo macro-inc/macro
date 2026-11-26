@@ -6,6 +6,7 @@
 import type { Page } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
+import { isSyncStreamPath } from './harness/front';
 import { deliverNoise, focusRow, openThreadId, rowIds } from './harness/list';
 import { anInbox, PROVIDERS } from './harness/providers';
 import { notice } from './harness/send';
@@ -204,9 +205,13 @@ for (const provider of PROVIDERS) {
       await mailbox.deliver({ from, subject: 'Alpha', text: 'Body of Alpha.' });
       const alpha = await mailbox.synced('Alpha');
       // The list is read by its own request (Soup) and filled in the
-      // background by others (…Backfill). The background ones stay down for
-      // the whole test: they are tried again for ever, and would list the
-      // thread without anyone asking.
+      // background by others (…Backfill, or the streamed cache sync's stream
+      // when it runs instead). The background ones stay down for the whole
+      // test: they are tried again for ever, and would list the thread
+      // without anyone asking.
+      mailbox.front.stub(({ path }) =>
+        isSyncStreamPath(path) ? { status: 500, json: {} } : undefined
+      );
       let failing = true;
       let lastListRequest = Date.now();
       await page.route(/\/graphql(\?|$)/, (route) => {

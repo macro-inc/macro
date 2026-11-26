@@ -4,12 +4,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // than rejecting), so the mock mirrors that shape; trashEmails wraps it in
 // throwOnErr.
 type ResultLike = {
+  isOk: () => boolean;
   isErr: () => boolean;
   value?: undefined;
   error?: { code: string; message: string }[];
 };
-const okResult: ResultLike = { isErr: () => false, value: undefined };
+const okResult: ResultLike = {
+  isOk: () => true,
+  isErr: () => false,
+  value: undefined,
+};
 const errResult: ResultLike = {
+  isOk: () => false,
   isErr: () => true,
   error: [{ code: 'ERR', message: 'boom' }],
 };
@@ -29,7 +35,7 @@ const operationMocks = vi.hoisted(() => ({
       thread_id: string;
       field: 'trashed';
       value: boolean;
-    }): Promise<ResultLike> => ({ isErr: () => false, value: undefined })
+    }): Promise<ResultLike> => okResult
   ),
 }));
 

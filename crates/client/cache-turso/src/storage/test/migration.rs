@@ -250,7 +250,7 @@ fn versions_without_a_chain_and_failing_steps_still_reset() {
         for (name, sql) in [
             (
                 "newer",
-                "UPDATE meta SET value = '13' WHERE key = 'storage_schema_version'",
+                "UPDATE meta SET value = '14' WHERE key = 'storage_schema_version'",
             ),
             (
                 "older-than-every-step",
@@ -349,7 +349,9 @@ fn a_rejected_upgrade_leaves_the_older_file_untouched() {
         let mut storage = database.open("scope").unwrap();
         populate(&mut storage).await;
         test_hooks::add_unknown_table(&mut storage).unwrap();
-        downgrade_to_storage_11(&mut storage);
+        // Only the last step: earlier steps of a longer chain commit before
+        // the last one's frozen-schema check rejects the file.
+        test_hooks::rewrite_as_storage_12(&mut storage).unwrap();
         let schema = schema_rows(&storage.connection());
         let rows = table_rows(&storage.connection());
         storage.try_close().unwrap();
@@ -365,7 +367,7 @@ fn a_rejected_upgrade_leaves_the_older_file_untouched() {
         let connection = Db::uncached(raw.connect().unwrap());
         assert_eq!(
             crate::storage::migration::stored_storage_version(&connection),
-            Some(11)
+            Some(12)
         );
         assert_eq!(schema_rows(&connection), schema);
         assert_eq!(table_rows(&connection), rows);
@@ -669,6 +671,7 @@ fn fresh_at_target(source: &Db, fresh: &FreshSchema, path: &Path, version: u32) 
     let mut creates = CREATE_SCHEMA
         .into_iter()
         .chain(calendar::CREATE_SCHEMA)
+        .chain(sync::CREATE_SCHEMA)
         .map(str::to_owned)
         .collect::<Vec<_>>();
     for (table, definition) in &fresh.added_columns {

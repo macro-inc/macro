@@ -41,12 +41,10 @@ fn scoped_first_binding_preserves_the_generation_without_notifying_windows() {
         let handle = handle.with_authority_listener("profile".into(), move |authority| {
             crate::emit_cache_event(&emitter, "graphql-cache://authority-changed", authority);
         });
-        app.manage(crate::CacheState(Mutex::new(Some(
-            crate::InitializedCache {
-                scope: "profile".into(),
-                handle,
-            },
-        ))));
+        app.manage(crate::CacheState::with_cache(crate::InitializedCache {
+            scope: "profile".into(),
+            handle,
+        }));
         let events = Arc::new(Mutex::new(Vec::<CacheAuthority>::new()));
         let received = events.clone();
         app.listen("graphql-cache://authority-changed", move |event| {
@@ -253,12 +251,10 @@ fn legacy_payloads_omit_generation_through_the_invoke_handler() {
         None,
     );
     let app = tauri::test::mock_builder()
-        .manage(crate::CacheState(std::sync::Mutex::new(Some(
-            crate::InitializedCache {
-                scope: "legacy-profile".into(),
-                handle,
-            },
-        ))))
+        .manage(crate::CacheState::with_cache(crate::InitializedCache {
+            scope: "legacy-profile".into(),
+            handle,
+        }))
         .invoke_handler(tauri::generate_handler![
             super::graphql_cache_write,
             super::graphql_cache_read,

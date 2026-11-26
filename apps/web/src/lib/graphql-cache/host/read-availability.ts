@@ -18,7 +18,11 @@ export function isReadOnlyCacheRequest(kind: CacheRequest['kind']): boolean {
     kind === 'people-search' ||
     kind === 'inspect-mutations' ||
     kind === 'inspect-query' ||
-    kind === 'inspect-query-variants'
+    kind === 'inspect-query-variants' ||
+    kind === 'sync-state' ||
+    // Stopping and fencing change no storage; a parked engine has no run.
+    kind === 'sync-stop' ||
+    kind === 'sync-fence'
   );
 }
 

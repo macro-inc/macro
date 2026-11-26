@@ -1,0 +1,24 @@
+[package]
+edition = "2024"
+name = "soup_sync_stream"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+async-graphql = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+futures = { workspace = true }
+graphql_soup_filter_input = { path = "../graphql_soup_filter_input" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+apollo-compiler = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }

@@ -281,6 +281,10 @@ const CACHE_REQUEST_KINDS: Readonly<Record<CacheRequest['kind'], true>> = {
   'current-authority': true,
   'transition-authority': true,
   'inspect-mutations': true,
+  'sync-start': true,
+  'sync-stop': true,
+  'sync-state': true,
+  'sync-fence': true,
 };
 
 export type CacheTelemetryObservation = {
@@ -688,6 +692,7 @@ export function operationCategoryForRequest(
       'people-context',
       'entity-filter',
       'calendar-range',
+      'sync-state',
       () => 'read' as const
     )
     .with(
@@ -696,6 +701,7 @@ export function operationCategoryForRequest(
       'calendar-commit',
       'people-update',
       'contact-reconcile',
+      'sync-start',
       () => 'write' as const
     )
     .with(
@@ -711,7 +717,12 @@ export function operationCategoryForRequest(
       'inspect-query-variants',
       () => 'inspection' as const
     )
-    .with('invalidate', 'delete-records', () => 'invalidation' as const)
+    .with(
+      'invalidate',
+      'delete-records',
+      'sync-fence',
+      () => 'invalidation' as const
+    )
     .with(
       'teardown',
       'clear',
@@ -719,6 +730,7 @@ export function operationCategoryForRequest(
       'current-authority',
       'transition-authority',
       'inspect-mutations',
+      'sync-stop',
       () => 'lifecycle' as const
     )
     .exhaustive(() => 'lifecycle' as const);

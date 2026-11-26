@@ -1,11 +1,13 @@
 use std::{collections::HashMap, sync::Arc};
 
-use async_graphql::{Context, Enum, SimpleObject, Union, dataloader::DataLoader};
+use async_graphql::{
+    Context, Enum, SimpleObject, Union,
+    dataloader::{DataLoader, HashMapCache},
+};
 use entity_access::domain::{
     models::{AccessError, AccessLevel, EntityPermission, ParticipantRole, TeamRole},
     ports::EntityAccessService,
 };
-use futures::{StreamExt, stream};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, OwnedEntity};
 use rootcause::markers::{Cloneable, Dynamic};
@@ -183,30 +185,18 @@ where
         organization_id: Option<i64>,
         entities: Vec<Entity<'static>>,
     ) -> Result<HashMap<Entity<'static>, Option<EntityPermission>>, rootcause::Report> {
-        let mut futures = Vec::with_capacity(entities.len());
-        for entity in entities {
-            futures.push(async move {
-                let permission = self
-                    .get_entity_permission(
-                        Some(user_id),
-                        &entity.entity_id,
-                        entity.entity_type,
-                        organization_id,
-                    )
-                    .await;
-                (entity, permission)
-            });
-        }
-        let permissions = stream::iter(futures)
-            // A Soup page can contain many heterogeneous entities. Keep the edge
-            // lazy and parallel, but do not let one request consume the whole DB
-            // pool while the entity-access port has no bulk lookup yet.
-            .buffer_unordered(16)
-            .collect::<Vec<_>>()
-            .await;
+        // A Soup page holds many entities of several kinds: the access service
+        // reads the kinds it can a batch at a time, and bounds the rest.
+        let permissions = EntityAccessService::get_entity_permissions(
+            &**self,
+            user_id,
+            organization_id,
+            &entities,
+        )
+        .await;
 
         let mut result = HashMap::with_capacity(permissions.len());
-        for (entity, permission) in permissions {
+        for (entity, permission) in entities.into_iter().zip(permissions) {
             match permission {
                 Ok(permission) => {
                     result.insert(entity, Some(permission));
@@ -286,19 +276,31 @@ where
     }
 }
 
+/// The request's permission loader. It can cache, but its cache starts off:
+/// see [`entity_permission_loader`].
+pub type EntityPermissionDataLoader<R> = DataLoader<EntityPermissionLoader<R>, HashMapCache>;
+
 /// Build a permission DataLoader scoped to the authenticated viewer.
+///
+/// Its cache starts off: subscription connection data outlives one payload,
+/// and a request may change sharing between two reads. A query-only request
+/// (a streamed sync page) turns it on with `enable_all_cache(true)` so a
+/// page's prefetched permissions serve its entities' fields.
 pub fn entity_permission_loader<R>(
     user_id: MacroUserIdStr<'static>,
     organization_id: Option<i64>,
     reader: R,
-) -> DataLoader<EntityPermissionLoader<R>>
+) -> EntityPermissionDataLoader<R>
 where
     R: EntityPermissionEdgeReader,
 {
-    DataLoader::new(
+    let loader = DataLoader::with_cache(
         EntityPermissionLoader::new(user_id, organization_id, reader),
         |batch| tokio::spawn(batch.in_current_span()),
-    )
+        HashMapCache::default(),
+    );
+    loader.enable_all_cache(false);
+    loader
 }
 
 /// Resolve a typed current-viewer permission from GraphQL request data.
@@ -309,7 +311,7 @@ pub async fn load_entity_permission<R>(
 where
     R: EntityPermissionEdgeReader,
 {
-    let loader = ctx.data::<DataLoader<EntityPermissionLoader<R>>>()?;
+    let loader = ctx.data::<EntityPermissionDataLoader<R>>()?;
     Ok(loader
         .load_one(OwnedEntity::from(entity))
         .await?

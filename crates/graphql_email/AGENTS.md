@@ -41,6 +41,17 @@ types, the `EmailThread` edge resolvers, and draft mutations.
 
 - `cargo test -p graphql_email` (`SQLX_OFFLINE` unset).
 
+## Gotchas
+
+- The content loader's cost cap is per batch (`EmailContentLimits`): one
+  operation gets 20 threads and 100 messages, a streamed sync page 500 and
+  10,000.
+- The metadata and Mail projection loaders are `HashMapCache` loaders with the
+  cache off (`DataLoader::new` would have no cache at all). Only query-only
+  requests turn it on, so `graphql_soup` can prefetch a page's threads in one
+  batch: subscription data outlives a payload, and a mutation request may read
+  a thread before and after changing it.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`

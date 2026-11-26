@@ -145,6 +145,36 @@ ordinary engine handoff preserves the marker and continues the saved scan.
 Reset notifications restart active backfills promptly, but checkpoint validity
 does not depend on observing a notification.
 
+## Streamed sync
+
+`cache_core::sync` fills the cache from one streamed NDJSON response
+(contract: [streamed cache sync](../../docs/architecture/streamed-cache-sync.md)
+and `apps/web/src/lib/graphql-cache/sync-protocol.ts`). The server plans each
+pass's lanes. Hosts own the network: they start a run with
+`Engine::sync_begin`, whose request (`SyncRun::request_body`) carries the pass,
+every lane's saved state, the app's lane documents and, for calendars, the
+cache's coverage; they feed
+response bytes to `SyncRun::push_bytes` and apply each decoded frame with
+`Engine::sync_apply_next`, one call per frame, scheduling foreground reads
+between frames (a frame is a bounded amount of work: a page and its lane
+state, or a membership deletion in chunks). A run applies frames only to the
+cache it began against: `clear`, an account reset or `external_reset` renews
+the engine's reset epoch, and the run's next frame fails as
+`SyncStreamError::Superseded`, which hosts report as `aborted`. A lane's `lane` line declares its operation and kind before its pages, and its
+pages are written with the document the request sent for that operation. The engine stays I/O-free: a host `SyncHooks` supplies the same Soup
+projection composition it uses for hydration and server deletions, and the
+clocks. Hydrate lanes record delivered keys as lane members; a completed
+membership listing deletes unlisted members like a server deletion, and when it
+lists a record no scope lane delivered, clears those lanes' watermarks (once
+all of them completed a pass) so the next run fetches them whole; calendar
+lanes that complete commit their coverage with the lowest per-link watermark. Lane state and
+members live in `sync_lanes` / `sync_members` (storage schema 13), and `clear`,
+`reset_with_records` and format migration wipe them with the records. The
+browser engine worker drives runs (`worker/sync-driver.ts`); the native plugin
+drives them in Rust (`graphql_cache_plugin/src/sync.rs`) through an HTTP opener
+the app installs at setup. Both hosts compose page and deletion projections
+with `soup_filter_cache_adapter::host_projections`.
+
 ## Soup page retention
 
 Backfill hydration persists normalized descendants (including email message

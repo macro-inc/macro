@@ -29,6 +29,18 @@ threads, pins, recents, notifications, folders, activity.
   `no_scope_reaches_graphql_where_it_is_mounted` holds `agent_correlation`'s
   `ANY_WRITE` to that mount) GraphQL API — the frontend's main read path for Home/Recent/
   search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
+- `src/api/graphql_soup/stream.rs`: `POST /soup/graphql/stream` (streamed
+  cache sync): plans a pass's lanes from the client's saved lane state, runs
+  their paged Soup and calendar queries with the `/soup/graphql` request
+  context and writes NDJSON; 426 for a body whose sync protocol it does not
+  speak; one open stream per user per task (409)
+  and at most `MAX_STREAMS_PER_TASK` open per task (503 with `Retry-After`);
+  a per-user budget across tasks in Redis (`stream/budget.rs`: stream starts
+  per minute, page time per hour; 429 with `Retry-After`, open when Redis is
+  down).
+  Open streams take turns on `PAGE_SLOTS` pages at once, so the number of
+  streams does not change what they ask of the database. Lanes, planning,
+  lane loop, turns and wire format: `crates/soup_sync_stream`.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
@@ -147,6 +159,10 @@ threads, pins, recents, notifications, folders, activity.
 
 - Compose Soup without a separate property-definition reader; REST and GraphQL validate DATE range inputs before calling the service.
 
+- Debug builds run tokio workers with 8 MiB stacks (`src/main.rs`): unoptimized
+  futures give every awaited sub-future a full-size slot in its caller's poll
+  frame, and the Soup request chain overflows the 2 MiB default. Release builds
+  keep the default.
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,
   `delete_document_worker`, `location_check`, all on by `default`) — a feature
   disabled locally can hide a bug that only shows in deployed builds.

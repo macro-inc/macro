@@ -90,6 +90,12 @@ the entity-access domain service.
   as `Arc<sqlx::Error>`; `anyhow_access_error` classifies both forms, so route
   new callers' errors through it.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
+- `get_entity_permissions` and `generate_view_access_receipts` answer many
+  entities for one signed-in user: every UUID document in two statements
+  (`get_documents_access`), owned email threads in one, and anything else
+  through the single-entity lookup. `get_documents_access` repeats the sources
+  of `get_document_access`; change both together (`document_access/test.rs`
+  compares their answers).
 
 ## Related
 
