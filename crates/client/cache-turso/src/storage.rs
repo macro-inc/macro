@@ -3548,6 +3548,10 @@ impl SqlPredicateCompiler {
         profile: &Profile,
         partition: &Token,
     ) -> String {
+        // Each value once: a repeated one would seek and read its facts again.
+        let mut values = values.to_vec();
+        values.sort_by(|left, right| left.as_bytes().cmp(right.as_bytes()));
+        values.dedup_by(|left, right| left.as_bytes() == right.as_bytes());
         let wanted = self.next_name();
         self.parameters.extend(
             values

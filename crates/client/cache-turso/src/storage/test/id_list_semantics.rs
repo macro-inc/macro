@@ -110,7 +110,7 @@ fn predicates(
     let after = PredicateExpr::After {
         attribute: token(SORT),
         value: 3,
-        key: PredicateRecordKey::new("Thing:thing:17").unwrap(),
+        key: PredicateRecordKey::new("Thing:thing:16").unwrap(),
         direction,
         tie_direction,
     };
@@ -228,7 +228,7 @@ fn id_lists_answer_the_reference_rows_in_order_across_ties_missing_ids_shadows_a
                     .await
                     .unwrap();
             }
-            let (mut listed, mut windowed) = (0, 0);
+            let mut listed = 0;
             for list in lists() {
                 for direction in [SortDirection::Asc, SortDirection::Desc] {
                     for tie_break_direction in [SortDirection::Asc, SortDirection::Desc] {
@@ -263,9 +263,11 @@ fn id_lists_answer_the_reference_rows_in_order_across_ties_missing_ids_shadows_a
                                     .iter()
                                     .map(|hit| hit.sort_value)
                                     .collect::<Vec<_>>();
-                                if both_plans(&storage, &query, &context) {
-                                    windowed += 1;
-                                }
+                                // Forty records never fill the window's cap, so it answers each.
+                                assert!(
+                                    both_plans(&storage, &query, &context),
+                                    "the window gave up; {context}"
+                                );
                                 let reconciled = storage
                                     .reconcile_predicate_index(&query, &[])
                                     .await
@@ -304,7 +306,6 @@ fn id_lists_answer_the_reference_rows_in_order_across_ties_missing_ids_shadows_a
                 }
             }
             assert!(listed > 0, "no query took the id-list plan");
-            assert!(windowed > 0, "no window answered to compare with");
         }
     });
 }
@@ -486,4 +487,24 @@ fn an_id_list_the_set_plan_cannot_prepare_falls_back_to_the_window() {
             .collect::<Vec<_>>();
         assert_eq!(actual, expected);
     });
+}
+
+/// A repeated id is sought once: the list's VALUES table holds each id once.
+#[test]
+fn a_repeated_id_is_sought_once() {
+    let repeated = [ids([1, 2]), vec!["id-01".to_owned(); 50]].concat();
+    let query = ValidatedIndexQuery::new(IndexQuery {
+        profile: Profile::new(token(PROFILE)),
+        partitions: vec![PartitionPredicate {
+            partition: token("thing"),
+            predicate: any_of("id", &repeated),
+        }],
+        sort_attribute: token(SORT),
+        sort_direction: SortDirection::Desc,
+        tie_break_direction: SortDirection::Desc,
+        limit: 10,
+    })
+    .unwrap();
+    let (sql, _) = compile_predicate_selection(&query, &[], true);
+    assert!(sql.contains("(VALUES (?), (?))"), "{sql}");
 }
