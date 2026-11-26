@@ -401,8 +401,9 @@ from the same page state, so its `focus` lines up; `FeatureScreenshot` and
 `FeaturePhoneScreens` render both with the `palette-dark-only` /
 `palette-light-only` classes, and on the cream palette a screen with a light
 frame (`data-light`) gets a light stage and phone screen. A screen without one
-stays dark on a solid dark mat (`--feature-screenshot-stage`). The build checks
-that every light frame shows on `?theme=cream`.
+stays dark on a solid dark mat (`--feature-screenshot-stage`). The build loads
+each product page on `?theme=cream` at desktop and phone widths and fails if a
+screen with a light frame shows its dark one.
 
 To recapture a screen, run `scripts/capture-app-screens.mjs` with the set's
 scene file from meta-ads `site-screens/` (its README lists the sets and
@@ -410,10 +411,11 @@ shots). It needs an app checkout at the revision the sets build against
 (`54058bdb8`) with dependencies installed:
 
 ```sh
-MACRO=../macro-at-54058bdb8 ADS=../meta-ads node scripts/capture-app-screens.mjs chat ../meta-ads/site-screens/chat.mjs p-thread
+MACRO=../../../macro-at-54058bdb8 ADS=../../../meta-ads node scripts/capture-app-screens.mjs chat ../../../meta-ads/site-screens/chat.mjs p-thread
 ```
 
-It writes `<set>-<shot>-dark.png` and `-light.png` (plus `-narrow-*` for
+If Playwright's browser for this repo isn't installed, set `CHROMIUM` to a
+Chromium binary. It writes `<set>-<shot>-dark.png` and `-light.png` (plus `-narrow-*` for
 shots with a `focus`) at 2x; convert them to WebP (quality 80) under the
 names in `core/feature-screens.ts`. The Docs history screen has no scene and
 no light frame: the set does not mock the sync service's edit history.
