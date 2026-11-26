@@ -8,7 +8,17 @@ integration.
 
 Open Fleet at `/fleet` or from the header. Add bot opens Creator. In fixture
 mode, each sample bot has a Brain with Overview, Activity, Email, and Access
-tabs. Passwords and Billing are Tower routes alongside Fleet. The Brain and
-Tower routes reserve navigation for later integrations.
+tabs. In Overview, use Schedule to expand the sample schedule and read the
+dated Daily journal. Activity shows the newest observations first. Only rows
+with a fixture detail offer Open, and Back to Activity returns to the same
+bot. Kestrel's fixture displays setup and empty work. The accepted Hire fixture
+retains the exact selected agent and shows Setting up in the current tab.
+After reload, that synthetic receipt is unavailable. Unknown teams, bots and
+inaccessible details display Unavailable. Use Tab to reach a tab and
+Enter to open it.
+
+Computer remains unavailable. Email and Access keep their navigation and
+unavailable panels. Passwords and Billing remain Tower routes alongside Fleet.
+Brain sample data is present only in the local fixture build.
 
 See the [Bots app guide](../../apps/bots/AGENTS.md) for preview commands.

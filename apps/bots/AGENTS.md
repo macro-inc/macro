@@ -2,7 +2,7 @@
 
 ## Scope
 
-The standalone Vite entry for the public Character Creator and the Fleet shell.
+The standalone Vite entry for the public Character Creator, Fleet, and the Brain shell.
 The auth seam uses checked-in SDK auth response types. Its current adapter is
 offline and exposes a disabled sign-in flow with a same-tab, expiring draft
 handoff. Real Hire is disabled. The local preview can rehearse Hire with
@@ -20,6 +20,11 @@ synthetic team and offer responses. See [Hire checkout](HIRE.md).
   states. A confirmed Hire uses its current-tab fixture receipt and exact
   team/agent route. Browser Back from a Hub restores rail position and the
   exact card focus from the originating history entry.
+- `src/brain.tsx` mounts Overview and Activity. `src/brain-model.ts` owns the
+  viewer/team/agent reader and source-safe journal projection. The local
+  fixture adapter reuses Fleet identity and the exact accepted Hire receipt.
+  Replace the reader at the composition boundary when the backend contract is
+  available. Email and Access have reserved component seams.
 - `src/return-intent.ts`, `src/draft.ts`, and `src/session.ts` own the handoff.
 - `scripts/verify-bots-boundary.ts` and `scripts/botsBoundary.ts` enforce isolation.
   Keep imports inside this app or an explicitly allowed workspace package.
@@ -43,6 +48,6 @@ then `bun run --filter @macro-inc/bots preview`. That preview serves only
 `dist-local`. Set `BOTS_PREVIEW_HOST` to a single exact hostname when an
 authorized local reverse proxy needs a forwarded Host header.
 
-The default build writes `dist` and excludes the Fleet sample data. Keep
+The default build writes `dist` and excludes the Fleet, Hire and Brain fixtures. Keep
 `dev.bots.macro.com` and `bots.macro.com` as planning targets until the relevant
 auth, infrastructure, and release changes are approved.

@@ -308,28 +308,6 @@ footer {
   color: var(--amber);
   text-decoration: underline;
 }
-.brain {
-  margin: 16px;
-}
-.brain-heading {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-}
-.brain-heading img {
-  width: 64px;
-  background: #000;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-}
-.brain-heading p {
-  color: var(--muted);
-}
-.brain nav {
-  border-top: 1px solid var(--border);
-  padding: 6px 12px;
-}
 .bot-link {
   display: block;
 }
