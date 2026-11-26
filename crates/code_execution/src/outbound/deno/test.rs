@@ -776,6 +776,52 @@ async fn rejects_sleeping_and_points_at_routines() {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn reports_a_rejection_nothing_handled_yet() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (host, _) = counting_server("{}").await;
+    let hanging = hanging_server().await;
+    // Started first and awaited last: it rejects while the program waits on a
+    // request, which ends Deno before the program reaches its `await`.
+    let source = "export async function main({ hosts }) {
+        const early = Promise.reject(new Error('Macro API error 422: The page could not be read'));
+        await fetch(hosts.cognition);
+        return await early;
+    }";
+    let outcome = run_in_session(&service, source, &host, Some(&hanging), 5000).await;
+    assert!(
+        matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Runtime
+            && error.message.contains("Macro API error 422: The page could not be read")
+            && error.message.contains("Promise.allSettled")
+            && error.message.contains("may have taken effect")),
+        "{outcome:?}"
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn reports_a_rejection_whose_reason_cannot_become_a_string() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (host, _) = counting_server("{}").await;
+    let hanging = hanging_server().await;
+    // `String()` throws on a null-prototype object, so the reason is inspected.
+    let source = "export async function main({ hosts }) {
+        const early = Promise.reject(Object.assign(Object.create(null), { status: 'page unreadable' }));
+        await fetch(hosts.cognition);
+        return await early;
+    }";
+    let outcome = run_in_session(&service, source, &host, Some(&hanging), 5000).await;
+    assert!(
+        matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Runtime
+            && error.message.contains("[Object: null prototype] { status: \"page unreadable\" }")
+            && error.message.contains("may have taken effect")),
+        "{outcome:?}"
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn denies_unlisted_destinations_including_redirects() {
     let (_root, service) = setup(Limits::default()).await;
     let forbidden = TcpListener::bind("127.0.0.1:0").await.unwrap();
