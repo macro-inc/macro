@@ -112,6 +112,7 @@ fn members(ids: &[u16]) -> Value {
     }
 }
 
+#[derive(Clone)]
 struct View {
     id: String,
     members: Vec<u16>,
@@ -122,6 +123,7 @@ struct View {
     seen: Vec<String>,
     keys: Vec<String>,
     rows: BTreeMap<String, Value>,
+    identities: BTreeMap<String, Value>,
 }
 
 impl View {
@@ -165,17 +167,22 @@ impl View {
             // The page refuses a reset that carries patches: they have no base row.
             assert_eq!(update["patches"], json!([]), "{update}");
             self.rows.clear();
+            self.identities.clear();
         }
         for key in update["removed"].as_array().unwrap() {
             self.rows.remove(key.as_str().unwrap());
+            self.identities.remove(key.as_str().unwrap());
         }
         for row in update["upserts"].as_array().unwrap() {
-            self.rows.insert(
-                row["recordKey"].as_str().unwrap().to_owned(),
-                row["record"].clone(),
-            );
+            let key = row["recordKey"].as_str().unwrap().to_owned();
+            self.identities.insert(key.clone(), row["identity"].clone());
+            self.rows.insert(key, row["record"].clone());
         }
         for patch in update["patches"].as_array().unwrap() {
+            self.identities.insert(
+                patch["recordKey"].as_str().unwrap().to_owned(),
+                patch["identity"].clone(),
+            );
             let record = self
                 .rows
                 .get_mut(patch["recordKey"].as_str().unwrap())
@@ -219,42 +226,51 @@ fn delta(update: &Value) -> Value {
     let mut removed: Vec<_> = update["removed"].as_array().unwrap().clone();
     removed.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
     json!({
+        "reset": update["reset"],
+        "keys": update["keys"],
         "upserts": update["upserts"].as_array().unwrap().iter()
-            .map(|row| json!([row["recordKey"], row["record"]])).collect::<Vec<_>>(),
+            .map(|row| json!([row["recordKey"], row["record"], row["identity"]])).collect::<Vec<_>>(),
         "patches": update["patches"].as_array().unwrap().iter()
-            .map(|patch| json!([patch["recordKey"], patch["fields"]])).collect::<Vec<_>>(),
+            .map(|patch| json!([patch["recordKey"], patch["fields"], patch["identity"]])).collect::<Vec<_>>(),
         "removed": removed,
     })
 }
 
-/// The delta the page contract asks for, from the rows the reader showed and
-/// the rows a new view reads: a reset sends every row; otherwise new rows go
-/// whole, changed rows as patches of the fields that changed, in key order.
-fn expected(before: &BTreeMap<String, Value>, reset: bool, now: &BTreeMap<String, Value>) -> Value {
+/// The delta the page contract asks for, from what the reader showed and what
+/// a new view reads: a read from any revision but the reader's last resets
+/// and sends every row; otherwise new rows go whole and changed rows as
+/// patches of the fields that changed, in key order. The order goes out
+/// whenever it changed, and always with a reset.
+fn expected(before: &View, reset: bool, now: &View) -> Value {
+    let keys = (reset || before.keys != now.keys).then(|| now.keys.clone());
     if reset {
         return json!({
-            "upserts": now.iter().map(|(key, row)| json!([key, row])).collect::<Vec<_>>(),
+            "reset": true, "keys": keys,
+            "upserts": now.rows.iter().map(|(key, row)| json!([key, row, now.identities[key]])).collect::<Vec<_>>(),
             "patches": [], "removed": [],
         });
     }
     let mut upserts = Vec::new();
     let mut patches = Vec::new();
-    for (key, row) in now {
-        match before.get(key) {
-            None => upserts.push(json!([key, row])),
-            Some(shown) if shown != row => {
+    for (key, row) in &now.rows {
+        let identity = &now.identities[key];
+        match before.rows.get(key) {
+            None => upserts.push(json!([key, row, identity])),
+            Some(shown) if shown != row || &before.identities[key] != identity => {
                 let mut fields = Vec::new();
                 changed_fields(shown, row, &mut Vec::new(), &mut fields);
-                patches.push(json!([key, fields]));
+                patches.push(json!([key, fields, identity]));
             }
             Some(_) => {}
         }
     }
+    let before = &before.rows;
+    let now = &now.rows;
     let removed: Vec<_> = before
         .keys()
         .filter(|key| !now.contains_key(*key))
         .collect();
-    json!({"upserts": upserts, "patches": patches, "removed": removed})
+    json!({"reset": false, "keys": keys, "upserts": upserts, "patches": patches, "removed": removed})
 }
 
 /// The smallest replacements that turn `before` into `after`: fields of an
@@ -429,6 +445,7 @@ fn run(seed: u64, trace: &mut String) -> (usize, usize, usize) {
                 seen: Vec::new(),
                 keys: Vec::new(),
                 rows: BTreeMap::new(),
+                identities: BTreeMap::new(),
             }
         })
         .collect();
@@ -450,7 +467,8 @@ fn run(seed: u64, trace: &mut String) -> (usize, usize, usize) {
                 }
                 _ => view.revision.clone(),
             };
-            let before = view.rows.clone();
+            let before = view.clone();
+            let expect_reset = since.is_none() || since != view.revision;
             let update = view.read(&handle, since);
             patches += update["patches"].as_array().unwrap().len();
             resets += usize::from(update["reset"] == true);
@@ -463,6 +481,7 @@ fn run(seed: u64, trace: &mut String) -> (usize, usize, usize) {
                 seen: Vec::new(),
                 keys: Vec::new(),
                 rows: BTreeMap::new(),
+                identities: BTreeMap::new(),
             };
             fresh.read(&handle, None);
             block_on(handle.entity_filter({
@@ -475,7 +494,7 @@ fn run(seed: u64, trace: &mut String) -> (usize, usize, usize) {
             .unwrap();
             assert_eq!(
                 delta(&update),
-                expected(&before, update["reset"] == true, &fresh.rows),
+                expected(&before, expect_reset, &fresh),
                 "seed {seed} step {step}: {} sent another delta",
                 view.id
             );
