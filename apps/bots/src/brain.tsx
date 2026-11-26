@@ -1,6 +1,6 @@
 import { A, useParams } from '@solidjs/router';
 import { createResource, For, Show } from 'solid-js';
-import { brainPath, brainViews, ownView } from './routes';
+import { brainViews, ownView, scopedBrainPath } from './routes';
 
 export function Unavailable() {
   return (
@@ -18,20 +18,41 @@ export default function Brain() {
       ? import('./fleet-fixture').then((module) => module.fleetBots)
       : []
   );
+  const [hire] = createResource(() =>
+    __BOTS_FIXTURES__ ? import('./hire-fixture') : undefined
+  );
   const bot = () => {
-    if (params.team !== 'sample-team' || !ownView(brainViews, params.view))
-      return;
-    return bots()?.find((sample) => sample.id === params.bot);
+    if (!ownView(brainViews, params.view)) return;
+
+    const receipt = hire()?.hireReceiptFor(params.team, params.bot);
+    if (receipt?.agent.status === 'provisioning') {
+      return {
+        team: receipt.agent.teamId,
+        id: receipt.agent.userId,
+        name: receipt.agent.name,
+        portrait: receipt.portrait,
+        width: receipt.width,
+        role: 'Setting up',
+      };
+    }
+
+    if (params.team !== 'sample-team') return;
+    const sample = bots()?.find(({ id }) => id === params.bot);
+    if (sample) return { ...sample, team: 'sample-team', width: 0 };
   };
 
   return (
-    <Show when={!bots.loading}>
+    <Show when={!bots.loading && !hire.loading}>
       <Show when={bot()} fallback={<Unavailable />} keyed>
         {(sample) => (
           <section class="brain">
             <div class="panel">
               <div class="brain-heading">
-                <img src={sample.portrait} alt="" />
+                <img
+                  src={sample.portrait}
+                  alt=""
+                  style={{ transform: `scaleX(${1 + sample.width / 100})` }}
+                />
                 <div>
                   <h1>{sample.name}’s Hub</h1>
                   <p>{sample.role} · Sample team</p>
@@ -41,7 +62,10 @@ export default function Brain() {
                 <For each={Object.keys(brainViews)}>
                   {(view) =>
                     ownView(brainViews, view) && (
-                      <A href={brainPath(sample.id, view)} end>
+                      <A
+                        href={scopedBrainPath(sample.team, sample.id, view)}
+                        end
+                      >
                         {brainViews[view]}
                       </A>
                     )

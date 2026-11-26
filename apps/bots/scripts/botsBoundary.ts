@@ -24,10 +24,10 @@ export function botsBoundary(includeFixtures: boolean): Plugin {
         if (
           output.type === 'chunk' &&
           Object.keys(output.modules).some((id) =>
-            id.endsWith('/fleet-fixture.ts')
+            /\/(fleet|hire)-fixture\.ts$/.test(id)
           )
         ) {
-          this.error('The default Bots build cannot include Fleet fixtures');
+          this.error('The default Bots build cannot include local fixtures');
         }
       }
     },

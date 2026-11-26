@@ -22,5 +22,13 @@ export function brainPath(
   bot: string,
   view: keyof typeof brainViews = 'overview'
 ): string {
-  return `/teams/sample-team/bots/${encodeURIComponent(bot)}/${view}`;
+  return scopedBrainPath('sample-team', bot, view);
+}
+
+export function scopedBrainPath(
+  team: string,
+  bot: string,
+  view: keyof typeof brainViews = 'overview'
+): string {
+  return `/teams/${encodeURIComponent(team)}/bots/${encodeURIComponent(bot)}/${view}`;
 }

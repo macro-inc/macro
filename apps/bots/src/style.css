@@ -345,3 +345,51 @@ footer {
     margin-inline: 12px;
   }
 }
+.hire-checkout form {
+  display: grid;
+  gap: 8px;
+}
+.hire-checkout h3 {
+  margin: 0;
+}
+.hire-checkout textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin-top: 4px;
+  padding: 6px;
+  resize: vertical;
+  color: inherit;
+  background: #1a2029;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+}
+.hire-checkout fieldset {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--border);
+}
+.hire-offer {
+  display: flex;
+  gap: 6px;
+  align-items: start;
+}
+.hire-offer small {
+  display: block;
+  color: var(--muted);
+}
+.hire-checkout button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+.hire-checkout > a {
+  margin-top: 8px;
+}
+
+.bot-link[aria-current="true"] {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
