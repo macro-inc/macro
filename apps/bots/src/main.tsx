@@ -18,6 +18,7 @@ const Creator = lazy(() => import('./creator'));
 const Brain = lazy(() => import('./brain'));
 const SignIn = lazy(() => import('./sign-in'));
 const Fleet = lazy(() => import('./fleet'));
+const Billing = lazy(() => import('./billing'));
 
 function Shell(props: ParentProps) {
   const location = useLocation();
@@ -102,10 +103,7 @@ if (root) {
           path="/passwords"
           component={() => <TowerUnavailable heading={towerViews.passwords} />}
         />
-        <Route
-          path="/billing"
-          component={() => <TowerUnavailable heading={towerViews.billing} />}
-        />
+        <Route path="/billing" component={Billing} />
         <Route
           path="*"
           component={() => (
