@@ -85,10 +85,12 @@ rewrite((t) =>
 );
 
 const port = Number(process.env.PORT || 5560);
-const vite = spawn(process.execPath, [`${MACRO}/node_modules/vite/bin/vite.js`, '--config', `${dest}/vite.config.ts`, '--port', String(port)], {
+const vite = spawn(process.execPath, [`${MACRO}/node_modules/vite/bin/vite.js`, '--config', `${dest}/vite.config.ts`, '--port', String(port), '--strictPort'], {
   cwd: dest,
   stdio: ['ignore', 'pipe', 'pipe'],
 });
+// Never leave Vite running: a later run on this port would talk to it.
+process.on('exit', () => vite.kill());
 let log = '';
 vite.stdout.on('data', (d) => (log += d));
 vite.stderr.on('data', (d) => (log += d));
@@ -107,12 +109,23 @@ for (let i = 0; ; i++) {
 const browser = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
 fs.mkdirSync(OUT, { recursive: true });
 const theme = async (page, id) => {
-  await page.evaluate((t) => window.__applyTheme(t), id);
+  await page.evaluate((t) => {
+    if (!window.__applyTheme) throw new Error('the set did not render (no theme switch)');
+    window.__applyTheme(t);
+  }, id);
   await page.waitForTimeout(700);
 };
 
 for (const shot of scenes.shots) {
   if (only && !only.split(',').includes(shot.name)) continue;
+  try {
+    await take(shot);
+  } catch (e) {
+    console.log(shot.name, 'FAILED', String(e).slice(0, 400));
+  }
+}
+
+async function take(shot) {
   const phone = Boolean(shot.phone);
   const ctx = await browser.newContext(
     phone
@@ -208,6 +221,7 @@ for (const shot of scenes.shots) {
   console.log(shot.name, 'captured', [...new Set(errors)].slice(0, 4).join(' | '));
   await ctx.close();
 }
+
 const viteErrors = log.split('\n').filter((l) => /Unhandled error|Failed to resolve|Internal server error/.test(l));
 if (viteErrors.length) console.log('vite:', [...new Set(viteErrors.map((l) => l.slice(0, 260)))].slice(0, 8).join('\n'));
 await browser.close();
