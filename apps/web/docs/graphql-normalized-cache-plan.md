@@ -714,11 +714,11 @@ refetchable are not carried; only the pending writes' own projections are. The
 next database takes the copy's stored schema with it, so the schema adoption after the
 open retires the overlays the wiped database would have retired. A copy joined from
 databases of two schemas when the older one adds a write, or taken into a database
-that stores another schema or holds records under none, leaves that database's schema
-unreadable instead: adoption then resets it and keeps every write, without their
-overlays. A copy that adds no write leaves the schema as it is. An adoption that fails
-as a corrupt file wipes the same way, keeping the queue, and its open tells the page
-one report for both databases, each loss once. The copy
+that stores another schema or holds records, or rows derived from them, under none,
+leaves that database's schema unreadable instead: adoption then resets it and keeps
+every write, without their overlays. A copy that adds no write leaves the schema as
+it is. An adoption that fails as a corrupt file wipes the same way, keeping the
+queue, and its open tells the page one report for both databases, each loss once. The copy
 is given up after three engines die reading the old database, three die taking the
 copy in, or eight wipes in two minutes, and a database bound to another account
 refuses it. Logout, an account switch, a mismatched identity and stale-database
