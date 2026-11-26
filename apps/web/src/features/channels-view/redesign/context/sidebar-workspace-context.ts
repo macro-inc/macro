@@ -70,11 +70,21 @@ export type SidebarWorkspaceContextValue = {
   focusModel: Accessor<FocusModel>;
   totalUnreadCount: Accessor<number>;
 
-  // Collapse, sort & ordering
+  // Collapse, sort, windowing & ordering
   isGroupOpen: (group: SidebarBuiltInGroup) => boolean;
   setGroupOpen: (group: SidebarBuiltInGroup, open: boolean) => void;
   isSectionOpen: (sectionId: string) => boolean;
   setSectionOpen: (sectionId: string, open: boolean) => void;
+  /** Current progressive window cap for an expanded section, if expanded beyond default. */
+  sectionWindowLimit?: (sectionId: string) => number | undefined;
+  /** Expand an open section's visible & fetched window by one page (+25). */
+  loadMoreSection?: (sectionId: string) => void;
+  /** Reset an expanded section's window back to smart density (8 rows). */
+  collapseSectionWindow?: (sectionId: string) => void;
+  /** Advance the Support lens fetch window by one page (+25). */
+  loadMoreSupport?: () => void;
+  /** True when Support sections contain more channels beyond the active window. */
+  supportHasMoreWindow?: Accessor<boolean>;
   sectionSort: (sectionId: string) => SectionSortMode | undefined;
   setSectionSort: (sectionId: string, sort: SectionSortMode) => void;
   sectionOrder: Accessor<readonly string[]>;

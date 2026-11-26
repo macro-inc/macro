@@ -47,7 +47,6 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { markChannelsAsRead } from '@notifications/notification-helpers';
 import { queryAccountSession } from '@queries/auth/account-scope';
 import { useCachedChannelsByIds } from '@queries/channel/by-ids';
-import type { DirectoryChannel } from '@queries/channel/directory-core';
 import { useJoinChannelMutation } from '@queries/channel/join-links';
 import {
   useChannelSectionsQuery,
@@ -84,7 +83,6 @@ import { useChannelLabelActions } from '../../components/rail/hooks/useChannelLa
 import { useChannelRailActivity } from '../../components/rail/hooks/useChannelRailActivity';
 import { useChannelSectionNotifications } from '../../components/rail/hooks/useChannelSectionNotifications';
 import { createSectionSearchSource } from '../../components/rail/next/channel-discovery-source';
-import { useCollapsedUnreadChannels } from '../../components/rail/next/collapsed-unread-channels';
 import { reorderVisibleFavorites } from '../../components/rail/next/useFavoriteReorder';
 import { canAssignChannel } from '../../core/channel-label-eligibility';
 import { resolveChannelLabelMemberships } from '../../core/smart-tags';
@@ -100,47 +98,36 @@ import type {
 import { buildBrowsePlacement } from '../core/deduplicate-placement';
 import { buildDmWindow } from '../core/dm-window';
 import { buildFocusModel } from '../core/focus-triage';
-import type { SidebarChannel, SidebarSection } from '../core/sidebar-model';
-import { toEpochMs } from '../core/sidebar-model';
-import { buildSupportDeskModel } from '../core/support-triage';
-import { toSidebarChannel, toSidebarSection } from '../queries/adapt-channel';
+import {
+  LARGE_SECTION_SMART_LIMIT,
+  type SidebarChannel,
+  type SidebarLens,
+  type SidebarSection,
+} from '../core/sidebar-model';
+import {
+  buildSupportDeskModel,
+  isSupportChannel,
+  isSupportSection,
+} from '../core/support-triage';
+import {
+  collectWindowedReferencedChannelIds,
+  DEFAULT_CHANNEL_RESOLUTION_WINDOW,
+  DEFAULT_MAX_TOTAL_RESOLVED_IDS,
+  DEFAULT_SUPPORT_LENS_WINDOW,
+  SECTION_WINDOW_PAGE_STEP,
+  searchDirectoryTopK,
+} from '../core/windowed-resolution';
+import {
+  toSidebarChannel,
+  toSidebarChannelFromDirectory,
+  toSidebarSection,
+} from '../queries/adapt-channel';
+import { useBoundedUnreadChannels } from '../queries/bounded-unread-channels';
 import { liveJevDecide } from '../queries/jev-decide';
 import { createJevTriageController } from './create-jev-triage';
 import { createSidebarPreferences } from './create-sidebar-preferences';
 
-function directoryOnlyToSidebarChannel(
-  record: DirectoryChannel
-): SidebarChannel {
-  const latest = record.latestNonThreadMessage;
-  return {
-    id: record.id,
-    name: record.agentDm?.name ?? record.name ?? 'Unnamed channel',
-    channelType: record.channelType,
-    teamId: record.teamId ?? undefined,
-    isParticipant: record.isParticipant,
-    updatedAtMs: toEpochMs(record.updatedAt),
-    viewedAtMs: toEpochMs(record.viewedAt),
-    createdAtMs: toEpochMs(record.createdAt),
-    frecencyScore: record.frecencyScore ?? 0,
-    participantIds: record.participants
-      .filter((p) => p.leftAt === null)
-      .map((p) => p.userId),
-    botParticipantIds: record.botParticipants
-      .filter((p) => p.leftAt === null)
-      .map((p) => p.botId),
-    isAgentDm: Boolean(record.agentDm),
-    latestMessage: latest
-      ? {
-          messageId: latest.messageId,
-          senderId: latest.senderId,
-          content: latest.content,
-          createdAtMs: toEpochMs(latest.createdAt),
-          threadId: latest.threadId ?? undefined,
-          mentions: latest.mentions,
-        }
-      : undefined,
-  };
-}
+const JEV_CANDIDATE_POOL_CAP = 100;
 
 export function createLiveSidebarWorkspace(options: {
   sources: ChannelsSources;
@@ -174,6 +161,12 @@ export function createLiveSidebarWorkspace(options: {
   const [dmQuery, setDmQuery] = createSignal('');
   const [quickSwitchOpen, setQuickSwitchOpen] = createSignal(false);
   const [quickSwitchQuery, setQuickSwitchQuery] = createSignal('');
+  const [sectionWindowLimits, setSectionWindowLimits] = createSignal<
+    ReadonlyMap<string, number>
+  >(new Map());
+  const [supportWindowLimit, setSupportWindowLimit] = createSignal(
+    DEFAULT_SUPPORT_LENS_WINDOW
+  );
   const [nowTick, setNowTick] = createSignal(Date.now());
   // Refresh relative wait ages every 60s without re-fetching anything.
   const ageTimer = setInterval(() => setNowTick(Date.now()), 60_000);
@@ -196,9 +189,9 @@ export function createLiveSidebarWorkspace(options: {
   const joinMutation = useJoinChannelMutation();
   const bulkNotificationPrefs = useBulkNotificationPreferencesMutation();
 
-  // Unread-channel projection ensures unread DMs/mentions outside loaded Soup pages
-  // still enrich Focus, Support Desk, Unread-only, and the DM priority window.
-  const collapsedUnread = useCollapsedUnreadChannels(() => true);
+  // Bounded unread-channel projection (capped at 2 pages = 200 most recent unreads)
+  // so noisy accounts with thousands of unreads never auto-drain unbounded pages.
+  const boundedUnread = useBoundedUnreadChannels(() => true, { maxPages: 2 });
 
   // Discoverable unjoined team channels while Quick Switch is open.
   const quickSwitchDiscovery = createSectionSearchSource({
@@ -215,17 +208,34 @@ export function createLiveSidebarWorkspace(options: {
       .map((fav) => fav.entityId)
   );
 
-  // Combine all loaded ChannelEntity rows across scopes
+  // Strictly bounded loaded Soup rows (no eager full-directory dump!).
   const loadedEntities = createMemo(() =>
     deduplicateChannels([
       options.sources.team_channels.items(),
       options.sources.channels.items(),
       options.sources.direct_messages.items(),
       options.sources.recents.items(),
-      collapsedUnread(),
-      options.localChannels(),
+      boundedUnread.channels(),
     ])
   );
+
+  const loadedEntityIds = createMemo(
+    () => new Set(loadedEntities().map((ch) => ch.id))
+  );
+
+  const earlyUnreadIds = createMemo<ReadonlySet<string>>(() => {
+    const set = new Set<string>();
+    for (const ch of boundedUnread.channels()) set.add(ch.id);
+    for (const ch of loadedEntities()) {
+      if (
+        (ch.unreadNotifications && ch.unreadNotifications.length > 0) ||
+        (ch.unreadMentions && ch.unreadMentions.length > 0)
+      ) {
+        set.add(ch.id);
+      }
+    }
+    return set;
+  });
 
   const rawLabelsUnresolved = createMemo<readonly ChannelLabel[]>(() => {
     const shared =
@@ -238,18 +248,72 @@ export function createLiveSidebarWorkspace(options: {
     return [...shared, ...personal];
   });
 
-  // Resolve channels referenced by favorites or manual sections that aren't in loaded pages
-  const missingReferencedIds = createMemo(() => {
-    const loadedIds = new Set(loadedEntities().map((ch) => ch.id));
-    const refs = new Set([
-      ...rawLabelsUnresolved().flatMap((l) => l.channelIds),
-      ...favoriteChannelIds(),
-    ]);
-    return [...refs].filter((id) => !loadedIds.has(id));
+  const rawSectionsUnresolved = createMemo<SidebarSection[]>(() =>
+    rawLabelsUnresolved().map(toSidebarSection)
+  );
+
+  const activeLens = createMemo<SidebarLens>(() =>
+    tab() === 'threads' ? 'threads' : prefs.prefs.activeLens
+  );
+
+  const hiddenTeamSectionIdSet = createMemo<ReadonlySet<string>>(
+    () => new Set(prefs.prefs.hiddenTeamSectionIds)
+  );
+
+  const openSectionIds = createMemo<ReadonlySet<string>>(() => {
+    const collapsed = new Set(state.collapsedLabels);
+    const hidden = hiddenTeamSectionIdSet();
+    const set = new Set<string>();
+    for (const sec of rawSectionsUnresolved()) {
+      if (collapsed.has(sec.id)) continue;
+      if (sec.scope === 'personal' && prefs.prefs.collapsedPersonalZone) {
+        continue;
+      }
+      if (
+        sec.scope === 'team' &&
+        (prefs.prefs.collapsedTeamZone || hidden.has(sec.id))
+      ) {
+        continue;
+      }
+      set.add(sec.id);
+    }
+    return set;
   });
+
+  const effectiveSectionWindowLimits = createMemo<ReadonlyMap<string, number>>(
+    () => {
+      const limits = new Map(sectionWindowLimits());
+      for (const id of prefs.prefs.expandedLargeSectionIds) {
+        if (!limits.has(id)) {
+          limits.set(id, LARGE_SECTION_SMART_LIMIT + SECTION_WINDOW_PAGE_STEP);
+        }
+      }
+      return limits;
+    }
+  );
+
+  // Windowed by-ID resolution: resolves ONLY missing channels inside expanded
+  // sections (capped per section and globally), open Pinned favorites, or the
+  // active Support lens window. Collapsed/hidden sections resolve 0 rows.
+  const windowedMissingIds = createMemo(() =>
+    collectWindowedReferencedChannelIds({
+      sections: rawSectionsUnresolved(),
+      favoriteChannelIds: favoriteChannelIds(),
+      loadedIds: loadedEntityIds(),
+      unreadIds: earlyUnreadIds(),
+      activeLens: activeLens(),
+      favoritesOpen: state.expandedGroups.favorites,
+      openSectionIds: openSectionIds(),
+      hiddenTeamSectionIds: hiddenTeamSectionIdSet(),
+      sectionWindowLimits: effectiveSectionWindowLimits(),
+      supportWindowLimit: supportWindowLimit(),
+      window: DEFAULT_CHANNEL_RESOLUTION_WINDOW,
+    })
+  );
+
   const referencedChannels = useCachedChannelsByIds(
-    missingReferencedIds,
-    () => true
+    windowedMissingIds,
+    () => windowedMissingIds().length > 0
   );
 
   const allEntities = createMemo(() =>
@@ -258,26 +322,20 @@ export function createLiveSidebarWorkspace(options: {
   const entityById = createMemo(
     () => new Map(allEntities().map((ch) => [ch.id, ch]))
   );
-  const directoryById = createMemo(
-    () => new Map(directory.channels().map((ch) => [ch.id, ch]))
+
+  // Reference-cached adaptation over ONLY the bounded loaded entities (never
+  // mapping the full multi-thousand channel directory on every update).
+  const adaptedCache = new WeakMap<ChannelEntity, SidebarChannel>();
+  const channels = createMemo<SidebarChannel[]>(() =>
+    allEntities().map((entity) => {
+      let adapted = adaptedCache.get(entity);
+      if (!adapted) {
+        adapted = toSidebarChannel(entity);
+        adaptedCache.set(entity, adapted);
+      }
+      return adapted;
+    })
   );
-
-  // Merge ChannelEntities + DirectoryChannels into unified SidebarChannel records
-  const channels = createMemo<SidebarChannel[]>(() => {
-    const seen = new Set<string>();
-    const list: SidebarChannel[] = [];
-
-    for (const entity of allEntities()) {
-      seen.add(entity.id);
-      list.push(toSidebarChannel(entity, directoryById().get(entity.id)));
-    }
-    for (const dirRec of directory.channels()) {
-      if (seen.has(dirRec.id)) continue;
-      seen.add(dirRec.id);
-      list.push(directoryOnlyToSidebarChannel(dirRec));
-    }
-    return list;
-  });
 
   const channelsById = createMemo(
     () => new Map(channels().map((ch) => [ch.id, ch]))
@@ -388,19 +446,52 @@ export function createLiveSidebarWorkspace(options: {
     return set;
   });
 
-  // Support Desk + Jev Triage Controller
+  // Support Desk channel identification (pure ID check — no duplicate triage pass, no nowTick)
+  const supportSectionMemberIds = createMemo<ReadonlySet<string>>(() => {
+    const hidden = hiddenTeamSectionIdSet();
+    const set = new Set<string>();
+    for (const section of sections()) {
+      if (section.scope === 'team' && hidden.has(section.id)) continue;
+      if (!isSupportSection(section)) continue;
+      for (const id of section.channelIds) set.add(id);
+    }
+    return set;
+  });
+
   const supportChannelIds = createMemo<ReadonlySet<string>>(() => {
-    const desk = buildSupportDeskModel({
-      channels: channels(),
-      sections: sections(),
-      currentUserId: userId(),
-      teamMemberIds: teamMemberIds(),
-      unreadIds: unreadIds(),
-      mentionCounts: mentionCounts(),
-      triageByChannelId: new Map(),
-      nowMs: nowTick(),
-    });
-    return new Set(desk.items.map((item) => item.channel.id));
+    const sectionIds = supportSectionMemberIds();
+    const set = new Set<string>();
+    for (const ch of channels()) {
+      if (!ch.isParticipant) continue;
+      if (isSupportChannel(ch, sectionIds)) set.add(ch.id);
+    }
+    return set;
+  });
+
+  // Gate Jev triage strictly to active triage surfaces (Focus, Support Desk,
+  // or an expanded Support section) so cold Browse loads fire 0 Jev calls.
+  const jevTriageActive = createMemo(() => {
+    const lens = activeLens();
+    if (lens === 'focus' || lens === 'support') return true;
+    if (lens !== 'browse') return false;
+    const openIds = openSectionIds();
+    return sections().some(
+      (section) => isSupportSection(section) && openIds.has(section.id)
+    );
+  });
+
+  // Feed Jev ONLY the bounded active/support candidate slice (capped at 100).
+  const jevCandidateChannels = createMemo<SidebarChannel[]>(() => {
+    const supportIds = supportChannelIds();
+    const unread = unreadOrMentionedIds();
+    const list: SidebarChannel[] = [];
+    for (const ch of channels()) {
+      if (supportIds.has(ch.id) || unread.has(ch.id)) {
+        list.push(ch);
+        if (list.length >= JEV_CANDIDATE_POOL_CAP) break;
+      }
+    }
+    return list;
   });
 
   const triage = createJevTriageController({
@@ -408,7 +499,8 @@ export function createLiveSidebarWorkspace(options: {
       userId() ? `${userId()}:${queryAccountSession()}` : undefined,
     userId,
     enabled: () => prefs.prefs.jevEnabled,
-    channels,
+    active: jevTriageActive,
+    channels: jevCandidateChannels,
     supportChannelIds,
     unreadOrMentionedIds,
     mentionCounts,
@@ -427,6 +519,12 @@ export function createLiveSidebarWorkspace(options: {
       triageByChannelId: triage.triageByChannelId(),
       nowMs: nowTick(),
     })
+  );
+
+  const supportHasMoreWindow = createMemo(
+    () =>
+      supportSectionMemberIds().size > supportDesk().totalCount &&
+      supportWindowLimit() < DEFAULT_MAX_TOTAL_RESOLVED_IDS
   );
 
   const focusModel = createMemo(() =>
@@ -473,8 +571,9 @@ export function createLiveSidebarWorkspace(options: {
     buildBrowsePlacement({
       channels: channels(),
       sections: sections(),
-      hiddenTeamSectionIds: new Set(prefs.prefs.hiddenTeamSectionIds),
+      hiddenTeamSectionIds: hiddenTeamSectionIdSet(),
       expandedLargeSectionIds: new Set(prefs.prefs.expandedLargeSectionIds),
+      sectionWindowLimits: effectiveSectionWindowLimits(),
       unreadIds: unreadIds(),
       unreadOrMentionedIds: unreadOrMentionedIds(),
       mentionCounts: mentionCounts(),
@@ -543,6 +642,34 @@ export function createLiveSidebarWorkspace(options: {
     dialogOwner,
   });
 
+  // Lazy Quick Switch discovery: ONLY runs while Quick Switch is open,
+  // returning at most top-50 directory hits + unjoined team channel hits
+  // without converting the entire directory up front.
+  const discoverableChannels = createMemo<readonly SidebarChannel[]>(() => {
+    if (!quickSwitchOpen()) return [];
+    const loadedIds = loadedEntityIds();
+    const seen = new Set<string>(loadedIds);
+    const results: SidebarChannel[] = [];
+
+    for (const dirRec of searchDirectoryTopK(
+      directory.channels(),
+      quickSwitchQuery(),
+      50,
+      loadedIds
+    )) {
+      seen.add(dirRec.id);
+      results.push(toSidebarChannelFromDirectory(dirRec));
+    }
+
+    for (const ch of quickSwitchDiscovery.items()) {
+      if (seen.has(ch.id)) continue;
+      seen.add(ch.id);
+      results.push(toSidebarChannel(ch));
+    }
+
+    return results;
+  });
+
   const openChannel = (
     channelId: string,
     opts?: { newSplit?: boolean; focusComposer?: boolean }
@@ -550,7 +677,9 @@ export function createLiveSidebarWorkspace(options: {
     const entity =
       entityById().get(channelId) ??
       quickSwitchDiscovery.items().find((ch) => ch.id === channelId);
-    const sidebarCh = channelsById().get(channelId);
+    const sidebarCh =
+      channelsById().get(channelId) ??
+      discoverableChannels().find((ch) => ch.id === channelId);
     const fallbackEntity: ChannelEntity | undefined =
       entity ??
       (sidebarCh
@@ -886,12 +1015,7 @@ export function createLiveSidebarWorkspace(options: {
       setQuickSwitchOpen(open);
       setQuickSwitchQuery(query);
     },
-    discoverableChannels: createMemo(() => {
-      if (!quickSwitchOpen()) return [];
-      return quickSwitchDiscovery
-        .items()
-        .map((ch) => toSidebarChannel(ch, directoryById().get(ch.id)));
-    }),
+    discoverableChannels,
     supportDesk,
     focusModel,
     totalUnreadCount,
@@ -899,6 +1023,46 @@ export function createLiveSidebarWorkspace(options: {
     setGroupOpen: (group, open) => setViewGroupOpen(group, open),
     isSectionOpen: (sectionId) => !state.collapsedLabels.includes(sectionId),
     setSectionOpen: (sectionId, open) => setLabelOpen(sectionId, open),
+    sectionWindowLimit: (sectionId) =>
+      effectiveSectionWindowLimits().get(sectionId),
+    loadMoreSection: (sectionId) => {
+      setSectionWindowLimits((previous) => {
+        const next = new Map(previous);
+        const current =
+          next.get(sectionId) ??
+          (prefs.prefs.expandedLargeSectionIds.includes(sectionId)
+            ? LARGE_SECTION_SMART_LIMIT + SECTION_WINDOW_PAGE_STEP
+            : LARGE_SECTION_SMART_LIMIT);
+        next.set(
+          sectionId,
+          Math.min(
+            current + SECTION_WINDOW_PAGE_STEP,
+            DEFAULT_MAX_TOTAL_RESOLVED_IDS
+          )
+        );
+        return next;
+      });
+    },
+    collapseSectionWindow: (sectionId) => {
+      setSectionWindowLimits((previous) => {
+        if (!previous.has(sectionId)) return previous;
+        const next = new Map(previous);
+        next.delete(sectionId);
+        return next;
+      });
+      if (prefs.prefs.expandedLargeSectionIds.includes(sectionId)) {
+        prefs.toggleLargeSectionExpanded(sectionId);
+      }
+    },
+    loadMoreSupport: () => {
+      setSupportWindowLimit((current) =>
+        Math.min(
+          current + SECTION_WINDOW_PAGE_STEP,
+          DEFAULT_MAX_TOTAL_RESOLVED_IDS
+        )
+      );
+    },
+    supportHasMoreWindow,
     sectionSort: (sectionId) => sectionSortMap().get(sectionId),
     setSectionSort: (sectionId, sort) => {
       if (sort === 'smart') {

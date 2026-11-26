@@ -318,7 +318,10 @@ function ChannelsViewRoot(props: {
   );
   onCleanup(() => props.registerAsideList(undefined));
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
-  const localChannels = useChannelListSearchPool();
+  // The redesigned sidebar searches `useChannelDirectory()` lazily inside
+  // Quick Switch instead of eagerly converting thousands of directory channels
+  // into `ChannelEntity` rows on Chat open.
+  const localChannels = useChannelListSearchPool(() => !isRedesign());
 
   const sources = useChannelsSources(
     (scope) => {
@@ -342,7 +345,11 @@ function ChannelsViewRoot(props: {
       if (isRedesign()) {
         if (scope === 'search') return false;
         if (scope === 'threads') return tab() === 'threads';
-        return tab() === 'browse';
+        if (tab() !== 'browse') return false;
+        if (scope === 'direct_messages') {
+          return state.expandedGroups.direct_messages;
+        }
+        return true;
       }
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;

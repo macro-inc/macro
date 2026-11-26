@@ -8,6 +8,7 @@ import {
   createSignal,
   on,
   onCleanup,
+  untrack,
 } from 'solid-js';
 import {
   buildChannelTriageRequest,
@@ -18,6 +19,9 @@ import {
   JEV_MAX_BURST_CHANNELS,
   JEV_MAX_CACHE_ENTRIES,
   JEV_MAX_CONCURRENCY,
+  JEV_MAX_ORGANIZE_CHANNELS,
+  JEV_MAX_SESSION_CALLS,
+  JEV_SUPPORT_RECENCY_WINDOW_MS,
   type JevDecisionPayload,
   type OrganizeSuggestion,
   selectChannelsForJevTriage,
@@ -137,9 +141,16 @@ export type JevTriageController = {
 /**
  * Bounded, content-addressed, account-fenced Jev triage controller.
  *
+ * - Runs background calls ONLY while `active()` is true (Focus, Support Desk,
+ *   or an expanded Support section) so cold Browse loads make 0 Jev calls.
  * - Reloads hit localStorage cache by `(channelId, latestMessageId)` with 0
  *   network requests and 0 flicker.
- * - Limits bursts to `JEV_MAX_BURST_CHANNELS` (25) with concurrency 3.
+ * - Limits each burst to `JEV_MAX_BURST_CHANNELS` (15) with concurrency 3,
+ *   skips read support channels older than 7 days, and enforces a hard
+ *   per-session ceiling (`JEV_MAX_SESSION_CALLS = 50`) so busy workspaces
+ *   never chain unbounded classification waves.
+ * - Flushes reactive cache updates once per completed batch rather than per
+ *   response to avoid N× full-list recomputations.
  * - Debounces live tail changes by 10s so rapid typing never fires per-message.
  * - Gracefully degrades to `'heuristic'` on HTTP 503/402/network unavailability
  *   without spamming errors.
@@ -148,6 +159,11 @@ export function createJevTriageController(options: {
   accountKey: Accessor<string | undefined>;
   userId: Accessor<string | undefined>;
   enabled: Accessor<boolean>;
+  /**
+   * Whether a triage surface (Focus, Support Desk, or an expanded Support
+   * section) is currently visible. Defaults to `true` when omitted.
+   */
+  active?: Accessor<boolean>;
   channels: Accessor<readonly SidebarChannel[]>;
   supportChannelIds: Accessor<ReadonlySet<string>>;
   unreadOrMentionedIds: Accessor<ReadonlySet<string>>;
@@ -156,10 +172,13 @@ export function createJevTriageController(options: {
   decide: JevDecidePort;
   storage?: TriageCacheStorage;
   debounceMs?: number;
+  maxSessionCalls?: number;
   now?: () => number;
 }): JevTriageController {
   const storage = options.storage ?? defaultCacheStorage;
   const debounceMs = options.debounceMs ?? LIVE_DEBOUNCE_MS;
+  const maxSessionCalls = options.maxSessionCalls ?? JEV_MAX_SESSION_CALLS;
+  const isActive = options.active ?? (() => true);
   const now = options.now ?? (() => Date.now());
 
   const [cacheVersion, setCacheVersion] = createSignal(0);
@@ -279,7 +298,6 @@ export function createJevTriageController(options: {
               nowMs: now(),
             });
             cache.set(key, result);
-            setCacheVersion((version) => version + 1);
           } else if (outcome.unavailable) {
             hitUnavailable = true;
             unavailableHold = true;
@@ -302,24 +320,32 @@ export function createJevTriageController(options: {
 
     if (anySucceeded) {
       saveCache(storage, expectedUserId, cache);
+      setCacheVersion((version) => version + 1);
       if (!hitUnavailable) setEngineStatus('jev');
     }
 
-    if (pendingRescan && !hitUnavailable && options.enabled()) {
+    if (
+      pendingRescan &&
+      !hitUnavailable &&
+      options.enabled() &&
+      isActive() &&
+      jevCallsThisSession() < maxSessionCalls
+    ) {
       pendingRescan = false;
       setRefreshTick((tick) => tick + 1);
+    } else {
+      pendingRescan = false;
     }
   };
 
-  // Trigger bounded triage passes when active/support tails change.
+  // Trigger bounded triage passes ONLY when a triage surface is active and
+  // within the per-session budget.
   createEffect(() => {
     refreshTick();
     const enabled = options.enabled();
+    const active = isActive();
     const accountKey = options.accountKey();
     const userId = options.userId();
-    const channels = options.channels();
-    const supportChannelIds = options.supportChannelIds();
-    const unreadOrMentionedIds = options.unreadOrMentionedIds();
 
     if (!enabled) {
       abortInFlight();
@@ -333,6 +359,31 @@ export function createJevTriageController(options: {
       return;
     }
 
+    if (!active) {
+      if (debounceTimer !== undefined) {
+        clearTimeout(debounceTimer);
+        debounceTimer = undefined;
+      }
+      pendingRescan = false;
+      if (cache.size > 0 && engineStatus() === 'idle') {
+        setEngineStatus('jev');
+      }
+      return;
+    }
+
+    const remainingBudget = Math.max(
+      0,
+      maxSessionCalls - untrack(jevCallsThisSession)
+    );
+    if (remainingBudget === 0) {
+      pendingRescan = false;
+      return;
+    }
+
+    const channels = options.channels();
+    const supportChannelIds = options.supportChannelIds();
+    const unreadOrMentionedIds = options.unreadOrMentionedIds();
+
     const skipKeys = new Set<string>([...cache.keys(), ...inFlightKeys]);
     const candidates = selectChannelsForJevTriage({
       channels,
@@ -340,7 +391,9 @@ export function createJevTriageController(options: {
       unreadOrMentionedIds,
       currentUserId: userId,
       cachedKeys: skipKeys,
-      maxBurst: JEV_MAX_BURST_CHANNELS,
+      maxBurst: Math.min(JEV_MAX_BURST_CHANNELS, remainingBudget),
+      nowMs: now(),
+      supportRecencyWindowMs: JEV_SUPPORT_RECENCY_WINDOW_MS,
     });
 
     if (candidates.length === 0) {
@@ -360,6 +413,7 @@ export function createJevTriageController(options: {
         disposed ||
         options.accountKey() !== accountKey ||
         !options.enabled() ||
+        !isActive() ||
         activeController
       ) {
         return;
@@ -411,6 +465,7 @@ export function createJevTriageController(options: {
   const refresh = () => {
     unavailableHold = false;
     hasRunInitialPass = false;
+    setJevCallsThisSession(0);
     setEngineStatus(options.enabled() ? 'idle' : 'paused');
     setRefreshTick((tick) => tick + 1);
   };
@@ -431,7 +486,7 @@ export function createJevTriageController(options: {
         (channel) =>
           channel.channelType !== 'direct_message' && channel.isParticipant
       )
-      .slice(0, JEV_MAX_BURST_CHANNELS);
+      .slice(0, JEV_MAX_ORGANIZE_CHANNELS);
 
     const suggestions: OrganizeSuggestion[] = [];
     let usedJevCount = 0;

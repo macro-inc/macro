@@ -6,10 +6,12 @@ import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import ChecksIcon from '@icon/system/regular/checks.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { Button, Tooltip } from '@ui';
-import { For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { useSidebarWorkspace } from '../context/sidebar-workspace-context';
 import type { FocusItem, FocusReason } from '../core/focus-triage';
 import { SidebarRow, type SidebarRowBadge } from './SidebarRow';
+
+const FOCUS_BUCKET_PAGE_SIZE = 25;
 
 function formatFocusBadge(
   reason: FocusReason | undefined
@@ -40,6 +42,10 @@ function FocusBucketList(props: {
   focusedKey?: string;
   headerAction?: { label: string; onClick: () => void };
 }) {
+  const [limit, setLimit] = createSignal(FOCUS_BUCKET_PAGE_SIZE);
+  const visibleItems = () => props.items.slice(0, limit());
+  const overflow = () => Math.max(0, props.items.length - limit());
+
   return (
     <Show when={props.items.length > 0}>
       <section class="flex flex-col gap-0.5" aria-label={props.title}>
@@ -62,7 +68,7 @@ function FocusBucketList(props: {
             )}
           </Show>
         </div>
-        <For each={props.items}>
+        <For each={visibleItems()}>
           {(item) => (
             <SidebarRow
               channel={item.channel}
@@ -77,6 +83,19 @@ function FocusBucketList(props: {
             />
           )}
         </For>
+        <Show when={overflow() > 0}>
+          <button
+            type="button"
+            class="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink"
+            onClick={() =>
+              setLimit((current) => current + FOCUS_BUCKET_PAGE_SIZE)
+            }
+          >
+            <span>
+              {t('channelSidebar.sectionShowMore', { count: overflow() })}
+            </span>
+          </button>
+        </Show>
       </section>
     </Show>
   );
@@ -84,7 +103,10 @@ function FocusBucketList(props: {
 
 export function FocusView(props: { focusedKey?: string }) {
   const ws = useSidebarWorkspace();
+  const [fyiLimit, setFyiLimit] = createSignal(FOCUS_BUCKET_PAGE_SIZE);
   const model = () => ws.focusModel();
+  const visibleFyi = () => model().fyi.slice(0, fyiLimit());
+  const fyiOverflow = () => Math.max(0, model().fyi.length - fyiLimit());
   const engineStatus = () => ws.triage.engineStatus();
 
   const engineLabel = () => {
@@ -202,7 +224,7 @@ export function FocusView(props: { focusedKey?: string }) {
                 <span class="tabular-nums">{model().fyi.length}</span>
               </button>
               <Show when={!ws.prefs.prefs.collapsedFocusFyi}>
-                <For each={model().fyi}>
+                <For each={visibleFyi()}>
                   {(item) => (
                     <SidebarRow
                       channel={item.channel}
@@ -216,6 +238,21 @@ export function FocusView(props: { focusedKey?: string }) {
                     />
                   )}
                 </For>
+                <Show when={fyiOverflow() > 0}>
+                  <button
+                    type="button"
+                    class="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink"
+                    onClick={() =>
+                      setFyiLimit((current) => current + FOCUS_BUCKET_PAGE_SIZE)
+                    }
+                  >
+                    <span>
+                      {t('channelSidebar.sectionShowMore', {
+                        count: fyiOverflow(),
+                      })}
+                    </span>
+                  </button>
+                </Show>
               </Show>
             </section>
           </Show>
