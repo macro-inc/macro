@@ -18,6 +18,9 @@ const Creator = lazy(() => import('./creator'));
 const Brain = lazy(() => import('./brain'));
 const SignIn = lazy(() => import('./sign-in'));
 const Fleet = lazy(() => import('./fleet'));
+const Passwords = __BOTS_FIXTURES__
+  ? lazy(() => import('./passwords/view'))
+  : () => <TowerUnavailable heading={towerViews.passwords} />;
 
 function Shell(props: ParentProps) {
   const location = useLocation();
@@ -98,10 +101,7 @@ if (root) {
         <Route path="/fleet" component={Fleet} />
         <Route path="/sign-in" component={SignIn} />
         <Route path="/teams/:team/bots/:bot/:view/:entry?" component={Brain} />
-        <Route
-          path="/passwords"
-          component={() => <TowerUnavailable heading={towerViews.passwords} />}
-        />
+        <Route path="/passwords" component={Passwords} />
         <Route
           path="/billing"
           component={() => <TowerUnavailable heading={towerViews.billing} />}
