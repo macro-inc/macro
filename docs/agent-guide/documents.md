@@ -2790,7 +2790,9 @@ Title navigation preserves the reference's block parameters, including message,
 thread, annotation, and document locations.
 Click the card frame to select its editor node; controls and embedded content
 handle their own clicks. Full embeds remain vertically resizable and scroll
-inside the inset preview. When verifying, check a canvas embed, a metadata-only
+inside the inset preview. Panning and zooming a canvas embed are local to the
+open preview. A previously saved canvas view supplies the initial position.
+When verifying, check a canvas embed, a metadata-only
 reference, and an editable task, including resize, menu actions, and keyboard
 access to the title and property controls.
 

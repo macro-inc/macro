@@ -261,48 +261,15 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     });
   };
 
-  const previewContext = createMemo<
-    Partial<PreviewState & { showDraftSelectorButton: boolean }>
-  >(() => {
-    return {
-      onChangePreviewHeight: (h: string) => resizePreview(h),
-      showDraftSelectorButton: true,
-      canvas: {
-        onLocationChange: (location) => {
-          const currentEditor = editor();
-          if (!currentEditor) return;
-          const focused = document.activeElement;
-          const restoreFocus =
-            focused instanceof HTMLElement &&
-            currentEditor.getElementByKey(props.key)?.contains(focused);
-          currentEditor.update(
-            () => {
-              $addUpdateTag(HISTORY_MERGE_TAG);
-              const node = $getNodeByKey(props.key);
-              if (!$isDocumentCardNode(node)) return;
-              node.setPreviewData({
-                view: location,
-              });
-            },
-            {
-              onUpdate: () => {
-                if (
-                  restoreFocus &&
-                  focused instanceof HTMLElement &&
-                  focused.isConnected
-                )
-                  focused.focus({ preventScroll: true });
-              },
-            }
-          );
-        },
-      },
-    };
-  });
+  const previewContext: PreviewState = {
+    onChangePreviewHeight: resizePreview,
+    showDraftSelectorButton: true,
+  };
 
-  const previewData = () => {
+  const initialPreviewParams = () => {
     const data = props.previewData;
-    if (data && 'view' in data) {
+    // Legacy camera data is an initial position for this preview.
+    if (data && typeof data === 'object' && 'view' in data) {
       return { view: data.view };
     }
     return {};
@@ -369,8 +336,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         resolveBlockAlias(verifyBlockName(props.blockName)),
         i.id,
         {
-          params: previewData(),
-          nested: { parentContext: previewContext() },
+          params: initialPreviewParams(),
+          nested: { parentContext: previewContext },
         }
       );
       if (!preview) return;
