@@ -2,7 +2,12 @@ import type { ComputerSize, Quote } from '@macro-inc/sdk/generated/auth';
 import { A } from '@solidjs/router';
 import { createSignal, For, Show } from 'solid-js';
 import { type CheckoutState, createCheckout } from './hire';
-import { fixtureCheckout, saveHireReceipt } from './hire-fixture';
+import {
+  fixtureCheckout,
+  hireFleetPath,
+  hireReceiptFor,
+  saveHireReceipt,
+} from './hire-fixture';
 
 const messages = {
   loading: 'Checking the team and available computers…',
@@ -60,7 +65,7 @@ export default function HirePanel(props: {
   const checkout = createCheckout(fixtureCheckout, (next) => {
     setState(next);
     if (next.status === 'accepted') {
-      saveHireReceipt({ name: next.agent.name, ...confirmedPortrait });
+      saveHireReceipt({ agent: next.agent, ...confirmedPortrait });
     }
     if (next.status === 'review') {
       if (
@@ -72,6 +77,12 @@ export default function HirePanel(props: {
       }
     }
   });
+  const accepted = () => {
+    const current = state();
+    if (current.status === 'accepted') {
+      return hireReceiptFor(current.agent.teamId, current.agent.userId)?.agent;
+    }
+  };
   const review = () => {
     const current = state();
     if (current.status === 'review') return current;
@@ -202,11 +213,15 @@ export default function HirePanel(props: {
           Retry same request
         </button>
       </Show>
-      <Show when={state().status === 'accepted'}>
-        <p role="status">Preview Hire accepted. Setting up.</p>
-        <A href="/fleet" class="primary">
-          View setup in Fleet
-        </A>
+      <Show when={accepted()}>
+        {(agent) => (
+          <>
+            <p role="status">Preview Hire accepted. Setting up.</p>
+            <A href={hireFleetPath(agent())} class="primary">
+              View setup in Fleet
+            </A>
+          </>
+        )}
       </Show>
     </div>
   );

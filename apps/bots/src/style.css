@@ -388,3 +388,8 @@ footer {
 .hire-checkout > a {
   margin-top: 8px;
 }
+
+.bot-link[aria-current="true"] {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}

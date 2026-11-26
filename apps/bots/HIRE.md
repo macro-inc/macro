@@ -6,6 +6,11 @@ Identity must come from the authenticated PR 7 session seam. The existing genera
 
 The admin `listTeamComputerPurchaseOffers` contract supplies resources, money in minor units, currency, billing cadence, due today and capacity. A price ID is not an offer ID or a price lock. A 422 can describe missing subscription terms or an interval the service cannot sell. A null card does not prove anything by itself. Check refreshed terms before confirmation. A successful invite acknowledges the teammate and its computer. The provisioning status remains independent.
 
+Fleet selects the accepted teammate only when its requested team and agent match
+the receipt created by this tab's mock checkout. The Brain link uses the receipt's
+team and agent IDs. Brain resolves the same fixture receipt and shows Setting up.
+A fresh tab or reload has no Hire receipt, and an unmatched deep link is unavailable.
+
 ## Backend follow-on
 
 Add an authorized Hire-specific offer and confirmation contract. The offer should carry an opaque, expiring ID bound server-side to the authenticated account, exact team, size and quoted terms. Confirmation should require expected team and offer ID, verify membership, role, rollout, pricing and capacity under the authoritative transaction, then use the existing teammate provisioning service. Deny a changed or expired offer before creating an account, seat or charge. Return a typed refusal or pending/confirmed receipt keyed by the existing purchase intent. Exact money rules, including permissible proration drift, need a product decision.

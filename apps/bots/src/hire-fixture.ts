@@ -1,14 +1,50 @@
+import type { TeamAgent } from '@macro-inc/sdk/generated/auth';
 import { createSignal } from 'solid-js';
 import type { CheckoutAdapter } from './hire';
 
-const team = 'hire-fixture-team';
-const [receipt, setReceipt] = createSignal<{
-  name: string;
+const team = 'sample-team';
+type HireReceipt = {
+  agent: Readonly<TeamAgent>;
   portrait: string;
   width: number;
-}>();
+};
+
+const accepted = new Map<string, TeamAgent>();
+
+const [receipt, setReceipt] = createSignal<HireReceipt>();
 export const hireReceipt = receipt;
-export const saveHireReceipt = setReceipt;
+
+export function saveHireReceipt(value: HireReceipt) {
+  if (value.agent.teamId !== team || value.agent.status !== 'provisioning') {
+    return;
+  }
+  for (const agent of accepted.values()) {
+    if (agent === value.agent) {
+      setReceipt({ ...value, agent: Object.freeze({ ...agent }) });
+      return;
+    }
+  }
+}
+
+export function hireFleetPath(agent: Pick<TeamAgent, 'teamId' | 'userId'>) {
+  return `/fleet?${new URLSearchParams({ team: agent.teamId, bot: agent.userId })}`;
+}
+
+export function hireReceiptFor(teamId: string, userId: string) {
+  const current = hireReceipt();
+  if (current?.agent.teamId === teamId && current.agent.userId === userId) {
+    return current;
+  }
+}
+
+export function selectedHireReceipt(search: string) {
+  const params = new URLSearchParams(search);
+  const teams = params.getAll('team');
+  const bots = params.getAll('bot');
+  if (params.size === 2 && teams.length === 1 && bots.length === 1) {
+    return hireReceiptFor(teams[0], bots[0]);
+  }
+}
 
 export const fixtureCheckout: CheckoutAdapter = {
   async readScope() {
@@ -79,18 +115,20 @@ export const fixtureCheckout: CheckoutAdapter = {
     };
   },
   async submit({ request }) {
-    return {
-      status: 'accepted',
-      agent: {
-        teamId: team,
-        userId: request.purchaseKey,
-        computerId: request.purchaseKey,
-        name: request.name,
-        jobDescription: request.jobDescription ?? '',
-        personality: request.personality ?? '',
-        status: 'provisioning',
-        createdAt: '2026-12-01T00:00:00Z',
-      },
+    const existing = accepted.get(request.purchaseKey);
+    if (existing) return { status: 'accepted', agent: existing };
+
+    const agent: TeamAgent = {
+      teamId: team,
+      userId: `fixture-${crypto.randomUUID()}`,
+      computerId: crypto.randomUUID(),
+      name: request.name,
+      jobDescription: request.jobDescription ?? '',
+      personality: request.personality ?? '',
+      status: 'provisioning',
+      createdAt: '2026-12-01T00:00:00Z',
     };
+    accepted.set(request.purchaseKey, agent);
+    return { status: 'accepted', agent };
   },
 };
