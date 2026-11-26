@@ -22,6 +22,9 @@ pub trait SyncRepository: Send + Sync {
     async fn finish(&self, job: &Job, success: bool) -> Result<()>;
     /// Lease the next page of an enabled connection's unfinished backfill.
     async fn claim_backfill(&self) -> Result<Option<BackfillJob>>;
+    /// Record that a note of the job's page is imported, so a retry of the
+    /// page skips it. A stale lease changes nothing.
+    async fn mark_backfilled(&self, job: &BackfillJob, note: &NoteId) -> Result<()>;
     /// Save where the backfill continues. A stale lease changes nothing.
     async fn finish_backfill(&self, job: &BackfillJob, step: BackfillStep) -> Result<()>;
 }

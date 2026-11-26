@@ -294,15 +294,21 @@ async fn backfill_pages_are_leased_resumed_and_restarted_on_connect(pool: PgPool
     assert_eq!(first.attempts, 1);
     assert!(repo.claim_backfill().await.unwrap().is_none());
 
-    repo.finish_backfill(&first, BackfillStep::Next("page-2".into()))
-        .await
-        .unwrap();
+    repo.finish_backfill(
+        &first,
+        BackfillStep::Next {
+            cursor: "page-2".into(),
+            skipped: vec![],
+        },
+    )
+    .await
+    .unwrap();
     let second = repo.claim_backfill().await.unwrap().unwrap();
     assert_eq!(second.cursor.as_deref(), Some("page-2"));
     assert_eq!(second.attempts, 1);
 
     // An expired worker's lease cannot move the backfill.
-    repo.finish_backfill(&first, BackfillStep::Done)
+    repo.finish_backfill(&first, BackfillStep::Done { skipped: vec![] })
         .await
         .unwrap();
     repo.finish_backfill(&second, BackfillStep::Retry)
@@ -340,7 +346,7 @@ async fn backfill_pages_are_leased_resumed_and_restarted_on_connect(pool: PgPool
     assert_eq!(retry.cursor.as_deref(), Some("page-2"));
     assert_eq!(retry.attempts, 2);
 
-    repo.finish_backfill(&retry, BackfillStep::Done)
+    repo.finish_backfill(&retry, BackfillStep::Done { skipped: vec![] })
         .await
         .unwrap();
     assert!(repo.claim_backfill().await.unwrap().is_none());
@@ -374,4 +380,121 @@ async fn backfill_pages_are_leased_resumed_and_restarted_on_connect(pool: PgPool
     .await
     .unwrap();
     assert!(repo.claim_backfill().await.unwrap().is_none());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn backfill_progress_losses_give_ups_and_deferrals_are_recorded(pool: PgPool) {
+    let repo = PgSyncRepository::new(pool.clone(), &[7; 32]);
+    let connection = connection();
+    assert!(repo.reserve(&connection).await.unwrap());
+    assert!(
+        repo.activate(
+            connection.id,
+            Webhook {
+                id: "whe_test".into(),
+                secret: SigningSecret("secret".into()),
+            },
+            Scope::All,
+        )
+        .await
+        .unwrap()
+    );
+    let available = |pool: PgPool| async move {
+        sqlx::query!(
+            "UPDATE granola_sync_connections SET backfill_available_at = now() WHERE id = $1",
+            connection.id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    };
+    let wait_seconds = |pool: PgPool| async move {
+        sqlx::query_scalar!(
+            r#"SELECT EXTRACT(EPOCH FROM backfill_available_at - now())::float8 AS "seconds!"
+            FROM granola_sync_connections WHERE id = $1"#,
+            connection.id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+
+    // Deferrals back off from ten minutes, doubling, and keep the attempt.
+    let job = repo.claim_backfill().await.unwrap().unwrap();
+    assert_eq!(job.deferrals, 0);
+    repo.finish_backfill(&job, BackfillStep::Deferred)
+        .await
+        .unwrap();
+    assert!((wait_seconds(pool.clone()).await - 600.0).abs() < 5.0);
+    available(pool.clone()).await;
+    let job = repo.claim_backfill().await.unwrap().unwrap();
+    assert_eq!((job.attempts, job.deferrals), (1, 1));
+    repo.finish_backfill(&job, BackfillStep::Deferred)
+        .await
+        .unwrap();
+    assert!((wait_seconds(pool.clone()).await - 1200.0).abs() < 5.0);
+    available(pool.clone()).await;
+
+    // Notes handled on a page are remembered until the page moves on; a
+    // stale lease cannot record one.
+    let job = repo.claim_backfill().await.unwrap().unwrap();
+    assert_eq!(job.deferrals, 2);
+    let note = NoteId("not_aaaaaaaaaaaaaa".into());
+    repo.mark_backfilled(&job, &note).await.unwrap();
+    repo.finish_backfill(&job, BackfillStep::Retry)
+        .await
+        .unwrap();
+    repo.mark_backfilled(&job, &NoteId("not_bbbbbbbbbbbbbb".into()))
+        .await
+        .unwrap();
+    available(pool.clone()).await;
+    let job = repo.claim_backfill().await.unwrap().unwrap();
+    assert_eq!(job.handled, vec![note]);
+    // Any outcome other than a deferral ends the deferral streak.
+    assert_eq!(job.deferrals, 0);
+
+    let skipped = SkippedNote {
+        note_id: NoteId("not_cccccccccccccc".into()),
+        reason: SkipReason::OutOfTime,
+    };
+    repo.finish_backfill(
+        &job,
+        BackfillStep::Next {
+            cursor: "page-2".into(),
+            skipped: vec![skipped],
+        },
+    )
+    .await
+    .unwrap();
+    let job = repo.claim_backfill().await.unwrap().unwrap();
+    assert!(job.handled.is_empty());
+    let lost = sqlx::query_scalar!(
+        "SELECT backfill_skipped FROM granola_sync_connections WHERE id = $1",
+        connection.id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        lost,
+        serde_json::json!([{"note_id": "not_cccccccccccccc", "reason": "out_of_time"}])
+    );
+
+    // Giving up ends the backfill and says why.
+    repo.finish_backfill(&job, BackfillStep::GaveUp(GiveUpReason::RepeatedCursor))
+        .await
+        .unwrap();
+    available(pool.clone()).await;
+    assert!(repo.claim_backfill().await.unwrap().is_none());
+    let gave_up = sqlx::query_scalar!(
+        "SELECT backfill_gave_up FROM granola_sync_connections WHERE id = $1",
+        connection.id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(gave_up.as_deref(), Some("repeated_cursor"));
 }

@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO granola_sync_connections (id, user_id, account_id, scope, started_at, namespace)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            ON CONFLICT (user_id) DO UPDATE SET id = EXCLUDED.id, account_id = EXCLUDED.account_id,\n                scope = EXCLUDED.scope, started_at = EXCLUDED.started_at, enabled = false,\n                endpoint_id = NULL, signing_secret = NULL, last_error = NULL, last_synced_at = NULL,\n                backfill_cursor = NULL, backfill_completed_at = NULL, backfill_available_at = now(),\n                backfill_lease_id = NULL, backfill_attempts = 0, backfill_handled = '{}',\n                backfill_deferrals = 0, backfill_skipped = '[]', backfill_gave_up = NULL\n            WHERE granola_sync_connections.endpoint_id IS NOT NULL\n                OR granola_sync_connections.last_error IS NOT NULL\n                OR granola_sync_connections.started_at < now() - interval '2 minutes'\n            RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3ee313c03dbe96c30c52f49eb046c2843bc64ee0147478ba54c71e49902d3f45"
+}

@@ -113,6 +113,8 @@ struct BackfillState {
     cursor: Option<String>,
     done: bool,
     attempts: i32,
+    handled: Vec<NoteId>,
+    deferrals: i32,
 }
 
 impl FakeRepo {
@@ -217,21 +219,33 @@ impl SyncRepository for FakeRepo {
             cursor: backfill.cursor.clone(),
             lease_id: macro_uuid::generate_uuid_v7(),
             attempts: backfill.attempts,
+            handled: backfill.handled.clone(),
+            deferrals: backfill.deferrals,
         }))
+    }
+    async fn mark_backfilled(&self, _job: &BackfillJob, note: &NoteId) -> Result<()> {
+        self.backfill.lock().unwrap().handled.push(note.clone());
+        Ok(())
     }
     async fn finish_backfill(&self, _job: &BackfillJob, step: BackfillStep) -> Result<()> {
         let mut backfill = self.backfill.lock().unwrap();
         match &step {
-            BackfillStep::Next(cursor) => {
+            BackfillStep::Next { cursor, .. } => {
                 backfill.cursor = Some(cursor.clone());
                 backfill.attempts = 0;
+                backfill.handled.clear();
             }
-            BackfillStep::Done => {
+            BackfillStep::Done { .. } | BackfillStep::GaveUp(_) => {
                 backfill.done = true;
                 backfill.attempts = 0;
+                backfill.handled.clear();
             }
             BackfillStep::Retry => {}
-            BackfillStep::Throttled(_) | BackfillStep::Deferred => backfill.attempts -= 1,
+            BackfillStep::Throttled(_) => backfill.attempts -= 1,
+            BackfillStep::Deferred => {
+                backfill.attempts -= 1;
+                backfill.deferrals += 1;
+            }
         }
         self.steps.lock().unwrap().push(step);
         Ok(())
@@ -575,7 +589,7 @@ async fn backfill_imports_history_page_by_page_without_deleted_or_private_notes(
     }
     assert_eq!(
         *service.repo.steps.lock().unwrap(),
-        vec![BackfillStep::Next("page-2".into()), BackfillStep::Done]
+        vec![next("page-2", vec![]), done(vec![])]
     );
     let urls: Vec<String> = fake.api_calls().into_iter().map(|c| c.url).collect();
     assert!(urls.iter().all(|url| !url.contains("not_bbbbbbbbbbbbbb")));
@@ -600,11 +614,7 @@ async fn a_failed_page_is_retried_from_its_saved_cursor() {
 
     assert_eq!(
         *service.repo.steps.lock().unwrap(),
-        vec![
-            BackfillStep::Next("page-2".into()),
-            BackfillStep::Retry,
-            BackfillStep::Done
-        ]
+        vec![next("page-2", vec![]), BackfillStep::Retry, done(vec![])]
     );
     assert_eq!(
         imported_ids(&calls),
@@ -647,7 +657,10 @@ async fn a_note_that_keeps_failing_is_skipped_only_on_the_last_attempt() {
     assert!(service.backfill().await.unwrap());
     assert_eq!(
         *service.repo.steps.lock().unwrap(),
-        vec![BackfillStep::Done]
+        vec![done(vec![skip(
+            "not_aaaaaaaaaaaaaa",
+            SkipReason::FetchFailed
+        )])]
     );
     assert_eq!(imported_ids(&calls), vec!["not_cccccccccccccc"]);
 }
@@ -829,14 +842,17 @@ async fn a_slow_page_stops_at_its_budget_and_counts_an_attempt() {
         vec!["not_aaaaaaaaaaaaaa", "not_cccccccccccccc"]
     );
 
-    // On the last attempt the page moves on, skipping the notes it never
-    // reached, so a slow page cannot hold history back forever.
+    // On the last attempt the page moves on, recording the notes it never
+    // reached by ID, so a slow page cannot hold history back forever.
     let (_, calls, service) = scripted_with(responses(), true, slow);
     service.repo.backfill.lock().unwrap().attempts = BACKFILL_PAGE_ATTEMPTS - 1;
     assert!(service.backfill().await.unwrap());
     assert_eq!(
         *service.repo.steps.lock().unwrap(),
-        vec![BackfillStep::Done]
+        vec![done(vec![
+            skip("not_dddddddddddddd", SkipReason::OutOfTime),
+            skip("not_eeeeeeeeeeeeee", SkipReason::OutOfTime),
+        ])]
     );
     assert_eq!(
         imported_ids(&calls),
@@ -882,9 +898,10 @@ async fn a_throttled_page_waits_as_long_as_granola_asks() {
 }
 
 /// A listing that hands back the cursor it was given would repeat the same
-/// page forever; it is a failed page instead.
+/// page forever; it is a failed page, and after the page's last attempt the
+/// backfill gives up for good.
 #[tokio::test(start_paused = true)]
-async fn a_repeated_listing_cursor_is_a_failed_page() {
+async fn a_repeated_listing_cursor_fails_the_page_then_gives_up() {
     let (_, _, service) = scripted(vec![
         page(&["not_aaaaaaaaaaaaaa"], Some("page-2")),
         note("not_aaaaaaaaaaaaaa"),
@@ -898,4 +915,89 @@ async fn a_repeated_listing_cursor_is_a_failed_page() {
         *service.repo.steps.lock().unwrap(),
         vec![BackfillStep::Retry]
     );
+
+    let (_, _, service) = scripted(vec![page(&["not_aaaaaaaaaaaaaa"], Some("page-2"))]);
+    {
+        let mut backfill = service.repo.backfill.lock().unwrap();
+        backfill.cursor = Some("page-2".into());
+        backfill.attempts = BACKFILL_PAGE_ATTEMPTS - 1;
+    }
+    assert!(service.backfill().await.unwrap());
+    assert_eq!(
+        *service.repo.steps.lock().unwrap(),
+        vec![BackfillStep::GaveUp(GiveUpReason::RepeatedCursor)]
+    );
+}
+
+fn next(cursor: &str, skipped: Vec<SkippedNote>) -> BackfillStep {
+    BackfillStep::Next {
+        cursor: cursor.into(),
+        skipped,
+    }
+}
+
+fn done(skipped: Vec<SkippedNote>) -> BackfillStep {
+    BackfillStep::Done { skipped }
+}
+
+fn skip(id: &str, reason: SkipReason) -> SkippedNote {
+    SkippedNote {
+        note_id: NoteId(id.into()),
+        reason,
+    }
+}
+
+/// A page too slow for one attempt resumes on the next where it stopped:
+/// notes an earlier attempt imported are not fetched again.
+#[tokio::test(start_paused = true)]
+async fn a_slow_page_resumes_where_its_last_attempt_stopped() {
+    let listing = || {
+        response(
+            200,
+            page(
+                &[
+                    "not_aaaaaaaaaaaaaa",
+                    "not_cccccccccccccc",
+                    "not_dddddddddddddd",
+                    "not_eeeeeeeeeeeeee",
+                ],
+                None,
+            )
+            .1,
+        )
+    };
+    let fetched = |id| [response(200, note(id).1), response(404, Value::Null)];
+    let mut responses = vec![listing()];
+    responses.extend(fetched("not_aaaaaaaaaaaaaa"));
+    responses.extend(fetched("not_cccccccccccccc"));
+    responses.push(listing());
+    responses.extend(fetched("not_dddddddddddddd"));
+    responses.extend(fetched("not_eeeeeeeeeeeeee"));
+    let (fake, calls, service) = scripted_with(responses, true, |api| {
+        Slow(api, std::time::Duration::from_secs(55))
+    });
+
+    assert!(service.backfill().await.unwrap());
+    assert!(service.backfill().await.unwrap());
+
+    assert_eq!(
+        *service.repo.steps.lock().unwrap(),
+        vec![BackfillStep::Retry, done(vec![])]
+    );
+    assert_eq!(
+        imported_ids(&calls),
+        vec![
+            "not_aaaaaaaaaaaaaa",
+            "not_cccccccccccccc",
+            "not_dddddddddddddd",
+            "not_eeeeeeeeeeeeee"
+        ]
+    );
+    let fetches: Vec<String> = fake
+        .api_calls()
+        .into_iter()
+        .map(|c| c.url)
+        .filter(|url| url.ends_with("/notes/not_aaaaaaaaaaaaaa"))
+        .collect();
+    assert_eq!(fetches.len(), 1);
 }

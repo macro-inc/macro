@@ -130,7 +130,8 @@ impl SyncRepository for PgSyncRepository {
                 scope = EXCLUDED.scope, started_at = EXCLUDED.started_at, enabled = false,
                 endpoint_id = NULL, signing_secret = NULL, last_error = NULL, last_synced_at = NULL,
                 backfill_cursor = NULL, backfill_completed_at = NULL, backfill_available_at = now(),
-                backfill_lease_id = NULL, backfill_attempts = 0
+                backfill_lease_id = NULL, backfill_attempts = 0, backfill_handled = '{}',
+                backfill_deferrals = 0, backfill_skipped = '[]', backfill_gave_up = NULL
             WHERE granola_sync_connections.endpoint_id IS NOT NULL
                 OR granola_sync_connections.last_error IS NOT NULL
                 OR granola_sync_connections.started_at < now() - interval '2 minutes'
@@ -269,7 +270,8 @@ impl SyncRepository for PgSyncRepository {
                 backfill_attempts = c.backfill_attempts + 1,
                 backfill_available_at = now() + interval '10 minutes'
             FROM candidate WHERE c.id = candidate.id
-            RETURNING c.id, c.backfill_cursor, c.backfill_attempts"#,
+            RETURNING c.id, c.backfill_cursor, c.backfill_attempts, c.backfill_handled,
+                c.backfill_deferrals"#,
             lease
         )
         .fetch_optional(&self.pool)
@@ -285,25 +287,63 @@ impl SyncRepository for PgSyncRepository {
             cursor: row.backfill_cursor,
             lease_id: lease,
             attempts: row.backfill_attempts,
+            handled: row.backfill_handled.into_iter().map(NoteId).collect(),
+            deferrals: row.backfill_deferrals,
         }))
+    }
+    async fn mark_backfilled(&self, job: &BackfillJob, note: &NoteId) -> Result<()> {
+        sqlx::query!(
+            "UPDATE granola_sync_connections SET backfill_handled = array_append(backfill_handled, $3)
+             WHERE id = $1 AND backfill_lease_id = $2",
+            job.connection.id,
+            job.lease_id,
+            note.as_ref()
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
     async fn finish_backfill(&self, job: &BackfillJob, step: BackfillStep) -> Result<()> {
         // A failed page waits 30 s, doubling per attempt, up to an hour. A
-        // throttled page waits as long as Granola asked, and a deferred one
-        // (backfill not rolled out to the user) ten minutes; neither spends
-        // the attempt.
-        let (next_cursor, done, retry_seconds, keep_attempt) = match step {
-            BackfillStep::Next(cursor) => (Some(cursor), false, None, false),
-            BackfillStep::Done => (None, true, None, false),
+        // throttled page waits as long as Granola asked. A deferred one (the
+        // user is not opted in) waits ten minutes, doubling per deferral in a
+        // row, up to twelve hours. Neither of the last two spends the attempt.
+        let mut finished = Finished::default();
+        match step {
+            BackfillStep::Next { cursor, skipped } => {
+                finished.next_cursor = Some(cursor);
+                finished.page_over = true;
+                finished.skipped = skipped;
+            }
+            BackfillStep::Done { skipped } => {
+                finished.done = true;
+                finished.page_over = true;
+                finished.skipped = skipped;
+            }
+            BackfillStep::GaveUp(reason) => {
+                finished.done = true;
+                finished.page_over = true;
+                finished.gave_up = Some(reason);
+            }
             BackfillStep::Retry => {
                 let seconds = 30_i32
                     .saturating_mul(2_i32.saturating_pow(job.attempts.clamp(1, 8) as u32 - 1))
                     .min(3600);
-                (None, false, Some(f64::from(seconds)), false)
+                finished.wait_seconds = Some(f64::from(seconds));
             }
-            BackfillStep::Throttled(wait) => (None, false, Some(wait.as_secs_f64()), true),
-            BackfillStep::Deferred => (None, false, Some(600.0), true),
-        };
+            BackfillStep::Throttled(wait) => {
+                finished.wait_seconds = Some(wait.as_secs_f64());
+                finished.keep_attempt = true;
+            }
+            BackfillStep::Deferred => {
+                let seconds = 600_i64
+                    .saturating_mul(2_i64.saturating_pow(job.deferrals.clamp(0, 10) as u32))
+                    .min(12 * 3600);
+                finished.wait_seconds = Some(seconds as f64);
+                finished.keep_attempt = true;
+                finished.deferred = true;
+            }
+        }
         sqlx::query!(
             r#"UPDATE granola_sync_connections SET
                 backfill_cursor = COALESCE($3, backfill_cursor),
@@ -311,19 +351,43 @@ impl SyncRepository for PgSyncRepository {
                 backfill_attempts = CASE WHEN $6 THEN backfill_attempts - 1
                     WHEN $5::double precision IS NULL THEN 0 ELSE backfill_attempts END,
                 backfill_available_at = now() + make_interval(secs => COALESCE($5::double precision, 0)),
+                backfill_handled = CASE WHEN $7 THEN '{}' ELSE backfill_handled END,
+                backfill_skipped = backfill_skipped || $8::jsonb,
+                backfill_gave_up = COALESCE($9, backfill_gave_up),
+                backfill_deferrals = CASE WHEN $10 THEN backfill_deferrals + 1 ELSE 0 END,
                 backfill_lease_id = NULL
             WHERE id = $1 AND backfill_lease_id = $2"#,
             job.connection.id,
             job.lease_id,
-            next_cursor,
-            done,
-            retry_seconds,
-            keep_attempt
+            finished.next_cursor,
+            finished.done,
+            finished.wait_seconds,
+            finished.keep_attempt,
+            finished.page_over,
+            serde_json::to_value(&finished.skipped)?,
+            finished.gave_up.as_ref().map(|reason| reason.as_ref()),
+            finished.deferred
         )
         .execute(&self.pool)
         .await?;
         Ok(())
     }
+}
+
+/// The columns one backfill outcome writes.
+#[derive(Default)]
+struct Finished {
+    next_cursor: Option<String>,
+    /// The backfill is over: completed or given up.
+    done: bool,
+    /// Wait before the next claim; `None` resets the attempts.
+    wait_seconds: Option<f64>,
+    keep_attempt: bool,
+    /// The page moved on, so its handled notes are forgotten.
+    page_over: bool,
+    skipped: Vec<SkippedNote>,
+    gave_up: Option<GiveUpReason>,
+    deferred: bool,
 }
 
 #[cfg(test)]

@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidate AS (\n                SELECT id FROM granola_sync_connections\n                WHERE enabled AND backfill_completed_at IS NULL AND backfill_available_at <= now()\n                ORDER BY backfill_available_at LIMIT 1 FOR UPDATE SKIP LOCKED\n            )\n            UPDATE granola_sync_connections c SET backfill_lease_id = $1,\n                backfill_attempts = c.backfill_attempts + 1,\n                backfill_available_at = now() + interval '10 minutes'\n            FROM candidate WHERE c.id = candidate.id\n            RETURNING c.id, c.backfill_cursor, c.backfill_attempts, c.backfill_handled,\n                c.backfill_deferrals",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "backfill_cursor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "backfill_attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "backfill_handled",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 4,
+        "name": "backfill_deferrals",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3b7f920e5c6c28903d0177c8b17c511380ce288e1f3b821ffa7cd7c36485a73c"
+}

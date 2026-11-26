@@ -127,15 +127,54 @@ pub struct BackfillJob {
     pub lease_id: Uuid,
     /// Attempts at this page, including this one.
     pub attempts: i32,
+    /// Notes of this page already handled by an earlier attempt; a retry
+    /// skips them, so a slow page makes progress on every attempt.
+    pub handled: Vec<NoteId>,
+    /// Times in a row the user was not opted in, for backing off deferrals.
+    pub deferrals: i32,
+}
+
+/// Why a backfilled note was given up on when its page moved on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, strum::AsRefStr)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SkipReason {
+    /// Granola kept failing to return the note.
+    FetchFailed,
+    /// The call import kept rejecting the note.
+    ImportFailed,
+    /// No attempt at the page reached the note within its time budget.
+    OutOfTime,
+}
+
+/// A note a page moved on without importing; recorded durably by ID only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SkippedNote {
+    pub note_id: NoteId,
+    pub reason: SkipReason,
+}
+
+/// Why a backfill stopped before Granola's last page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum GiveUpReason {
+    /// The listing kept handing back the cursor it was given.
+    RepeatedCursor,
 }
 
 /// How a backfill page ended.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BackfillStep {
-    /// The page was imported; continue from this cursor.
-    Next(String),
-    /// The last page was imported.
-    Done,
+    /// The page was imported; continue from this cursor. `skipped` are
+    /// the notes it gave up on after its last attempt.
+    Next {
+        cursor: String,
+        skipped: Vec<SkippedNote>,
+    },
+    /// The last page was imported, except `skipped`.
+    Done { skipped: Vec<SkippedNote> },
+    /// The backfill cannot continue; stop it for good.
+    GaveUp(GiveUpReason),
     /// The page failed; retry it after a backoff from its saved cursor.
     Retry,
     /// Granola rate-limited the page; retry it after this wait without

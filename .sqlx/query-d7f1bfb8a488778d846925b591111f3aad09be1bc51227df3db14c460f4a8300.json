@@ -82,6 +82,26 @@
         "ordinal": 15,
         "name": "backfill_attempts",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 16,
+        "name": "backfill_handled",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 17,
+        "name": "backfill_deferrals",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 18,
+        "name": "backfill_skipped",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 19,
+        "name": "backfill_gave_up",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -105,7 +125,11 @@
       true,
       false,
       true,
-      false
+      false,
+      false,
+      false,
+      false,
+      true
     ]
   },
   "hash": "d7f1bfb8a488778d846925b591111f3aad09be1bc51227df3db14c460f4a8300"

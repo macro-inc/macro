@@ -235,16 +235,25 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> Service<R,
             Ok(Err(error)) => return Err(error),
         };
         if page.next.is_some() && page.next == job.cursor {
+            if job.attempts >= BACKFILL_PAGE_ATTEMPTS {
+                tracing::warn!("Granola kept repeating a listing cursor; giving up the backfill");
+                return Ok(BackfillStep::GaveUp(GiveUpReason::RepeatedCursor));
+            }
             return Err(rootcause::report!("Granola repeated a listing cursor"));
         }
         span.record("listed", page.notes.len());
         span.record("has_more", page.next.is_some());
 
-        let (mut deleted, mut missing, mut imported, mut failed) = (0_usize, 0, 0, 0);
+        let (mut deleted, mut already, mut missing, mut imported) = (0_usize, 0_usize, 0, 0);
+        let mut failures: Vec<SkippedNote> = Vec::new();
         let mut throttled = None;
         for (index, note) in page.notes.iter().enumerate() {
             if note.deleted {
                 deleted += 1;
+                continue;
+            }
+            if job.handled.contains(&note.id) {
+                already += 1;
                 continue;
             }
             tokio::time::sleep(BACKFILL_NOTE_PACING).await;
@@ -252,10 +261,18 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> Service<R,
                 tokio::time::timeout_at(deadline, self.granola.meeting(&job.connection, &note.id))
                     .await;
             let Ok(fetched) = fetched else {
-                // Out of time: the notes not reached count as failed, so the
-                // page is retried, or moves on after its last attempt.
+                // Out of time: the notes not reached fail this attempt; the
+                // next one resumes after the notes already handled.
                 span.record("out_of_time", true);
-                failed += page.notes[index..].iter().filter(|n| !n.deleted).count();
+                failures.extend(
+                    page.notes[index..]
+                        .iter()
+                        .filter(|n| !n.deleted && !job.handled.contains(&n.id))
+                        .map(|n| SkippedNote {
+                            note_id: n.id.clone(),
+                            reason: SkipReason::OutOfTime,
+                        }),
+                );
                 break;
             };
             match fetched {
@@ -264,39 +281,65 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> Service<R,
                         return Ok(BackfillStep::Retry);
                     }
                     match self.calls.ingest(meeting).await {
-                        Ok(_) => imported += 1,
+                        Ok(_) => {
+                            imported += 1;
+                            self.repo.mark_backfilled(job, &note.id).await?;
+                        }
                         Err(error) => {
-                            failed += 1;
                             tracing::warn!(error = ?error, note_id = note.id.as_ref(), "could not import a backfilled Granola note");
+                            failures.push(SkippedNote {
+                                note_id: note.id.clone(),
+                                reason: SkipReason::ImportFailed,
+                            });
                         }
                     }
                 }
-                Ok(None) => missing += 1,
+                Ok(None) => {
+                    missing += 1;
+                    self.repo.mark_backfilled(job, &note.id).await?;
+                }
                 // Stop here; the page is retried once the allowance recovers.
                 Err(error) if rate_limited(&error) => {
                     throttled = Some(throttle_wait(&error));
                     break;
                 }
                 Err(error) => {
-                    failed += 1;
                     tracing::warn!(error = ?error, note_id = note.id.as_ref(), "could not fetch a Granola note for backfill");
+                    failures.push(SkippedNote {
+                        note_id: note.id.clone(),
+                        reason: SkipReason::FetchFailed,
+                    });
                 }
             }
         }
         span.record("deleted", deleted);
+        span.record("already_handled", already);
         span.record("missing", missing);
         span.record("imported", imported);
-        span.record("failed", failed);
+        span.record("failed", failures.len());
 
         if let Some(wait) = throttled {
             return Ok(BackfillStep::Throttled(wait));
         }
-        if failed > 0 && job.attempts < BACKFILL_PAGE_ATTEMPTS {
+        if !failures.is_empty() && job.attempts < BACKFILL_PAGE_ATTEMPTS {
             return Ok(BackfillStep::Retry);
         }
+        // The page moves on: what still failed after its last attempt is
+        // given up on, recorded by note ID.
+        span.record("skipped", failures.len());
+        if !failures.is_empty() {
+            let note_ids: Vec<&str> = failures.iter().map(|f| f.note_id.as_ref()).collect();
+            tracing::warn!(
+                ?note_ids,
+                "skipping Granola notes after the page's last backfill attempt"
+            );
+        }
         Ok(match page.next {
-            Some(cursor) => BackfillStep::Next(cursor),
-            None => BackfillStep::Done,
+            Some(cursor) => BackfillStep::Next {
+                cursor,
+                skipped: failures,
+            },
+            None => BackfillStep::Done { skipped: failures },
         })
     }
 
@@ -453,6 +496,8 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> SyncServic
             failed = tracing::field::Empty,
             has_more = tracing::field::Empty,
             out_of_time = tracing::field::Empty,
+            already_handled = tracing::field::Empty,
+            skipped = tracing::field::Empty,
             step = tracing::field::Empty,
         );
         let step = match self.backfill_page(&job).instrument(span.clone()).await {
@@ -463,8 +508,9 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> SyncServic
             }
         };
         let outcome = match &step {
-            BackfillStep::Next(_) => "next",
-            BackfillStep::Done => "done",
+            BackfillStep::Next { .. } => "next",
+            BackfillStep::Done { .. } => "done",
+            BackfillStep::GaveUp(_) => "gave_up",
             BackfillStep::Retry => "retry",
             BackfillStep::Throttled(_) => "throttled",
             BackfillStep::Deferred => "deferred",

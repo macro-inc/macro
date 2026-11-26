@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE granola_sync_connections SET\n                backfill_cursor = COALESCE($3, backfill_cursor),\n                backfill_completed_at = CASE WHEN $4 THEN now() ELSE NULL END,\n                backfill_attempts = CASE WHEN $6 THEN backfill_attempts - 1\n                    WHEN $5::double precision IS NULL THEN 0 ELSE backfill_attempts END,\n                backfill_available_at = now() + make_interval(secs => COALESCE($5::double precision, 0)),\n                backfill_handled = CASE WHEN $7 THEN '{}' ELSE backfill_handled END,\n                backfill_skipped = backfill_skipped || $8::jsonb,\n                backfill_gave_up = COALESCE($9, backfill_gave_up),\n                backfill_deferrals = CASE WHEN $10 THEN backfill_deferrals + 1 ELSE 0 END,\n                backfill_lease_id = NULL\n            WHERE id = $1 AND backfill_lease_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool",
+        "Float8",
+        "Bool",
+        "Bool",
+        "Jsonb",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4bed609d860ee3c1962b1d3d7d00b34c5e95907e783f6adff2b015f1a1944eba"
+}
