@@ -130,7 +130,7 @@ impl Gen<'_> {
                 self.hydrate_lane(lane, page);
             }
         }
-        let count = *pick(&mut self.rng, &[2usize, 3, 8, 40, 120, 500]);
+        let count = *pick(&mut self.rng, &[2usize, 3, 8, 40, 120, ID_LIST_BATCH]);
         let mut ids: Vec<String> = Vec::with_capacity(count);
         for _ in 0..count {
             let id = if pool.is_empty() || self.rng.chance(0.15) {
@@ -147,7 +147,7 @@ impl Gen<'_> {
         let sort = *pick(&mut self.rng, &["CREATED_AT", "UPDATED_AT"]);
         let direction = if self.rng.chance(0.7) { "DESC" } else { "ASC" };
         let limit = if self.rng.chance(0.5) {
-            u16::try_from(count.min(500)).unwrap_or(500)
+            u16::try_from(count).unwrap_or(u16::MAX)
         } else {
             *pick(&mut self.rng, LIMITS)
         };
@@ -157,8 +157,8 @@ impl Gen<'_> {
             "sortDirection": direction,
             "limit": limit,
         });
-        let pages = *pick(&mut self.rng, &[1u8, 1, 2, 4]);
-        self.push(Op::Filter { request, pages });
+        // Only Mail filters follow cursors, so one page.
+        self.push(Op::Filter { request, pages: 1 });
     }
 
     /// A live view op on one slot; reads mostly keep the slot's filter, so
@@ -459,6 +459,9 @@ fn split_shared(tree: Value) -> (Value, Option<Value>) {
         (tree, None)
     }
 }
+
+/// The most ids the channel list sends in one filter.
+const ID_LIST_BATCH: usize = 500;
 
 /// `field` equal to any of `ids`, as a balanced OR: the app's filter
 /// compilers balance theirs, and a chain of 500 would pass the parser's depth.
