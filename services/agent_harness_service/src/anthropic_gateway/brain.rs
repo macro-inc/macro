@@ -205,6 +205,22 @@ impl BrainAccess {
     /// The agent behind the bearer key. The authenticator is the shared one
     /// (wrapped by [`HeldBrains`]), so a take-over holds these routes too.
     pub(crate) async fn authorize(&self, headers: &HeaderMap) -> Result<BrainCaller, BrainRefusal> {
+        let brain = self.authenticate_enabled(headers).await?;
+        self.admission
+            .admit(&brain.user_id, AiFeature::AgentSession)
+            .await
+            .map_err(|error| match error {
+                AiAdmissionError::Denied(_) => BrainRefusal::Forbidden,
+                AiAdmissionError::Unavailable => BrainRefusal::Unavailable,
+            })?;
+        Ok(brain)
+    }
+
+    /// Authenticate a live teammate and check rollout before any funding decision.
+    pub(crate) async fn authenticate_enabled(
+        &self,
+        headers: &HeaderMap,
+    ) -> Result<BrainCaller, BrainRefusal> {
         let bearer = headers
             .typed_get::<Authorization<Bearer>>()
             .ok_or(BrainRefusal::Unauthenticated)?;
@@ -224,13 +240,6 @@ impl BrainAccess {
             return Err(BrainRefusal::Forbidden);
         }
 
-        self.admission
-            .admit(&brain.user_id, AiFeature::AgentSession)
-            .await
-            .map_err(|error| match error {
-                AiAdmissionError::Denied(_) => BrainRefusal::Forbidden,
-                AiAdmissionError::Unavailable => BrainRefusal::Unavailable,
-            })?;
         Ok(brain)
     }
 }

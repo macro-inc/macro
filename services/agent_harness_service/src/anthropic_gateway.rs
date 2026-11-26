@@ -35,7 +35,7 @@ use usage::{SseUsage, TokenUsage};
 
 pub(crate) mod brain;
 mod screen_notices;
-mod usage;
+pub(crate) mod usage;
 
 #[cfg(test)]
 mod test;
