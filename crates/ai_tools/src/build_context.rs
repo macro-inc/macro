@@ -702,8 +702,11 @@ pub async fn build_tool_service_context_from_env(
                 import_notion::outbound::connected::ConnectedNotion::new(Arc::clone(&connections)),
             ))
             .with_hubspot(Arc::new(import_hubspot::outbound::client::HubspotApi::new(
-                connections,
+                Arc::clone(&connections),
             )))
+            .with_salesforce(Arc::new(
+                import_salesforce::outbound::client::SalesforceApi::new(connections),
+            ))
             .with_crm_writer(Arc::new(crate::CrmRecordWriter::new(
                 &crm_tool_context,
                 &pipeline_tool_context,

@@ -128,6 +128,7 @@ import = { path = "../../crates/import" }
 import_notion = { path = "../../crates/import_notion" }
 import_linear = { path = "../../crates/import_linear" }
 import_hubspot = { path = "../../crates/import_hubspot" }
+import_salesforce = { path = "../../crates/import_salesforce" }
 import_jira = { path = "../../crates/import_jira" }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 jev = { path = "../../crates/jev", features = ["decisions", "outbound"] }
