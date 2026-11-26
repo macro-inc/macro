@@ -97,7 +97,7 @@ if (root) {
         <Route path="/" component={Creator} />
         <Route path="/fleet" component={Fleet} />
         <Route path="/sign-in" component={SignIn} />
-        <Route path="/teams/:team/bots/:bot/:view" component={Brain} />
+        <Route path="/teams/:team/bots/:bot/:view/:entry?" component={Brain} />
         <Route
           path="/passwords"
           component={() => <TowerUnavailable heading={towerViews.passwords} />}
