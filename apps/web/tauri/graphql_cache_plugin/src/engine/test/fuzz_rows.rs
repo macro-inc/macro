@@ -467,7 +467,10 @@ fn run(seed: u64, trace: &mut String) -> (usize, usize, usize) {
                 }
                 _ => view.revision.clone(),
             };
+            // The oracle reads rows, identities and order, not the revisions seen.
+            let seen = std::mem::take(&mut view.seen);
             let before = view.clone();
+            view.seen = seen;
             let expect_reset = since.is_none() || since != view.revision;
             let update = view.read(&handle, since);
             patches += update["patches"].as_array().unwrap().len();
