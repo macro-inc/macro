@@ -615,6 +615,7 @@ describe('bounded calendar preload window', () => {
       vi.useFakeTimers();
       const viewport = document.createElement('div');
       Object.defineProperty(viewport, 'clientWidth', { value: 100 });
+      viewport.getBoundingClientRect = () => new DOMRect(0, 0, 100, 0);
       let pager!: ReturnType<typeof useCalendarPager>;
       function Pages() {
         pager = useCalendarPager();

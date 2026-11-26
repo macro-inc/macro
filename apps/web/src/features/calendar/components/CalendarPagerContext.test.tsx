@@ -44,6 +44,7 @@ function mountCalendar(
     value: 100,
     configurable: true,
   });
+  viewport.getBoundingClientRect = () => new DOMRect(0, 0, 100, 0);
   viewport.scrollTo = vi.fn(
     (options?: ScrollToOptions | number, _y?: number) => {
       if (typeof options === 'object')
@@ -448,6 +449,7 @@ describe('virtual track lifecycle', () => {
     let width = 100;
     const viewport = document.createElement('div');
     Object.defineProperty(viewport, 'clientWidth', { get: () => width });
+    viewport.getBoundingClientRect = () => new DOMRect(0, 0, width, 0);
     const pager = createSnapPager();
     const detach = pager.attachViewport(viewport);
     try {
@@ -535,6 +537,7 @@ describe('virtual track lifecycle', () => {
     const pager = createSnapPager();
     const viewport = document.createElement('div');
     Object.defineProperty(viewport, 'clientWidth', { value: 100 });
+    viewport.getBoundingClientRect = () => new DOMRect(0, 0, 100, 0);
     const detach = pager.attachViewport(viewport);
     try {
       viewport.dispatchEvent(new Event('touchstart'));
@@ -554,6 +557,7 @@ describe('virtual track lifecycle', () => {
       let width = 100;
       const viewport = document.createElement('div');
       Object.defineProperty(viewport, 'clientWidth', { get: () => width });
+      viewport.getBoundingClientRect = () => new DOMRect(0, 0, width, 0);
       viewport.scrollTo = (options?: ScrollToOptions | number) => {
         if (typeof options === 'object')
           viewport.scrollLeft = options.left ?? viewport.scrollLeft;
