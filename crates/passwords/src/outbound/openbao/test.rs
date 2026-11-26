@@ -723,3 +723,29 @@ async fn status_pins_operation_to_metadata_version_during_independent_write() {
     server.abort();
     let _ = server.await;
 }
+
+#[test]
+fn use_when_is_optional_only_within_a_valid_stored_envelope() {
+    let legacy = serde_json::json!({
+        "operation_id": uuid::Uuid::now_v7(),
+        "values": { "username": "", "password": "", "notes": "", "fields": [] }
+    });
+    let projection: StoredUseWhen = serde_json::from_value(legacy.clone()).expect("old advisory");
+    assert!(projection.use_when.is_none());
+    let credential: StoredCredential = serde_json::from_value(legacy).expect("old envelope");
+    let stored = serde_json::to_value(StoredSecret {
+        operation_id: credential.operation_id,
+        values: credential.values,
+        use_when: Some(SecretString("Renewals".into())),
+    })
+    .expect("new envelope");
+    assert_eq!(stored["use_when"], "Renewals");
+    assert!(stored["values"].get("use_when").is_none());
+    let projection: StoredUseWhen = serde_json::from_value(stored.clone()).expect("new advisory");
+    assert_eq!(projection.use_when.expect("advisory").0, "Renewals");
+    assert!(serde_json::from_value::<StoredUseWhen>(serde_json::json!({})).is_err());
+    let mut malformed = stored;
+    malformed["use_when"] = serde_json::json!(42);
+    assert!(serde_json::from_value::<StoredUseWhen>(malformed.clone()).is_err());
+    assert!(serde_json::from_value::<StoredCredential>(malformed).is_ok());
+}

@@ -230,6 +230,7 @@ impl PasswordService {
                                         expected_version: None,
                                         values: item.values,
                                     },
+                                    None,
                                     lock.as_ref(),
                                 )
                                 .await;

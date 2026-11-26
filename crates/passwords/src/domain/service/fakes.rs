@@ -702,7 +702,7 @@ impl Drop for ActiveWrite<'_> {
 }
 pub struct FakeProvider {
     pub calls: AtomicUsize,
-    pub stored: Mutex<HashMap<Uuid, (i32, Uuid, SecretValues)>>,
+    pub stored: Mutex<HashMap<Uuid, (i32, Uuid, SecretValues, Option<SecretString>)>>,
     pub reads: AtomicUsize,
     pub fail_delete: AtomicBool,
     pub blocked_deletes: Mutex<HashSet<Uuid>>,
@@ -831,13 +831,14 @@ impl SecretProvider for FakeProvider {
             .get(&item.0)
             .map(|stored| (stored.0, stored.1)))
     }
-    async fn write(
+    async fn write_with_use_when(
         &self,
         _: TeamId,
         item: ItemId,
         expected: i32,
         operation: Uuid,
         values: &SecretValues,
+        use_when: Option<&SecretString>,
     ) -> Result<i32, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.login()?;
@@ -865,7 +866,10 @@ impl SecretProvider for FakeProvider {
         if actual != expected {
             return Err(Error::Conflict);
         }
-        stored.insert(item.0, (expected + 1, operation, values.clone()));
+        stored.insert(
+            item.0,
+            (expected + 1, operation, values.clone(), use_when.cloned()),
+        );
         self.writes_completed
             .lock()
             .expect("fixture lock")
@@ -874,6 +878,22 @@ impl SecretProvider for FakeProvider {
             gate.finished.notify_one();
         }
         Ok(expected + 1)
+    }
+    async fn use_when(
+        &self,
+        _: TeamId,
+        item: ItemId,
+        version: i32,
+    ) -> Result<Option<SecretString>, Error> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.login()?;
+        self.revoke_during_disclosure();
+        let stored = self.stored.lock().expect("fixture lock");
+        let stored = stored.get(&item.0).ok_or(Error::NotFound)?;
+        if stored.0 != version {
+            return Err(Error::Conflict);
+        }
+        Ok(stored.3.clone())
     }
     async fn read(&self, _: TeamId, item: ItemId, version: i32) -> Result<SecretValues, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
