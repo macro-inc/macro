@@ -110,7 +110,9 @@ fn transport_class(error: &ConnectorsError) -> TransportClass {
             .map_or(TransportClass::Other, http_class),
         ConnectorsError::UnknownApp(_)
         | ConnectorsError::NonPublicServer(_)
-        | ConnectorsError::EmptyName => TransportClass::Other,
+        | ConnectorsError::EmptyName
+        | ConnectorsError::ToolNotListed { .. }
+        | ConnectorsError::TimedOut { .. } => TransportClass::Other,
     }
 }
 

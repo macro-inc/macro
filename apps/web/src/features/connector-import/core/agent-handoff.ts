@@ -69,12 +69,26 @@ const HUBSPOT_HANDOFF: AgentImportHandoff = {
   ].join(' '),
 };
 
+/**
+ * Attio runs the same CRM importer: companies, people, one deal pipeline and
+ * deals, read through the user's Attio connection with ImportFromAttio.
+ */
+const ATTIO_HANDOFF: AgentImportHandoff = {
+  input: 'Import my Attio CRM into Macro.',
+  instructions: [
+    "The user started this from Macro's import dialog and has just connected Attio.",
+    'Use ImportFromAttio to plan it and present the import review right away.',
+    'Never recreate companies, people or deals with other tools, and never edit or delete anything in Attio.',
+  ].join(' '),
+};
+
 export function agentImportHandoff(
   config: ImportCategoryConfig,
   provider: ImportProvider
 ): AgentImportHandoff {
   if (provider.ledger === 'notion') return NOTION_WORKSPACE_HANDOFF;
   if (provider.ledger === 'hubspot') return HUBSPOT_HANDOFF;
+  if (provider.ledger === 'attio') return ATTIO_HANDOFF;
   if (provider.ledger === 'linear' || provider.ledger === 'jira') {
     return {
       input: `Import my ${provider.name} workspace into Macro.`,

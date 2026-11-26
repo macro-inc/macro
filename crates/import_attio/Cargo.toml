@@ -1,0 +1,44 @@
+[package]
+name = "import_attio"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+# `standin::AttioStandin`, a labelled in-process Attio MCP stand-in serving
+# synthetic records, and the `attio_mcp_standin` HTTP binary over it.
+standin = [
+    "rmcp/server",
+    "rmcp/transport-streamable-http-server",
+    "dep:axum",
+    "dep:clap",
+    "dep:tokio",
+]
+
+[[bin]]
+name = "attio_mcp_standin"
+required-features = ["standin"]
+
+[dependencies]
+async-trait = { workspace = true }
+axum = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
+connectors = { path = "../connectors" }
+import_tracker = { path = "../import_tracker" }
+macro_user_id = { path = "../macro_user_id" }
+mcp_toolset = { path = "../mcp_toolset" }
+rmcp = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["net"], optional = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+connectors = { path = "../connectors", features = ["test-fakes"] }
+rmcp = { workspace = true, features = ["server"] }
+tokio = { workspace = true, features = ["test-util", "macros"] }

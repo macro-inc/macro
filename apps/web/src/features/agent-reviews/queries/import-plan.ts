@@ -3,6 +3,7 @@ import { parseRunErrorKind } from '@service-cognition/import';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 import type {
+  CrmPlanReport,
   ImportDraft,
   ImportPlanEntry,
   ImportProgress,
@@ -56,7 +57,9 @@ export function decodePlanEntries(
   );
   return entities.flatMap((entity): ImportPlanEntry[] => {
     if (
-      !['notion', 'linear', 'jira', 'hubspot'].includes(entity.source) ||
+      !['notion', 'linear', 'jira', 'hubspot', 'attio'].includes(
+        entity.source
+      ) ||
       entity.review_id !== reviewId
     )
       return [];
@@ -84,10 +87,10 @@ export function decodePlanEntries(
             'jira_epic',
             () => 'project' as const
           )
-          .with('hubspot_pipeline', () => 'pipeline' as const)
-          .with('hubspot_company', () => 'company' as const)
-          .with('hubspot_contact', () => 'contact' as const)
-          .with('hubspot_deal', () => 'deal' as const)
+          .with('hubspot_pipeline', 'attio_pipeline', () => 'pipeline' as const)
+          .with('hubspot_company', 'attio_company', () => 'company' as const)
+          .with('hubspot_contact', 'attio_person', () => 'contact' as const)
+          .with('hubspot_deal', 'attio_deal', () => 'deal' as const)
           .otherwise(() => 'page' as const),
         title: metadata.data.title,
         decision: plan.decision ?? null,
@@ -151,14 +154,20 @@ export function decodeImportProgress(
       title: item.title,
       reason: item.reason ?? '',
     })),
-    hubspot: report.hubspot
-      ? {
-          owners: report.hubspot.owners,
-          ownersMatched: report.hubspot.ownersMatched,
-          created: report.hubspot.created ?? 0,
-          linked: report.hubspot.linked ?? 0,
-          losses: report.hubspot.losses,
-        }
-      : null,
+    crm: decodeCrmReport(source === 'attio' ? report.attio : report.hubspot),
+  };
+}
+
+/** A CRM source's owners, writes and losses, from its own report section. */
+function decodeCrmReport(
+  crm: NotionImportReport['hubspot'] | NotionImportReport['attio']
+): CrmPlanReport | null {
+  if (!crm) return null;
+  return {
+    owners: crm.owners,
+    ownersMatched: crm.ownersMatched,
+    created: crm.created ?? 0,
+    linked: crm.linked ?? 0,
+    losses: crm.losses,
   };
 }

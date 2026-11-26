@@ -17,4 +17,5 @@ export const ImportSource = {
   notion: 'notion',
   slack: 'slack',
   hubspot: 'hubspot',
+  attio: 'attio',
 } as const;

@@ -27,6 +27,17 @@ describe('agent import handoff', () => {
     expect(handoff.instructions).not.toContain('CreateImportEntity');
   });
 
+  it("imports Attio through Macro's CRM importer", () => {
+    const crm = IMPORT_CATEGORIES.crm;
+    const attio = crm.providers.find((p) => p.appSlug === 'attio')!;
+    const handoff = agentImportHandoff(crm, attio);
+    expect(handoff.input).toBe('Import my Attio CRM into Macro.');
+    expect(handoff.instructions).toContain('ImportFromAttio');
+    expect(handoff.instructions).toContain('never edit or delete');
+    expect(handoff.instructions).not.toContain('CreateCompany');
+    expect(handoff.instructions).not.toContain('CreateImportEntity');
+  });
+
   it("imports the Notion workspace through Macro's importer", () => {
     const files = IMPORT_CATEGORIES.files;
     const notion = files.providers.find((p) => p.appSlug === 'notion')!;

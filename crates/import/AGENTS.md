@@ -519,23 +519,42 @@ review predicates aligned with `import_entity_notion_review_sources_idx`.
 Reconcile only the exact owned review; never scan an owner's import history for
 review defaults on each edit.
 
-## CRM imports
+## CRM imports (HubSpot, Attio)
 
-`ImportFromHubspot` uses the same reviewed lifecycle with no decision model.
-A CRM source reads its own inventory and converts it into the neutral
-`CrmInventory` (`hubspot_workspace/plan.rs`: ledger keys, record URLs,
-source-only losses); planning, writing and the report are shared in
+`ImportFromHubspot` and `ImportFromAttio` use the same reviewed lifecycle with
+no decision model. Each source reads its own inventory and converts it into
+the neutral `CrmInventory` (`hubspot_workspace/plan.rs`,
+`attio_workspace/plan.rs`: ledger keys, record URLs, source-only losses);
+planning, writing and the report are shared in
 `domain/service/crm_workspace.rs` + `plan`, parameterized by the source's
-`CrmKinds`. The host registers an `import_hubspot::domain::HubspotConnections`
-reader with `with_hubspot` and the one `CrmImportWriter`
-(`ai_tools::CrmRecordWriter`, over `crm::domain::record_import`) with
-`with_crm_writer`; hosts without them answer "not available". A plan needs a
-team whose CRM the user may use (`ImportError::CrmAccessRequired`) and a
-source connection (`HubspotError::NotConnected`, which the tool turns into a
-connect prompt), both checked before the run starts, so neither leaves a failed import; every row is shared with the team and not shareable, so the card
-offers no sharing choice. Rows are keyed `{portal}:{type}:{id}` (pipeline ids
-are words, record ids numbers), so re-runs and teammates dedupe through the
-ledger and the `import_entity_hubspot_team_object_key` index.
+`CrmKinds`. The host registers an
+`import_hubspot::domain::HubspotConnections` reader with `with_hubspot`, an
+`import_attio::domain::AttioConnections` reader with `with_attio`, and the
+one `CrmImportWriter` (`ai_tools::CrmRecordWriter`,
+over `crm::domain::record_import`) with `with_crm_writer`; hosts without them
+answer "not available".
+Attio is read through the user's native Attio MCP connection
+(`connectors::McpConnectionsService::call_tool`), since an overlaid app has no
+API surface; its report section is `attio`, HubSpot's `hubspot`, both a
+`CrmReport`. A deal stage of Attio's is Won when Attio celebrates it, Lost
+when its title is "Lost" or "Closed lost" (any case, symbols ignored), else
+Open. The Attio import waits on its rollout flag, `enable-attio-import`
+(`ImportSource::rollout_flag`, see below), off until a real capture replaces
+`import_attio`'s ASSUMED shapes. A plan needs a team
+whose CRM the user may use (`ImportError::CrmAccessRequired`) and a source
+connection (`HubspotError::NotConnected`, `AttioError::NotConnected`, which
+the tool turns into a connect prompt), both checked before the run starts, so neither leaves a failed import; every row is shared with the team and not shareable, so the card
+offers no sharing choice. Rows are keyed so re-runs and teammates dedupe
+through the ledger and the source's team index:
+
+- HubSpot: `{portal}:{type}:{id}` (pipeline ids are words, record ids
+  numbers), index `import_entity_hubspot_team_object_key`.
+- Attio: `{workspace_id}:{object}:{record_id}` (objects `companies`, `people`,
+  `deals`), and `{workspace_id}:pipeline:deals` for the one "Attio deals"
+  pipeline; index `import_entity_attio_team_object_key`.
+
+Reads of runs and rows (`list`, `list_runs`, `get`) skip a source this build
+does not know, so a newer binary's rows never fail an older one mid-rollout.
 
 An import still being rolled out waits on a feature flag: `ImportSource::rollout_flag`
 (an exhaustive match, `None` for an import on for everyone) names it, the
@@ -551,7 +570,7 @@ connectors listing (`Importable::with_flagged`).
 Plans are fully decided when staged: deals with no company or no live pipeline
 are `skip` with a reason; everything Macro CRM cannot hold is a typed
 `CrmLoss` on the row (its serialized names are stored: never rename one),
-counted into the report's source section (`hubspot`, a `CrmReport`) with the
+counted into the report's source section with the
 owner match summary kept on the first row (`hubspotSummary`, not `summary`,
 which the shared report reads as text). Writes go pipelines, companies,
 contacts, deals. Each object is claimed for the team, then reuses a

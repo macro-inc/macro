@@ -27,7 +27,8 @@ pub use domain::models::{
 /// one implementation. Also re-exported at the crate root.
 pub use domain::service;
 pub use domain::service::{
-    ApiConnectionsService, ConnectionManagementService, Connectors, McpConnectionsService,
+    ApiConnectionsService, CALL_DEADLINE, ConnectionManagementService, Connectors,
+    McpConnectionsService,
 };
 /// Address-guarded HTTP for traffic to user-chosen servers: the egress
 /// proxy's forwarders refuse the same addresses the connectors do.

@@ -1,6 +1,9 @@
 //! The service's composition root: reads config and wires every adapter and
 //! domain service into the HTTP server.
 
+#[cfg(test)]
+mod test;
+
 use crate::cognition::{
     api::{self, context::ApiContext},
     config::{Config, Environment},
@@ -722,6 +725,9 @@ pub async fn build(
         .with_hubspot(Arc::new(import_hubspot::outbound::client::HubspotApi::new(
             Arc::clone(&connections),
         )))
+        .with_attio(Arc::new(import_attio::outbound::client::AttioMcp::new(
+            Arc::clone(&connections),
+        )))
         .with_import_rollout(ai_tools::import_rollout(
             side_effect_clients.feature_flags.clone(),
         ))
@@ -1055,5 +1061,17 @@ fn importable_apps() -> anyhow::Result<connectors::inbound::dto::Importable> {
             surface,
         );
     }
+    // Attio's reader runs on ASSUMED output shapes until a real capture, so
+    // its import shows only where its rollout flag is on.
+    let attio = import::domain::models::ImportSource::Attio;
+    importable = importable.with_flagged(
+        attio
+            .connector()
+            .context("the Attio import's app slug is not an app slug")?,
+        ImportSurface::Mcp,
+        attio
+            .rollout_flag()
+            .context("the Attio import has a rollout flag")?,
+    );
     Ok(importable)
 }

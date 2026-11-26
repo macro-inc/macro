@@ -13,7 +13,10 @@ Pipedream, Macro Connect) or tell which one holds a connection.
 - `src/lib.rs`: the public surface. Everything else is private.
 - `src/domain/service.rs`: the three service traits, the only way in, and
   `Connectors`, their one implementation: `McpConnectionsService` (a user's
-  answer, tools for in-process agents, the sandbox proxy's upstream),
+  answer, tools for in-process agents, one tool called by its listed name
+  for importers, bounded by `CALL_DEADLINE`, with an unlisted tool as
+  `ToolNotListed` apart from a gone connection's `NotFound`, the sandbox
+  proxy's upstream),
   `ApiConnectionsService` (an app's REST API through the counted connection),
   `ConnectionManagementService` (list, connect, add a server, enable, rename,
   remove).
@@ -71,7 +74,9 @@ Pipedream, Macro Connect) or tell which one holds a connection.
   (`SQLX_OFFLINE` unset; the repository tests need local MacroDB).
 - Consumers test against `fake::FakeConnectors` (feature `test-fakes`): the
   real services over in-memory sources, so a test can only hold states the
-  rules produce. Never hand-write a fake store.
+  rules produce. Never hand-write a fake store. `FakeConnection::answering_tool`
+  scripts a server's tool results, `served_by` serves a test's own MCP
+  server (a vendor stand-in), and `FakeConnectors::mcp_calls` records calls.
 - The sources' vendor calls are covered end to end against dev by the nightly
   connectors suite, not by tests over hand-written JSON.
 

@@ -702,6 +702,9 @@ pub async fn build_tool_service_context_from_env(
                 import_notion::outbound::connected::ConnectedNotion::new(Arc::clone(&connections)),
             ))
             .with_hubspot(Arc::new(import_hubspot::outbound::client::HubspotApi::new(
+                Arc::clone(&connections),
+            )))
+            .with_attio(Arc::new(import_attio::outbound::client::AttioMcp::new(
                 connections,
             )))
             .with_import_rollout(import_rollout(side_effect_clients.feature_flags.clone()))

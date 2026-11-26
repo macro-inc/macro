@@ -201,7 +201,7 @@ export function useCancelNotionImportMutation() {
 }
 
 function workspaceImportReportQueryOptions(
-  source: 'notion' | 'linear' | 'jira' | 'hubspot'
+  source: 'notion' | 'linear' | 'jira' | 'hubspot' | 'attio'
 ) {
   return queryOptions({
     queryKey: importKeys.workspace(source).queryKey,
@@ -213,7 +213,7 @@ function workspaceImportReportQueryOptions(
 
 /** A reviewed workspace report, isolated by source and refreshed on pushes. */
 export function useWorkspaceImportReportQuery(
-  source: Accessor<'notion' | 'linear' | 'jira' | 'hubspot'>
+  source: Accessor<'notion' | 'linear' | 'jira' | 'hubspot' | 'attio'>
 ) {
   createConnectionWebsocketEffect((message) => {
     if (message.type !== IMPORT_UPDATED_MESSAGE_TYPE) return;
@@ -229,7 +229,7 @@ export function useWorkspaceImportReportQuery(
 
 /** Cancel only the workspace source displayed by this review. */
 export function useCancelWorkspaceImportMutation(
-  source: Accessor<'notion' | 'linear' | 'jira' | 'hubspot'>
+  source: Accessor<'notion' | 'linear' | 'jira' | 'hubspot' | 'attio'>
 ) {
   return useMutation(() => ({
     mutationFn: async () => {

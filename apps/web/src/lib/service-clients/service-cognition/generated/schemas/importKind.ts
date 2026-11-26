@@ -29,4 +29,8 @@ export const ImportKind = {
   hubspot_company: 'hubspot_company',
   hubspot_contact: 'hubspot_contact',
   hubspot_deal: 'hubspot_deal',
+  attio_pipeline: 'attio_pipeline',
+  attio_company: 'attio_company',
+  attio_person: 'attio_person',
+  attio_deal: 'attio_deal',
 } as const;

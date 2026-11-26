@@ -1,0 +1,11 @@
+{
+  "active": true,
+  "scope": "record_permission:read object_configuration:read user_management:read",
+  "client_id": "00000000-0000-4000-8000-0000000000c1",
+  "token_type": "bearer",
+  "workspace_id": "1a1a1a1a-0000-4000-8000-000000000001",
+  "workspace_name": "Example Workspace",
+  "workspace_slug": "example-workspace",
+  "workspace_logo_url": null,
+  "authorized_by_workspace_member_id": "e0000000-0000-4000-8000-000000000001"
+}

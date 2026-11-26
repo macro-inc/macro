@@ -686,6 +686,24 @@ pub enum ConnectorsError {
     /// The user holds no connection to this app or server.
     #[error("no connection to {0}")]
     NotFound(ConnectorKey),
+    /// The connection's server does not list a tool the caller named.
+    #[error("{connector} does not list the {tool} tool")]
+    ToolNotListed {
+        /// The app or server called.
+        connector: ConnectorKey,
+        /// The tool, as the caller named it.
+        tool: String,
+    },
+    /// The connection's server did not answer a step of a tool call
+    /// (dialing, the call, or the listing that explains a failure) within
+    /// [`CALL_DEADLINE`](crate::domain::service::CALL_DEADLINE).
+    #[error("{connector} did not answer the {tool} tool call in time")]
+    TimedOut {
+        /// The app or server called.
+        connector: ConnectorKey,
+        /// The tool, as the caller named it.
+        tool: String,
+    },
     /// The connection's grant stopped working while it was being used.
     #[error("the connection to {0} must be authorized again")]
     NeedsReauth(ConnectorKey),

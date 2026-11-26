@@ -1,4 +1,7 @@
-import { isFeatureEnabled } from '@core/constant/featureFlags';
+import {
+  enableAttioImport,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import IconAirtable from '@icon/import/airtable.svg';
 import IconAsana from '@icon/import/asana.svg';
 import IconBox from '@icon/import/box.svg';
@@ -16,6 +19,7 @@ import IconTrello from '@icon/import/trello.svg';
 import IconGithub from '@icon/mcp-github.svg';
 import IconLinear from '@icon/mcp-linear.svg';
 import IconSlack from '@icon/slack-color.svg';
+import IconAddressBook from '@phosphor/address-book.svg';
 import type {
   ImportCategory,
   ImportCategoryConfig,
@@ -145,6 +149,16 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
         detail: 'Companies, contacts and deals',
         ledger: 'hubspot',
         icon: IconHubSpot as ImportIcon,
+      },
+      {
+        appSlug: 'attio',
+        name: 'Attio',
+        detail: 'Companies, people and deals',
+        ledger: 'attio',
+        // Its reader runs on ASSUMED Attio output until a real capture.
+        flag: enableAttioImport,
+        // No Attio logo in the icon set yet.
+        icon: IconAddressBook as ImportIcon,
       },
       {
         appSlug: 'salesforce_rest_api',

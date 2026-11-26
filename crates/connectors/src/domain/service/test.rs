@@ -389,6 +389,344 @@ async fn the_toolset_lists_each_usable_connections_tools() {
     assert!(answer.to_string().contains("Notion:search"));
 }
 
+// Calling one tool by the name its server lists.
+
+const ATTIO_SERVER: &str = "https://mcp.attio.com/mcp";
+
+/// The user's one handle to Attio, overlaid at its own server.
+async fn attio_handle(connection: FakeConnection) -> (FakeConnectors, Connectors, McpHandle) {
+    let fake = FakeConnectors::new()
+        .with_overlay("attio", ATTIO_SERVER)
+        .with_connection(&user(), connection);
+    let connectors = fake.build();
+    let handle = connectors
+        .connections(&user())
+        .await
+        .unwrap()
+        .handles()
+        .find(|handle| *handle.key() == app_key("attio"))
+        .cloned()
+        .unwrap();
+    (fake, connectors, handle)
+}
+
+fn json_result(value: serde_json::Value) -> CallToolResult {
+    CallToolResult::structured(value)
+}
+
+#[tokio::test]
+async fn a_tool_is_called_by_its_listed_name_with_its_arguments_and_answers_in_turn() {
+    let (fake, connectors, handle) = attio_handle(FakeConnection::app("attio").answering_tool(
+        "list-records",
+        [
+            json_result(serde_json::json!({"page": 1})),
+            json_result(serde_json::json!({"page": 2})),
+        ],
+    ))
+    .await;
+    let arguments = serde_json::json!({"object": "companies", "limit": 2, "offset": 0});
+
+    let first = connectors
+        .call_tool(&handle, "list-records", arguments.clone())
+        .await
+        .unwrap();
+    let second = connectors
+        .call_tool(&handle, "list-records", serde_json::json!({}))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        first.structured_content,
+        Some(serde_json::json!({"page": 1}))
+    );
+    assert_eq!(
+        second.structured_content,
+        Some(serde_json::json!({"page": 2}))
+    );
+    let calls = fake.mcp_calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[0].key, server_key(ATTIO_SERVER));
+    assert_eq!(calls[0].tool, "list-records");
+    assert_eq!(
+        serde_json::Value::Object(calls[0].arguments.clone()),
+        arguments
+    );
+}
+
+#[tokio::test]
+async fn a_result_the_tool_marked_as_an_error_is_returned_for_the_caller_to_read() {
+    let (_, connectors, handle) = attio_handle(FakeConnection::app("attio").answering_tool(
+        "whoami",
+        [CallToolResult::error(vec![
+            rmcp::model::ContentBlock::text("workspace suspended"),
+        ])],
+    ))
+    .await;
+
+    let result = connectors
+        .call_tool(&handle, "whoami", serde_json::json!({}))
+        .await
+        .unwrap();
+
+    assert_eq!(result.is_error, Some(true));
+}
+
+#[tokio::test]
+async fn a_tool_the_server_does_not_list_is_named_as_not_listed() {
+    let (fake, connectors, handle) =
+        attio_handle(FakeConnection::app("attio").with_tools(&["whoami"])).await;
+
+    let error = connectors
+        .call_tool(&handle, "delete-everything", serde_json::json!({}))
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        ConnectorsError::ToolNotListed { connector, tool }
+            if connector == app_key("attio") && tool == "delete-everything"
+    ));
+    assert!(fake.mcp_calls().is_empty());
+}
+
+#[tokio::test]
+async fn a_grant_the_server_revoked_needs_reauth_when_calling_a_tool() {
+    let (_, connectors, handle) = attio_handle(
+        FakeConnection::app("attio")
+            .with_tools(&["whoami"])
+            .revoked_upstream(),
+    )
+    .await;
+
+    let error = connectors
+        .call_tool(&handle, "whoami", serde_json::json!({}))
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, ConnectorsError::NeedsReauth(key) if key == app_key("attio")));
+}
+
+#[tokio::test]
+async fn a_server_that_cannot_be_dialed_fails_the_call_instead_of_dropping_it() {
+    let (_, connectors, handle) = attio_handle(
+        FakeConnection::app("attio")
+            .with_tools(&["whoami"])
+            .unreachable(),
+    )
+    .await;
+
+    let error = connectors
+        .call_tool(&handle, "whoami", serde_json::json!({}))
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, ConnectorsError::Internal(_)));
+}
+
+#[tokio::test]
+async fn arguments_that_are_not_an_object_are_refused_before_dialing() {
+    let (fake, connectors, handle) =
+        attio_handle(FakeConnection::app("attio").answering_tool("whoami", [])).await;
+
+    let error = connectors
+        .call_tool(
+            &handle,
+            "whoami",
+            serde_json::json!(["not", "an", "object"]),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, ConnectorsError::Internal(_)));
+    assert!(fake.mcp_calls().is_empty());
+}
+
+/// A test's own server: echoes the arguments of its one tool.
+#[derive(Clone)]
+struct EchoServer;
+
+impl rmcp::ServerHandler for EchoServer {
+    fn get_info(&self) -> rmcp::model::ServerConfig {
+        rmcp::model::ServerConfig::new(
+            rmcp::model::ServerCapabilities::builder()
+                .enable_tools()
+                .build(),
+        )
+    }
+
+    async fn list_tools(
+        &self,
+        _request: Option<rmcp::model::PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> Result<rmcp::model::ListToolsResult, rmcp::model::ErrorData> {
+        Ok(rmcp::model::ListToolsResult::with_all_items(vec![
+            rmcp::model::Tool::new("echo", "echo", Arc::new(serde_json::Map::new())),
+        ]))
+    }
+
+    async fn call_tool(
+        &self,
+        request: rmcp::model::CallToolRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> Result<rmcp::model::CallToolResponse, rmcp::model::ErrorData> {
+        if request.name != "echo" {
+            return Err(rmcp::model::ErrorData::invalid_params("unknown tool", None));
+        }
+        let arguments = serde_json::Value::Object(request.arguments.unwrap_or_default());
+        Ok(CallToolResult::structured(arguments).into())
+    }
+}
+
+#[tokio::test]
+async fn a_test_can_serve_its_own_mcp_server_for_a_connection() {
+    let (_, connectors, handle) =
+        attio_handle(FakeConnection::app("attio").served_by(EchoServer)).await;
+
+    let echoed = connectors
+        .call_tool(&handle, "echo", serde_json::json!({"offset": 50}))
+        .await
+        .unwrap();
+    let unknown = connectors
+        .call_tool(&handle, "whoami", serde_json::json!({}))
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        echoed.structured_content,
+        Some(serde_json::json!({"offset": 50}))
+    );
+    assert!(matches!(unknown, ConnectorsError::ToolNotListed { .. }));
+}
+
+/// A server that lists one tool and never answers a call to it.
+#[derive(Clone)]
+struct SilentServer;
+
+impl rmcp::ServerHandler for SilentServer {
+    fn get_info(&self) -> rmcp::model::ServerConfig {
+        rmcp::model::ServerConfig::new(
+            rmcp::model::ServerCapabilities::builder()
+                .enable_tools()
+                .build(),
+        )
+    }
+
+    async fn list_tools(
+        &self,
+        _request: Option<rmcp::model::PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> Result<rmcp::model::ListToolsResult, rmcp::model::ErrorData> {
+        Ok(rmcp::model::ListToolsResult::with_all_items(vec![
+            rmcp::model::Tool::new(
+                "list-records",
+                "never answers",
+                Arc::new(serde_json::Map::new()),
+            ),
+        ]))
+    }
+
+    async fn call_tool(
+        &self,
+        _request: rmcp::model::CallToolRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> Result<rmcp::model::CallToolResponse, rmcp::model::ErrorData> {
+        std::future::pending().await
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_server_that_never_answers_fails_the_call_at_the_deadline() {
+    let (_, connectors, handle) =
+        attio_handle(FakeConnection::app("attio").served_by(SilentServer)).await;
+    let started = tokio::time::Instant::now();
+
+    let error = connectors
+        .call_tool(&handle, "list-records", serde_json::json!({}))
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(&error, ConnectorsError::TimedOut { connector, tool }
+            if *connector == app_key("attio") && tool == "list-records"),
+        "{error:?}"
+    );
+    // The call timed out; the explaining listing is not tried.
+    assert!(started.elapsed() >= CALL_DEADLINE);
+    assert!(started.elapsed() < CALL_DEADLINE * 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_server_that_never_answers_the_dial_fails_the_call_at_the_deadline() {
+    let (_, connectors, handle) = attio_handle(
+        FakeConnection::app("attio")
+            .with_tools(&["whoami"])
+            .never_answering(),
+    )
+    .await;
+    let started = tokio::time::Instant::now();
+
+    let error = connectors
+        .call_tool(&handle, "whoami", serde_json::json!({}))
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(error, ConnectorsError::TimedOut { .. }),
+        "{error:?}"
+    );
+    assert!(started.elapsed() >= CALL_DEADLINE);
+    assert!(started.elapsed() < CALL_DEADLINE * 2);
+}
+
+/// A server that refuses its one tool's call and never answers a listing.
+#[derive(Clone)]
+struct SilentListingServer;
+
+impl rmcp::ServerHandler for SilentListingServer {
+    fn get_info(&self) -> rmcp::model::ServerConfig {
+        rmcp::model::ServerConfig::new(
+            rmcp::model::ServerCapabilities::builder()
+                .enable_tools()
+                .build(),
+        )
+    }
+
+    async fn list_tools(
+        &self,
+        _request: Option<rmcp::model::PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> Result<rmcp::model::ListToolsResult, rmcp::model::ErrorData> {
+        std::future::pending().await
+    }
+
+    async fn call_tool(
+        &self,
+        _request: rmcp::model::CallToolRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::service::RoleServer>,
+    ) -> Result<rmcp::model::CallToolResponse, rmcp::model::ErrorData> {
+        Err(rmcp::model::ErrorData::internal_error("refused", None))
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_listing_that_never_answers_after_a_failed_call_times_out() {
+    let (_, connectors, handle) =
+        attio_handle(FakeConnection::app("attio").served_by(SilentListingServer)).await;
+    let started = tokio::time::Instant::now();
+
+    let error = connectors
+        .call_tool(&handle, "list-records", serde_json::json!({}))
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(error, ConnectorsError::TimedOut { .. }),
+        "{error:?}"
+    );
+    assert!(started.elapsed() >= CALL_DEADLINE);
+    assert!(started.elapsed() < CALL_DEADLINE * 2);
+}
+
 // The selected-apps permission.
 
 #[tokio::test]

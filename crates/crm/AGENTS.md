@@ -26,7 +26,7 @@ tools/HTTP/GraphQL surfaces over them.
   pipeline workflows and `CrmService`; CSV files reach documents through the
   `CsvFiles` port, implemented in `ai_tools::crm_csv_files`.
 - `src/domain/record_import.rs`: `CrmRecordImports`, the companies, contacts
-  and deal pipelines another CRM's import (HubSpot) writes, with the viewer's
+  and deal pipelines another CRM's import (HubSpot, Attio) writes, with the viewer's
   receipts: companies by domain (personal providers never key one), contacts
   with every free address, and company pipelines whose entries carry `Deal`,
   `Close date` and `Source link` beside the standard Stage, Outcome, Owner

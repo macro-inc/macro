@@ -32,6 +32,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 mod admission;
+mod attio_workspace;
 mod crm_workspace;
 mod hubspot_workspace;
 pub(crate) mod lifecycle;
@@ -321,6 +322,7 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections
         Arc<dyn import_tracker::domain::model::TrackerConnections>,
     >,
     hubspot: Option<Arc<dyn import_hubspot::domain::HubspotConnections>>,
+    attio: Option<Arc<dyn import_attio::domain::AttioConnections>>,
     crm_writer: Option<Arc<dyn crate::domain::ports::CrmImportWriter>>,
     rollout: Arc<dyn crate::domain::ports::ImportRollout>,
     slack_source: Arc<W>,
@@ -370,6 +372,7 @@ impl<R: Clone, S, C, W: SlackWorkspaceSource, N> Clone for ImportServiceImpl<R, 
             workspace_source: self.workspace_source,
             trackers: self.trackers.clone(),
             hubspot: self.hubspot.clone(),
+            attio: self.attio.clone(),
             crm_writer: self.crm_writer.clone(),
             rollout: self.rollout.clone(),
             slack_source: self.slack_source.clone(),
@@ -399,6 +402,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
             workspace_source: ImportSource::Notion,
             trackers: Default::default(),
             hubspot: None,
+            attio: None,
             crm_writer: None,
             rollout: Arc::new(crate::domain::ports::ImportsOff),
             slack_source: Arc::new(NoSlackSource),
@@ -426,6 +430,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             workspace_source: self.workspace_source,
             trackers: self.trackers,
             hubspot: self.hubspot,
+            attio: self.attio,
             crm_writer: self.crm_writer,
             rollout: self.rollout,
             mcp_tools: self.mcp_tools,
@@ -461,6 +466,13 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
         self
     }
 
+    /// Read Attio workspaces through `reader`. Hosts without it report
+    /// Attio as unavailable; its rollout is the host's `ImportRollout`.
+    pub fn with_attio(mut self, reader: Arc<dyn import_attio::domain::AttioConnections>) -> Self {
+        self.attio = Some(reader);
+        self
+    }
+
     /// Decide which users may plan an import still being rolled out
     /// through `rollout`. Hosts without it leave every flagged import off.
     pub fn with_import_rollout(
@@ -471,9 +483,8 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
         self
     }
 
-    /// Write every CRM import (HubSpot and later sources) into the team's
-    /// CRM through `writer`. Hosts without it report CRM imports as
-    /// unavailable.
+    /// Write every CRM import (HubSpot, Attio) into the team's CRM through
+    /// `writer`. Hosts without it report CRM imports as unavailable.
     pub fn with_crm_writer(
         mut self,
         writer: Arc<dyn crate::domain::ports::CrmImportWriter>,
@@ -514,6 +525,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             workspace_source: self.workspace_source,
             trackers: self.trackers,
             hubspot: self.hubspot,
+            attio: self.attio,
             crm_writer: self.crm_writer,
             rollout: self.rollout,
             mcp_tools: self.mcp_tools,
@@ -781,7 +793,10 @@ where
             }
             // Notion rows go through the agent session, never here; Jira and
             // HubSpot rows only through their reviewed workspace writes.
-            ImportSource::Notion | ImportSource::Jira | ImportSource::Hubspot => return,
+            ImportSource::Notion
+            | ImportSource::Jira
+            | ImportSource::Hubspot
+            | ImportSource::Attio => return,
         };
 
         let persisted = match created {
@@ -1423,6 +1438,11 @@ where
             ImportSource::Hubspot => {
                 return Err(ImportError::NotReady(
                     "HubSpot imports require an approved workspace review.",
+                ));
+            }
+            ImportSource::Attio => {
+                return Err(ImportError::NotReady(
+                    "Attio imports require an approved workspace review.",
                 ));
             }
             ImportSource::Slack => {

@@ -66,6 +66,8 @@ pub enum ImportSource {
     Slack,
     /// HubSpot CRM companies, contacts, deals and deal pipelines.
     Hubspot,
+    /// Attio CRM companies, people and deals, read through Attio's MCP server.
+    Attio,
 }
 
 impl ImportSource {
@@ -77,17 +79,19 @@ impl ImportSource {
             Self::Notion => "Notion",
             Self::Slack => "Slack",
             Self::Hubspot => "HubSpot",
+            Self::Attio => "Attio",
         }
     }
 
     /// All import sources.
-    pub fn all() -> [ImportSource; 5] {
+    pub fn all() -> [ImportSource; 6] {
         [
             ImportSource::Linear,
             ImportSource::Jira,
             ImportSource::Notion,
             ImportSource::Slack,
             ImportSource::Hubspot,
+            ImportSource::Attio,
         ]
     }
 
@@ -102,6 +106,8 @@ impl ImportSource {
             | ImportSource::Notion
             | ImportSource::Slack
             | ImportSource::Hubspot => None,
+            // Its reader runs on ASSUMED output shapes until a real capture.
+            ImportSource::Attio => Some("enable-attio-import"),
         }
     }
 
@@ -115,6 +121,7 @@ impl ImportSource {
             ImportSource::Notion => "notion",
             ImportSource::Slack => "slack",
             ImportSource::Hubspot => "hubspot",
+            ImportSource::Attio => "attio",
         })
     }
 
@@ -127,6 +134,7 @@ impl ImportSource {
             ImportSource::Notion => ImportKind::Page,
             ImportSource::Slack => ImportKind::Channel,
             ImportSource::Hubspot => ImportKind::HubspotCompany,
+            ImportSource::Attio => ImportKind::AttioCompany,
         }
     }
 
@@ -139,7 +147,7 @@ impl ImportSource {
             ImportSource::Slack => "channel",
             // Companies are the bulk of a CRM import; each written row records
             // its own kind's entity type.
-            ImportSource::Hubspot => "crm_company",
+            ImportSource::Hubspot | ImportSource::Attio => "crm_company",
         }
     }
 
@@ -153,7 +161,10 @@ impl ImportSource {
             return None;
         }
         Some(match self {
-            ImportSource::Linear | ImportSource::Jira | ImportSource::Hubspot => raw.to_string(),
+            ImportSource::Linear
+            | ImportSource::Jira
+            | ImportSource::Hubspot
+            | ImportSource::Attio => raw.to_string(),
             // Page ids survive renames; URLs don't. Accept either and store
             // the id whenever one is present.
             ImportSource::Notion => notion_page_id(raw).unwrap_or_else(|| raw.to_string()),
@@ -223,6 +234,14 @@ pub enum ImportKind {
     HubspotContact,
     /// A HubSpot deal.
     HubspotDeal,
+    /// Attio's deal stages, as one pipeline.
+    AttioPipeline,
+    /// An Attio company.
+    AttioCompany,
+    /// An Attio person.
+    AttioPerson,
+    /// An Attio deal.
+    AttioDeal,
 }
 
 impl ImportKind {
@@ -241,6 +260,10 @@ impl ImportKind {
             | ImportKind::HubspotCompany
             | ImportKind::HubspotContact
             | ImportKind::HubspotDeal => ImportSource::Hubspot,
+            ImportKind::AttioPipeline
+            | ImportKind::AttioCompany
+            | ImportKind::AttioPerson
+            | ImportKind::AttioDeal => ImportSource::Attio,
         }
     }
 }
@@ -861,10 +884,10 @@ pub fn validate_metadata(
         ImportSource::Slack => {
             serde_json::to_value(serde_json::from_value::<SlackChannelMeta>(metadata)?.capped())
         }
-        // Only the reviewed workspace importer stages HubSpot rows; nothing
+        // Only the reviewed workspace importers stage CRM rows; nothing
         // stages them through the generic ledger tools.
-        ImportSource::Hubspot => Err(serde::de::Error::custom(
-            "HubSpot rows are staged only by the HubSpot importer",
+        ImportSource::Hubspot | ImportSource::Attio => Err(serde::de::Error::custom(
+            "CRM rows are staged only by their reviewed importer",
         )),
     }
 }
@@ -876,7 +899,8 @@ pub fn metadata_label(source: ImportSource, metadata: &serde_json::Value) -> Str
         ImportSource::Linear
         | ImportSource::Jira
         | ImportSource::Notion
-        | ImportSource::Hubspot => "title",
+        | ImportSource::Hubspot
+        | ImportSource::Attio => "title",
         ImportSource::Slack => "name",
     };
     metadata
@@ -1041,9 +1065,9 @@ pub struct NotionReportItem {
     pub reason: Option<String>,
 }
 
-/// Something a CRM import cannot carry into Macro CRM, counted on the review
-/// card and in the final report. The serialized names are stored on ledger
-/// rows: never rename one.
+/// Something a CRM import (HubSpot or Attio) cannot carry into Macro CRM,
+/// counted on the review card and in the final report. The serialized names
+/// are stored on ledger rows: never rename one.
 #[derive(
     Debug,
     Clone,
@@ -1089,6 +1113,10 @@ pub enum CrmLoss {
     /// A contact whose company was left out of the import; it is created
     /// without one.
     ContactWithoutCompany,
+    /// People linked to a deal; a Macro pipeline entry tracks its company only.
+    DealPeople,
+    /// A deal in a stage the source archived; it is imported without a stage.
+    ArchivedStage,
 }
 
 /// How many records lost one thing.
@@ -1103,7 +1131,7 @@ pub struct CrmLossCount {
     pub count: u32,
 }
 
-/// What a CRM plan holds, for the review card.
+/// What a CRM plan (HubSpot or Attio) holds, for the review card.
 #[derive(
     Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
 )]
@@ -1113,7 +1141,7 @@ pub struct CrmReport {
     pub pipelines: u32,
     /// Companies.
     pub companies: u32,
-    /// Contacts.
+    /// Contacts (Attio's people).
     pub contacts: u32,
     /// Deals, each becoming an entry in its pipeline.
     pub deals: u32,
@@ -1132,8 +1160,8 @@ pub struct CrmReport {
     pub linked: u32,
     /// What cannot be carried over, by kind.
     pub losses: Vec<CrmLossCount>,
-    /// Properties the source defined itself, as `object.name`; their values
-    /// stay in the source.
+    /// Properties (HubSpot) or attributes (Attio) the source workspace
+    /// defined itself, as `object.name`; their values stay in the source.
     pub custom_properties: Vec<String>,
 }
 
@@ -1246,4 +1274,7 @@ pub struct NotionImportReport {
     /// A HubSpot plan's counts, owners and losses.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hubspot: Option<CrmReport>,
+    /// An Attio plan's counts, owners and losses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attio: Option<CrmReport>,
 }

@@ -78,6 +78,18 @@ struct ImportEntityDbRow {
     updated_at: DateTime<Utc>,
 }
 
+/// Whether this build knows `source`, logging one it does not.
+fn known_source(source: &str) -> bool {
+    let known = ImportSource::from_str(source).is_ok();
+    if !known {
+        tracing::warn!(
+            source,
+            "skipping an import row of a source this build does not know"
+        );
+    }
+    known
+}
+
 impl TryFrom<ImportEntityDbRow> for ImportEntity {
     type Error = ImportError;
 
@@ -215,7 +227,11 @@ impl ImportRepo for PgImportRepo {
         )
         .fetch_optional(&self.pool)
         .await?;
-        row.map(ImportEntity::try_from).transpose()
+        // A row of a source this build does not know (written by a newer
+        // binary during a rollout) reads as absent, not as a failure.
+        row.filter(|row| known_source(&row.source))
+            .map(ImportEntity::try_from)
+            .transpose()
     }
 
     #[tracing::instrument(skip(self, user), err)]
@@ -356,7 +372,11 @@ impl ImportRepo for PgImportRepo {
         )
         .fetch_optional(&self.pool)
         .await?;
-        row.map(ImportEntity::try_from).transpose()
+        // A row of a source this build does not know (written by a newer
+        // binary during a rollout) reads as absent, not as a failure.
+        row.filter(|row| known_source(&row.source))
+            .map(ImportEntity::try_from)
+            .transpose()
     }
 
     #[tracing::instrument(skip(self, user), err)]
@@ -547,7 +567,7 @@ impl ImportRepo for PgImportRepo {
                 last_error = 'the import was interrupted — select it again to retry',
                 updated_at = NOW()
             WHERE user_id = $1 AND status = 'importing'
-              AND NOT (source IN ('notion', 'linear', 'jira', 'hubspot') AND metadata->'plan' IS NOT NULL)
+              AND NOT (source IN ('notion', 'linear', 'jira', 'hubspot', 'attio') AND metadata->'plan' IS NOT NULL)
               AND updated_at < NOW() - ($2::double precision * interval '1 second')
             "#,
             user.as_ref(),
@@ -635,7 +655,12 @@ impl ImportRepo for PgImportRepo {
         )
         .fetch_all(&self.pool)
         .await?;
-        rows.into_iter().map(ImportRun::try_from).collect()
+        // Runs of a source this build does not know (written by a newer
+        // binary during a rollout) are left out rather than failing the list.
+        rows.into_iter()
+            .filter(|row| known_source(&row.source))
+            .map(ImportRun::try_from)
+            .collect()
     }
 
     #[tracing::instrument(skip(self, user), err)]
@@ -679,7 +704,7 @@ impl ImportRepo for PgImportRepo {
                 error = 'discovery was interrupted — try again',
                 error_kind = 'interrupted',
                 updated_at = NOW()
-            WHERE user_id = $1 AND status IN ('running', 'importing') AND source NOT IN ('notion', 'linear', 'jira', 'hubspot')
+            WHERE user_id = $1 AND status IN ('running', 'importing') AND source NOT IN ('notion', 'linear', 'jira', 'hubspot', 'attio')
               AND updated_at < NOW() - ($2::double precision * interval '1 second')
             "#,
             user.as_ref(),

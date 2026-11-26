@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod import_from_attio;
 mod import_from_hubspot;
 
 /// What the agent does after a workspace plan failed: tell the user once,
@@ -37,6 +38,7 @@ fn failure_reason(source: ImportSource, kind: Option<RunErrorKind>) -> String {
 
 mod import_from_notion;
 mod import_from_tracker;
+pub use import_from_attio::{AttioImportResponse, ImportFromAttio};
 pub use import_from_hubspot::{HubspotImportResponse, ImportFromHubspot};
 pub use import_from_tracker::{ImportFromJira, ImportFromLinear, TrackerImportResponse};
 
@@ -96,6 +98,7 @@ pub fn import_toolset<T: ImportStager + NotionPageImporter + WorkspaceImporter>(
         .add_tool::<ImportFromLinear, ImportToolContext<T>>()
         .add_tool::<ImportFromJira, ImportToolContext<T>>()
         .add_tool::<ImportFromHubspot, ImportToolContext<T>>()
+        .add_tool::<ImportFromAttio, ImportToolContext<T>>()
         .add_tool::<DeleteImportEntity, ImportToolContext<T>>()
         .add_tool::<ListImportEntities, ImportToolContext<T>>()
 }

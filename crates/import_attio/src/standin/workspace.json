@@ -1,0 +1,64 @@
+{
+  "self": {
+    "active": true,
+    "workspace_id": "5d5d5d5d-0000-4000-8000-000000000001",
+    "workspace_name": "Stand-in Workspace (synthetic)",
+    "workspace_slug": "standin-synthetic",
+    "authorized_by_workspace_member_id": "5e000000-0000-4000-8000-000000000001"
+  },
+  "objects": [
+    {"id": {"workspace_id": "5d5d5d5d-0000-4000-8000-000000000001", "object_id": "5b000000-0000-4000-8000-000000000001"}, "api_slug": "companies", "singular_noun": "Company", "plural_noun": "Companies"},
+    {"id": {"workspace_id": "5d5d5d5d-0000-4000-8000-000000000001", "object_id": "5b000000-0000-4000-8000-000000000002"}, "api_slug": "people", "singular_noun": "Person", "plural_noun": "People"},
+    {"id": {"workspace_id": "5d5d5d5d-0000-4000-8000-000000000001", "object_id": "5b000000-0000-4000-8000-000000000003"}, "api_slug": "deals", "singular_noun": "Deal", "plural_noun": "Deals"}
+  ],
+  "members": [
+    {"id": {"workspace_id": "5d5d5d5d-0000-4000-8000-000000000001", "workspace_member_id": "5e000000-0000-4000-8000-000000000001"}, "first_name": "Stand", "last_name": "In", "email_address": "standin-owner@example.com", "access_level": "admin"},
+    {"id": {"workspace_id": "5d5d5d5d-0000-4000-8000-000000000001", "workspace_member_id": "5e000000-0000-4000-8000-000000000002"}, "first_name": "Synthetic", "last_name": "Seller", "email_address": "seller@standin.test", "access_level": "member"}
+  ],
+  "attributes": {
+    "companies": [
+      {"api_slug": "name", "title": "Name", "type": "text", "is_system_attribute": true},
+      {"api_slug": "domains", "title": "Domains", "type": "domain", "is_system_attribute": true},
+      {"api_slug": "standin_tier", "title": "Tier", "type": "select", "is_system_attribute": false, "options": [{"id": {"option_id": "5c000000-0000-4000-8000-000000000001"}, "title": "Gold", "is_archived": false}]}
+    ],
+    "people": [
+      {"api_slug": "name", "title": "Name", "type": "personal-name", "is_system_attribute": true},
+      {"api_slug": "email_addresses", "title": "Email addresses", "type": "email-address", "is_system_attribute": true},
+      {"api_slug": "company", "title": "Company", "type": "record-reference", "is_system_attribute": true}
+    ],
+    "deals": [
+      {"api_slug": "name", "title": "Deal name", "type": "text", "is_system_attribute": true},
+      {"api_slug": "stage", "title": "Deal stage", "type": "status", "is_system_attribute": true, "options": [
+        {"id": {"status_id": "5a5a0000-0000-4000-8000-000000000001"}, "title": "Lead", "celebration_enabled": false, "is_archived": false},
+        {"id": {"status_id": "5a5a0000-0000-4000-8000-000000000002"}, "title": "In Progress", "celebration_enabled": false, "is_archived": false},
+        {"id": {"status_id": "5a5a0000-0000-4000-8000-000000000003"}, "title": "Won", "celebration_enabled": true, "is_archived": false},
+        {"id": {"status_id": "5a5a0000-0000-4000-8000-000000000004"}, "title": "Lost", "celebration_enabled": false, "is_archived": false},
+        {"id": {"status_id": "5a5a0000-0000-4000-8000-000000000005"}, "title": "Retired", "celebration_enabled": false, "is_archived": true}
+      ]},
+      {"api_slug": "value", "title": "Deal value", "type": "currency", "is_system_attribute": true},
+      {"api_slug": "owner", "title": "Deal owner", "type": "actor-reference", "is_system_attribute": true},
+      {"api_slug": "associated_company", "title": "Associated company", "type": "record-reference", "is_system_attribute": true},
+      {"api_slug": "associated_people", "title": "Associated people", "type": "record-reference", "is_system_attribute": true},
+      {"api_slug": "standin_region", "title": "Region", "type": "text", "is_system_attribute": false}
+    ]
+  },
+  "records": {
+    "companies": [
+      {"id": {"record_id": "5c0c0000-0000-4000-8000-000000000001"}, "values": {"name": [{"value": "Standin Anvils (synthetic)"}], "domains": [{"domain": "anvils.standin.test", "root_domain": "standin.test"}]}},
+      {"id": {"record_id": "5c0c0000-0000-4000-8000-000000000002"}, "values": {"name": [{"value": "Standin Rockets (synthetic)"}], "domains": [{"domain": "rockets.standin.test", "root_domain": "standin.test"}, {"domain": "rockets.example.com", "root_domain": "example.com"}]}},
+      {"id": {"record_id": "5c0c0000-0000-4000-8000-000000000003"}, "values": {"name": [{"value": "Standin Widgets (synthetic)"}], "domains": []}},
+      {"id": {"record_id": "5c0c0000-0000-4000-8000-000000000004"}, "values": {"name": [{"value": "Standin Gears (synthetic)"}], "domains": [{"domain": "gears.standin.test", "root_domain": "standin.test"}]}},
+      {"id": {"record_id": "5c0c0000-0000-4000-8000-000000000005"}, "values": {"name": [], "domains": [{"domain": "nameless.standin.test", "root_domain": "standin.test"}]}}
+    ],
+    "people": [
+      {"id": {"record_id": "5f0f0000-0000-4000-8000-000000000001"}, "values": {"name": [{"first_name": "Ada", "last_name": "Standin", "full_name": "Ada Standin"}], "email_addresses": [{"email_address": "ada@anvils.standin.test"}], "company": [{"target_object": "companies", "target_record_id": "5c0c0000-0000-4000-8000-000000000001"}]}},
+      {"id": {"record_id": "5f0f0000-0000-4000-8000-000000000002"}, "values": {"name": [{"first_name": "Bo", "last_name": "Standin", "full_name": "Bo Standin"}], "email_addresses": [{"email_address": "bo@rockets.standin.test"}, {"email_address": "bo.standin@example.com"}], "company": [{"target_object": "companies", "target_record_id": "5c0c0000-0000-4000-8000-000000000002"}]}},
+      {"id": {"record_id": "5f0f0000-0000-4000-8000-000000000003"}, "values": {"name": [{"first_name": "Cy", "last_name": null, "full_name": "Cy"}], "email_addresses": [], "company": []}}
+    ],
+    "deals": [
+      {"id": {"record_id": "5d0d0000-0000-4000-8000-000000000001"}, "values": {"name": [{"value": "Anvil order (synthetic)"}], "stage": [{"status": {"id": {"status_id": "5a5a0000-0000-4000-8000-000000000003"}, "title": "Won"}}], "value": [{"currency_value": 4200.0, "currency_code": "USD"}], "owner": [{"referenced_actor_type": "workspace-member", "referenced_actor_id": "5e000000-0000-4000-8000-000000000002"}], "associated_company": [{"target_object": "companies", "target_record_id": "5c0c0000-0000-4000-8000-000000000001"}], "associated_people": [{"target_object": "people", "target_record_id": "5f0f0000-0000-4000-8000-000000000001"}]}},
+      {"id": {"record_id": "5d0d0000-0000-4000-8000-000000000002"}, "values": {"name": [{"value": "Rocket pilot (synthetic)"}], "stage": [{"status": {"id": {"status_id": "5a5a0000-0000-4000-8000-000000000002"}, "title": "In Progress"}}], "value": [{"currency_value": 950.25, "currency_code": "EUR"}], "owner": [{"referenced_actor_type": "workspace-member", "referenced_actor_id": "5e000000-0000-4000-8000-000000000001"}], "associated_company": [{"target_object": "companies", "target_record_id": "5c0c0000-0000-4000-8000-000000000002"}], "associated_people": []}},
+      {"id": {"record_id": "5d0d0000-0000-4000-8000-000000000003"}, "values": {"name": [{"value": "Orphan lead (synthetic)"}], "stage": [{"status": {"id": {"status_id": "5a5a0000-0000-4000-8000-000000000001"}, "title": "Lead"}}], "value": [], "owner": [], "associated_company": [], "associated_people": []}}
+    ]
+  }
+}

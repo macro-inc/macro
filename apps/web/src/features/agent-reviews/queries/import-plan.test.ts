@@ -1,6 +1,6 @@
-import type { ImportEntity } from '@queries/import';
+import type { ImportEntity, NotionImportReport } from '@queries/import';
 import { describe, expect, it } from 'vitest';
-import { decodePlanEntries } from './import-plan';
+import { decodeImportProgress, decodePlanEntries } from './import-plan';
 
 const row: ImportEntity = {
   id: 'roadmap',
@@ -208,4 +208,63 @@ it('decodes HubSpot pipelines, companies, contacts and deals', () => {
     ['n', 'contact'],
     ['d', 'deal'],
   ]);
+});
+
+it('decodes Attio pipelines, companies, people and deals', () => {
+  const kinds = decodePlanEntries(
+    [
+      { ...row, id: 'p', source: 'attio', kind: 'attio_pipeline' },
+      { ...row, id: 'c', source: 'attio', kind: 'attio_company' },
+      { ...row, id: 'n', source: 'attio', kind: 'attio_person' },
+      { ...row, id: 'd', source: 'attio', kind: 'attio_deal' },
+    ],
+    'review'
+  ).map((entry) => [entry.id, entry.kind]);
+  expect(kinds).toEqual([
+    ['p', 'pipeline'],
+    ['c', 'company'],
+    ['n', 'contact'],
+    ['d', 'deal'],
+  ]);
+});
+
+it("reads the CRM section of the review's own source", () => {
+  const section = {
+    pipelines: 1,
+    companies: 2,
+    contacts: 3,
+    deals: 0,
+    owners: 1,
+    ownersMatched: 1,
+    alreadyImported: 0,
+    losses: [{ loss: 'deal_people' as const, count: 2 }],
+    customProperties: [],
+  };
+  const report: NotionImportReport = {
+    status: 'ready',
+    reviewId: 'review',
+    onTeam: true,
+    pages: 0,
+    dataSources: 0,
+    copy: 0,
+    tasks: 0,
+    skip: 0,
+    hand: 0,
+    documents: 0,
+    databases: 0,
+    databaseRows: 0,
+    taskRows: 0,
+    imported: 0,
+    waiting: 0,
+    writing: 0,
+    attio: section,
+  };
+  expect(decodeImportProgress(report, 'attio').crm).toEqual({
+    owners: 1,
+    ownersMatched: 1,
+    created: 0,
+    linked: 0,
+    losses: [{ loss: 'deal_people', count: 2 }],
+  });
+  expect(decodeImportProgress(report, 'hubspot').crm).toBeNull();
 });

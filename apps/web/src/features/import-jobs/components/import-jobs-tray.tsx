@@ -7,6 +7,7 @@ import IconSlack from '@icon/slack-color.svg';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import CaretUp from '@icon/system/regular/caret-up.svg';
 import X from '@icon/system/regular/x.svg';
+import IconAddressBook from '@phosphor/address-book.svg';
 import type { ImportSource, RunErrorKind } from '@service-cognition/import';
 import { Button, cn, Item, ProgressRing, Surface } from '@ui';
 import { type Component, Index, type JSX, Show } from 'solid-js';
@@ -30,6 +31,7 @@ const SOURCES: Record<ImportSource, SourceDisplay> = {
   jira: { name: 'Jira', icon: IconJira },
   slack: { name: 'Slack', icon: IconSlack },
   hubspot: { name: 'HubSpot', icon: IconHubSpot },
+  attio: { name: 'Attio', icon: IconAddressBook },
 };
 
 function phaseLabel(source: ImportSource, phase: ImportJobPhase): string {
@@ -40,7 +42,7 @@ function phaseLabel(source: ImportSource, phase: ImportJobPhase): string {
         .with('linear', 'jira', () =>
           t('importJobs.scanningIssues', { count: found })
         )
-        .with('hubspot', () =>
+        .with('hubspot', 'attio', () =>
           t('importJobs.scanningRecords', { count: found })
         )
         .with('slack', () => t('importJobs.findingChannels'))

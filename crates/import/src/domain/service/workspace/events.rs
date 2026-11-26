@@ -154,7 +154,7 @@ where
             report.confirmed = Some(writes);
         }
         report.on_team = self.repo.user_team_id(user).await?.is_some();
-        if let Some(crm) = report.hubspot.as_mut() {
+        if let Some(crm) = report.hubspot.as_mut().or(report.attio.as_mut()) {
             // A record this import created carries its CRM marker; one it
             // matched by natural key or linked from a teammate does not.
             let imported: Vec<Uuid> = rows
@@ -218,6 +218,7 @@ fn workspace(source: ImportSource) -> Option<ImportWorkspace> {
         ImportSource::Linear => Some(ImportWorkspace::Linear),
         ImportSource::Jira => Some(ImportWorkspace::Jira),
         ImportSource::Hubspot => Some(ImportWorkspace::Hubspot),
+        ImportSource::Attio => Some(ImportWorkspace::Attio),
         ImportSource::Slack => None,
     }
 }

@@ -6,9 +6,9 @@
  */
 
 /**
- * Something a CRM import cannot carry into Macro CRM, counted on the review
-card and in the final report. The serialized names are stored on ledger
-rows: never rename one.
+ * Something a CRM import (HubSpot or Attio) cannot carry into Macro CRM,
+counted on the review card and in the final report. The serialized names
+are stored on ledger rows: never rename one.
  */
 export type CrmLoss = (typeof CrmLoss)[keyof typeof CrmLoss];
 
@@ -25,4 +25,6 @@ export const CrmLoss = {
   merged_company: 'merged_company',
   merged_contact: 'merged_contact',
   contact_without_company: 'contact_without_company',
+  deal_people: 'deal_people',
+  archived_stage: 'archived_stage',
 } as const;

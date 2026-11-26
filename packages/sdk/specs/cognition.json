@@ -4332,7 +4332,7 @@
       },
       "CrmLoss": {
         "type": "string",
-        "description": "Something a CRM import cannot carry into Macro CRM, counted on the review\ncard and in the final report. The serialized names are stored on ledger\nrows: never rename one.",
+        "description": "Something a CRM import (HubSpot or Attio) cannot carry into Macro CRM,\ncounted on the review card and in the final report. The serialized names\nare stored on ledger rows: never rename one.",
         "enum": [
           "owner_not_member",
           "deal_without_company",
@@ -4344,7 +4344,9 @@
           "company_owner",
           "merged_company",
           "merged_contact",
-          "contact_without_company"
+          "contact_without_company",
+          "deal_people",
+          "archived_stage"
         ]
       },
       "CrmLossCount": {
@@ -4366,7 +4368,7 @@
       },
       "CrmReport": {
         "type": "object",
-        "description": "What a CRM plan holds, for the review card.",
+        "description": "What a CRM plan (HubSpot or Attio) holds, for the review card.",
         "required": [
           "pipelines",
           "companies",
@@ -4394,7 +4396,7 @@
           "contacts": {
             "type": "integer",
             "format": "int32",
-            "description": "Contacts.",
+            "description": "Contacts (Attio's people).",
             "minimum": 0
           },
           "created": {
@@ -4408,7 +4410,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Properties the source defined itself, as `object.name`; their values\nstay in the source."
+            "description": "Properties (HubSpot) or attributes (Attio) the source workspace\ndefined itself, as `object.name`; their values stay in the source."
           },
           "deals": {
             "type": "integer",
@@ -5642,7 +5644,11 @@
           "hubspot_pipeline",
           "hubspot_company",
           "hubspot_contact",
-          "hubspot_deal"
+          "hubspot_deal",
+          "attio_pipeline",
+          "attio_company",
+          "attio_person",
+          "attio_deal"
         ]
       },
       "ImportNotionPageRequest": {
@@ -5741,7 +5747,7 @@
       "ImportSource": {
         "type": "string",
         "description": "External systems items can be imported from.",
-        "enum": ["linear", "jira", "notion", "slack", "hubspot"]
+        "enum": ["linear", "jira", "notion", "slack", "hubspot", "attio"]
       },
       "ImportState": {
         "type": "object",
@@ -6125,6 +6131,17 @@
             "format": "int32",
             "description": "Plan objects a teammate already imported and shared with the team;\nthey link to that copy and are not counted as copies.",
             "minimum": 0
+          },
+          "attio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CrmReport",
+                "description": "An Attio plan's counts, owners and losses."
+              }
+            ]
           },
           "confirmed": {
             "oneOf": [

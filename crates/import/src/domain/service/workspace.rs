@@ -126,7 +126,8 @@ fn workspace_source(source: ImportSource) -> Result<()> {
         ImportSource::Notion
         | ImportSource::Linear
         | ImportSource::Jira
-        | ImportSource::Hubspot => Ok(()),
+        | ImportSource::Hubspot
+        | ImportSource::Attio => Ok(()),
         ImportSource::Slack => Err(ImportError::NotReady(
             "Slack uses channel discovery, not workspace plans.",
         )),
@@ -252,6 +253,7 @@ where
                 self.plan_tracker(user, sharing, control).await
             }
             ImportSource::Hubspot => self.plan_hubspot(user, control).await,
+            ImportSource::Attio => self.plan_attio(user, control).await,
             ImportSource::Slack => workspace_source(self.workspace_source),
         }
     }
@@ -270,6 +272,7 @@ where
                 self.write_tracker(user, review, control).await
             }
             ImportSource::Hubspot => self.write_hubspot(user, review, control).await,
+            ImportSource::Attio => self.write_attio(user, review, control).await,
             ImportSource::Slack => Err(ImportError::NotReady("Slack uses channel discovery.")),
         }
     }

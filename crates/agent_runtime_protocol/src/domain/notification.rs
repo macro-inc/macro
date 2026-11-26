@@ -214,6 +214,8 @@ pub enum ImportWorkspace {
     Jira,
     /// HubSpot deal pipelines, companies, contacts and deals.
     Hubspot,
+    /// Attio companies, people and deals.
+    Attio,
 }
 
 /// How an approved import's write ended.

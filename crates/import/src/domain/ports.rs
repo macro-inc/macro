@@ -67,6 +67,9 @@ pub enum ImportError {
     /// for this user (see [`ImportRollout`]).
     #[error("the {} import is not turned on for this account yet", .0.label())]
     NotRolledOut(crate::domain::models::ImportSource),
+    /// The connected Attio workspace could not be read.
+    #[error(transparent)]
+    Attio(#[from] import_attio::domain::AttioError),
     /// A CRM import needs a team whose CRM the user may use.
     #[error("importing into the CRM needs a team with CRM access")]
     CrmAccessRequired,
@@ -1685,7 +1688,7 @@ pub struct NewDealEntry {
     pub link: String,
 }
 
-/// Writes a CRM import into the team's CRM through the CRM services,
+/// Writes a CRM import (HubSpot, Attio) into the team's CRM through the CRM services,
 /// with the importing user's permissions. Object-safe so the import service
 /// holds it without a type parameter.
 #[async_trait::async_trait]

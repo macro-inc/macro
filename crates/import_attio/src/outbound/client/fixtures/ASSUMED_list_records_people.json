@@ -1,0 +1,27 @@
+{
+  "data": [
+    {
+      "id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000002", "record_id": "a0000000-0000-4000-8000-000000000001"},
+      "created_at": "2026-01-05T00:00:00.000000000Z",
+      "web_url": "https://app.attio.com/example-workspace/person/a0000000-0000-4000-8000-000000000001/overview",
+      "values": {
+        "name": [{"first_name": "Grace", "last_name": "Sample", "full_name": "Grace Sample", "attribute_type": "personal-name"}],
+        "email_addresses": [{"original_email_address": "grace@anvils.example.com", "email_address": "grace@anvils.example.com", "email_domain": "anvils.example.com", "email_root_domain": "example.com", "email_local_specifier": "grace", "attribute_type": "email-address"}],
+        "company": [{"target_object": "companies", "target_record_id": "c0000000-0000-4000-8000-000000000001", "attribute_type": "record-reference"}]
+      }
+    },
+    {
+      "id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000002", "record_id": "a0000000-0000-4000-8000-000000000002"},
+      "created_at": "2026-01-06T00:00:00.000000000Z",
+      "web_url": "https://app.attio.com/example-workspace/person/a0000000-0000-4000-8000-000000000002/overview",
+      "values": {
+        "name": [{"first_name": "Linus", "last_name": "Example", "full_name": null, "attribute_type": "personal-name"}],
+        "email_addresses": [
+          {"email_address": "linus@rockets.test", "attribute_type": "email-address"},
+          {"email_address": "linus.example@example.com", "attribute_type": "email-address"}
+        ],
+        "company": []
+      }
+    }
+  ]
+}

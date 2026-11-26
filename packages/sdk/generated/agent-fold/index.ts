@@ -1243,7 +1243,9 @@ export type ImportWorkspace =
 /**  Jira projects, epics and issues. */
 "jira" |
 /**  HubSpot deal pipelines, companies, contacts and deals. */
-"hubspot";
+"hubspot" |
+/**  Attio companies, people and deals. */
+"attio";
 
 /**  Review item state, shared with notification consumers. */
 export type ItemStatus =

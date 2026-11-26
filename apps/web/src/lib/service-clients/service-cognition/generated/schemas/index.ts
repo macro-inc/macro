@@ -246,6 +246,7 @@ export * from './notionDocMetaSummary';
 export * from './notionDocMetaUrl';
 export * from './notionImporter';
 export * from './notionImportReport';
+export * from './notionImportReportAttio';
 export * from './notionImportReportConfirmed';
 export * from './notionImportReportDetails';
 export * from './notionImportReportError';

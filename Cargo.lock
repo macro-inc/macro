@@ -735,6 +735,7 @@ dependencies = [
  "http-body-util",
  "image_generation",
  "import",
+ "import_attio",
  "import_hubspot",
  "import_jira",
  "import_linear",
@@ -1296,6 +1297,7 @@ dependencies = [
  "hosted_runtimes",
  "image_generation",
  "import",
+ "import_attio",
  "import_hubspot",
  "import_jira",
  "import_linear",
@@ -11532,6 +11534,7 @@ dependencies = [
  "dateparser",
  "feature_flags",
  "futures",
+ "import_attio",
  "import_hubspot",
  "import_notion",
  "import_tracker",
@@ -11558,6 +11561,29 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "import_attio"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "clap",
+ "connectors",
+ "import_tracker",
+ "macro_user_id",
+ "mcp_toolset",
+ "rmcp",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]

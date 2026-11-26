@@ -91,6 +91,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
     `import a Linear workspace into ${whose} workspace`,
   ImportFromJira: (whose) => `import a Jira workspace into ${whose} workspace`,
   ImportFromHubspot: (whose) => `import a HubSpot CRM into ${whose} CRM`,
+  ImportFromAttio: (whose) => `import an Attio CRM into ${whose} CRM`,
   ImportFromNotion: (whose) =>
     `import a Notion workspace into ${whose} workspace`,
   ImportNotionPage: (whose) => `import a Notion page into ${whose} workspace`,

@@ -1902,3 +1902,55 @@ async fn a_second_review_while_planning_is_refused(pool: PgPool) {
         Some(first)
     );
 }
+
+/// During a rollout an older binary reads rows a newer one wrote for a
+/// source it does not know (as Attio rows were). They are skipped, not a
+/// failure of the whole tray or of a by-id read.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rows_of_a_source_this_build_does_not_know_are_skipped(pool: PgPool) {
+    let actor = ledger_actor(&pool, "future-source").await;
+    let repo = PgImportRepo::new(pool.clone());
+    assert!(
+        repo.start_run(&actor, ImportSource::Slack, &[])
+            .await
+            .unwrap()
+    );
+    // The newer binary's migration widened the checks; drop them to stand in.
+    sqlx::query!("ALTER TABLE import_run DROP CONSTRAINT import_run_source_check")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!("ALTER TABLE import_entity DROP CONSTRAINT import_entity_source_check")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!("ALTER TABLE import_entity DROP CONSTRAINT import_entity_kind_check")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "INSERT INTO import_run (user_id, source, status) VALUES ($1, 'future_crm', 'running')",
+        actor.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let row = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO import_entity (id, user_id, source, kind, foreign_id, status, initiator, metadata) \
+         VALUES ($1, $2, 'future_crm', 'future_record', 'x:1', 'staged', 'chat', '{}'::jsonb)",
+        row,
+        actor.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let runs = repo.list_runs(&actor).await.unwrap();
+
+    assert_eq!(
+        runs.iter().map(|run| run.source).collect::<Vec<_>>(),
+        [ImportSource::Slack]
+    );
+    assert!(repo.get(&actor, row).await.unwrap().is_none());
+}

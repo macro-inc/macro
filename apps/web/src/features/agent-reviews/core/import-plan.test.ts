@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   alreadyInMacroSummary,
   buildPlanTree,
+  crmTotals,
   EMPTY_IMPORT_DRAFT,
   failureCopy,
-  hubspotTotals,
   type ImportPlanEntry,
   type ImportProgress,
   importCount,
@@ -319,7 +319,7 @@ describe('importReviewPhase', () => {
     waiting: 1,
     writing: 1,
     failures: [],
-    hubspot: null,
+    crm: null,
   };
 
   it('follows the review item until the plan is approved', () => {
@@ -483,7 +483,7 @@ describe('planning', () => {
     waiting: 0,
     writing: 0,
     failures: [],
-    hubspot: null,
+    crm: null,
   };
 
   it('reads Notion until the plan is staged, then counts what is decided', () => {
@@ -629,17 +629,20 @@ describe('HubSpot plans', () => {
       },
     ];
     expect([
-      ...planTotals(crm, ['contact']),
-      ...hubspotTotals({
-        owners: 2,
-        ownersMatched: 1,
-        created: 3,
-        linked: 1,
-        losses: [
-          { loss: 'owner_not_member', count: 25 },
-          { loss: 'deal_without_company', count: 10 },
-        ],
-      }),
+      ...planTotals(crm, ['contact'], 'hubspot'),
+      ...crmTotals(
+        {
+          owners: 2,
+          ownersMatched: 1,
+          created: 3,
+          linked: 1,
+          losses: [
+            { loss: 'owner_not_member', count: 25 },
+            { loss: 'deal_without_company', count: 10 },
+          ],
+        },
+        'hubspot'
+      ),
     ]).toEqual([
       { label: 'Pipelines', value: '1' },
       { label: 'Companies', value: '1' },
@@ -651,6 +654,45 @@ describe('HubSpot plans', () => {
       { label: 'Owners not on your team', value: '25' },
       { label: 'Deals without a company', value: '10' },
     ]);
-    expect(hubspotTotals(null)).toEqual([]);
+    expect(crmTotals(null, 'hubspot')).toEqual([]);
+  });
+});
+
+describe('Attio plans', () => {
+  it('calls contacts people and names its own losses', () => {
+    const crm: ImportPlanEntry[] = [
+      { ...entries[0], id: 'pipeline', kind: 'pipeline' },
+      { ...entries[0], id: 'company', kind: 'company' },
+      { ...entries[0], id: 'person', kind: 'contact', parentId: 'company' },
+      { ...entries[0], id: 'deal', kind: 'deal', parentId: 'pipeline' },
+    ];
+    expect([
+      ...planTotals(crm, [], 'attio'),
+      ...crmTotals(
+        {
+          owners: 0,
+          ownersMatched: 0,
+          created: 0,
+          linked: 0,
+          losses: [
+            { loss: 'deal_people', count: 4 },
+            { loss: 'archived_stage', count: 2 },
+            { loss: 'merged_contact', count: 1 },
+          ],
+        },
+        'attio'
+      ),
+    ]).toEqual([
+      { label: 'Pipelines', value: '1' },
+      { label: 'Companies', value: '1' },
+      { label: 'People', value: '1' },
+      { label: 'Deals', value: '1' },
+      { label: 'People linked to deals', value: '4' },
+      { label: 'Deals in archived stages', value: '2' },
+      { label: 'People merged by email', value: '1' },
+    ]);
+    expect(volumeLabel(importVolume(crm, []), 'attio')).toBe(
+      '1 pipeline, 1 company, 1 person, 1 deal'
+    );
   });
 });

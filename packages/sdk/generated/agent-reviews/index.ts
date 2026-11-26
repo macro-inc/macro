@@ -141,9 +141,9 @@ export type CreateReview_Serialize = {
 } & ReviewDrafts_Serialize;
 
 /**
- *  Something a CRM import cannot carry into Macro CRM, counted on the review
- *  card and in the final report. The serialized names are stored on ledger
- *  rows: never rename one.
+ *  Something a CRM import (HubSpot or Attio) cannot carry into Macro CRM,
+ *  counted on the review card and in the final report. The serialized names
+ *  are stored on ledger rows: never rename one.
  */
 export type CrmLoss =
 /**  A record's owner in the source is not a member of the team; it stays unassigned. */
@@ -182,7 +182,11 @@ export type CrmLoss =
  *  A contact whose company was left out of the import; it is created
  *  without one.
  */
-"contact_without_company";
+"contact_without_company" |
+/**  People linked to a deal; a Macro pipeline entry tracks its company only. */
+"deal_people" |
+/**  A deal in a stage the source archived; it is imported without a stage. */
+"archived_stage";
 
 /**  How many records lost one thing. */
 export type CrmLossCount = {
@@ -192,13 +196,13 @@ export type CrmLossCount = {
 	count: number,
 };
 
-/**  What a CRM plan holds, for the review card. */
+/**  What a CRM plan (HubSpot or Attio) holds, for the review card. */
 export type CrmReport = {
 	/**  Deal pipelines, each becoming a Macro pipeline. */
 	pipelines: number,
 	/**  Companies. */
 	companies: number,
-	/**  Contacts. */
+	/**  Contacts (Attio's people). */
 	contacts: number,
 	/**  Deals, each becoming an entry in its pipeline. */
 	deals: number,
@@ -218,8 +222,8 @@ export type CrmReport = {
 	/**  What cannot be carried over, by kind. */
 	losses: CrmLossCount[],
 	/**
-	 *  Properties the source defined itself, as `object.name`; their values
-	 *  stay in the source.
+	 *  Properties (HubSpot) or attributes (Attio) the source workspace
+	 *  defined itself, as `object.name`; their values stay in the source.
 	 */
 	customProperties: string[],
 };
@@ -365,7 +369,15 @@ export type ImportKind =
 /**  A HubSpot contact. */
 "hubspot_contact" |
 /**  A HubSpot deal. */
-"hubspot_deal";
+"hubspot_deal" |
+/**  Attio's deal stages, as one pipeline. */
+"attio_pipeline" |
+/**  An Attio company. */
+"attio_company" |
+/**  An Attio person. */
+"attio_person" |
+/**  An Attio deal. */
+"attio_deal";
 
 /**  Which source's staged plan an import review presents. */
 export type ImportReviewSource =
@@ -376,7 +388,9 @@ export type ImportReviewSource =
 /**  A Jira plan, staged by ImportFromJira. */
 "jira" |
 /**  A HubSpot plan, staged by ImportFromHubspot. */
-"hubspot";
+"hubspot" |
+/**  An Attio plan, staged by ImportFromAttio. */
+"attio";
 
 /**  Review item state, shared with notification consumers. */
 export type ItemStatus =
@@ -507,6 +521,8 @@ export type NotionImportReport_Deserialize = {
 	failureCount?: number,
 	/**  A HubSpot plan's counts, owners and losses. */
 	hubspot?: CrmReport | null,
+	/**  An Attio plan's counts, owners and losses. */
+	attio?: CrmReport | null,
 };
 
 /**  Where a Notion workspace import stands. */
@@ -602,6 +618,8 @@ export type NotionImportReport_Serialize = {
 	failureCount: number,
 	/**  A HubSpot plan's counts, owners and losses. */
 	hubspot?: CrmReport | null,
+	/**  An Attio plan's counts, owners and losses. */
+	attio?: CrmReport | null,
 };
 
 /**  A teammate who already imported some of a plan's objects. */

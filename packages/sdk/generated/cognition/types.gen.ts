@@ -667,11 +667,11 @@ export type CreateChatRequest = {
 };
 
 /**
- * Something a CRM import cannot carry into Macro CRM, counted on the review
- * card and in the final report. The serialized names are stored on ledger
- * rows: never rename one.
+ * Something a CRM import (HubSpot or Attio) cannot carry into Macro CRM,
+ * counted on the review card and in the final report. The serialized names
+ * are stored on ledger rows: never rename one.
  */
-export type CrmLoss = 'owner_not_member' | 'deal_without_company' | 'deal_without_pipeline' | 'extra_company_links' | 'domain_rejected' | 'unsupported_currency' | 'additional_domains' | 'company_owner' | 'merged_company' | 'merged_contact' | 'contact_without_company';
+export type CrmLoss = 'owner_not_member' | 'deal_without_company' | 'deal_without_pipeline' | 'extra_company_links' | 'domain_rejected' | 'unsupported_currency' | 'additional_domains' | 'company_owner' | 'merged_company' | 'merged_contact' | 'contact_without_company' | 'deal_people' | 'archived_stage';
 
 /**
  * How many records lost one thing.
@@ -688,7 +688,7 @@ export type CrmLossCount = {
 };
 
 /**
- * What a CRM plan holds, for the review card.
+ * What a CRM plan (HubSpot or Attio) holds, for the review card.
  */
 export type CrmReport = {
     /**
@@ -700,7 +700,7 @@ export type CrmReport = {
      */
     companies: number;
     /**
-     * Contacts.
+     * Contacts (Attio's people).
      */
     contacts: number;
     /**
@@ -708,8 +708,8 @@ export type CrmReport = {
      */
     created?: number;
     /**
-     * Properties the source defined itself, as `object.name`; their values
-     * stay in the source.
+     * Properties (HubSpot) or attributes (Attio) the source workspace
+     * defined itself, as `object.name`; their values stay in the source.
      */
     customProperties: Array<string>;
     /**
@@ -1237,7 +1237,7 @@ export type ImportEntity = {
  * kinds; a Notion database and a Notion page, or a Linear project and a
  * Linear issue, are tracked and deduplicated separately.
  */
-export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel' | 'hubspot_pipeline' | 'hubspot_company' | 'hubspot_contact' | 'hubspot_deal';
+export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel' | 'hubspot_pipeline' | 'hubspot_company' | 'hubspot_contact' | 'hubspot_deal' | 'attio_pipeline' | 'attio_company' | 'attio_person' | 'attio_deal';
 
 /**
  * Body for importing one Notion page.
@@ -1304,7 +1304,7 @@ export type ImportRun = {
 /**
  * External systems items can be imported from.
  */
-export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack' | 'hubspot';
+export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack' | 'hubspot' | 'attio';
 
 /**
  * The full import aggregate for a user: discovery runs plus visible ledger
@@ -1558,6 +1558,7 @@ export type NotionImportReport = {
      * they link to that copy and are not counted as copies.
      */
     alreadyInMacro?: number;
+    attio?: null | CrmReport;
     confirmed?: null | ConfirmedNotionWrites;
     /**
      * Objects to copy as they are.

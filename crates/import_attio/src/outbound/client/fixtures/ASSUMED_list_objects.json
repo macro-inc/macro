@@ -1,0 +1,8 @@
+{
+  "data": [
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000001"}, "api_slug": "companies", "singular_noun": "Company", "plural_noun": "Companies", "created_at": "2026-01-01T00:00:00.000000000Z"},
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000002"}, "api_slug": "people", "singular_noun": "Person", "plural_noun": "People", "created_at": "2026-01-01T00:00:00.000000000Z"},
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000003"}, "api_slug": "deals", "singular_noun": "Deal", "plural_noun": "Deals", "created_at": "2026-01-01T00:00:00.000000000Z"},
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000004"}, "api_slug": "users", "singular_noun": "User", "plural_noun": "Users", "created_at": "2026-01-01T00:00:00.000000000Z"}
+  ]
+}
