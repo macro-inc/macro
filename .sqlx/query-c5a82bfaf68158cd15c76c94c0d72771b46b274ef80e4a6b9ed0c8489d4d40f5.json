@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                count(*) FILTER (WHERE subscription_id <> $3) AS \"others!\",\n                coalesce(bool_or(endpoint_url = $2), false) AS \"endpoint_verified!\"\n            FROM mcp_event_subscription\n            WHERE user_id = $1 AND expires_at > now()\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "others!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "endpoint_verified!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "c5a82bfaf68158cd15c76c94c0d72771b46b274ef80e4a6b9ed0c8489d4d40f5"
+}

@@ -40,6 +40,15 @@ pub enum McpStoreOutcome {
     QuotaExceeded,
 }
 
+/// What a user already holds, read before a subscribe calls their endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct McpLiveStanding {
+    /// Live subscriptions other than the one being made or refreshed.
+    pub others: u32,
+    /// Whether a live subscription of theirs is to the requested URL.
+    pub endpoint_verified: bool,
+}
+
 /// Storage of MCP webhook subscriptions.
 pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
     /// Repository error.
@@ -79,13 +88,15 @@ pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
     /// subscriptions of any user, oldest first; how many were deleted.
     fn delete_expired_batch(&self) -> impl Future<Output = Result<u64, Self::Err>> + Send;
 
-    /// Whether the user holds a live subscription to `endpoint_url`, which
-    /// means the endpoint was verified for them.
-    fn has_live_endpoint(
+    /// The user's live subscriptions other than `subscription_id`, and
+    /// whether one of them is to `endpoint_url`, which means the endpoint was
+    /// verified for them.
+    fn live_standing(
         &self,
         user_id: &MacroUserIdStr<'static>,
         endpoint_url: &str,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+        subscription_id: &McpSubscriptionId,
+    ) -> impl Future<Output = Result<McpLiveStanding, Self::Err>> + Send;
 
     /// The owner of each live subscription, at most
     /// [`LIVE_SUBSCRIBERS_MAX_ROWS`](super::live_subscribers::LIVE_SUBSCRIBERS_MAX_ROWS)
@@ -102,6 +113,24 @@ pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
         user_ids: &[String],
         event_name: &str,
     ) -> impl Future<Output = Result<Vec<McpMatchCandidate>, Self::Err>> + Send;
+}
+
+/// Counts each user's callback verifications that fail. A verification is a
+/// signed POST to a URL the caller chose; one that fails went to an endpoint
+/// that did not agree to it, so these are what is limited.
+pub trait McpVerificationLimiter: Clone + Send + Sync + 'static {
+    /// One attempt taken from the user's allowance.
+    type Ticket: Send;
+
+    /// Take an attempt; `None` when the user has none left in this window.
+    fn take(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<Self::Ticket>, rootcause::Report>> + Send;
+
+    /// Return an attempt that did not reach an unwilling endpoint: the
+    /// verification passed, or the URL was refused before any request.
+    fn give_back(&self, ticket: Self::Ticket) -> impl Future<Output = ()> + Send;
 }
 
 /// Decrypts a subscriber's signing secret.
@@ -237,6 +266,12 @@ pub enum McpSubscriptionError {
     /// The user holds the most subscriptions allowed.
     #[error("at most {max} subscriptions")]
     ResourceExhausted {
+        /// The limit.
+        max: u32,
+    },
+    /// The user's failed callback verifications reached the hourly limit.
+    #[error("at most {max} failed callback verifications an hour")]
+    VerificationsExhausted {
         /// The limit.
         max: u32,
     },

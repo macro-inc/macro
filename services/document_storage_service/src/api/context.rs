@@ -1012,6 +1012,7 @@ pub(crate) type DssMcpSubscriptionService =
     webhook::domain::mcp::service::McpEventSubscriptionServiceImpl<
         webhook::outbound::PgMcpSubscriptionRepository,
         ReqwestWebhookValidationClient,
+        webhook::outbound::RateLimitedMcpVerifications<DssWebhookRateLimiter>,
     >;
 
 /// Type alias for the internal MCP Events subscription router state.

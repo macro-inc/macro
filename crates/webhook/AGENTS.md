@@ -35,8 +35,9 @@ before changing ingestion or delivery behavior.
   with each stored filter; never match by scanning subscription rows.
   `src/inbound/mcp_router.rs` is the internal
   surface the MCP server calls; `src/outbound/pg_mcp_subscription_repository.rs`,
-  `http_mcp_endpoint.rs` (verify and deliver) and `kms_mcp_secret_cipher.rs`
-  are its adapters.
+  `http_mcp_endpoint.rs` (verify and deliver), `kms_mcp_secret_cipher.rs` and
+  `rate_limited_mcp_verifications.rs` (the failed-verification allowance) are
+  its adapters.
 - `src/domain/blocked_address.rs`: the one blocked-address classifier, used by
   create/patch validation and outbound delivery. `src/outbound/address_guard.rs`
   is the connect-time resolver that enforces it; never add a second
