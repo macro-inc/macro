@@ -459,6 +459,56 @@ fn a_string_outside_an_sdk_union_lists_the_values_it_takes() {
     assert!(!object.message.contains("is one of"), "{}", object.message);
 }
 
+/// A program written as a script names `macro` (or another field of
+/// `main`'s argument) with no `main` to take it from; one that names an SDK
+/// type uses it without importing it. Each gets the line that fixes it.
+#[test]
+fn a_missing_context_field_or_sdk_type_says_where_it_comes_from() {
+    let script = type_errors(&[Diagnostic {
+        file: Some("main.ts".into()),
+        message: "TS2304 [ERROR]: Cannot find name 'macro'.\nconst task = macro.tasks.byId(id);\n             ~~~~~\n    at main.ts:2:14".into(),
+    }]);
+    assert!(
+        script.message.ends_with(
+            "    at main.ts:2:14\n  `macro` is a field of main's argument: export async function main({ macro }: CodeContext) { ... }\n"
+        ),
+        "{}",
+        script.message
+    );
+    let execution = type_errors(&[Diagnostic {
+        file: Some("main.ts".into()),
+        message: "TS2304 [ERROR]: Cannot find name 'execution'.\n    at main.ts:3:40".into(),
+    }]);
+    assert!(
+        execution.message.ends_with(
+            "    at main.ts:3:40\n  `execution` is a field of main's argument: export async function main({ macro, execution }: CodeContext) { ... }\n"
+        ),
+        "{}",
+        execution.message
+    );
+    let sdk_type = type_errors(&[Diagnostic {
+        file: Some("main.ts".into()),
+        message: "TS2304 [ERROR]: Cannot find name 'Channel'.\n  const channels: Channel[] = [];\n                  ~~~~~~~\n    at main.ts:9:19".into(),
+    }]);
+    assert!(
+        sdk_type.message.ends_with(
+            "    at main.ts:9:19\n  Channel is an SDK type: import type { Channel } from '@macro-inc/sdk';\n"
+        ),
+        "{}",
+        sdk_type.message
+    );
+    // A name that is neither gets no hint.
+    let other = type_errors(&[Diagnostic {
+        file: Some("main.ts".into()),
+        message: "TS2304 [ERROR]: Cannot find name 'nope'.\n    at main.ts:1:1".into(),
+    }]);
+    assert!(
+        other.message.ends_with("    at main.ts:1:1\n"),
+        "{}",
+        other.message
+    );
+}
+
 /// A program checked ahead of its run isn't checked again when it runs, and
 /// one that fails its precheck is never run.
 #[tokio::test]

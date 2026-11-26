@@ -431,7 +431,8 @@ fn type_errors(diagnostics: &[Diagnostic]) -> ExecutionFailure {
         message.push_str(&diagnostic.message);
         message.push('\n');
         let hint = missing_member_hint(&diagnostic.message)
-            .or_else(|| string_union_hint(&diagnostic.message));
+            .or_else(|| string_union_hint(&diagnostic.message))
+            .or_else(|| missing_name_hint(&diagnostic.message));
         if let Some(hint) = hint {
             message.push_str(&hint);
             message.push('\n');
@@ -507,6 +508,49 @@ fn string_union_hint(message: &str) -> Option<String> {
     let values = sdk_string_literals(type_name)?;
     let values: Vec<String> = values.iter().map(|value| format!("'{value}'")).collect();
     Some(format!("  {type_name} is one of: {}.", values.join(", ")))
+}
+
+/// The fields of `CodeContext`, what `main` is passed (`domain/context.rs`).
+const CONTEXT_FIELDS: [&str; 8] = [
+    "macro",
+    "token",
+    "hosts",
+    "webAppUrl",
+    "session",
+    "sessionId",
+    "execution",
+    "executionId",
+];
+
+/// For a name the program uses but never declares (TS2304): a field of
+/// `main`'s argument, which a program written as a script has no `main` to
+/// take from, or an SDK type the root exports, used without importing it.
+fn missing_name_hint(message: &str) -> Option<String> {
+    use nom::Parser as _;
+    use nom::bytes::complete::{tag, take_until, take_while1};
+    let (rest, _) = take_until::<_, _, ()>("TS2304 [ERROR]: Cannot find name '")
+        .parse(message)
+        .ok()?;
+    let (_, (_, name, _)) = (
+        tag::<_, _, ()>("TS2304 [ERROR]: Cannot find name '"),
+        take_while1(|c: char| c.is_ascii_alphanumeric() || c == '_'),
+        tag("'."),
+    )
+        .parse(rest)
+        .ok()?;
+    if CONTEXT_FIELDS.contains(&name) {
+        let fields = if name == "macro" {
+            "macro".to_owned()
+        } else {
+            format!("macro, {name}")
+        };
+        return Some(format!(
+            "  `{name}` is a field of main's argument: export async function main({{ {fields} }}: CodeContext) {{ ... }}"
+        ));
+    }
+    sdk_root_exports(name).then(|| {
+        format!("  {name} is an SDK type: import type {{ {name} }} from '@macro-inc/sdk';")
+    })
 }
 
 #[cfg(test)]

@@ -110,6 +110,60 @@ pub fn sdk_members(name: &str) -> Option<Vec<&'static str>> {
     Some(members)
 }
 
+/// The SDK root's declarations, what `import … from '@macro-inc/sdk'` reads.
+const SDK_ROOT: &str = "src/macro.d.ts";
+
+/// The names the SDK's root exports: its `export { … }` and
+/// `export type { … }` lists, under the names it exports them as, and the
+/// classes, interfaces and types it declares itself (`export declare class
+/// Macro`).
+static ROOT_EXPORTS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+    use nom::Parser as _;
+    use nom::branch::alt;
+    use nom::bytes::complete::{tag, take_until, take_while1};
+    use nom::combinator::opt;
+    let Some(mut rest) = SDK.files.get(SDK_ROOT).map(String::as_str) else {
+        return Vec::new();
+    };
+    let identifier = || take_while1::<_, &str, ()>(|c: char| c.is_ascii_alphanumeric() || c == '_');
+    let mut names = Vec::new();
+    while let Ok((after, _)) = take_until::<_, _, ()>("export ").parse(rest) {
+        let after = &after["export ".len()..];
+        let list = (opt(tag::<_, _, ()>("type ")), tag("{"), take_until("}")).parse(after);
+        let declared = (
+            opt(tag::<_, _, ()>("declare ")),
+            alt((tag("class "), tag("interface "), tag("type "))),
+            identifier(),
+        )
+            .parse(after);
+        rest = match (list, declared) {
+            (Ok((after_list, (_, _, inner))), _) => {
+                names.extend(
+                    inner
+                        .split(',')
+                        .map(|item| item.trim().trim_start_matches("type "))
+                        .filter_map(|item| item.rsplit(" as ").next())
+                        .map(str::trim)
+                        .filter(|name| !name.is_empty()),
+                );
+                after_list
+            }
+            (_, Ok((after_name, (_, _, name)))) => {
+                names.push(name);
+                after_name
+            }
+            _ => after,
+        };
+    }
+    names
+});
+
+/// Whether the SDK's root exports `name`, so a program can import it from
+/// `@macro-inc/sdk`.
+pub fn sdk_root_exports(name: &str) -> bool {
+    ROOT_EXPORTS.contains(&name)
+}
+
 /// The values of the SDK's string-literal union type `name`, such as
 /// `SortDirection`, in declaration order.
 /// The SDK's own declarations (`src/`) win over a generated type of the same
