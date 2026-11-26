@@ -452,17 +452,10 @@ impl TurnEngine for RigTurnEngine {
                     return;
                 };
                 request.model = model;
-                // A live tool loop preserves its signatures. The ACP history
-                // currently loses those and the signatures on visible text.
-                if requires_gemini_4_client(&request.model)
-                    && request
-                        .messages
-                        .iter()
-                        .any(|message| message.role == agent::types::Role::Assistant)
-                {
+                if requires_gemini_4_client(&request.model) && request.gemini_4_replay.is_none() {
                     let _ = parts
                         .send(Err(AgentError::Other(anyhow::anyhow!(
-                            "Gemini 4 conversation history cannot be replayed safely yet"
+                            "Gemini 4 conversation history cannot be replayed safely"
                         ))))
                         .await;
                     return;
@@ -623,6 +616,7 @@ async fn drive_turn(
     parts: &mpsc::Sender<Result<StreamPart, AgentError>>,
 ) -> Result<(), AgentError> {
     let TurnRequest {
+        gemini_4_replay,
         purpose,
         delivery,
         session_id,
@@ -676,7 +670,10 @@ async fn drive_turn(
     // The opening line runs on Macro's own fast model, so a turn the agent's
     // key pays for goes without one; so does a reply read only once it is
     // finished, which gains nothing from it.
-    let opening = !summarizing && agent_key.is_none() && delivery == ReplyDelivery::Streamed;
+    let frontier = requires_gemini_4_client(&model);
+    // An opener's text is not part of Gemini's signed native response.
+    let opening =
+        !summarizing && !frontier && agent_key.is_none() && delivery == ReplyDelivery::Streamed;
 
     // Started before anything else so its line is out before the turn's
     // model has a first token.
@@ -861,7 +858,9 @@ async fn drive_turn(
         let client = routing
             .gemini_4_client
             .ok_or_else(|| AgentError::UnknownModel(model.clone()))?;
-        agent_loop = agent_loop.with_gemini_4_client(client)?;
+        let replay = gemini_4_replay
+            .ok_or_else(|| anyhow::anyhow!("Gemini 4 replay state is unavailable"))?;
+        agent_loop = agent_loop.with_gemini_4_client(client, replay)?;
     }
     // Only the loop's own model calls run on the agent's key, so only they are
     // recorded against it; tools keep `usage_ctx`, since they call models on

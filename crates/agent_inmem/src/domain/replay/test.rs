@@ -147,7 +147,7 @@ fn said(entries: &[HistoryEntry]) -> Vec<String> {
         .filter_map(|entry| match entry {
             HistoryEntry::User { prompt, .. } => Some(prompt.text.clone()),
             HistoryEntry::Summary(text) => Some(format!("[{text}]")),
-            HistoryEntry::Assistant(_) => None,
+            HistoryEntry::Assistant(_) | HistoryEntry::Gemini4Replay(_) => None,
         })
         .collect()
 }
@@ -157,7 +157,9 @@ fn said(entries: &[HistoryEntry]) -> Vec<String> {
 fn shown(entries: &[HistoryEntry]) -> Vec<String> {
     entries
         .iter()
+        .filter(|entry| !matches!(entry, HistoryEntry::Gemini4Replay(_)))
         .map(|entry| match entry {
+            HistoryEntry::Gemini4Replay(_) => unreachable!(),
             HistoryEntry::User { prompt, .. } => prompt.text.clone(),
             HistoryEntry::Summary(text) => format!("[{text}]"),
             HistoryEntry::Assistant(parts) => {
@@ -836,4 +838,45 @@ fn a_call_named_like_a_presentation_with_the_models_id_still_replays() {
         )),
         "the model's own call replays: {parts:#?}"
     );
+}
+
+#[test]
+fn gemini_4_cold_replay_joins_only_the_completed_prompt() {
+    let metadata: agent::Gemini4Replay = serde_json::from_value(serde_json::json!({
+        "model": agent::GEMINI_4_NEON,
+        "responses": [{"digest": vec![0; 32], "parts": [
+            {"Text": {"bytes": 6, "signature": "cHJpdmF0ZQ=="}}
+        ]}]
+    }))
+    .unwrap();
+    let completed = turn("completed", "answer");
+    assert!(!has_gemini_4_selection(&completed));
+    assert!(has_gemini_4_selection(&[config_frame(
+        MODEL_CONFIG_ID,
+        agent::GEMINI_4_NEON
+    )]));
+    let requests = replay_request_ids(&completed);
+    assert_eq!(requests.len(), 1);
+    let sides = HashMap::from([(requests[0].clone(), metadata)]);
+    let recovered = replay_history_with_gemini_4(completed.clone(), sides.clone());
+    assert_eq!(
+        crate::domain::session::gemini_4_history(&recovered, agent::GEMINI_4_NEON)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(crate::domain::session::gemini_4_history(&recovered, agent::GEMINI_4_CARBON).is_none());
+    let absent = replay_history(completed.clone());
+    assert!(crate::domain::session::gemini_4_history(&absent, agent::GEMINI_4_NEON).is_none());
+    let mut cancelled = completed.clone();
+    cancelled[2] = answer("completed", "cancelled");
+    let recovered = replay_history_with_gemini_4(cancelled, sides);
+    assert!(
+        !recovered
+            .iter()
+            .any(|item| matches!(item, HistoryEntry::Gemini4Replay(_)))
+    );
+    let mut duplicated = completed.clone();
+    duplicated.extend(completed);
+    assert!(replay_request_ids(&duplicated).is_empty());
 }

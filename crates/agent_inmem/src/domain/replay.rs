@@ -21,7 +21,7 @@ use agent_client_protocol::schema::v1::{
     ContentBlock, PromptRequest, SessionNotification, SessionUpdate, ToolCallStatus,
 };
 use agent_client_protocol::schema::v1::{
-    RequestId, Response, SessionConfigKind, SessionConfigOption,
+    RequestId, Response, SessionConfigKind, SessionConfigOption, SetSessionConfigOptionRequest,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
@@ -32,6 +32,7 @@ use std::collections::{HashMap, HashSet};
 use crate::domain::agent::{META_NAMESPACE, TURN_FAILED_REPLY, close_dangling_tool_calls};
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::{HistoryEntry, UserPrompt, end_of_turn, splice_summary};
+use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 use agent_runtime_protocol::domain::context::ContextSummaryNotification;
 
 #[cfg(test)]
@@ -57,6 +58,7 @@ struct OpenTurn {
     id: RequestId,
     prompt: UserPrompt,
     parts: Vec<AssistantMessagePart>,
+    gemini_4_replay: Option<agent::Gemini4Replay>,
 }
 
 /// Rebuild the conversation the log's frames recorded, oldest first.
@@ -75,6 +77,13 @@ struct OpenTurn {
 /// it, without the failure reply it sent its reader.
 #[must_use]
 pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryEntry> {
+    replay_history_with_gemini_4(frames, HashMap::new())
+}
+
+pub(crate) fn replay_history_with_gemini_4(
+    frames: impl IntoIterator<Item = Message>,
+    mut replays: HashMap<RequestId, agent::Gemini4Replay>,
+) -> Vec<HistoryEntry> {
     let mut history = Vec::new();
     let mut open: Option<OpenTurn> = None;
     let mut writing = WritingCalls::default();
@@ -99,6 +108,7 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
                     id: request.id.clone(),
                     prompt: UserPrompt::from_blocks(&prompt.prompt),
                     parts: Vec::new(),
+                    gemini_4_replay: None,
                 });
             }
             Message::ToServer(ToServerMessage::Acp(acp)) => {
@@ -107,6 +117,12 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
                 {
                     let failed =
                         matches!(acp.0, RawJsonRpcMessage::Response(Response::Error { .. }));
+                    if let RawJsonRpcMessage::Response(Response::Result { result, .. }) = &acp.0
+                        && result["stopReason"] == "end_turn"
+                        && let Some(turn) = open.as_mut()
+                    {
+                        turn.gemini_4_replay = replays.remove(id);
+                    }
                     // A turn that failed after it ran told its reader so in a
                     // last text chunk the live agent never kept; it kept the
                     // prompt and whatever the turn said before.
@@ -166,6 +182,55 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
     }
     close_turn(&mut history, &mut open);
     history
+}
+
+/// Whether an earlier explicit choice may have created private Gemini 4 state.
+pub(crate) fn has_gemini_4_selection(frames: &[Message]) -> bool {
+    frames.iter().any(|frame| {
+        let Message::ToRuntime(ToRuntimeMessage::Acp(acp)) = frame else {
+            return false;
+        };
+        let RawJsonRpcMessage::Request(request) = &acp.0 else {
+            return false;
+        };
+        if !SetSessionConfigOptionRequest::matches_method(&request.method) {
+            return false;
+        }
+        deserialize_params::<SetSessionConfigOptionRequest>(request.params.as_ref()).is_some_and(
+            |config| {
+                config.config_id.to_string() == MODEL_CONFIG_ID
+                    && config
+                        .value
+                        .as_value_id()
+                        .is_some_and(|model| agent::requires_gemini_4_client(&model.to_string()))
+            },
+        )
+    })
+}
+
+/// Only pair private state with unambiguous prompt identities from this log.
+pub(crate) fn replay_request_ids(frames: &[Message]) -> Vec<RequestId> {
+    let mut found = HashMap::new();
+    for frame in frames {
+        let (Message::ToRuntime(ToRuntimeMessage::Acp(acp))
+        | Message::Notification(ToRuntimeMessage::Acp(acp))) = frame
+        else {
+            continue;
+        };
+        let RawJsonRpcMessage::Request(request) = &acp.0 else {
+            continue;
+        };
+        if PromptRequest::matches_method(&request.method) {
+            found
+                .entry(request.id.clone())
+                .and_modify(|duplicate| *duplicate = true)
+                .or_insert(false);
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(id, duplicate)| (!duplicate).then_some(id))
+        .collect()
 }
 
 /// Rebuild the last valid reasoning-effort selection from durable frames.
@@ -451,6 +516,7 @@ fn close_turn(history: &mut Vec<HistoryEntry>, open: &mut Option<OpenTurn>) {
         id,
         prompt,
         mut parts,
+        gemini_4_replay,
     }) = open.take()
     else {
         return;
@@ -473,6 +539,9 @@ fn close_turn(history: &mut Vec<HistoryEntry>, open: &mut Option<OpenTurn>) {
     });
     if !parts.is_empty() {
         history.push(HistoryEntry::Assistant(parts));
+        if let Some(replay) = gemini_4_replay {
+            history.push(HistoryEntry::Gemini4Replay(replay));
+        }
     }
 }
 

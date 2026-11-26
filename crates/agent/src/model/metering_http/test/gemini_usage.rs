@@ -17,10 +17,15 @@ impl ToolAnnotated for Lookup {
 }
 
 #[async_trait::async_trait]
-impl AsyncTool<()> for Lookup {
+impl AsyncTool<Arc<AtomicUsize>> for Lookup {
     type Output = String;
 
-    async fn call(&self, _: ServiceContext<()>, _: RequestContext) -> ToolResult<Self::Output> {
+    async fn call(
+        &self,
+        count: ServiceContext<Arc<AtomicUsize>>,
+        _: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        count.0.fetch_add(1, Ordering::SeqCst);
         Ok(self.name.clone())
     }
 }
@@ -53,7 +58,7 @@ fn gemini_4_auth_rejects_every_other_authority_before_attaching_the_key() {
 
 #[tokio::test]
 async fn gemini_4_json_uses_a_sensitive_header_and_scope_excludes_flash() {
-    use crate::model::gemini::gemini_4_client;
+    use crate::model::gemini::{gemini_4_client, gemini_4_key};
     use rig_core::{client::CompletionClient, completion::CompletionModel, providers::gemini};
 
     let transport = Transport::new(
@@ -63,8 +68,9 @@ async fn gemini_4_json_uses_a_sensitive_header_and_scope_excludes_flash() {
     );
     let frontier = gemini_4_client(
         transport.clone(),
-        "fixture-frontier",
+        gemini_4_key("fixture-frontier").unwrap(),
         &[crate::GEMINI_4_NEON],
+        None,
     )
     .unwrap();
     frontier
@@ -108,6 +114,7 @@ async fn gemini_4_json_uses_a_sensitive_header_and_scope_excludes_flash() {
     );
     assert_eq!(headers[0]["x-goog-api-key"], "fixture-frontier");
     assert!(headers[0]["x-goog-api-key"].is_sensitive());
+    assert!(!headers[0].contains_key("authorization"));
     assert!(!format!("{:?}", headers[0]).contains("fixture-frontier"));
     assert_eq!(uris[1].query(), Some("key=fixture-flash"));
     assert!(!headers[1].contains_key("x-goog-api-key"));
@@ -116,7 +123,7 @@ async fn gemini_4_json_uses_a_sensitive_header_and_scope_excludes_flash() {
 #[tokio::test]
 async fn gemini_4_parallel_tool_replay_meters_final_usage_for_each_request() {
     use crate::model::{
-        gemini::{GeminiModel, gemini_4_client},
+        gemini::{GeminiModel, gemini_4_client, gemini_4_key},
         types::Model,
     };
     use crate::{AgentLoop, StreamPart};
@@ -151,26 +158,41 @@ async fn gemini_4_parallel_tool_replay_meters_final_usage_for_each_request() {
         });
         let reply = json!({
             "responseId": "reply",
-            "candidates": [{"content": {"role": "model", "parts": [{"text": "done"}]},
+            "candidates": [{"content": {"role": "model", "parts": [
+                {"text": "done", "thoughtSignature": "dmlzaWJsZQ=="},
+                {"text": "", "thoughtSignature": "ZW1wdHk="}
+            ]},
                 "finishReason": "STOP"}],
             "usageMetadata": {"promptTokenCount": 90, "cachedContentTokenCount": 60,
                 "candidatesTokenCount": 2, "thoughtsTokenCount": 5, "totalTokenCount": 97}
         });
+        let mut tool_parts = calls.clone();
+        let last = tool_parts["candidates"][0].as_object_mut().unwrap();
+        last.remove("finishReason");
+        tool_parts.as_object_mut().unwrap().remove("usageMetadata");
+        let mut tool_stop = calls;
+        tool_stop["candidates"][0]["content"]["parts"] = json!([]);
         transport.remaining.lock().unwrap().extend([
-            Bytes::from(format!("data: {calls}\r\n\r\n")),
+            Bytes::from(format!(
+                "data: {tool_parts}\r\n\r\ndata: {tool_stop}\r\n\r\n"
+            )),
             Bytes::from(format!("data: {interim}\r\n\r\ndata: {reply}\r\n\r\n")),
         ]);
+        let id = format!("google/{slug}");
+        let replay = crate::Gemini4ReplaySession::new(&id, vec![]).unwrap();
         let client = gemini_4_client(
             transport.clone(),
-            "fixture-frontier",
+            gemini_4_key("fixture-frontier").unwrap(),
             &[crate::GEMINI_4_NEON, crate::GEMINI_4_CARBON],
+            Some(replay.clone()),
         )
         .unwrap();
-        let id = format!("google/{slug}");
         let model = GeminiModel::new(Model::try_from(id.as_str()).unwrap(), Arc::new(client));
         let agent = AgentLoop::new(Arc::new(NoOpUsageRecorder))
             .with_model(&id)
-            .with_max_tokens(20);
+            .with_max_tokens(20)
+            .test_with_gemini_4_replay(replay.clone());
+        let effects = Arc::new(AtomicUsize::new(0));
         let mut session = MeteringContext::new(
             FinancialMode::Activated,
             FinancialCapability::Available(journal.clone()),
@@ -183,25 +205,98 @@ async fn gemini_4_parallel_tool_replay_meters_final_usage_for_each_request() {
                 zero_usage_is_missing: false,
             }],
         )
-        .scope(agent.test_session(
-            Arc::new(AsyncToolCollection::<()>::new().add_tool::<Lookup, ()>()),
-            Arc::new(()),
-            "system",
-            usage.clone(),
-            model.completion(),
-        ))
+        .scope(
+            agent.test_session(
+                Arc::new(
+                    AsyncToolCollection::<Arc<AtomicUsize>>::new()
+                        .add_tool::<Lookup, Arc<AtomicUsize>>(),
+                ),
+                Arc::new(effects.clone()),
+                "system",
+                usage.clone(),
+                model.completion(),
+            ),
+        )
         .await;
         let mut stream = session
             .send_message(vec![rig_core::message::Message::user("Look up both items")])
             .await
             .unwrap();
         let mut output = String::new();
+        let mut accumulation = crate::StreamAccumulator::new();
         while let Some(part) = stream.next().await {
-            if let StreamPart::Content(text) = part.unwrap() {
-                output.push_str(&text);
+            let part = part.unwrap();
+            if let StreamPart::Content(text) = &part {
+                output.push_str(text);
             }
+            accumulation.push(part);
         }
         assert_eq!(output, "All done", "{slug}");
+        assert_eq!(effects.load(Ordering::SeqCst), 2, "{slug}");
+        let saved = replay.complete().unwrap();
+        let rounds = saved.assistant_rounds(&accumulation.into_parts()).unwrap();
+        assert_eq!(rounds.len(), 2, "{slug}");
+        let saved = serde_json::to_value(saved).unwrap();
+        assert_eq!(
+            saved["responses"][1]["parts"][1]["Text"]["signature"],
+            "dmlzaWJsZQ=="
+        );
+        assert_eq!(
+            saved["responses"][1]["parts"][2]["Text"]["signature"],
+            "ZW1wdHk="
+        );
+
+        let cold_replay =
+            crate::Gemini4ReplaySession::new(&id, vec![serde_json::from_value(saved).unwrap()])
+                .unwrap();
+        let cold = Transport::new(format!("data: {reply}\r\n\r\n"));
+        let client = gemini_4_client(
+            cold.clone(),
+            gemini_4_key("fixture-frontier").unwrap(),
+            &[crate::GEMINI_4_NEON, crate::GEMINI_4_CARBON],
+            Some(cold_replay),
+        )
+        .unwrap();
+        let mut history = vec![rig_core::message::Message::user("Look up both items")];
+        history.extend(crate::to_rig_messages(
+            &rounds
+                .into_iter()
+                .map(|parts| crate::types::ChatMessage {
+                    role: crate::types::Role::Assistant,
+                    content: crate::types::ChatMessageContent::AssistantMessageParts(parts),
+                    attachments: None,
+                })
+                .collect::<Vec<_>>(),
+        ));
+        use rig_core::{client::CompletionClient, completion::CompletionModel};
+        let mut next = client
+            .completion_model(slug)
+            .completion_request("continue")
+            .messages(history)
+            .stream()
+            .await
+            .unwrap();
+        while let Some(part) = next.next().await {
+            part.unwrap();
+        }
+        let cold_bodies = cold.bodies.lock().unwrap();
+        assert_eq!(cold_bodies.len(), 1);
+        let history = &cold_bodies[0]["contents"];
+        assert_eq!(
+            history[1]["parts"][0]["thoughtSignature"],
+            "dGVzdC1zaWduYXR1cmU="
+        );
+        assert_eq!(
+            history[3]["parts"],
+            reply["candidates"][0]["content"]["parts"]
+                .as_array()
+                .map(|parts| {
+                    let mut parts = parts.clone();
+                    parts.insert(0, json!({"text": "All "}));
+                    Value::Array(parts)
+                })
+                .unwrap()
+        );
 
         let uris = transport.uris.lock().unwrap();
         assert_eq!(uris.len(), 2);
@@ -216,6 +311,8 @@ async fn gemini_4_parallel_tool_replay_meters_final_usage_for_each_request() {
         for headers in transport.headers.lock().unwrap().iter() {
             assert_eq!(headers["x-goog-api-key"], "fixture-frontier");
             assert!(headers["x-goog-api-key"].is_sensitive());
+            assert!(!headers.contains_key("authorization"));
+            assert!(!format!("{headers:?}").contains("fixture-frontier"));
         }
 
         let bodies = transport.bodies.lock().unwrap();
@@ -346,4 +443,104 @@ async fn the_chat_span_records_the_final_chunks_cache_read_for_gemini() {
     }
     assert_eq!(cache_read.as_deref(), Some("60"));
     assert_eq!(output.as_deref(), Some("2"));
+}
+
+#[tokio::test]
+async fn gemini_4_does_not_execute_tools_before_a_valid_terminal_capture() {
+    use crate::AgentLoop;
+    use crate::model::{
+        gemini::{GeminiModel, gemini_4_client, gemini_4_key},
+        types::Model,
+    };
+    use ai_usage::NoOpUsageRecorder;
+
+    for invalid in ["missing", "extra-signature", "unfinished", "cancelled"] {
+        let mut parts = vec![
+            json!({"text":"","thoughtSignature":"ZW1wdHk="}),
+            json!({"functionCall":{"id":"call-a","name":"lookup","args":{"name":"a"}}}),
+        ];
+        if invalid != "missing" {
+            parts[1]["thoughtSignature"] = json!("YQ==");
+        }
+        if invalid == "extra-signature" {
+            parts.push(json!({
+                "functionCall":{"id":"call-b","name":"lookup","args":{"name":"b"}},
+                "thoughtSignature":"Yg=="
+            }));
+        }
+        let mut response = json!({"candidates":[{
+            "content":{"role":"model","parts":parts},"finishReason":"STOP"
+        }]});
+        if invalid == "unfinished" {
+            response["candidates"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove("finishReason");
+        }
+        let transport = Transport::new(format!("data: {response}\n\n"));
+        let replay = crate::Gemini4ReplaySession::new(crate::GEMINI_4_NEON, vec![]).unwrap();
+        let client = Arc::new(
+            gemini_4_client(
+                transport.clone(),
+                gemini_4_key("fixture-frontier").unwrap(),
+                &[crate::GEMINI_4_NEON],
+                Some(replay.clone()),
+            )
+            .unwrap(),
+        );
+        let model = GeminiModel::new(Model::try_from(crate::GEMINI_4_NEON).unwrap(), client);
+        let effects = Arc::new(AtomicUsize::new(0));
+        let owner =
+            macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@example.com")
+                .unwrap();
+        let session = AgentLoop::new(Arc::new(NoOpUsageRecorder))
+            .with_model(crate::GEMINI_4_NEON)
+            .test_with_gemini_4_replay(replay.clone())
+            .test_session(
+                Arc::new(
+                    AsyncToolCollection::<Arc<AtomicUsize>>::new()
+                        .add_tool::<Lookup, Arc<AtomicUsize>>(),
+                ),
+                Arc::new(effects.clone()),
+                "system",
+                UsageContext::new(AiFeature::AgentSession, owner),
+                model.completion(),
+            )
+            .await;
+        let (mut session, cancel) = session.cancellable();
+        if invalid == "cancelled" {
+            cancel.cancel();
+        }
+        if let Ok(mut stream) = session
+            .send_message(vec![rig_core::message::Message::user("look up")])
+            .await
+        {
+            while stream.next().await.is_some() {}
+        }
+        assert_eq!(effects.load(Ordering::SeqCst), 0, "{invalid}");
+        // The runtime discards completed capture on cancellation, even if
+        // the provider finished streaming before the cancel was observed.
+        if invalid != "cancelled" {
+            assert!(replay.complete().is_none(), "{invalid}");
+        }
+    }
+}
+
+#[test]
+fn gemini_4_reduces_provider_errors_to_safe_diagnostics() {
+    assert!(gemini_4_finish_reason_is_known("STOP"));
+    assert!(!gemini_4_finish_reason_is_known("private provider hint"));
+    let rejected = sanitize_gemini_4_error(http_client::Error::InvalidStatusCodeWithMessage(
+        reqwest::StatusCode::BAD_REQUEST,
+        "private provider signature and request hint".to_owned(),
+    ));
+    assert!(
+        matches!(rejected, http_client::Error::InvalidStatusCode(status)
+        if status == reqwest::StatusCode::BAD_REQUEST)
+    );
+    assert!(!format!("{rejected:?}").contains("private"));
+
+    let content_type = HeaderValue::from_static("private provider id");
+    let rejected = sanitize_gemini_4_error(http_client::Error::InvalidContentType(content_type));
+    assert!(!format!("{rejected:?}").contains("private"));
 }

@@ -207,6 +207,8 @@ pub enum HistoryEntry {
     },
     /// One assistant turn: text, tool calls, and tool results, flattened.
     Assistant(Vec<AssistantMessagePart>),
+    /// Provider-specific state for the immediately preceding assistant turn.
+    Gemini4Replay(agent::Gemini4Replay),
     /// What a summary says of the conversation before it, which it stands
     /// in for. The model reads it as history it has already acted on.
     Summary(String),
@@ -348,6 +350,7 @@ pub fn messages_for_turn(history: &[HistoryEntry], prompt: &UserPrompt) -> Vec<C
         .flat_map(|entry| match entry {
             HistoryEntry::User { prompt, .. } => vec![prompt.to_chat_message()],
             HistoryEntry::Assistant(parts) => vec![assistant_message(parts.clone())],
+            HistoryEntry::Gemini4Replay(_) => Vec::new(),
             HistoryEntry::Summary(summary) => vec![
                 UserPrompt::text(SUMMARY_PREAMBLE).to_chat_message(),
                 assistant_message(vec![AssistantMessagePart::Text {
@@ -357,6 +360,60 @@ pub fn messages_for_turn(history: &[HistoryEntry], prompt: &UserPrompt) -> Vec<C
         })
         .chain(std::iter::once(prompt.to_chat_message()))
         .collect()
+}
+
+/// Build the dedicated provider's assistant rounds from private boundaries.
+pub(crate) fn gemini_4_messages(
+    history: &[HistoryEntry],
+    prompt: &UserPrompt,
+) -> Option<Vec<ChatMessage>> {
+    let mut history = history.iter();
+    let mut messages = Vec::new();
+    while let Some(entry) = history.next() {
+        match entry {
+            HistoryEntry::User { prompt, .. } => messages.push(prompt.to_chat_message()),
+            HistoryEntry::Assistant(parts) => {
+                let HistoryEntry::Gemini4Replay(replay) = history.next()? else {
+                    return None;
+                };
+                messages.extend(
+                    replay
+                        .assistant_rounds(parts)?
+                        .into_iter()
+                        .map(assistant_message),
+                );
+            }
+            HistoryEntry::Summary(_) | HistoryEntry::Gemini4Replay(_) => return None,
+        }
+    }
+    messages.push(prompt.to_chat_message());
+    Some(messages)
+}
+
+/// Read only complete, same-model signed history. A cold log missing any
+/// assistant turn's companion metadata is unsafe to send to Gemini 4.
+pub(crate) fn gemini_4_history<'a>(
+    history: &'a [HistoryEntry],
+    model: &str,
+) -> Option<Vec<&'a agent::Gemini4Replay>> {
+    let mut replay = Vec::new();
+    let mut history = history.iter();
+    while let Some(entry) = history.next() {
+        match entry {
+            HistoryEntry::Assistant(_) => {
+                let HistoryEntry::Gemini4Replay(turn) = history.next()? else {
+                    return None;
+                };
+                if !turn.is_for_model(model) {
+                    return None;
+                }
+                replay.push(turn);
+            }
+            HistoryEntry::Gemini4Replay(_) | HistoryEntry::Summary(_) => return None,
+            HistoryEntry::User { .. } => {}
+        }
+    }
+    Some(replay)
 }
 
 fn assistant_message(parts: Vec<AssistantMessagePart>) -> ChatMessage {

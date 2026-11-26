@@ -145,6 +145,7 @@ fn message(uri: &str) -> ChatMessage {
 
 fn request(messages: Vec<ChatMessage>) -> TurnRequest {
     TurnRequest {
+        gemini_4_replay: None,
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         purpose: crate::domain::engine::TurnPurpose::Conversation,

@@ -55,6 +55,7 @@ pub struct AgentLoop {
     stream_tool_calls: bool,
     /// A router bound to the agent's own key or the dedicated Gemini 4 client.
     router: Option<ModelRouter<MeteredHttpClient>>,
+    gemini_4_replay: Option<crate::Gemini4ReplaySession>,
 }
 
 impl AgentLoop {
@@ -81,6 +82,7 @@ impl AgentLoop {
             genai_telemetry: true,
             stream_tool_calls: false,
             router: None,
+            gemini_4_replay: None,
         }
     }
 
@@ -105,15 +107,17 @@ impl AgentLoop {
     pub fn with_gemini_4_client(
         mut self,
         client: &crate::Gemini4Client,
+        replay: crate::Gemini4ReplaySession,
     ) -> Result<Self, AgentError> {
         if !client.models().contains(&self.model.as_str()) {
             return Err(AgentError::UnknownModel(self.model));
         }
         let router = ModelRouter::shared()?
             .clone()
-            .with_gemini_4_client(client.inner.clone(), client.models());
+            .with_gemini_4_client(client.bind(replay.clone())?, client.models());
         router.route(&self.model)?;
         self.router = Some(router);
+        self.gemini_4_replay = Some(replay);
         Ok(self)
     }
 
@@ -475,6 +479,7 @@ impl AgentLoop {
                 user_tool_finisher: self.user_tool_finisher.clone(),
                 stream_tool_calls: self.stream_tool_calls,
                 result_limit: self.result_limit.clone(),
+                gemini_4_replay: self.gemini_4_replay.clone(),
             },
             recorder: self.recorder.clone(),
             usage_ctx,
@@ -483,6 +488,12 @@ impl AgentLoop {
             telemetry,
             financial_context,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_with_gemini_4_replay(mut self, replay: crate::Gemini4ReplaySession) -> Self {
+        self.gemini_4_replay = Some(replay);
+        self
     }
 
     /// Start a session backed by a caller-supplied (fake) completion model

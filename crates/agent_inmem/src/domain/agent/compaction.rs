@@ -139,6 +139,7 @@ fn tokens(entries: &[HistoryEntry]) -> u64 {
                 bytes_to_tokens(serde_json::to_string(parts).map_or(0, |json| json.len()))
             }
             HistoryEntry::Summary(text) => bytes_to_tokens(SUMMARY_PREAMBLE.len() + text.len()),
+            HistoryEntry::Gemini4Replay(_) => 0,
         })
         .sum()
 }
@@ -175,7 +176,9 @@ fn covered_until(history: &[HistoryEntry], retain: u64) -> usize {
 fn last_prompt(entries: &[HistoryEntry]) -> Option<RequestId> {
     entries.iter().rev().find_map(|entry| match entry {
         HistoryEntry::User { request_id, .. } => Some(request_id.clone()),
-        HistoryEntry::Assistant(_) | HistoryEntry::Summary(_) => None,
+        HistoryEntry::Assistant(_) | HistoryEntry::Summary(_) | HistoryEntry::Gemini4Replay(_) => {
+            None
+        }
     })
 }
 
@@ -230,6 +233,9 @@ fn start_summary(
     let mut start = None;
     let wait = {
         let mut session = state.store.get_mut(&state.session_id)?;
+        if agent::requires_gemini_4_client(&session.model) {
+            return None;
+        }
         let window = window(&session.model);
         let total = tokens(&session.history) + prompt_tokens(prompt);
         if total < share(window, SUMMARIZE_AT) {
@@ -562,6 +568,7 @@ fn transcript(covered: &[HistoryEntry], descriptions: &HashMap<String, String>) 
                     &serde_json::to_string(&visible).expect("conversation parts serialize"),
                 );
             }
+            HistoryEntry::Gemini4Replay(_) => {}
         }
     }
     result
@@ -582,6 +589,7 @@ async fn complete(
     let call = cancel.child_token();
     let _stop = call.clone().drop_guard();
     let mut parts = state.engine.run_turn(TurnRequest {
+        gemini_4_replay: None,
         purpose: TurnPurpose::Summary,
         delivery: state.delivery,
         session_id: state.session_id,

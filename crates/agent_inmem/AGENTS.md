@@ -133,7 +133,9 @@ MCP catalog lacks any `mcp__macro_internal__` code tool fails
   `models::resolve`.
 - Gemini 4 Neon and Carbon appear in the paid catalog only when the
   runtime has a dedicated client. While signature persistence is incomplete,
-  the runtime rejects Gemini 4 turns with existing assistant history.
+  the runtime requires complete private same-model replay metadata for each
+  prior assistant turn and rejects compacted or incompatible histories. The
+  native runtime skips Flash compaction while Gemini 4 is selected.
 - Owners with the `auto-skills` flag route each turn's request to their skills
   (`skills::domain::selection`, Jev, 1 s). Loaded skills are appended to the
   user message that loaded them in the model's copy only, and remembered per

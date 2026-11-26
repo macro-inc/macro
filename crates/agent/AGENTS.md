@@ -83,7 +83,9 @@ and usage metering.
   from `ai_usage` if spans and billing disagree.
 - Gemini 4 Neon and Carbon require their dedicated Gemini Developer API
   client. Only those IDs may use its sensitive header credential. The shared
-  Gemini client continues to serve Gemini 3.8 Flash.
+  Gemini client continues to serve Gemini 3.8 Flash. The dedicated transport
+  captures original part boundaries and signatures before the shared client
+  parses responses, and validates native replay before inference or tool dispatch.
 - `MeteredHttpClient` logs every provider response that means Macro's
   account is suspended or out of credit (`genai_telemetry::provider_account`),
   which pages on-call. A client rekeyed for an agent's own key is built

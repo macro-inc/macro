@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_session_gemini_4_replay (agent_session_id, request_id, replay)\n            SELECT id, $2, $3 FROM agent_session WHERE id = $1 AND owner_id = $4\n            ON CONFLICT (agent_session_id, request_id) DO UPDATE SET replay = EXCLUDED.replay\n            WHERE agent_session_gemini_4_replay.replay = EXCLUDED.replay\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bd23b4fa461953d4f70b99f74dd9c6af58c1a14bb87ebc0b20a7d357a68d0a97"
+}

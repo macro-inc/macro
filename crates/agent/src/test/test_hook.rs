@@ -47,6 +47,7 @@ fn inputs(
         user_tool_finisher,
         stream_tool_calls: false,
         result_limit: None,
+        gemini_4_replay: None,
     }
 }
 

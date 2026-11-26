@@ -9,17 +9,25 @@
 use bytes::{Bytes, BytesMut};
 use futures::StreamExt;
 use rig_core::http_client::sse::BoxedStream;
+use rig_core::providers::gemini::{
+    completion::gemini_api_types::PartKind, streaming::StreamGenerateContentResponse,
+};
+use serde::Deserialize;
 use serde_json::Value;
 
-use super::MAX_EVENT_BYTES;
+use super::{MAX_EVENT_BYTES, sanitize_gemini_4_error};
+use crate::model::gemini_replay::{Capture, call_alias};
 
 #[cfg(test)]
 mod test;
 
 /// `body` with usage removed from Gemini's interim chunks.
-pub(super) fn without_interim_usage(mut body: BoxedStream) -> BoxedStream {
+pub(super) fn without_interim_usage(
+    mut body: BoxedStream,
+    capture: Option<Capture>,
+) -> BoxedStream {
     Box::pin(async_stream::stream! {
-        let mut filter = InterimUsageFilter::default();
+        let mut filter = InterimUsageFilter { capture, ..Default::default() };
         while let Some(chunk) = body.next().await {
             match chunk {
                 Ok(bytes) => {
@@ -33,6 +41,11 @@ pub(super) fn without_interim_usage(mut body: BoxedStream) -> BoxedStream {
                     if !rest.is_empty() {
                         yield Ok(rest);
                     }
+                    let error = if filter.capture.is_some() {
+                        sanitize_gemini_4_error(error)
+                    } else {
+                        error
+                    };
                     yield Err(error);
                     return;
                 }
@@ -48,6 +61,7 @@ pub(super) fn without_interim_usage(mut body: BoxedStream) -> BoxedStream {
 /// Rewrites a Gemini SSE body as it streams, one complete event at a time.
 #[derive(Default)]
 struct InterimUsageFilter {
+    capture: Option<Capture>,
     /// Bytes of the event still being received.
     pending: BytesMut,
     /// Where the current line of `pending` starts.
@@ -67,7 +81,11 @@ impl InterimUsageFilter {
     /// still being received waits for the next chunk.
     fn push(&mut self, bytes: &[u8]) -> Bytes {
         if self.passthrough {
-            return Bytes::copy_from_slice(bytes);
+            return if self.capture.is_some() {
+                Bytes::new()
+            } else {
+                Bytes::copy_from_slice(bytes)
+            };
         }
         self.pending.extend_from_slice(bytes);
         let mut out = BytesMut::new();
@@ -78,11 +96,18 @@ impl InterimUsageFilter {
             }
         }
         if self.pending.len() > MAX_EVENT_BYTES {
+            if let Some(capture) = self.capture.as_mut() {
+                capture.invalidate();
+            }
             self.passthrough = true;
             // The final chunk now passes unread; replaying interim usage
             // after it would undo it.
             self.removed = None;
-            out.extend_from_slice(&self.pending.split());
+            if self.capture.is_some() {
+                self.pending.clear();
+            } else {
+                out.extend_from_slice(&self.pending.split());
+            }
         }
         out.freeze()
     }
@@ -92,6 +117,12 @@ impl InterimUsageFilter {
     /// event of its own, so rig still reports the prompt it sent.
     fn finish(&mut self) -> Bytes {
         let mut rest = self.pending.split();
+        if let Some(capture) = self.capture.as_mut()
+            && !rest.is_empty()
+        {
+            capture.invalidate();
+            rest.clear();
+        }
         if rest.is_empty()
             && !self.finished
             && let Some(usage) = self.removed.take()
@@ -133,20 +164,34 @@ impl InterimUsageFilter {
     /// The event without `usageMetadata` when it is an interim chunk; `None`
     /// leaves it as sent.
     fn rewrite(&mut self, event: &[u8]) -> Option<Bytes> {
-        let text = std::str::from_utf8(event).ok()?;
-        let mut lines = text.split_inclusive('\n');
-        let data_line = lines.next()?;
-        // One `data:` line, then the blank line. Anything else passes through.
-        if lines.any(|line| !line.trim_end_matches(['\r', '\n']).is_empty()) {
+        let Some((text, mut value)) = parse_event(event) else {
+            if let Some(capture) = self.capture.as_mut() {
+                let comment = event
+                    .split(|byte| *byte == b'\n')
+                    .all(|line| line.is_empty() || line == b"\r" || line.starts_with(b":"));
+                if !comment {
+                    capture.invalidate();
+                }
+                return Some(Bytes::new());
+            }
             return None;
+        };
+        let private = self.capture.is_some();
+        if let Some(capture) = self.capture.as_mut() {
+            if !supported_private_event(&value) {
+                capture.invalidate();
+                return Some(Bytes::new());
+            }
+            if !capture.event(&value, event.len()) {
+                return Some(Bytes::new());
+            }
+            redact_private_parts(&mut value);
         }
-        let json = data_line.strip_prefix("data:")?.trim();
-        let mut value: Value = serde_json::from_str(json).ok()?;
 
         // The same test metering uses for the final chunk.
         if value.pointer("/candidates/0/finishReason").is_some() {
             self.finished = true;
-            return None;
+            return private.then(|| encode_event(text, &value));
         }
         // Usage alone, without candidates, is not an interim chunk.
         let has_candidates = value
@@ -158,18 +203,93 @@ impl InterimUsageFilter {
             if value.get("usageMetadata").is_some() {
                 self.removed = None;
             }
+            return private.then(|| encode_event(text, &value));
+        }
+        if let Some(usage) = value.as_object_mut()?.remove("usageMetadata") {
+            self.removed = Some(usage);
+        } else if !private {
             return None;
         }
-        self.removed = Some(value.as_object_mut()?.remove("usageMetadata")?);
-
-        let ending = if text.ends_with("\r\n\r\n") {
-            "\r\n\r\n"
-        } else {
-            "\n\n"
-        };
-        Some(Bytes::from(format!(
-            "data: {}{ending}",
-            serde_json::to_string(&value).ok()?
-        )))
+        Some(encode_event(text, &value))
     }
+}
+
+fn encode_event(original: &str, value: &Value) -> Bytes {
+    let ending = if original.ends_with("\r\n\r\n") {
+        "\r\n\r\n"
+    } else {
+        "\n\n"
+    };
+    Bytes::from(format!("data: {value}{ending}"))
+}
+
+// Validate with Rig's own schema before passing bytes to its SSE reader,
+// which can log rejected JSON and unsupported parts.
+fn supported_private_event(value: &Value) -> bool {
+    if !value.is_object() || value.get("error").is_some_and(|error| !error.is_null()) {
+        return false;
+    }
+    StreamGenerateContentResponse::deserialize(value).is_ok_and(|response| {
+        response.candidates.len() <= 1
+            && response.candidates.into_iter().all(|candidate| {
+                candidate.content.is_none_or(|content| {
+                    content.parts.into_iter().all(|part| {
+                        part.thought != Some(true)
+                            && match &part.part {
+                                PartKind::Text(_) => true,
+                                PartKind::FunctionCall(call) => {
+                                    call.args.is_object()
+                                        && call.id.as_deref().is_some_and(|id| !id.is_empty())
+                                }
+                                _ => false,
+                            }
+                            && part.additional_params.as_ref().is_none_or(|value| {
+                                value.as_object().is_some_and(serde_json::Map::is_empty)
+                            })
+                    })
+                })
+            })
+    })
+}
+
+fn redact_private_parts(value: &mut Value) {
+    if let Some(event) = value.as_object_mut() {
+        event.retain(|name, value| match name.as_str() {
+            "candidates" | "usageMetadata" => true,
+            "modelVersion" => matches!(value.as_str(), Some("gemini-4-neon" | "gemini-4-carbon")),
+            _ => false,
+        });
+    }
+    if let Some(candidates) = value.get_mut("candidates").and_then(Value::as_array_mut) {
+        for candidate in candidates {
+            if let Some(candidate) = candidate.as_object_mut() {
+                candidate.retain(|name, _| matches!(name.as_str(), "content" | "finishReason"));
+            }
+            if let Some(parts) = candidate
+                .pointer_mut("/content/parts")
+                .and_then(Value::as_array_mut)
+            {
+                for part in parts.iter_mut().filter_map(Value::as_object_mut) {
+                    part.remove("thoughtSignature");
+                    if let Some(call) = part.get_mut("functionCall")
+                        && let Some(id) = call["id"].as_str()
+                    {
+                        call["id"] = Value::from(call_alias(id));
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn parse_event(event: &[u8]) -> Option<(&str, Value)> {
+    let text = std::str::from_utf8(event).ok()?;
+    let mut lines = text.split_inclusive('\n');
+    let data_line = lines.next()?;
+    // One data line followed by the blank line.
+    if lines.any(|line| !line.trim_end_matches(['\r', '\n']).is_empty()) {
+        return None;
+    }
+    let json = data_line.strip_prefix("data:")?.trim();
+    Some((text, serde_json::from_str(json).ok()?))
 }

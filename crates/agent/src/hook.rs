@@ -159,6 +159,8 @@ pub struct BridgeInputs {
     /// Report tool calls while the model is still writing them (see
     /// [`StreamPart::ToolCallStarted`]).
     pub stream_tool_calls: bool,
+    /// Attests Gemini 4's complete provider tool payload before dispatch.
+    pub gemini_4_replay: Option<crate::Gemini4ReplaySession>,
 }
 
 /// A call announced from its first argument delta and not yet finished.
@@ -233,6 +235,7 @@ pub struct StreamBridge {
     /// stream reports a call under the id the model saw, so a replayed
     /// history repeats it and the provider's prompt cache still matches.
     provider_ids: Arc<Mutex<HashMap<String, String>>>,
+    gemini_4_replay: Option<crate::Gemini4ReplaySession>,
 }
 
 impl StreamBridge {
@@ -259,6 +262,7 @@ impl StreamBridge {
             user_tool_finisher,
             stream_tool_calls,
             result_limit,
+            gemini_4_replay,
         } = inputs;
         let (tx, rx) = mpsc::unbounded_channel();
         (
@@ -275,6 +279,7 @@ impl StreamBridge {
                 result_limit,
                 cancel,
                 provider_ids: Arc::default(),
+                gemini_4_replay,
             },
             rx,
         )
@@ -678,6 +683,14 @@ impl AgentHook for StreamBridge {
         _ctx: &HookContext,
         event: rig_agent::agent::hook::ToolCall<'_>,
     ) -> ToolCallAction {
+        if let Some(replay) = &self.gemini_4_replay
+            && (self.cancel.is_cancelled()
+                || !event
+                    .tool_call_id
+                    .is_some_and(|id| replay.attests_tool_call(id, event.tool_name, event.args)))
+        {
+            return ToolCallAction::stop("Gemini 4 tool replay state is incomplete");
+        }
         self.handle_tool_call(
             event.tool_name,
             event.tool_call_id,
