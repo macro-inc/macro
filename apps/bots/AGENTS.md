@@ -11,6 +11,15 @@ synthetic team and offer responses. See [Hire checkout](HIRE.md).
 ## Start here
 
 - `src/main.tsx` registers routes and renders the shell.
+- `src/fleet-data.ts` defines the scoped, read-only Fleet ports over generated
+  auth DTOs. `src/fleet.tsx` joins the fixture roster and optional computer
+  details into one horizontal rail. The ordinary build leaves Fleet reads
+  offline. The separately authorized local auth bridge owns real transport.
+- The local fixture uses `/fleet?example=hire` for a confirmed sample selection,
+  and `compute-outage`, `roster-outage`, `denied`, or `empty` for alternate
+  states. A confirmed Hire uses its current-tab fixture receipt and exact
+  team/agent route. Browser Back from a Hub restores rail position and the
+  exact card focus from the originating history entry.
 - `src/return-intent.ts`, `src/draft.ts`, and `src/session.ts` own the handoff.
 - `scripts/verify-bots-boundary.ts` and `scripts/botsBoundary.ts` enforce isolation.
   Keep imports inside this app or an explicitly allowed workspace package.
