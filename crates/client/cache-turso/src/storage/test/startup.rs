@@ -243,6 +243,38 @@ fn a_swap_a_crash_interrupted_reopens_the_migrated_database() {
     });
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn an_original_that_cannot_be_put_back_stays_for_the_next_open() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let kept = directory.path().join("cache.turso");
+        let mut storage = TursoFileDatabase::new(&kept).unwrap().open("scope").unwrap();
+        storage.enqueue_mutation(queued("Pending")).await.unwrap();
+        let pending = storage.load_mutation_queue().await.unwrap();
+        storage.try_close().unwrap();
+
+        // The original a crashed swap moved aside, under a database name
+        // longer than a file name may be: moving it back fails, for any user.
+        let path = directory
+            .path()
+            .join(format!("{}.{}", "a".repeat(240), "x".repeat(20)));
+        let backup_path = path.with_extension("backup");
+        std::fs::rename(&kept, &backup_path).unwrap();
+        let database = TursoFileDatabase::new(&path).unwrap();
+        assert!(matches!(
+            database.open_or_reset("scope"),
+            Err(error) if !error.requires_physical_reset()
+        ));
+        assert!(backup_path.is_file());
+
+        std::fs::rename(&backup_path, &kept).unwrap();
+        let storage = TursoFileDatabase::new(&kept).unwrap().open("scope").unwrap();
+        assert_eq!(storage.load_mutation_queue().await.unwrap(), pending);
+        storage.try_close().unwrap();
+    });
+}
+
 /// A file at `path` with one queued write, and a copy of it where a swap a
 /// crash stopped after the compacted file was in place leaves the original.
 #[cfg(not(target_arch = "wasm32"))]

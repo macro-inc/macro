@@ -97,7 +97,9 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
   unreadable so adoption resets the queued projections, and rewrites the
   namespace. Everything else still resets. The compaction swap after it moves
   the migrated file to `.backup` first; `open` moves a lone backup back, so a
-  crash between the two renames keeps the queue.
+  crash between the two renames keeps the queue. When that move fails, the
+  open fails with `FileOperation`, never a reset, which would delete the
+  backup.
 
 ## Related
 

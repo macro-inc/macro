@@ -699,7 +699,8 @@ impl TursoFileDatabase {
     /// Compaction is an optimization on top of an already-committed migration:
     /// every failure falls back to the migrated database, because reporting a
     /// reset-required error here would make `open_or_reset` delete the queued
-    /// mutations the migration just preserved.
+    /// mutations the migration just preserved. A swap that cannot put the
+    /// migrated database back fails the open without asking for a reset.
     fn compact_after_migration(
         &self,
         storage: TursoStorage,
@@ -729,6 +730,8 @@ impl TursoFileDatabase {
         let _ = storage.try_close();
         if self.install_compacted(&compact_path).is_err() {
             let _ = remove_native_file(&compact_path);
+            // A restore that failed left the original aside.
+            self.recover_interrupted_swap()?;
         }
         let mut reopened = self.open_with_outcome(scope, false)?.0;
         reopened.storage_upgraded_from = storage_upgraded_from;
@@ -740,17 +743,23 @@ impl TursoFileDatabase {
     /// the migrated database, without which the open would start an empty
     /// cache and lose the queued writes the migration kept. After, it deletes
     /// the original, which a later physical reset would otherwise reopen,
-    /// with writes that have settled since queued again.
+    /// with writes that have settled since queued again. Either step failing
+    /// fails the open without asking for a reset, which would delete both
+    /// files: the next open tries again.
     fn recover_interrupted_swap(&self) -> Result<(), TursoStorageError> {
         let backup_path = self.path.with_extension("backup");
         if !backup_path.is_file() {
             return Ok(());
         }
-        if self.path.exists() {
-            return remove_native_file(&backup_path);
-        }
-        std::fs::rename(&backup_path, &self.path)
-            .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Io))
+        let recovered = if self.path.exists() {
+            match std::fs::remove_file(&backup_path) {
+                Err(error) if error.kind() != ErrorKind::NotFound => Err(error),
+                _ => Ok(()),
+            }
+        } else {
+            std::fs::rename(&backup_path, &self.path)
+        };
+        recovered.map_err(|_| TursoStorageError::FileOperation)
     }
 
     /// Move the compacted database into place while keeping the original
