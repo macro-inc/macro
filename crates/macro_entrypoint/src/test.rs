@@ -36,6 +36,18 @@ impl<'a> MakeWriter<'a> for SharedWriter {
     }
 }
 
+/// Tracing caches whether each callsite is enabled across every live
+/// dispatcher, and skips asking a dispatcher about a callsite cached as always
+/// enabled. A test that installs a dispatcher enabling a callsite would then let
+/// it through another test's filter, so tests that install one run one at a time.
+static DISPATCH: Mutex<()> = Mutex::new(());
+
+fn one_dispatcher_at_a_time() -> std::sync::MutexGuard<'static, ()> {
+    DISPATCH
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 fn test_tracer_provider() -> (InMemorySpanExporter, SdkTracerProvider) {
     let exporter = InMemorySpanExporter::default();
     let provider = SdkTracerProvider::builder()
@@ -175,6 +187,7 @@ async fn force_flush_exports_recorded_gauges() {
 
 #[test]
 fn rootcause_tracing_subscriber_captures_span_chain() {
+    let _dispatch = one_dispatcher_at_a_time();
     static INSTALL_ROOTCAUSE_HOOKS: Once = Once::new();
     INSTALL_ROOTCAUSE_HOOKS.call_once(install_rootcause_hooks);
 
@@ -205,6 +218,7 @@ fn rootcause_tracing_subscriber_captures_span_chain() {
 
 #[test]
 fn rust_log_warn_does_not_drop_info_spans() {
+    let _dispatch = one_dispatcher_at_a_time();
     let (exporter, provider) = test_tracer_provider();
     let tracer = provider.tracer("test");
 
@@ -274,6 +288,7 @@ fn rust_log_warn_does_not_drop_info_spans() {
 
 #[test]
 fn rust_log_target_directive_includes_info_span_fields_in_warn_log() {
+    let _dispatch = one_dispatcher_at_a_time();
     let json_format = tracing_subscriber::fmt::format::Format::default()
         .json()
         .with_current_span(true)
@@ -318,6 +333,7 @@ fn rust_log_target_directive_includes_info_span_fields_in_warn_log() {
 
 #[test]
 fn global_warn_filter_drops_info_spans() {
+    let _dispatch = one_dispatcher_at_a_time();
     let (exporter, provider) = test_tracer_provider();
     let tracer = provider.tracer("test");
 
@@ -338,6 +354,7 @@ fn global_warn_filter_drops_info_spans() {
 
 #[test]
 fn otel_trace_filter_defaults_to_info() {
+    let _dispatch = one_dispatcher_at_a_time();
     let (exporter, provider) = test_tracer_provider();
     let tracer = provider.tracer("test");
 
@@ -363,6 +380,7 @@ fn otel_trace_filter_defaults_to_info() {
 
 #[test]
 fn otel_trace_filter_invalid_value_falls_back_to_info() {
+    let _dispatch = one_dispatcher_at_a_time();
     let (exporter, provider) = test_tracer_provider();
     let tracer = provider.tracer("test");
 
@@ -381,6 +399,7 @@ fn otel_trace_filter_invalid_value_falls_back_to_info() {
 
 #[test]
 fn absent_rust_log_still_logs_info() {
+    let _dispatch = one_dispatcher_at_a_time();
     // A builder with no default directive and an empty value parses to zero
     // directives, which logs nothing at all - the failure mode this floor
     // exists to prevent. A service deployed without `RUST_LOG` must still
@@ -414,6 +433,7 @@ fn absent_rust_log_still_logs_info() {
 
 #[test]
 fn explicit_rust_log_still_wins_over_the_floor() {
+    let _dispatch = one_dispatcher_at_a_time();
     let logs = SharedWriter::default();
     let subscriber = Registry::default().with(
         tracing_subscriber::fmt::layer()
@@ -437,10 +457,11 @@ fn explicit_rust_log_still_wins_over_the_floor() {
 
 #[test]
 fn dependency_suppression_overrides_enabled_logs_without_hiding_service_logs() {
+    let _dispatch = one_dispatcher_at_a_time();
     let output = SharedWriter::default();
     let subscriber = Registry::default()
         .with(tracing_subscriber::filter::filter_fn(|metadata| {
-            dependency_logs_allowed(&["russh", "rmcp"], metadata.target())
+            dependency_logs_allowed(&["russh", "rmcp"], &[], metadata)
         }))
         .with(
             tracing_subscriber::fmt::layer()
@@ -463,4 +484,133 @@ fn dependency_suppression_overrides_enabled_logs_without_hiding_service_logs() {
         .local()
         .build();
     assert_eq!(entrypoint.suppressed_targets, &["russh"]);
+}
+
+#[test]
+fn quiet_dependencies_keep_info_and_drop_debug() {
+    let _dispatch = one_dispatcher_at_a_time();
+    let output = SharedWriter::default();
+    let subscriber = Registry::default()
+        .with(tracing_subscriber::filter::filter_fn(|metadata| {
+            dependency_logs_allowed(&[], &["rmcp::service"], metadata)
+        }))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(output.clone())
+                .with_filter(EnvFilter::new("trace")),
+        );
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::debug!(target: "rmcp::service", "received request with whsec_test-only");
+        tracing::trace!(target: "rmcp::service::server", "message whsec_test-only");
+        tracing::warn!(target: "rmcp::service", "rejected peer request");
+        tracing::debug!(target: "rmcp::transport", "transport detail");
+        tracing::debug!(target: "agent_harness_service", "service debug");
+    });
+    let text = output.contents();
+    assert!(!text.contains("whsec_test-only"), "{text}");
+    assert!(text.contains("rejected peer request"), "{text}");
+    assert!(text.contains("transport detail"), "{text}");
+    assert!(text.contains("service debug"), "{text}");
+    let entrypoint = MacroEntrypoint::default()
+        .quiet_dependency_debug_logs(&["rmcp"])
+        .local()
+        .build();
+    assert_eq!(entrypoint.quiet_targets, &["rmcp"]);
+}
+
+/// Logs rmcp's drain failure and returns the statement's line.
+fn drain_failure() -> u32 {
+    let line = line!() + 1;
+    tracing::error!(target: "rmcp::service", error = %"channel closed", "failed to send pending response during drain");
+    line
+}
+
+fn rmcp_drain_rules(line: u32, file: &'static str) -> &'static [DroppedCallsite] {
+    Box::leak(Box::new([DroppedCallsite {
+        target: "rmcp::service",
+        level: tracing::Level::ERROR,
+        file,
+        line,
+    }]))
+}
+
+/// One subscriber with a strict and a lenient sink, as services run (an error
+/// sink beside an info one), behind the global dependency filter.
+fn two_sinks(
+    dropped: &'static [DroppedCallsite],
+    errors: &SharedWriter,
+    infos: &SharedWriter,
+) -> impl tracing::Subscriber + Send + Sync {
+    Registry::default()
+        .with(DependencyLogFilter {
+            suppressed: &[],
+            quiet: &[],
+            dropped,
+        })
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(errors.clone())
+                .with_filter(EnvFilter::new("error")),
+        )
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(infos.clone())
+                .with_filter(EnvFilter::new("info")),
+        )
+}
+
+#[test]
+fn a_dropped_callsite_reaches_no_sink_and_hides_nothing_after_it() {
+    let _dispatch = one_dispatcher_at_a_time();
+    let line = drain_failure();
+    let dropped = rmcp_drain_rules(line, "macro_entrypoint/src/test.rs");
+    let errors = SharedWriter::default();
+    let infos = SharedWriter::default();
+    fn unrelated(round: u8) {
+        tracing::error!(round, "unrelated failure");
+    }
+    fn same_message_elsewhere() {
+        tracing::error!(target: "rmcp::service", error = %"broken pipe", "failed to send pending response during drain");
+    }
+    // A per-event veto left filter state behind here: a debug assertion
+    // aborted the process, and in release the next event was lost.
+    tracing::subscriber::with_default(two_sinks(dropped, &errors, &infos), || {
+        for round in 0..3 {
+            drain_failure();
+            unrelated(round);
+            same_message_elsewhere();
+        }
+    });
+    for (sink, text) in [("error", errors.contents()), ("info", infos.contents())] {
+        assert!(!text.contains("channel closed"), "{sink}: {text}");
+        assert_eq!(
+            text.matches("unrelated failure").count(),
+            3,
+            "{sink}: {text}"
+        );
+        assert_eq!(text.matches("broken pipe").count(), 3, "{sink}: {text}");
+    }
+    let entrypoint = MacroEntrypoint::default()
+        .drop_dependency_callsites(dropped)
+        .local()
+        .build();
+    assert_eq!(entrypoint.dropped_callsites.len(), 1);
+}
+
+#[test]
+fn a_callsite_in_another_file_or_version_is_kept() {
+    let _dispatch = one_dispatcher_at_a_time();
+    let line = drain_failure();
+    let errors = SharedWriter::default();
+    let infos = SharedWriter::default();
+    let dropped = rmcp_drain_rules(line, "rmcp-3.9.0/src/service.rs");
+    tracing::subscriber::with_default(two_sinks(dropped, &errors, &infos), || {
+        drain_failure();
+    });
+    for (sink, text) in [("error", errors.contents()), ("info", infos.contents())] {
+        assert!(text.contains("channel closed"), "{sink}: {text}");
+    }
 }

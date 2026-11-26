@@ -29,6 +29,12 @@ const BASE_NAME = pulumi.getProject();
 /** Must match `ENCRYPTION_PURPOSE` in `mcp_auth_proxy::outbound::postgres`. */
 const MCP_OAUTH_KMS_PURPOSE = 'mcp-oauth-authorization-code';
 const MCP_OAUTH_KMS_ACTIONS = ['kms:Encrypt', 'kms:Decrypt'];
+/**
+ * Must match `ENCRYPTION_PURPOSE` in `webhook::outbound::kms_mcp_secret_cipher`.
+ * The harness encrypts MCP Events subscribers' signing secrets with the same
+ * key; the document storage service, which delivers, only decrypts them.
+ */
+const MCP_EVENT_SECRET_KMS_PURPOSE = 'mcp-event-subscription-secret';
 const REPO_ROOT = '../../..';
 
 /** Where the service reads `REPO_STORAGE_ROOT`; set to this path in Doppler. */
@@ -61,6 +67,8 @@ type Args = {
   projectionQueueArn: pulumi.Input<string>;
   /** S3 buckets the service needs access to. */
   bucketArns: (pulumi.Output<string> | string)[];
+  /** The document storage service's task role, which decrypts MCP Events signing secrets. */
+  mcpEventSecretDecryptorRoleArn: pulumi.Input<string>;
 };
 
 /**
@@ -312,7 +320,10 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const mcpOauthKms = this.createMcpOauthKmsKey(tags);
+    const mcpOauthKms = this.createMcpOauthKmsKey(
+      tags,
+      args.mcpEventSecretDecryptorRoleArn
+    );
 
     const image = new EcrImage(
       `${BASE_NAME}-ecr-image-${stack}`,
@@ -617,7 +628,10 @@ export class AgentHarnessService extends pulumi.ComponentResource {
    * upstream tokens with, and the Doppler value naming it. Returns what the
    * ECS service must wait for, so no task starts unable to issue a code.
    */
-  private createMcpOauthKmsKey(tags: { [key: string]: string }) {
+  private createMcpOauthKmsKey(
+    tags: { [key: string]: string },
+    mcpEventSecretDecryptorRoleArn: pulumi.Input<string>
+  ) {
     const accountRootArn = pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentityOutput().accountId}:root`;
     const key = new aws.kms.Key(
       `${BASE_NAME}-mcp-oauth-key`,
@@ -663,6 +677,36 @@ export class AgentHarnessService extends pulumi.ComponentResource {
                 },
               ],
             },
+            {
+              sid: 'AllowMcpEventSecretEncryption',
+              effect: 'Allow',
+              principals: [{ type: 'AWS', identifiers: [this.role.arn] }],
+              actions: ['kms:Encrypt'],
+              resources: ['*'],
+              conditions: [
+                {
+                  test: 'StringEquals',
+                  variable: 'kms:EncryptionContext:macro:purpose',
+                  values: [MCP_EVENT_SECRET_KMS_PURPOSE],
+                },
+              ],
+            },
+            {
+              sid: 'AllowMcpEventSecretDecryption',
+              effect: 'Allow',
+              principals: [
+                { type: 'AWS', identifiers: [mcpEventSecretDecryptorRoleArn] },
+              ],
+              actions: ['kms:Decrypt'],
+              resources: ['*'],
+              conditions: [
+                {
+                  test: 'StringEquals',
+                  variable: 'kms:EncryptionContext:macro:purpose',
+                  values: [MCP_EVENT_SECRET_KMS_PURPOSE],
+                },
+              ],
+            },
           ],
         }).json,
         tags,
@@ -688,6 +732,17 @@ export class AgentHarnessService extends pulumi.ComponentResource {
               Condition: {
                 StringEquals: {
                   'kms:EncryptionContext:macro:purpose': MCP_OAUTH_KMS_PURPOSE,
+                },
+              },
+            },
+            {
+              Action: ['kms:Encrypt'],
+              Resource: key.arn,
+              Effect: 'Allow',
+              Condition: {
+                StringEquals: {
+                  'kms:EncryptionContext:macro:purpose':
+                    MCP_EVENT_SECRET_KMS_PURPOSE,
                 },
               },
             },

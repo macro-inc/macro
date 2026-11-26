@@ -1045,6 +1045,10 @@ fn mcp_cors_layer() -> CorsLayer {
             HeaderName::from_static("x-macro-user-api-key"),
             HeaderName::from_static("mcp-protocol-version"),
             HeaderName::from_static("mcp-session-id"),
+            // Routing headers the MCP HTTP standardization (SEP-2243) has
+            // clients send, which MCP Events requests must carry.
+            HeaderName::from_static("mcp-method"),
+            HeaderName::from_static("mcp-name"),
         ])
         .expose_headers([
             HeaderName::from_static("mcp-session-id"),

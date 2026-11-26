@@ -13,7 +13,12 @@ static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let entrypoint = MacroEntrypoint::default().init();
+    // rmcp logs every request it receives at debug and trace; an MCP Events
+    // subscribe carries the subscriber's signing secret in its params.
+    let entrypoint = MacroEntrypoint::default()
+        .quiet_dependency_debug_logs(&["rmcp"])
+        .drop_dependency_callsites(agent_harness_service::DROPPED_RMCP_CALLSITES)
+        .init();
     let result = agent_harness_service::run().await;
     entrypoint.shutdown();
     result

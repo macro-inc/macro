@@ -1,6 +1,7 @@
 //! Public workspace MCP and OAuth, hosted on the harness's public listener.
 mod agent_keys;
 mod analytics;
+mod events;
 mod macro_api_tokens;
 mod markdown_images;
 #[cfg(test)]
@@ -66,8 +67,11 @@ pub async fn router(
     cancellation: tokio_util::sync::CancellationToken,
     code_mode: Option<PublicCodeMode>,
     rollout: crate::anthropic_gateway::brain::BrainRollout,
+    models: EventFilterModels,
+    redis: redis::Client,
 ) -> anyhow::Result<axum::Router> {
     let public_url = macro_service_urls::McpPublicUrl::new()?;
+    let events = Arc::new(build_events(config, kms.clone(), models, redis)?);
     let (auth_proxy, backfill) = build_auth_proxy(
         config,
         secrets,
@@ -118,6 +122,7 @@ pub async fn router(
                 static_file_base_url.clone(),
                 analytics.clone(),
             );
+            let service = service.with_events(Arc::clone(&events));
             Ok(match &code_mode {
                 Some(code_mode) => service.with_code_mode(code_mode.clone()),
                 None => service,
@@ -280,6 +285,45 @@ async fn build_auth_proxy(
         macro_api_tokens: Arc::new(macro_api_tokens),
     });
     Ok((auth_proxy, backfill))
+}
+
+/// What compiling a subscription's words into a filter is admitted and
+/// metered by: the subscriber's automation usage.
+pub struct EventFilterModels {
+    pub admission: Arc<dyn ai_billing::AiAdmissionService>,
+    pub recorder: Arc<dyn ai_usage::UsageRecorder>,
+}
+
+/// MCP Events: filters compiled on the router's fast model, subscriptions
+/// and event streams through the document storage service, and signing
+/// secrets encrypted with the MCP OAuth KMS key, which the document storage
+/// service may decrypt, after a per-user subscribe allowance kept in Redis.
+fn build_events(
+    config: &Config,
+    kms: aws_sdk_kms::Client,
+    models: EventFilterModels,
+    redis: redis::Client,
+) -> anyhow::Result<events::McpEvents> {
+    let dss = Arc::new(events::DssEvents::new(
+        url::Url::parse(macro_service_urls::DocumentStorageServiceUrl::new()?.as_ref())?,
+        config.document_storage_service_auth_key.clone(),
+    )?);
+    Ok(events::McpEvents::new(
+        Arc::new(events::ModelFilterCompiler {
+            admission: models.admission,
+            recorder: models.recorder,
+        }),
+        dss.clone(),
+        dss,
+        Arc::new(webhook::outbound::KmsMcpSecretCipher::new(
+            AwsKmsCiphertexts::new(kms, config.mcp_oauth_kms_key_id.as_ref().to_owned()),
+        )),
+        Arc::new(events::RateLimitedSubscribes(
+            rate_limit::RateLimitServiceImpl {
+                repo: rate_limit::RedisRateLimitAdapter { redis },
+            },
+        )),
+    ))
 }
 
 /// PostHog MCP analytics when `POSTHOG_API_KEY` is set; otherwise disabled.

@@ -17,6 +17,11 @@
 //! they come from a timer here and say nothing about the event source. Like
 //! `Last-Event-ID`, the header and the heartbeat event are left out of the
 //! OpenAPI spec while macrod is their one client.
+//!
+//! `POST /webhook/events/stream` is the same stream with its scope and filters
+//! in a JSON body instead of the URL, so filter ids (a user id is an email)
+//! stay out of access logs, which record URLs. It too is left out of the
+//! OpenAPI spec while the agent harness is its one client.
 
 #[cfg(test)]
 mod test;
@@ -90,7 +95,10 @@ where
     T: Send + Sync + 'static,
 {
     Router::new()
-        .route("/events/stream", get(stream_events::<St, Auth>))
+        .route(
+            "/events/stream",
+            get(stream_events::<St, Auth>).post(stream_events_from_body::<St, Auth>),
+        )
         .with_state(state)
 }
 
@@ -103,6 +111,15 @@ pub struct StreamEventsQuery {
     /// URL-encoded JSON array of webhook filters, identical to the persisted
     /// webhook `filters` field.
     pub filters: Option<String>,
+}
+
+/// The selection of [`StreamEventsQuery`] as a `POST` body.
+#[derive(Debug, serde::Deserialize)]
+pub struct StreamEventsBody {
+    /// Personal or team workspace whose webhook lifecycle events are delivered.
+    pub scope: WebhookScope,
+    /// Webhook filters, identical to the persisted webhook `filters` field.
+    pub filters: WebhookFilters,
 }
 
 /// Asks for the retained events after `Last-Event-ID` before live ones.
@@ -179,6 +196,52 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
     WebhookStreamHandlerError,
 > {
     let filters = parse_filters(query.filters)?;
+    open_events(state, authorization, headers, query.scope, filters, resume).await
+}
+
+/// The same stream as [`stream_events`], selected by a JSON body.
+pub async fn stream_events_from_body<
+    St: WebhookEventStreamService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<WebhookStreamRouterState<St, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
+    headers: HeaderMap,
+    Query(resume): Query<ResumeQuery>,
+    Json(body): Json<StreamEventsBody>,
+) -> Result<
+    (
+        [(&'static str, String); 1],
+        Sse<impl Stream<Item = Result<Event, Infallible>> + Send + 'static>,
+    ),
+    WebhookStreamHandlerError,
+> {
+    open_events(
+        state,
+        authorization,
+        headers,
+        body.scope,
+        body.filters,
+        resume,
+    )
+    .await
+}
+
+/// Open the caller's stream as Server-Sent Events.
+async fn open_events<St: WebhookEventStreamService, Auth: MacroAuthorizationService>(
+    state: WebhookStreamRouterState<St, Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
+    headers: HeaderMap,
+    scope: WebhookScope,
+    filters: WebhookFilters,
+    resume: ResumeQuery,
+) -> Result<
+    (
+        [(&'static str, String); 1],
+        Sse<impl Stream<Item = Result<Event, Infallible>> + Send + 'static>,
+    ),
+    WebhookStreamHandlerError,
+> {
     let after = (resume.resume.as_deref() == Some("true"))
         .then(|| resume_cursor(&headers))
         .flatten();
@@ -187,7 +250,7 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
         .stream_service
         .open_stream(
             authorization.authorization.user.macro_user_id,
-            query.scope,
+            scope,
             filters,
             after,
         )

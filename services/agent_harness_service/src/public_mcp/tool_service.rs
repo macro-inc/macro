@@ -1,6 +1,8 @@
+use crate::mcp_response_errors::{McpMethod, log_error_response};
 use crate::public_mcp::analytics::{
     McpAnalytics, McpAnalyticsEvent, McpClientSignals, SERVER_NAME, ToolCallOutcome,
 };
+use crate::public_mcp::events::{self, McpEvents};
 use crate::public_mcp::markdown_images::MarkdownImageResolver;
 use crate::public_mcp::tool_response::tool_result_with_media;
 use agent_code_mode::{domain::UserCodeMode, inbound::toolset::UserCodeModeToolContext};
@@ -13,9 +15,10 @@ use mcp_auth_proxy::inbound::middleware::McpCallerIds;
 use rmcp::{
     handler::server::ServerHandler,
     model::{
-        CacheScope, CallToolResult, ContentBlock, DiscoverResult, Icon, InitializeRequestParams,
-        InitializeResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
-        ServerCapabilities, ServerConfig, Tool, ToolAnnotations,
+        CacheScope, CallToolResult, ContentBlock, CustomRequest, CustomResult, DiscoverResult,
+        ExtensionCapabilities, Icon, InitializeRequestParams, InitializeResult, ListToolsResult,
+        PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerConfig, Tool,
+        ToolAnnotations,
     },
 };
 use std::{borrow::Cow, sync::Arc, time::Instant};
@@ -96,6 +99,8 @@ pub struct AuthenticatedToolService<Context> {
     code_mode: Option<Arc<CodeModeSurface>>,
     /// Records sessions and tool calls to product analytics.
     analytics: McpAnalytics,
+    /// MCP Events, when this deployment offers them.
+    events: Option<Arc<McpEvents>>,
 }
 
 impl<Context> AuthenticatedToolService<Context> {
@@ -114,6 +119,7 @@ impl<Context> AuthenticatedToolService<Context> {
             static_file_base_url,
             code_mode: None,
             analytics,
+            events: None,
         }
     }
 
@@ -121,6 +127,19 @@ impl<Context> AuthenticatedToolService<Context> {
     pub fn with_code_mode(mut self, code_mode: Arc<CodeModeSurface>) -> Self {
         self.code_mode = Some(code_mode);
         self
+    }
+
+    /// Offer MCP Events to every client but ChatGPT.
+    pub fn with_events(mut self, events: Arc<McpEvents>) -> Self {
+        self.events = Some(events);
+        self
+    }
+
+    /// Events for this request: none for ChatGPT, which is not offered them.
+    fn events_for(&self, extensions: &rmcp::model::Extensions) -> Option<&Arc<McpEvents>> {
+        self.events
+            .as_ref()
+            .filter(|_| !caller(extensions).is_ok_and(|caller| may_be_chatgpt(&caller)))
     }
 
     fn tool_definitions(&self) -> Vec<Tool> {
@@ -199,18 +218,12 @@ fn tool_call_span(
     mode: ToolMode,
     extensions: &rmcp::model::Extensions,
 ) -> tracing::Span {
-    let parts = extensions.get::<http::request::Parts>();
-    let ids = parts
-        .and_then(|parts| parts.extensions.get::<McpCallerIds>())
-        .cloned()
-        .unwrap_or_default();
-    let caller = parts.and_then(|parts| parts.extensions.get::<ToolCaller>());
-    let (caller_kind, client_name, agent_id) = match caller {
-        Some(ToolCaller::McpClient { name }) => ("oauth_client", name.as_deref(), None),
-        Some(ToolCaller::ApiKey) => ("api_key", None, None),
-        Some(ToolCaller::Agent(agent)) => ("agent", None, Some(agent.to_string())),
-        None => ("none", None, None),
-    };
+    let CallerFields {
+        ids,
+        caller_kind,
+        client_name,
+        agent_id,
+    } = caller_fields(extensions);
     tracing::info_span!(
         "public_mcp.call_tool",
         mcp.tool.name = %tool_name,
@@ -220,11 +233,63 @@ fn tool_call_span(
         },
         mcp.caller = caller_kind,
         mcp.client.id = ids.oauth_client_id.as_deref(),
-        mcp.client.name = client_name,
+        mcp.client.name = client_name.as_deref(),
         agent_id = agent_id.as_deref(),
         fusionauth_user_id = ids.fusionauth_user_id.as_deref(),
         mcp.outcome = tracing::field::Empty,
     )
+}
+
+/// The span over one `events/*` request, with the same opaque caller ids as
+/// a tool call's. For `events/stream` it lasts as long as the stream.
+fn events_span(extensions: &rmcp::model::Extensions) -> tracing::Span {
+    let CallerFields {
+        ids,
+        caller_kind,
+        client_name,
+        agent_id,
+    } = caller_fields(extensions);
+    tracing::info_span!(
+        "public_mcp.events",
+        mcp.events.method = tracing::field::Empty,
+        mcp.event.name = tracing::field::Empty,
+        mcp.events.sources = tracing::field::Empty,
+        mcp.caller = caller_kind,
+        mcp.client.id = ids.oauth_client_id.as_deref(),
+        mcp.client.name = client_name.as_deref(),
+        agent_id = agent_id.as_deref(),
+        fusionauth_user_id = ids.fusionauth_user_id.as_deref(),
+        mcp.outcome = tracing::field::Empty,
+    )
+}
+
+/// Who a request came from, as opaque ids.
+struct CallerFields {
+    ids: McpCallerIds,
+    caller_kind: &'static str,
+    client_name: Option<String>,
+    agent_id: Option<String>,
+}
+
+fn caller_fields(extensions: &rmcp::model::Extensions) -> CallerFields {
+    let parts = extensions.get::<http::request::Parts>();
+    let ids = parts
+        .and_then(|parts| parts.extensions.get::<McpCallerIds>())
+        .cloned()
+        .unwrap_or_default();
+    let caller = parts.and_then(|parts| parts.extensions.get::<ToolCaller>());
+    let (caller_kind, client_name, agent_id) = match caller {
+        Some(ToolCaller::McpClient { name }) => ("oauth_client", name.clone(), None),
+        Some(ToolCaller::ApiKey) => ("api_key", None, None),
+        Some(ToolCaller::Agent(agent)) => ("agent", None, Some(agent.to_string())),
+        None => ("none", None, None),
+    };
+    CallerFields {
+        ids,
+        caller_kind,
+        client_name,
+        agent_id,
+    }
 }
 
 /// Tools ChatGPT is never offered. Each one runs code or hands an open-ended
@@ -267,7 +332,13 @@ where
     Context: Clone + Send + Sync + MarkdownImageResolver + CalledBy + 'static,
 {
     fn get_info(&self) -> ServerConfig {
-        let mut info = ServerConfig::new(ServerCapabilities::builder().enable_tools().build());
+        let mut capabilities = ServerCapabilities::builder().enable_tools().build();
+        if self.events.is_some() {
+            let mut extensions = ExtensionCapabilities::new();
+            extensions.insert(events::EXTENSION_ID.to_owned(), serde_json::Map::new());
+            capabilities.extensions = Some(extensions);
+        }
+        let mut info = ServerConfig::new(capabilities);
         let base_url = self.item_base_url.trim_end_matches('/');
         info.server_info = rmcp::model::Implementation::new(SERVER_NAME, env!("CARGO_PKG_VERSION"))
             .with_title("Macro")
@@ -292,7 +363,8 @@ where
         request: InitializeRequestParams,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<InitializeResult, rmcp::ErrorData> {
-        let user_id = Self::authenticated_user_id(&context.extensions)?;
+        let user_id = Self::authenticated_user_id(&context.extensions)
+            .inspect_err(|error| log_error_response(McpMethod::Initialize, error))?;
         // The handshake names the client, so sessions are counted per client
         // here and in `discover`.
         self.analytics.record(
@@ -307,7 +379,7 @@ where
         if context.peer.peer_info().is_none() {
             context.peer.set_peer_info(request);
         }
-        let mut info = self.get_info();
+        let mut info = self.info_for(&context.extensions);
         info.instructions = Some(self.instructions(self.tool_mode(&context.extensions)));
         Ok(info)
     }
@@ -326,7 +398,8 @@ where
         &self,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<DiscoverResult, rmcp::ErrorData> {
-        let user_id = Self::authenticated_user_id(&context.extensions)?;
+        let user_id = Self::authenticated_user_id(&context.extensions)
+            .inspect_err(|error| log_error_response(McpMethod::Discover, error))?;
         // This revision's clients never send `initialize`; they name
         // themselves in the request's `_meta`.
         if let Some(client) = context.meta.client_info() {
@@ -344,7 +417,7 @@ where
                 },
             );
         }
-        let mut info = self.get_info();
+        let mut info = self.info_for(&context.extensions);
         info.instructions = Some(self.instructions(self.tool_mode(&context.extensions)));
         let mut result =
             DiscoverResult::from_server_info(self.supported_protocol_versions().into_owned(), info);
@@ -354,7 +427,83 @@ where
         Ok(result)
     }
 
+    async fn on_custom_request(
+        &self,
+        request: CustomRequest,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<CustomResult, rmcp::ErrorData> {
+        self.custom_request(request, context)
+            .await
+            .inspect_err(|error| {
+                // How that request normally goes, not a failure.
+                if !events::is_confirm_step(error) {
+                    log_error_response(McpMethod::Custom, error);
+                }
+            })
+    }
+
     async fn list_tools(
+        &self,
+        request: Option<PaginatedRequestParams>,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<ListToolsResult, rmcp::ErrorData> {
+        self.tool_list(request, context)
+            .await
+            .inspect_err(|error| log_error_response(McpMethod::ListTools, error))
+    }
+
+    async fn call_tool(
+        &self,
+        request: rmcp::model::CallToolRequestParams,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::CallToolResponse, rmcp::ErrorData> {
+        self.tool_call(request, context)
+            .await
+            .inspect_err(|error| log_error_response(McpMethod::CallTool, error))
+    }
+}
+
+impl<Context> AuthenticatedToolService<Context>
+where
+    Context: Clone + Send + Sync + MarkdownImageResolver + CalledBy + 'static,
+{
+    async fn custom_request(
+        &self,
+        request: CustomRequest,
+        context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<CustomResult, rmcp::ErrorData> {
+        let CustomRequest { method, params, .. } = request;
+        let Some(events) = method
+            .starts_with(events::METHOD_PREFIX)
+            .then(|| self.events_for(&context.extensions))
+            .flatten()
+        else {
+            return Err(rmcp::ErrorData::new(
+                rmcp::model::ErrorCode::METHOD_NOT_FOUND,
+                method,
+                None,
+            ));
+        };
+        let user = Self::authenticated_user_id(&context.extensions)?;
+        let request_id = serde_json::to_value(&context.id)
+            .map_err(|error| rmcp::ErrorData::internal_error(error.to_string(), None))?;
+        events::handle(
+            events,
+            &method,
+            params,
+            events::RequestScope {
+                user,
+                request_id,
+                extensions: &context.extensions,
+                sink: &context.peer,
+                cancel: context.ct.clone(),
+                span: events_span(&context.extensions),
+            },
+        )
+        .await
+    }
+
+    async fn tool_list(
         &self,
         _request: Option<PaginatedRequestParams>,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
@@ -372,7 +521,7 @@ where
         })
     }
 
-    async fn call_tool(
+    async fn tool_call(
         &self,
         request: rmcp::model::CallToolRequestParams,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
@@ -410,6 +559,21 @@ impl<Context> AuthenticatedToolService<Context>
 where
     Context: Clone + Send + Sync + MarkdownImageResolver + CalledBy + 'static,
 {
+    /// The server's info for this request's caller: ChatGPT is not offered
+    /// MCP Events.
+    fn info_for(&self, extensions: &rmcp::model::Extensions) -> ServerConfig {
+        let mut info = self.get_info();
+        if self.events_for(extensions).is_none()
+            && let Some(offered) = info.capabilities.extensions.as_mut()
+        {
+            offered.remove(events::EXTENSION_ID);
+            if offered.is_empty() {
+                info.capabilities.extensions = None;
+            }
+        }
+        info
+    }
+
     /// Runs one tool call and classifies how it ended, for analytics.
     async fn run_tool(
         &self,

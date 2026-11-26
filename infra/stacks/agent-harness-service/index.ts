@@ -210,6 +210,9 @@ const service = new AgentHarnessService(
       sessionChangesBucket.arn,
       githubPullRequestPatchBucketArn,
     ],
+    mcpEventSecretDecryptorRoleArn: cloudStorageServiceStack.requireOutput(
+      'cloudStorageServiceRoleArn'
+    ),
     containerEnvVars: [
       { name: 'DENO_BINARY', value: '/usr/local/bin/deno' },
       {
