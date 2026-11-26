@@ -415,7 +415,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
             patches.clear();
         }
         let observation_id = self
-            .observe_live_query_window(&spec, &membership, &view.dependencies)
+            .observe_live_query_window(id, &spec, &membership, &view.dependencies)
             .await?;
         let result = LiveQueryUpdate {
             registration_id: view.registration_id,
@@ -438,6 +438,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
     /// Releases the in-memory view; persisted records and mutations are unaffected.
     pub fn release_live_query(&mut self, id: &str) {
         self.live_queries.views.pop(id);
+        self.forget_view_observation(id);
     }
 }
 

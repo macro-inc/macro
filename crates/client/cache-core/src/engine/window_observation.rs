@@ -18,6 +18,9 @@ pub(super) struct WindowObservation {
 
 pub(super) struct WindowObservations {
     windows: LruCache<String, WindowObservation>,
+    /// The one observation each live view holds: its last read. A read
+    /// replaces it, so a reader that ignores proofs leaves no token behind.
+    by_view: LruCache<String, String>,
     next_id: u64,
     instance: Uuid,
 }
@@ -26,6 +29,7 @@ impl Default for WindowObservations {
     fn default() -> Self {
         Self {
             windows: LruCache::new(NonZeroUsize::new(64).expect("nonzero observation capacity")),
+            by_view: LruCache::new(NonZeroUsize::new(256).expect("nonzero view capacity")),
             next_id: 0,
             instance: Uuid::new_v4(),
         }
@@ -60,6 +64,15 @@ impl<S: Storage> Engine<S> {
     ) {
         if let Some(window) = self.window_observations.windows.get_mut(id) {
             window.fields.insert((key, field), value);
+        }
+    }
+
+    /// Drops the observation of a live view's previous read. Its reader holds
+    /// the new token once the read returns; a proof that no longer lists the
+    /// old one only makes a reader that still holds it read again.
+    pub(super) fn forget_view_observation(&mut self, view: &str) {
+        if let Some(previous) = self.window_observations.by_view.pop(view) {
+            self.window_observations.windows.pop(&previous);
         }
     }
 
@@ -253,10 +266,12 @@ impl<S: PredicateIndexStorage> Engine<S> {
 
     pub(super) async fn observe_live_query_window(
         &mut self,
+        view: &str,
         spec: &live_query::LiveQuerySpec,
         membership: &PredicateReconciliation,
         dependencies: &live_query::RowDependencies,
     ) -> Result<String, EngineError<S::Error>> {
+        self.forget_view_observation(view);
         // A window composed with optimism reports `optimistic`, which a rollback
         // or commit outside the window changes without touching its rows. Its
         // token is never installed, so no proof covers it.
@@ -305,6 +320,9 @@ impl<S: PredicateIndexStorage> Engine<S> {
                 .collect(),
             true,
         );
+        self.window_observations
+            .by_view
+            .put(view.to_owned(), id.clone());
         Ok(id)
     }
 }

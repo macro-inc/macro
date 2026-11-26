@@ -826,3 +826,39 @@ fn a_window_read_under_optimism_is_never_proven_unchanged() {
         assert!(!again.optimistic);
     });
 }
+
+#[test]
+fn a_view_keeps_only_its_last_reads_observation() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        seed(&mut engine, "a", 1).await;
+        let unrelated = |n: u8| {
+            (
+                EntityKey::entity("GraphqlUser", &["viewer"]),
+                Record {
+                    fields: BTreeMap::from([("n".into(), CacheValue::String(n.to_string()))]),
+                },
+            )
+        };
+        let first = engine.read_live_query("view", spec(), None).await.unwrap();
+        let released = engine.read_live_query("gone", spec(), None).await.unwrap();
+        engine
+            .put_records_with_projections(None, vec![unrelated(1)], vec![])
+            .await
+            .unwrap();
+        // A reader that ignores the proof reads again: its new token replaces the old.
+        let second = engine
+            .read_live_query("view", spec(), Some(first.revision.parse().unwrap()))
+            .await
+            .unwrap();
+        engine.release_live_query("gone");
+        engine
+            .put_records_with_projections(None, vec![unrelated(2)], vec![])
+            .await
+            .unwrap();
+        let unchanged = engine.unchanged_observed_windows().await.unwrap();
+        assert_eq!(unchanged, [second.observation_id]);
+        assert!(!unchanged.contains(&first.observation_id));
+        assert!(!unchanged.contains(&released.observation_id));
+    });
+}
