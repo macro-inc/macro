@@ -1,6 +1,6 @@
 import * as Slider from '@kobalte/core/slider';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { createSignal, For, lazy, onMount } from 'solid-js';
+import { createSignal, For, lazy, onMount, Show } from 'solid-js';
 import { storeHireDraft, takeHireDraft } from './draft';
 import { creatorPresets, sampleSurnames } from './presets';
 import { buildSignInUrl, hireIntent } from './return-intent';
@@ -118,11 +118,18 @@ export default function Creator() {
       </section>
       <section class="stage" aria-label="Portrait preview">
         <div class="portrait-frame">
-          <img
-            src={preset().portrait}
-            alt=""
-            style={{ transform: `scaleX(${1 + width() / 100})` }}
-          />
+          <Show when={preset()} keyed>
+            {(sample) => (
+              <>
+                <img
+                  src={sample.portrait}
+                  alt=""
+                  style={{ transform: `scaleX(${1 + width() / 100})` }}
+                />
+                <i class="portrait-scan" />
+              </>
+            )}
+          </Show>
         </div>
         <h1>{name() || 'Unnamed bot'}</h1>
       </section>
