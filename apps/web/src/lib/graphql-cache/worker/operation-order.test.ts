@@ -19,7 +19,7 @@ vi.mock('./wasm-module', () => ({
   },
 }));
 
-import { operationsOf, runnableIndexes } from './operation-order';
+import { OperationIndex, operationsOf } from './operation-order';
 import { CacheWorkerCore } from './worker-core';
 
 const RUNS = 400;
@@ -387,9 +387,6 @@ const teardown = (id: number, opId: string): CacheRequest => ({
   kind: 'teardown',
   opId,
 });
-const queued = (requests: CacheRequest[]) =>
-  requests.map((request) => ({ request, ops: operationsOf(request) }));
-
 async function order(requests: CacheRequest[]) {
   const { events } = await run(requests);
   return events.map((event) =>
@@ -397,27 +394,59 @@ async function order(requests: CacheRequest[]) {
   );
 }
 
-describe('runnableIndexes', () => {
+function indexed(requests: CacheRequest[]) {
+  const entries = requests.map((request, seq) => ({
+    request,
+    ops: operationsOf(request),
+    seq,
+  }));
+  const index = new OperationIndex<(typeof entries)[number]>();
+  for (const entry of entries) index.add(entry);
+  const roots = (of: typeof entries) =>
+    of.map((entry) => entries.indexOf(index.rootOf(entry)));
+  return { entries, index, roots };
+}
+
+describe('OperationIndex', () => {
   it('holds requests about an operation behind its teardown, and its teardown behind them', () => {
-    expect(
-      runnableIndexes(
-        queued([
-          read(1, 'a'),
-          read(2, 'b'),
-          teardown(3, 'a'),
-          read(4, 'a'),
-          read(5, 'c'),
-          teardown(6, 'a'),
-        ]),
-        6
-      )
-    ).toEqual([0, 1, 0, 0, 4, 0]);
+    const { entries, roots } = indexed([
+      read(1, 'a'),
+      read(2, 'b'),
+      teardown(3, 'a'),
+      read(4, 'a'),
+      read(5, 'c'),
+      teardown(6, 'a'),
+    ]);
+    expect(roots(entries)).toEqual([0, 1, 0, 0, 4, 0]);
   });
 
   it('holds a teardown with nothing ahead about its operation back from nothing', () => {
-    expect(
-      runnableIndexes(queued([read(1, 'b'), teardown(2, 'a'), read(3, 'a')]), 3)
-    ).toEqual([0, 1, 1]);
+    const { entries, roots } = indexed([
+      read(1, 'b'),
+      teardown(2, 'a'),
+      read(3, 'a'),
+    ]);
+    expect(roots(entries)).toEqual([0, 1, 1]);
+  });
+
+  it('frees what waited for a request once it leaves the queue', () => {
+    const { entries, index, roots } = indexed([
+      read(1, 'a'),
+      read(2, 'b'),
+      teardown(3, 'a'),
+      read(4, 'a'),
+      read(5, 'c'),
+      teardown(6, 'a'),
+    ]);
+    const [first, ...rest] = entries;
+    if (first) index.remove(first);
+    expect(roots(rest)).toEqual([1, 2, 2, 4, 2]);
+    expect(index.hasTeardowns).toBe(true);
+    for (const entry of rest)
+      if (entry.request.kind === 'teardown') index.remove(entry);
+    expect(index.hasTeardowns).toBe(false);
+    const reads = rest.filter((entry) => entry.request.kind !== 'teardown');
+    expect(roots(reads)).toEqual([1, 3, 4]);
   });
 });
 

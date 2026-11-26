@@ -1547,6 +1547,88 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('runs a typed search ahead of writes queued past a teardown, as when the teardown ended the segment', async () => {
+    const order: string[] = [];
+    const blocker = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const written = { changed: [], affectedOps: [], reset: false };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async (opId: string) => {
+          order.push(`read:${opId}`);
+          if (opId === 'blocker') {
+            started.resolve();
+            await blocker.promise;
+          }
+          return { kind: 'miss' };
+        },
+        currentStorageGeneration: async () => {
+          order.push('generation');
+          return '00000000-0000-4000-8000-000000000001';
+        },
+        teardownOperation: async () => {
+          order.push('teardown');
+        },
+        writeQuery: async () => {
+          order.push('write');
+          return { ...written, revision: INITIAL_CACHE_REVISION };
+        },
+        readRecordsByKeys: async (
+          _document: string,
+          _fragment: string,
+          keys: string[]
+        ) => {
+          order.push(`rows:${keys[0]}`);
+          return { revision: INITIAL_CACHE_REVISION, records: [] };
+        },
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'blocker',
+      query: 'query Blocker { blocker }',
+    });
+    await started.promise;
+    const write = (id: number) =>
+      core.handleRequest(port, {
+        generation: TEST_AUTHORITY_GENERATION,
+        id,
+        kind: 'write',
+        query: 'query Current { document { id } }',
+        data: { document: { id: `doc-${id}` } },
+      });
+    const queued = [
+      core.handleRequest(port, { id: 3, kind: 'teardown', opId: 'gone' }),
+      write(4),
+      write(5),
+      write(6),
+      core.handleRequest(port, { id: 7, kind: 'current-storage-generation' }),
+      core.handleRequest(port, {
+        id: 8,
+        kind: 'read-records-by-keys',
+        document: 'fragment Item on GraphqlSoupDocument { id }',
+        fragmentName: 'Item',
+        keys: ['GraphqlSoupDocument:typed'],
+        priority: 'typed-search',
+      }),
+    ];
+    blocker.resolve();
+    await Promise.all([running, ...queued]);
+    expect(order).toEqual([
+      'read:blocker',
+      'rows:GraphqlSoupDocument:typed',
+      'write',
+      'write',
+      'write',
+      'teardown',
+      'generation',
+    ]);
+  });
+
   it('collects the requests already sent before starting one, so a typed search is not run in arrival order', async () => {
     const order: string[] = [];
     const resumes: (() => void)[] = [];
@@ -4096,6 +4178,40 @@ describe('CacheWorkerCore', () => {
         'commit',
         'teardown',
         'write',
+      ]);
+    });
+
+    it("runs reads ahead of another operation's teardown, which a remount behind it does not hurry", async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          id: 3,
+          kind: 'read',
+          opId: 'client:other',
+          query: 'query Other { other }',
+        }),
+        core.handleRequest(port, {
+          id: 4,
+          kind: 'teardown',
+          opId: 'client:gone',
+        }),
+        // Visible, and waiting for the teardown, which can't run before the
+        // commit.
+        core.handleRequest(port, read(5, 'client:gone'))
+      );
+      release();
+      await Promise.all(sent);
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:other',
+        'commit',
+        'teardown',
+        'read:client:gone',
       ]);
     });
 

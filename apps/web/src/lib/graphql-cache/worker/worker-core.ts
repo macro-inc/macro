@@ -45,11 +45,7 @@ import {
   type CacheQueueState,
   cacheDatabaseIdentity,
 } from './coordinator-protocol';
-import {
-  lastTeardownOf,
-  operationsOf,
-  runnableIndexes,
-} from './operation-order';
+import { OperationIndex, operationsOf } from './operation-order';
 import {
   type CacheEngine,
   type CacheEngineHydrationResult,
@@ -98,6 +94,8 @@ type QueuedEngineRequest = {
   readSignature?: string;
   /** The operations it is about (`operationsOf`), which teardowns order. */
   ops: readonly string[];
+  /** Its place in arrival order, for `OperationIndex`. */
+  seq: number;
   waiters: RequestWaiter[];
   /** When the first of its waiters arrived, on the core's monotonic clock. */
   enqueuedAt: number;
@@ -298,6 +296,12 @@ export class CacheWorkerCore {
   private scope: string | undefined;
   /** Serializes engine calls while allowing safe read prioritization. */
   private readonly queue: QueuedEngineRequest[] = [];
+  private readonly operations = new OperationIndex<QueuedEngineRequest>();
+  /** The latest queued request with each read signature. */
+  private readonly readsBySignature = new Map<string, QueuedEngineRequest>();
+  /** The queued ordering barriers, in queue order. */
+  private readonly queuedBarriers: QueuedEngineRequest[] = [];
+  private nextSeq = 0;
   private running = false;
   /** Between two requests, while arrivals join the queue. */
   private yielding = false;
@@ -522,26 +526,21 @@ export class CacheWorkerCore {
 
       // Coalesce only within the current lifecycle segment, and never with a
       // read queued before this operation's teardown: a remount must perform
-      // a fresh read to re-register deps.
+      // a fresh read to re-register deps. Only the latest read with this
+      // signature can qualify: an earlier one has a barrier or teardown
+      // between, which runs only after it.
       if (signature !== undefined) {
-        let segmentStart = 0;
-        for (let i = this.queue.length - 1; i >= 0; i -= 1) {
-          const queued = this.queue[i];
-          if (queued && isOrderingBarrier(queued.request)) {
-            segmentStart = i + 1;
-            break;
-          }
-        }
-        if (request.kind === 'read' && request.opId !== undefined) {
-          segmentStart = Math.max(
-            segmentStart,
-            lastTeardownOf(this.queue, request.opId) + 1
-          );
-        }
-        const duplicate = this.queue
-          .slice(segmentStart)
-          .find((queued) => queued.readSignature === signature);
-        if (duplicate) {
+        const duplicate = this.readsBySignature.get(signature);
+        const barrier = this.queuedBarriers[this.queuedBarriers.length - 1];
+        const teardown =
+          request.kind === 'read' && request.opId !== undefined
+            ? this.operations.lastTeardownOf(request.opId)
+            : undefined;
+        if (
+          duplicate &&
+          (barrier === undefined || duplicate.seq > barrier.seq) &&
+          (teardown === undefined || duplicate.seq > teardown.seq)
+        ) {
           duplicate.priority = Math.max(duplicate.priority, priority);
           duplicate.waiters.push({ resolve, reject });
           this.collectArrivalsThenDrain();
@@ -549,16 +548,37 @@ export class CacheWorkerCore {
         }
       }
 
-      this.queue.push({
+      const queued: QueuedEngineRequest = {
         request,
         priority,
         readSignature: signature,
         ops: operationsOf(request),
+        seq: this.nextSeq,
         waiters: [{ resolve, reject }],
         enqueuedAt: this.now(),
-      });
+      };
+      this.nextSeq += 1;
+      this.queue.push(queued);
+      this.operations.add(queued);
+      if (signature !== undefined) this.readsBySignature.set(signature, queued);
+      if (isOrderingBarrier(request)) this.queuedBarriers.push(queued);
       this.collectArrivalsThenDrain();
     });
+  }
+
+  /** Takes the request at `index` out of the queue and the indexes over it. */
+  private dequeue(index: number): QueuedEngineRequest | undefined {
+    const [queued] = this.queue.splice(index, 1);
+    if (!queued) return undefined;
+    this.operations.remove(queued);
+    if (
+      queued.readSignature !== undefined &&
+      this.readsBySignature.get(queued.readSignature) === queued
+    )
+      this.readsBySignature.delete(queued.readSignature);
+    const barrier = this.queuedBarriers.indexOf(queued);
+    if (barrier !== -1) this.queuedBarriers.splice(barrier, 1);
+    return queued;
   }
 
   /**
@@ -579,25 +599,37 @@ export class CacheWorkerCore {
       .findIndex((queued) => isAuthoritativeWrite(queued.request));
     const priorityAt = this.runnablePriority(segmentEnd, false);
     const priorityOf = (i: number) => priorityAt(i) ?? Number.NEGATIVE_INFINITY;
+    // A typed search keeps the place it had when a teardown ended the
+    // segment: ahead of everything queued past the first one.
+    let firstTeardown = segmentEnd;
+    if (this.operations.hasTeardowns) {
+      const at = this.queue
+        .slice(0, segmentEnd)
+        .findIndex((queued) => queued.request.kind === 'teardown');
+      if (at !== -1) firstTeardown = at;
+    }
     let index = 0;
+    let beforeTeardown = 0;
     for (let i = 1; i < segmentEnd; i += 1) {
       const candidate = this.queue[i];
       const preservesWriteOrder =
         !candidate ||
         !isAuthoritativeWrite(candidate.request) ||
         i === firstAuthoritativeWrite;
-      if (
-        priorityAt(i) !== undefined &&
-        preservesWriteOrder &&
-        priorityOf(i) > priorityOf(index)
-      ) {
-        index = i;
-      }
+      if (priorityAt(i) === undefined || !preservesWriteOrder) continue;
+      if (priorityOf(i) > priorityOf(index)) index = i;
+      if (i < firstTeardown && priorityOf(i) > priorityOf(beforeTeardown))
+        beforeTeardown = i;
     }
 
-    index = this.pickPastFences(index, priorityOf(index), segmentEnd);
+    const search = this.pickPastFences(
+      beforeTeardown,
+      priorityOf(beforeTeardown),
+      firstTeardown
+    );
+    if (search !== beforeTeardown) index = search;
 
-    const [queued] = this.queue.splice(index, 1);
+    const queued = this.dequeue(index);
     if (!queued) return;
     this.running = true;
     const startedAt = this.now();
@@ -738,62 +770,51 @@ export class CacheWorkerCore {
    *
    * Authoritative writes run in queue order, so one behind the first lends
    * nothing (it can't run yet), and a request waiting on such a write lends
-   * to the first one instead. With `writesHeld`, every write waits on work
-   * outside the queue (a hydrate's commit), so nothing lends to one.
+   * to the first one instead. With `writesHeld` only reads run (a hydrate's
+   * commit waits), so a loan could only hurry what can't run: nothing lends.
    */
   private runnablePriority(
     segmentEnd: number,
     writesHeld: boolean
   ): (index: number) => number | undefined {
+    const operations = this.operations;
     // Without a teardown nothing waits for anything but the write order.
-    if (
-      !this.queue
-        .slice(0, segmentEnd)
-        .some((queued) => queued.request.kind === 'teardown')
-    )
-      return (i) => this.queue[i]?.priority;
+    if (!operations.hasTeardowns) return (i) => this.queue[i]?.priority;
 
-    const priorities = this.queue
-      .slice(0, segmentEnd)
-      .map<number | undefined>((queued) => queued.priority);
-
-    let firstWrite = -1;
+    let firstWrite: QueuedEngineRequest | undefined;
     if (!writesHeld) {
-      for (let i = 0; i < segmentEnd && firstWrite === -1; i += 1) {
+      for (let i = 0; i < segmentEnd && firstWrite === undefined; i += 1) {
         const queued = this.queue[i];
-        if (queued && isAuthoritativeWrite(queued.request)) firstWrite = i;
+        if (queued && isAuthoritativeWrite(queued.request)) firstWrite = queued;
       }
     }
-    const waitsOnWriteOrder = (i: number) => {
-      const request = this.queue[i]?.request;
-      return (
-        request !== undefined &&
-        isAuthoritativeWrite(request) &&
-        i !== firstWrite
-      );
-    };
-    const runnable = runnableIndexes(this.queue, segmentEnd);
-    const lend = (target: number, priority: number | undefined) => {
-      const current = priorities[target];
-      if (
-        priority !== undefined &&
-        (current === undefined || priority > current)
-      )
-        priorities[target] = priority;
-    };
-    runnable.forEach((target, i) => {
-      if (target === i) return;
-      const priority = priorities[i];
-      priorities[i] = undefined;
-      if (waitsOnWriteOrder(i)) return;
-      if (!waitsOnWriteOrder(target)) {
-        lend(target, priority);
-        return;
+    const waitsOnWriteOrder = (queued: QueuedEngineRequest) =>
+      isAuthoritativeWrite(queued.request) && queued !== firstWrite;
+
+    const priorities: (number | undefined)[] = [];
+    const lent = new Map<QueuedEngineRequest, number>();
+    for (let i = 0; i < segmentEnd; i += 1) {
+      const queued = this.queue[i];
+      if (!queued) continue;
+      if (operations.blockerOf(queued) === undefined) {
+        priorities[i] = queued.priority;
+        continue;
       }
-      const head = runnable[firstWrite];
-      if (head !== undefined) lend(head, priority);
-    });
-    return (i) => priorities[i];
+      if (writesHeld || waitsOnWriteOrder(queued)) continue;
+      let target = operations.rootOf(queued);
+      if (waitsOnWriteOrder(target)) {
+        if (firstWrite === undefined) continue;
+        target = operations.rootOf(firstWrite);
+      }
+      if (queued.priority > (lent.get(target) ?? target.priority))
+        lent.set(target, queued.priority);
+    }
+    return (i) => {
+      const own = priorities[i];
+      const queued = this.queue[i];
+      if (own === undefined || !queued) return own;
+      return Math.max(own, lent.get(queued) ?? own);
+    };
   }
 
   /**
@@ -851,6 +872,8 @@ export class CacheWorkerCore {
         candidate &&
         candidatePriority !== undefined &&
         !isAuthoritativeWrite(candidate.request) &&
+        // A teardown can't run here, and holds back only its own operation.
+        candidate.request.kind !== 'teardown' &&
         candidatePriority > priority
       ) {
         index = i;
@@ -887,7 +910,7 @@ export class CacheWorkerCore {
         index !== undefined;
         index = this.pickReadBeforeHydrateCommit()
       ) {
-        const [queued] = this.queue.splice(index, 1);
+        const queued = this.dequeue(index);
         if (!queued) break;
         ran = true;
         const startedAt = this.now();

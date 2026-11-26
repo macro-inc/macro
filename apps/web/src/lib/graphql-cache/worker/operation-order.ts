@@ -81,53 +81,97 @@ export function operationsOf(request: CacheRequest): readonly string[] {
   );
 }
 
+type Indexed = {
+  request: CacheRequest;
+  /** `operationsOf(request)`. */
+  ops: readonly string[];
+  /** Its place in arrival order: a request queued later has a larger one. */
+  seq: number;
+};
+
 /**
- * For each of the first `end` queued requests, the index of the request that
- * has to run before it can: itself when nothing ahead of it is ordered against
- * it, else (through as many such requests as there are) the earliest request
- * ahead of it that is. A request that waits lends its priority to the one it
- * waits for, so a remount's user-visible read does not wait behind every
- * request queued before the old view's teardown.
+ * The queued requests about each operation, in queue order, kept as
+ * requests join and leave the queue. A pick asks it what a request waits
+ * for in a few map reads, instead of walking the queue ahead of it.
  */
-export function runnableIndexes(
-  queue: readonly { request: CacheRequest; ops: readonly string[] }[],
-  end: number
-): number[] {
-  // Only operations with a teardown queued order anything.
-  const tornDown = new Set<string>();
-  for (let i = 0; i < end; i += 1) {
-    const request = queue[i]?.request;
-    if (request?.kind === 'teardown') tornDown.add(request.opId);
+export class OperationIndex<T extends Indexed> {
+  private readonly touches = new Map<string, T[]>();
+  private readonly teardowns = new Map<string, T[]>();
+  private queuedTeardowns = 0;
+
+  /** Whether any queued request is a teardown: without one, nothing waits. */
+  get hasTeardowns(): boolean {
+    return this.queuedTeardowns > 0;
   }
-  const firstTouch = new Map<string, number>();
-  const firstTeardown = new Map<string, number>();
-  const runnable: number[] = [];
-  for (let i = 0; i < end; i += 1) {
-    const queued = queue[i];
-    const teardown = queued?.request.kind === 'teardown';
-    let blocker: number | undefined;
-    for (const op of queued?.ops ?? []) {
-      if (!tornDown.has(op)) continue;
-      const ahead = teardown ? firstTouch.get(op) : firstTeardown.get(op);
-      if (ahead !== undefined && (blocker === undefined || ahead < blocker)) {
-        blocker = ahead;
-      }
-      if (!firstTouch.has(op)) firstTouch.set(op, i);
-      if (teardown && !firstTeardown.has(op)) firstTeardown.set(op, i);
+
+  add(queued: T): void {
+    const teardown = queued.request.kind === 'teardown';
+    for (const op of queued.ops) {
+      append(this.touches, op, queued);
+      if (teardown) append(this.teardowns, op, queued);
     }
-    runnable.push(blocker === undefined ? i : (runnable[blocker] ?? blocker));
+    if (teardown) this.queuedTeardowns += 1;
   }
-  return runnable;
+
+  remove(queued: T): void {
+    const teardown = queued.request.kind === 'teardown';
+    for (const op of queued.ops) {
+      drop(this.touches, op, queued);
+      if (teardown) drop(this.teardowns, op, queued);
+    }
+    if (teardown) this.queuedTeardowns -= 1;
+  }
+
+  /**
+   * The request queued ahead of `queued` that it waits for, if any. A
+   * teardown waits for the first request about its operation; any other
+   * request waits for the first teardown of one of its operations.
+   */
+  blockerOf(queued: T): T | undefined {
+    const ahead =
+      queued.request.kind === 'teardown' ? this.touches : this.teardowns;
+    let blocker: T | undefined;
+    for (const op of queued.ops) {
+      const first = ahead.get(op)?.[0];
+      if (
+        first !== undefined &&
+        first.seq < queued.seq &&
+        (blocker === undefined || first.seq < blocker.seq)
+      )
+        blocker = first;
+    }
+    return blocker;
+  }
+
+  /** The last queued teardown of `opId`, if any. */
+  lastTeardownOf(opId: string): T | undefined {
+    const list = this.teardowns.get(opId);
+    return list?.[list.length - 1];
+  }
+
+  /** What has to run before `queued` can: its blockers, followed to one that waits for nothing. */
+  rootOf(queued: T): T {
+    let root = queued;
+    for (
+      let blocker = this.blockerOf(root);
+      blocker !== undefined;
+      blocker = this.blockerOf(root)
+    )
+      root = blocker;
+    return root;
+  }
 }
 
-/** Index of the last teardown of `opId` among `queue`, or -1. */
-export function lastTeardownOf(
-  queue: readonly { request: CacheRequest }[],
-  opId: string
-): number {
-  for (let i = queue.length - 1; i >= 0; i -= 1) {
-    const request = queue[i]?.request;
-    if (request?.kind === 'teardown' && request.opId === opId) return i;
-  }
-  return -1;
+function append<T>(lists: Map<string, T[]>, op: string, queued: T): void {
+  const list = lists.get(op);
+  if (list) list.push(queued);
+  else lists.set(op, [queued]);
+}
+
+function drop<T>(lists: Map<string, T[]>, op: string, queued: T): void {
+  const list = lists.get(op);
+  if (!list) return;
+  const at = list.indexOf(queued);
+  if (at !== -1) list.splice(at, 1);
+  if (list.length === 0) lists.delete(op);
 }
