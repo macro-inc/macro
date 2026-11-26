@@ -82,8 +82,25 @@ export function formatPreviewSnippet(raw: string | undefined): string {
     .replace(/<m-user-mention[^>]*\bname="([^"]+)"[^>]*\/?>/gi, '@$1')
     .replace(
       /<m-user-mention[^>]*>([\s\S]*?)<\/m-user-mention>/gi,
-      (_match, inner: string) =>
-        inner.trim() ? `@${inner.trim().replace(/^@/, '')}` : '@mention'
+      (_match, inner: string) => {
+        const trimmed = inner.trim();
+        if (trimmed.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(trimmed) as {
+              displayName?: string;
+              name?: string;
+              email?: string;
+            };
+            const label =
+              parsed.displayName ?? parsed.name ?? parsed.email?.split('@')[0];
+            if (label) return `@${label}`;
+          } catch {
+            // Fall through to plain-text handling
+          }
+          return '@mention';
+        }
+        return trimmed ? `@${trimmed.replace(/^@/, '')}` : '@mention';
+      }
     )
     .replace(/<m-[a-z0-9-]+[^>]*>([\s\S]*?)<\/m-[a-z0-9-]+>/gi, '$1')
     .replace(/<m-[a-z0-9-]+\b[^>]*\/?>/gi, '')

@@ -8,6 +8,7 @@ Chat's desktop sidebar, mobile conversation lists, section membership, and route
 
 - `queries.ts` owns the bounded list sources; `channels-view.tsx` composes the shared local channel pool and views.
 - `components/rail/ChannelsRail.tsx` composes section membership, favorites, and referenced-channel hydration.
+- `redesign/` holds the flagged Chat sidebar redesign (`enable-channel-sidebar-redesign`): pure placement, DM smart-window, Support Desk, Focus triage, Quick Switch, and Jev classifier logic under `redesign/core/`, desktop workspace under `redesign/views/`, touch-first phone/tablet view under `redesign/views/mobile/`, and backend-free Playwright coverage under `redesign/browser-test/`.
 - `queries/channel-list-search-pool.ts` adapts the joined channels of the channel directory (`useChannelDirectory`, `lib/queries/channel/directory.ts`) for initial display, search, and mobile pins.
 
 ## Data and loading
@@ -17,7 +18,7 @@ Chat's desktop sidebar, mobile conversation lists, section membership, and route
 - Bound each seeded section to the normal first-page size and preserve membership and sorting; recreate the query graph and reference batches on account-session changes, including same-viewer reauthentication, without rebuilding for sort, cache, or tab changes.
 - Keep Soup's bounded unread projection and live updates authoritative; do not replace them with a full-list fetch.
 - Filter Unread only and collapsed sections by `unreadOrMentionedChannelIds`, so every channel that lights Chat's dot in the app rail stays listed; the row's unread dot and section counts stay on `unreadChannelIds`.
-- Hydrate only referenced channels missing from the loaded sources.
+- Hydrate only referenced channels missing from the loaded sources; in `redesign/`, always route by-ID hydration through `collectWindowedReferencedChannelIds` (`redesign/core/windowed-resolution.ts`) with an explicit window (0 IDs for collapsed or hidden sections, bounded per-section/total caps), cap unread auto-pagination (`useBoundedUnreadChannels`, ≤ 200 rows), keep `useChannelDirectory()` lazy inside Quick Switch / mobile search (`searchDirectoryTopK`), unwrap store proxies in `toSidebarChannel`, and gate Jev triage to active triage surfaces with recency (7d) and session (50) caps.
 - Render favorite metadata without extra skeleton rows; an unread filter can legitimately leave no rows after enrichment.
 - Keep failed referenced lookups retryable and omit successfully unavailable channel favorites from the rail without deleting saved favorites.
 - Require a cached or fetched Soup page before treating missing reference IDs as unavailable; an empty offline index proves nothing.
