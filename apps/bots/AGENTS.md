@@ -7,6 +7,8 @@ The auth seam uses checked-in SDK auth response types. Its current adapter is
 offline and exposes a disabled sign-in flow with a same-tab, expiring draft
 handoff. Real Hire is disabled. The local preview can rehearse Hire with
 synthetic team and offer responses. See [Hire checkout](HIRE.md).
+Tower Passwords uses in-memory fixtures and a storage seam typed from the
+generated SDK storage schemas.
 
 ## Start here
 
@@ -29,6 +31,12 @@ synthetic team and offer responses. See [Hire checkout](HIRE.md).
 - `src/brain-access.tsx` renders inline Access with an injected source scoped to
   the viewer, team, and agent. `src/brain-access-fixture.ts` provides the local
   simulation for an explicitly selected viewer role.
+- `src/passwords/` owns the Tower vault, local role and setup fixtures, and
+  storage projections. The default build excludes this fixture route module.
+- `src/billing/` owns the read-only Tower Billing route and its typed,
+  team-scoped reader. The default reader is unavailable. The local fixture
+  supplies the sample cycle and can exercise pending, denied, empty, and zero
+  observations without contacting any service.
 - `scripts/verify-bots-boundary.ts` and `scripts/botsBoundary.ts` enforce isolation.
   Keep imports inside this app or an explicitly allowed workspace package.
 
@@ -51,8 +59,8 @@ then `bun run --filter @macro-inc/bots preview`. That preview serves only
 `dist-local`. Set `BOTS_PREVIEW_HOST` to a single exact hostname when an
 authorized local reverse proxy needs a forwarded Host header.
 
-The default build writes `dist` and excludes the Fleet, Hire, Brain, Brain
-Email, and Brain Access fixtures. Keep
+The default build writes `dist` and excludes Fleet, Hire, Brain, Email,
+Access, Passwords, and Billing fixture data. Keep
 `dev.bots.macro.com` and `bots.macro.com` as planning targets until the relevant
 auth, infrastructure, and release changes are approved.
 

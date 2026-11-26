@@ -84,8 +84,8 @@ export default function Creator() {
           </div>
           <Slider.Track class="slider-track">
             <Slider.Fill class="slider-fill" />
-            <Slider.Thumb aria-label="Face width" class="slider-thumb">
-              <Slider.Input />
+            <Slider.Thumb class="slider-thumb">
+              <Slider.Input aria-hidden="true" />
             </Slider.Thumb>
           </Slider.Track>
         </Slider.Root>
