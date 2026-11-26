@@ -75,7 +75,10 @@ empty resources, in `fixtures/bootstrap.ts` and as empty `GraphqlUser` fields in
 `fixtures/server.ts`; the running-timer read (`user.timeTracking`) gets no timer
 and the current server clock. The fixture user joined no channels, so the channel
 backfill lane (`SoupChannelDirectoryBackfill`) and the directory's network
-fallback (`ChannelDirectoryPage`) read an empty directory. Unexpected requests,
+fallback (`ChannelDirectoryPage`) read an empty directory. The fixture user owns
+and has viewed nothing, so one-shot preview lists (`SoupPreviewPage`: quick-access
+skills, snippets, initiatives, recently viewed) read no items; a preview that asks
+for a Mail view fails. Unexpected requests,
 unknown cursors and GraphQL validation errors are recorded and fail the smoke
 suite; nothing forwards to hosted services. This does not test the Rust HTTP
 server's authorization, SQL, or Gmail synchronization.
