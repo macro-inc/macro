@@ -144,6 +144,90 @@ export type CreateReview_Serialize = {
   title: ReviewTitle;
 } & ReviewDrafts_Serialize;
 
+/**
+ *  Something a CRM import cannot carry into Macro CRM, counted on the review
+ *  card and in the final report. The serialized names are stored on ledger
+ *  rows: never rename one.
+ */
+export type CrmLoss =
+  /**  A record's owner in the source is not a member of the team; it stays unassigned. */
+  | 'owner_not_member'
+  /**  A deal with no company; Macro pipelines track companies, so it is not imported. */
+  | 'deal_without_company'
+  /**  A deal in a pipeline that is archived or missing; it is not imported. */
+  | 'deal_without_pipeline'
+  /**  A contact or deal linked to more than one company; only its primary is kept. */
+  | 'extra_company_links'
+  /**
+   *  A company domain Macro does not key companies by (a personal email
+   *  provider, or not a domain); the company is created by name only.
+   */
+  | 'domain_rejected'
+  /**
+   *  A deal currency Macro does not support; the amount is left empty rather
+   *  than shown in another currency.
+   */
+  | 'unsupported_currency'
+  /**  A company's further domains; only its primary domain is kept. */
+  | 'additional_domains'
+  /**  A company's owner in the source; Macro companies have no owner. */
+  | 'company_owner'
+  /**
+   *  A company sharing its domain with another planned company; both become
+   *  one CRM company.
+   */
+  | 'merged_company'
+  /**
+   *  A contact sharing its primary address with another planned contact;
+   *  both become one CRM contact.
+   */
+  | 'merged_contact'
+  /**
+   *  A contact whose company was left out of the import; it is created
+   *  without one.
+   */
+  | 'contact_without_company';
+
+/**  How many records lost one thing. */
+export type CrmLossCount = {
+  /**  What was lost. */
+  loss: CrmLoss;
+  /**  Records affected. */
+  count: number;
+};
+
+/**  What a CRM plan holds, for the review card. */
+export type CrmReport = {
+  /**  Deal pipelines, each becoming a Macro pipeline. */
+  pipelines: number;
+  /**  Companies. */
+  companies: number;
+  /**  Contacts. */
+  contacts: number;
+  /**  Deals, each becoming an entry in its pipeline. */
+  deals: number;
+  /**  Source owners named by the planned records. */
+  owners: number;
+  /**  Of those, owners matched to a team member by email. */
+  ownersMatched: number;
+  /**  Records already in Macro from an earlier import, left as they are. */
+  alreadyImported: number;
+  /**  Records this import created in the CRM. */
+  created?: number;
+  /**
+   *  Records this import matched to ones already in the CRM (same domain,
+   *  address or deal) or to a teammate's import, instead of creating them.
+   */
+  linked?: number;
+  /**  What cannot be carried over, by kind. */
+  losses: CrmLossCount[];
+  /**
+   *  Properties the source defined itself, as `object.name`; their values
+   *  stay in the source.
+   */
+  customProperties: string[];
+};
+
 /**  Surface of a review decision. */
 export type DecisionVia =
   /**  Review card. */
@@ -235,86 +319,6 @@ export type GuestPolicy = {
   canInviteOthers: boolean;
   /**  Whether guests may see the guest list. */
   canSeeOtherGuests: boolean;
-};
-
-/**
- *  Something a HubSpot import cannot carry into Macro CRM, counted on the
- *  review card and in the final report.
- */
-export type HubspotLoss =
-  /**  A record's HubSpot owner is not a member of the team; it stays unassigned. */
-  | 'owner_not_member'
-  /**  A deal with no company; Macro pipelines track companies, so it is not imported. */
-  | 'deal_without_company'
-  /**  A deal in a pipeline that is archived or missing; it is not imported. */
-  | 'deal_without_pipeline'
-  /**  A contact or deal linked to more than one company; only its primary is kept. */
-  | 'extra_company_links'
-  /**
-   *  A company domain Macro does not key companies by (a personal email
-   *  provider, or not a domain); the company is created by name only.
-   */
-  | 'domain_rejected'
-  /**
-   *  A deal currency Macro does not support; the amount is left empty rather
-   *  than shown in another currency.
-   */
-  | 'unsupported_currency'
-  /**  A company's further domains; only its primary domain is kept. */
-  | 'additional_domains'
-  /**  A company's HubSpot owner; Macro companies have no owner. */
-  | 'company_owner'
-  /**
-   *  A company sharing its domain with another planned company; both become
-   *  one CRM company.
-   */
-  | 'merged_company'
-  /**
-   *  A contact sharing its primary address with another planned contact;
-   *  both become one CRM contact.
-   */
-  | 'merged_contact'
-  /**
-   *  A contact whose company was left out of the import; it is created
-   *  without one.
-   */
-  | 'contact_without_company';
-
-/**  How many records lost one thing. */
-export type HubspotLossCount = {
-  /**  What was lost. */
-  loss: HubspotLoss;
-  /**  Records affected. */
-  count: number;
-};
-
-/**  What a HubSpot plan holds, for the review card. */
-export type HubspotReport = {
-  /**  Deal pipelines, each becoming a Macro pipeline. */
-  pipelines: number;
-  /**  Companies. */
-  companies: number;
-  /**  Contacts. */
-  contacts: number;
-  /**  Deals, each becoming an entry in its pipeline. */
-  deals: number;
-  /**  HubSpot owners named by the planned records. */
-  owners: number;
-  /**  Of those, owners matched to a team member by email. */
-  ownersMatched: number;
-  /**  Records already in Macro from an earlier import, left as they are. */
-  alreadyImported: number;
-  /**  Records this import created in the CRM. */
-  created?: number;
-  /**
-   *  Records this import matched to ones already in the CRM (same domain,
-   *  address or deal) or to a teammate's import, instead of creating them.
-   */
-  linked?: number;
-  /**  What cannot be carried over, by kind. */
-  losses: HubspotLossCount[];
-  /**  Portal-defined property names whose values stay in HubSpot. */
-  customProperties: string[];
 };
 
 /**
@@ -512,7 +516,7 @@ export type NotionImportReport_Deserialize = {
   /**  Total objects that failed, including those outside the sample. */
   failureCount?: number;
   /**  A HubSpot plan's counts, owners and losses. */
-  hubspot?: HubspotReport | null;
+  hubspot?: CrmReport | null;
 };
 
 /**  Where a Notion workspace import stands. */
@@ -607,7 +611,7 @@ export type NotionImportReport_Serialize = {
   /**  Total objects that failed, including those outside the sample. */
   failureCount: number;
   /**  A HubSpot plan's counts, owners and losses. */
-  hubspot?: HubspotReport | null;
+  hubspot?: CrmReport | null;
 };
 
 /**  A teammate who already imported some of a plan's objects. */

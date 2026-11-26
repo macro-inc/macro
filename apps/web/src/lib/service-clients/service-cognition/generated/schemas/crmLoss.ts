@@ -6,13 +6,14 @@
  */
 
 /**
- * Something a HubSpot import cannot carry into Macro CRM, counted on the
-review card and in the final report.
+ * Something a CRM import cannot carry into Macro CRM, counted on the review
+card and in the final report. The serialized names are stored on ledger
+rows: never rename one.
  */
-export type HubspotLoss = (typeof HubspotLoss)[keyof typeof HubspotLoss];
+export type CrmLoss = (typeof CrmLoss)[keyof typeof CrmLoss];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const HubspotLoss = {
+export const CrmLoss = {
   owner_not_member: 'owner_not_member',
   deal_without_company: 'deal_without_company',
   deal_without_pipeline: 'deal_without_pipeline',

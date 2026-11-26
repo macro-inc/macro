@@ -4,17 +4,17 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { HubspotLoss } from './hubspotLoss';
+import type { CrmLoss } from './crmLoss';
 
 /**
  * How many records lost one thing.
  */
-export interface HubspotLossCount {
+export interface CrmLossCount {
   /**
    * Records affected.
    * @minimum 0
    */
   count: number;
   /** What was lost. */
-  loss: HubspotLoss;
+  loss: CrmLoss;
 }
