@@ -274,7 +274,11 @@ impl ScheduledActionRepo for Repo {
     async fn update_last_executed(&self, _: &Uuid, _: DateTime<Utc>) -> Result<()> {
         Ok(())
     }
-    async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        _: ScheduledAction,
+        _: Option<crate::domain::routine_limit::RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         unimplemented!()
     }
     async fn get_owned_actions(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
@@ -289,7 +293,11 @@ impl ScheduledActionRepo for Repo {
     async fn get_next_unclaimed_actions(&self, _: i64) -> Result<Vec<ScheduledAction>> {
         unimplemented!()
     }
-    async fn update_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
+    async fn update_action(
+        &self,
+        _: ScheduledAction,
+        _: Option<crate::domain::routine_limit::RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         unimplemented!()
     }
     async fn delete_action(&self, _: &Uuid) -> Result<()> {

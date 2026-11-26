@@ -33,6 +33,7 @@ import {
   buildRecurrenceLines,
   defaultCustomConfig,
   formatRecurrenceDescription,
+  isValidRecurrenceConfig,
   parseRecurrenceConfig,
   type RecurrenceConfig,
   recurrenceConfigsEqual,
@@ -47,6 +48,26 @@ const DATE_VALUE = 'yyyy-MM-dd';
 /** `<input type="datetime-local">` value. */
 const DATETIME_VALUE = "yyyy-MM-dd'T'HH:mm";
 
+/** Shared feedback for incomplete or unparseable composer dates. */
+export function eventDateValidationError(
+  state: Pick<EventEditorInitialValues, 'allDay' | 'start' | 'end'>
+): string | undefined {
+  for (const endpoint of ['start', 'end'] as const) {
+    const value = state[endpoint];
+    if (!value)
+      return endpoint === 'start'
+        ? 'Enter a start date.'
+        : 'Enter an end date.';
+    const valid = state.allDay
+      ? parseLocalDate(value) !== undefined
+      : !Number.isNaN(new Date(value).getTime());
+    if (!valid)
+      return endpoint === 'start'
+        ? 'Enter a valid start date.'
+        : 'Enter a valid end date.';
+  }
+  return undefined;
+}
 const isDateOnly = (value: string) => parseLocalDate(value) !== undefined;
 
 /** Option displayed by an event editor recurrence selector. */
@@ -117,6 +138,8 @@ export interface EventEditorCalendarOption {
   capabilities?: CalendarCapabilities;
   id: string;
   label: string;
+  name?: string;
+  accountLabel?: string;
   color: string;
   /** Provider defaults shown until the event's reminders are customized. */
   defaultReminders?: EventReminderOverride[];
@@ -311,7 +334,7 @@ export function buildEventTime(
   state: EventEditorInitialValues
 ): EventTime | undefined {
   if (state.allDay) {
-    if (!state.start || !state.end || state.end < state.start) {
+    if (eventDateValidationError(state) || state.end < state.start) {
       return undefined;
     }
     // Google has no date-based out-of-office event, so encode an all-day one as
@@ -425,7 +448,7 @@ export function convertTimesForAllDay(
     ...state,
     allDay,
     start: format(start, DATETIME_VALUE),
-    end: format(end, DATETIME_VALUE),
+    end: `${state.end.slice(0, 10)}T${format(end, 'HH:mm')}`,
   };
 }
 
@@ -541,19 +564,8 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     }
     setRecurrenceChoice(choice);
   };
-  const customValid = createMemo(() => {
-    if (recurrenceChoice() !== 'custom') return true;
-    const config = customConfig();
-    if (!Number.isInteger(config.interval) || config.interval < 1) return false;
-    if (config.frequency === 'WEEKLY' && config.byDay.length === 0) {
-      return false;
-    }
-    if (config.ends.kind === 'on') return config.ends.date !== '';
-    if (config.ends.kind === 'after') {
-      return Number.isInteger(config.ends.count) && config.ends.count >= 1;
-    }
-    return true;
-  });
+  const customValid = () =>
+    recurrenceChoice() !== 'custom' || isValidRecurrenceConfig(customConfig());
   const recurrenceConfig = (): RecurrenceConfig | undefined => {
     const choice = recurrenceChoice();
     if (choice === 'none') return undefined;

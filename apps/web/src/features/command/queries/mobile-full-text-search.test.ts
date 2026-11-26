@@ -107,3 +107,58 @@ it('keeps listed rows settled while an operator-only search refetches', () => {
     dispose();
   });
 });
+
+it("applies the opener's bound tag by id, beside a word and alone", () => {
+  createRoot((dispose) => {
+    const binding = {
+      token: 'tag:"🎉"',
+      tags: [{ propertyId: 'prop-1', optionId: 'opt-1' }],
+    };
+    const [query, setQuery] = createSignal('tag:"🎉" launch');
+    createMobileFullTextSearch(
+      query,
+      () => LOOKUP,
+      () => [binding]
+    );
+    const options = capture.options!;
+    // The bound token goes with the request by id, not as a word.
+    expect(options.text()).toBe('launch');
+    expect(
+      JSON.stringify(
+        options.buildRequest({ query: 'launch', matchType: 'partial' })
+      )
+    ).toContain('opt-1');
+
+    setQuery('tag:"🎉"');
+    expect(options.enabled?.()).toBe(false);
+    expect(capture.browse?.options().enabled).toBe(true);
+    expect(JSON.stringify(capture.browse?.request().body)).toContain('opt-1');
+    dispose();
+  });
+});
+
+it('lists every tag group of operators alone through the feed', () => {
+  createRoot((dispose) => {
+    const tags: Record<string, string> = {
+      finance: 'opt-finance',
+      legal: 'opt-legal',
+      q3: 'opt-q3',
+    };
+    const lookup: SearchOperatorLookup = {
+      ...LOOKUP,
+      tags: (name) => {
+        const optionId = tags[name.toLowerCase()];
+        return optionId ? [{ propertyId: 'prop-1', optionId }] : [];
+      },
+    };
+    const [query] = createSignal('tag:finance OR tag:legal tag:q3');
+    createMobileFullTextSearch(query, () => lookup);
+
+    expect(capture.browse?.options().enabled).toBe(true);
+    const body = JSON.stringify(capture.browse?.request().body);
+    for (const optionId of Object.values(tags)) {
+      expect(body).toContain(optionId);
+    }
+    dispose();
+  });
+});

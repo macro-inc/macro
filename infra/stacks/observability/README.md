@@ -181,19 +181,45 @@ cover only runs recorded since; the other panels cover every event.
 ### Local stacks' own telemetry
 
 A developer who sets `services = true` in their local telemetry settings also
-sends their local stacks' service traces, logs and metrics through the same
+sends their local stacks' service traces and metrics through the same
 route and token (`docs/development/running-locally.md`). A Grafana Alloy
 forwarder on their machine (`docker/grafana-forwarder/config.alloy`) keeps every
 trace with an error in its first 30 seconds and a tenth of the rest, drops the
-local collector's own telemetry and debug and trace logs,
-and tags resources and metric datapoints with `host.name` (the machine's name)
+local collector's own telemetry, and tags resources and metric datapoints with `host.name` (the machine's name)
 and `deployment.environment="local"`; services add `macro.local.instance`,
 which the forwarder copies onto metric datapoints. Dev
 dashboards and alerts select `dev`/`development`, so this data stays out of
-them. In Loki, `host_name` and `macro_local_instance` are structured metadata,
-under `deployment_environment="local"`. The `Macro run_local` dashboard's last row
+them. It also forwards their logs except debug and trace, which ingest drops
+(`nixos/ingest.alloy`): one local service failing in a loop sent more than every
+other sender together. Only `local-telemetry`'s run events reach Loki. The
+`Macro run_local` dashboard's last row
 (`nixos/grafana-provisioning/local-dashboard.nix`, not the shared report spec)
-shows bring-ups, stacks, sampled traces, error logs and logs by machine.
+shows sampled traces by machine.
+
+### What ingest removes
+
+Before storage, `nixos/ingest.alloy` removes what people and models wrote from
+spans and span events, whichever service sent them: the `gen_ai.*` messages,
+prompts, completions, system instructions, tool definitions, and tool call
+arguments and results. It also removes a tool call's title, a tool name that is
+really a title, and the error text of `gen_ai` spans, which can quote any of
+those. Token counts, models, operations, outcomes, `error.type` and the
+`macro.genai.*` sizes stay. A new attribute that carries content belongs in its
+`ai_content` statements.
+
+It also replaces every email address with its SHA-256 (`emails`): in resource,
+scope, log, span, span event and metric datapoint attributes, log bodies, and
+scope, span and event names and status messages. User IDs are
+`macro|<address>`, so they become `macro|<hash>`; a user's logs and traces are
+found by hashing their address as written (`%40` for `@` hashes differently).
+The web app's `presence.user_ids` list becomes its JSON text. Any other map
+with an address in a nested list or map is flattened into `key.0`, `key.1.x`
+keys, every nested value of it; past Loki's 128 metadata entries a line or
+Mimir's 30 labels a series, that record is refused. A list or map body holding
+an address becomes its JSON text. What stays: addresses in map keys and byte
+values, a repeated key's earlier values (malformed OTLP), and logs and metrics
+pushed straight to Loki and Mimir through the edge (pod logs, the database
+collector), which skip ingest.
 
 ### Pinned exporter limits
 
@@ -772,13 +798,13 @@ Drilldown apps. The service selector discovers names from dev logs; a service
 that emits only traces or metrics can be found in the corresponding Drilldown.
 
 Loki enables pattern ingestion, log-level detection, and volume queries. Tempo's
-metrics generator enables TraceQL metrics, span metrics, and service graphs, and
-writes the generated metrics to Mimir. They describe
-received spans, so sampling and missing instrumentation can prevent parity with
+metrics generator enables TraceQL metrics, of the traces sampling keeps. Span
+metrics and service graphs come from the sampler, which counts every received
+span before dropping any and writes them to Mimir. Missing instrumentation, and
+the senders that sample before ingest, can prevent parity with
 Datadog request counts. Span names remain in Tempo rather than becoming unbounded
-Prometheus labels. Generated series are capped at 50,000; monitor
-`tempo_metrics_generator_registry_series_limited_total` and local-block discards
-before expanding ingestion. The cluster's README covers how these backends run.
+Prometheus labels. Monitor local-block discards before expanding ingestion. The
+cluster's README covers how these backends run and what sampling keeps.
 
 Tempo spans link to the service's logs in a time window and its generated metrics;
 logs carrying an OTLP trace ID link back to the trace. FireLens logs do not always
@@ -821,6 +847,11 @@ CloudWatch database/Lambda dashboard. CloudWatch reads native metrics in Virgini
 it does not replicate their history to Ohio, so these panels depend on Virginia
 remaining available. These are not a replacement for Datadog database query monitoring, RUM, or anomaly
 models.
+
+`nixos/grafana-provisioning/agents-dashboard.nix` ("AI and agents") shows model
+calls, agent turns, the prompt cache and tools from the cluster's derived
+metrics (its `modules/derived-metrics/MAPPING.md`), in place of Datadog's LLM
+Observability view.
 
 `nixos/grafana-provisioning/prod-alerts.nix` lists the prod CloudWatch alerts:
 macrodb memory, swap, load, CPU, connections, replica lag, read latency and

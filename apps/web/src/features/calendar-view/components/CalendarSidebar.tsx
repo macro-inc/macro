@@ -4,16 +4,24 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
-import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
+import { MonthYearPickerPopover } from '@app/features/calendar/components/month-picker/MonthPickerPopover';
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
+import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
+import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
+import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import {
   type TeamOooWindow,
   useHasTeammates,
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
-import { TEAM_OOO_SOURCE_ID } from '@app/features/calendar/types';
+import { miniMonthMarkers } from '@app/features/calendar/primitives/mini-month-markers';
+import {
+  DEFAULT_CALENDAR_SOURCE,
+  TEAM_OOO_SOURCE_ID,
+} from '@app/features/calendar/types';
+import { calendarMonthLabel } from '@app/features/calendar/utils/calendar-label';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
 import { TutorialSidebarItem } from '@app/features/video-tutorials';
@@ -23,15 +31,22 @@ import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import PlusIcon from '@icon/system/regular/plus.svg';
+import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { Key } from '@solid-primitives/keyed';
-import { Button, Checkbox, cn, Calendar as MiniCalendar } from '@ui';
+import {
+  Button,
+  type CalendarMonthSelectorProps,
+  Checkbox,
+  cn,
+  Calendar as MiniCalendar,
+} from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { format, getDaysInMonth } from 'date-fns';
+import { addDays, format, getDaysInMonth, startOfWeek } from 'date-fns';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { CalendarCallSidebar } from '../calendar-call-sidebar';
 import { useCalendarFocus } from '../calendar-focus-target';
 import { CALENDAR_TOUR } from '../tour';
+import { MobileCalendarSidebar } from '../views/mobile/calendar-sidebar';
 import {
   CalendarCreateBookingLinkItem,
   CalendarCreateCallItem,
@@ -40,41 +55,77 @@ import {
 import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { ConnectCalendarsPromotion } from './ConnectCalendarsPromotion';
 
+function MiniMonthControl(props: CalendarMonthSelectorProps) {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <MonthYearPickerPopover
+      value={props.month}
+      open={open()}
+      onOpenChange={setOpen}
+      triggerSize="sm"
+      onChange={props.onChange}
+      onGoToDate={(date) =>
+        props.onChange(new Date(date.getFullYear(), date.getMonth(), 1))
+      }
+    >
+      <span class="min-w-0 truncate">{calendarMonthLabel(props.month)}</span>
+      <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
+    </MonthYearPickerPopover>
+  );
+}
 export function CalendarMiniCalendar() {
   const calendarView = useCalendarView();
-  const calendarPager = useCalendarPager();
+  const navigation = useCalendarNavigation();
   const initialDate = new Date();
 
-  const currentDate = createMemo(
-    () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
-  );
+  const currentDate = createMemo(() => navigation.activeDate() ?? initialDate);
   const [focusedDay, setFocusedDay] = createSignal(currentDate());
-  const highlightedRange = createMemo(() => {
-    const dateInfo = calendarPager.activeDateInfo();
-    if (dateInfo?.view.type !== 'timeGridWeek') return undefined;
-    return { end: dateInfo.end, start: dateInfo.start };
+  const [month, setMonth] = createSignal(currentDate());
+  const gridStart = createMemo(() =>
+    startOfWeek(new Date(month().getFullYear(), month().getMonth(), 1), {
+      weekStartsOn: calendarView.displaySettings.weekStartsOn,
+    })
+  );
+  const gridEnd = createMemo(() => addDays(gridStart(), 42));
+  const data = useCalendarOccurrenceData({
+    range: () => createCalendarOccurrenceQueryRange(gridStart(), gridEnd()),
+    sourceById: calendarView.sourceById,
+    sourcesReady: calendarView.sourcesReady,
+    isSourceVisible: calendarView.isSourceVisible,
   });
+  const markersByDay = createMemo(() =>
+    miniMonthMarkers(data.visibleEvents(), gridStart(), gridEnd())
+  );
+  const highlightedRange = createMemo(navigation.weekRange);
 
   // Keep focus local and clamp month-end dates so shorter months stay tabbable.
   return (
     <MiniCalendar
+      monthControl={MiniMonthControl}
       required
       fixedWeeks
       startOfWeek={calendarView.displaySettings.weekStartsOn}
       value={currentDate()}
       focusedDay={focusedDay()}
       highlightedRange={highlightedRange()}
-      onMonthChange={(month) =>
+      month={month()}
+      markersByDay={markersByDay()}
+      onMonthChange={(nextMonth) => {
+        setMonth(nextMonth);
         setFocusedDay(
           new Date(
-            month.getFullYear(),
-            month.getMonth(),
-            Math.min(focusedDay().getDate(), getDaysInMonth(month))
+            nextMonth.getFullYear(),
+            nextMonth.getMonth(),
+            Math.min(focusedDay().getDate(), getDaysInMonth(nextMonth))
           )
-        )
-      }
+        );
+      }}
       onFocusedDayChange={setFocusedDay}
-      onValueChange={(date) => date && calendarPager.gotoDate(date)}
+      onValueChange={(date) => {
+        if (!date) return;
+        setMonth(date);
+        navigation.gotoDate(date);
+      }}
     />
   );
 }
@@ -108,7 +159,11 @@ function CalendarSourcesSection() {
   const [open, setOpen] = createSignal(true);
 
   return (
-    <Show when={calendarView.sources().length > 1}>
+    <Show
+      when={calendarView
+        .sources()
+        .some((source) => source.id !== DEFAULT_CALENDAR_SOURCE.id)}
+    >
       <CollapsibleSection.Root
         sectionId="calendars"
         sectionLabel="Calendars"
@@ -157,7 +212,7 @@ function TeamOooSkeleton() {
 }
 
 export function TeamOooUpcomingList() {
-  const calendarPager = useCalendarPager();
+  const navigation = useCalendarNavigation();
   const shell = useViewShell();
   const upcoming = useUpcomingTeamOoo();
   const windows = upcoming.windows;
@@ -168,7 +223,7 @@ export function TeamOooUpcomingList() {
   const openWindow = (window: TeamOooWindow, row: HTMLElement) => {
     const openOnRow = () =>
       calendarView.selectEvent(window.event, row, 'agenda');
-    calendarPager.gotoDate(window.start);
+    navigation.gotoDate(window.start);
     // With the overlay on, the absence also renders on the grid: open it on
     // its chip once the page shows it, as a navigation request does, so the
     // card never opens on the row and then jumps to the chip.
@@ -212,12 +267,7 @@ export function TeamOooUpcomingList() {
         <Match when={upcoming.isPending()}>
           <TeamOooSkeleton />
         </Match>
-        <Match when={upcoming.isError()}>
-          <span class="px-2 py-1 text-xs text-ink-muted">
-            Couldn't load time off
-          </span>
-        </Match>
-        <Match when={windows().length === 0}>
+        <Match when={windows().length === 0 && !upcoming.isError()}>
           <span class="px-2 py-1 text-xs text-ink-muted">
             No shared time off in the next 90 days
           </span>
@@ -279,6 +329,11 @@ export function TeamOooUpcomingList() {
           </Show>
         </Match>
       </Switch>
+      <Show when={upcoming.isError()}>
+        <span role="alert" class="px-2 py-1 text-xs text-ink-muted">
+          Couldn't load time off
+        </span>
+      </Show>
     </div>
   );
 }
@@ -326,14 +381,20 @@ function CalendarTeamOooSection() {
   );
 }
 
-export function CalendarSidebar() {
+function DesktopCalendarSidebar() {
   const shell = useViewShell();
+  const composerHost = useCalendarComposerHost();
   const closeOverlay = () => {
     if (shell.aside.isOverlay()) shell.aside.collapse();
   };
 
   return (
-    <ViewSidebar.Root reorderId="calendar" aria-label="Calendar navigation">
+    <ViewSidebar.Root
+      aria-label={t('calendar.navigation')}
+      reorderId="calendar"
+      data-calendar-sidebar=""
+      class={composerHost?.drag()?.state.active ? 'invisible' : undefined}
+    >
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
@@ -342,18 +403,8 @@ export function CalendarSidebar() {
       </ViewSidebar.Header>
       <ViewSidebar.Primary>
         <CalendarCreateMenu
-          presentation={isTouchDevice() ? undefined : 'sidebar'}
-          size="md"
-          class="h-(--sidebar-row-height) w-full min-w-0 justify-start gap-(--sidebar-label-gap) px-(--sidebar-item-inset) text-left touch:h-11"
-          trigger={
-            <>
-              <ViewSidebar.Icon>
-                <PlusIcon class="size-4" />
-              </ViewSidebar.Icon>
-              <span class="min-w-0 flex-1 truncate">New</span>
-              <CaretDownIcon class="size-3.5 shrink-0" />
-            </>
-          }
+          restoreFocus={!composerHost?.sessions.state.session}
+          presentation="sidebar"
         >
           <CalendarCreateEventItem onSelect={closeOverlay} />
           <CalendarCreateCallItem onSelect={closeOverlay} />
@@ -388,10 +439,18 @@ export function CalendarSidebar() {
       {/* Outside the scrolling list, so a long list never slides it under Settings. */}
       <ConnectCalendarsPromotion class="px-(--sidebar-gutter) pt-2" />
       <ViewSidebar.Footer class="border-0 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.75rem)]">
-        <ViewSidebar.Nav aria-label="Calendar tools">
+        <ViewSidebar.Nav aria-label={t('calendar.tools')}>
           <CalendarSettingsDropdown sidebar />
         </ViewSidebar.Nav>
       </ViewSidebar.Footer>
     </ViewSidebar.Root>
+  );
+}
+
+export function CalendarSidebar() {
+  return (
+    <Show when={isTouchDevice()} fallback={<DesktopCalendarSidebar />}>
+      <MobileCalendarSidebar />
+    </Show>
   );
 }

@@ -56,6 +56,10 @@ with their `email_links` row; `user_id` and `list_key` on them repeat the link's
 owner and provider on purpose, so reads never join `email_links`. List rows have no
 foreign key: the contacts worker removes them on account deletion.
 
+`agent_runtime_update` stores leased dev operator requests for one
+Firecracker teammate. Unfinished rows hold the computer and keep the
+presigned download URL, which is cleared when an outcome is written.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
@@ -100,6 +104,10 @@ Task-template rows cascade with personal users or teams; nullable creator attrib
 `password_import_activity` stores only per-batch source format and counts; its
 team foreign key cascades, and the passwords repository includes it in retained
 data checks and explicit vault purge. It does not depend on a successful item.
+
+`import_run.error_kind` (migration `20261122042907`) is nullable TEXT checked
+against the import crate's `RunErrorKind`; NULL while a run has not failed and
+on runs that failed before it existed. Older binaries ignore it.
 
 `import_run.personal_root_folder_id` and `personal_folder_ids` are nullable,
 additive state owned by the import repository. Preserve both when a later run

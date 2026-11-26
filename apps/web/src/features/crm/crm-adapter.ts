@@ -1,6 +1,9 @@
 import { propertyValueLabel } from '@app/features/activity/queries/property-value';
 import { useCreateContext } from '@app/features/command/context/create-context';
-import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
+import {
+  useCrmCompanyPickerSearch,
+  useQuickAccessCrmCompaniesQuery,
+} from '@app/features/crm/crm-search';
 import { composeEmail } from '@app/features/email-view/compose-email';
 import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -112,7 +115,10 @@ import {
   useResetCrmStagesMutation,
 } from './queries/stages';
 import { useTeamCrmConfig } from './queries/team-config';
-import { useQuickAccessCrmContactsQuery } from './record-adapter';
+import {
+  useCrmContactSearch,
+  useQuickAccessCrmContactsQuery,
+} from './record-adapter';
 import { createAppDealStages } from './stage-adapter';
 import { crmTaskComposerContext } from './task-composer';
 
@@ -360,7 +366,7 @@ export function createAppCrmContext(): CrmContext {
     RecordTasks: CrmRecordTasks,
     RecordActivity: CrmRecordActivity,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
-    createMergeCommands: () => createMergeCommands(deps),
+    createMergeCommands: (recordType) => createMergeCommands(deps, recordType),
     createPropertyValueLabel: () => {
       const definitions = useAllProperties();
       return (propertyId, value) =>
@@ -377,10 +383,11 @@ export function createAppCrmContext(): CrmContext {
       }),
     createReplaceStages: () => useReplaceCrmStagesMutation(deps),
     createResetStages: () => useResetCrmStagesMutation(deps),
-    exportCompanies: (...args) =>
-      fetchCrmExportCompanies(deps.storage, ...args),
+    exportCompanies: fetchCrmExportCompanies,
     createCompanySuggestions: useQuickAccessCrmCompaniesQuery,
+    createCompanySearch: useCrmCompanyPickerSearch,
     createContactSuggestions: useQuickAccessCrmContactsQuery,
+    createContactSearch: useCrmContactSearch,
     hydrateCompany(company) {
       if (company.properties) return company;
       const cached = getSoupEntityById(company.id);

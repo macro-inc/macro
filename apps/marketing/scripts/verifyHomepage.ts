@@ -125,7 +125,9 @@ export async function verifyHomepage(
           '1700 / 916'
         );
         await expect(
-          page.locator('.homepage-tour-screen img[data-active="true"]')
+          page.locator(
+            '.homepage-tour-screen img.palette-dark-only[data-active="true"]'
+          )
         ).toHaveCount(1);
         await expect(headingLocator).toHaveCSS(
           'font-family',
@@ -194,7 +196,12 @@ export async function verifyHomepage(
         await page.locator('#email').scrollIntoViewIfNeeded();
         // The page stays dark across live system theme changes.
         const emailTitle = page.locator('#email-title');
-        await expect(page.locator('#email .homepage-screen img')).toBeVisible();
+        await expect(
+          page.locator('#email .homepage-screen img.palette-dark-only')
+        ).toBeVisible();
+        await expect(
+          page.locator('#email .homepage-screen img.palette-light-only')
+        ).toBeHidden();
         const titleColor = await emailTitle.evaluate(
           (element) => getComputedStyle(element).color
         );
@@ -230,10 +237,89 @@ export async function verifyHomepage(
         await page.close();
       }
     }
+    await verifyStoredLightPalette(browser, origin);
     if (browserType === chromium) await verifyProductPages(browser, origin);
   } finally {
     await browser?.close();
     server.stop(true);
+  }
+}
+
+/**
+ * A visitor who chose the light palette gets it on the first paint of the
+ * dark prerendered page, keeps it through hydration, and can switch back.
+ */
+async function verifyStoredLightPalette(
+  browser: Awaited<ReturnType<typeof chromium.launch>>,
+  origin: string
+): Promise<void> {
+  const page = await browser.newPage({
+    viewport: { width: 1440, height: 1000 },
+    // The operating system asks for dark; only the stored choice counts.
+    colorScheme: 'dark',
+    reducedMotion: 'reduce',
+  });
+  page.setDefaultTimeout(15000);
+  let releaseScripts!: () => void;
+  const scriptsReady = new Promise<void>((resolve) => {
+    releaseScripts = resolve;
+  });
+  try {
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('macro-site-palette'))
+        localStorage.setItem('macro-site-palette', 'cream');
+    });
+    await page.route('**/*', async (route) => {
+      if (new URL(route.request().url()).origin !== origin) {
+        await route.abort();
+        return;
+      }
+      if (route.request().resourceType() === 'script') await scriptsReady;
+      await route.continue();
+    });
+    await page.goto(origin, { waitUntil: 'commit' });
+    await page.locator('[data-welcome-heading]').waitFor({ state: 'visible' });
+
+    // Before any script loads: the cream page and the light app window.
+    const scrollRoot = page.locator('#app-scroll-root');
+    await expect(scrollRoot).toHaveCSS(
+      'background-color',
+      'rgb(245, 241, 232)'
+    );
+    const lightWindow = page.locator(
+      '.homepage-tour-screen img.palette-light-only[data-active="true"]'
+    );
+    const darkWindow = page.locator(
+      '.homepage-tour-screen img.palette-dark-only[data-active="true"]'
+    );
+    await expect(lightWindow).toBeVisible();
+    await expect(darkWindow).toBeHidden();
+
+    releaseScripts();
+    await page.waitForSelector('#root[data-public-ready="true"]', {
+      state: 'attached',
+    });
+    await expect(scrollRoot).toHaveCSS(
+      'background-color',
+      'rgb(245, 241, 232)'
+    );
+    await expect(lightWindow).toBeVisible();
+
+    await page
+      .getByRole('button', { name: 'Switch to dark theme', exact: true })
+      .click();
+    await expect(scrollRoot).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+    await expect(darkWindow).toBeVisible();
+    await expect(lightWindow).toBeHidden();
+    expect(
+      await page.evaluate(() => localStorage.getItem('macro-site-palette'))
+    ).toBe('dark');
+    console.log(
+      '[prerender] Homepage light palette: cream first paint, light app window, and theme toggle'
+    );
+  } finally {
+    releaseScripts();
+    await page.close();
   }
 }
 

@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'solid-js';
+import { createContext, type JSX, useContext } from 'solid-js';
 
 /**
  * Opens a link inside the app instead of a browser tab. Returns false for a
@@ -26,4 +26,16 @@ export const AppLinkDescriberContext = createContext<AppLinkDescriber>();
 
 export function useAppLinkDescriber(): AppLinkDescriber | undefined {
   return useContext(AppLinkDescriberContext);
+}
+
+/**
+ * Draws a link the surface knows as a typed reference (a chip) in place of
+ * the link, such as an agent's screen; undefined leaves the link as it is.
+ */
+export type AppLinkChip = (url: string) => JSX.Element | undefined;
+
+export const AppLinkChipContext = createContext<AppLinkChip>();
+
+export function useAppLinkChip(): AppLinkChip | undefined {
+  return useContext(AppLinkChipContext);
 }

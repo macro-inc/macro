@@ -6,6 +6,7 @@ import agentScreen from './en/agent-screen';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
 import appearance from './en/appearance';
+import calendar from './en/calendar';
 import calendarPrompt from './en/calendar-prompt';
 import calls from './en/calls';
 import channelComposer from './en/channel-composer';
@@ -70,6 +71,7 @@ export default {
   agentSetup,
   githubConnect,
   agentWork,
+  calendar,
   calendarPrompt,
   calls,
   channelComposer,

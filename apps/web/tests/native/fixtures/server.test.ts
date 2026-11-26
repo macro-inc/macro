@@ -17,6 +17,8 @@ import {
   SoupDocument,
   type SoupInput,
   SoupMailBackfillDocument,
+  SoupPreviewPageDocument,
+  type SoupPreviewPageQuery,
   type SoupQuery,
   SoupSharedMailBackfillDocument,
 } from '../../../src/lib/service-clients/service-storage/graphql/generated/graphql';
@@ -513,6 +515,61 @@ test('matrix fixtures validate against the production backfill selections', asyn
     expect(result.errors).toBeUndefined();
     expect(result.data.user.soup.items).toHaveLength(count);
   }
+});
+
+test('one-shot preview lists read no items and never serve Mail views', async () => {
+  server = startFixtureServer();
+  const none = fixtureId(0);
+  const request = async (
+    input: SoupInput
+  ): Promise<ExecutionResult<SoupPreviewPageQuery>> => {
+    if (!server) throw new Error('Fixture server must be started first');
+    const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query: transportQuery(SoupPreviewPageDocument),
+        operationName: 'SoupPreviewPage',
+        variables: { input },
+      }),
+    });
+    return await response.json();
+  };
+  // Quick-access skills and the recently viewed list, as the app sends them.
+  for (const input of [
+    {
+      initial: {
+        expand: true,
+        limit: 500,
+        sortMethod: 'VIEWED_UPDATED',
+        filters: {
+          documentFilter: { literal: { subType: 'SKILL' } },
+          emailFilter: { tree: { literal: { threadId: none } } },
+          chatFilter: { literal: { chatId: none } },
+          channelFilter: { literal: { channelId: none } },
+        },
+      },
+    },
+    {
+      initial: {
+        expand: true,
+        limit: 50,
+        sortMethod: 'VIEWED_AT',
+        filters: {
+          agentSessionFilter: { literal: { include: true } },
+          callFilter: { literal: { callId: none } },
+        },
+      },
+    },
+  ] satisfies SoupInput[]) {
+    const result = await request(input);
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.user.soup).toEqual({ items: [], nextCursor: null });
+  }
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
+  const mail = await request({ initial: { emailView: 'INBOX' } });
+  expect(mail.errors?.[0]?.message).toBe(
+    'SoupPreviewPage does not serve Mail views'
+  );
 });
 
 test('the startup running-timer read finds no timer', async () => {

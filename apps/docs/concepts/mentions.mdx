@@ -16,6 +16,8 @@ Mentions are how blocks reference each other across the workspace. Typing `@` in
 
 Mentioning entities to AI agents inserts a pointer so the AI can read the docs. In the case of markdown docs, the agent can also read images embedded in the doc. Your agents inherit the permissions you have. If you try and give an agent a doc/entity that you don't have access to, your agents won't have access either, and your agent will tell you as much.
 
+@mentioning a person in an agent prompt, or in a private chat with an agent, tells the agent who you mean. It doesn't notify that person or share the conversation with them.
+
 You don't _need to_ mention entities to agents. Since your agent has access to the search tool and list tool, it can find things in your workspace for itself. We recommend mentioning entities when you already know what the agent should look at. It skips a round of searching and guarantees the right context.
 
 ## Mentions in Channels

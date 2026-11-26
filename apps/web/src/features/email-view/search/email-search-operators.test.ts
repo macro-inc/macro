@@ -10,6 +10,7 @@ import {
   matchEmailSearchLabels,
   readsAsEmailSearchOperator,
   typedEmailSearchValue,
+  wordFilterAtEnd,
 } from './email-search-operators';
 
 type TypedOperator = { typed: string; operator: boolean };
@@ -211,6 +212,36 @@ describe('matchEmailSearchLabels', () => {
       'Receipts/Travel',
       'Respond',
     ]);
+  });
+});
+
+describe('wordFilterAtEnd', () => {
+  it('offers the filter the whole plain words at the end stand for', () => {
+    expect(wordFilterAtEnd('invoice attachment')).toEqual({
+      filter: 'has:attachment',
+      typed: 'attachment',
+    });
+    expect(wordFilterAtEnd('Unread')).toEqual({
+      filter: 'is:unread',
+      typed: 'Unread',
+    });
+    expect(wordFilterAtEnd('budget this week')).toEqual({
+      filter: 'newer_than:7d',
+      typed: 'this week',
+    });
+  });
+
+  it('offers nothing for part of a word, a finished word, or a quoted or left-out one', () => {
+    for (const text of [
+      'attach',
+      'resent',
+      'budget week',
+      'budget sent ',
+      '"team sent',
+      '-sent',
+    ]) {
+      expect(wordFilterAtEnd(text)).toBeUndefined();
+    }
   });
 });
 

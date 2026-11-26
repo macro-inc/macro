@@ -17,7 +17,7 @@ vi.mock('@entity', () => ({
   isSkillEntity: (entity: { type: string }) => entity.type === 'skill',
 }));
 vi.mock('@queries/soup/items', () => ({
-  useSoupItemsQuery: () => mocks.query,
+  useSoupAstItemsQuery: () => mocks.query,
 }));
 
 import { useQuickAccessSkillsQuery } from './quick-access-skills';
@@ -43,7 +43,7 @@ describe.each(feeds)('Quick Access $type', ({ type, useEntities }) => {
         },
         get data() {
           if (pending()) throw new Error('Pending query data was read');
-          return [entity];
+          return { entities: [entity] };
         },
       };
 
@@ -60,8 +60,9 @@ describe.each(feeds)('Quick Access $type', ({ type, useEntities }) => {
   });
 
   it('does not suspend the app shell while the discovery request is pending', async () => {
-    const response =
-      Promise.withResolvers<Array<{ id: string; type: string }>>();
+    const response = Promise.withResolvers<{
+      entities: Array<{ id: string; type: string }>;
+    }>();
     const client = new QueryClient();
     function Shell() {
       mocks.query = createQuery(() => ({
@@ -84,12 +85,12 @@ describe.each(feeds)('Quick Access $type', ({ type, useEntities }) => {
         expect(screen.getByRole('button').textContent).toBe('Navigation: 0');
         expect(screen.queryByText('Loading app shell')).toBeNull();
       });
-      response.resolve([{ id: 'one', type }]);
+      response.resolve({ entities: [{ id: 'one', type }] });
       await waitFor(() =>
         expect(screen.getByRole('button').textContent).toBe('Navigation: 1')
       );
     } finally {
-      response.resolve([]);
+      response.resolve({ entities: [] });
       view.unmount();
       client.clear();
     }

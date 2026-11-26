@@ -151,8 +151,8 @@ Team admins and owners merge duplicate companies while `enable-crm-merge` is
 on for them. Select two or more companies in a Companies list and press Merge
 in the selection toolbar, or choose Merge companies (several selected) or Merge
 with… (one) from a row's menu; on a phone, long-press a row for Merge with….
-Merge with… first asks for the other companies (search by name or domain, tick
-them). Then choose the company to keep and review: its domains, what moves to
+Merge with… first asks for the other companies of the current team (search by
+name or domain, which reaches past the recent companies; tick them). Then choose the company to keep and review: its domains, what moves to
 it, pipelines where it ends up with several entries (kept separate), values
 that differ (the kept company's win), what email sync does, and, when a
 teammate's email sharing names a merged company, Keep sharing the same mail or
@@ -165,6 +165,19 @@ one "merged … into this" entry with the team-visible values it dropped. The sa
 merge is available through `POST /crm/merges/preview` then `POST /crm/merges`,
 the SDK's `crm.merges`, and the agent's PreviewMerge and MergeRecords tools.
 Verify with two throwaway companies on desktop and at phone width.
+
+Duplicate people merge the same way from a People list: Merge in the selection
+toolbar, Merge people (several selected) or Merge with… (one) in a row's menu,
+or a long-press on a phone. Merge with… searches the current team's people by
+name, address or company. The review lists the person's addresses after the merge (its primary
+first), what moves, pipelines, values that differ, email sync and teammates'
+sharing, as for companies. Someone under another company with a work address,
+or no address, blocks it; the block lists each of them with their company.
+After the merge a toast offers Open, and the merged people's old links open the
+person who stays. The routes take `recordType: "contact"`, and the SDK has
+`crm.merges.previewContacts` and `mergeContacts`. Verify with two throwaway
+contacts on desktop and at phone width: the person who stays has every
+address, pipeline entry, task reference and discussion message.
 
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses
@@ -309,6 +322,9 @@ open the shared **Switch view** bottom drawer: every available section
 has an icon and label, with a check beside the current section. Choosing a section
 closes the drawer and updates the header label; Escape, backdrop tap, and drag
 also dismiss it. Focus returns to the section trigger. Contacts do not show Team.
+A Customers record link with a section (`/app/companies/company/<id>/team`)
+opens on a phone on that section of the record's own page; a section the
+record type lacks opens Overview.
 The workspace's scrollable mobile view strip is unchanged. Copy-link islands are 40px square on touch with
 a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
 and header fit at phone and tablet widths.
@@ -804,8 +820,11 @@ only they see **Remove** on **Team blacklist** rows. A long domain wraps beside
 **Remove** instead of pushing it onto its own line. Archiving a company lists
 its domains there until it is restored. Admins see that the row's company is
 archived and get **Open company** (where **Restore** is) instead of **Remove**;
-members, who can't see archived companies, get a plain row. A remove refused
-because the company was archived meanwhile says the same in its toast. Personal domains affect
+shift-click opens it in a new split, and a company already open in another split
+is brought to the front instead. Members, who can't see
+archived companies, get a plain row. A remove refused because the company was
+archived meanwhile says the same in its toast, and the row then shows the
+archived company. Personal domains affect
 only that member's mailbox. Domains include subdomains;
 a blocked participant in To/Cc/Bcc or the sender excludes the whole thread.
 Blocking hides previously shared matching threads on subsequent CRM reads.

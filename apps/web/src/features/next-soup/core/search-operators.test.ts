@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   isUnfinishedSearchOperator,
+  leavesOutName,
   readSearchOperators,
   searchBindingsIn,
   searchOperatorIndexes,
@@ -128,6 +129,33 @@ describe('searchQueryParts', () => {
     );
   });
 
+  it('leaves out the words a minus names and waits for a word beside them', () => {
+    const beside = searchQueryParts('budget -draft -"team lunch"');
+    expect(beside.serviceText).toBe('budget -draft -"team lunch"');
+    expect(beside.nameText).toBe('budget');
+    expect(beside.leftOutWords).toEqual(['draft', 'team lunch']);
+    expect(beside.waitsForWord).toBe(false);
+
+    expect(searchQueryParts('-draft').waitsForWord).toBe(true);
+    expect(searchQueryParts('-draft').nameText).toBe('');
+    expect(searchQueryParts('type:doc -draft').waitsForWord).toBe(true);
+    // Mail's search runs on the words it leaves out alone.
+    expect(searchQueryParts('type:email -draft').waitsForWord).toBe(false);
+    expect(searchQueryParts('from:ana -draft').waitsForWord).toBe(false);
+
+    const words = searchQueryParts('e-mail --force');
+    expect(words.leftOutWords).toEqual([]);
+    expect(words.nameText).toBe('e-mail --force');
+    expect(words.waitsForWord).toBe(false);
+  });
+
+  it('leaves out a name holding a word a minus names, ignoring case', () => {
+    expect(leavesOutName('Budget Draft v2', ['draft'])).toBe(true);
+    expect(leavesOutName('Q3 redrafts', ['DRAFT'])).toBe(true);
+    expect(leavesOutName('Budget plan', ['draft'])).toBe(false);
+    expect(leavesOutName('Budget plan', [])).toBe(false);
+  });
+
   it('sends bound tokens with the request by id, not in the service’s text', () => {
     const bindings = [
       { token: 'tag:🔥', tags: [{ propertyId: 'tags-1', optionId: 'fire-1' }] },
@@ -158,6 +186,45 @@ describe('searchQueryParts', () => {
     expect(searchQueryParts('in:#"Ana Lim" budget', bindings).serviceText).toBe(
       'in:#"Ana Lim" budget'
     );
+  });
+
+  it('leaves bound tags the request can’t hold as one group to the service by name', () => {
+    const tag = (name: string) => ({
+      token: `tag:${name}`,
+      tags: [{ propertyId: 'tags-1', optionId: `${name}-1` }],
+    });
+    const bindings = [tag('🦋'), tag('legal'), tag('q3')];
+    // Two tags that must both hold: one group, sent by id.
+    const both = searchQueryParts('budget tag:🦋 tag:legal', bindings);
+    expect(both.serviceText).toBe('budget');
+    expect(both.bound.groups).toHaveLength(2);
+    // An OR group beside another tag: the service reads them as typed.
+    const mixed = searchQueryParts(
+      'budget tag:🦋 OR tag:legal tag:q3',
+      bindings
+    );
+    expect(mixed.serviceText).toBe('budget tag:🦋 OR tag:legal tag:q3');
+    expect(mixed.bound.groups).toEqual([]);
+    // Other bound tokens still go by id.
+    const channel = { token: 'in:#launch', channelIds: ['launch-1'] };
+    const withChannel = searchQueryParts(
+      'budget tag:🦋 OR tag:legal tag:q3 in:#launch',
+      [...bindings, channel]
+    );
+    expect(withChannel.serviceText).toBe('budget tag:🦋 OR tag:legal tag:q3');
+    expect(withChannel.bound.groups.map((group) => group.name)).toEqual(['in']);
+    // Two same-named tags picked from different tag sets are alternatives.
+    const twoLegal = [
+      tag('legal'),
+      {
+        token: 'tag:legal',
+        tags: [{ propertyId: 'tags-2', optionId: 'legal-2' }],
+      },
+      tag('q3'),
+    ];
+    const sameName = searchQueryParts('budget tag:legal tag:q3', twoLegal);
+    expect(sameName.serviceText).toBe('budget tag:legal tag:q3');
+    expect(sameName.bound.groups).toEqual([]);
   });
 
   it('reads Mail’s operators as words where email isn’t searched', () => {
@@ -255,15 +322,21 @@ describe('searchOperatorSpans', () => {
   });
 
   it('draws a bound token as an operator', () => {
+    // A tag named with ASCII punctuation alone reads as a word when typed.
     const bindings = [
-      { token: 'tag:🔥', tags: [{ propertyId: 'tags-1', optionId: 'fire-1' }] },
+      { token: 'tag:--', tags: [{ propertyId: 'tags-1', optionId: 'dash-1' }] },
     ];
     expect(
-      searchOperatorSpans('launch tag:🔥', bindings).map(({ start, end }) =>
-        'launch tag:🔥'.slice(start, end)
+      searchOperatorSpans('launch tag:--', bindings).map(({ start, end }) =>
+        'launch tag:--'.slice(start, end)
       )
-    ).toEqual(['tag:🔥']);
-    expect(drawn('launch tag:🔥')).toEqual([]);
+    ).toEqual(['tag:--']);
+    expect(drawn('launch tag:--')).toEqual([]);
+  });
+
+  it('reads a tag or channel named by an emoji alone', () => {
+    expect(drawn('launch tag:🔥 in:#🚀')).toEqual(['tag:🔥', 'in:#🚀']);
+    expect(drawn('launch tag:- in:#-')).toEqual([]);
   });
 
   it('draws an operator the rest of the query lets it be', () => {

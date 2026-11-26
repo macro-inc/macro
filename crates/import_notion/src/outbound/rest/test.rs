@@ -16,12 +16,19 @@ use crate::domain::model::{
     NotionDataSource, NotionId, NotionPage, NotionParent, NotionUser, NotionValue, PageMarkdown,
     Paged, SearchHit, SearchObject,
 };
-use crate::domain::ports::{NotionApi, NotionError};
+use crate::domain::ports::{NotionApi, NotionError, TransportClass};
+
+/// One scripted answer: Notion's response, or a request that did not
+/// complete.
+enum Step {
+    Answer(TransportResponse),
+    Fail(TransportClass),
+}
 
 /// Answers requests in order from a script and records what was sent.
 struct ScriptedTransport {
     started: Instant,
-    responses: Mutex<VecDeque<TransportResponse>>,
+    responses: Mutex<VecDeque<Step>>,
     requests: Mutex<Vec<SentRequest>>,
 }
 
@@ -35,9 +42,13 @@ struct SentRequest {
 
 impl ScriptedTransport {
     fn new(responses: Vec<TransportResponse>) -> Arc<Self> {
+        Self::steps(responses.into_iter().map(Step::Answer).collect())
+    }
+
+    fn steps(steps: Vec<Step>) -> Arc<Self> {
         Arc::new(Self {
             started: Instant::now(),
-            responses: Mutex::new(responses.into()),
+            responses: Mutex::new(steps.into()),
             requests: Mutex::new(Vec::new()),
         })
     }
@@ -55,8 +66,17 @@ impl NotionTransport for Arc<ScriptedTransport> {
             body: read.body().cloned(),
             after: self.started.elapsed(),
         });
-        let response = self.responses.lock().unwrap().pop_front();
-        Ok(response.expect("the script has a response for every request"))
+        let step = self.responses.lock().unwrap().pop_front();
+        match step.expect("the script has a response for every request") {
+            Step::Answer(response) => Ok(response),
+            Step::Fail(class) => Err(NotionError::Transport {
+                class,
+                report: rootcause::report!(
+                    "proxy request to https://api.notion.com/v1/pages/598337872cf94fdf8782e53db20768a5 failed"
+                )
+                .into_dynamic(),
+            }),
+        }
     }
 }
 
@@ -844,7 +864,9 @@ async fn incomplete_view_lists_are_errors_and_view_reads_retry_and_preserve_acce
         TransportResponse {
             status: StatusCode::NOT_FOUND,
             retry_after: None,
-            body: String::new(),
+            // Notion's own 404 (an empty body reads as the connection
+            // being unusable, not a missing object).
+            body: r#"{"object":"error","status":404,"code":"object_not_found","message":"Could not find view"}"#.into(),
         },
     ]);
     let client = NotionRestClient::new(
@@ -1034,3 +1056,64 @@ async fn one_malformed_source_does_not_lose_other_sources_in_the_placement() {
         }
     ));
 }
+
+#[tokio::test]
+async fn a_lost_connection_is_told_apart_from_an_object_that_is_not_shared() {
+    let transport = ScriptedTransport::new(vec![
+        // Notion: the token is not valid (revoked or expired).
+        TransportResponse {
+            status: StatusCode::UNAUTHORIZED,
+            retry_after: None,
+            body: r#"{"object":"error","status":401,"code":"unauthorized","message":"API token is invalid."}"#.into(),
+        },
+        // Notion: this object is missing or not shared.
+        TransportResponse {
+            status: StatusCode::NOT_FOUND,
+            retry_after: None,
+            body: r#"{"object":"error","status":404,"code":"object_not_found","message":"Could not find page"}"#.into(),
+        },
+        // Not Notion's error shape: the proxy itself could not use the account.
+        TransportResponse {
+            status: StatusCode::NOT_FOUND,
+            retry_after: None,
+            body: r#"{"error":"account apn_1 not found"}"#.into(),
+        },
+        // Notion: the connection may not read this object.
+        TransportResponse {
+            status: StatusCode::FORBIDDEN,
+            retry_after: None,
+            body: r#"{"object":"error","status":403,"code":"restricted_resource","message":"no access"}"#.into(),
+        },
+    ]);
+    let client = NotionRestClient::new(
+        transport.clone(),
+        Arc::new(RequestPacer::new(NOTION_REQUEST_INTERVAL)),
+    );
+    let id = NotionId::parse("598337872cf94fdf8782e53db20768a5").unwrap();
+
+    let revoked = client.page(&id).await.unwrap_err();
+    let not_shared = client.page(&id).await.unwrap_err();
+    let unavailable = client.page(&id).await.unwrap_err();
+    let forbidden = client.page(&id).await.unwrap_err();
+
+    assert!(matches!(revoked, NotionError::AccessLost), "{revoked:?}");
+    assert!(
+        matches!(not_shared, NotionError::NotFound),
+        "{not_shared:?}"
+    );
+    assert!(
+        matches!(unavailable, NotionError::ConnectionUnavailable),
+        "{unavailable:?}"
+    );
+    assert!(matches!(forbidden, NotionError::Forbidden), "{forbidden:?}");
+    assert_eq!(
+        revoked.to_string(),
+        "Notion no longer accepts Macro's connection (it was revoked or expired); reconnect Notion"
+    );
+    assert_eq!(
+        unavailable.to_string(),
+        "Macro couldn't use your Notion connection; reconnect Notion"
+    );
+}
+
+mod telemetry;

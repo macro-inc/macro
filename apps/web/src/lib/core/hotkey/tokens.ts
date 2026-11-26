@@ -82,6 +82,7 @@ export const TOKENS = {
       today: 'calendar.period.today',
     },
     search: 'calendar.search',
+    goToDate: 'calendar.goToDate',
   },
 
   // global
@@ -133,6 +134,7 @@ export const TOKENS = {
       calendar: 'sidebar.goTo.calendar',
       search: 'sidebar.goTo.search',
       agents: 'sidebar.goTo.agents',
+      routines: 'sidebar.goTo.routines',
       mail: 'sidebar.goTo.mail',
       sent: 'sidebar.goTo.sent',
       documents: 'sidebar.goTo.documents',

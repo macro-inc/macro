@@ -1,6 +1,10 @@
 import { StickyVirtualizer } from '@app/components/list/StickyVirtualizer';
 import { ListHeaderSearch } from '@app/components/view-shell/ListHeader';
-import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
+import { SearchTipsButton } from '@app/components/view-shell/search-tips';
+import {
+  LIST_VIEW_DOCS_URL,
+  SEARCH_OPERATORS_DOCS_URL,
+} from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { MobileAgentComposer } from '@app/features/agents-view/mobile-agent-composer';
 import {
@@ -127,6 +131,7 @@ import { makeMarkNotDoneAction } from '../actions/make-mark-not-done-action';
 import { SOUP_TOUR } from '../tour';
 import { SearchAskAiButton } from './search-ask-ai-button';
 import { SearchMoreChats } from './search-more-chats';
+import { searchViewTips } from './search-tips';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { SoupGroupContinuation } from './soup-group-continuation';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
@@ -446,19 +451,30 @@ export const SoupView = (props: SoupViewProps) => {
                 <Show when={!isTouchDevice()}>
                   <div class="flex items-center gap-1">
                     <span class="text-sm font-semibold">{props.viewName}</span>
-                    <Show when={docsUrl()}>
-                      {(url) => (
-                        <Button
-                          aria-label="View documentation"
-                          tooltip="View documentation"
-                          size="icon-sm"
-                          variant="ghost"
-                          class="@max-[380px]/split-header:hidden"
-                          onClick={() => openExternalUrl(url())}
-                        >
-                          <InfoIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-                        </Button>
-                      )}
+                    <Show
+                      when={isComponentListView('search')}
+                      fallback={
+                        <Show when={docsUrl()}>
+                          {(url) => (
+                            <Button
+                              aria-label="View documentation"
+                              tooltip="View documentation"
+                              size="icon-sm"
+                              variant="ghost"
+                              class="@max-[380px]/split-header:hidden"
+                              onClick={() => openExternalUrl(url())}
+                            >
+                              <InfoIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                            </Button>
+                          )}
+                        </Show>
+                      }
+                    >
+                      <SearchTipsButton
+                        tips={searchViewTips()}
+                        docsUrl={SEARCH_OPERATORS_DOCS_URL}
+                        class="@max-[380px]/split-header:hidden"
+                      />
                     </Show>
                   </div>
                 </Show>

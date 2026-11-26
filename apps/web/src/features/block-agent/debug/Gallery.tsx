@@ -1277,11 +1277,11 @@ export default function AgentUiGallery() {
             <FailureNoticeCard
               notice={{
                 kind: 'provider_usage_limit',
-                title: 'Cursor usage limit reached',
-                body: "Your Cursor account has no background-agent budget left, so this message wasn't sent. Raise the spending limit in your Cursor dashboard, then send it again.",
+                title: 'Cursor billing stopped this message',
+                body: "Your Cursor account is out of prepaid credit, or too close to its spend limit to start a run. Add credit or raise the limit in Cursor's billing settings, then send the message again.",
                 link: {
-                  label: 'Manage Cursor usage',
-                  url: 'https://www.cursor.com/dashboard?tab=settings',
+                  label: 'How to fix this',
+                  url: 'https://macro.com/docs/AI/cursor#cursor-usage-and-billing',
                 },
               }}
               onOpenLink={(url) => window.open(url, '_blank', 'noopener')}

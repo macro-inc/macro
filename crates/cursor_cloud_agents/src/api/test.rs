@@ -449,47 +449,56 @@ async fn an_unrelated_client_error_is_still_a_plain_rejection() {
     );
 }
 
-/// The body Cursor answered with in production when the account behind the
-/// key had spent its background-agent budget.
-const USAGE_LIMIT_BODY: &str = r#"{"error":{"code":"usage_limit_exceeded","message":"You need to increase your hard limit. Background Agent requires at least $2 remaining until your hard limit. Manage it at https://www.cursor.com/dashboard?tab=settings."}}"#;
+/// The bodies Cursor answered with in production when the account behind the
+/// key was out of credit or near its limit: prepaid credit used up (The X
+/// Subscription), and a spend limit reached (legacy plans). One code, two
+/// wordings.
+const USAGE_LIMIT_BODIES: [&str; 2] = [
+    r#"{"error":{"code":"usage_limit_exceeded","message":"Your prepaid balance is used up. Add funds or enable auto top-up in your billing settings to keep going."}}"#,
+    r#"{"error":{"code":"usage_limit_exceeded","message":"You need to increase your hard limit. Background Agent requires at least $2 remaining until your hard limit. Manage it at https://www.cursor.com/dashboard?tab=settings."}}"#,
+];
 
-/// An exhausted Cursor budget is the person's to fix, so it arrives typed -
-/// keyed on the code, with Cursor's body kept for the logs and a notice that
-/// says where to go.
+/// An account out of credit or near its limit is the person's to fix, so it
+/// arrives typed - keyed on the code, with Cursor's body kept for the logs and
+/// a notice that says where to go - whichever of Cursor's wordings it came in.
 #[tokio::test]
 async fn an_exhausted_usage_limit_is_typed_with_a_notice() {
-    let base_url = stand_in_server("400 Bad Request", USAGE_LIMIT_BODY);
-    let error = client_against(base_url)
-        .create_agent("prompt", Some(&repo()), true, &[], None, &[])
-        .await
-        .expect_err("the stand-in rejects every create");
-    let exceeded = error
-        .downcast_current_context::<crate::domain::error::UsageLimitExceeded>()
-        .expect("a usage limit is typed as one");
-    assert_eq!(exceeded.code, "usage_limit_exceeded");
-    assert_eq!(exceeded.detail, USAGE_LIMIT_BODY);
-    let notice = exceeded.notice();
-    assert_eq!(
-        notice.kind,
-        crate::domain::error::FailureNoticeKind::ProviderUsageLimit
-    );
-    assert_eq!(
-        notice.link.as_ref().map(|link| link.url.as_str()),
-        Some("https://www.cursor.com/dashboard?tab=settings")
-    );
-    let refusal = exceeded.refusal();
-    assert!(
-        !refusal.message.contains("usage_limit_exceeded") && !refusal.message.contains("$2"),
-        "cursor's own wording stays in the logs: {}",
-        refusal.message
-    );
+    for body in USAGE_LIMIT_BODIES {
+        let base_url = stand_in_server("400 Bad Request", body);
+        let error = client_against(base_url)
+            .create_agent("prompt", Some(&repo()), true, &[], None, &[])
+            .await
+            .expect_err("the stand-in rejects every create");
+        let exceeded = error
+            .downcast_current_context::<crate::domain::error::UsageLimitExceeded>()
+            .expect("a usage limit is typed as one");
+        assert_eq!(exceeded.code, "usage_limit_exceeded");
+        assert_eq!(exceeded.detail, body);
+        let notice = exceeded.notice();
+        assert_eq!(
+            notice.kind,
+            crate::domain::error::FailureNoticeKind::ProviderUsageLimit
+        );
+        assert_eq!(
+            notice.link.as_ref().map(|link| link.url.as_str()),
+            Some("https://macro.com/docs/AI/cursor#cursor-usage-and-billing")
+        );
+        let refusal = exceeded.refusal();
+        assert!(
+            !refusal.message.contains("usage_limit_exceeded")
+                && !refusal.message.contains("$2")
+                && !refusal.message.contains("prepaid balance"),
+            "cursor's own wording stays in the logs: {}",
+            refusal.message
+        );
+    }
 }
 
 /// A follow-up run on an existing agent hits the same wall when the budget
 /// runs out mid-conversation, and is classified the same way.
 #[tokio::test]
 async fn an_exhausted_usage_limit_on_a_follow_up_run_is_typed_too() {
-    let base_url = stand_in_server("400 Bad Request", USAGE_LIMIT_BODY);
+    let base_url = stand_in_server("400 Bad Request", USAGE_LIMIT_BODIES[0]);
     let error = client_against(base_url)
         .create_run(&agent(), "prompt", None, &[])
         .await

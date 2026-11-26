@@ -1,4 +1,8 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import {
+  readTo,
+  scrollToEnd,
+} from '../../../property/browser-test/entity-list';
 
 // Production controls and mutations with synthetic transport responses;
 // these checks do not establish hosted persistence.
@@ -190,14 +194,10 @@ test('company picker lists further browse and search pages as it scrolls, withou
     page
       .locator('[data-entity-index]')
       .filter({ hasText: `Company ${String(index).padStart(2, '0')}` });
-  const scrollToEnd = () =>
-    page.locator('[data-entity-index]').last().scrollIntoViewIfNeeded();
 
   await expect(company(0)).toBeVisible();
   await expect(company(50)).toHaveCount(0);
-  await scrollToEnd();
-  await company(50).scrollIntoViewIfNeeded();
-  await expect(company(50)).toBeVisible();
+  await readTo(page, company(50));
   await expect(
     page.getByRole('button', { name: 'Next options', exact: true })
   ).toHaveCount(0);
@@ -205,9 +205,7 @@ test('company picker lists further browse and search pages as it scrolls, withou
   await search.fill('company');
   await expect(company(50)).toHaveCount(0);
   await expect(company(20)).toHaveCount(0);
-  await scrollToEnd();
-  await company(20).scrollIntoViewIfNeeded();
-  await expect(company(20)).toBeVisible();
+  await readTo(page, company(20));
   expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
 });
 
@@ -226,7 +224,7 @@ test('company picker shows page loading, failure, and successful retry', async (
     window.companyPickerFixture.holdNext();
     window.companyPickerFixture.failNext();
   });
-  await page.locator('[data-entity-index]').last().scrollIntoViewIfNeeded();
+  await scrollToEnd(page);
   await expect(
     page.getByRole('status').filter({ hasText: 'Loading options…' })
   ).toBeVisible();
@@ -238,9 +236,10 @@ test('company picker shows page loading, failure, and successful retry', async (
   const retry = page.getByRole('button', { name: 'Retry options' });
   await expect(retry).toBeEnabled();
   await retry.click();
-  await expect(
+  await readTo(
+    page,
     page.locator('[data-entity-index]').filter({ hasText: 'Company 50' })
-  ).toHaveCount(1);
+  );
   await expect(
     page.getByRole('status').filter({ hasText: 'Options unavailable' })
   ).toHaveCount(0);

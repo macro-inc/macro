@@ -377,7 +377,7 @@ describe('worker CacheHost coordinator integration', () => {
       host.readQuery({ opKey: 7, query: 'query Seven { seven }' })
     ).resolves.toEqual({ kind: 'miss' });
     expect(host.clientId).toBe(clientId);
-    expect(generations).toEqual([{ storage: 'reset' }]);
+    expect(generations).toEqual([{ storage: 'reset', queue: 'reset' }]);
     expect(record).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'graphql_cache.owner',
@@ -872,7 +872,10 @@ describe('worker CacheHost coordinator integration', () => {
         expect(await completed.promise).toMatchObject({
           error: { networkError: { errorCode: 'admitted-enqueue-uncertain' } },
         });
-        expect(await recovered.promise).toEqual({ storage: 'preserved' });
+        expect(await recovered.promise).toEqual({
+          storage: 'preserved',
+          queue: 'preserved',
+        });
         await expect(
           standby.readQuery({ query: 'query After { after }' })
         ).resolves.toEqual({ kind: 'miss' });
@@ -968,7 +971,10 @@ describe('worker CacheHost coordinator integration', () => {
       expect(forwarded).toHaveLength(0);
       gate.resolve();
       expect((await completed.promise).error).toBeUndefined();
-      expect(await recovered.promise).toEqual({ storage: 'preserved' });
+      expect(await recovered.promise).toEqual({
+        storage: 'preserved',
+        queue: 'preserved',
+      });
       expect(await affected.promise).toEqual([7, 9]);
       await write;
       expect(await lateAffected.promise).toEqual([11]);

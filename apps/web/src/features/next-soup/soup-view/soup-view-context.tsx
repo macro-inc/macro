@@ -9,6 +9,7 @@ import {
   type SearchOperatorLookup,
   searchOperatorFilters,
   searchOperatorQuery,
+  searchOperatorTagAst,
   searchTagOperator,
   withSearchOperatorQuery,
 } from '@app/features/next-soup/core/search-operator-filters';
@@ -28,6 +29,7 @@ import {
 } from '@app/features/next-soup/create-soup-state';
 import type { FilterContext } from '@app/features/next-soup/filters/configs/';
 import {
+  bothTargetAsts,
   compileToAst,
   NIL_UUID,
   type QueryState,
@@ -871,6 +873,13 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       ? searchQueryParts(searchText(), searchBindings())
       : undefined
   );
+  // Words a minus leaves out need a word beside them, so until one is typed
+  // nothing goes to the service.
+  const serviceText = () => {
+    const parts = searchParts();
+    if (!parts) return searchText();
+    return parts.waitsForWord ? '' : parts.serviceText;
+  };
   const [operatorLookup, setOperatorLookup] = createSignal<
     Accessor<SearchOperatorLookup> | undefined
   >();
@@ -911,7 +920,10 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
           searchOperatorQuery(operators)
         )
       : queryFilters.state;
-    return compileToAst(applyViewFilters(state));
+    const body = compileToAst(applyViewFilters(state));
+    return operators
+      ? bothTargetAsts(body, searchOperatorTagAst(operators))
+      : body;
   });
   // Server-side filters change the result set without touching the client
   // predicates or sort, so they release held row positions too.
@@ -936,8 +948,9 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     searchPaused: sourceSearchPaused,
     searchText,
     setSearchText,
-    serviceText: () => searchParts()?.serviceText ?? searchText(),
+    serviceText,
     nameText: () => searchParts()?.nameText ?? searchText(),
+    leftOutWords: () => searchParts()?.leftOutWords ?? [],
     operatorIndexes: () => operatorFilters()?.indexes,
   });
 
@@ -945,10 +958,9 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const searchAwaitingInput = () =>
     activeListView() === 'search' &&
     searchAwaitsInput({
-      // Half-typed operators alone search for nothing yet.
-      text: listsOperators()
-        ? searchText()
-        : (searchParts()?.serviceText ?? searchText()),
+      // Half-typed operators alone, or words a minus leaves out alone,
+      // search for nothing yet.
+      text: listsOperators() ? searchText() : serviceText(),
       state: queryFilters.state,
       activeFilterIds: soup.predicates.activeIds(),
       assigneeCount: assigneeFilter().length,

@@ -1,0 +1,37 @@
+import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
+import { catalogModelLabel } from '@core/component/AI/constant/model-label';
+import { Show } from 'solid-js';
+import { AgentAvatar } from '../../components/AgentGlyph';
+import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
+import { MACRO_PERSONA_ID } from '../../core/roster';
+
+export function ModelSelectorIdentity(props: { mobile?: boolean }) {
+  const state = useUnifiedModelSelector();
+  const custom = () => state.agent && state.agent.id !== MACRO_PERSONA_ID;
+  const modelName = () =>
+    state.models.find((option) => option.id === state.model)?.label ??
+    catalogModelLabel(state.model, state.models);
+  return (
+    <span class="flex min-w-0 items-center gap-1">
+      <Show
+        when={custom()}
+        fallback={
+          <ModelIcon
+            model={state.model}
+            class={props.mobile ? 'size-[18px] shrink-0' : 'size-4 shrink-0'}
+          />
+        }
+      >
+        <AgentAvatar
+          agent={state.agent!}
+          coder={false}
+          class="size-[18px]"
+          iconClass="size-4"
+        />
+      </Show>
+      <span class="min-w-0 truncate">
+        {custom() ? state.agent?.name : modelName()}
+      </span>
+    </span>
+  );
+}

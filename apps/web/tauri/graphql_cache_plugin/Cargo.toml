@@ -16,6 +16,8 @@ tracing = { workspace = true }
 uuid = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
+# The bench builds a runtime the size of a Mac's; `engine/access.rs` labels guards with a task-local.
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
 pollster = { workspace = true }
 tauri = { workspace = true, features = ["test"] }
 tempfile = "3"

@@ -28,6 +28,7 @@ data:
           protocols:
             grpc:
               endpoint: 0.0.0.0:4317
+              max_recv_msg_size_mib: 16
             http:
               endpoint: 0.0.0.0:4318
       ring:
@@ -65,7 +66,7 @@ data:
       retransmit_factor: 2
       stream_timeout: 10s
     metrics_generator:
-      metrics_ingestion_time_range_slack: 30s
+      metrics_ingestion_time_range_slack: 5m
       processor:
         local_blocks:
           concurrent_blocks: 2
@@ -74,16 +75,34 @@ data:
           max_block_bytes: 50000000
           max_live_traces: 10000
         service_graphs:
-          dimensions:
-          - deployment.environment
+          dimensions: []
+          histogram_buckets:
+          - 0.1
+          - 0.2
+          - 0.4
+          - 0.8
+          - 1.6
+          - 3.2
+          - 6.4
+          - 12.8
           max_items: 10000
           wait: 10s
           workers: 10
         span_metrics:
-          dimensions:
-          - deployment.environment
-          intrinsic_dimensions:
-            span_name: false
+          dimensions: []
+          histogram_buckets:
+          - 0.002
+          - 0.004
+          - 0.008
+          - 0.016
+          - 0.032
+          - 0.064
+          - 0.128
+          - 0.256
+          - 0.512
+          - 1.02
+          - 2.05
+          - 4.1
       registry:
         collection_interval: 15s
         external_labels: {}
@@ -93,10 +112,8 @@ data:
           store: memberlist
       storage:
         path: /var/tempo/wal
-        remote_write:
-        - send_exemplars: true
-          url: http://mimir.observability.svc.cluster.local:8080/api/v1/push
-        remote_write_add_org_id_header: false
+        remote_write: []
+        remote_write_add_org_id_header: true
         remote_write_flush_deadline: 1m
         wal: null
       traces_storage:
@@ -104,17 +121,19 @@ data:
     multitenancy_enabled: false
     overrides:
       defaults:
+        ingestion:
+          burst_size_bytes: 40000000
+          max_traces_per_user: 30000
+          rate_limit_bytes: 30000000
+          rate_strategy: local
         metrics_generator:
-          max_active_series: 50000
           processors:
           - local-blocks
-          - span-metrics
-          - service-graphs
       per_tenant_override_config: /runtime-config/overrides.yaml
     querier:
       frontend_worker:
         frontend_address: tempo-query-frontend-discovery:9095
-      max_concurrent_queries: 20
+      max_concurrent_queries: 5
       search:
         query_timeout: 30s
       trace_by_id:
@@ -139,8 +158,8 @@ data:
       trace_by_id:
         query_shards: 50
     server:
-      grpc_server_max_recv_msg_size: 4194304
-      grpc_server_max_send_msg_size: 4194304
+      grpc_server_max_recv_msg_size: 16777216
+      grpc_server_max_send_msg_size: 16777216
       http_listen_port: 3200
       http_server_read_timeout: 30s
       http_server_write_timeout: 30s

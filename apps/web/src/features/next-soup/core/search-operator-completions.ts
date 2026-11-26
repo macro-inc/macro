@@ -1,6 +1,8 @@
+import { foldName } from '@core/util/name-match-score';
 import { match } from 'ts-pattern';
 import {
   isPhraseQuote,
+  nameAsTyped,
   SEARCH_OPERATOR_CALL_STATUSES,
   SEARCH_OPERATOR_NAMES,
   SEARCH_OPERATOR_PRIORITIES,
@@ -22,7 +24,11 @@ const MIN_NAME_PREFIX = 2;
 const MAX_ROWS = 8;
 
 /** Someone `assignee:`, `author:` and `from:` can name. */
-export type SearchOperatorPerson = { email: string; name?: string };
+export type SearchOperatorPerson = {
+  id?: string;
+  email: string;
+  name?: string;
+};
 
 /** What the field can offer as values, from data the app already holds. */
 export type SearchOperatorValues = {
@@ -37,7 +43,39 @@ export type SearchOperatorCompletion =
   | { kind: 'name'; name: SearchOperatorName; insert: string }
   | { kind: 'value'; text: string; insert: string }
   | { kind: 'person'; person: SearchOperatorPerson | 'me'; insert: string }
-  | { kind: 'tag' | 'inbox' | 'channel'; text: string; insert: string };
+  | { kind: 'tag' | 'inbox' | 'channel'; text: string; insert: string }
+  | { kind: 'word'; filter: SearchOperatorWordFilter; insert: string }
+  | {
+      kind: 'named';
+      name: 'from' | 'assignee';
+      person: SearchOperatorPerson;
+      insert: string;
+    };
+
+/** The filters a plain word can stand for. */
+export type SearchOperatorWordFilter =
+  | 'type:task'
+  | 'type:email'
+  | 'type:doc'
+  | 'is:unread';
+
+/** Plain words, typed whole, and the filter each offers in their place. */
+const WORD_FILTERS: readonly {
+  words: readonly string[];
+  filter: SearchOperatorWordFilter;
+}[] = [
+  { words: ['task', 'tasks'], filter: 'type:task' },
+  { words: ['email', 'emails', 'mail'], filter: 'type:email' },
+  { words: ['doc', 'docs', 'document', 'documents'], filter: 'type:doc' },
+  { words: ['unread'], filter: 'is:unread' },
+];
+
+/**
+ * Fewest letters of a plain word before the people it names are offered:
+ * each word typed looks people up, so a short one would on almost every
+ * search. The same as Mail's.
+ */
+const MIN_NAME_LETTERS = 3;
 
 /** The token at the end of `text`, unless the text ends in whitespace. */
 export function searchTokenAtEnd(text: string): string | undefined {
@@ -50,6 +88,16 @@ export function searchTokenAtEnd(text: string): string | undefined {
   }
   const token = text.slice(start);
   return token === '' ? undefined : token;
+}
+
+/**
+ * A plain word typed at the end of the field that could start someone's
+ * name (`ana`), so the rows can offer what is from them or assigned to them.
+ */
+export function searchNameBeingTyped(text: string): string | undefined {
+  const token = searchTokenAtEnd(text);
+  if (!token || token.length < MIN_NAME_LETTERS) return undefined;
+  return /^\p{L}[\p{L}\p{M}'’.-]*$/u.test(token) ? token : undefined;
 }
 
 /** `value` as a token's value: quoted when it holds whitespace. */
@@ -104,9 +152,41 @@ export function searchOperatorCompletions(
   if (!typing) return [];
   const rows = ((): SearchOperatorCompletion[] => {
     if ('prefix' in typing) {
-      return SEARCH_OPERATOR_NAMES.filter((name) =>
-        startsWith(name, typing.prefix)
-      ).map((name) => ({ kind: 'name', name, insert: `${name}:` }));
+      // The filter a plain word stands for comes first, then the operators
+      // whose names it starts, then the person it names, as in Mail.
+      const word = WORD_FILTERS.find(({ words }) =>
+        words.includes(typing.prefix.toLowerCase())
+      );
+      const typedName = searchNameBeingTyped(text);
+      const named = typedName
+        ? values.people.find((person) =>
+            foldName(person.name ?? '')
+              .split(/\s+/)
+              .some((part) => part.startsWith(foldName(typedName)))
+          )
+        : undefined;
+      return [
+        ...(word
+          ? [
+              {
+                kind: 'word' as const,
+                filter: word.filter,
+                insert: word.filter,
+              },
+            ]
+          : []),
+        ...SEARCH_OPERATOR_NAMES.filter((name) =>
+          startsWith(name, typing.prefix)
+        ).map((name) => ({ kind: 'name' as const, name, insert: `${name}:` })),
+        ...(named
+          ? (['from', 'assignee'] as const).map((name) => ({
+              kind: 'named' as const,
+              name,
+              person: named,
+              insert: `${name}:${named.email}`,
+            }))
+          : []),
+      ];
     }
     const { name, value } = typing;
     // A whole `me` is the searcher; nobody else is offered in its place.
@@ -144,12 +224,12 @@ export function searchOperatorCompletions(
       .with('assignee', 'author', 'from', people)
       .with('tag', () =>
         values.tags
-          .filter((tag) => startsWith(tag, value))
+          .filter((tag) => startsWith(nameAsTyped(tag), value))
           .map(
             (tag): SearchOperatorCompletion => ({
               kind: 'tag',
               text: tag,
-              insert: `tag:${asValue(tag)}`,
+              insert: `tag:${asValue(nameAsTyped(tag))}`,
             })
           )
       )
@@ -168,12 +248,12 @@ export function searchOperatorCompletions(
         if (value !== '' && !value.startsWith('#')) return [];
         const typedName = value.slice(1);
         return values.channels
-          .filter((channel) => startsWith(channel, typedName))
+          .filter((channel) => startsWith(nameAsTyped(channel), typedName))
           .map(
             (channel): SearchOperatorCompletion => ({
               kind: 'channel',
               text: channel,
-              insert: `in:#${asValue(channel)}`,
+              insert: `in:#${asValue(nameAsTyped(channel))}`,
             })
           );
       })
@@ -181,17 +261,4 @@ export function searchOperatorCompletions(
   })();
   const token = searchTokenAtEnd(text) ?? '';
   return rows.filter((row) => row.insert !== token).slice(0, MAX_ROWS);
-}
-
-/**
- * The field's text with the token being typed replaced by `row`'s. The caret
- * stays right after it: a space typed next starts the next word, as it would
- * have without the row.
- */
-export function completeSearchOperator(
-  text: string,
-  row: SearchOperatorCompletion
-): string {
-  const token = searchTokenAtEnd(text) ?? '';
-  return `${text.slice(0, text.length - token.length)}${row.insert}`;
 }

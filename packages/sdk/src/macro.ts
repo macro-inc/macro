@@ -59,18 +59,26 @@ export type {
   EntityAppearance,
 } from '../generated/storage/types.gen';
 export type { MacroOpts } from './config';
+export type { AccountManagerGrant } from './entities/account-managers/grant';
 export type {
   ActivityAction,
   ActivityEvent,
   ActivityRange,
 } from './entities/activity/namespace';
+export type { AgentSession } from './entities/agent-sessions/agent-session';
 export { CodeExecution } from './entities/agent-sessions/code-execution';
+export type { QueuedAction } from './entities/agent-sessions/queued-action';
 export type {
   DecisionRequest,
   DecisionResponse,
   StructuredCompletionRequest,
   StructuredCompletionResponse,
 } from './entities/ai/namespace';
+export type { Booking } from './entities/calendar/booking';
+export type { BookingLink } from './entities/calendar/booking-link';
+export type { Calendar } from './entities/calendar/calendar';
+export type { CalendarEvent } from './entities/calendar/event';
+export type { CalendarReplacement } from './entities/calendar/replacement';
 export { CallRecord } from './entities/calls/call-record';
 export { CallConnection, type JoinOptions } from './entities/calls/connection';
 export {
@@ -81,12 +89,18 @@ export {
 export type { CallMessage } from './entities/calls/message';
 export type { CallSummary } from './entities/calls/namespace';
 export { CallParticipant } from './entities/calls/participant';
+export type { Channel } from './entities/channels/channel';
+export type { Message } from './entities/channels/message';
+export type { Thread } from './entities/channels/thread';
+export type { Chat } from './entities/chats/chat';
 export {
   ConnectedApp,
   ConnectedTool,
 } from './entities/connected-apps/connected-app';
 export { Connector } from './entities/connected-apps/connector';
 export { ConnectedAppNamespace } from './entities/connected-apps/namespace';
+export type { Company } from './entities/crm/company';
+export type { Contact } from './entities/crm/contact';
 export type {
   CrmEmailPolicy,
   CrmEmailPolicyHistoryEvent,
@@ -112,10 +126,13 @@ export type {
 export {
   type CrmCompanyMerge,
   type CrmCompanyMergeCommit,
+  type CrmContactMerge,
+  type CrmContactMergeCommit,
   CrmMergeNamespace,
   type CrmMergeOutcome,
   type CrmMergePreview,
 } from './entities/crm-merges/merges';
+export type { DatabaseColumn } from './entities/databases/column';
 export {
   type AddColumnOptions,
   type ApplyOpsOptions,
@@ -123,9 +140,23 @@ export {
   type ColumnType,
   type ConvertIntoNewColumnOptions,
   type CreateDatabaseOptions,
+  type Database,
   MacroOpRefusedError,
   type OpResultOf,
 } from './entities/databases/database';
+export type { DatabaseRow } from './entities/databases/row';
+export type { DatabaseTable } from './entities/databases/table';
+export type { DatabaseView } from './entities/databases/view';
+export type { DatabaseWebhook } from './entities/databases/webhook';
+export type { Comment } from './entities/documents/comment';
+export type { Document } from './entities/documents/document';
+export type { SystemSkill } from './entities/documents/system-skill';
+export type { EmailAttachment } from './entities/email/attachment';
+export type { Label } from './entities/email/label';
+export type { Link } from './entities/email/link';
+export type { EmailMessage } from './entities/email/message';
+export type { EmailThread } from './entities/email/thread';
+export type { ForeignEntity } from './entities/foreign/foreign-entity';
 export {
   Form,
   type FormAnswer,
@@ -148,7 +179,16 @@ export {
 export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
 export { FormSection } from './entities/forms/section';
+export type { ImportEntry } from './entities/imports/entry';
+export type { DiscussionComment } from './entities/messages/discussion';
+export type { Notification } from './entities/notifications/notification';
+export type { Project } from './entities/projects/project';
+export type { PropertyDefinition } from './entities/properties/property-definition';
+export type { PropertyOption } from './entities/properties/property-option';
 export type { CreatedEntity } from './entities/routines/namespace';
+export type { RoutineRun, RoutineTemplate } from './entities/routines/routine';
+export type { Task } from './entities/tasks/task';
+export type { Team } from './entities/teams/team';
 export {
   AppLink,
   UiNamespace,
@@ -156,6 +196,9 @@ export {
   type UiOpenResult,
   type UiTarget,
 } from './entities/ui/namespace';
+export type { User } from './entities/users/user';
+export type { Webhook } from './entities/webhooks/webhook';
+export type { WorkspaceQuery } from './entities/workspace/query';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
@@ -645,6 +688,10 @@ export {
 export type {
   SuggestionInput,
   SuggestionsReview,
+  SuggestionTopic,
+  SuggestionTopicInput,
+  SuggestionTopicReason,
+  SuggestionTopicReasonInput,
 } from './entities/suggestions/namespace';
 export {
   Suggestion,

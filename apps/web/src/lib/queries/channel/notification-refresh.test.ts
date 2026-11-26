@@ -484,6 +484,44 @@ describe('shared channel notification refresh', () => {
     await tick();
     expect(f.query).toHaveBeenCalledOnce();
   });
+
+  it('scopes channel notifications and channel deletions to by-ID readers containing the channel', async () => {
+    const f = setup();
+    f.register('batch-1', {
+      channelId: undefined,
+      channelIds: new Set(['a', 'b']),
+      filtered: true,
+    });
+    f.register('batch-2', {
+      channelId: undefined,
+      channelIds: new Set(['c', 'd']),
+      filtered: true,
+    });
+    f.register('list', {
+      channelId: undefined,
+      filtered: true,
+    });
+
+    f.queue.onPatch(patch('a'), false);
+    await tick();
+    expect(f.query.mock.calls.map((call) => call[1])).toEqual([
+      { id: 'batch-1' },
+      { id: 'list' },
+    ]);
+
+    f.query.mockClear();
+    f.queue.onPatch(patch('unlisted'), false);
+    await tick();
+    expect(f.query.mock.calls.map((call) => call[1])).toEqual([{ id: 'list' }]);
+
+    f.query.mockClear();
+    f.queue.onPatch(deletion('c', 'GraphqlSoupChannel'), true);
+    await tick();
+    expect(f.query.mock.calls.map((call) => call[1])).toEqual([
+      { id: 'batch-2' },
+      { id: 'list' },
+    ]);
+  });
 });
 
 describe('new channels reaching channel lists', () => {

@@ -25,9 +25,388 @@ otelcol.processor.memory_limiter "ingest" {
   limit = "768MiB"
   spike_limit = "128MiB"
   output {
+    logs = [otelcol.processor.filter.local_logs.input]
+    traces = [otelcol.processor.transform.ai_content.input]
+    metrics = [otelcol.processor.transform.emails.input]
+  }
+}
+
+// Local stacks forward their logs here (docker/grafana-forwarder), and one
+// service failing in a loop sent more than every other sender together, nearly
+// all of it error-level. Only local-telemetry's run events are kept; the rest
+// stay in the stack's own Loki.
+otelcol.processor.filter "local_logs" {
+  error_mode = "ignore"
+  logs {
+    log_record = [
+      `(resource.attributes["deployment.environment"] == "local" or resource.attributes["deployment.environment.name"] == "local") and resource.attributes["service.name"] != "local-telemetry"`,
+    ]
+  }
+  output { logs = [otelcol.processor.transform.emails.input] }
+}
+
+// What people and models wrote never reaches storage. Token counts, models,
+// operations, outcomes and the macro.genai.* sizes stay. A failed statement
+// fails the batch, so content can't slip through.
+otelcol.processor.transform "ai_content" {
+  error_mode = "propagate"
+  trace_statements {
+    context = "span"
+    statements = [
+      `delete_matching_keys(attributes, "^gen_ai\\.(input|output|prompt|completion|choice|system_instructions|(system|user|assistant|tool)\\.message|tool\\.definitions|tool\\.call\\.(arguments|result))(\\.|$)")`,
+      // A harness's own title for a tool call, often its command line. Where it
+      // gave no tool name, the title is the name and part of the span's.
+      `delete_key(attributes, "macro.genai.tool.title")`,
+      `set(name, "execute_tool") where IsMatch(attributes["gen_ai.tool.name"], "[^A-Za-z0-9_:-]")`,
+      `delete_key(attributes, "gen_ai.tool.name") where IsMatch(attributes["gen_ai.tool.name"], "[^A-Za-z0-9_:-]")`,
+      // A provider's error can quote the request, and a tool's is its output.
+      // error.type stays.
+      `set(status.message, "") where attributes["gen_ai.operation.name"] != nil`,
+    ]
+  }
+  trace_statements {
+    context = "spanevent"
+    statements = [
+      `delete_matching_keys(attributes, "^gen_ai\\.(input|output|prompt|completion|choice|system_instructions|(system|user|assistant|tool)\\.message|tool\\.definitions|tool\\.call\\.(arguments|result))(\\.|$)")`,
+      `delete_matching_keys(attributes, "^(error|exception\\.(message|stacktrace))$") where span.attributes["gen_ai.operation.name"] != nil`,
+      // The model client's events carry responses it couldn't parse, in the
+      // event's name or its fields.
+      `set(name, "rig") where IsMatch(attributes["target"], "^rig")`,
+      `keep_keys(attributes, ["level", "target"]) where IsMatch(attributes["target"], "^rig")`,
+    ]
+  }
+  output { traces = [otelcol.processor.transform.emails.input] }
+}
+
+// User IDs are email addresses, and logs and errors quote them. Each address,
+// wherever it appears, becomes its SHA-256 ("macro|<hash>"), so one user's
+// telemetry can still be found by hashing their address as written. A map or
+// list attribute that holds one is flattened (`ids.0`, `m.inner`) and scanned
+// again; a list or map body that holds one becomes its JSON text.
+//
+// The pattern scan tripled ingest's CPU on spans with long attributes, so a
+// map is scanned only when its JSON holds an "@" or a "%40", and checked for a
+// nested address only when the JSON also shows a list or map value. The
+// macro.ingest.* keys mark what to scan between blocks; senders' are removed
+// first, and all after. JSON can't hold a NaN or an infinity, so the checks
+// ignore errors, and a map they couldn't check is scanned and flattened.
+// Addresses in map keys and byte values stay, and a flattened map can pass
+// Loki's 128 metadata entries or Mimir's 30 labels and be refused.
+otelcol.processor.transform "emails" {
+  error_mode = "propagate"
+  log_statements {
+    context = "resource"
+    error_mode = "ignore"
+    statements = [
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      `set(cache["json"], String(attributes))`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+    ]
+  }
+  log_statements {
+    context = "resource"
+    statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+  }
+  log_statements {
+    context = "resource"
+    error_mode = "ignore"
+    statements = [
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+    ]
+  }
+  log_statements {
+    context = "resource"
+    statements = [
+      `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+    ]
+  }
+  log_statements {
+    context = "scope"
+    error_mode = "ignore"
+    statements = [
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      `set(cache["json"], String(attributes))`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+    ]
+  }
+  log_statements {
+    context = "scope"
+    statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+  }
+  log_statements {
+    context = "scope"
+    error_mode = "ignore"
+    statements = [
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+    ]
+  }
+  log_statements {
+    context = "scope"
+    statements = [
+      `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256)`,
+    ]
+  }
+  log_statements {
+    context = "log"
+    error_mode = "ignore"
+    statements = [
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      // A list of user IDs the web app sends stays one value.
+      `set(attributes["presence.user_ids"], String(attributes["presence.user_ids"])) where IsList(attributes["presence.user_ids"])`,
+      `set(cache["json"], String(attributes))`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+    ]
+  }
+  log_statements {
+    context = "log"
+    statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+  }
+  log_statements {
+    context = "log"
+    error_mode = "ignore"
+    statements = [
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+    ]
+  }
+  log_statements {
+    context = "log"
+    statements = [
+      `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+    ]
+  }
+  log_statements {
+    context = "log"
+    error_mode = "ignore"
+    statements = [`set(body, String(body)) where (IsMap(body) or IsList(body)) and IsMatch(body, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`]
+  }
+  log_statements {
+    context = "log"
+    statements = [`replace_pattern(body, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where IsString(body) and (IsMatch(body, "@") or IsMatch(body, "%40"))`]
+  }
+  trace_statements {
+    context = "resource"
+    error_mode = "ignore"
+    statements = [
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      `set(cache["json"], String(attributes))`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+    ]
+  }
+  trace_statements {
+    context = "resource"
+    statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+  }
+  trace_statements {
+    context = "resource"
+    error_mode = "ignore"
+    statements = [
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+    ]
+  }
+  trace_statements {
+    context = "resource"
+    statements = [
+      `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+    ]
+  }
+  trace_statements {
+    context = "scope"
+    error_mode = "ignore"
+    statements = [
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      `set(cache["json"], String(attributes))`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+    ]
+  }
+  trace_statements {
+    context = "scope"
+    statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+  }
+  trace_statements {
+    context = "scope"
+    error_mode = "ignore"
+    statements = [
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+    ]
+  }
+  trace_statements {
+    context = "scope"
+    statements = [
+      `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256)`,
+    ]
+  }
+  trace_statements {
+    context = "span"
+    error_mode = "ignore"
+    statements = [
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      // A list of user IDs the web app sends stays one value.
+      `set(attributes["presence.user_ids"], String(attributes["presence.user_ids"])) where IsList(attributes["presence.user_ids"])`,
+      `set(cache["json"], String(attributes))`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+    ]
+  }
+  trace_statements {
+    context = "span"
+    statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+  }
+  trace_statements {
+    context = "span"
+    error_mode = "ignore"
+    statements = [
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+    ]
+  }
+  trace_statements {
+    context = "span"
+    statements = [
+      `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where (IsMatch(name, "@") or IsMatch(name, "%40"))`,
+      `replace_pattern(status.message, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where (IsMatch(status.message, "@") or IsMatch(status.message, "%40"))`,
+    ]
+  }
+  trace_statements {
+    context = "spanevent"
+    error_mode = "ignore"
+    statements = [
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      `set(cache["json"], String(attributes))`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+    ]
+  }
+  trace_statements {
+    context = "spanevent"
+    statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+  }
+  trace_statements {
+    context = "spanevent"
+    error_mode = "ignore"
+    statements = [
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+    ]
+  }
+  trace_statements {
+    context = "spanevent"
+    statements = [
+      `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where (IsMatch(name, "@") or IsMatch(name, "%40"))`,
+    ]
+  }
+  metric_statements {
+    context = "resource"
+    error_mode = "ignore"
+    statements = [
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      `set(cache["json"], String(attributes))`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+    ]
+  }
+  metric_statements {
+    context = "resource"
+    statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+  }
+  metric_statements {
+    context = "resource"
+    error_mode = "ignore"
+    statements = [
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+    ]
+  }
+  metric_statements {
+    context = "resource"
+    statements = [
+      `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+    ]
+  }
+  metric_statements {
+    context = "scope"
+    error_mode = "ignore"
+    statements = [
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      `set(cache["json"], String(attributes))`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+    ]
+  }
+  metric_statements {
+    context = "scope"
+    statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+  }
+  metric_statements {
+    context = "scope"
+    error_mode = "ignore"
+    statements = [
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+    ]
+  }
+  metric_statements {
+    context = "scope"
+    statements = [
+      `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256)`,
+    ]
+  }
+  metric_statements {
+    context = "datapoint"
+    error_mode = "ignore"
+    statements = [
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      `set(cache["json"], String(attributes))`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+    ]
+  }
+  metric_statements {
+    context = "datapoint"
+    statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+  }
+  metric_statements {
+    context = "datapoint"
+    error_mode = "ignore"
+    statements = [
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+    ]
+  }
+  metric_statements {
+    context = "datapoint"
+    statements = [
+      `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+    ]
+  }
+  output {
     logs = [otelcol.processor.batch.ingest.input]
-    traces = [otelcol.processor.batch.ingest.input]
     metrics = [otelcol.processor.batch.ingest.input]
+    traces = [otelcol.processor.batch.ingest.input]
   }
 }
 
@@ -37,7 +416,7 @@ otelcol.processor.batch "ingest" {
   send_batch_max_size = 1024
   output {
     logs = [otelcol.exporter.otlphttp.loki.input]
-    traces = [otelcol.exporter.otlp.tempo.input]
+    traces = [otelcol.exporter.loadbalancing.sampler.input]
     metrics = [otelcol.exporter.prometheus.metrics.input]
   }
 }
@@ -47,12 +426,33 @@ otelcol.exporter.otlphttp "loki" {
   sending_queue { queue_size = 256 }
 }
 
-otelcol.exporter.otlp "tempo" {
-  client {
-    endpoint = "127.0.0.1:4317"
-    tls { insecure = true }
+// Every span of a trace to the same sampler (modules/sampler in
+// infra/k8s/observability/cluster), which keeps or drops whole traces. The
+// queue is in front of the routing, so a span waiting here goes to a sampler
+// that is up when it leaves; a full one holds senders back instead of dropping.
+otelcol.exporter.loadbalancing "sampler" {
+  timeout = "10s"
+  resolver {
+    dns {
+      hostname = "127.0.0.1"
+      interval = "5s"
+    }
   }
-  sending_queue { queue_size = 256 }
+  protocol {
+    otlp {
+      timeout = "2s"
+      queue { enabled = false }
+      retry { enabled = false }
+      client {
+        tls { insecure = true }
+      }
+    }
+  }
+  sending_queue {
+    queue_size = 256
+    block_on_overflow = true
+  }
+  retry_on_failure { max_elapsed_time = "2m" }
 }
 
 otelcol.exporter.prometheus "metrics" {

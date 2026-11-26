@@ -96,9 +96,19 @@ export function createImportReview(sources: ImportReviewSources) {
     if (!report) return undefined;
     if (report.reviewId === record().id) return report;
     // A newer run replaced this one; its rows still say how it ended.
-    return item()?.status === 'completed'
-      ? progressFromEntries(record().id, sources.entries())
-      : undefined;
+    if (item()?.status === 'completed')
+      return progressFromEntries(record().id, sources.entries());
+    // Planning again clears the run's review, so a plan that failed names
+    // none: this review's plan can no longer be approved. That failure may
+    // come from a later plan than the one this card showed; its reason is
+    // still why nothing here can be imported.
+    if (
+      item()?.status === 'pending' &&
+      report.status === 'failed' &&
+      report.reviewId === null
+    )
+      return report;
+    return undefined;
   };
   const phase = () => importReviewPhase(record(), item(), progress());
   const locked = () =>
@@ -109,6 +119,9 @@ export function createImportReview(sources: ImportReviewSources) {
     controller.stale() ||
     record().presentedAt == null;
   const editable = () => !locked() && phase().kind === 'plan';
+  // A plan that failed can still be dismissed, so the review settles.
+  const dismissable = () =>
+    !locked() && (phase().kind === 'plan' || phase().kind === 'planFailed');
   const count = () => importCount(sources.entries(), draft().excluded);
   const volume = () => importVolume(sources.entries(), draft().excluded);
 
@@ -178,7 +191,7 @@ export function createImportReview(sources: ImportReviewSources) {
     return controller.decide('submit', []);
   }
   async function dismiss(): Promise<boolean> {
-    if (!editable()) return false;
+    if (!dismissable()) return false;
     return controller.decide('dismiss', []);
   }
   async function stop(): Promise<boolean> {
@@ -250,6 +263,7 @@ export function createImportReview(sources: ImportReviewSources) {
     count,
     volume,
     editable,
+    dismissable,
     working: controller.busy,
     stopping,
     stopFailed,

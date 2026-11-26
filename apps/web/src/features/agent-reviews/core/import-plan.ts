@@ -1,5 +1,6 @@
 import type { NotionImportReport } from '@queries/import';
 import type { ImportDraft as SavedImportDraft } from '@service-agent-reviews/generated/types';
+import type { RunErrorKind } from '@service-cognition/import';
 import { match } from 'ts-pattern';
 import type { Review, ReviewItem } from './review';
 
@@ -139,6 +140,9 @@ export type ImportProgress = {
     | 'failed'
     | 'dismissed'
     | null;
+  /** Why the run failed, when it did and the server recorded the kind. */
+  errorKind: RunErrorKind | null;
+  /** The run's report text, written by Macro (never a provider's text). */
   error: string | null;
   /** What planning has found in Notion so far, while it reads it. */
   scanned: { pages: number; databases: number } | null;
@@ -182,12 +186,19 @@ export type ImportReviewPhase =
   | { kind: 'preparing' }
   | { kind: 'planning' }
   | { kind: 'plan' }
+  /** Planning failed before the plan was approved; nothing can be approved. */
+  | { kind: 'planFailed'; errorKind: RunErrorKind | null }
   | { kind: 'starting' }
   | { kind: 'importing' }
   | { kind: 'completed' }
   | { kind: 'stopped' }
-  | { kind: 'failed'; error: string }
-  | { kind: 'dismissed' }
+  /** An approved import's write failed; `errorKind` says why. */
+  | { kind: 'failed'; errorKind: RunErrorKind | null }
+  /** `planFailure` when the plan had failed before it was dismissed. */
+  | {
+      kind: 'dismissed';
+      planFailure: { errorKind: RunErrorKind | null } | null;
+    }
   | { kind: 'unknown'; error: string | null };
 
 /**
@@ -316,9 +327,25 @@ export function visiblePlanNodes(
 
 /** Nodes with children below the top level start collapsed. */
 export function initiallyCollapsed(nodes: ImportPlanNode[]): Set<string> {
+  // A failed object is never hidden under a collapsed parent.
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const aboveFailures = new Set<string>();
+  for (const node of nodes) {
+    if (!node.error) continue;
+    let parent = node.parentId;
+    while (parent !== null && !aboveFailures.has(parent)) {
+      aboveFailures.add(parent);
+      parent = byId.get(parent)?.parentId ?? null;
+    }
+  }
   return new Set(
     nodes
-      .filter((node) => node.depth > 0 && node.childIds.length > 0)
+      .filter(
+        (node) =>
+          node.depth > 0 &&
+          node.childIds.length > 0 &&
+          !aboveFailures.has(node.id)
+      )
       .map((node) => node.id)
   );
 }
@@ -725,6 +752,7 @@ export function progressFromEntries(
   return {
     reviewId,
     status: null,
+    errorKind: null,
     error: null,
     scanned: null,
     onTeam: true,
@@ -756,10 +784,26 @@ export function importReviewPhase(
   return match(item.status)
     .returnType<ImportReviewPhase>()
     .with('pending', () =>
-      progress?.status === 'running' ? { kind: 'planning' } : { kind: 'plan' }
+      match(progress?.status ?? null)
+        .returnType<ImportReviewPhase>()
+        .with('running', () => ({ kind: 'planning' }))
+        .with('failed', () => ({
+          kind: 'planFailed',
+          errorKind: progress?.errorKind ?? null,
+        }))
+        .with('ready', 'importing', 'completed', 'dismissed', null, () => ({
+          kind: 'plan',
+        }))
+        .exhaustive()
     )
     .with('submitting', () => ({ kind: 'starting' }))
-    .with('dismissed', () => ({ kind: 'dismissed' }))
+    .with('dismissed', () => ({
+      kind: 'dismissed',
+      planFailure:
+        progress?.status === 'failed'
+          ? { errorKind: progress.errorKind ?? null }
+          : null,
+    }))
     .with('unknown', () => ({ kind: 'unknown', error: item.error ?? null }))
     .with('completed', () =>
       match(progress?.status ?? null)
@@ -768,7 +812,7 @@ export function importReviewPhase(
         .with('dismissed', () => ({ kind: 'stopped' }))
         .with('failed', () => ({
           kind: 'failed',
-          error: progress?.error ?? 'The import failed.',
+          errorKind: progress?.errorKind ?? null,
         }))
         .with('importing', 'running', 'ready', () => ({ kind: 'importing' }))
         // Progress without a run status was counted from the rows because a
@@ -811,4 +855,71 @@ function scanUnits(source: ImportDraft['source']): {
       groups: ['pipeline', 'pipelines'] as [string, string],
     }))
     .exhaustive();
+}
+
+/** What a failed import's card says: a plain first line, then what happened. */
+export type FailureCopy = {
+  headline: string;
+  /** `null` when the server recorded no kind (an older host). */
+  detail: string | null;
+  /** Reconnecting the source is the way out. */
+  reconnect: boolean;
+};
+
+/** Copy for a plan or a write that failed with `errorKind`; never the raw error. */
+export function failureCopy(
+  stage: 'plan' | 'write',
+  source: ImportDraft['source'],
+  errorKind: RunErrorKind | null
+): FailureCopy {
+  const name = sourceLabel(source);
+  const detail = match(errorKind)
+    .returnType<string | null>()
+    .with(
+      'not_found',
+      () =>
+        `${name} said something in the plan is missing or isn’t shared with Macro.`
+    )
+    .with('forbidden', () => `${name} doesn’t let Macro read part of it.`)
+    .with(
+      'access_lost',
+      () =>
+        `${name} no longer accepts Macro’s connection. Reconnect ${name}, then plan the import again.`
+    )
+    .with(
+      'connection_unavailable',
+      () =>
+        `Macro couldn’t use your ${name} connection. Reconnect ${name}, then plan the import again.`
+    )
+    .with(
+      'not_connected',
+      () => `${name} isn’t connected. Connect it, then plan the import again.`
+    )
+    .with(
+      'rate_limited',
+      () =>
+        `${name} is limiting requests right now. Try again in a few minutes.`
+    )
+    .with('unreachable', () => `${name} couldn’t be reached. Try again later.`)
+    .with(
+      'usage_refused',
+      () => 'The AI work to plan it was refused. Check your plan’s usage.'
+    )
+    .with(
+      'interrupted',
+      () =>
+        'It stopped before it finished. Start it again to pick up what is left.'
+    )
+    .with('internal', () => 'Something went wrong on Macro’s side. Try again.')
+    .with(null, () => null)
+    .exhaustive();
+  return {
+    headline:
+      stage === 'plan'
+        ? "Couldn't plan this import."
+        : "Couldn't finish this import.",
+    detail,
+    reconnect:
+      errorKind === 'access_lost' || errorKind === 'connection_unavailable',
+  };
 }

@@ -2,7 +2,7 @@
 
 use ai_billing::domain::{EntitlementSource, PlanTier, SubscriptionScope};
 use chrono::{DateTime, Utc};
-use hosted_runtimes::domain::rollout::ComputerRollout;
+use hosted_runtimes::domain::{models::BillingInterval, rollout::ComputerRollout};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use teams::domain::model::ScheduledSeatPlan;
 
@@ -23,6 +23,9 @@ mod test;
 pub struct SubscriptionPlanFacts {
     /// End of the subscription's currently effective billing period.
     pub period_end: DateTime<Utc>,
+    /// How often the subscription bills; `None` for an interval no plan is
+    /// sold at.
+    pub interval: Option<BillingInterval>,
     /// Only the caller's seat, from the currently attached provider schedule.
     pub scheduled_change: Option<ScheduledSeatPlan>,
     /// Actual provider billing details, exposed only to its billing administrator.
@@ -54,6 +57,9 @@ pub trait SubscriptionStatusGateway: Send + Sync {
 pub struct SubscriptionStatus {
     /// Provider-confirmed subscription renewal date.
     pub renewal_date: Option<DateTime<Utc>>,
+    /// How often the subscription bills. Plan changes keep it, so clients
+    /// price plan options at it; Pro is not sold annually.
+    pub interval: Option<BillingInterval>,
     /// Future downgrade for the caller's seat, if still pending.
     pub scheduled_change: Option<ScheduledSeatPlan>,
     /// Actual provider billing details, exposed only to its billing administrator.
@@ -117,12 +123,12 @@ impl<E: EntitlementSource, G: SubscriptionStatusGateway> SubscriptionStatusServi
         // An applied phase or already-Pro seat is not a future downgrade, even
         // while entitlement webhooks or schedule acknowledgements are catching up.
         let scheduled_change = facts.scheduled_change.filter(|change| {
-            entitlement.tier == PlanTier::Max
-                && change.plan == teams::domain::model::SeatPlan::Premium
+            PlanTier::from(change.plan) < entitlement.tier
                 && change.effective_at >= facts.period_end
         });
         Ok(SubscriptionStatus {
             renewal_date: Some(facts.period_end),
+            interval: facts.interval,
             scheduled_change,
             billing: if read_billing {
                 facts

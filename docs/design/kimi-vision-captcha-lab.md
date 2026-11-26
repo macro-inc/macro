@@ -148,8 +148,9 @@ click recording no markup, and the Kimi adapter against the stand-in
 asserts refusal with zero requests to the lab or the counting proxy. Every
 family also has its own tests: seeds, scoring, leakage, wrong-kind
 submissions, the runner end to end, out-of-bounds responses, and gate
-rejections with zero planner calls and actions. CI runs them in the Browser
-Tests job.
+rejections with zero planner calls and actions. The `CAPTCHA vision lab`
+workflow runs all of them and gates nothing; Browser Tests runs the files
+`check:gate` names, which start no browser.
 
 ## Live results
 

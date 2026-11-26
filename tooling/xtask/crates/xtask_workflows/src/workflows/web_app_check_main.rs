@@ -444,7 +444,7 @@ fn browser() -> Job {
         .add_step(run_database_browser_tests())
         .add_step(run_calendar_details_browser_tests())
         .add_step(run_agent_screen_browser_tests())
-        .add_step(run_captcha_vision_lab_tests())
+        .add_step(run_captcha_vision_lab_gate())
         .add_step(steps::teardown_nix())
 }
 
@@ -597,7 +597,7 @@ fn paths_filter() -> Step<Use> {
     DornyPathsFilter::new(
         "Filter changed paths",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'packages/muppet/**'\n  - 'packages/starter-agent/**'\n  - 'tooling/scripts/starter-agent-lock.sh'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\nagent_screen_changed:\n  - 'apps/web/src/features/agent-screen/**'\n  - 'apps/web/src/features/channel/Channel/ChannelDetail.tsx'\n  - 'apps/web/src/features/settings/views/team-agent-dm-status.tsx'\n  - 'apps/web/src/components/priority-collapse/**'\n  - 'apps/web/src/lib/core/context/channels.ts'\n  - 'apps/web/src/features/channel/use-channel-participants.ts'\n  - 'apps/web/src/features/settings/primitives/team-agent-status.ts'\n  - 'apps/web/src/features/channel/Call/use-call.ts'\n  - 'apps/web/src/components/app/GlobalAppState.tsx'\n  - 'apps/web/src/lib/core/context/user.ts'\n  - 'apps/web/src/lib/core/user/displayName.ts'\n  - 'apps/web/src/components/app/split-layout/**'\n  - 'apps/web/src/components/ui/components/Dialog.tsx'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'packages/muppet/**'\n  - 'packages/starter-agent/**'\n  - 'tooling/scripts/starter-agent-lock.sh'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\nagent_screen_changed:\n  - 'apps/web/src/features/agent-screen/**'\n  - 'apps/web/src/features/channel/Channel/ChannelDetail.tsx'\n  - 'apps/web/src/features/settings/views/team-agent-dm-status.tsx'\n  - 'apps/web/src/components/priority-collapse/**'\n  - 'apps/web/src/lib/core/context/channels.ts'\n  - 'apps/web/src/features/channel/use-channel-participants.ts'\n  - 'apps/web/src/features/settings/primitives/team-agent-status.ts'\n  - 'apps/web/src/features/channel/Call/use-call.ts'\n  - 'apps/web/src/components/app/GlobalAppState.tsx'\n  - 'apps/web/src/lib/core/context/user.ts'\n  - 'apps/web/src/lib/core/user/displayName.ts'\n  - 'apps/web/src/components/app/split-layout/**'\n  - 'apps/web/src/components/ui/components/Dialog.tsx'\n  - 'apps/web/src/lib/core/component/LexicalMarkdown/component/core/LinkWithPreview.tsx'\n  - 'apps/web/src/lib/core/component/LexicalMarkdown/component/core/app-link-opener.ts'\n  - 'apps/web/src/lib/core/signal/unfurl.ts'\n  - 'apps/web/src/lib/core/component/LexicalMarkdown/component/core/StaticMarkdown.tsx'\n  - 'apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/DocumentMention.tsx'\n  - 'apps/web/src/lib/core/util/macroAppUrl.ts'\n"
             ),
     )
     .step()
@@ -800,21 +800,18 @@ fn run_agent_screen_browser_tests() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
-const CAPTCHA_LAB_CHECK: &str = indoc::indoc! {r#"
+const CAPTCHA_LAB_GATE: &str = indoc::indoc! {r#"
     bun install --frozen-lockfile
-    ./node_modules/.bin/playwright install --with-deps chromium
-    env -u LD_LIBRARY_PATH -u BASH_ENV bun run check
+    bun run check:gate
 "#};
 
-/// The CAPTCHA vision lab is outside the root workspace: its own install and
-/// its own Playwright's Chromium, then its typecheck and tests with the mock
-/// planner and the loopback provider stand-in only. Clear BASH_ENV as well as
-/// LD_LIBRARY_PATH because Bun's script shell would restore the Nix libraries,
-/// which are incompatible with Playwright's Chromium.
-/// Run on every browser job so the lab's isolation test scans the whole repo.
-fn run_captcha_vision_lab_tests() -> Step<Run> {
-    Step::new("CAPTCHA Vision Lab Tests")
-        .run(CAPTCHA_LAB_CHECK.trim_end())
+/// The CAPTCHA vision lab's checks that start no browser. The lab is outside
+/// the root workspace, so it has its own install. Run on every browser job so
+/// the lab's isolation test scans the whole repo. Its browser tests run in
+/// `captcha_vision_lab.rs`, which gates nothing.
+fn run_captcha_vision_lab_gate() -> Step<Run> {
+    Step::new("CAPTCHA Vision Lab Checks")
+        .run(CAPTCHA_LAB_GATE.trim_end())
         .working_directory(xtask_paths::repo_dir!("packages/captcha-vision-lab"))
 }
 

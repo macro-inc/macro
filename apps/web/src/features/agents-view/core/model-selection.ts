@@ -12,33 +12,45 @@ import type { RosterAgent } from './roster';
 export function modelSelection(
   options: CatalogModelOption[],
   agents: RosterAgent[],
-  query: string
+  query: string,
+  includeSuggested = false
 ) {
   const search = query.trim().toLocaleLowerCase();
   const catalog = buildModelCatalog(options, true);
-  const suggested = catalog.frontier.length ? catalog.frontier : options;
+  const suggested = catalog.frontier;
   const suggestedIds = new Set(suggested.map((option) => option.id));
   const allProviders = catalog.providers
     .map((provider) => ({
       ...provider,
       options: provider.options.filter(
         (option) =>
-          !suggestedIds.has(option.id) && matchesModelQuery(option, search)
+          (includeSuggested || !suggestedIds.has(option.id)) &&
+          matchesModelQuery(option, search)
       ),
     }))
     .filter((provider) => provider.options.length > 0);
+  const allModels = allProviders.flatMap((provider) => provider.options);
+  const auto = allModels.find((option) => option.id.toLowerCase() === 'auto');
   return {
     suggested: (search ? options : suggested).filter((option) =>
       matchesModelQuery(option, search)
     ),
-    allProviders,
-    allModels: allProviders.flatMap((provider) => provider.options),
+    auto,
+    // Keep Auto searchable while presenting it outside every provider group.
+    allProviders: allProviders
+      .map((provider) => ({
+        ...provider,
+        options: provider.options.filter((option) => option !== auto),
+      }))
+      .filter((provider) => provider.options.length > 0),
+    allModels,
     agents: agents.filter((agent) =>
       agent.name.toLocaleLowerCase().includes(search)
     ),
   };
 }
 
+const SPEED_TIER_ORDER = { standard: 0, fast: 1, ultrafast: 2 };
 /** Display tiers are distinct from the wire values, especially priority (OpenAI Fast). */
 export function speedChoices(values: readonly string[]) {
   const offered = nativeSpeeds(values);
@@ -57,7 +69,9 @@ export function speedChoices(values: readonly string[]) {
     if (tiers.some((choice) => choice.tier === tier)) continue;
     tiers.push({ value, tier });
   }
-  return tiers;
+  return tiers.sort(
+    (a, b) => SPEED_TIER_ORDER[a.tier] - SPEED_TIER_ORDER[b.tier]
+  );
 }
 
 export function speedTier(value: string | undefined) {

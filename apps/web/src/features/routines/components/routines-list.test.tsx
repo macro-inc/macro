@@ -117,6 +117,23 @@ describe('routines list', () => {
       screen.queryByRole('group', { name: 'Routine ownership' })
     ).toBeNull();
   });
+  it('finds a later trigger even when the row shows only the first', () => {
+    const props = setup({
+      rows: [
+        {
+          ...rows[0]!,
+          when: 'Weekdays at 9:00 AM +1',
+          whenDetails: 'Weekdays at 9:00 AM\nNew task created',
+        },
+      ],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Search routines' }));
+    fireEvent.input(screen.getByRole('searchbox'), {
+      target: { value: 'New task created' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Morning briefing' }));
+    expect(props.onOpen).toHaveBeenCalledWith('mine');
+  });
   it('toggles the enabled property without opening the routine', () => {
     const props = setup();
     const on = screen.getByRole('switch', {
@@ -299,14 +316,14 @@ describe('routines list', () => {
           .map((heading) => heading.textContent)
       ).toEqual(['When something happens', 'On a schedule']);
       expect(card('Morning briefing').textContent).toContain(
-        'Weekdays at 9:00 AM · Ran 9:00 AM'
+        'Weekdays at 9:00 AMRan 9:00 AM'
       );
       // A compact card: its name and one line on its state, no description.
       expect(card('Morning briefing').textContent).not.toContain(
         'Sum up my day'
       );
       expect(card('Revenue signals').textContent).toContain(
-        'New email received · Off'
+        'New email receivedOff'
       );
     });
 

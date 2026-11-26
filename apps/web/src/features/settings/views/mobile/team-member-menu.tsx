@@ -12,6 +12,7 @@ import {
   removalLockReason,
   roleLockReason,
   roleName,
+  seatPlanName,
   seatPlanOptions,
   type TeamAgentMenuProps,
   type TeamMemberMenuProps,
@@ -148,17 +149,17 @@ export function TeamMemberMenu(props: TeamMemberMenuProps) {
           <Choices
             label={t('teamMembers.plan')}
             after={
-              <Show when={plan() === 'max' && props.pendingDowngrade}>
+              <Show when={props.pendingDowngrade}>
                 <MobileDrawer.Item
                   disabled={props.planPending}
-                  onClick={() => choose(() => props.onPlanChange('max'))}
+                  onClick={() => choose(() => props.onPlanChange(plan()))}
                 >
-                  {t('teamMembers.keepMax')}
+                  {t('teamMembers.keepPlan', { plan: seatPlanName(plan()) })}
                 </MobileDrawer.Item>
               </Show>
             }
           >
-            <For each={seatPlanOptions()}>
+            <For each={seatPlanOptions(props.annual)}>
               {(option) => (
                 <Choice
                   label={option.label}

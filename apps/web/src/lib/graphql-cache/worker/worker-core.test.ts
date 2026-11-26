@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   TEST_AUTHORITY_GENERATION,
@@ -1536,13 +1537,142 @@ describe('CacheWorkerCore', () => {
       'rows:GraphqlSoupDocument:typed-after-network-write',
       'read:visible',
       'generation',
-      'rows:GraphqlSoupDocument:plain',
-      'teardown',
+      // An operation's teardown orders only requests about that operation.
       'write',
       'local-change',
+      'rows:GraphqlSoupDocument:plain',
+      'teardown',
       'generation',
       'read:later',
       'rows:GraphqlSoupDocument:typed-after-local-change',
+    ]);
+  });
+
+  it('runs a typed search ahead of writes queued past a teardown, as when the teardown ended the segment', async () => {
+    type Queued =
+      | 'teardown'
+      | 'write'
+      | 'registering write'
+      | 'generation'
+      | 'search';
+    const run = async (queue: Queued[]) => {
+      const order: string[] = [];
+      const blocker = Promise.withResolvers<void>();
+      const started = Promise.withResolvers<void>();
+      const written = { changed: [], affectedOps: [], reset: false };
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({
+          readQuery: async (opId: string) => {
+            order.push(`read:${opId}`);
+            if (opId === 'blocker') {
+              started.resolve();
+              await blocker.promise;
+            }
+            return { kind: 'miss' };
+          },
+          currentStorageGeneration: async () => {
+            order.push('generation');
+            return '00000000-0000-4000-8000-000000000001';
+          },
+          teardownOperation: async () => {
+            order.push('teardown');
+          },
+          writeQuery: async () => {
+            order.push('write');
+            return { ...written, revision: INITIAL_CACHE_REVISION };
+          },
+          readRecordsByKeys: async (
+            _document: string,
+            _fragment: string,
+            keys: string[]
+          ) => {
+            order.push(`rows:${keys[0]}`);
+            return { revision: INITIAL_CACHE_REVISION, records: [] };
+          },
+        }),
+      });
+      const port = { postMessage: vi.fn() };
+      const core = new CacheWorkerCore();
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      const running = core.handleRequest(port, {
+        id: 2,
+        kind: 'read',
+        opId: 'blocker',
+        query: 'query Blocker { blocker }',
+      });
+      await started.promise;
+      const write = (id: number) =>
+        core.handleRequest(port, {
+          generation: TEST_AUTHORITY_GENERATION,
+          id,
+          kind: 'write',
+          query: 'query Current { document { id } }',
+          data: { document: { id: `doc-${id}` } },
+        });
+      const queued = queue.map((kind, i) =>
+        match(kind)
+          .with('teardown', () =>
+            core.handleRequest(port, {
+              id: 3 + i,
+              kind: 'teardown',
+              opId: 'gone',
+            })
+          )
+          .with('write', () => write(3 + i))
+          .with('registering write', () =>
+            core.handleRequest(port, {
+              generation: TEST_AUTHORITY_GENERATION,
+              id: 3 + i,
+              kind: 'write',
+              query: 'query Gone { gone }',
+              data: { gone: true },
+              registration: { opId: 'gone' },
+            })
+          )
+          .with('generation', () =>
+            core.handleRequest(port, {
+              id: 3 + i,
+              kind: 'current-storage-generation',
+            })
+          )
+          .with('search', () =>
+            core.handleRequest(port, {
+              id: 3 + i,
+              kind: 'read-records-by-keys',
+              document: 'fragment Item on GraphqlSoupDocument { id }',
+              fragmentName: 'Item',
+              keys: ['GraphqlSoupDocument:typed'],
+              priority: 'typed-search',
+            })
+          )
+          .exhaustive()
+      );
+      blocker.resolve();
+      await Promise.all([running, ...queued]);
+      return order.slice(1);
+    };
+
+    expect(
+      await run(['teardown', 'write', 'write', 'write', 'generation', 'search'])
+    ).toEqual([
+      'rows:GraphqlSoupDocument:typed',
+      'write',
+      'write',
+      'write',
+      'teardown',
+      'generation',
+    ]);
+    // Already first among the requests ahead of the teardown.
+    expect(await run(['search', 'teardown', 'write'])).toEqual([
+      'rows:GraphqlSoupDocument:typed',
+      'write',
+      'teardown',
+    ]);
+    // The write lends the teardown its priority, which the search still beats.
+    expect(await run(['teardown', 'registering write', 'search'])).toEqual([
+      'rows:GraphqlSoupDocument:typed',
+      'teardown',
+      'write',
     ]);
   });
 
@@ -1979,9 +2109,10 @@ describe('CacheWorkerCore', () => {
 
     expect(order).toEqual([
       'read:client:blocker',
+      // The local change concerns no operation, so the teardown doesn't hold it.
+      'enqueue',
       'read:client:group-soup',
       'teardown:client:group-soup',
-      'enqueue',
       'read:client:group-soup',
     ]);
     expect(
@@ -3226,7 +3357,10 @@ describe('CacheWorkerCore', () => {
     );
 
     expect(onInitializationOutcome).toHaveBeenCalledOnce();
-    expect(onInitializationOutcome).toHaveBeenCalledWith('reset-corrupt');
+    expect(onInitializationOutcome).toHaveBeenCalledWith(
+      'reset-corrupt',
+      'reset'
+    );
     expect(
       observations.filter((observation) =>
         [
@@ -3243,6 +3377,189 @@ describe('CacheWorkerCore', () => {
       })
     );
   });
+
+  it('tells the engine that a lost queue was told of, when it can be', async () => {
+    const queueLossTold = vi.fn().mockResolvedValue(undefined);
+    for (const engine of [{}, { queueLossTold }]) {
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheWithOutcome: vi.fn().mockResolvedValue({
+          engine,
+          outcome: 'opened-existing',
+          queue: { outcome: 'unreadable', kept: 0, dropped: 1 },
+        }),
+      });
+      const core = new CacheWorkerCore();
+      await core.queueLossTold();
+      await core.handleRequest(
+        { postMessage: vi.fn() },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+
+      expect(queueLossTold).not.toHaveBeenCalled();
+      await core.queueLossTold();
+    }
+
+    expect(queueLossTold).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it.each([
+    ['opened-existing', undefined, 'preserved'],
+    ['opened-existing', 'none', 'preserved'],
+    ['opened-existing', 'kept', 'preserved'],
+    ['opened-existing', 'partial', 'reset'],
+    ['opened-existing', 'abandoned', 'reset'],
+    ['opened-new', 'none', 'reset'],
+    ['reset-storage-uncertain', undefined, 'reset'],
+    ['reset-storage-uncertain', 'none', 'reset'],
+    ['reset-storage-uncertain', 'kept', 'preserved'],
+    ['reset-corrupt', 'partial', 'reset'],
+    ['reset-corrupt', 'unreadable', 'reset'],
+    ['reset-incompatible', 'abandoned', 'reset'],
+  ])(
+    'after %s with a queue %s reports the queue %s',
+    async (outcome, crossing, queue) => {
+      const observations: Array<Record<string, unknown>> = [];
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheWithOutcome: vi.fn().mockResolvedValue({
+          engine: {},
+          outcome,
+          ...(crossing === undefined
+            ? {}
+            : { queue: { outcome: crossing, kept: 2, dropped: 1 } }),
+        }),
+      });
+      const onInitializationOutcome = vi.fn();
+      const core = new CacheWorkerCore({
+        onInitializationOutcome,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      await core.handleRequest(
+        { postMessage: vi.fn() },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+
+      expect(onInitializationOutcome).toHaveBeenCalledExactlyOnceWith(
+        outcome,
+        queue
+      );
+      expect(
+        observations.filter(({ queueOutcome }) => queueOutcome !== undefined)
+      ).toEqual(
+        crossing === undefined || crossing === 'none'
+          ? []
+          : [
+              expect.objectContaining({
+                name: 'graphql_cache.schema_init',
+                openOutcome: outcome,
+                queueOutcome: crossing,
+                queueKept: 2,
+                queueDropped: 1,
+              }),
+            ]
+      );
+    }
+  );
+
+  it('times each step of a queue that crosses', async () => {
+    const observations: Array<Record<string, unknown>> = [];
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheForRecoveryWithOutcome: vi.fn().mockResolvedValue({
+        engine: {},
+        outcome: 'reset-storage-uncertain',
+        queue: {
+          outcome: 'kept',
+          kept: 2,
+          dropped: 0,
+          readMs: 40,
+          wipeMs: 5,
+          importMs: 7,
+        },
+      }),
+    });
+    const core = new CacheWorkerCore({
+      recoveryOpen: true,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    const step = {
+      openOutcome: 'reset-storage-uncertain',
+      queueOutcome: 'kept',
+    };
+    expect(
+      observations.filter(
+        ({ name, queueOutcome }) =>
+          queueOutcome !== undefined && name !== 'graphql_cache.schema_init'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        ...step,
+        name: 'graphql_cache.queue_read',
+        durationMs: 40,
+      }),
+      expect.objectContaining({
+        ...step,
+        name: 'graphql_cache.recovery_wipe',
+        durationMs: 5,
+      }),
+      expect.objectContaining({
+        ...step,
+        name: 'graphql_cache.queue_import',
+        durationMs: 7,
+      }),
+    ]);
+  });
+
+  it.each([
+    ['unreadable', 'error', 'integrity'],
+    ['abandoned', 'success', 'none'],
+    ['partial', 'success', 'none'],
+  ])(
+    'records a %s queue as read with %s',
+    async (queue, outcome, errorCode) => {
+      const observations: Array<Record<string, unknown>> = [];
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheForRecoveryWithOutcome: vi.fn().mockResolvedValue({
+          engine: {},
+          outcome: 'reset-storage-uncertain',
+          queue: { outcome: queue, kept: 0, dropped: 1, readMs: 40, wipeMs: 5 },
+        }),
+      });
+      const core = new CacheWorkerCore({
+        recoveryOpen: true,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      await core.handleRequest(
+        { postMessage: vi.fn() },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+      expect(
+        observations
+          .filter(({ name }) =>
+            [
+              'graphql_cache.queue_read',
+              'graphql_cache.recovery_wipe',
+            ].includes(String(name))
+          )
+          .map(({ name, ...step }) => [name, step.outcome, step.errorCode])
+      ).toEqual([
+        ['graphql_cache.queue_read', outcome, errorCode],
+        ['graphql_cache.recovery_wipe', 'success', 'none'],
+      ]);
+    }
+  );
 
   it('leaves recovery-open wipe authority with the coordinator', async () => {
     const observations: Array<Record<string, unknown>> = [];
@@ -3272,7 +3589,8 @@ describe('CacheWorkerCore', () => {
       { id: 1, kind: 'init', scope: 'scope-1' }
     );
     expect(onInitializationOutcome).toHaveBeenCalledWith(
-      'reset-storage-uncertain'
+      'reset-storage-uncertain',
+      'reset'
     );
     expect(
       observations.filter((observation) =>
@@ -3738,6 +4056,12 @@ describe('CacheWorkerCore', () => {
           order.push('invalidate');
           return written;
         }),
+        readRecordsByKeys: vi.fn(
+          async (_document: string, _fragment: string, keys: string[]) => {
+            order.push(`rows:${keys[0]}`);
+            return { revision: INITIAL_CACHE_REVISION, records: [] };
+          }
+        ),
         teardownOperation: vi.fn(async () => {
           order.push('teardown');
         }),
@@ -3823,7 +4147,7 @@ describe('CacheWorkerCore', () => {
       expect(messages.filter((message) => !message.ok)).toEqual([]);
     });
 
-    it('lets no request that writes, and no read behind a fence, run between', async () => {
+    it("lets no request that writes, and no read behind a fence or its operation's teardown, run between", async () => {
       const order: string[] = [];
       const { engine, prepareStarted, release } = splitEngine(order);
       const { core, port } = await start(engine);
@@ -3862,7 +4186,7 @@ describe('CacheWorkerCore', () => {
           kind: 'teardown',
           opId: 'client:gone',
         }),
-        second.core.handleRequest(second.port, read(4, 'client:remount'))
+        second.core.handleRequest(second.port, read(4, 'client:gone'))
       );
       fenced.release();
       await Promise.all(sentAgain);
@@ -3871,7 +4195,181 @@ describe('CacheWorkerCore', () => {
         'read:client:before',
         'commit',
         'teardown',
-        'read:client:remount',
+        'read:client:gone',
+      ]);
+    });
+
+    it("runs reads queued past another operation's teardown, which a write behind it does not hurry", async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          id: 3,
+          kind: 'teardown',
+          opId: 'client:gone',
+        }),
+        // It waits for the hydrate's write, so it lends the teardown nothing.
+        core.handleRequest(port, {
+          generation: TEST_AUTHORITY_GENERATION,
+          id: 4,
+          kind: 'write',
+          query: 'query Gone { gone }',
+          data: { gone: true },
+          registration: { opId: 'client:gone' },
+        }),
+        core.handleRequest(port, read(5, 'client:other'))
+      );
+      release();
+      await Promise.all(sent);
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:other',
+        'commit',
+        'teardown',
+        'write',
+      ]);
+    });
+
+    it("runs reads ahead of another operation's teardown, which a remount behind it does not hurry", async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          id: 3,
+          kind: 'read',
+          opId: 'client:other',
+          query: 'query Other { other }',
+        }),
+        core.handleRequest(port, {
+          id: 4,
+          kind: 'teardown',
+          opId: 'client:gone',
+        }),
+        // Visible, and waiting for the teardown, which can't run before the
+        // commit.
+        core.handleRequest(port, read(5, 'client:gone'))
+      );
+      release();
+      await Promise.all(sent);
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:other',
+        'commit',
+        'teardown',
+        'read:client:gone',
+      ]);
+    });
+
+    it('runs a typed search sent during a hydrate ahead of an invalidation queued past a teardown', async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          id: 3,
+          kind: 'teardown',
+          opId: 'client:gone',
+        }),
+        core.handleRequest(port, {
+          generation: TEST_AUTHORITY_GENERATION,
+          id: 4,
+          kind: 'invalidate',
+          keys: ['Document:1'],
+        }),
+        core.handleRequest(port, {
+          id: 5,
+          kind: 'read-records-by-keys',
+          document: 'fragment Item on GraphqlSoupDocument { id }',
+          fragmentName: 'Item',
+          keys: ['GraphqlSoupDocument:typed'],
+          priority: 'typed-search',
+        })
+      );
+      release();
+      await Promise.all(sent);
+      expect(order).toEqual([
+        'prepare:first',
+        'rows:GraphqlSoupDocument:typed',
+        'commit',
+        'invalidate',
+        'teardown',
+      ]);
+    });
+
+    it("runs a read queued past another operation's teardown during a hydrate", async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          id: 3,
+          kind: 'teardown',
+          opId: 'client:gone',
+        }),
+        core.handleRequest(port, {
+          id: 4,
+          kind: 'read',
+          opId: 'client:other',
+          query: 'query Other { other }',
+        })
+      );
+      release();
+      await Promise.all(sent);
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:other',
+        'commit',
+        'teardown',
+      ]);
+    });
+
+    it("doesn't let a remount hurry its operation's older read during a hydrate", async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          id: 3,
+          kind: 'read',
+          opId: 'client:x',
+          query: 'query X { x }',
+        }),
+        core.handleRequest(port, read(4, 'client:y')),
+        core.handleRequest(port, {
+          id: 5,
+          kind: 'teardown',
+          opId: 'client:x',
+        }),
+        // It waits for the teardown, which can't run before the commit, so
+        // lending it to the older read would only delay the visible one.
+        core.handleRequest(port, read(6, 'client:x'))
+      );
+      release();
+      await Promise.all(sent);
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:y',
+        'read:client:x',
+        'commit',
+        'teardown',
+        'read:client:x',
       ]);
     });
 
