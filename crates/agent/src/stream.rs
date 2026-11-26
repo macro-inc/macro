@@ -30,6 +30,13 @@ pub enum StreamPart {
         /// The newly received text.
         delta: String,
     },
+    /// A started call that will never finish: the loop threw away the reply
+    /// that wrote it (the reply also called a tool that was not loaded or does
+    /// not exist, so the model was asked again) and the call never ran.
+    ToolCallDropped {
+        /// The [`ToolCallStart::id`] of the dropped call.
+        id: String,
+    },
     /// A complete tool invocation by the assistant.
     ToolCall(ToolCall),
     /// The result of executing a tool.

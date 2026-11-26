@@ -30,6 +30,8 @@ milliseconds instead of waiting on container provisioning.
   MCP calls and a failed turn guard it.
 - `src/domain/tool_stream.rs`: throttled, bounded argument previews for pending
   calls; replay ignores previews and retains only calls that began execution.
+  A dropped call (`StreamPart::ToolCallDropped`) closes `failed` at once with
+  `DROPPED_TOOL_CALL`; calls still open when the turn ends close `failed` then.
 - `src/domain/session.rs` / `src/domain/replay.rs`: in-process session state
   and log replay on reconnect.
 - `src/domain/admission.rs` + `src/outbound/approval_gate.rs`: usage/plan
