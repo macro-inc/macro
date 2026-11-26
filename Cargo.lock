@@ -11563,6 +11563,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "import_attio"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "clap",
+ "connectors",
+ "import_tracker",
+ "macro_user_id",
+ "mcp_toolset",
+ "rmcp",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "import_hubspot"
 version = "0.1.0"
 dependencies = [

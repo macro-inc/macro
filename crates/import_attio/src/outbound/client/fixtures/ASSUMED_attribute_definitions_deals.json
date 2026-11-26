@@ -1,0 +1,14 @@
+{
+  "data": [
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000003", "attribute_id": "a7000000-0000-4000-8000-000000000021"}, "title": "Deal name", "api_slug": "name", "type": "text", "is_system_attribute": true, "is_multiselect": false},
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000003", "attribute_id": "a7000000-0000-4000-8000-000000000022"}, "title": "Deal stage", "api_slug": "stage", "type": "status", "is_system_attribute": true, "is_multiselect": false, "options": [
+      {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000003", "attribute_id": "a7000000-0000-4000-8000-000000000022", "status_id": "5a000000-0000-4000-8000-000000000001"}, "title": "Lead", "is_archived": false, "celebration_enabled": false, "target_time_in_status": null},
+      {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000003", "attribute_id": "a7000000-0000-4000-8000-000000000022", "status_id": "5a000000-0000-4000-8000-000000000002"}, "title": "In Progress", "is_archived": false, "celebration_enabled": false, "target_time_in_status": null},
+      {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000003", "attribute_id": "a7000000-0000-4000-8000-000000000022", "status_id": "5a000000-0000-4000-8000-000000000003"}, "title": "Won 🎉", "is_archived": false, "celebration_enabled": true, "target_time_in_status": null},
+      {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000003", "attribute_id": "a7000000-0000-4000-8000-000000000022", "status_id": "5a000000-0000-4000-8000-000000000004"}, "title": "Lost", "is_archived": false, "celebration_enabled": false, "target_time_in_status": null},
+      {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000003", "attribute_id": "a7000000-0000-4000-8000-000000000022", "status_id": "5a000000-0000-4000-8000-000000000005"}, "title": "Parked", "is_archived": true, "celebration_enabled": false, "target_time_in_status": null}
+    ]},
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000003", "attribute_id": "a7000000-0000-4000-8000-000000000023"}, "title": "Deal value", "api_slug": "value", "type": "currency", "is_system_attribute": true, "is_multiselect": false},
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000003", "attribute_id": "a7000000-0000-4000-8000-000000000024"}, "title": "Renewal quarter", "api_slug": "renewal_quarter", "type": "text", "is_system_attribute": false, "is_multiselect": false}
+  ]
+}

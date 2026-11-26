@@ -1,0 +1,6 @@
+{
+  "data": [
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "workspace_member_id": "e0000000-0000-4000-8000-000000000001"}, "first_name": "Ada", "last_name": "Example", "avatar_url": null, "email_address": "Ada@Example.com", "access_level": "admin", "created_at": "2026-01-01T00:00:00.000000000Z"},
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "workspace_member_id": "e0000000-0000-4000-8000-000000000002"}, "first_name": "Bo", "last_name": "Sample", "avatar_url": null, "email_address": "bo@sample.test", "access_level": "member", "created_at": "2026-01-01T00:00:00.000000000Z"}
+  ]
+}

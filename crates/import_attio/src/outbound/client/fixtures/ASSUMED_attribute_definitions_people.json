@@ -1,0 +1,7 @@
+{
+  "data": [
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000002", "attribute_id": "a7000000-0000-4000-8000-000000000011"}, "title": "Name", "api_slug": "name", "type": "personal-name", "is_system_attribute": true, "is_multiselect": false},
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000002", "attribute_id": "a7000000-0000-4000-8000-000000000012"}, "title": "Email addresses", "api_slug": "email_addresses", "type": "email-address", "is_system_attribute": true, "is_multiselect": true},
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000002", "attribute_id": "a7000000-0000-4000-8000-000000000013"}, "title": "Company", "api_slug": "company", "type": "record-reference", "is_system_attribute": true, "is_multiselect": false}
+  ]
+}

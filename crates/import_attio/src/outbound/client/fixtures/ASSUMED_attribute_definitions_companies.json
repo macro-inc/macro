@@ -1,0 +1,8 @@
+{
+  "data": [
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000001", "attribute_id": "a7000000-0000-4000-8000-000000000001"}, "title": "Name", "api_slug": "name", "type": "text", "is_system_attribute": true, "is_multiselect": false},
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000001", "attribute_id": "a7000000-0000-4000-8000-000000000002"}, "title": "Domains", "api_slug": "domains", "type": "domain", "is_system_attribute": true, "is_multiselect": true},
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000001", "attribute_id": "a7000000-0000-4000-8000-000000000003"}, "title": "Account tier", "api_slug": "account_tier", "type": "select", "is_system_attribute": false, "is_multiselect": false, "options": [{"id": {"option_id": "a8000000-0000-4000-8000-000000000001"}, "title": "Gold", "is_archived": false}]},
+    {"id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000001", "attribute_id": "a7000000-0000-4000-8000-000000000004"}, "title": "Annual spend", "api_slug": "annual_spend", "type": "currency", "is_system_attribute": false, "is_multiselect": false}
+  ]
+}

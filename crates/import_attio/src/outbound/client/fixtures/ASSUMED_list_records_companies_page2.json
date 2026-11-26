@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "id": {"workspace_id": "1a1a1a1a-0000-4000-8000-000000000001", "object_id": "0b000000-0000-4000-8000-000000000001", "record_id": "c0000000-0000-4000-8000-000000000003"},
+      "created_at": "2026-01-04T00:00:00.000000000Z",
+      "web_url": "https://app.attio.com/example-workspace/company/c0000000-0000-4000-8000-000000000003/overview",
+      "values": {
+        "name": [],
+        "domains": [
+          {"root_domain": "unreadable.test", "attribute_type": "domain"},
+          {"domain": "widgets.test", "root_domain": "widgets.test", "attribute_type": "domain"}
+        ]
+      }
+    }
+  ]
+}
