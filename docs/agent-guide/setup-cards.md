@@ -12,7 +12,7 @@ tasks**, or **Import customers**. Customers shows it only to team members.
 
 The button opens a dialog listing that category's apps (Files: Notion, Google
 Drive, Dropbox, OneDrive, Box, Confluence; Tasks: Linear, Jira, Asana, GitHub,
-Trello, monday.com; Customers: HubSpot, Salesforce, Close, Airtable). A
+Trello, monday.com; Customers: HubSpot, Attio, Salesforce, Close, Airtable). A
 disconnected row offers **Connect** (`Connect <App>`). Connecting follows the
 server's answer: a consent page in a new tab (the row flips to connected when
 the app regains focus) or the embedded connect dialog inside the import dialog.
@@ -29,7 +29,10 @@ the server says its connection can be imported from (`importAvailable`),
   Macro.”: its review lists deal pipelines, companies, contacts and deals, with
   owners matched to teammates and counted losses (deals without a company,
   unsupported currencies, personal-provider domains) in the totals, and no
-  sharing choice, since CRM records belong to the team. Other connectors list
+  sharing choice, since CRM records belong to the team. Attio opens the same
+  importer (`ImportFromAttio`) with “Import my Attio CRM into Macro.”, read
+  through the user's Attio MCP connection: companies, people, and deals in one
+  "Attio deals" pipeline (deals only when the workspace turned them on). Other connectors list
   candidates and ask which ones to create. No importer writes to its source.
 - The shared review identifies its source, shows task/project totals for issue
   trackers, and lets the owner exclude objects and change sharing. On phones,

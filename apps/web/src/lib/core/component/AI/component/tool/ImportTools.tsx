@@ -94,7 +94,7 @@ export const importNotionPageHandler = createToolRenderer({
 
 /** Progress while the short plan call waits; the persisted review takes over. */
 function WorkspaceScanProgress(props: {
-  source: 'notion' | 'linear' | 'jira' | 'hubspot';
+  source: 'notion' | 'linear' | 'jira' | 'hubspot' | 'attio';
 }) {
   const report = useWorkspaceImportReportQuery(() => props.source);
   return (
@@ -105,9 +105,9 @@ function WorkspaceScanProgress(props: {
           {match(props.source)
             .with('notion', () => 'pages')
             .with('linear', 'jira', () => 'issues')
-            .with('hubspot', () => 'records')
+            .with('hubspot', 'attio', () => 'records')
             .exhaustive()}
-          <Show when={props.source !== 'hubspot'}>
+          <Show when={props.source !== 'hubspot' && props.source !== 'attio'}>
             , {scanned().dataSources}{' '}
             {props.source === 'notion' ? 'databases' : 'projects'}
           </Show>{' '}
@@ -124,8 +124,11 @@ function WorkspaceImportTool(
     | 'ImportFromLinear'
     | 'ImportFromJira'
     | 'ImportFromHubspot'
+    | 'ImportFromAttio'
   > &
-    RenderContext & { source: 'notion' | 'linear' | 'jira' | 'hubspot' }
+    RenderContext & {
+      source: 'notion' | 'linear' | 'jira' | 'hubspot' | 'attio';
+    }
 ) {
   const [isExpanded, setIsExpanded] = createSignal(false);
   const hasResponse = () => ctx.response !== undefined;
@@ -136,6 +139,7 @@ function WorkspaceImportTool(
       .with('linear', () => 'Linear')
       .with('jira', () => 'Jira')
       .with('hubspot', () => 'HubSpot')
+      .with('attio', () => 'Attio')
       .exhaustive();
   const label = () =>
     match(ctx.tool.data.action)
@@ -188,6 +192,10 @@ export const importFromJiraHandler = createToolRenderer({
 export const importFromHubspotHandler = createToolRenderer({
   name: 'ImportFromHubspot',
   render: (ctx) => <WorkspaceImportTool {...ctx} source="hubspot" />,
+});
+export const importFromAttioHandler = createToolRenderer({
+  name: 'ImportFromAttio',
+  render: (ctx) => <WorkspaceImportTool {...ctx} source="attio" />,
 });
 
 export const deleteImportEntityHandler = createToolRenderer({

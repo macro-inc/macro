@@ -1,5 +1,6 @@
 import type { NotionImportReport } from '@queries/import';
 import type { ImportDraft as SavedImportDraft } from '@service-agent-reviews/generated/types';
+import type { CrmLoss } from '@service-cognition/generated/schemas';
 import type { RunErrorKind } from '@service-cognition/import';
 import { match } from 'ts-pattern';
 import type { Review, ReviewItem } from './review';
@@ -154,32 +155,18 @@ export type ImportProgress = {
   writing: number;
   failures: ImportReportItem[];
   failureCount?: number;
-  /** A HubSpot plan's owners and what it cannot carry over. */
-  hubspot: HubspotPlanReport | null;
+  /** A CRM plan's owners and what it cannot carry over (HubSpot, Attio). */
+  crm: CrmPlanReport | null;
 };
 
-/** What CRM cannot hold of a HubSpot portal, by kind. */
-export type HubspotLoss =
-  | 'owner_not_member'
-  | 'deal_without_company'
-  | 'deal_without_pipeline'
-  | 'extra_company_links'
-  | 'domain_rejected'
-  | 'unsupported_currency'
-  | 'additional_domains'
-  | 'company_owner'
-  | 'merged_company'
-  | 'merged_contact'
-  | 'contact_without_company';
-
-/** A HubSpot plan's owner matching and losses. */
-export type HubspotPlanReport = {
+/** A CRM plan's owner matching and losses. */
+export type CrmPlanReport = {
   owners: number;
   ownersMatched: number;
   /** Records the write created, and records it matched to ones already there. */
   created: number;
   linked: number;
-  losses: { loss: HubspotLoss; count: number }[];
+  losses: { loss: CrmLoss; count: number }[];
 };
 
 export type ImportReviewPhase =
@@ -482,7 +469,7 @@ export function importCount(
 /** What approving the plan writes, in real numbers: every row is counted. */
 export type ImportVolume = {
   projects: number;
-  /** HubSpot deal pipelines, companies, contacts and deals. */
+  /** CRM deal pipelines, companies, contacts and deals. */
   pipelines: number;
   companies: number;
   contacts: number;
@@ -550,7 +537,8 @@ export type ImportTotal = { label: string; value: string };
 /** What the plan holds per kind, leaving out empty kinds. */
 export function planTotals(
   entries: ImportPlanEntry[],
-  excluded: readonly string[]
+  excluded: readonly string[],
+  source: ImportDraft['source'] = 'notion'
 ): ImportTotal[] {
   const volume = importVolume(entries, excluded);
   const skipped = entries.filter(
@@ -568,7 +556,10 @@ export function planTotals(
       ? { label: 'Companies', value: `${volume.companies}` }
       : null,
     volume.contacts > 0
-      ? { label: 'Contacts', value: `${volume.contacts}` }
+      ? {
+          label: source === 'attio' ? 'People' : 'Contacts',
+          value: `${volume.contacts}`,
+        }
       : null,
     volume.deals > 0 ? { label: 'Deals', value: `${volume.deals}` } : null,
     volume.tasks > 0 && volume.taskLists === 0
@@ -594,26 +585,36 @@ export function planTotals(
   ].filter((total): total is ImportTotal => total !== null);
 }
 
-/** How each HubSpot loss reads in the plan's totals. */
-function hubspotLossLabel(loss: HubspotLoss): string {
-  return match(loss)
-    .with('owner_not_member', () => 'Owners not on your team')
-    .with('deal_without_company', () => 'Deals without a company')
-    .with('deal_without_pipeline', () => 'Deals in archived pipelines')
-    .with('extra_company_links', () => 'Extra company links')
-    .with('domain_rejected', () => 'Companies without a usable domain')
-    .with('unsupported_currency', () => 'Unsupported currencies')
-    .with('additional_domains', () => 'Extra company domains')
-    .with('company_owner', () => 'Company owners')
-    .with('merged_company', () => 'Companies merged by domain')
-    .with('merged_contact', () => 'Contacts merged by email')
-    .with('contact_without_company', () => 'Contacts without their company')
-    .exhaustive();
+/** How each CRM loss reads in the plan's totals; Attio's contacts are people. */
+function crmLossLabel(loss: CrmLoss, source: ImportDraft['source']): string {
+  const contacts = source === 'attio' ? 'People' : 'Contacts';
+  return (
+    match(loss)
+      .with('owner_not_member', () => 'Owners not on your team')
+      .with('deal_without_company', () => 'Deals without a company')
+      .with('deal_without_pipeline', () => 'Deals in archived pipelines')
+      .with('extra_company_links', () => 'Extra company links')
+      .with('domain_rejected', () => 'Companies without a usable domain')
+      .with('unsupported_currency', () => 'Unsupported currencies')
+      .with('additional_domains', () => 'Extra company domains')
+      .with('company_owner', () => 'Company owners')
+      .with('merged_company', () => 'Companies merged by domain')
+      .with('merged_contact', () => `${contacts} merged by email`)
+      .with(
+        'contact_without_company',
+        () => `${contacts} without their company`
+      )
+      // A pipeline entry tracks a deal's company, not its people.
+      .with('deal_people', () => 'People linked to deals')
+      .with('archived_stage', () => 'Deals in archived stages')
+      .exhaustive()
+  );
 }
 
-/** A HubSpot plan's owner matching and what it leaves behind. */
-export function hubspotTotals(
-  report: HubspotPlanReport | null | undefined
+/** A CRM plan's owner matching and what it leaves behind. */
+export function crmTotals(
+  report: CrmPlanReport | null | undefined,
+  source: ImportDraft['source']
 ): ImportTotal[] {
   if (!report) return [];
   return [
@@ -632,7 +633,7 @@ export function hubspotTotals(
       ? [{ label: 'Matched existing', value: `${report.linked}` }]
       : []),
     ...report.losses.map((loss) => ({
-      label: hubspotLossLabel(loss.loss),
+      label: crmLossLabel(loss.loss, source),
       value: `${loss.count}`,
     })),
   ];
@@ -658,7 +659,10 @@ export function planningStatus(
 }
 
 /** e.g. "54 pages, 18 databases (405 rows), 33 tasks". */
-export function volumeLabel(volume: ImportVolume): string {
+export function volumeLabel(
+  volume: ImportVolume,
+  source: ImportDraft['source'] = 'notion'
+): string {
   const parts = [
     volume.documents > 0 ? plural(volume.documents, 'page', 'pages') : '',
     volume.databases > 0
@@ -672,7 +676,11 @@ export function volumeLabel(volume: ImportVolume): string {
     volume.companies > 0
       ? plural(volume.companies, 'company', 'companies')
       : '',
-    volume.contacts > 0 ? plural(volume.contacts, 'contact', 'contacts') : '',
+    volume.contacts > 0
+      ? source === 'attio'
+        ? plural(volume.contacts, 'person', 'people')
+        : plural(volume.contacts, 'contact', 'contacts')
+      : '',
     volume.deals > 0 ? plural(volume.deals, 'deal', 'deals') : '',
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(', ') : 'nothing';
@@ -734,7 +742,7 @@ export function planSummary(
     shared ? `${sourceLabel(source)} shared ${shared}` : '',
     counts.deciding > 0
       ? 'Deciding what to import…'
-      : `importing ${volumeLabel(volume)}`,
+      : `importing ${volumeLabel(volume, source)}`,
   ]
     .filter(Boolean)
     .join(' — ')
@@ -767,7 +775,7 @@ export function progressFromEntries(
         title: entry.title,
         reason: entry.error ?? '',
       })),
-    hubspot: null,
+    crm: null,
   };
 }
 
@@ -825,6 +833,13 @@ export function importReviewPhase(
     .exhaustive();
 }
 
+/** CRM sources import records (companies, contacts, deals), not items. */
+export function isCrmSource(
+  source: ImportDraft['source'] | undefined
+): boolean {
+  return source === 'hubspot' || source === 'attio';
+}
+
 /** Human label for the source in a saved review draft. */
 export function sourceLabel(source: ImportDraft['source']): string {
   return match(source)
@@ -832,11 +847,12 @@ export function sourceLabel(source: ImportDraft['source']): string {
     .with('linear', () => 'Linear')
     .with('jira', () => 'Jira')
     .with('hubspot', () => 'HubSpot')
+    .with('attio', () => 'Attio')
     .exhaustive();
 }
 
 /** What a source's scan counts, singular and plural: Notion pages and
- * databases, tracker issues and projects, HubSpot records and pipelines. */
+ * databases, tracker issues and projects, CRM records and pipelines. */
 function scanUnits(source: ImportDraft['source']): {
   items: [string, string];
   groups: [string, string];
@@ -850,7 +866,7 @@ function scanUnits(source: ImportDraft['source']): {
       items: ['issue', 'issues'] as [string, string],
       groups: ['project', 'projects'] as [string, string],
     }))
-    .with('hubspot', () => ({
+    .with('hubspot', 'attio', () => ({
       items: ['record', 'records'] as [string, string],
       groups: ['pipeline', 'pipelines'] as [string, string],
     }))

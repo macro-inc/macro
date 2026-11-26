@@ -1044,7 +1044,13 @@ export type Code =
 /**
  * External systems items can be imported from.
  */
-export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack' | 'hubspot';
+export type ImportSource =
+  | 'linear'
+  | 'jira'
+  | 'notion'
+  | 'slack'
+  | 'hubspot'
+  | 'attio';
 /**
  * Status values accepted by [`CreateImportEntity`].
  */
@@ -3750,7 +3756,11 @@ export type ImportKind =
   | 'hubspot_pipeline'
   | 'hubspot_company'
   | 'hubspot_contact'
-  | 'hubspot_deal';
+  | 'hubspot_deal'
+  | 'attio_pipeline'
+  | 'attio_company'
+  | 'attio_person'
+  | 'attio_deal';
 /**
  * The kind and severity of a user-visible change to a saved view.
  */
@@ -3795,9 +3805,9 @@ export type RunErrorKind =
   | 'interrupted'
   | 'internal';
 /**
- * Something a CRM import cannot carry into Macro CRM, counted on the review
- * card and in the final report. The serialized names are stored on ledger
- * rows: never rename one.
+ * Something a CRM import (HubSpot or Attio) cannot carry into Macro CRM,
+ * counted on the review card and in the final report. The serialized names
+ * are stored on ledger rows: never rename one.
  */
 export type CrmLoss =
   | 'owner_not_member'
@@ -3810,7 +3820,9 @@ export type CrmLoss =
   | 'company_owner'
   | 'merged_company'
   | 'merged_contact'
-  | 'contact_without_company';
+  | 'contact_without_company'
+  | 'deal_people'
+  | 'archived_stage';
 /**
  * Who a Notion workspace import shares what it writes with.
  */
@@ -11261,15 +11273,15 @@ export interface ToolAddedOptions {
   labels: string[];
 }
 /**
- * Import a connected HubSpot portal into the team's Macro CRM: deal pipelines become Sales pipelines with their stages, companies and contacts become CRM records, and deals become pipeline entries with stage, outcome, amount, close date and owner. Plan reads every company, contact and deal through the user's connected HubSpot account; nothing is written to HubSpot. Records belong to the team, so there is no sharing question. Present the plan immediately with PresentReview kind import, drafts [{source: hubspot}], even while it is running. Do not poll status or recreate records with other tools. Nothing is written until approval. Once the plan is ready, ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. While it is still being planned, do not ask or approve: the user approves it on the card once it is ready. Status reports progress; cancel stops this import and keeps records already written.
+ * Import a connected Attio workspace into the team's Macro CRM (only where the Attio import is turned on for the account; elsewhere it is refused): Attio's deal stages become one Sales pipeline named "Attio deals", companies and people become CRM companies and contacts, and deals become pipeline entries with stage, outcome, value and owner. Plan reads every company, person and deal through the user's connected Attio account; nothing is written to Attio. Records belong to the team, so there is no sharing question. Present the plan immediately with PresentReview kind import, drafts [{source: attio}], even while it is running. Do not poll status or recreate records with other tools. Nothing is written until approval. Once the plan is ready, ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. While it is still being planned, do not ask or approve: the user approves it on the card once it is ready. Status reports progress; cancel stops this import and keeps records already written.
  */
-export interface ImportFromHubspot {
+export interface ImportFromAttio {
   action: NotionImportAction;
 }
 /**
- * Where a HubSpot import stands and what the agent should do next.
+ * Where an Attio import stands and what the agent should do next.
  */
-export interface HubspotImportResponse {
+export interface AttioImportResponse {
   report: NotionImportReport;
   /**
    * Guidance on presenting or approving the current plan.
@@ -11423,6 +11435,10 @@ export interface NotionImportReport {
    * A HubSpot plan's counts, owners and losses.
    */
   hubspot?: CrmReport | null;
+  /**
+   * An Attio plan's counts, owners and losses.
+   */
+  attio?: CrmReport | null;
 }
 /**
  * Details alongside the outcome on a Notion import card.
@@ -11669,7 +11685,7 @@ export interface NotionImporter {
   count: number;
 }
 /**
- * What a CRM plan holds, for the review card.
+ * What a CRM plan (HubSpot or Attio) holds, for the review card.
  */
 export interface CrmReport {
   /**
@@ -11681,7 +11697,7 @@ export interface CrmReport {
    */
   companies: number;
   /**
-   * Contacts.
+   * Contacts (Attio's people).
    */
   contacts: number;
   /**
@@ -11714,8 +11730,8 @@ export interface CrmReport {
    */
   losses: CrmLossCount[];
   /**
-   * Properties the source defined itself, as `object.name`; their values
-   * stay in the source.
+   * Properties (HubSpot) or attributes (Attio) the source workspace
+   * defined itself, as `object.name`; their values stay in the source.
    */
   customProperties: string[];
 }
@@ -11728,6 +11744,22 @@ export interface CrmLossCount {
    * Records affected.
    */
   count: number;
+}
+/**
+ * Import a connected HubSpot portal into the team's Macro CRM: deal pipelines become Sales pipelines with their stages, companies and contacts become CRM records, and deals become pipeline entries with stage, outcome, amount, close date and owner. Plan reads every company, contact and deal through the user's connected HubSpot account; nothing is written to HubSpot. Records belong to the team, so there is no sharing question. Present the plan immediately with PresentReview kind import, drafts [{source: hubspot}], even while it is running. Do not poll status or recreate records with other tools. Nothing is written until approval. Once the plan is ready, ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. While it is still being planned, do not ask or approve: the user approves it on the card once it is ready. Status reports progress; cancel stops this import and keeps records already written.
+ */
+export interface ImportFromHubspot {
+  action: NotionImportAction;
+}
+/**
+ * Where a HubSpot import stands and what the agent should do next.
+ */
+export interface HubspotImportResponse {
+  report: NotionImportReport;
+  /**
+   * Guidance on presenting or approving the current plan.
+   */
+  message: string;
 }
 /**
  * Import Jira Cloud into Macro: issues become tasks, and projects and epics become Macro projects. Plan reads all sites visible through the user's connected Jira account; no source writes are possible. First plan without sharing unless the user already chose. If sharing is required, ask team, personal, or AI; users without a team get a personal import. Present the plan immediately with PresentReview kind import, drafts [{source: jira}], even while it is running. Do not poll status or recreate plan items with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps completed copies.

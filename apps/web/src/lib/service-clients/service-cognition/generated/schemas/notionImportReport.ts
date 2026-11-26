@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { NotionImporter } from './notionImporter';
+import type { NotionImportReportAttio } from './notionImportReportAttio';
 import type { NotionImportReportConfirmed } from './notionImportReportConfirmed';
 import type { NotionImportReportDetails } from './notionImportReportDetails';
 import type { NotionImportReportError } from './notionImportReportError';
@@ -27,6 +28,7 @@ they link to that copy and are not counted as copies.
    * @minimum 0
    */
   alreadyInMacro?: number;
+  attio?: NotionImportReportAttio;
   confirmed?: NotionImportReportConfirmed;
   /**
    * Objects to copy as they are.

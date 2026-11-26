@@ -7,7 +7,7 @@
 import type { CrmLossCount } from './crmLossCount';
 
 /**
- * What a CRM plan holds, for the review card.
+ * What a CRM plan (HubSpot or Attio) holds, for the review card.
  */
 export interface CrmReport {
   /**
@@ -21,7 +21,7 @@ export interface CrmReport {
    */
   companies: number;
   /**
-   * Contacts.
+   * Contacts (Attio's people).
    * @minimum 0
    */
   contacts: number;
@@ -30,8 +30,8 @@ export interface CrmReport {
    * @minimum 0
    */
   created?: number;
-  /** Properties the source defined itself, as `object.name`; their values
-stay in the source. */
+  /** Properties (HubSpot) or attributes (Attio) the source workspace
+defined itself, as `object.name`; their values stay in the source. */
   customProperties: string[];
   /**
    * Deals, each becoming an entry in its pipeline.

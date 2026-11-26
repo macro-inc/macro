@@ -243,6 +243,10 @@ type ToolParserMap = {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
   };
+  ImportFromAttio: {
+    call: types.ImportFromAttio;
+    response: types.AttioImportResponse;
+  };
   ImportFromHubspot: {
     call: types.ImportFromHubspot;
     response: types.HubspotImportResponse;
@@ -834,6 +838,10 @@ const toolParserMap = {
   ImportCompaniesCsv: {
     call: schemas.ImportCompaniesCsv,
     response: schemas.ImportCompaniesCsvResponse,
+  },
+  ImportFromAttio: {
+    call: schemas.ImportFromAttio,
+    response: schemas.AttioImportResponse,
   },
   ImportFromHubspot: {
     call: schemas.ImportFromHubspot,
@@ -1470,6 +1478,10 @@ type ToolDataMap = {
   ImportCompaniesCsv: {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
+  };
+  ImportFromAttio: {
+    call: types.ImportFromAttio;
+    response: types.AttioImportResponse;
   };
   ImportFromHubspot: {
     call: types.ImportFromHubspot;

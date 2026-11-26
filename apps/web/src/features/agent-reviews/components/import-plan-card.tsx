@@ -4,6 +4,7 @@ import IconJira from '@icon/import/jira.svg';
 import IconNotion from '@icon/import/notion.svg';
 import IconLinear from '@icon/mcp-linear.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
+import IconAddressBook from '@phosphor/address-book.svg';
 import type { RunErrorKind } from '@service-cognition/import';
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { Button } from '@ui/components/Button';
@@ -22,6 +23,7 @@ import {
   type ImportReviewPhase,
   type ImportTotal,
   type ImportVolume,
+  isCrmSource,
   omissionCountLabel,
   omissionTotals,
   sourceLabel,
@@ -93,7 +95,7 @@ function PhaseStatus(props: {
 }) {
   const imported = () => props.progress?.imported ?? 0;
   const outcome = () => {
-    if (props.source === 'hubspot') {
+    if (isCrmSource(props.source)) {
       return `Imported ${plural(imported(), 'object')}`;
     }
     const confirmed = props.progress?.confirmed;
@@ -191,7 +193,7 @@ function PhaseStatus(props: {
             Import stopped —{' '}
             {plural(
               imported(),
-              props.source === 'hubspot' ? 'imported object' : 'imported item'
+              isCrmSource(props.source) ? 'imported object' : 'imported item'
             )}{' '}
             {imported() === 1 ? 'stays' : 'stay'}
           </p>
@@ -409,6 +411,7 @@ function PlanContents(
             .with('linear', () => <IconLinear class="size-4" />)
             .with('jira', () => <IconJira class="size-4" />)
             .with('hubspot', () => <IconHubSpot class="size-4" />)
+            .with('attio', () => <IconAddressBook class="size-4" />)
             .exhaustive()}
         </span>
         <Show
@@ -578,7 +581,7 @@ function PlanContents(
       <Show when={!details() && failures().length > 0}>
         <section aria-label="Failures" class="flex flex-col gap-1">
           <h4 class="text-xs font-medium text-ink-muted">
-            {props.source === 'hubspot'
+            {isCrmSource(props.source)
               ? `${plural(failures().length, 'object')} couldn't be imported`
               : failedItemSentence(
                   props.progress?.failureCount ?? failures().length
@@ -616,7 +619,9 @@ function PlanContents(
             disabled={!props.editable || props.count === 0}
             onClick={() => props.onApprove()}
           >
-            {planning() ? 'Import' : `Import ${volumeLabel(props.volume)}`}
+            {planning()
+              ? 'Import'
+              : `Import ${volumeLabel(props.volume, props.source)}`}
           </Button>
         </footer>
       </Show>

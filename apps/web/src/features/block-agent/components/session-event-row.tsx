@@ -64,6 +64,7 @@ function importLabel(source: ImportWorkspace = 'notion') {
     .with('linear', () => 'Linear import')
     .with('jira', () => 'Jira import')
     .with('hubspot', () => 'HubSpot import')
+    .with('attio', () => 'Attio import')
     .exhaustive();
 }
 
@@ -82,7 +83,7 @@ function importPlanSummary(plan: ImportPlan) {
         ...(plan.copy ? [countLabel(plan.copy, 'project', 'projects')] : []),
       ].join(' · ')
     )
-    .with('hubspot', () => countLabel(plan.copy, 'record', 'records'))
+    .with('hubspot', 'attio', () => countLabel(plan.copy, 'record', 'records'))
     .exhaustive();
   let summary = `${importLabel(plan.source)} plan ready · ${counts}`;
   if (plan.byHand)

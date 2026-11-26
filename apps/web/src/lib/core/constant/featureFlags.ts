@@ -530,6 +530,18 @@ export const enableTimeTracking = defineFlag({
   default: onInDev,
 });
 
+/**
+ * The Attio CRM import: its row in the CRM import dialog and its import
+ * action. Off everywhere, dev included, until a real capture of Attio's MCP
+ * output replaces the reader's ASSUMED shapes; PostHog decides, and the
+ * backend refuses `ImportFromAttio` and hides Attio's `importAvailable` under
+ * the same key.
+ */
+export const enableAttioImport = defineFlag({
+  key: 'enable-attio-import',
+  env: 'ENABLE_ATTIO_IMPORT',
+});
+
 /** Task-composer template selection, authoring, and saved-draft recovery. */
 export const enableTaskTemplates = defineFlag({
   key: 'enable-task-templates',

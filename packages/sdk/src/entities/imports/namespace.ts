@@ -106,9 +106,10 @@ export class ImportNamespace {
    * Record that `item` was created in Macro from the external item, so it is
    * not imported again. The ledger stores each source's kind of item: a task
    * for Linear and Jira, a document for Notion and a channel for Slack, and
-   * any other handle is refused. HubSpot records are written only by the
-   * reviewed HubSpot import, so they are refused here. An earlier mapping wins: the outcome is then
-   * `already_imported` and `entry.item()` is the item recorded first.
+   * any other handle is refused. HubSpot and Attio records are written only
+   * by their reviewed CRM import, so they are refused here. An earlier
+   * mapping wins: the outcome is then `already_imported` and `entry.item()`
+   * is the item recorded first.
    *
    * @write
    * @idempotent
@@ -133,6 +134,11 @@ export class ImportNamespace {
       .with('hubspot', () => {
         throw new MacroError(
           'A hubspot import is recorded only by the reviewed HubSpot import',
+        );
+      })
+      .with('attio', () => {
+        throw new MacroError(
+          'An attio import is recorded only by the reviewed Attio import',
         );
       })
       .exhaustive();

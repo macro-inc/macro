@@ -19,6 +19,7 @@ const SOURCE_NAMES: Record<WorkspaceSource, string> = {
   linear: 'Linear',
   jira: 'Jira',
   hubspot: 'HubSpot',
+  attio: 'Attio',
 };
 
 /** The tray over the provided import sources, opening jobs through the host. */
