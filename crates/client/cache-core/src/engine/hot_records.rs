@@ -16,9 +16,20 @@ use std::num::NonZeroUsize;
 /// overhead: in that replay, freeing an estimated 293 MB freed 420 MB of RSS.
 pub const HOT_BYTE_BUDGET: usize = 64 << 20;
 
-/// Bytes a `BTreeMap` spends per entry besides the key and value, about
-/// what its nodes (of up to 11 entries) average.
-const MAP_ENTRY_BYTES: usize = 16;
+/// Entries a `BTreeMap` node has room for (std's `CAPACITY`). Every node
+/// allocates all of them, so a map of one entry costs a whole node.
+const BTREE_NODE_SLOTS: usize = 11;
+
+/// Entries a node holds on average once a map grows past one node.
+/// Inserting in key order, as decoding does, splits nodes about half full:
+/// measured with a counting allocator, 100 entries take 15 leaves and 2
+/// internal nodes, and 500 take 72 and 11.
+const BTREE_ENTRIES_PER_NODE: usize = 7;
+
+/// A leaf's parent pointer, its index in the parent and its length, before
+/// its key and value slots.
+const BTREE_LEAF_HEADER: usize =
+    (size_of::<usize>() + 2 * size_of::<u16>()).next_multiple_of(align_of::<usize>());
 
 struct HotRecord {
     record: Record,
@@ -107,24 +118,36 @@ pub struct HotTierSize {
     pub bytes: usize,
 }
 
-/// An estimate of the heap bytes an entry holds: its key, the record's
+/// An estimate of the heap bytes an entry holds: its key, the nodes of each
 /// field map and everything the values own. It counts string and list
-/// lengths, not their spare capacity, which a decoded record rarely has.
+/// lengths, not their spare capacity, which a decoded record rarely has, and
+/// leaves out what the allocator adds to each allocation.
 pub fn record_bytes(key: &EntityKey<'_>, record: &Record) -> usize {
     key.0.len() + fields_bytes(&record.fields)
 }
 
 fn fields_bytes(fields: &BTreeMap<String, CacheValue>) -> usize {
-    fields
-        .iter()
-        .map(|(name, value)| {
-            MAP_ENTRY_BYTES
-                + size_of::<String>()
-                + size_of::<CacheValue>()
-                + name.len()
-                + value_bytes(value)
-        })
-        .sum()
+    map_nodes_bytes(fields.len())
+        + fields
+            .iter()
+            .map(|(name, value)| name.len() + value_bytes(value))
+            .sum::<usize>()
+}
+
+/// The nodes of a `BTreeMap<String, CacheValue>` holding `entries`.
+fn map_nodes_bytes(entries: usize) -> usize {
+    if entries == 0 {
+        return 0;
+    }
+    let leaf =
+        BTREE_LEAF_HEADER + BTREE_NODE_SLOTS * (size_of::<String>() + size_of::<CacheValue>());
+    if entries <= BTREE_NODE_SLOTS {
+        return leaf;
+    }
+    let internal = leaf + (BTREE_NODE_SLOTS + 1) * size_of::<usize>();
+    let leaves = entries.div_ceil(BTREE_ENTRIES_PER_NODE);
+    let internals = (leaves - 1).div_ceil(BTREE_ENTRIES_PER_NODE);
+    leaves * leaf + internals * internal
 }
 
 fn value_bytes(value: &CacheValue) -> usize {

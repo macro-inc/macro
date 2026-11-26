@@ -17,13 +17,14 @@ fn tier(records: usize, budget: usize) -> HotRecords {
 
 #[test]
 fn the_byte_budget_evicts_the_least_recently_used_records() {
-    let size = record_bytes(&key("a"), &record(1_000));
+    const TEXT: usize = 1_000;
+    let size = record_bytes(&key("a"), &record(TEXT));
     let mut hot = tier(100, 3 * size);
     for id in ["a", "b", "c"] {
-        hot.put(key(id), record(1_000));
+        hot.put(key(id), record(TEXT));
     }
     assert!(hot.get(&key("a")).is_some());
-    hot.put(key("d"), record(1_000));
+    hot.put(key("d"), record(TEXT));
     assert!(!hot.contains(&key("b")), "b was the least recently used");
     for id in ["a", "c", "d"] {
         assert!(hot.contains(&key(id)), "{id} stays");
@@ -98,14 +99,21 @@ fn the_estimate_counts_what_nested_values_own() {
             ]),
         )]),
     };
-    let per_participant = size_of::<CacheValue>()
-        + MAP_ENTRY_BYTES
-        + size_of::<String>()
-        + size_of::<CacheValue>()
-        + "userId".len()
-        + 40;
+    // A one-field object still allocates a whole node.
+    let per_participant = size_of::<CacheValue>() + map_nodes_bytes(1) + "userId".len() + 40;
     assert_eq!(
         record_bytes(&key("a"), &nested),
         record_bytes(&key("a"), &flat) + "participants".len() - "name".len() + 75 * per_participant
     );
+}
+
+#[test]
+fn a_map_costs_whole_nodes() {
+    let leaf = map_nodes_bytes(1);
+    assert!(leaf >= 11 * (size_of::<String>() + size_of::<CacheValue>()));
+    assert_eq!(map_nodes_bytes(0), 0);
+    assert_eq!(map_nodes_bytes(11), leaf);
+    // Past one node: two leaves under an internal node holding their edges.
+    assert_eq!(map_nodes_bytes(12), 3 * leaf + 12 * size_of::<usize>());
+    assert!(map_nodes_bytes(500) > 70 * leaf);
 }
