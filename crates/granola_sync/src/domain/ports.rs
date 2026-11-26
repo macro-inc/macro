@@ -52,6 +52,13 @@ pub trait Accounts: Send + Sync {
     async fn holders(&self) -> Result<Vec<MacroUserIdStr<'static>>>;
 }
 
+/// Whether history backfill may run for a user. Off unless the user is
+/// opted in, so deploying backfill changes nothing by itself.
+#[async_trait]
+pub trait BackfillRollout: Send + Sync {
+    async fn enabled(&self, user: &MacroUserIdStr<'static>) -> Result<bool>;
+}
+
 pub trait DeliveryVerifier: Send + Sync {
     fn verify(&self, secret: &SigningSecret, delivery: &Delivery<'_>) -> bool;
 }

@@ -602,6 +602,24 @@ pub async fn build(
     let granola_signing_key = *mcp_encryption_key.as_bytes();
     let connections = Arc::new(composed.connectors.clone());
 
+    // One flag client for this server's per-user rollouts. Without a PostHog
+    // key there is none: Granola backfill stays off and memory refresh runs.
+    let feature_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config
+                    .posthog_host
+                    .value()
+                    .unwrap_or(crate::DEFAULT_POSTHOG_HOST),
+                key.to_owned(),
+                std::time::Duration::from_secs(3),
+                config.environment,
+            )
+            .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
+        })
+        .transpose()?;
     let granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>> =
         Some(Arc::new(granola_sync::domain::service::Service {
             repo: granola_sync::outbound::pg_repo::PgSyncRepository::new(
@@ -614,6 +632,9 @@ pub async fn build(
             calls: Arc::new(call::domain::imports::CallImportServiceImpl(
                 call::outbound::pg_imported_call_repo::PgImportedCallRepository::new(db.clone()),
                 macro_event_broker.clone(),
+            )),
+            backfill_rollout: Arc::new(granola_sync::outbound::rollout::FlaggedBackfill(
+                feature_flags.clone(),
             )),
             public_url: public_url.to_string(),
         })
@@ -934,25 +955,9 @@ pub async fn build(
     let cancellation = tokio_util::sync::CancellationToken::new();
     if !matches!(config.environment, Environment::Local) {
         // Without a PostHog key there is no kill switch, and refresh runs.
-        let memory_flags = config
-            .posthog_api_key
-            .value()
-            .map(|key| {
-                feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                    config
-                        .posthog_host
-                        .value()
-                        .unwrap_or(crate::DEFAULT_POSTHOG_HOST),
-                    key.to_owned(),
-                    std::time::Duration::from_secs(3),
-                    config.environment,
-                )
-                .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
-            })
-            .transpose()?;
         memory::schedule::start(
             memory_service.clone(),
-            memory_flags,
+            feature_flags.clone(),
             &event_broker_tracker,
             cancellation.clone(),
         )?;

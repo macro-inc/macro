@@ -19,14 +19,17 @@ pub struct GranolaApi<S>(pub Arc<S>);
 
 /// Granola's public API origin.
 const GRANOLA_API_URL: &str = "https://public-api.granola.ai/v1";
-/// Granola's largest page of listed notes.
-const NOTES_PAGE_SIZE: &str = "30";
+/// Notes listed per backfill page; small enough that fetching a page's
+/// notes and transcripts fits the page's time budget.
+const NOTES_PAGE_SIZE: &str = "10";
 
 /// Granola's answer, whatever its status. Never log the body: registration
 /// returns the webhook secret.
 struct Reply {
     status: u16,
     body: Value,
+    /// `Retry-After` in seconds, when Granola sent one.
+    retry_after: Option<std::time::Duration>,
 }
 
 /// Provider IDs are opaque; encode them so one can never change the path.
@@ -69,9 +72,16 @@ impl<S: ApiConnectionsService> GranolaApi<S> {
             serde_json::from_str(&response.body)
                 .map_err(|error| rootcause::report!("invalid Granola JSON response: {error}"))?
         };
+        let retry_after = response
+            .headers
+            .get(http::header::RETRY_AFTER)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.trim().parse::<u64>().ok())
+            .map(std::time::Duration::from_secs);
         Ok(Reply {
             status: response.status.as_u16(),
             body,
+            retry_after,
         })
     }
 
@@ -91,7 +101,10 @@ fn checked(response: Reply) -> Result<Option<Value>> {
     match response.status {
         200..=299 => Ok(Some(response.body)),
         404 => Ok(None),
-        429 => Err(rootcause::report!(RateLimited).into()),
+        429 => Err(rootcause::report!(RateLimited {
+            retry_after: response.retry_after,
+        })
+        .into()),
         status => Err(rootcause::report!(
             "Granola API returned HTTP {status}: {}",
             error_reason(&response.body)
@@ -291,6 +304,7 @@ struct Note {
     id: NoteId,
     title: Option<String>,
     owner: Person,
+    created_at: Option<DateTime<Utc>>,
     updated_at: DateTime<Utc>,
     deleted_at: Option<DateTime<Utc>>,
     web_url: String,
@@ -341,6 +355,16 @@ fn map_meeting(
     segments: Vec<Segment>,
 ) -> Result<ImportedCall> {
     let start = segments.iter().filter_map(|s| s.start_time).min();
+    // Transcript timing is what was observed; without it, the meeting starts
+    // when its calendar event was scheduled, else when its note was created,
+    // so an old meeting never sorts as one held when it was imported.
+    let scheduled = note
+        .calendar_event
+        .as_ref()
+        .and_then(|event| event["scheduled_start_time"].as_str())
+        .and_then(|time| DateTime::parse_from_rfc3339(time).ok())
+        .map(|time| time.with_timezone(&Utc));
+    let started_at = start.or(scheduled).or(note.created_at);
     let end = segments.iter().filter_map(|s| s.end_time).max();
     let mut emails = HashSet::new();
     let participants = note
@@ -415,8 +439,8 @@ fn map_meeting(
     // Private scratch notes are intentionally not part of a meeting import.
     Ok(ImportedCall {
         title: note.title,
-        started_at: start,
-        ended_at: end.filter(|end| start.is_none_or(|start| *end >= start)),
+        started_at,
+        ended_at: end.filter(|end| started_at.is_none_or(|start| *end >= start)),
         participants,
         transcript,
         source: CallSource {

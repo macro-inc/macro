@@ -135,6 +135,9 @@ fn service(
         accounts: ConnectedAccounts(connectors),
         verifier: crate::outbound::signature::StandardWebhooks,
         calls: Arc::new(Calls),
+        backfill_rollout: Arc::new(crate::outbound::rollout::FlaggedBackfill::<
+            feature_flags::outbound::fake::FakeFeatureFlags,
+        >(None)),
         public_url: "https://macro.test".into(),
     }
 }
@@ -319,9 +322,12 @@ async fn backfill_pages_are_leased_resumed_and_restarted_on_connect(pool: PgPool
     assert_eq!(retry.attempts, 2);
 
     // A throttled page waits briefly and does not spend its attempt.
-    repo.finish_backfill(&retry, BackfillStep::Throttled)
-        .await
-        .unwrap();
+    repo.finish_backfill(
+        &retry,
+        BackfillStep::Throttled(std::time::Duration::from_secs(60)),
+    )
+    .await
+    .unwrap();
     assert!(repo.claim_backfill().await.unwrap().is_none());
     sqlx::query!(
         "UPDATE granola_sync_connections SET backfill_available_at = now() WHERE id = $1",

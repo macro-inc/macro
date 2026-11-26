@@ -288,19 +288,21 @@ impl SyncRepository for PgSyncRepository {
         }))
     }
     async fn finish_backfill(&self, job: &BackfillJob, step: BackfillStep) -> Result<()> {
-        // A failed page waits 30 s, doubling per attempt, up to an hour; a
-        // throttled one waits a minute and keeps its attempt.
-        let throttled = step == BackfillStep::Throttled;
-        let (next_cursor, done, retry_seconds) = match step {
-            BackfillStep::Next(cursor) => (Some(cursor), false, None),
-            BackfillStep::Done => (None, true, None),
+        // A failed page waits 30 s, doubling per attempt, up to an hour. A
+        // throttled page waits as long as Granola asked, and a deferred one
+        // (backfill not rolled out to the user) ten minutes; neither spends
+        // the attempt.
+        let (next_cursor, done, retry_seconds, keep_attempt) = match step {
+            BackfillStep::Next(cursor) => (Some(cursor), false, None, false),
+            BackfillStep::Done => (None, true, None, false),
             BackfillStep::Retry => {
                 let seconds = 30_i32
                     .saturating_mul(2_i32.saturating_pow(job.attempts.clamp(1, 8) as u32 - 1))
                     .min(3600);
-                (None, false, Some(f64::from(seconds)))
+                (None, false, Some(f64::from(seconds)), false)
             }
-            BackfillStep::Throttled => (None, false, Some(60.0)),
+            BackfillStep::Throttled(wait) => (None, false, Some(wait.as_secs_f64()), true),
+            BackfillStep::Deferred => (None, false, Some(600.0), true),
         };
         sqlx::query!(
             r#"UPDATE granola_sync_connections SET
@@ -316,7 +318,7 @@ impl SyncRepository for PgSyncRepository {
             next_cursor,
             done,
             retry_seconds,
-            throttled
+            keep_attempt
         )
         .execute(&self.pool)
         .await?;

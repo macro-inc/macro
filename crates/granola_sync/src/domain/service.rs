@@ -21,9 +21,25 @@ pub(crate) const BACKFILL_PAGE_ATTEMPTS: i32 = 5;
 /// note and its transcript), so this keeps backfill near four requests a
 /// second, under Granola's sustained five.
 const BACKFILL_NOTE_PACING: std::time::Duration = std::time::Duration::from_millis(500);
+/// Time a backfill page may take, well inside the worker's 300 s timeout, so
+/// a page always records its outcome and its attempt.
+pub(crate) const BACKFILL_PAGE_BUDGET: std::time::Duration = std::time::Duration::from_secs(120);
 
 fn rate_limited(error: &rootcause::Report) -> bool {
     error.downcast_current_context::<RateLimited>().is_some()
+}
+
+/// How long a throttled page waits: Granola's `Retry-After` when it sent
+/// one, otherwise a minute, never under a second or over an hour.
+fn throttle_wait(error: &rootcause::Report) -> std::time::Duration {
+    error
+        .downcast_current_context::<RateLimited>()
+        .and_then(|limited| limited.retry_after)
+        .unwrap_or(std::time::Duration::from_secs(60))
+        .clamp(
+            std::time::Duration::from_secs(1),
+            std::time::Duration::from_secs(3600),
+        )
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -94,6 +110,8 @@ pub struct Service<R, G, A, V> {
     pub accounts: A,
     pub verifier: V,
     pub calls: Arc<dyn CallImportService>,
+    /// Gates history backfill per user; see [`BackfillRollout`].
+    pub backfill_rollout: Arc<dyn BackfillRollout>,
     /// Public DCS origin, supplied by the composition root's existing config.
     pub public_url: String,
 }
@@ -172,41 +190,91 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> Service<R,
         Ok(())
     }
 
+    /// Whether the job's connection still syncs; checked again before each
+    /// import, as webhook deliveries are after their fetch.
+    async fn still_current(&self, job: &BackfillJob) -> Result<bool> {
+        match self.repo.by_id(job.connection.id).await? {
+            Some(current) => self.is_current(&current).await,
+            None => Ok(false),
+        }
+    }
+
     /// Import one listed page and decide where the backfill goes next.
     /// Notes are fetched with the same adapter and mapper as webhook
-    /// deliveries, so both paths import a note identically.
+    /// deliveries, so both paths import a note identically. Each note is
+    /// imported as soon as it is fetched; a retried page imports them again,
+    /// which the call import's upsert on namespace and note ID makes a no-op.
     async fn backfill_page(&self, job: &BackfillJob) -> Result<BackfillStep> {
+        match self.backfill_rollout.enabled(&job.connection.user_id).await {
+            Ok(true) => {}
+            Ok(false) => return Ok(BackfillStep::Deferred),
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not read the Granola backfill rollout; deferring");
+                return Ok(BackfillStep::Deferred);
+            }
+        }
         if !self.is_current(&job.connection).await? {
             return Ok(BackfillStep::Retry);
         }
-        let page = match self
-            .granola
-            .notes(&job.connection, job.cursor.as_deref())
-            .await
-        {
-            Ok(page) => page,
-            Err(error) if rate_limited(&error) => return Ok(BackfillStep::Throttled),
-            Err(error) => return Err(error),
-        };
         let span = tracing::Span::current();
+        let deadline = tokio::time::Instant::now() + BACKFILL_PAGE_BUDGET;
+        let listed = tokio::time::timeout_at(
+            deadline,
+            self.granola.notes(&job.connection, job.cursor.as_deref()),
+        )
+        .await;
+        let page = match listed {
+            Err(_) => {
+                span.record("out_of_time", true);
+                return Ok(BackfillStep::Retry);
+            }
+            Ok(Ok(page)) => page,
+            Ok(Err(error)) if rate_limited(&error) => {
+                return Ok(BackfillStep::Throttled(throttle_wait(&error)));
+            }
+            Ok(Err(error)) => return Err(error),
+        };
+        if page.next.is_some() && page.next == job.cursor {
+            return Err(rootcause::report!("Granola repeated a listing cursor"));
+        }
         span.record("listed", page.notes.len());
         span.record("has_more", page.next.is_some());
 
-        let mut meetings = Vec::new();
-        let (mut deleted, mut missing, mut failed) = (0_usize, 0_usize, 0_usize);
-        let mut throttled = false;
-        for note in page.notes {
+        let (mut deleted, mut missing, mut imported, mut failed) = (0_usize, 0, 0, 0);
+        let mut throttled = None;
+        for (index, note) in page.notes.iter().enumerate() {
             if note.deleted {
                 deleted += 1;
                 continue;
             }
             tokio::time::sleep(BACKFILL_NOTE_PACING).await;
-            match self.granola.meeting(&job.connection, &note.id).await {
-                Ok(Some(meeting)) => meetings.push(meeting),
+            let fetched =
+                tokio::time::timeout_at(deadline, self.granola.meeting(&job.connection, &note.id))
+                    .await;
+            let Ok(fetched) = fetched else {
+                // Out of time: the notes not reached count as failed, so the
+                // page is retried, or moves on after its last attempt.
+                span.record("out_of_time", true);
+                failed += page.notes[index..].iter().filter(|n| !n.deleted).count();
+                break;
+            };
+            match fetched {
+                Ok(Some(meeting)) => {
+                    if !self.still_current(job).await? {
+                        return Ok(BackfillStep::Retry);
+                    }
+                    match self.calls.ingest(meeting).await {
+                        Ok(_) => imported += 1,
+                        Err(error) => {
+                            failed += 1;
+                            tracing::warn!(error = ?error, note_id = note.id.as_ref(), "could not import a backfilled Granola note");
+                        }
+                    }
+                }
                 Ok(None) => missing += 1,
                 // Stop here; the page is retried once the allowance recovers.
                 Err(error) if rate_limited(&error) => {
-                    throttled = true;
+                    throttled = Some(throttle_wait(&error));
                     break;
                 }
                 Err(error) => {
@@ -215,31 +283,13 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> Service<R,
                 }
             }
         }
-
-        // The connection may have gone while notes were fetched.
-        let Some(current) = self.repo.by_id(job.connection.id).await? else {
-            return Ok(BackfillStep::Retry);
-        };
-        if !self.is_current(&current).await? {
-            return Ok(BackfillStep::Retry);
-        }
-        let mut imported = 0_usize;
-        for meeting in meetings {
-            match self.calls.ingest(meeting).await {
-                Ok(_) => imported += 1,
-                Err(error) => {
-                    failed += 1;
-                    tracing::warn!(error = ?error, "could not import a backfilled Granola note");
-                }
-            }
-        }
         span.record("deleted", deleted);
         span.record("missing", missing);
         span.record("imported", imported);
         span.record("failed", failed);
 
-        if throttled {
-            return Ok(BackfillStep::Throttled);
+        if let Some(wait) = throttled {
+            return Ok(BackfillStep::Throttled(wait));
         }
         if failed > 0 && job.attempts < BACKFILL_PAGE_ATTEMPTS {
             return Ok(BackfillStep::Retry);
@@ -402,6 +452,7 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> SyncServic
             imported = tracing::field::Empty,
             failed = tracing::field::Empty,
             has_more = tracing::field::Empty,
+            out_of_time = tracing::field::Empty,
             step = tracing::field::Empty,
         );
         let step = match self.backfill_page(&job).instrument(span.clone()).await {
@@ -415,7 +466,8 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> SyncServic
             BackfillStep::Next(_) => "next",
             BackfillStep::Done => "done",
             BackfillStep::Retry => "retry",
-            BackfillStep::Throttled => "throttled",
+            BackfillStep::Throttled(_) => "throttled",
+            BackfillStep::Deferred => "deferred",
         };
         span.record("step", outcome);
         self.repo.finish_backfill(&job, step).await?;

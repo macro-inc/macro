@@ -9739,6 +9739,7 @@ dependencies = [
  "call",
  "chrono",
  "connectors",
+ "feature_flags",
  "hmac 0.12.1",
  "http 1.4.0",
  "macro_db_migrator",

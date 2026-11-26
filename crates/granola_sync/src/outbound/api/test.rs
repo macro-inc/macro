@@ -23,6 +23,7 @@ fn note() -> Note {
     serde_json::from_value(json!({
         "id": "not_123456789abcde", "title": "Design review",
         "owner": {"name": "Owner", "email": "owner@test.com"},
+        "created_at": "2026-10-07T11:00:00Z",
         "updated_at": "2026-10-07T15:00:00Z", "deleted_at": null,
         "web_url": "https://notes.granola.ai/d/example",
         "calendar_event": {"scheduled_start_time": "2026-10-07T12:00:00Z"},
@@ -32,10 +33,15 @@ fn note() -> Note {
     .unwrap()
 }
 
+/// Without transcript timing, a meeting starts when its calendar event was
+/// scheduled, so an old note never sorts as a meeting held today.
 #[test]
-fn meetings_without_transcripts_do_not_fabricate_timing_or_macro_participants() {
+fn meetings_without_transcripts_start_at_their_calendar_event_without_macro_participants() {
     let call = map_meeting(&connection(), note(), vec![]).unwrap();
-    assert!(call.started_at.is_none());
+    assert_eq!(
+        call.started_at.unwrap().to_rfc3339(),
+        "2026-10-07T12:00:00+00:00"
+    );
     assert!(call.ended_at.is_none());
     assert!(call.transcript.is_none());
     assert_eq!(call.participants.len(), 1);
@@ -47,6 +53,19 @@ fn meetings_without_transcripts_do_not_fabricate_timing_or_macro_participants() 
         !json!(call.source.metadata)
             .to_string()
             .contains("Do not import")
+    );
+}
+
+/// With neither transcript timing nor a calendar event, a meeting starts
+/// when its note was created.
+#[test]
+fn meetings_without_timing_or_calendar_start_when_the_note_was_created() {
+    let mut note = note();
+    note.calendar_event = None;
+    let call = map_meeting(&connection(), note, vec![]).unwrap();
+    assert_eq!(
+        call.started_at.unwrap().to_rfc3339(),
+        "2026-10-07T11:00:00+00:00"
     );
 }
 
@@ -244,11 +263,11 @@ async fn notes_are_listed_a_page_at_a_time_with_opaque_cursors() {
     let urls = urls(&fake);
     assert_eq!(
         urls[0],
-        "https://public-api.granola.ai/v1/notes?page_size=30"
+        "https://public-api.granola.ai/v1/notes?page_size=10"
     );
     assert_eq!(
         urls[1],
-        "https://public-api.granola.ai/v1/notes?page_size=30&cursor=next%2F%26%3F"
+        "https://public-api.granola.ai/v1/notes?page_size=10&cursor=next%2F%26%3F"
     );
 }
 
@@ -273,4 +292,33 @@ async fn a_rate_limited_request_is_reported_as_such() {
     let (_, failing) = adapter(vec![(500, json!({"code": "INTERNAL_ERROR"}))]);
     let error = failing.notes(&connection(), None).await.unwrap_err();
     assert!(error.downcast_current_context::<RateLimited>().is_none());
+}
+
+#[tokio::test]
+async fn a_rate_limit_carries_granolas_retry_after_in_seconds() {
+    for (header, expected) in [
+        (Some("120"), Some(std::time::Duration::from_secs(120))),
+        (Some("Wed, 21 Oct 2015 07:28:00 GMT"), None),
+        (None, None),
+    ] {
+        let mut headers = http::HeaderMap::new();
+        if let Some(header) = header {
+            headers.insert(
+                http::header::RETRY_AFTER,
+                http::HeaderValue::from_static(header),
+            );
+        }
+        let fake = FakeConnectors::new().with_connection(
+            &connection().user_id,
+            FakeConnection::app("granola").answering_in_turn([ApiResponse {
+                status: http::StatusCode::TOO_MANY_REQUESTS,
+                headers,
+                body: json!({"code": "RATE_LIMITED"}).to_string(),
+            }]),
+        );
+        let adapter = GranolaApi(Arc::new(fake.build()));
+        let error = adapter.notes(&connection(), None).await.unwrap_err();
+        let limited = error.downcast_current_context::<RateLimited>().unwrap();
+        assert_eq!(limited.retry_after, expected);
+    }
 }

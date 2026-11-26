@@ -231,7 +231,7 @@ impl SyncRepository for FakeRepo {
                 backfill.attempts = 0;
             }
             BackfillStep::Retry => {}
-            BackfillStep::Throttled => backfill.attempts -= 1,
+            BackfillStep::Throttled(_) | BackfillStep::Deferred => backfill.attempts -= 1,
         }
         self.steps.lock().unwrap().push(step);
         Ok(())
@@ -275,6 +275,16 @@ impl Granola for FakeGranola {
             notes: vec![],
             next: None,
         })
+    }
+}
+
+/// History backfill rolled out to every user, or to none.
+struct Rollout(bool);
+
+#[async_trait]
+impl BackfillRollout for Rollout {
+    async fn enabled(&self, _user: &MacroUserIdStr<'static>) -> Result<bool> {
+        Ok(self.0)
     }
 }
 
@@ -322,6 +332,7 @@ fn service(repo: FakeRepo, fake: &FakeConnectors) -> FakeService {
         accounts: ConnectedAccounts(Arc::new(fake.build())),
         verifier: AcceptAll,
         calls: Arc::new(NoCalls),
+        backfill_rollout: Arc::new(Rollout(true)),
         public_url: "https://macro.example.com".to_owned(),
     }
 }
@@ -427,36 +438,54 @@ impl CallImportService for RecordedCalls {
     }
 }
 
-type ScriptedService =
-    Service<FakeRepo, GranolaApi<Connectors>, ConnectedAccounts<Connectors>, AcceptAll>;
+type ScriptedService = ScriptedOn<GranolaApi<Connectors>>;
+type ScriptedOn<G> = Service<FakeRepo, G, ConnectedAccounts<Connectors>, AcceptAll>;
 
-/// A syncing user whose Granola answers `responses` in turn, recording calls.
-fn scripted(responses: Vec<(u16, Value)>) -> (FakeConnectors, Arc<RecordedCalls>, ScriptedService) {
+fn response(status: u16, body: Value) -> ApiResponse {
+    ApiResponse {
+        status: http::StatusCode::from_u16(status).unwrap(),
+        headers: http::HeaderMap::new(),
+        body: if body.is_null() {
+            String::new()
+        } else {
+            body.to_string()
+        },
+    }
+}
+
+/// A syncing user whose Granola answers `responses` in turn through `wrap`
+/// of the real adapter, recording calls.
+fn scripted_with<G: Granola>(
+    responses: Vec<ApiResponse>,
+    rollout: bool,
+    wrap: impl FnOnce(GranolaApi<Connectors>) -> G,
+) -> (FakeConnectors, Arc<RecordedCalls>, ScriptedOn<G>) {
     let fake = FakeConnectors::new().with_connection(
         &user("a"),
-        FakeConnection::app("granola").answering_in_turn(responses.into_iter().map(
-            |(status, body)| ApiResponse {
-                status: http::StatusCode::from_u16(status).unwrap(),
-                headers: http::HeaderMap::new(),
-                body: if body.is_null() {
-                    String::new()
-                } else {
-                    body.to_string()
-                },
-            },
-        )),
+        FakeConnection::app("granola").answering_in_turn(responses),
     );
     let connectors = Arc::new(fake.build());
     let calls = Arc::new(RecordedCalls::default());
     let service = Service {
         repo: FakeRepo::syncing(user("a")),
-        granola: GranolaApi(connectors.clone()),
+        granola: wrap(GranolaApi(connectors.clone())),
         accounts: ConnectedAccounts(connectors),
         verifier: AcceptAll,
         calls: calls.clone(),
+        backfill_rollout: Arc::new(Rollout(rollout)),
         public_url: "https://macro.example.com".to_owned(),
     };
     (fake, calls, service)
+}
+
+/// A syncing user, opted into backfill, whose Granola answers `responses`
+/// in turn.
+fn scripted(responses: Vec<(u16, Value)>) -> (FakeConnectors, Arc<RecordedCalls>, ScriptedService) {
+    let responses = responses
+        .into_iter()
+        .map(|(status, body)| response(status, body))
+        .collect();
+    scripted_with(responses, true, |api| api)
 }
 
 /// A note as the list returns it.
@@ -550,7 +579,7 @@ async fn backfill_imports_history_page_by_page_without_deleted_or_private_notes(
     );
     let urls: Vec<String> = fake.api_calls().into_iter().map(|c| c.url).collect();
     assert!(urls.iter().all(|url| !url.contains("not_bbbbbbbbbbbbbb")));
-    assert!(urls[3].ends_with("/notes?page_size=30&cursor=page-2"));
+    assert!(urls[3].ends_with("/notes?page_size=10&cursor=page-2"));
 }
 
 #[tokio::test(start_paused = true)]
@@ -588,7 +617,7 @@ async fn a_failed_page_is_retried_from_its_saved_cursor() {
         .filter(|url| url.contains("/notes?"))
         .collect();
     assert_eq!(lists.len(), 3);
-    assert!(lists[0].ends_with("/notes?page_size=30"));
+    assert!(lists[0].ends_with("/notes?page_size=10"));
     assert!(lists[1].ends_with("&cursor=page-2"));
     assert!(lists[2].ends_with("&cursor=page-2"));
 }
@@ -674,6 +703,7 @@ async fn backfill_without_api_access_imports_nothing() {
         accounts: ConnectedAccounts(connectors),
         verifier: AcceptAll,
         calls: calls.clone(),
+        backfill_rollout: Arc::new(Rollout(true)),
         public_url: "https://macro.example.com".to_owned(),
     };
 
@@ -710,7 +740,7 @@ async fn a_rate_limited_page_waits_without_skipping_notes() {
 
     assert_eq!(
         *service.repo.steps.lock().unwrap(),
-        vec![BackfillStep::Throttled]
+        vec![BackfillStep::Throttled(std::time::Duration::from_secs(60))]
     );
     assert_eq!(
         service.repo.backfill.lock().unwrap().attempts,
@@ -724,7 +754,148 @@ async fn a_rate_limited_page_waits_without_skipping_notes() {
     assert!(service.backfill().await.unwrap());
     assert_eq!(
         *service.repo.steps.lock().unwrap(),
-        vec![BackfillStep::Throttled]
+        vec![BackfillStep::Throttled(std::time::Duration::from_secs(60))]
     );
     assert!(calls.0.lock().unwrap().is_empty());
+}
+
+/// Granola, slowed so each note takes the given time to fetch.
+struct Slow<G>(G, std::time::Duration);
+
+#[async_trait]
+impl<G: Granola> Granola for Slow<G> {
+    async fn register(
+        &self,
+        connection: &Connection,
+        url: &str,
+        scope: Scope,
+    ) -> Result<Registration> {
+        self.0.register(connection, url, scope).await
+    }
+    async fn unregister(&self, connection: &Connection) -> Result<()> {
+        self.0.unregister(connection).await
+    }
+    async fn meeting(
+        &self,
+        connection: &Connection,
+        note: &NoteId,
+    ) -> Result<Option<ImportedCall>> {
+        tokio::time::sleep(self.1).await;
+        self.0.meeting(connection, note).await
+    }
+    async fn notes(&self, connection: &Connection, cursor: Option<&str>) -> Result<NotesPage> {
+        self.0.notes(connection, cursor).await
+    }
+}
+
+/// A page whose notes are slow to fetch stops at its time budget, well
+/// inside the worker's timeout, so it always records its outcome: the notes
+/// fetched so far are already imported, and the page counts an attempt.
+#[tokio::test(start_paused = true)]
+async fn a_slow_page_stops_at_its_budget_and_counts_an_attempt() {
+    let responses = || {
+        vec![
+            response(
+                200,
+                page(
+                    &[
+                        "not_aaaaaaaaaaaaaa",
+                        "not_cccccccccccccc",
+                        "not_dddddddddddddd",
+                        "not_eeeeeeeeeeeeee",
+                    ],
+                    None,
+                )
+                .1,
+            ),
+            response(200, note("not_aaaaaaaaaaaaaa").1),
+            response(404, Value::Null),
+            response(200, note("not_cccccccccccccc").1),
+            response(404, Value::Null),
+        ]
+    };
+    let slow = |api| Slow(api, std::time::Duration::from_secs(55));
+
+    let (_, calls, service) = scripted_with(responses(), true, slow);
+    let started = tokio::time::Instant::now();
+    assert!(service.backfill().await.unwrap());
+    assert!(started.elapsed() <= BACKFILL_PAGE_BUDGET + std::time::Duration::from_secs(1));
+    assert_eq!(
+        *service.repo.steps.lock().unwrap(),
+        vec![BackfillStep::Retry]
+    );
+    assert_eq!(
+        imported_ids(&calls),
+        vec!["not_aaaaaaaaaaaaaa", "not_cccccccccccccc"]
+    );
+
+    // On the last attempt the page moves on, skipping the notes it never
+    // reached, so a slow page cannot hold history back forever.
+    let (_, calls, service) = scripted_with(responses(), true, slow);
+    service.repo.backfill.lock().unwrap().attempts = BACKFILL_PAGE_ATTEMPTS - 1;
+    assert!(service.backfill().await.unwrap());
+    assert_eq!(
+        *service.repo.steps.lock().unwrap(),
+        vec![BackfillStep::Done]
+    );
+    assert_eq!(
+        imported_ids(&calls),
+        vec!["not_aaaaaaaaaaaaaa", "not_cccccccccccccc"]
+    );
+}
+
+/// Backfill is off unless the user is opted in: nothing reaches Granola.
+#[tokio::test(start_paused = true)]
+async fn backfill_waits_for_the_user_to_be_opted_in() {
+    let (fake, calls, service) = scripted_with(
+        vec![response(200, page(&["not_aaaaaaaaaaaaaa"], None).1)],
+        false,
+        |api| api,
+    );
+
+    assert!(service.backfill().await.unwrap());
+
+    assert_eq!(
+        *service.repo.steps.lock().unwrap(),
+        vec![BackfillStep::Deferred]
+    );
+    assert!(fake.api_calls().is_empty());
+    assert!(calls.0.lock().unwrap().is_empty());
+}
+
+/// A rate-limited page waits as long as Granola's `Retry-After` asks.
+#[tokio::test(start_paused = true)]
+async fn a_throttled_page_waits_as_long_as_granola_asks() {
+    let mut limited = response(429, json!({"code": "RATE_LIMITED"}));
+    limited.headers.insert(
+        http::header::RETRY_AFTER,
+        http::HeaderValue::from_static("120"),
+    );
+    let (_, _, service) = scripted_with(vec![limited], true, |api| api);
+
+    assert!(service.backfill().await.unwrap());
+
+    assert_eq!(
+        *service.repo.steps.lock().unwrap(),
+        vec![BackfillStep::Throttled(std::time::Duration::from_secs(120))]
+    );
+}
+
+/// A listing that hands back the cursor it was given would repeat the same
+/// page forever; it is a failed page instead.
+#[tokio::test(start_paused = true)]
+async fn a_repeated_listing_cursor_is_a_failed_page() {
+    let (_, _, service) = scripted(vec![
+        page(&["not_aaaaaaaaaaaaaa"], Some("page-2")),
+        note("not_aaaaaaaaaaaaaa"),
+        no_transcript(),
+    ]);
+    service.repo.backfill.lock().unwrap().cursor = Some("page-2".into());
+
+    assert!(service.backfill().await.unwrap());
+
+    assert_eq!(
+        *service.repo.steps.lock().unwrap(),
+        vec![BackfillStep::Retry]
+    );
 }
