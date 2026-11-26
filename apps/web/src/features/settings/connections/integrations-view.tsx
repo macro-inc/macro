@@ -1,20 +1,18 @@
 import { SearchBar } from '@app/components/view-shell';
 import { toast } from '@core/component/Toast/Toast';
-import { createPipedreamCatalogSearch } from '@core/pipedream/catalog';
 import {
   clearPendingConnectApp,
   pendingConnectApp,
-} from '@core/pipedream/pendingConnect';
+} from '@core/connectors/pendingConnect';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import { readGithubLinkStatus } from '@queries/auth';
-import { queryReadyGate } from '@queries/gate';
 import {
-  connectPipedreamApp,
-  overlaidAppSlug,
-  usePipedreamConnectedSlugs,
-  usePipedreamOverlaysQuery,
-} from '@queries/pipedream-connectors';
+  appConnectorKey,
+  connectConnector,
+  createConnectorCatalogSearch,
+  GITHUB_CONNECTOR_KEY,
+  readConnectors,
+} from '@queries/connectors';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { Button } from '@ui';
 import { ResultAsync } from 'neverthrow';
@@ -31,6 +29,7 @@ import {
 } from 'solid-js';
 import { SettingsPage } from '../primitives';
 import { AddCustomMcpDialog } from './add-custom-mcp-dialog';
+import { AiProviderPage } from './ai-provider';
 import { CatalogRows } from './catalog-rows';
 import {
   aiAppItems,
@@ -48,12 +47,11 @@ import {
 import { LeftoverRow, leftoverCategories } from './leftover-row';
 import {
   type ConnectionsModel,
-  capabilitiesFor,
+  capabilityFor,
   type Leftover,
   type ProviderId,
 } from './model';
-import { PipedreamAiProvider } from './PipedreamAiProvider';
-import { PIPEDREAM_BROWSE_HIDDEN_SLUGS } from './provider-meta';
+import { CATALOG_HIDDEN_SLUGS, OWN_ROW_APPS } from './provider-meta';
 import { SlackChannelImportFlow } from './slack-channel-import/SlackChannelImportFlow';
 import { useConnectionsModel } from './use-connections-model';
 import {
@@ -75,18 +73,26 @@ export function IntegrationsView(props: IntegrationsViewProps) {
   );
 }
 
-const GITHUB_APP_SLUG = 'github';
-
-/** Whether the viewer's GitHub account is linked; unknown reads as unlinked. */
-async function githubAlreadyLinked(): Promise<boolean> {
-  const status = await ResultAsync.fromPromise(readGithubLinkStatus(), () => ({
-    kind: 'github-link-status-unavailable' as const,
+/**
+ * Whether GitHub is connected or only switched off, by the server's answer;
+ * unknown reads as not connected.
+ */
+async function githubAlreadyHeld(): Promise<boolean> {
+  const connectors = await ResultAsync.fromPromise(readConnectors(), () => ({
+    kind: 'connectors-unavailable' as const,
   }));
-  return status.isOk() && status.value === 'linked';
+  return (
+    connectors.isOk() &&
+    connectors.value.some(
+      (connector) =>
+        connector.key === GITHUB_CONNECTOR_KEY &&
+        (connector.status === 'connected' || connector.status === 'disabled')
+    )
+  );
 }
 
 function ConnectionsContent(props: IntegrationsViewProps) {
-  const { model, ready, error, partialError, retry } = useConnectionsModel();
+  const { model, ready, error, retry } = useConnectionsModel();
   // A consent finished in the system browser leaves the page visible, so the
   // queries' visibility-based focus refetch never fires on return.
   makeEventListener(window, 'focus', retry);
@@ -113,31 +119,25 @@ function ConnectionsContent(props: IntegrationsViewProps) {
   });
   async function connectRequestedApp(appSlug: string) {
     try {
-      // A linked account already authorizes GitHub's agent tools, so a
-      // request to connect it means they are switched off. Show them instead
-      // of linking again, which on the web navigates the whole page away.
-      const alreadyLinked =
-        appSlug === GITHUB_APP_SLUG && (await githubAlreadyLinked());
-      // The user left Connections while the status read was pending; starting
+      const key = appConnectorKey(appSlug);
+      // A request to connect a GitHub that is already held means its agent
+      // tools are switched off: show them instead of connecting again.
+      const alreadyHeld =
+        key === GITHUB_CONNECTOR_KEY && (await githubAlreadyHeld());
+      // The user left Connections while the read was pending; starting
       // authorization now would navigate away from their newer work.
       if (disposed) return;
-      if (alreadyLinked) {
+      if (alreadyHeld) {
         view.openProvider('github');
         return;
       }
-      const outcome = await connectPipedreamApp({ appSlug });
-      if (outcome === 'unsupported')
-        toast.failure('Connectors are not available on this deployment');
+      await connectConnector({ key });
     } catch {
       toast.failure(`Failed to connect ${appSlug}`);
     }
   }
   const slackConnected = () =>
-    capabilitiesFor(model(), 'slack').some(
-      (capability) =>
-        capability.mechanism === 'pipedream' &&
-        capability.status === 'connected'
-    );
+    capabilityFor(model(), 'slack')?.status === 'connected';
 
   return (
     <Show
@@ -152,14 +152,12 @@ function ConnectionsContent(props: IntegrationsViewProps) {
               bodyClass="mt-6 gap-4"
               contentClass="max-w-none px-8"
             >
-              <Show when={error() || partialError()}>
+              <Show when={error()}>
                 <div
                   role="status"
                   class="flex items-center gap-3 text-sm text-ink-muted"
                 >
-                  {error()
-                    ? "Couldn't load agent tools."
-                    : "Some connections couldn't be loaded."}
+                  Couldn't load agent tools.
                   <Button variant="secondary" size="sm" onClick={retry}>
                     Retry
                   </Button>
@@ -182,9 +180,7 @@ function ConnectionsContent(props: IntegrationsViewProps) {
             </SettingsPage>
           }
         >
-          {(provider) => (
-            <PipedreamAiProvider model={model()} provider={provider} />
-          )}
+          {(provider) => <AiProviderPage model={model()} provider={provider} />}
         </Show>
       }
     >
@@ -205,16 +201,12 @@ function ConnectionsContent(props: IntegrationsViewProps) {
   );
 }
 
-function leftoverMatches(
-  leftover: Leftover,
-  overlaidAppSlug: string | undefined,
-  query: string
-): boolean {
+function leftoverMatches(leftover: Leftover, query: string): boolean {
   return matchesIntegration(
     {
       name: leftover.title,
-      description: leftover.kind === 'native-mcp' ? leftover.subtitle : '',
-      categories: leftoverCategories(leftover, overlaidAppSlug),
+      description: leftover.kind === 'server' ? leftover.subtitle : '',
+      categories: leftoverCategories(leftover),
     },
     query
   );
@@ -234,9 +226,7 @@ function IntegrationsOverview(
   const [query, setQuery] = createSignal('');
   const [addingCustom, setAddingCustom] = createSignal(false);
   const view = useConnectionsView();
-  const catalog = createPipedreamCatalogSearch(
-    () => PIPEDREAM_BROWSE_HIDDEN_SLUGS
-  );
+  const catalog = createConnectorCatalogSearch(() => CATALOG_HIDDEN_SLUGS);
   const search = (value: string) => {
     setQuery(value);
     catalog.onSearchInput(value);
@@ -264,50 +254,39 @@ function IntegrationsOverview(
   const inUse = () => matching().filter((item) => item.status !== 'available');
   const available = () =>
     matching().filter((item) => item.status === 'available');
-  // Overlaid catalog apps connect as native MCP servers; show them as the app.
-  const overlays = usePipedreamOverlaysQuery();
-  const overlaidSlugFor = (leftover: Leftover) =>
-    leftover.kind === 'native-mcp' && queryReadyGate(overlays)
-      ? overlaidAppSlug(overlays.data, leftover.url)
-      : undefined;
-  // Until overlays load, a native server can't be told apart from a custom one;
-  // hold those rows back so an overlaid app doesn't flash at the top.
   const leftovers = () =>
-    props
-      .model()
-      .leftovers.filter(
-        (row) =>
-          !(row.kind === 'native-mcp' && overlays.isPlaceholderData) &&
-          leftoverMatches(row, overlaidSlugFor(row), query())
-      );
+    props.model().leftovers.filter((row) => leftoverMatches(row, query()));
   // Servers the user added themselves lead the list.
-  const isCustom = (leftover: Leftover) =>
-    leftover.kind === 'native-mcp' && !overlaidSlugFor(leftover);
-  const customLeftovers = () => leftovers().filter(isCustom);
+  const customLeftovers = () =>
+    leftovers().filter((leftover) => leftover.kind === 'server');
+  // An app with a row of its own above (Granola) shows only there.
   const otherLeftovers = () =>
-    leftovers().filter((leftover) => !isCustom(leftover));
+    leftovers().filter(
+      (leftover) =>
+        leftover.kind === 'app' && !OWN_ROW_APPS.has(leftover.appSlug)
+    );
 
-  // Includes overlaid apps, which are connected as native MCP servers.
-  const connected = usePipedreamConnectedSlugs();
-  const alreadyHave = createMemo(() => {
-    const slugs = new Set<string>(connected.slugs());
-    for (const row of props.model().capabilities) {
-      if (row.status !== 'not-connected') slugs.add(row.provider);
-    }
-    for (const leftover of props.model().leftovers) {
-      if (leftover.kind === 'pipedream') slugs.add(leftover.appSlug);
-    }
-    return slugs;
-  });
+  // Every app the user holds already has a row above.
+  const alreadyHave = createMemo(
+    () =>
+      new Set<string>([
+        ...props.model().capabilities.map((row) => row.provider),
+        ...props
+          .model()
+          .leftovers.flatMap((leftover) =>
+            leftover.kind === 'app' ? [leftover.appSlug] : []
+          ),
+      ])
+  );
   const catalogEntries = createMemo(() =>
     props.agentToolsAvailable
       ? catalog.entries().filter(
           (entry) =>
-            !alreadyHave().has(entry.app_slug) &&
+            !alreadyHave().has(entry.slug) &&
             matchesIntegration(
               {
-                name: entry.display_name,
-                description: `${entry.description ?? ''} ${entry.app_slug}`,
+                name: entry.name,
+                description: `${entry.description ?? ''} ${entry.slug}`,
                 categories: entry.categories ?? [],
               },
               query()
@@ -360,12 +339,7 @@ function IntegrationsOverview(
             {(item) => <IntegrationItemRow item={item} />}
           </For>
           <For each={otherLeftovers()}>
-            {(leftover) => (
-              <LeftoverRow
-                leftover={leftover}
-                overlaidAppSlug={overlaidSlugFor(leftover)}
-              />
-            )}
+            {(leftover) => <LeftoverRow leftover={leftover} />}
           </For>
           <For each={available()}>
             {(item) => <IntegrationItemRow item={item} />}

@@ -18,6 +18,8 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{NotionApi, NotionError};
 
+use crate::domain::views::{NotionView, ViewList, ViewScope};
+
 mod wire;
 
 use wire::{
@@ -82,6 +84,15 @@ pub enum NotionRead {
     },
     /// `GET /v1/databases/{id}`.
     Database(NotionId),
+    /// `GET /v1/views`, scoped to a database or data source.
+    ListViews {
+        /// Which container or source to list.
+        scope: ViewScope,
+        /// Pagination cursor.
+        cursor: Option<String>,
+    },
+    /// `GET /v1/views/{id}` with full saved configuration.
+    RetrieveView(NotionId),
     /// `GET /v1/users`, one page of members.
     Users {
         /// Where the previous page of members ended.
@@ -99,6 +110,8 @@ impl NotionRead {
             | Self::PageProperty { .. }
             | Self::DataSource(_)
             | Self::Database(_)
+            | Self::ListViews { .. }
+            | Self::RetrieveView(_)
             | Self::Users { .. } => Method::GET,
         }
     }
@@ -120,6 +133,14 @@ impl NotionRead {
             Self::DataSource(id) => format!("/v1/data_sources/{id}"),
             Self::QueryDataSource { id, .. } => format!("/v1/data_sources/{id}/query"),
             Self::Database(id) => format!("/v1/databases/{id}"),
+            Self::ListViews { scope, cursor } => {
+                let query = match scope {
+                    ViewScope::Database(id) => format!("database_id={id}"),
+                    ViewScope::DataSource(id) => format!("data_source_id={id}"),
+                };
+                with_cursor(format!("/v1/views?{query}&page_size={PAGE_SIZE}"), cursor)
+            }
+            Self::RetrieveView(id) => format!("/v1/views/{id}"),
             Self::Users { cursor } => {
                 with_cursor(format!("/v1/users?page_size={PAGE_SIZE}"), cursor)
             }
@@ -135,6 +156,8 @@ impl NotionRead {
             | Self::PageProperty { .. }
             | Self::DataSource(_)
             | Self::Database(_)
+            | Self::ListViews { .. }
+            | Self::RetrieveView(_)
             | Self::Users { .. } => None,
         }
     }
@@ -396,6 +419,33 @@ impl<Transport: NotionTransport> NotionApi for NotionRestClient<Transport> {
             .collect())
     }
 
+    async fn list_views(
+        &self,
+        scope: &ViewScope,
+        cursor: Option<String>,
+    ) -> Result<Paged<NotionId>, NotionError> {
+        let list: ViewList = self
+            .request(NotionRead::ListViews {
+                scope: scope.clone(),
+                cursor,
+            })
+            .await?;
+        let incomplete = list.request_status.as_ref().is_some_and(|status| {
+            status.get("type").and_then(serde_json::Value::as_str) != Some("complete")
+        });
+        if incomplete || (list.has_more && list.next_cursor.is_none()) {
+            return Err(NotionError::IncompleteViewList);
+        }
+        Ok(Paged {
+            results: list.results.into_iter().map(|view| view.id).collect(),
+            next_cursor: list.next_cursor.filter(|_| list.has_more),
+        })
+    }
+
+    async fn retrieve_view(&self, id: &NotionId) -> Result<NotionView, NotionError> {
+        self.request(NotionRead::RetrieveView(id.clone())).await
+    }
+
     /// Rows oldest first. Notion caps one query at 10,000 rows; past the cap
     /// the cursor restarts the query from the last row's creation time, so
     /// rows created in that same instant come again and callers draining the
@@ -508,9 +558,13 @@ enum Failure {
 }
 
 fn failure(response: TransportResponse) -> Failure {
-    let code = serde_json::from_str::<WireError>(&response.body)
-        .ok()
-        .and_then(|error| error.code);
+    let wire = serde_json::from_str::<WireError>(&response.body).ok();
+    // Notion answers every error as `{"object":"error", ...}`; a body
+    // without that shape came from the proxy in front of it.
+    let from_notion = wire
+        .as_ref()
+        .is_some_and(|error| error.object.as_deref() == Some("error"));
+    let code = wire.and_then(|error| error.code);
     match (response.status, code.as_deref()) {
         (StatusCode::TOO_MANY_REQUESTS, _) | (_, Some("rate_limited")) => Failure::Transient {
             error: NotionError::RateLimited {
@@ -533,6 +587,14 @@ fn failure(response: TransportResponse) -> Failure {
             retry_after: response.retry_after,
             error: upstream(response),
         },
+        // Notion's answer to a revoked or expired token
+        // (https://developers.notion.com/reference/status-codes).
+        (StatusCode::UNAUTHORIZED, _) | (_, Some("unauthorized")) => {
+            Failure::Final(NotionError::AccessLost)
+        }
+        (StatusCode::NOT_FOUND, _) if !from_notion => {
+            Failure::Final(NotionError::ConnectionUnavailable)
+        }
         (StatusCode::NOT_FOUND, _) | (_, Some("object_not_found")) => {
             Failure::Final(NotionError::NotFound)
         }

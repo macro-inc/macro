@@ -19,9 +19,13 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type Span, Telemetry } from '@macro-inc/observability';
+import {
+  type Span,
+  Telemetry,
+  type TraceContext,
+} from '@macro-inc/observability';
 import type { CombinedError } from '@urql/core';
-import type { ClaimedMutation } from '../protocol';
+import type { ClaimedMutation, EngineLockTiming } from '../protocol';
 
 export type MutationQueueEnvironment = {
   authenticated: boolean;
@@ -75,6 +79,8 @@ export type MutationEnqueueFailure =
   /** The queue may hold the write; the caller cannot safely retry. */
   | 'uncertain'
   | 'storage-changed'
+  /** No owner took the write in time: it is neither queued nor sent. */
+  | 'not-admitted'
   /** Another context holds the database; the mutation went straight out. */
   | 'owner-lock'
   /** The engine refused the write; the mutation went straight out. */
@@ -86,12 +92,20 @@ export type MutationAttemptDetails = {
   errorCode?: unknown;
   httpStatus?: number;
   retryDelayMs?: number;
+  /** The commit's time from the runner's call to its answer. */
+  commitMs?: number;
+  /** The native engine's wait and hold for the commit. */
+  commitEngine?: EngineLockTiming;
 };
 
 export interface MutationAttemptTelemetry {
   /** Runs the network send so its spans join this attempt's trace. */
   run<T>(send: () => T): T;
-  sent(mode: 'live' | 'replay'): void;
+  /**
+   * A live send's attempt joins the trace its caller named, when the attempt
+   * has not opened its span yet.
+   */
+  sent(mode: 'live' | 'replay', parent?: TraceContext): void;
   /** Ends the attempt; later calls are ignored. */
   finish(
     outcome: MutationAttemptOutcome,
@@ -108,6 +122,8 @@ export interface MutationEnqueueTelemetry {
     claimed: boolean;
     /** Persisted without its list patches after the engine rejected them. */
     linkPatchesDegraded: boolean;
+    /** The native engine's wait and hold for the enqueue. */
+    engine?: EngineLockTiming;
   }): void;
   failed(reason: MutationEnqueueFailure): void;
 }
@@ -125,11 +141,30 @@ export interface MutationQueueTelemetry {
   enqueue(item: {
     uuid?: string;
     operationName?: string;
+    /** The trace the mutation's caller named. */
+    parent?: TraceContext;
   }): MutationEnqueueTelemetry;
   attempt(mutation: ClaimedMutation): MutationAttemptTelemetry;
+  /**
+   * Releases a claim whose page has gone, so its head runs now instead of
+   * when the lease runs out. `release` says how that went, and so does the
+   * result.
+   */
+  releaseLease(
+    lease: { transactionId: string; itemId: string; expiresAtMs: number },
+    release: () => Promise<LeaseReleaseOutcome>
+  ): Promise<LeaseReleaseOutcome>;
   skipped(reason: MutationQueueSkipReason): void;
   storageReset(): void;
 }
+
+/**
+ * `released`: the claim no longer holds the head. `moved`: the engine
+ * refused, because the claim was settled, claimed again or released by
+ * another page. `failed`: the claim still holds the head, or the queue could
+ * not be read again to tell.
+ */
+export type LeaseReleaseOutcome = 'released' | 'moved' | 'failed';
 
 export const NOOP_MUTATION_ATTEMPT_TELEMETRY: MutationAttemptTelemetry = {
   run: (send) => send(),
@@ -146,6 +181,7 @@ export const NOOP_MUTATION_QUEUE_TELEMETRY: MutationQueueTelemetry = {
   loaded: () => undefined,
   enqueue: () => NOOP_ENQUEUE,
   attempt: () => NOOP_MUTATION_ATTEMPT_TELEMETRY,
+  releaseLease: async (_lease, release) => await release(),
   skipped: () => undefined,
   storageReset: () => undefined,
 };
@@ -278,7 +314,28 @@ function detailAttributes(
     attributes['http.response.status_code'] = details.httpStatus;
   if (details.retryDelayMs !== undefined)
     attributes['mutation_queue.retry_delay_ms'] = details.retryDelayMs;
+  if (details.commitMs !== undefined)
+    attributes['mutation_queue.commit_ms'] = details.commitMs;
+  Object.assign(
+    attributes,
+    engineAttributes('mutation_queue.commit', details.commitEngine)
+  );
   return attributes;
+}
+
+/**
+ * The native engine's wait and hold, beside the call's own time: the rest is
+ * IPC and runtime queueing.
+ */
+function engineAttributes(
+  prefix: string,
+  engine: EngineLockTiming | undefined
+): Record<string, number> {
+  if (!engine) return {};
+  return {
+    [`${prefix}.engine_lock_wait_ms`]: engine.lockWaitMs,
+    [`${prefix}.engine_lock_hold_ms`]: engine.lockHoldMs,
+  };
 }
 
 /** Classifies a failed attempt without retaining its message. */
@@ -565,9 +622,10 @@ export function createMutationQueueTelemetry({
     // Opened on first use: a head whose admission keeps deferring is claimed
     // every second and should only count, not emit a span per claim.
     let openedSpan: Span | undefined;
-    const span = (): Span => {
+    const span = (parent?: TraceContext): Span => {
       if (openedSpan) return openedSpan;
-      openedSpan = Telemetry.span('graphql.mutation_queue.attempt');
+      const open = () => Telemetry.span('graphql.mutation_queue.attempt');
+      openedSpan = parent ? parent.run(open) : open();
       for (const [key, value] of Object.entries(claimAttributes))
         openedSpan.setAttr(key, value);
       return openedSpan;
@@ -576,8 +634,8 @@ export function createMutationQueueTelemetry({
     let finished = false;
     return {
       run: (send) => span().run(send),
-      sent(mode) {
-        span().setAttr('mutation_queue.send_mode', mode);
+      sent(mode, parent) {
+        span(parent).setAttr('mutation_queue.send_mode', mode);
         span().setAttr('mutation_queue.prepare_ms', now() - startedAt);
         span().event('sent');
       },
@@ -659,16 +717,23 @@ export function createMutationQueueTelemetry({
         'graphql-cache-mutation-queue'
       );
     },
-    enqueue({ uuid, operationName }) {
+    enqueue({ uuid, operationName, parent }) {
       const startedAt = now();
-      const span = Telemetry.span('graphql.mutation_queue.enqueue');
+      const open = () => Telemetry.span('graphql.mutation_queue.enqueue');
+      const span = parent ? parent.run(open) : open();
       span.setAttr(
         'graphql.operation.name',
         operationNameAttribute(operationName)
       );
       if (uuid) span.setAttr('mutation_queue.item_id', uuid);
       return {
-        persisted({ transactionId, replaced, claimed, linkPatchesDegraded }) {
+        persisted({
+          transactionId,
+          replaced,
+          claimed,
+          linkPatchesDegraded,
+          engine,
+        }) {
           // A replacement inherits a durable time this tab learns at claim.
           if (uuid && !items.has(uuid))
             items.set(uuid, {
@@ -685,7 +750,10 @@ export function createMutationQueueTelemetry({
           );
           if (linkPatchesDegraded) count('enqueue.link-patches-degraded');
           span.setAttr('mutation_queue.enqueue_ms', now() - startedAt);
-          for (const [key, value] of Object.entries(queueAttributes()))
+          for (const [key, value] of Object.entries({
+            ...engineAttributes('mutation_queue.enqueue', engine),
+            ...queueAttributes(),
+          }))
             span.setAttr(key, value);
           count('enqueue.persisted');
           span.end();
@@ -708,6 +776,23 @@ export function createMutationQueueTelemetry({
       };
     },
     attempt,
+    async releaseLease({ transactionId, itemId, expiresAtMs }, release) {
+      return await Telemetry.span(
+        'graphql.mutation_queue.lease_release',
+        async (span) => {
+          span.setAttr('mutation_queue.item_id', itemId);
+          span.setAttr('mutation_queue.transaction_id', transactionId);
+          span.setAttr(
+            'mutation_queue.lease_remaining_ms',
+            Math.max(0, expiresAtMs - now())
+          );
+          const outcome = await release();
+          span.setAttr('mutation_queue.lease_release_outcome', outcome);
+          count(`lease.${outcome}`);
+          return outcome;
+        }
+      );
+    },
     skipped(reason) {
       count(`skip.${reason}`);
       if (firstOccurrence(`skip|${reason}`))

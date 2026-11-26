@@ -129,3 +129,44 @@ test('typing o after j@m.c keeps the letter without wrapping mid-edit', async ({
   await expect(editor).toHaveText('j@m.com b');
   await expect(editor.locator('a')).toHaveCount(0);
 });
+
+// Saved Markdown stores a link's URL as written; one with a scheme a link may
+// not open keeps only its text in the renderer, the composer and a resave.
+test('links whose URL a link may not open stay text', async ({
+  page,
+}, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('popup', (popup) => errors.push(`popup ${popup.url()}`));
+  const url = 'javascript:document.body.dataset.opened=1';
+  const markdown = `See <m-link>{"url":"${url}","text":"the notes","title":""}</m-link> and [the plan](${url}) today`;
+  await page.goto(
+    `/src/lib/core/component/LexicalMarkdown/component/core/browser-test/links.html?markdown=${encodeURIComponent(markdown)}`
+  );
+  const input = page.getByTestId('input');
+  await expect(input).toHaveText('See the notes and the plan today', {
+    timeout: 30_000,
+  });
+  await expect(input.locator('a')).toHaveCount(0);
+  for (const label of ['the notes', 'the plan']) {
+    const text = input.getByText(label);
+    if (testInfo.project.use.hasTouch) await text.tap();
+    else {
+      await text.click();
+      await text.click({ modifiers: ['ControlOrMeta'] });
+    }
+  }
+
+  const editor = page.getByRole('textbox', { name: 'Message' });
+  await expect(editor).toHaveText('See the notes and the plan today');
+  await expect(editor.locator('a')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Save message', exact: true }).click();
+  await expect(page.getByTestId('saved')).toHaveText(
+    'See the notes and the plan today'
+  );
+  await expect(page.getByTestId('saved').locator('a')).toHaveCount(0);
+  expect(
+    await page.evaluate(() => document.body.dataset.opened ?? null)
+  ).toBeNull();
+  expect(errors).toEqual([]);
+});

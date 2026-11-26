@@ -2,7 +2,6 @@ import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-ta
 import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
 import { externalChatContent } from '@app/features/external-view/hosted-content';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -28,10 +27,7 @@ import {
   resolveBlockAlias,
   verifyBlockName,
 } from '@core/constant/allBlocks';
-import {
-  ENABLE_BLOCK_IN_BLOCK,
-  enableDatabases,
-} from '@core/constant/featureFlags';
+import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { canNestBlock } from '@core/orchestrator';
@@ -53,6 +49,7 @@ import {
 } from '@macro-inc/lexical-core';
 import { useExternalChatDetailQuery } from '@queries/external-chats';
 import {
+  type AccessiblePreviewItem,
   failedReadAccess,
   type ItemEntity,
   isAccessiblePreviewItem,
@@ -65,7 +62,7 @@ import { useFormDetailQuery } from '@queries/storage/forms';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button, Tooltip } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import {
   $createTextNode,
   $getNodeByKey,
@@ -73,7 +70,7 @@ import {
   type EditorThemeClasses,
   KEY_ENTER_COMMAND,
 } from 'lexical';
-import type { JSX } from 'solid-js';
+import type { Accessor, JSX } from 'solid-js';
 import {
   createEffect,
   createMemo,
@@ -94,6 +91,13 @@ import { MentionTooltip } from './MentionTooltip';
 // Time threshold for showing fallback state for recently created mentions (1 minute)
 const RECENT_MENTION_THRESHOLD_MS = 1 * 60 * 1000;
 
+type DocumentMentionProps = DocumentMentionDecoratorProps & {
+  /** Dismiss a hosting dialog or sheet after the reference opens a split. */
+  onOpened?: () => void;
+  /** Host-authorized display data; hover previews still load through the shared query. */
+  inlinePreview?: Accessor<AccessiblePreviewItem>;
+};
+
 /**
  * Determine if we should use fallback data for a mention due to stale preview cache.
  * This happens when a mention is very recent and the preview API returns does_not_exist
@@ -112,9 +116,16 @@ function MentionContainer(props: {
   icon: JSX.Element;
   text: JSX.Element;
   collapsed?: boolean;
+  /** Cut the name to one line. An email's name is a whole subject. */
+  singleLine?: boolean;
 }) {
   return (
-    <span class="pointer-events-auto">
+    <span
+      class={cn(
+        'pointer-events-auto',
+        props.singleLine && 'inline-block max-w-full truncate align-bottom'
+      )}
+    >
       <span class="relative top-[0.125em] size-[1em] inline-flex mx-[0.25em]">
         {props.icon}
       </span>
@@ -143,6 +154,7 @@ function SkillSlashText(props: {
   name: string;
   collapsed?: boolean;
   dimmed?: boolean;
+  onOpened?: () => void;
 }) {
   const systemSkills = useSystemSkillsQuery();
   const openSkill = createCallback((e: MouseEvent) => {
@@ -150,12 +162,13 @@ function SkillSlashText(props: {
     // Also keeps the outer mention click handler from opening the skill a
     // second time.
     e.stopPropagation();
-    openDocument(
+    const result = openDocument(
       'skill',
       props.documentId,
       undefined,
       openInNewSplitForMention(e.shiftKey, true)
     );
+    if (result && result.status !== 'unavailable') props.onOpened?.();
   });
   return (
     <span
@@ -220,6 +233,7 @@ function InlinePreview(props: {
   documentName?: string;
   createdAt?: number;
   isRecentMention: () => boolean;
+  onOpened?: () => void;
 }) {
   const { item, ItemEntityIcon, documentProperties } = props.previewData;
 
@@ -270,6 +284,7 @@ function InlinePreview(props: {
                 </span>
               }
               collapsed={props.collapsed}
+              singleLine={props.blockName === 'email'}
             />
           }
         >
@@ -278,6 +293,7 @@ function InlinePreview(props: {
             name={props.documentName ?? ''}
             collapsed={props.collapsed}
             dimmed
+            onOpened={props.onOpened}
           />
         </Show>
       </Match>
@@ -316,6 +332,7 @@ function InlinePreview(props: {
                 </span>
               }
               collapsed={props.collapsed}
+              singleLine={props.blockName === 'email'}
             />
           }
         >
@@ -323,6 +340,7 @@ function InlinePreview(props: {
             documentId={props.entity.id}
             name={props.documentName ?? ''}
             collapsed={props.collapsed}
+            onOpened={props.onOpened}
           />
         </Show>
       </Match>
@@ -393,6 +411,7 @@ function InlinePreview(props: {
                   </span>
                 }
                 collapsed={props.collapsed}
+                singleLine={props.blockName === 'email'}
               />
             }
           >
@@ -400,6 +419,7 @@ function InlinePreview(props: {
               documentId={accessibleItem().id}
               name={accessibleItem().name}
               collapsed={props.collapsed}
+              onOpened={props.onOpened}
             />
           </Show>
         )}
@@ -414,7 +434,7 @@ function InlinePreview(props: {
   );
 }
 
-export function DocumentMention(props: DocumentMentionDecoratorProps) {
+export function DocumentMention(props: DocumentMentionProps) {
   if (props.blockName === 'routine' || props.blockName === 'automation') {
     return <RoutineMention {...props} />;
   }
@@ -612,13 +632,13 @@ function detailUnavailable(detail: {
   return access;
 }
 
-function RoutineMention(props: DocumentMentionDecoratorProps) {
+function RoutineMention(props: DocumentMentionProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   if (lexicalWrapper?.skipPreviewFetch) return <RoutineLink {...props} />;
   return <PreviewedRoutineMention {...props} />;
 }
 
-function PreviewedRoutineMention(props: DocumentMentionDecoratorProps) {
+function PreviewedRoutineMention(props: DocumentMentionProps) {
   const { item } = useItemPreviewData(() => ({
     id: props.documentId,
     type: 'routine',
@@ -676,9 +696,7 @@ function PreviewedRoutineMention(props: DocumentMentionDecoratorProps) {
  * Routine references use their saved label, else the routine's own name;
  * routines have no hover preview.
  */
-function RoutineLink(
-  props: DocumentMentionDecoratorProps & { resolvedName?: string }
-) {
+function RoutineLink(props: DocumentMentionProps & { resolvedName?: string }) {
   const name = () =>
     props.documentName?.replaceAll('\n', ' ').trim() ||
     props.resolvedName?.replaceAll('\n', ' ').trim() ||
@@ -686,12 +704,13 @@ function RoutineLink(
   const open = (event: MouseEvent | KeyboardEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    openDocument(
+    const result = openDocument(
       'routine',
       props.documentId,
       undefined,
       openInNewSplitForMention(event.shiftKey, true)
     );
+    if (result && result.status !== 'unavailable') props.onOpened?.();
   };
   return (
     <Tooltip label={name()} as="span" disabled={!props.collapsed}>
@@ -713,7 +732,7 @@ function RoutineLink(
 }
 
 /** Databases have their own permission-checked metadata, not a document preview. */
-function DatabaseMention(props: DocumentMentionDecoratorProps) {
+function DatabaseMention(props: DocumentMentionProps) {
   const wrapper = useContext(LexicalWrapperContext);
   const [editable, setEditable] = createSignal(
     wrapper?.editor.isEditable() ?? false
@@ -724,10 +743,7 @@ function DatabaseMention(props: DocumentMentionDecoratorProps) {
         setEditable(value);
       })
     );
-  const enabled = useFeatureFlag(enableDatabases);
-  const detail = useDatabaseDetailQuery(() =>
-    enabled().enabled ? props.documentId : undefined
-  );
+  const detail = useDatabaseDetailQuery(() => props.documentId);
   const name = () =>
     detail.isSuccess ? detail.data.database.name : props.documentName;
   const expand = (event: MouseEvent) => {
@@ -758,18 +774,17 @@ function DatabaseMention(props: DocumentMentionDecoratorProps) {
               />
             }
             collapsed={props.collapsed}
-            onOpen={(event) =>
-              openDocument(
+            onOpen={(event) => {
+              const result = openDocument(
                 'database',
                 props.documentId,
                 props.blockParams,
                 openInNewSplitForMention(event.shiftKey, true)
-              )
-            }
+              );
+              if (result && result.status !== 'unavailable') props.onOpened?.();
+            }}
           />
-          <Show
-            when={enabled().enabled && editable() && wrapper?.isInteractable()}
-          >
+          <Show when={editable() && wrapper?.isInteractable()}>
             <Button
               variant="ghost"
               size="icon-xs"
@@ -804,7 +819,7 @@ function DatabaseMention(props: DocumentMentionDecoratorProps) {
  * A form: its icon and name, from its own detail, which respondents can read.
  * Opens for every recipient; the forms flag gates authoring only.
  */
-function FormMention(props: DocumentMentionDecoratorProps) {
+function FormMention(props: DocumentMentionProps) {
   const detail = useFormDetailQuery(() => props.documentId);
   const name = () =>
     detail.isSuccess ? detail.data.form.name : props.documentName;
@@ -826,14 +841,15 @@ function FormMention(props: DocumentMentionDecoratorProps) {
             />
           }
           collapsed={props.collapsed}
-          onOpen={(event) =>
-            openDocument(
+          onOpen={(event) => {
+            const result = openDocument(
               'form',
               props.documentId,
               props.blockParams,
               openInNewSplitForMention(event.shiftKey, true)
-            )
-          }
+            );
+            if (result && result.status !== 'unavailable') props.onOpened?.();
+          }}
         />
       }
     >
@@ -858,7 +874,7 @@ function FormMention(props: DocumentMentionDecoratorProps) {
  * inside External; a viewer the chat isn't shared with sees it as
  * unavailable.
  */
-function ExternalChatMention(props: DocumentMentionDecoratorProps) {
+function ExternalChatMention(props: DocumentMentionProps) {
   const { openWithSplit } = useSplitLayout();
   const userId = useUserId();
   const detail = useExternalChatDetailQuery(
@@ -883,11 +899,15 @@ function ExternalChatMention(props: DocumentMentionDecoratorProps) {
             />
           }
           collapsed={props.collapsed}
-          onOpen={(event) =>
-            openWithSplit(externalChatContent(props.documentId), {
-              preferNewSplit: openInNewSplitForMention(event.shiftKey, true),
-            })
-          }
+          onOpen={(event) => {
+            const result = openWithSplit(
+              externalChatContent(props.documentId),
+              {
+                preferNewSplit: openInNewSplitForMention(event.shiftKey, true),
+              }
+            );
+            if (result && result.status !== 'unavailable') props.onOpened?.();
+          }}
         />
       }
     >
@@ -898,7 +918,7 @@ function ExternalChatMention(props: DocumentMentionDecoratorProps) {
   );
 }
 
-function SkillDocumentMention(props: DocumentMentionDecoratorProps) {
+function SkillDocumentMention(props: DocumentMentionProps) {
   const systemSkills = useSystemSkillsQuery();
   return (
     <Switch>
@@ -925,26 +945,26 @@ function SkillDocumentMention(props: DocumentMentionDecoratorProps) {
  * in code, not documents, so there is nothing to preview-fetch and nothing to
  * open — the pill never navigates.
  */
-function SystemSkillMention(
-  props: DocumentMentionDecoratorProps & { name: string }
-) {
+function SystemSkillMention(props: DocumentMentionProps & { name: string }) {
   return (
     <SkillSlashText
       documentId={props.documentId}
       name={props.name}
       collapsed={props.collapsed}
+      onOpened={props.onOpened}
     />
   );
 }
 
 /** Lightweight mention display that skips all backend fetches. Uses only the stored name. */
-export function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
+export function DocumentMentionStatic(props: DocumentMentionProps) {
   if (props.blockName === 'skill') {
     return (
       <SkillSlashText
         documentId={props.documentId}
         name={props.documentName ?? ''}
         collapsed={props.collapsed}
+        onOpened={props.onOpened}
       />
     );
   }
@@ -961,6 +981,7 @@ export function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
         </Show>
       }
       collapsed={props.collapsed}
+      singleLine={props.blockName === 'email'}
       text={
         <span
           data-document-mention="true"
@@ -979,7 +1000,7 @@ export function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
   );
 }
 
-function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
+function DocumentMentionInner(props: DocumentMentionProps) {
   const currentBlockId = useMaybeBlockId();
   const currentBlockName = useMarkdownHost() ?? useMaybeBlockName();
 
@@ -1031,7 +1052,7 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return baseEntity;
   };
 
-  const previewData = useItemPreviewData(itemEntity);
+  const previewData = useItemPreviewData(itemEntity, props.inlinePreview);
   const { item } = previewData;
 
   const isSelectedAsNode = createMemo(() => {
@@ -1051,6 +1072,7 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   });
 
   const [previewCardOpen, setPreviewCardOpen] = createSignal(false);
+  const [previewTrigger, setPreviewTrigger] = createSignal<HTMLElement>();
   const [previewSheetOpen, setPreviewSheetOpen] = createSignal(false);
 
   const calendarOpen = createMemo(() =>
@@ -1091,20 +1113,24 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     const target = calendarOpen();
     if (target?.kind === 'calendar') {
       fireAndForget(
-        openCalendarEventSplit({
-          ...target.target,
-          openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
-        }),
+        (async () => {
+          const opened = await openCalendarEventSplit({
+            ...target.target,
+            openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
+          });
+          if (opened) props.onOpened?.();
+        })(),
         'document-mention'
       );
       return;
     }
-    openDocument(
+    const result = openDocument(
       resolvedBlockName(),
       props.documentId,
       props.blockParams,
       openInNewSplitForMention(e?.shiftKey, e != null)
     );
+    if (result && result.status !== 'unavailable') props.onOpened?.();
   });
 
   if (editor) {
@@ -1182,7 +1208,8 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   // Native listeners: inside an editable editor (the agent and chat
   // composers) the shell stops click propagation before Solid's delegated
   // handlers run, which left the chip inert there.
-  const navHandlers = useNativeSplitNavigationHandler<HTMLSpanElement>((e) => {
+  const openIfReady = (e: MouseEvent | KeyboardEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     const i = item();
     if (
@@ -1193,10 +1220,13 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     ) {
       open(e);
     }
-  });
+  };
+  const navHandlers =
+    useNativeSplitNavigationHandler<HTMLSpanElement>(openIfReady);
 
   // One set of preview props for the hover card and the touch sheet.
   const previewContentProps: DocumentPreviewContentProps = {
+    onOpened: () => props.onOpened?.(),
     get delete() {
       return editor?.isEditable() ? deleteMention : undefined;
     },
@@ -1259,6 +1289,20 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
         open={previewCardOpen()}
         onOpenChange={setPreviewCardOpen}
         keepOpenOnTriggerPress={showsPreviewOnOpen()}
+        triggerRef={setPreviewTrigger}
+        triggerOnClick={editor ? undefined : openIfReady}
+        // A modal makes previews outside its content inert.
+        portalMount={
+          previewTrigger()?.closest<HTMLElement>('[role="dialog"]') ?? undefined
+        }
+        triggerOnKeyDown={
+          editor
+            ? undefined
+            : (event) => {
+                if (event.key === 'Enter') openIfReady(event);
+              }
+        }
+        triggerClass={editor ? undefined : 'rounded-xs focus-visible:bg-active'}
         trigger={
           <span class="relative">
             <span
@@ -1283,6 +1327,7 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
                     documentName={props.documentName}
                     createdAt={props.createdAt}
                     isRecentMention={isRecentMention}
+                    onOpened={props.onOpened}
                   />
                 </Match>
               </Switch>

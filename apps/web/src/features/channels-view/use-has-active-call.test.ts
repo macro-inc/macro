@@ -4,7 +4,6 @@ import { useHasActiveChannelsCall } from './use-has-active-call';
 
 const mocks = vi.hoisted(() => ({
   enabled: true,
-  flag: () => ({ enabled: true, loading: false }),
   userId: (): string | undefined => undefined,
   channelQuery: vi.fn(),
   quickCalls: vi.fn(),
@@ -14,9 +13,6 @@ vi.mock('@core/constant/featureFlags', () => ({
   get ENABLE_CALLS() {
     return mocks.enabled;
   },
-}));
-vi.mock('../meetings/use-quick-calls-flag', () => ({
-  useQuickCallsFlag: () => mocks.flag,
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => mocks.userId }));
 vi.mock('@queries/call/call', () => ({
@@ -30,7 +26,6 @@ const disposers: (() => void)[] = [];
 
 beforeEach(() => {
   mocks.enabled = true;
-  mocks.flag = () => ({ enabled: true, loading: false });
   mocks.channelQuery.mockReset();
   mocks.quickCalls.mockReset();
 });
@@ -106,31 +101,4 @@ it('does not mount either call query while calls are disabled', () => {
   expect(state.active()).toBe(false);
   expect(mocks.channelQuery).not.toHaveBeenCalled();
   expect(mocks.quickCalls).not.toHaveBeenCalled();
-});
-
-it('preserves channel indicators while the quick-call flag loads or is disabled', () => {
-  const [flag, setFlag] = createSignal({ enabled: true, loading: true });
-  mocks.flag = flag;
-  const state = setup();
-  state.setQuickCalls(['quick']);
-  expect(mocks.quickCalls).toHaveBeenCalledOnce();
-  expect(mocks.quickCalls.mock.calls[0][0]()).toBeUndefined();
-  expect(state.active()).toBe(false);
-  state.setChannelCalls(['channel']);
-  expect(state.active()).toBe(true);
-
-  setFlag({ enabled: false, loading: false });
-  expect(mocks.quickCalls).toHaveBeenCalledOnce();
-  expect(mocks.quickCalls.mock.calls[0][0]()).toBeUndefined();
-  expect(state.active()).toBe(true);
-  state.setChannelCalls([]);
-  setFlag({ enabled: true, loading: false });
-  expect(mocks.quickCalls).toHaveBeenCalledOnce();
-  expect(state.active()).toBe(true);
-
-  setFlag({ enabled: false, loading: false });
-  expect(mocks.quickCalls).toHaveBeenCalledOnce();
-  expect(state.active()).toBe(false);
-  state.setChannelCalls(['channel']);
-  expect(state.active()).toBe(true);
 });

@@ -1,12 +1,11 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHasPaidAccess } from '@core/auth';
-import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useLicenseStatus, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useAiBillingSummaryQuery,
+  useSubscriptionStatusQuery,
   useTrialEligibilityQuery,
 } from '@queries/auth';
 import { queryReadyGate } from '@queries/gate';
@@ -25,12 +24,14 @@ const PaywallComponent = (props: PaywallProps) => {
   const hasPaid = useHasPaidAccess();
   const licenseStatus = useLicenseStatus();
   const userId = useUserId();
-  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
   const trialEligibility = useTrialEligibilityQuery({
     enabled: () => !hasPaid(),
   });
+  // A paid plan change keeps the subscription's interval; the cards price
+  // at it.
+  const subscriptionStatus = useSubscriptionStatusQuery({ enabled: hasPaid });
   const availability = () =>
     team.isPending || summary.isPending
       ? 'loading'
@@ -54,13 +55,16 @@ const PaywallComponent = (props: PaywallProps) => {
             canManageBilling: currentSummary.can_manage_billing,
           }
         : undefined,
-      aiUsageEnabled: aiUsageBilling().enabled,
+      aiUsageEnabled: true,
       pending: false,
       trialEligible:
         trialEligibility.isSuccess && queryReadyGate(trialEligibility)
           ? trialEligibility.data.eligible
           : undefined,
       trialing: licenseStatus() === 'trialing',
+      interval: queryReadyGate(subscriptionStatus)
+        ? (subscriptionStatus.data.interval ?? undefined)
+        : undefined,
     });
   };
 

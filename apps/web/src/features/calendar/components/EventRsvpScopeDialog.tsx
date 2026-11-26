@@ -102,7 +102,7 @@ export function EventRsvpScopeDialog(props: {
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Close RSVP"
-                class="size-11 shrink-0 rounded-full bg-ink/6"
+                class="size-11 shrink-0 rounded-full bg-control"
               >
                 <CloseIcon class="size-5" />
               </MobileDrawer.Close>
@@ -127,7 +127,7 @@ export function EventRsvpScopeDialog(props: {
                     {(option) => (
                       <KobalteRadioGroup.Item
                         value={option.scope}
-                        class="relative rounded-[20px] text-ink data-checked:bg-ink/8 focus-within:outline-2 focus-within:outline-accent"
+                        class="relative rounded-[20px] text-ink hover:bg-hover active:bg-active data-checked:bg-selected focus-within:outline-2 focus-within:outline-accent"
                       >
                         <KobalteRadioGroup.ItemInput />
                         <KobalteRadioGroup.ItemLabel class="flex min-h-12 items-center justify-between gap-3 px-4 py-3 text-base">

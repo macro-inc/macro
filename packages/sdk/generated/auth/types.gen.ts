@@ -136,6 +136,11 @@ export type BillingInterval = 'month' | 'year';
 export type BillingStatus = 'purchasing' | 'active' | 'past_due' | 'ending' | 'ended' | 'comped';
 
 /**
+ * A card network.
+ */
+export type CardBrand = 'amex' | 'diners' | 'discover' | 'eftpos_au' | 'jcb' | 'mastercard' | 'unionpay' | 'visa' | 'unknown';
+
+/**
  * Request body for switching plans
  */
 export type ChangePlanRequest = {
@@ -297,6 +302,16 @@ export type CodexLoginStart = {
 export type CodexLoginState = 'pending' | 'connected' | 'expired' | 'failed';
 
 /**
+ * Whether computers are rolled out to the caller.
+ */
+export type ComputerRollout = {
+    /**
+     * The computer UI and purchases are on for this user.
+     */
+    enabled: boolean;
+};
+
+/**
  * A size a team can buy.
  */
 export type ComputerSize = 'standard' | 'large' | 'xl';
@@ -405,7 +420,24 @@ export type ComputerStatus = {
 /**
  * The coarse status the team sees.
  */
-export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released';
+export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'unhealthy' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released';
+
+/**
+ * A computer's CPU and memory over the last day.
+ */
+export type ComputerUsage = {
+    /**
+     * The computer.
+     */
+    computerId: string;
+    latest?: null | UsagePoint;
+    /**
+     * The last 24 hours in 15-minute steps, oldest first: average CPU and
+     * highest memory of each step, absent where the computer has no
+     * reading (it did not run).
+     */
+    points: Array<null | UsagePoint>;
+};
 
 export type CreateAccountMergeRequest = {
     /**
@@ -426,6 +458,7 @@ export type CreateCheckoutSessionV2Request = {
      * Optional discount/promo code to apply
      */
     discount?: string | null;
+    interval?: null | BillingInterval;
     /**
      * Tracking metadata for conversion attribution
      */
@@ -500,9 +533,10 @@ export type CreateTeamAgent = {
      */
     avatarUrl?: string | null;
     /**
-     * What the agent is responsible for. Seeds its workspace.
+     * What the agent is responsible for. Seeds its workspace; when this and
+     * `personality` are empty the agent asks its owner what to take on.
      */
-    jobDescription: string;
+    jobDescription?: string;
     /**
      * Display name.
      */
@@ -510,7 +544,7 @@ export type CreateTeamAgent = {
     /**
      * How the agent behaves and talks. Seeds its workspace.
      */
-    personality: string;
+    personality?: string;
     /**
      * One key per Invite dialog, reused when the invite is retried, so a
      * retry never buys a second computer.
@@ -1665,6 +1699,20 @@ export type PatchUserTutorialRequest = {
     tutorialComplete: boolean;
 };
 
+/**
+ * A card as its owner recognizes it: "Visa ending 4242".
+ */
+export type PaymentCard = {
+    /**
+     * Card network.
+     */
+    brand: CardBrand;
+    /**
+     * Last four digits.
+     */
+    last4: string;
+};
+
 export type Permission = {
     /**
      * The description of the permission
@@ -1681,6 +1729,11 @@ export type Permission = {
  */
 export type PlanCatalogEntry = {
     /**
+     * Price per seat per month when billed annually, cents. Absent for plans
+     * not sold annually.
+     */
+    annual_price_per_month_cents?: number | null;
+    /**
      * Monthly automatic reload limit a payer on this plan starts from,
      * cents. Absent for plans that cannot reload.
      */
@@ -1691,7 +1744,7 @@ export type PlanCatalogEntry = {
      */
     included_ai_cents_per_seat: number;
     /**
-     * Monthly subscription price per seat, cents.
+     * Month-to-month subscription price per seat, cents.
      */
     monthly_price_cents: number;
     /**
@@ -1738,7 +1791,7 @@ export type PlanCatalogResponse = {
 /**
  * The plans a user can be on, cheapest first.
  */
-export type PlanTier = 'free' | 'premium' | 'max';
+export type PlanTier = 'free' | 'premium' | 'business' | 'max';
 
 export type PostGetNamesRequestBody = {
     user_ids: Array<string>;
@@ -1811,6 +1864,43 @@ export type PurchaseBody = {
      * Purchased catalog size.
      */
     size: ComputerSize;
+};
+
+/**
+ * What the buy dialog shows before a purchase: each size with what buying
+ * it charges today, when the full price bills from, and the card charged.
+ */
+export type PurchaseOffers = {
+    card?: null | PaymentCard;
+    /**
+     * When the current billing period ends: each computer bills its full
+     * `quote.amount` every `quote.interval` from then.
+     */
+    renewsAt: string;
+    /**
+     * Every size some host can run awake.
+     */
+    sizes: Array<PurchaseSizeOffer>;
+};
+
+/**
+ * Why a purchase was refused, as a stable code the buy and add-agent dialogs
+ * show their own way. One vocabulary for `/team/computers` and
+ * `/team_agents`.
+ */
+export type PurchaseRefusalCode = 'team_on_trial' | 'payment_declined' | 'no_room' | 'invite_in_progress';
+
+/**
+ * A size on sale and what buying it charges today.
+ */
+export type PurchaseSizeOffer = SizeOffer & {
+    /**
+     * The prorated rest of the current period, invoiced at purchase, in the
+     * currency's smallest unit, less the team's credit balance; 0 when the
+     * team is comped. The charge itself is prorated to the second it is
+     * bought.
+     */
+    dueToday: number;
 };
 
 /**
@@ -1971,9 +2061,9 @@ export type ScheduledSeatPlan = {
 /**
  * The paid plan a seat is billed at. Every member of a paying team has one;
  * a team may mix them, and its Stripe subscription carries one seat item per
- * plan in use.
+ * plan in use. Variants are ordered cheapest first, so `<` compares plans.
  */
-export type SeatPlan = 'premium' | 'max';
+export type SeatPlan = 'premium' | 'business' | 'max';
 
 /**
  * Response for the domain notice endpoint.
@@ -2108,7 +2198,7 @@ export type SetupStep = 'billing' | 'creating' | 'booting' | 'connecting' | 'rea
  */
 export type SizeOffer = {
     /**
-     * Root disk size in GiB.
+     * Whole disk quota in GiB: root and `/home` together.
      */
     diskGb: number;
     /**
@@ -2284,6 +2374,7 @@ export type SubscriptionSeatTotal = {
  */
 export type SubscriptionStatus = {
     billing?: null | SubscriptionBilling;
+    interval?: null | BillingInterval;
     /**
      * Provider-confirmed subscription renewal date.
      */
@@ -2397,9 +2488,22 @@ export type TeamAgent = {
 };
 
 /**
+ * [`ErrorResponse`] plus a stable code for refusals the invite dialog shows
+ * its own way rather than as a message.
+ */
+export type TeamAgentErrorBody = {
+    code?: null | PurchaseRefusalCode;
+    /**
+     * Human-readable message.
+     */
+    message: string;
+    size?: null | ComputerSize;
+};
+
+/**
  * Where an agent teammate is, from its computer.
  */
-export type TeamAgentStatus = 'provisioning' | 'running' | 'paused' | 'failed' | 'released';
+export type TeamAgentStatus = 'provisioning' | 'starting' | 'running' | 'paused' | 'unhealthy' | 'failed' | 'released';
 
 /**
  * A team's agents.
@@ -2652,6 +2756,23 @@ export type UpstreamErrorResponse = {
      * What failed and what to do about it, written for the user.
      */
     message: string;
+};
+
+/**
+ * A computer's use at one point of the graph.
+ */
+export type UsagePoint = {
+    /**
+     * Share of its CPUs in use, 0 to 100. Absent until a second reading
+     * of the same run measures it: a computer's first reading after it
+     * starts or wakes has memory only.
+     */
+    cpuPercent?: number | null;
+    /**
+     * Memory only it holds, in bytes; memory shared with its image is not
+     * counted.
+     */
+    memoryBytes: number;
 };
 
 /**
@@ -4606,6 +4727,62 @@ export type ListTeamComputerOffersResponses = {
 
 export type ListTeamComputerOffersResponse = ListTeamComputerOffersResponses[keyof ListTeamComputerOffersResponses];
 
+export type ListTeamComputerPurchaseOffersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers/purchase-offers';
+};
+
+export type ListTeamComputerPurchaseOffersErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    422: ErrorResponse;
+    502: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type ListTeamComputerPurchaseOffersError = ListTeamComputerPurchaseOffersErrors[keyof ListTeamComputerPurchaseOffersErrors];
+
+export type ListTeamComputerPurchaseOffersResponses = {
+    200: PurchaseOffers;
+};
+
+export type ListTeamComputerPurchaseOffersResponse = ListTeamComputerPurchaseOffersResponses[keyof ListTeamComputerPurchaseOffersResponses];
+
+export type GetTeamComputerRolloutData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers/rollout';
+};
+
+export type GetTeamComputerRolloutResponses = {
+    200: ComputerRollout;
+};
+
+export type GetTeamComputerRolloutResponse = GetTeamComputerRolloutResponses[keyof GetTeamComputerRolloutResponses];
+
+export type ListTeamComputerUsageData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers/usage';
+};
+
+export type ListTeamComputerUsageErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type ListTeamComputerUsageError = ListTeamComputerUsageErrors[keyof ListTeamComputerUsageErrors];
+
+export type ListTeamComputerUsageResponses = {
+    200: Array<ComputerUsage>;
+};
+
+export type ListTeamComputerUsageResponse = ListTeamComputerUsageResponses[keyof ListTeamComputerUsageResponses];
+
 export type UndoCancelTeamComputerData = {
     body?: never;
     path: {
@@ -5167,8 +5344,15 @@ export type CreateTeamAgentData = {
 export type CreateTeamAgentErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * The card was declined (`payment_declined`); nothing was created
+     */
+    402: TeamAgentErrorBody;
     403: ErrorResponse;
-    409: ErrorResponse;
+    /**
+     * No room for the size (`no_room`, with `size`), or the invite is in flight (`invite_in_progress`); nothing was created
+     */
+    409: TeamAgentErrorBody;
     500: ErrorResponse;
     502: ErrorResponse;
 };
@@ -5180,6 +5364,28 @@ export type CreateTeamAgentResponses = {
 };
 
 export type CreateTeamAgentResponse = CreateTeamAgentResponses[keyof CreateTeamAgentResponses];
+
+export type ReportTeamAgentOnlineData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team_agents/me/online';
+};
+
+export type ReportTeamAgentOnlineErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ReportTeamAgentOnlineError = ReportTeamAgentOnlineErrors[keyof ReportTeamAgentOnlineErrors];
+
+export type ReportTeamAgentOnlineResponses = {
+    204: void;
+};
+
+export type ReportTeamAgentOnlineResponse = ReportTeamAgentOnlineResponses[keyof ReportTeamAgentOnlineResponses];
 
 export type DeleteTeamAgentData = {
     body?: never;
@@ -5278,7 +5484,7 @@ export type AgentSetupData = {
 export type AgentSetupErrors = {
     401: string;
     /**
-     * The account is not an agent
+     * The account is not an agent, or the caller is an agent's program
      */
     403: ErrorResponse;
     /**

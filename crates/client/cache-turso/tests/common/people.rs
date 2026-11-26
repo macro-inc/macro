@@ -51,7 +51,18 @@ pub async fn seed<S: Storage>(storage: &mut S, count: usize) {
                     .map(|index| {
                         let user = format!("macro|p{index:06}@example.com");
                         let key = contact_key(&user);
-                        let record = contact(&user, key.id().unwrap());
+                        let mut record = contact(&user, key.id().unwrap());
+                        // A few teammates, then larger lists. Without a list
+                        // priority these change no order.
+                        let list = match index {
+                            0..20 => "teammates",
+                            20..5_000 => "interacted",
+                            _ => "gmail",
+                        };
+                        record.fields.insert(
+                            "lists".into(),
+                            CacheValue::List(vec![CacheValue::String(list.into())]),
+                        );
                         (key, record)
                     })
                     .collect(),
@@ -111,6 +122,8 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         limit: 1,
         now_ms: 2_000,
         cursor: None,
+        list_priority: vec![],
+        only_listed: false,
     };
     assert!(
         engine.search_people(&request).await.is_err(),
@@ -316,8 +329,8 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
     };
     assert_eq!(
         people[0].user_id.as_ref(),
-        EXACT,
-        "an exact label precedes even a boosted DM prefix"
+        WINNER,
+        "a person the viewer messages precedes a stranger's exact label"
     );
     request.limit = MAX_PEOPLE_BATCH + 1;
     assert!(engine.search_people(&request).await.is_err());
@@ -354,18 +367,23 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         panic!("ready")
     };
     assert_eq!(people[0].user_id.as_ref(), "macro|p000001@example.com");
-    assert_eq!(people[0].match_rank, 5);
+    assert_eq!(people[0].match_rank, 7);
     request.mode = PeopleMode::Mention;
     request.query = "al".into();
+    request.limit = 2;
     let PeopleSearchResult::Page { people, .. } = engine.search_people(&request).await.unwrap()
     else {
         panic!("ready")
     };
     assert_eq!(
-        people[0].user_id.as_ref(),
-        EXACT,
-        "mention name tiers must apply before limiting, not only after hydration"
+        people
+            .iter()
+            .map(|person| person.user_id.as_ref())
+            .collect::<Vec<_>>(),
+        [DUPLICATE, EXACT],
+        "messaged people lead, then mention name tiers apply before limiting, not only after hydration"
     );
+    request.limit = 1;
     request.mode = PeopleMode::Property;
     request.query = "alpha".into();
     request.sender_domain = Some("example.com".into());

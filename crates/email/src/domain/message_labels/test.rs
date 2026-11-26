@@ -16,6 +16,8 @@ enum Call {
     Event,
     Enqueue,
     Revert(Uuid, Vec<Uuid>, Vec<Uuid>, Uuid),
+    Facts(Uuid, Uuid),
+    Command,
 }
 
 type Calls = std::sync::Arc<Mutex<Vec<Call>>>;
@@ -26,12 +28,31 @@ struct Repository {
     label: Option<MessageLabelDefinition>,
     messages: Vec<MessageLabelTarget>,
     provider_messages: Vec<(Uuid, String)>,
+    gaining: Vec<GainingThread>,
     restored: Result<Vec<Uuid>, TestError>,
     staged: Mutex<Vec<StagedLabelWrite>>,
+    /// Each Outlook message's facts beside its thread.
+    facts: Vec<(Uuid, MailboxActionMessage)>,
+    command_fails: bool,
+    /// A failed command found the inbox locked past the lock timeout.
+    command_contended: bool,
+    commands: Mutex<Vec<Command>>,
+}
+
+#[derive(Debug)]
+struct Command {
+    link_id: Uuid,
+    actor: String,
+    action: MailboxAction,
+    targets: Vec<Uuid>,
 }
 
 impl MessageLabelRepository for Repository {
     type Err = TestError;
+
+    fn is_contended(&self, _: &TestError) -> bool {
+        self.command_contended
+    }
 
     async fn inbox_for_message(
         &self,
@@ -66,10 +87,13 @@ impl MessageLabelRepository for Repository {
         Ok(self.messages.clone())
     }
 
-    async fn stage(&self, write: StagedLabelWrite) -> Result<Vec<(Uuid, String)>, StageFailure> {
+    async fn stage(&self, write: StagedLabelWrite) -> Result<StagedMessageLabels, StageFailure> {
         self.calls.lock().unwrap().push(Call::Stage);
         self.staged.lock().unwrap().push(write);
-        Ok(self.provider_messages.clone())
+        Ok(StagedMessageLabels {
+            provider_messages: self.provider_messages.clone(),
+            gaining: self.gaining.clone(),
+        })
     }
 
     async fn revert_unsent(
@@ -84,6 +108,44 @@ impl MessageLabelRepository for Repository {
             .unwrap()
             .push(Call::Revert(link, threads.into(), messages.into(), write));
         self.restored.clone()
+    }
+
+    async fn mailbox_action_messages(
+        &self,
+        link_id: Uuid,
+        thread_id: Uuid,
+    ) -> Result<Vec<MailboxActionMessage>, Self::Err> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(Call::Facts(link_id, thread_id));
+        Ok(self
+            .facts
+            .iter()
+            .filter(|(thread, _)| *thread == thread_id)
+            .map(|(_, fact)| fact.clone())
+            .collect())
+    }
+
+    async fn enqueue_mailbox_action(
+        &self,
+        link_id: Uuid,
+        actor: MacroUserIdStr<'static>,
+        action: &MailboxAction,
+        targets: &[MailboxActionTarget],
+    ) -> Result<Uuid, Self::Err> {
+        self.calls.lock().unwrap().push(Call::Command);
+        self.commands.lock().unwrap().push(Command {
+            link_id,
+            actor: actor.to_string(),
+            action: action.clone(),
+            targets: targets.iter().map(|t| t.message_id).collect(),
+        });
+        if self.command_fails {
+            Err(TestError)
+        } else {
+            Ok(Uuid::from_u128(99))
+        }
     }
 }
 
@@ -171,6 +233,7 @@ fn service() -> MessageLabelService<Repository, Enqueuer, Broker> {
             inbox: Some(MessageLabelInbox {
                 id: Uuid::from_u128(1),
                 macro_id: MacroUserIdStr::try_from("macro|owner@example.com").unwrap(),
+                provider: UserProvider::Gmail,
             }),
             label: Some(MessageLabelDefinition {
                 id: Some(Uuid::from_u128(2)),
@@ -179,8 +242,13 @@ fn service() -> MessageLabelService<Repository, Enqueuer, Broker> {
             }),
             messages: Vec::new(),
             provider_messages: Vec::new(),
+            gaining: Vec::new(),
             restored: Ok(Vec::new()),
             staged: Mutex::default(),
+            facts: Vec::new(),
+            command_fails: false,
+            command_contended: false,
+            commands: Mutex::default(),
         },
         enqueuer: Enqueuer {
             calls: calls.clone(),
@@ -204,7 +272,7 @@ fn message(id: u128, thread: u128) -> MessageLabelTarget {
 
 fn request(message_ids: Vec<Uuid>) -> MessageLabelChange {
     MessageLabelChange {
-        caller_macro_id: "macro|caller@example.com".into(),
+        caller: MacroUserIdStr::try_from("macro|caller@example.com").unwrap(),
         caller_fusionauth_user_id: "caller-auth".into(),
         message_ids,
         label_id: Uuid::from_u128(2),
@@ -384,14 +452,29 @@ async fn enqueue_failure_reports_only_restored_messages_as_failed() {
     assert_eq!(outcome.successful_ids, vec![Uuid::from_u128(4)]);
     assert_eq!(outcome.failed_ids, vec![Uuid::from_u128(3)]);
     let write_id = service.repository.staged.lock().unwrap()[0].write_id;
+    let calls = service.repository.calls.lock().unwrap();
+    let reverted = calls
+        .iter()
+        .position(|call| {
+            *call
+                == Call::Revert(
+                    Uuid::from_u128(1),
+                    vec![Uuid::from_u128(9)],
+                    vec![Uuid::from_u128(3)],
+                    write_id,
+                )
+        })
+        .unwrap();
+    // The change was published before the write was undone, so the thread is
+    // reindexed once the old labels are back.
+    assert_eq!(calls[reverted + 1..], [Call::Event]);
+    let events = service.broker.events.lock().unwrap();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["event_type"], "email.thread_labels_updated");
+    assert_eq!(events[1]["event_type"], "email.threads_reindex_requested");
     assert_eq!(
-        service.repository.calls.lock().unwrap().last(),
-        Some(&Call::Revert(
-            Uuid::from_u128(1),
-            vec![Uuid::from_u128(9)],
-            vec![Uuid::from_u128(3)],
-            write_id
-        ))
+        events[1]["metadata"]["thread_ids"],
+        serde_json::json!([Uuid::from_u128(9)])
     );
 }
 
@@ -406,4 +489,199 @@ async fn a_write_that_can_be_neither_queued_nor_undone_fails_the_request() {
         service.change(request(vec![Uuid::from_u128(3)])).await,
         Err(MessageLabelError::Unqueued(TestError))
     ));
+}
+
+fn outlook() -> MessageLabelService<Repository, Enqueuer, Broker> {
+    let mut service = service();
+    if let Some(inbox) = service.repository.inbox.as_mut() {
+        inbox.provider = UserProvider::Outlook;
+    }
+    service
+}
+
+fn fact(id: u128, is_present: bool) -> MailboxActionMessage {
+    MailboxActionMessage {
+        id: Uuid::from_u128(id),
+        provider_id: Some(format!("provider-{id}")),
+        is_draft: false,
+        is_sent: false,
+        is_read: true,
+        in_inbox: true,
+        in_trash: false,
+        in_junk: false,
+        is_present,
+    }
+}
+
+#[tokio::test]
+async fn outlook_queues_one_category_command_for_the_requested_messages_it_still_holds() {
+    let mut service = outlook();
+    service.repository.messages = vec![message(3, 9), message(4, 8), message(5, 9)];
+    service.repository.facts = vec![
+        (Uuid::from_u128(9), fact(3, true)),
+        (Uuid::from_u128(9), fact(5, false)),
+        (Uuid::from_u128(9), fact(6, true)),
+        (Uuid::from_u128(8), fact(4, true)),
+    ];
+    let outcome = service
+        .change(request(vec![
+            Uuid::from_u128(3),
+            Uuid::from_u128(4),
+            Uuid::from_u128(5),
+            Uuid::from_u128(7),
+        ]))
+        .await
+        .unwrap();
+    assert_eq!(
+        outcome,
+        MessageLabelOutcome {
+            successful_ids: vec![Uuid::from_u128(3), Uuid::from_u128(4)],
+            failed_ids: vec![Uuid::from_u128(5)],
+            missing_ids: vec![Uuid::from_u128(7)],
+        }
+    );
+    let commands = service.repository.commands.lock().unwrap();
+    assert_eq!(commands.len(), 1);
+    assert_eq!(commands[0].link_id, Uuid::from_u128(1));
+    assert_eq!(commands[0].actor, "macro|caller@example.com");
+    assert_eq!(
+        commands[0].action,
+        MailboxAction::Category {
+            name: "Label_3".into(),
+            present: true,
+        }
+    );
+    assert_eq!(
+        commands[0].targets,
+        vec![Uuid::from_u128(4), Uuid::from_u128(3)]
+    );
+    assert_eq!(
+        *service.repository.calls.lock().unwrap(),
+        vec![
+            Call::Inbox("macro|caller@example.com".into(), Uuid::from_u128(3)),
+            Call::Label(Uuid::from_u128(2), Uuid::from_u128(1)),
+            Call::Messages(
+                vec![
+                    Uuid::from_u128(3),
+                    Uuid::from_u128(4),
+                    Uuid::from_u128(5),
+                    Uuid::from_u128(7)
+                ],
+                "caller-auth".into()
+            ),
+            Call::Facts(Uuid::from_u128(1), Uuid::from_u128(8)),
+            Call::Facts(Uuid::from_u128(1), Uuid::from_u128(9)),
+            Call::Command,
+        ]
+    );
+    assert!(service.repository.staged.lock().unwrap().is_empty());
+    assert!(service.enqueuer.writes.lock().unwrap().is_empty());
+    assert!(service.broker.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn outlook_removal_takes_the_category_off() {
+    let mut service = outlook();
+    service.repository.messages = vec![message(3, 9)];
+    service.repository.facts = vec![(Uuid::from_u128(9), fact(3, true))];
+    let mut request = request(vec![Uuid::from_u128(3)]);
+    request.add = false;
+    service.change(request).await.unwrap();
+    assert_eq!(
+        service.repository.commands.lock().unwrap()[0].action,
+        MailboxAction::Category {
+            name: "Label_3".into(),
+            present: false,
+        }
+    );
+}
+
+#[tokio::test]
+async fn outlook_command_that_cannot_be_queued_fails_the_request() {
+    let mut service = outlook();
+    service.repository.messages = vec![message(3, 9), message(4, 9)];
+    service.repository.facts = vec![
+        (Uuid::from_u128(9), fact(3, true)),
+        (Uuid::from_u128(9), fact(4, true)),
+    ];
+    service.repository.command_fails = true;
+    assert!(matches!(
+        service
+            .change(request(vec![Uuid::from_u128(3), Uuid::from_u128(4)]))
+            .await,
+        Err(MessageLabelError::Command(TestError))
+    ));
+}
+
+#[tokio::test]
+async fn outlook_command_behind_a_busy_inbox_is_a_retryable_failure() {
+    let mut service = outlook();
+    service.repository.messages = vec![message(3, 9)];
+    service.repository.facts = vec![(Uuid::from_u128(9), fact(3, true))];
+    service.repository.command_fails = true;
+    service.repository.command_contended = true;
+    assert!(matches!(
+        service.change(request(vec![Uuid::from_u128(3)])).await,
+        Err(MessageLabelError::Contended)
+    ));
+}
+
+#[tokio::test]
+async fn outlook_messages_the_inbox_no_longer_holds_queue_no_command() {
+    let mut service = outlook();
+    service.repository.messages = vec![message(3, 9)];
+    service.repository.facts = vec![(Uuid::from_u128(9), fact(3, false))];
+    let outcome = service
+        .change(request(vec![Uuid::from_u128(3)]))
+        .await
+        .unwrap();
+    assert_eq!(outcome.failed_ids, vec![Uuid::from_u128(3)]);
+    assert!(outcome.successful_ids.is_empty());
+    assert!(service.repository.commands.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_thread_that_gains_the_label_is_told_and_a_programs_write_is_marked() {
+    let gaining = |service: &mut MessageLabelService<Repository, Enqueuer, Broker>| {
+        service.repository.messages = vec![message(3, 9), message(4, 8)];
+        service.repository.gaining = vec![GainingThread {
+            thread_id: Uuid::from_u128(9),
+            message_id: Uuid::from_u128(3),
+            label_id: Uuid::from_u128(2),
+        }];
+    };
+    let ids = || vec![Uuid::from_u128(3), Uuid::from_u128(4)];
+
+    let mut by_person = service();
+    gaining(&mut by_person);
+    by_person.change(request(ids())).await.unwrap();
+    let mut by_agent = service();
+    gaining(&mut by_agent);
+    agent_correlation::context::as_program(by_agent.change(request(ids())))
+        .await
+        .unwrap();
+
+    for (service, automated) in [(&by_person, None), (&by_agent, Some(true))] {
+        let events = service.broker.events.lock().unwrap();
+        let metadata = |thread: u128| {
+            events
+                .iter()
+                .map(|event| &event["metadata"])
+                .find(|metadata| metadata["thread_id"] == Uuid::from_u128(thread).to_string())
+                .unwrap()
+                .clone()
+        };
+        let gained = metadata(9);
+        assert_eq!(
+            gained["labels_gained"],
+            serde_json::json!([Uuid::from_u128(2)])
+        );
+        assert_eq!(gained["message_id"], Uuid::from_u128(3).to_string());
+        assert_eq!(
+            gained.get("automated").and_then(|flag| flag.as_bool()),
+            automated
+        );
+        // The other thread already had the label.
+        assert!(metadata(8).get("labels_gained").is_none());
+    }
 }

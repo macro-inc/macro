@@ -12,7 +12,6 @@ import { EmailParticipants } from './views/email-participants';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
-  clearDraft: vi.fn(),
   source: vi.fn(),
   rendering: vi.fn<(rendering: EmailThreadViewContext['rendering']) => void>(),
   started: [] as Promise<void>[],
@@ -21,11 +20,14 @@ vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => <span /> }));
 vi.mock('@app/features/email-message/components/email-user-tooltip', () => ({
   EmailUserTooltip: (props: ParentProps) => <>{props.children}</>,
 }));
-vi.mock('@property/tags', () => ({ InlineFetchedEntityTagsPill: () => null }));
-vi.mock('@queries/email/thread', () => ({ useThreadQuery: mocks.query }));
-vi.mock('@queries/email/draft-cache', () => ({
-  clearSavedDraftThreadCache: mocks.clearDraft,
+vi.mock('@property/tags', () => ({
+  InlineFetchedEntityTagsPill: () => null,
+  LabelsMenuPill: () => null,
 }));
+vi.mock('@queries/email/thread-labels', () => ({
+  useShownThreadLabels: () => () => [],
+}));
+vi.mock('@queries/email/thread', () => ({ useThreadQuery: mocks.query }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));
@@ -144,7 +146,6 @@ describe('email thread query ownership', () => {
     expect(fetchOlder).toHaveBeenCalledOnce();
     expect(refresh).toHaveBeenCalledOnce();
     view.unmount();
-    expect(mocks.clearDraft).toHaveBeenCalledWith('thread');
     await Promise.all(mocks.started);
   });
 

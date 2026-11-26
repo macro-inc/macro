@@ -9,6 +9,7 @@ import {
 } from '@core/component/ContextMenu';
 import { toast } from '@core/component/Toast/Toast';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowClockwise from '@icon/system/regular/arrow-clockwise.svg';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
@@ -27,13 +28,16 @@ import { createMemo, type ParentProps, useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent, SplitPlacement } from '../layoutManager';
 import { shouldShowSplitCloseButton } from '../layoutUtils';
+import { canDuplicateSplit as canDuplicate } from '../utils/canDuplicateSplit';
 import { canSpotlight } from '../utils/canSpotlight';
 
 /** Split actions shared by legacy split chrome and composable view top bars. */
 export function SplitHeaderContextMenu(props: ParentProps) {
   const panel = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
-  if (!panel || !layout) return props.children;
+  // Touch has no split actions: a long press, or the synthetic contextmenu
+  // iOS sends when a sheet closes under a held finger, would open them.
+  if (!panel || !layout || isTouchDevice()) return props.children;
 
   // Kobalte's menu provides its item collection around the trigger too. Hand
   // the header the collection it sits in, or tabs whose root wraps the header
@@ -47,8 +51,9 @@ export function SplitHeaderContextMenu(props: ParentProps) {
   const canCloseSplit = createMemo(() =>
     shouldShowSplitCloseButton(layout.manager)
   );
-  const canDuplicateSplit = createMemo(
-    () => panel.handle.content().type === 'component'
+  const pane = panel.handle.id as string as PaneId;
+  const canDuplicateSplit = createMemo(() =>
+    canDuplicate(router, pane, panel.handle.content())
   );
   const canToggleSpotlight = createMemo(() => canSpotlight(layout.manager));
   const canSwapWith = (direction: 'left' | 'right') =>
@@ -85,7 +90,7 @@ export function SplitHeaderContextMenu(props: ParentProps) {
             activeSplitId: layout.manager.activeSplitId(),
             currentSplitId: panel.handle.id,
             currentSplitIndex: splitIndex(),
-            currentSplitUrl: router.href(panel.handle.id as string as PaneId),
+            currentSplitUrl: router.href(pane),
             splits: splits.map((split, index) => ({
               index,
               id: split.id,

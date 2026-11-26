@@ -43,8 +43,11 @@ vi.mock('@components/app/side-panel', () => ({
     },
   },
 }));
-vi.mock('./CallRecording/CallRecordingSplitHeader', () => ({
-  CallRecordingSplitHeader: () => null,
+vi.mock('../views/call-recording-header', () => ({
+  CallRecordingHeader: () => null,
+}));
+vi.mock('../views/mobile/call-recording-header', () => ({
+  MobileCallRecordingHeader: () => null,
 }));
 vi.mock('./sidepanel/CallSidePanelSections', () => ({
   CallSidePanelSections: () => null,

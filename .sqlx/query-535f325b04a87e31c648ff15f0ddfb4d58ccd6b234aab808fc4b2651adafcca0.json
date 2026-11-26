@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT computer_id, sampled_at, cpu_usage_microseconds, memory_bytes\n            FROM hosted_runtime_usage_sample\n            WHERE computer_id = ANY($1) AND minute >= $2\n            ORDER BY computer_id, minute\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sampled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "cpu_usage_microseconds",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "memory_bytes",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "535f325b04a87e31c648ff15f0ddfb4d58ccd6b234aab808fc4b2651adafcca0"
+}

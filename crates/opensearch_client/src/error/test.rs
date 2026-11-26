@@ -86,7 +86,7 @@ async fn a_refused_connection_is_reported_as_a_connect_failure() {
     let client =
         crate::OpensearchClient::new(format!("http://{address}"), "".into(), "".into()).unwrap();
 
-    let result = client.delete_agent_session("session-1", None).await;
+    let result = client.delete_agent_session("session-1", None, 1).await;
 
     let Err(OpensearchClientError::RequestFailed {
         details,
@@ -96,7 +96,7 @@ async fn a_refused_connection_is_reported_as_a_connect_failure() {
     else {
         panic!("expected a request failure, got {result:?}");
     };
-    assert_eq!(operation, OpensearchOperation::DeleteAgentSession);
+    assert_eq!(operation, OpensearchOperation::ReadAgentSessionParent);
     assert_eq!(cause, TransportFailure::Connect);
     assert!(details.contains("error sending request"), "{details}");
 }

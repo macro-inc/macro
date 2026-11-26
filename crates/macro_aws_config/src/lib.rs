@@ -81,11 +81,14 @@ fn transform_local_url(url: &str, public_url: Option<&str>) -> String {
         return format!("{origin}{path}{query}");
     }
 
-    // hostname should be in the form {asset}.localstack or {asset}.localhost
-    let asset = host
+    // hostname should be in the form {asset}.localstack or {asset}.localhost;
+    // any other endpoint (a test's own, by address) is reachable as it is.
+    let Some(asset) = host
         .strip_suffix(".localstack")
         .or_else(|| host.strip_suffix(".localhost"))
-        .unwrap();
+    else {
+        return url.to_owned();
+    };
 
     format!("{origin}/{asset}{path}{query}")
 }

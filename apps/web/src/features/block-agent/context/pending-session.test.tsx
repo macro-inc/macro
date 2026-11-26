@@ -18,7 +18,6 @@ const fold = vi.hoisted(() => ({
 }));
 const flags = vi.hoisted(() => ({
   firstPromptOnCreate: true,
-  agentNavigation: false,
 }));
 const harness = vi.hoisted(() => ({
   create: vi.fn(),
@@ -36,7 +35,6 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
       if (flag === actual.enableFirstPromptOnCreate) {
         return flags.firstPromptOnCreate;
       }
-      if (flag === actual.enableAgentNavigation) return flags.agentNavigation;
       return actual.isFeatureEnabled(flag);
     },
   };
@@ -157,7 +155,6 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   flags.firstPromptOnCreate = true;
-  flags.agentNavigation = false;
   fold.pushSession.mockResolvedValue([]);
   fold.readSession.mockResolvedValue({
     messages: [],
@@ -432,6 +429,7 @@ describe('first prompt on the create', () => {
       id,
       prompt: 'Hello',
       promptActionId: expect.any(String),
+      promptClientId: expect.any(String),
     });
     const actionId: string = request.promptActionId;
     expect(harness.control).not.toHaveBeenCalled();
@@ -510,8 +508,7 @@ describe('first prompt on the create', () => {
     expect(fold.closeSession).toHaveBeenCalledExactlyOnceWith(id);
   });
 
-  it('names the tab the first prompt was typed in while agent navigation is on', async () => {
-    flags.agentNavigation = true;
+  it('names the tab the first prompt was typed in', async () => {
     startPendingSession({ prompt: 'Open the plan', userId: 'me' });
     await settle();
 
@@ -524,7 +521,6 @@ describe('first prompt on the create', () => {
   it.each(MOBILE_DEVICES)(
     'names no tab for a first prompt typed on $on',
     async (mobile) => {
-      flags.agentNavigation = true;
       holdMobile(device, mobile);
       startPendingSession({ prompt: 'Open the plan', userId: 'me' });
       await settle();

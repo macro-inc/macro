@@ -43,6 +43,9 @@ const QuickAccessProviderValue: FlowComponent = (props) => {
       loadMore: async () => {
         await sourceList()?.loadMore();
       },
+      retry: async () => {
+        await sourceList()?.retry?.();
+      },
     };
   }) as QuickAccessContextValue['useList'];
 

@@ -269,6 +269,7 @@ function fakeComputedStyle(element: Element) {
   return {
     color: toComputed(color, 'rgb(0, 0, 0)'),
     backgroundColor: toComputed(background, 'rgba(0, 0, 0, 0)'),
+    backgroundImage: 'none',
   } as CSSStyleDeclaration;
 }
 

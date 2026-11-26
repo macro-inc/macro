@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { appearanceColor, readEntityAppearance } from './appearance';
+import {
+  appearanceColor,
+  readEntityAppearance,
+  supportsEntityAppearance,
+} from './appearance';
 
 describe('appearance palette transport', () => {
   it('preserves icons when GraphQL reads include the added tag colors', () => {
@@ -35,4 +39,16 @@ describe('appearance palette transport', () => {
     expect(readEntityAppearance(null)).toBeNull();
     expect(readEntityAppearance('invalid')).toBeNull();
   });
+});
+
+it('supports saved definitions without enabling appearance on excluded entity kinds', () => {
+  expect(supportsEntityAppearance({ type: 'saved_view' })).toBe(true);
+  expect(supportsEntityAppearance({ type: 'project' })).toBe(false);
+  expect(
+    supportsEntityAppearance({
+      type: 'document',
+      fileType: 'md',
+      subType: { type: 'task' },
+    })
+  ).toBe(false);
 });

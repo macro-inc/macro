@@ -6,7 +6,7 @@ use crate::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         model::{Highlight, SearchGotoContent, SearchGotoDocument, SearchHit, parse_highlight_hit},
         properties::{PROPERTIES_PATH, build_tag_filter},
-        query::Keys,
+        query::{Keys, child_content_query},
         utils::{INNER_HITS_PER_RESULT, split_inner_hits_budget},
     },
 };
@@ -14,19 +14,13 @@ use crate::{
 use chrono::{DateTime, Utc};
 use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::{
-    BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
-    NestedQuery, QueryType, ToOpenSearchJson,
+    BoolQueryBuilder, HasChildQuery, InnerHits, NestedQuery, QueryType, ToOpenSearchJson,
 };
 
 /// Relation names for the join field. Kept in sync with the upsert path
 /// in `upsert::document`.
 const PARENT_RELATION: &str = "document";
 const CHILD_RELATION: &str = "chunk";
-
-/// Minimum prefix length before we emit a `match_phrase_prefix`. Matches
-/// the email keyword-field threshold — shorter prefixes explode the term
-/// set on the analyzer and risk hitting `max_clause_count`.
-const MIN_PREFIX_LEN: usize = 3;
 
 /// The chunk `_source` fields a `SearchHit` carries. Inner hits do not inherit
 /// the request-level `_source` filter, so without this every chunk comes back
@@ -44,12 +38,6 @@ const STOPWORDS: [&str; 33] = [
     "no", "not", "of", "on", "or", "such", "that", "the", "their", "then", "there", "these",
     "they", "this", "to", "was", "will", "with",
 ];
-
-/// Cap on terms a `match_phrase_prefix` may expand the last word to.
-/// OpenSearch's default of 50 is too aggressive — a prefix like `wo`
-/// can expand to far more real tokens. Picking a fixed ceiling keeps
-/// query cost bounded without truncating common cases.
-const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 
 /// Name of the one `inner_hits` block of the passage clause.
 const PASSAGE_INNER_HITS_NAME: &str = "passage";
@@ -121,10 +109,10 @@ impl SearchQueryConfig for DocumentSearchConfig {
 pub(crate) struct DocumentQueryBuilder {
     inner: SearchQueryBuilder<DocumentSearchConfig>,
     sub_types: Vec<String>,
+    excluded_sub_types: Vec<String>,
     mode: DocumentSearchMode,
     property_filters: Vec<PropertyFilterArg>,
-    tag_option_ids: Vec<String>,
-    match_all_tags: bool,
+    tag_groups: Vec<Vec<String>>,
     term_matching: DocumentTermMatching,
 }
 
@@ -133,10 +121,10 @@ impl DocumentQueryBuilder {
         Self {
             inner: SearchQueryBuilder::new(terms),
             sub_types: Vec::new(),
+            excluded_sub_types: Vec::new(),
             mode: DocumentSearchMode::default(),
             property_filters: Vec::new(),
-            tag_option_ids: Vec::new(),
-            match_all_tags: false,
+            tag_groups: Vec::new(),
             term_matching: DocumentTermMatching::default(),
         }
     }
@@ -155,10 +143,18 @@ impl DocumentQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn excluded_terms(excluded_terms: Vec<String>) -> Self;
     }
 
     pub fn sub_types(mut self, sub_types: Vec<String>) -> Self {
         self.sub_types = sub_types;
+        self
+    }
+
+    /// Leaves out the documents of these sub types; a document with none
+    /// stays.
+    pub fn excluded_sub_types(mut self, excluded_sub_types: Vec<String>) -> Self {
+        self.excluded_sub_types = excluded_sub_types;
         self
     }
 
@@ -167,13 +163,9 @@ impl DocumentQueryBuilder {
         self
     }
 
-    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
-        self.tag_option_ids = tag_option_ids;
-        self
-    }
-
-    pub fn match_all_tags(mut self, match_all_tags: bool) -> Self {
-        self.match_all_tags = match_all_tags;
+    /// Tag groups every hit must meet, each by any one of its option ids.
+    pub fn tag_groups(mut self, tag_groups: Vec<Vec<String>>) -> Self {
+        self.tag_groups = tag_groups;
         self
     }
 
@@ -216,6 +208,12 @@ impl DocumentQueryBuilder {
         if !self.sub_types.is_empty() {
             bool_query.filter(QueryType::terms("sub_type", self.sub_types.clone()));
         }
+        if !self.excluded_sub_types.is_empty() {
+            bool_query.must_not(QueryType::terms(
+                "sub_type",
+                self.excluded_sub_types.clone(),
+            ));
+        }
 
         // Property filters: one nested clause per filter, ANDed via bool.filter.
         // Each matches a `properties` entry whose definition_id and value line
@@ -230,7 +228,7 @@ impl DocumentQueryBuilder {
         // Tag filter: nested clause(s) matching `properties.values` with no
         // definition_id constraint. Option ids are globally unique, so this
         // ORs (or ANDs, for match-all) tags across definitions.
-        if let Some(nested) = build_tag_filter(&self.tag_option_ids, self.match_all_tags) {
+        if let Some(nested) = build_tag_filter(&self.tag_groups) {
             bool_query.filter(nested);
         }
 
@@ -265,6 +263,23 @@ impl DocumentQueryBuilder {
             }
         }
 
+        // A term a minus left out drops every document it would match: by
+        // its name, a chunk of its content, or either, as the mode reads.
+        if include_name {
+            for query in self
+                .inner
+                .excluded_field_queries(DocumentSearchConfig::TITLE_KEY)?
+            {
+                bool_query.must_not(query);
+            }
+        }
+        if include_content {
+            for term in &self.inner.excluded_terms {
+                let query = child_content_query(term, &self.inner.match_type);
+                bool_query.must_not(HasChildQuery::new(CHILD_RELATION, query).into());
+            }
+        }
+
         Ok(bool_query)
     }
 
@@ -287,7 +302,7 @@ impl DocumentQueryBuilder {
             .inner
             .terms
             .iter()
-            .map(|term| build_child_content_query(term, &self.inner.match_type))
+            .map(|term| child_content_query(term, &self.inner.match_type))
             .collect();
         let highlight_query = build_any_term_highlight_query(&term_queries);
         let budget = split_inner_hits_budget(term_queries.len());
@@ -337,11 +352,14 @@ impl DocumentQueryBuilder {
             } else {
                 "exact"
             };
-            let term_query = build_child_content_query(term, match_type);
+            let term_query = child_content_query(term, match_type);
 
             // A last term that expands as a prefix is a word still being
             // typed: `for` may be the start of `forecast`, so it is kept.
-            let is_prefix = matches!(term_query, QueryType::MatchPhrasePrefix(_));
+            let is_prefix = matches!(
+                term_query,
+                QueryType::MatchBoolPrefix(_) | QueryType::MatchPhrasePrefix(_)
+            );
             let lowercase = term.to_lowercase();
             if counted_terms.contains(&lowercase)
                 || (STOPWORDS.contains(&lowercase.as_str()) && !is_prefix)
@@ -501,29 +519,6 @@ fn required_term_count(term_count: usize) -> usize {
     term_count * 3 / 4
 }
 
-/// Build the per-term query that runs inside `has_child` against `content`.
-///
-/// - Quoted phrases (term contains whitespace) → `match_phrase` (exact).
-/// - Short terms (< `MIN_PREFIX_LEN`) → `match_phrase` (no prefix expansion).
-/// - `match_type` = "exact" → `match_phrase` always.
-/// - Otherwise → `match_phrase_prefix`.
-fn build_child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> {
-    let exact = match_type == "exact"
-        || term.chars().any(|c| c.is_whitespace())
-        || term.chars().count() < MIN_PREFIX_LEN;
-    if exact {
-        QueryType::MatchPhrase(MatchPhraseQuery::new(
-            "content".to_string(),
-            term.to_string(),
-        ))
-    } else {
-        QueryType::MatchPhrasePrefix(
-            MatchPhrasePrefixQuery::new("content".to_string(), term.to_string())
-                .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
-        )
-    }
-}
-
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct DocumentIndex {
     pub entity_id: uuid::Uuid,
@@ -545,10 +540,10 @@ pub struct DocumentSearchArgs {
     pub collapse: bool,
     pub ids_only: bool,
     pub sub_types: Vec<String>,
+    pub excluded_sub_types: Vec<String>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
     pub term_matching: DocumentTermMatching,
 }
 
@@ -563,10 +558,10 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .collapse(args.collapse)
             .ids_only(args.ids_only)
             .sub_types(args.sub_types)
+            .excluded_sub_types(args.excluded_sub_types)
             .mode(args.mode)
             .property_filters(args.property_filters)
-            .tag_option_ids(args.tag_option_ids)
-            .match_all_tags(args.match_all_tags)
+            .tag_groups(args.tag_groups)
             .term_matching(args.term_matching)
     }
 }

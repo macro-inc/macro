@@ -15,10 +15,11 @@ The WhatsApp page opens with the WhatsApp `TutorialSidebarItem` (from `features/
   the command menu.
 - Mobile: **External** in the bottom dock (or **More views → External** when
   the dock is full). It has no back button, like other navigation views; the
-  External sidebar is hidden on touch. Like Channels, the account list omits the floating split
-  header; the WhatsApp title uses the shared collection header directly below
-  the safe area on phones and tablets, above the scrollable **In Macro** chats.
-  Opening a chat drills in full-screen; its **Back to WhatsApp** button returns.
+  External sidebar docks above 720px and opens as an overlay at narrower widths.
+  Show navigation is the leading header control when it is collapsed. The account
+  list omits the floating split header on touch; the WhatsApp title uses the shared
+  collection header above its scrollable **In Macro** chats. Opening a chat drills
+  in full-screen; its **Back to WhatsApp** button returns.
 
 ## Sidebar
 

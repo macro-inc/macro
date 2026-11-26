@@ -28,7 +28,7 @@ afterEach(() => {
 });
 function setup() {
   const request = vi
-    .fn<() => Promise<{ error?: CombinedError }>>()
+    .fn<() => Promise<{ data?: unknown; error?: CombinedError }>>()
     .mockResolvedValue({});
   const query = vi.fn((..._args: Parameters<Client['query']>) => ({
     toPromise: request,
@@ -273,30 +273,45 @@ describe('shared channel notification refresh', () => {
     expect(f.query).toHaveBeenCalledOnce();
   });
 
-  it('recovers transient failures with exponential backoff capped at 30 seconds', async () => {
-    const f = setup();
-    f.register();
-    f.request.mockResolvedValue({
-      error: new CombinedError({ networkError: new Error('offline') }),
-    });
-    f.queue.onPatch(patch(), false);
-    await tick();
-    for (const delay of [1000, 2000, 4000, 8000, 16000, 30000, 30000]) {
-      const before = f.query.mock.calls.length;
-      await vi.advanceTimersByTimeAsync(delay - 1);
-      expect(f.query).toHaveBeenCalledTimes(before);
-      await vi.advanceTimersByTimeAsync(1);
-      expect(f.query).toHaveBeenCalledTimes(before + 1);
+  it.each([
+    new CombinedError({ networkError: new Error('offline') }),
+    new CombinedError({
+      graphQLErrors: [{ message: 'A comms error has occured' }],
+    }),
+    new CombinedError({
+      graphQLErrors: [
+        { message: 'Internal', extensions: { code: 'INTERNAL' } },
+      ],
+    }),
+  ])(
+    'recovers transient failures and server faults with exponential backoff capped at 30 seconds: %s',
+    async (error) => {
+      const f = setup();
+      f.register();
+      f.request.mockResolvedValue({ error });
+      f.queue.onPatch(patch(), false);
+      await tick();
+      for (const delay of [1000, 2000, 4000, 8000, 16000, 30000, 30000]) {
+        const before = f.query.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(delay - 1);
+        expect(f.query).toHaveBeenCalledTimes(before);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(f.query).toHaveBeenCalledTimes(before + 1);
+      }
+      f.request.mockResolvedValue({});
+      await vi.advanceTimersByTimeAsync(30000);
+      const calls = f.query.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(f.query).toHaveBeenCalledTimes(calls);
     }
-    f.request.mockResolvedValue({});
-    await vi.advanceTimersByTimeAsync(30000);
-    const calls = f.query.mock.calls.length;
-    await vi.advanceTimersByTimeAsync(60000);
-    expect(f.query).toHaveBeenCalledTimes(calls);
-  });
+  );
 
   it.each([
-    new CombinedError({ graphQLErrors: ['forbidden'] }),
+    new CombinedError({
+      graphQLErrors: [
+        { message: 'forbidden', extensions: { code: 'FORBIDDEN' } },
+      ],
+    }),
     new CombinedError({
       networkError: new Error('unauthorized'),
       response: { status: 401 },
@@ -326,7 +341,11 @@ describe('shared channel notification refresh', () => {
   );
 
   it.each([
-    new CombinedError({ graphQLErrors: ['forbidden'] }),
+    new CombinedError({
+      graphQLErrors: [
+        { message: 'forbidden', extensions: { code: 'FORBIDDEN' } },
+      ],
+    }),
     new CombinedError({
       networkError: new Error('unauthorized'),
       response: { status: 401 },
@@ -464,5 +483,124 @@ describe('shared channel notification refresh', () => {
     f.queue.suspend(false);
     await tick();
     expect(f.query).toHaveBeenCalledOnce();
+  });
+});
+
+describe('new channels reaching channel lists', () => {
+  const firstPage = (scope: string): QueryRevalidation => ({
+    document,
+    variables: { input: { initial: { scope } } },
+  });
+  const nextPage = (scope: string): QueryRevalidation => ({
+    document,
+    variables: { input: { continuation: { cursor: scope } } },
+  });
+  const page = (...ids: string[]) => ({
+    data: { user: { soup: { items: ids.map((id) => ({ id })) } } },
+  });
+  function list(
+    f: ReturnType<typeof setup>,
+    query: QueryRevalidation,
+    channelTypes: readonly string[]
+  ) {
+    cleanups.push(
+      f.queue.register(query, {
+        enabled: true,
+        fetching: false,
+        filtered: true,
+        notificationIds: [],
+        channelTypes,
+      })
+    );
+  }
+
+  it('reads a list showing the channel type again until the new channel is on its first page', async () => {
+    const f = setup();
+    list(f, firstPage('dms'), ['direct_message']);
+    f.request
+      .mockResolvedValueOnce(page('older'))
+      .mockResolvedValueOnce(page('older'))
+      .mockResolvedValueOnce(page('new', 'older'));
+
+    f.queue.expectChannel({ id: 'new', channelType: 'direct_message' });
+    await tick();
+    expect(f.query).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(f.query).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(f.query).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(f.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('runs an explicit refresh made during a read without waiting for the backoff', async () => {
+    const f = setup();
+    list(f, firstPage('dms'), ['direct_message']);
+    const inFlight = deferred();
+    f.request
+      .mockReturnValueOnce(inFlight.promise)
+      .mockResolvedValue(page('older'));
+
+    f.queue.expectChannel({ id: 'new', channelType: 'direct_message' });
+    await tick();
+    expect(f.query).toHaveBeenCalledTimes(1);
+    const refreshed = f.queue.refresh([firstPage('dms')]);
+    inFlight.resolve(page('older'));
+    await tick();
+    expect(f.query).toHaveBeenCalledTimes(2);
+    await refreshed;
+  });
+
+  it('stops waiting for a channel when the cache or session is replaced', async () => {
+    const f = setup();
+    list(f, firstPage('dms'), ['direct_message']);
+    f.request.mockResolvedValue(page('older'));
+
+    f.queue.expectChannel({ id: 'new', channelType: 'direct_message' });
+    await tick();
+    expect(f.query).toHaveBeenCalledTimes(1);
+    f.queue.reset();
+    await tick();
+    expect(f.query).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(f.query).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves lists of other channel types and continuation pages alone', async () => {
+    const f = setup();
+    list(f, firstPage('team'), ['team']);
+    list(f, nextPage('dms'), ['direct_message']);
+
+    f.queue.expectChannel({ id: 'new', channelType: 'direct_message' });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.query).not.toHaveBeenCalled();
+  });
+
+  it('keeps the first wait when later messages push the same channel again', async () => {
+    const f = setup();
+    list(f, firstPage('dms'), ['direct_message']);
+    f.request.mockResolvedValue(page('older'));
+
+    f.queue.expectChannel({ id: 'new', channelType: 'direct_message' });
+    await vi.advanceTimersByTimeAsync(50_000);
+    f.queue.expectChannel({ id: 'new', channelType: 'direct_message' });
+    await vi.advanceTimersByTimeAsync(30_000);
+    const reads = f.query.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(f.query).toHaveBeenCalledTimes(reads);
+  });
+
+  it('stops reading a minute after the push when the channel never appears', async () => {
+    const f = setup();
+    list(f, firstPage('dms'), ['direct_message']);
+    f.request.mockResolvedValue(page('older'));
+
+    f.queue.expectChannel({ id: 'new', channelType: 'direct_message' });
+    await vi.advanceTimersByTimeAsync(120_000);
+    const reads = f.query.mock.calls.length;
+    expect(reads).toBeGreaterThan(3);
+    expect(reads).toBeLessThan(10);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(f.query).toHaveBeenCalledTimes(reads);
   });
 });

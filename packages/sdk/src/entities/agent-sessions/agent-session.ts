@@ -308,8 +308,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   }
 
   /**
-   * The GitHub repositories the caller can hand a managed session: every
-   * repository under an installation of Macro's GitHub App they or their
+   * List repositories available for managed sessions.
+   *
+   * Includes every repository under an installation of Macro's GitHub App they or their
    * teams made, sorted by `owner/name`. Empty when the App is installed
    * nowhere they reach.
    */
@@ -887,8 +888,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   }
 
   /**
-   * Read this session's whole history as the conversation the app renders:
-   * each user prompt and agent reply, oldest first, with tool calls and their
+   * Read this session's full conversation as the app renders it.
+   *
+   * Includes each user prompt and agent reply, oldest first, with tool calls and their
    * results, plans, permission requests and how each turn ended. Works on any
    * session the caller can view, live or finished, so it is the way to read
    * what another agent session did. Prefer it to {@link log}, which returns
@@ -939,7 +941,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   };
 
   /**
-   * Recorded activity caused by this session, lazily paginated newest first.
+   * Recorded activity caused by this session, lazily paginated newest first; `maxItems` caps the total.
    *
    * @readonly
    */

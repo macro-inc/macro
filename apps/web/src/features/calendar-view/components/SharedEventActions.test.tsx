@@ -11,6 +11,7 @@ import { SharedEventActions } from './SharedEventActions';
 const mocks = vi.hoisted(() => ({
   addSharedEvent: true,
   calendars: [] as VisibleCalendar[],
+  calendarListSucceeded: (): boolean => true,
   copy: vi.fn(),
   ask: vi.fn(),
   download: vi.fn(),
@@ -28,7 +29,14 @@ vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarAddSharedEventFlag: () => () => mocks.addSharedEvent,
 }));
 vi.mock('@queries/calendar/calendars', () => ({
-  useVisibleCalendarsQuery: () => ({ isPending: false, data: mocks.calendars }),
+  useVisibleCalendarsQuery: () => ({
+    isPending: false,
+    get isSuccess() {
+      return mocks.calendarListSucceeded();
+    },
+    isPlaceholderData: false,
+    data: mocks.calendars,
+  }),
 }));
 // The mutation's transport and cache invalidation are covered with the
 // query; here it answers with whatever `mocks.copy` returns or throws.
@@ -129,6 +137,7 @@ beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn());
   mocks.addSharedEvent = true;
   mocks.calendars = [];
+  mocks.calendarListSucceeded = () => true;
 });
 afterEach(() => {
   cleanup();
@@ -182,17 +191,34 @@ describe('shared event actions', () => {
     });
   });
 
-  it('cannot add without a writable Google calendar but can still download', () => {
+  it('explains why Outlook cannot save the shared event and still lets the viewer download it', () => {
     mocks.calendars = [calendar({ provider: 'outlook' })];
     renderActions();
 
-    const add = screen.getByRole('button', { name: 'Add to calendar' });
-    expect((add as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('status').textContent).toBe(
+      'Adding shared events requires a writable Google calendar.'
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Add to calendar' })
+    ).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Download .ics' }));
     expect(mocks.download).toHaveBeenCalledWith({
       eventId: 'shared-event',
       title: 'Design review',
     });
+  });
+
+  it('keeps the Outlook calendar explanation when a background refresh fails', () => {
+    const [succeeded, setSucceeded] = createSignal(true);
+    mocks.calendarListSucceeded = succeeded;
+    mocks.calendars = [calendar({ provider: 'outlook' })];
+    renderActions();
+
+    setSucceeded(false);
+
+    expect(screen.getByRole('status').textContent).toBe(
+      'Adding shared events requires a writable Google calendar.'
+    );
   });
 
   it('says so when the meeting is already on a calendar', () => {

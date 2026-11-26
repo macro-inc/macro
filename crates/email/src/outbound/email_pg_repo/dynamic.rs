@@ -10,11 +10,15 @@ mod resolve;
 mod tests;
 
 // Re-export the public API
+#[cfg(test)]
 pub(crate) use query::dynamic_email_thread_cursor;
 #[cfg(test)]
 pub(crate) use query::{
     OwnedReadStats, OwnedReadTuning, OwnedStreams, TeamReadTuning, begin_snapshot,
     dynamic_email_thread_cursor_owned_with, dynamic_email_thread_cursor_with, inbox_window,
+};
+pub(crate) use query::{
+    dynamic_email_thread_cursor_with_discovery, dynamic_email_thread_page_with_discovery,
 };
 
 // Re-export filter internals so tests.rs can reach them via `use super::*`
@@ -34,6 +38,7 @@ enum SqlSegment {
     Raw(String),
     BindViewer,
     BindString(String),
+    BindI64(i64),
     BindStringArray(Vec<String>),
     BindUuid(Uuid),
     BindUuidArray(Vec<Uuid>),
@@ -64,6 +69,12 @@ impl SqlFragment {
     fn bind_string(s: impl Into<String>) -> Self {
         Self {
             segments: vec![SqlSegment::BindString(s.into())],
+        }
+    }
+
+    fn bind_i64(value: i64) -> Self {
+        Self {
+            segments: vec![SqlSegment::BindI64(value)],
         }
     }
 
@@ -143,6 +154,9 @@ impl SqlFragment {
                 SqlSegment::BindString(s) => {
                     builder.push_bind(s);
                 }
+                SqlSegment::BindI64(value) => {
+                    builder.push_bind(value);
+                }
                 SqlSegment::BindStringArray(values) => {
                     builder.push_bind(values);
                 }
@@ -172,6 +186,10 @@ impl SqlFragment {
                 SqlSegment::BindString(s) => {
                     bind_idx += 1;
                     result.push_str(&format!("${bind_idx}[str={s}]"));
+                }
+                SqlSegment::BindI64(value) => {
+                    bind_idx += 1;
+                    result.push_str(&format!("${bind_idx}[i64={value}]"));
                 }
                 SqlSegment::BindStringArray(values) => {
                     bind_idx += 1;

@@ -80,6 +80,17 @@ describe('extractChannelMentionsFromMarkdown', () => {
     ]);
   });
 
+  it('extracts a user mention from a pipe-table cell', () => {
+    const markdown = [
+      '| Person | Posts |',
+      '| --- | ---: |',
+      '| <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com"}</m-user-mention> | 206 |',
+    ].join('\n');
+    expect(extractChannelMentionsFromMarkdown(markdown)).toEqual([
+      { entityType: 'user', entityId: 'macro|person@example.com' },
+    ]);
+  });
+
   it('deduplicates repeated mentions', () => {
     const markdown = `${documentMention('doc-1', 'md')} twice ${documentMention('doc-1', 'md')}`;
     expect(extractChannelMentionsFromMarkdown(markdown)).toHaveLength(1);

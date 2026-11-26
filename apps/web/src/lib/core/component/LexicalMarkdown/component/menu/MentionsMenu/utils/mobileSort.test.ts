@@ -110,6 +110,32 @@ function dateItem(id: string, displayText: string): DateMentionItem {
 }
 
 describe('sortMobileMentions', () => {
+  test('keeps unpinned user candidates in their People order', () => {
+    const now = new Date();
+    const ann = userItem('macro|ann@example.com', 'Ann', now);
+    const ben = userItem('macro|ben@example.com', 'Ben', now);
+    const cal = userItem(
+      'macro|cal@example.com',
+      'Cal',
+      new Date(now.getTime() - 10 * HOUR)
+    );
+    const agent = userItem('bot|agent', 'Agent', now);
+
+    const result = sortMobileMentions(
+      [agent, cal, ben, ann],
+      '',
+      [ann, ben, cal, agent],
+      true
+    );
+
+    expect(result.map((item) => item.id)).toEqual([
+      ann.id,
+      ben.id,
+      cal.id,
+      agent.id,
+    ]);
+  });
+
   test('boosts users above an equally-fresh doc when no query is present', () => {
     const now = new Date();
     const user = userItem('u1', 'Alice', now);

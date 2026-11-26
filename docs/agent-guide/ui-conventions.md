@@ -12,7 +12,9 @@ keeps loaded items visible. Wait for real rows before navigating or selecting.
 On touch devices, check top bars with a nonzero safe area as well as at phone
 and tablet widths. Collection headers clear the pane's full top content inset:
 safe area only in composable CRM/Tasks/Drive, plus the floating split header in
-Reviews. Native project detail navigation also clears the safe area, with its
+Reviews. Floating entity split headers add the same 0.5rem top gutter as
+collection controls, with that gutter included in the measured content inset.
+Native project detail navigation also clears the safe area, with its
 content directly below it. Content nested below an in-flow header must not add
 the same inset again. See the [mobile layout rule](../../.agents/rules/web/mobile.md#layout-and-chrome).
 
@@ -22,24 +24,53 @@ filters, view options, New, then expandable Search. Related detail actions share
 a `HeaderActionGroup`; keep sharing, item navigation, and detail/view toggles in
 separate groups. View tabs (channel, CRM record, and project sections, Signal and
 Noise) are `Tabs`: separate pills at their bar's control height (`size="sm"`
-in a detail header), never inside a group. Action groups use
+in a detail header), never inside a group. A pane's top-bar view tabs take
+`Tab`, `Shift+Tab` and `1`–`9` through `useViewTabHotkeys`, called beside the
+`Tabs` with its element: the keys act only while those tabs are on screen and
+the keyboard is on their pane (its list, the pane itself, or nothing focused
+while the user last pressed or focused something in that pane), so a field,
+an editor, a button, a detail beside the list or an open item without tabs
+keeps normal focus order, at every width and with the sidebar collapsed.
+Sidebar navigation (views, folders, scopes) is not tabs and takes no Tab or
+number keys; tabs atop a list that is the sidebar (Chat's rail) are
+that pane's top bar. A destination (`ViewSidebar.Item` in a `ViewSidebar.Nav`)
+or a view on the app rail chosen with the mouse leaves the keyboard on the pane
+even though the browser leaves focus on the button, so the next Tab switches
+the tabs; a right click, or a control there that opens a menu, dialog or
+picker or discloses a folder, chooses nothing, and a sidebar reached with the
+keyboard stays focus order. Nothing else in a view binds `Tab`. Action groups use
 `variant="secondary" finish="raised"`, fully rounded ends, and 8px gaps. Keep
 the right side of a bar at one height: detail headers use `sm`/`icon-sm` segments
 (28px controls); collection headers, beside New and Search, use `md`/`icon-md`
-(32px). New and Search retain `md` sizing. A block whose split header is 32px
-passes `size="md"` to `SplitHeaderRight` so the header's own previous/next
+(32px). New and Search retain `md` sizing. Inside an `@container/split-header`
+600px or narrower (the `@max-[600px]/split-header` rule header actions share),
+New drops its label and keeps its icon, its caret when it opens a menu, its name
+and its tooltip. The open Search field narrows, down
+to its 96px minimum, before the header's actions would push its end and its
+close button out of view; check a narrowed pane (Customers or Tasks at 760px,
+or beside a docked sidebar) with the field open. A block whose split header is
+32px passes `size="md"` to `SplitHeaderRight` so the header's own previous/next
 island matches.
 Compose their actions with `ButtonGroup.Button`; the group shares Button's frame
 materials while each segment keeps its own interaction states. Standalone Buttons
 remain independent. Nested shared actions reuse the containing group rather than adding
 another frame, and a group with no visible actions renders nothing. Keep
 tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
-iconOnly`, then a menu). Preserve specialized editor toolbars. A touch header
+iconOnly`, then a menu). Decide those steps from whether the row fits with the
+shared mechanisms, `createLabelCollapse` (`@core/signal/create-label-collapse`;
+Reviews' list header, Email's list header, which hides its view options
+and then its inbox tabs' labels before Search would leave the pane, Tasks' list
+header, which hides its layout group and then its view options, Calendar's
+period controls, which show Today as its icon first, Email's phone reply buttons) or the split header's
+`PriorityCollapse`, never a new measurement. Preserve specialized editor toolbars. A touch header
 belongs to its view's mobile view, which lists every island it shows. A new one
 shows Back, the title (tap it for the title menu), and Info, with other actions
 in the title menu, as the email thread's does. A header split from a shared one
 keeps what it had: a document's or task's also shows the access badge, the sync
-indicator, Ask Macro and, on tablets, Dispatch Agent. Other touch headers keep
+indicator, and Ask Macro; a task's dispatch actions are under Code Actions in
+its title menu at every touch width. A touch view that shows an item beside its list hosts that
+same header in the pane, so it does not change between a split of its own and
+a preview. Other touch headers keep
 their current controls until their views are split. Recent, Folders, and Agents lists use the same islands (filters,
 view options, New, expandable Search) with active filter chips below; Search
 keeps its full-width field with facet chips under it. Inputs, search fields,
@@ -115,7 +146,9 @@ Opening the editor must not blank or remount the surrounding app.
 Readers, including public viewers, see saved appearance wherever an entity icon
 already appears. Appearance edits do not reorder content, update content recency,
 or send notifications. They create entity-history entries without entering
-broader activity feeds. Copies and template instances retain the appearance.
+broader activity feeds. Copies and template instances retain the appearance,
+except that an agent creating or changing a routine may pick its look; it never
+replaces a look the owner chose.
 
 ## Responsive workspace navigation
 
@@ -180,15 +213,17 @@ the Chat/Code switch; the open tray gives the input its multiline layout.
 
 ## Scrolling content
 
+On wide touch layouts, floating composers and page actions stay within the
+preview or detail pane that owns them. Their width follows sidebar collapse and
+resizing, while app navigation retains its global placement.
+
 Desktop Email, Drive, and Tasks lists, email threads, and the Channels thread feed
 and navigation lists use a linear 32px top fade as content scrolls
 beneath the header. The fade grows with the scroll
 offset and clears at the top; it does not blur content or change mobile fades.
 
-On touch, glass rims stay highlighted around most of the perimeter, with short soft gaps
-at the top-right and bottom-left corners. Light themes keep a soft highlight
-through those corners so they are only slightly dimmer. The iOS app also uses shared
-[glass press feedback](navigation.md#mobile-glass-feedback).
+On touch, glass surfaces draw an even 1px hairline edge with no highlight or
+bevel (see [mobile glass feedback](navigation.md#mobile-glass-feedback)).
 
 ## Selection controls
 
@@ -207,18 +242,23 @@ unchanged. See the [selection-control API contract](../../.agents/rules/web/ui-p
 ## Recipient suggestions
 
 New message/channel, main email, call, routine-template and sharing pickers search personal
-contacts through one bounded window. Type to find later contacts; **Next options**
-or PageDown replaces the window, and ArrowDown at its end advances it. An empty
-window can still have a next page. Touch Next preserves input focus. Closing and
-reopening starts at the first window, without clearing selected/custom chips.
+contacts through one bounded list. Type to find later contacts; scrolling to the
+end lists the next page below the earlier ones, up to 500 rows, and PageDown or
+ArrowDown at the end does the same from the keyboard. A page with no matching
+rows reads on until one matches or the directory ends; only a failed page shows a
+**Retry options** button. Closing and reopening starts at the first page, without
+clearing selected/custom chips.
 Explicit participant/agent/thread choices remain scoped extras. Matching addresses
-are deduplicated while keeping the caller's selected representation. Other recipient surfaces
+are deduplicated while keeping the caller's selected representation. Picking a
+selected row again removes it, except where the picker sets
+`markAlreadyAdded` (the email composers): there it is dimmed with its check and
+can't be picked; its chip's X or Backspace removes it. Other recipient surfaces
 are migrating separately; these controls do not change the AI planner's people pool.
 
 ## Property people pickers
 
-Personal user rows and calendar guest pickers use replaceable windows with Next
-options/PageDown. Selections and scoped extras stay independent of the page; names
+Personal user rows and calendar guest pickers list each further page below the
+earlier ones as the list scrolls (PageDown on desktop). Selections and scoped extras stay independent of the page; names
 from a chosen row survive later searches. A returned person page is not capped a
 second time, and broader native/server matches are kept. Search changes immediately
 remove stale person results from keyboard selection while the source debounces its
@@ -252,10 +292,11 @@ Inbox selectors retain their explicit **Only**/**All** reset action.
 Query-driven filter groups keep the existing menu/drawer controls but load only
 while open. Their source keeps all selected IDs in the collection (including
 unavailable values), separately from the current visible window. Do not apply a
-second substring filter to already matched source rows. Next options replaces
-the window; scroll and virtual focus reset only when a replacement is committed,
-not when selection labels or highlights change. Checkbox toggles keep row order
-stable within a window. A zero-result page can still offer Next options.
+second substring filter to already matched source rows. Scrolling to the end
+lists the next page below; scroll and virtual focus reset only for a new search,
+not when a page is added or selection labels or highlights change. Checkbox
+toggles and added pages keep row order stable. A zero-result page reads on by
+itself; only a failed page offers Retry options.
 `ListFilterGroup.createSource` requires explicit `selectedIds` and multiselect;
 static groups keep their existing behavior.
 
@@ -310,7 +351,12 @@ newly selected values.
 New references appear immediately in the collection as pending chips with an
 inline spinner through saving and refresh. Use the dragged item's label while
 its preview metadata loads. Failed saves clear pending chips through the existing
-error flow. Pending chips cannot be opened or removed. A persistently
+error flow. Pending chips cannot be opened or removed. Click a saved chip's
+name to open its item (a contact, company, task, document, channel, email,
+folder or project); shift-click opens it in a new split, and an item already
+open in another split is brought forward instead of opened twice. The Add
+button opens the picker and a chip's remove control removes that value; a chip
+never opens the picker. People who can't edit the item still open its values. A persistently
 mounted status region announces additions, including picker saves. Removed
 references disappear immediately and are restored from the last confirmed values
 if saving fails. A failed refresh does not undo a successful save: keep confirmed

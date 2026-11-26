@@ -3,18 +3,61 @@
 //! Generated into `pulumi_preview_pr.yml` (replaces the hand-written
 //! `pulumi-preview-pr.yml`).
 
-use anyhow::Result;
+use gh_workflow::expr::typed::{
+    Flag, JobHandle, JobOutput, Json, Num, StepHandle, StepOutput, Str, always, from_json, github,
+    matrix,
+};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, Run, Step, Strategy, Use,
-    Workflow,
+    CallJob, Concurrency, Event, Job, Level, Permissions, PullRequest, Run, Step, Strategy, Use,
+    Workflow, ZizmorRule,
 };
 
 use xtask_paths::RepoGlob;
 
+use crate::workflows::actions::{
+    ActionsCheckout, CallReusablePreviewService, TjActionsChangedFiles,
+};
 use crate::workflows::runners;
 
 #[cfg(test)]
 mod test;
+
+pub(crate) struct DetectChangesOutputs {
+    /// The affected services, as a JSON array.
+    pub services: JobOutput<Str>,
+    /// Whether any service is affected.
+    pub has_changes: JobOutput<Flag>,
+}
+
+/// The job that finds the services a PR affects.
+pub(crate) const DETECT_CHANGES: JobHandle<DetectChangesOutputs> = JobHandle::new(
+    "detect-changes",
+    DetectChangesOutputs {
+        services: JobOutput::new("detect-changes", "services"),
+        has_changes: JobOutput::new("detect-changes", "has-changes"),
+    },
+);
+
+pub(crate) struct DetectOutputs {
+    /// The affected services, as a JSON array.
+    pub services: StepOutput<Str>,
+    /// Whether any service is affected.
+    pub has_changes: StepOutput<Flag>,
+}
+
+/// The step that writes [`DETECT_CHANGES`]'s outputs.
+pub(crate) const DETECT: StepHandle<DetectOutputs> = StepHandle::new(
+    "detect",
+    DetectOutputs {
+        services: StepOutput::new("detect", "services"),
+        has_changes: StepOutput::new("detect", "has-changes"),
+    },
+);
+
+/// The changed-files action, which writes the files [`DETECT`] reads.
+pub(crate) const CHANGED_FILES: StepHandle<()> = StepHandle::new("changed-files", ());
+
+pub(crate) const PREVIEW_SERVICES: JobHandle<()> = JobHandle::new("preview-services", ());
 
 /// Inputs that can change a stack's definition. Crate and service code is left
 /// out on purpose: its preview is always the same "Lambda code / image changed"
@@ -32,8 +75,7 @@ const TRIGGER_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new(".github/scripts/build-cloud-storage-lambdas-nix.sh"),
 ];
 
-/// Build the workflow. The reusable-workflow caller job's `with:` and
-/// `secrets: inherit` are filled in by [`patch`].
+/// Build the workflow.
 pub fn pulumi_preview_pr() -> Workflow {
     Workflow::new("Pulumi Preview on PR")
         .on(
@@ -43,8 +85,10 @@ pub fn pulumi_preview_pr() -> Workflow {
             )),
         )
         .concurrency(
-            Concurrency::new(Expression::new(
-                "${{ github.workflow }}-${{ github.event.pull_request.number }}",
+            Concurrency::new(format!(
+                "{}-{}",
+                github().workflow(),
+                github().event::<Num>("pull_request.number")
             ))
             .cancel_in_progress(true),
         )
@@ -54,96 +98,80 @@ pub fn pulumi_preview_pr() -> Workflow {
                 .pull_requests(Level::Write)
                 .id_token(Level::Write),
         )
-        .add_job("detect-changes", detect_changes())
-        .add_job("preview-services", preview_services())
+        .add_job(DETECT_CHANGES, detect_changes())
+        .add_job(PREVIEW_SERVICES, preview_services())
         .add_job("preview-status", preview_status())
-}
-
-/// Add what gh-workflow cannot express on the caller job, and drop the
-/// `runs-on: ubuntu-latest` that `Job::default()` injects — a job that `uses`
-/// a reusable workflow must not declare a runner.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let job = crate::workflows::job_mut(root, "preview-services")?;
-    job.remove("runs-on");
-    job.insert(
-        "with".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            environment: dev
-            service-name: ${{ matrix.service }}
-            github-token: ${{ github.token }}
-        "#})?,
-    );
-    job.insert("secrets".into(), "inherit".into());
-    Ok(())
 }
 
 fn detect_changes() -> Job {
     Job::default()
         .name("Detect Changed Services")
         .runs_on(runners::Runner::Small.to_string())
-        .add_output("services", "${{ steps.detect.outputs.services }}")
-        .add_output("has-changes", "${{ steps.detect.outputs.has-changes }}")
+        .add_output(
+            DETECT_CHANGES.outputs.services.name(),
+            DETECT.outputs.services.read(),
+        )
+        .add_output(
+            DETECT_CHANGES.outputs.has_changes.name(),
+            DETECT.outputs.has_changes.read(),
+        )
         .add_step(checkout())
         .add_step(changed_files())
         .add_step(detect_affected_services())
 }
 
-fn preview_services() -> Job {
-    Job::default()
-        .name("Preview ${{ matrix.service }}")
-        .needs(vec!["detect-changes".to_string()])
-        .cond(Expression::new(
-            "${{ needs.detect-changes.outputs.has-changes == 'true' }}",
-        ))
+fn preview_services() -> CallJob {
+    CallReusablePreviewService::new("dev", matrix::<Str>("service"))
+        .github_token(github().token())
+        .inherit_secrets()
+        .job()
+        .name(format!("Preview {}", matrix::<Str>("service")))
+        .needs(vec![DETECT_CHANGES.to_string()])
+        .cond(DETECT_CHANGES.outputs.has_changes.read().is_set())
         .strategy(Strategy {
             fail_fast: Some(false),
             matrix: Some(serde_json::json!({
-                "service": "${{ fromJson(needs.detect-changes.outputs.services) }}",
+                "service": serde_json::Value::from(from_json::<Json>(
+                    DETECT_CHANGES.outputs.services.read()
+                )),
             })),
             max_parallel: None,
         })
-        .uses("./.github/workflows/reusable_preview_service.yml")
 }
 
 fn preview_status() -> Job {
     Job::default()
         .name("Preview Status")
         .needs(vec![
-            "detect-changes".to_string(),
-            "preview-services".to_string(),
+            DETECT_CHANGES.to_string(),
+            PREVIEW_SERVICES.to_string(),
         ])
-        .cond(Expression::new("always()"))
+        .cond(always())
         .runs_on(runners::Runner::Small.to_string())
         .add_step(summary())
 }
 
 fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses(
-        "actions",
-        "checkout",
-        "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    ) // v6
+    ActionsCheckout::new("Checkout Repo").step().zizmor_ignore(
+        ZizmorRule::Artipacked,
+        "Pulumi previews run from the checkout",
+    )
 }
 
 fn changed_files() -> Step<Use> {
-    Step::new("Get changed files")
-        .uses(
-            "tj-actions",
-            "changed-files",
-            "24d32ffd492484c1d75e0c0b894501ddb9d30d62",
-        ) // v47
-        .id("changed-files")
-        .add_with((
-            "files",
+    TjActionsChangedFiles::new("Get changed files")
+        .files(
             TRIGGER_PATHS
                 .iter()
                 .map(|path| path.as_str())
                 .collect::<Vec<_>>()
                 .join("\n"),
-        ))
-        .add_with(("json", true))
-        .add_with(("escape_json", false))
-        .add_with(("write_output_files", true))
+        )
+        .json(true)
+        .escape_json(false)
+        .write_output_files(true)
+        .step()
+        .id(CHANGED_FILES.id())
 }
 
 fn detect_affected_services() -> Step<Run> {
@@ -220,30 +248,33 @@ fn detect_affected_services() -> Step<Run> {
             fi
 
             if [ ${#services[@]} -eq 0 ]; then
-              echo "has-changes=false" >> $GITHUB_OUTPUT
-              echo "services=[]" >> $GITHUB_OUTPUT
+              echo "has-changes=false" >> "$GITHUB_OUTPUT"
+              echo "services=[]" >> "$GITHUB_OUTPUT"
               echo "No services affected by changes"
             else
-              echo "has-changes=true" >> $GITHUB_OUTPUT
+              echo "has-changes=true" >> "$GITHUB_OUTPUT"
               services_json=$(printf '%s\n' "${services[@]}" | jq -R . | jq -s -c .)
-              echo "services=${services_json}" >> $GITHUB_OUTPUT
-              echo "Services to preview: ${services[@]}"
+              echo "services=${services_json}" >> "$GITHUB_OUTPUT"
+              echo "Services to preview: ${services[*]}"
             fi
         "#})
-        .id("detect")
+        .id(DETECT.id())
 }
 
 fn summary() -> Step<Run> {
-    Step::new("Summary").run(indoc::indoc! {r#"
-        if [[ "${{ needs.detect-changes.outputs.has-changes }}" == "false" ]]; then
-          echo "ℹ️ No services were affected by the changes in this PR"
-        elif [[ "${{ needs.preview-services.result }}" == "failure" ]]; then
-          echo "❌ One or more Pulumi previews failed"
-          exit 1
-        elif [[ "${{ needs.preview-services.result }}" == "success" ]]; then
-          echo "✅ All Pulumi previews completed successfully"
-        elif [[ "${{ needs.preview-services.result }}" == "skipped" ]]; then
-          echo "ℹ️ No services were affected by the changes in this PR"
-        fi
-    "#})
+    Step::new("Summary")
+        .run(indoc::indoc! {r#"
+            if [[ "$HAS_CHANGES" == "false" ]]; then
+              echo "ℹ️ No services were affected by the changes in this PR"
+            elif [[ "$PREVIEW_SERVICES_RESULT" == "failure" ]]; then
+              echo "❌ One or more Pulumi previews failed"
+              exit 1
+            elif [[ "$PREVIEW_SERVICES_RESULT" == "success" ]]; then
+              echo "✅ All Pulumi previews completed successfully"
+            elif [[ "$PREVIEW_SERVICES_RESULT" == "skipped" ]]; then
+              echo "ℹ️ No services were affected by the changes in this PR"
+            fi
+        "#})
+        .add_env(("HAS_CHANGES", DETECT_CHANGES.outputs.has_changes.read()))
+        .add_env(("PREVIEW_SERVICES_RESULT", PREVIEW_SERVICES.result()))
 }

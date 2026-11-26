@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Keep eligibility aligned with mailbox_domains.sql; only exclusion writes lock rows.\nSELECT mailbox.domain AS \"domain!\",\n       COALESCE(member.user_id = $2, FALSE) AS \"is_caller!\"\nFROM team_user member\nJOIN LATERAL (\n    SELECT lower(split_part(email_address, '@', 2)) AS domain\n    FROM email_links\n    WHERE macro_id = member.user_id AND is_primary\n      AND deleting_at IS NULL AND disconnect_requested_at IS NULL\n      AND NOT needs_reauth\n    OFFSET 0 FOR SHARE\n) mailbox ON TRUE\nWHERE member.team_id = $1 AND (NOT $3 OR member.user_id = $2)\nFOR KEY SHARE OF member\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "domain!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_caller!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "0114f3738a3ea8a265e0a1089168d6873135764a7555ca18d5efd5d75e33c330"
+}

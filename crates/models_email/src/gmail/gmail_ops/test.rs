@@ -103,3 +103,28 @@ fn label_writes_queued_before_markers_still_decode() {
 
     assert_eq!(batch.pending_write_id, None);
 }
+
+#[test]
+fn debug_shows_the_operation_but_no_blocked_address() {
+    let link_id = Uuid::from_u128(0x0195_f0a6_8a0e_7cc2_8f39_6f0b_5d6a_2e10);
+    let block = GmailOpsPubsubMessage {
+        link_id,
+        operation: GmailOpsOperation::BlockSender(BlockSenderPayload {
+            email_address: "sender@example.com".to_owned(),
+        }),
+    };
+    let unblock = GmailOpsPubsubMessage {
+        link_id,
+        operation: GmailOpsOperation::UnblockSender(UnblockSenderPayload {
+            email_address: "sender@example.com".to_owned(),
+        }),
+    };
+
+    for message in [block, unblock] {
+        let debug = format!("{message:?}");
+
+        assert!(debug.contains("0195f0a6-8a0e-7cc2-8f39-6f0b5d6a2e10"));
+        assert!(debug.contains("Sender"));
+        assert!(!debug.contains("example.com"));
+    }
+}

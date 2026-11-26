@@ -5,14 +5,7 @@ async fn offers_use_free_sold_units_per_size(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool, policy());
     // 32 GB: 4 awake units, sold 3x.
-    repo.register_host(HostRegistration {
-        name: "capacity-test".to_owned(),
-        memory_gb: 32,
-        reserve_gb: 0,
-        oversell_factor: 3,
-    })
-    .await
-    .unwrap();
+    host(&repo, "capacity-test", 32, 0, 3).await;
     assert_eq!(sold_out(&repo).await, vec![]);
     for id in 1..=9 {
         bought(&repo, id).await;
@@ -47,14 +40,7 @@ async fn reserve_skips_hosts_too_small_to_wake_the_size(pool: PgPool) {
 async fn concurrent_purchases_share_the_sold_unit_limit(pool: PgPool) {
     insert_team(&pool).await;
     let repo = PgComputerRepo::new(pool, policy());
-    repo.register_host(HostRegistration {
-        name: "capacity-test".to_owned(),
-        memory_gb: 24,
-        reserve_gb: 0,
-        oversell_factor: 3,
-    })
-    .await
-    .unwrap();
+    host(&repo, "capacity-test", 24, 0, 3).await;
     let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(4));
     let mut purchases = Vec::new();
     for id in [1, 2, 3, 4] {

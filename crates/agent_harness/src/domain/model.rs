@@ -8,7 +8,9 @@ use agent_egress::domain::model::{
 };
 use agent_fold::domain::model::{StopReason, TurnSignal};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
-use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
+use agent_session::domain::model::{
+    AgentMcpServers, AgentSessionId, MessageId, PrompterKind, SandboxSize,
+};
 use agent_session::domain::ports::ControlEvent;
 use agent_session::domain::session::PermissionPolicy;
 
@@ -43,6 +45,8 @@ impl StaticFileLinks {
     const STATIC_IMAGE: &str = "static/image";
     /// Channel attachment entity type for a video stored as a static file.
     const STATIC_VIDEO: &str = "static/video";
+    /// Channel attachment entity type for a voice memo stored as a static file.
+    const STATIC_AUDIO: &str = "static/audio";
     /// How many files ride a prompt as ACP resource links. Matches the MCP
     /// channel-image budget so a long thread cannot flood the first turn.
     const MAX_PROMPT_ATTACHMENTS: usize = 8;
@@ -61,13 +65,15 @@ impl StaticFileLinks {
     /// a static file - documents reach the agent through mentions, and have
     /// no URL an agent could fetch unauthenticated.
     ///
-    /// Channel rows record only that a file is an image or a video, not its
-    /// exact type, so the media type is the matching wildcard range.
+    /// Channel rows record only that a file is an image, a video or a voice
+    /// memo, not its exact type, so the media type is the matching wildcard
+    /// range.
     #[must_use]
     fn file_link(&self, entity_type: &str, entity_id: &str) -> Option<PromptAttachment> {
         let (kind, mime_type) = match entity_type {
             Self::STATIC_IMAGE => ("image", "image/*"),
             Self::STATIC_VIDEO => ("video", "video/*"),
+            Self::STATIC_AUDIO => ("audio", "audio/*"),
             _ => return None,
         };
         let uri = format!("{}/file/{}", self.base_url, entity_id);
@@ -562,6 +568,9 @@ pub struct DeliverAction {
     /// The app tab a person typed the prompt in, when they typed it in one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client: Option<agent_session::domain::model::UiClientId>,
+    /// Whether a person or a program for them sent it.
+    #[serde(default, skip_serializing_if = "PrompterKind::is_user")]
+    pub prompter: PrompterKind,
 }
 
 /// How long a session on an external runtime goes without activity before it
@@ -648,6 +657,9 @@ pub enum HarnessCommand {
         /// may not prompt a session may not rewrite what it is about to be
         /// prompted with.
         actor: Option<MacroUserIdStr<'static>>,
+        /// Whether a person or a program for them rewrote it.
+        #[serde(default, skip_serializing_if = "PrompterKind::is_user")]
+        prompter: PrompterKind,
     },
     /// Remove a queued action before it dispatches.
     RemoveQueued {
@@ -719,6 +731,7 @@ impl DeliverAction {
             announce,
             context: None,
             client: None,
+            prompter: PrompterKind::User,
         }
     }
 
@@ -736,6 +749,7 @@ impl DeliverAction {
             announce: None,
             context: event.context,
             client: event.client,
+            prompter: event.prompter,
         }
     }
 }

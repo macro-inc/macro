@@ -15,7 +15,7 @@
 mod test;
 
 use crate::domain::{
-    ports::{ContactsPageRepository, UserPictureNotifier},
+    ports::{ContactListReader, ContactsPageRepository, UserPictureNotifier},
     service::picture_fanout::{UserPictureFanout, coalesce_users},
 };
 use kafka_util::{GroupName, KafkaEventConsumer};
@@ -78,7 +78,7 @@ async fn fan_out_with_retries<R, N>(
     fanout: &UserPictureFanout<R, N>,
     user: &MacroUserIdStr<'static>,
 ) where
-    R: ContactsPageRepository,
+    R: ContactsPageRepository + ContactListReader,
     N: UserPictureNotifier,
 {
     let mut delay = RETRY_BASE_DELAY;
@@ -87,7 +87,7 @@ async fn fan_out_with_retries<R, N>(
             return;
         }
         if attempt == MAX_ATTEMPTS {
-            tracing::error!(user_id = %user.as_ref(), attempts = MAX_ATTEMPTS, "giving up user picture fan-out");
+            tracing::error!(attempts = MAX_ATTEMPTS, "giving up user picture fan-out");
             return;
         }
         tokio::time::sleep(delay).await;
@@ -105,7 +105,7 @@ pub async fn run_user_picture_consumer<R, N>(
     shutdown: impl Future<Output = ()> + Send,
 ) -> Result<(), rootcause::Report>
 where
-    R: ContactsPageRepository,
+    R: ContactsPageRepository + ContactListReader,
     N: UserPictureNotifier,
 {
     let consumer = KafkaEventConsumer::<UserPictureConsumerGroup>::from_env(brokers)?;

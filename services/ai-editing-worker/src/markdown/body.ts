@@ -8,6 +8,11 @@ import {
 import { $updateAllNodeIds } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { INTERNAL_TRANSFORMERS } from '@macro-inc/lexical-core/transformers';
 import {
+  E_TABLE_NODE,
+  isolatePipeTables,
+} from '@macro-inc/lexical-core/transformers/tables';
+import { diffArrays } from 'diff';
+import {
   $createParagraphNode,
   $getRoot,
   $parseSerializedNode,
@@ -32,6 +37,18 @@ export type MarkdownRequest =
 export type MarkdownResponse =
   | { action: 'read'; markdown: string; revision: string }
   | { action: 'write'; revision: string; changed: boolean };
+
+/**
+ * What a written body is parsed with: the internal format `readMarkdownBody`
+ * returns, plus GitHub pipe tables, which agents write as they would anywhere
+ * else and documents created from markdown already accept. Nothing else from
+ * the external set: its entity and mention importers would read an unchanged
+ * internal block differently and replace it, dropping its ids and comments.
+ * `isolatePipeTables` keeps other pipe-delimited lines, and table-shaped text
+ * already in a paragraph, text for the same reason, since the internal format
+ * writes them unescaped.
+ */
+const BODY_IMPORT_TRANSFORMERS = [...INTERNAL_TRANSFORMERS, E_TABLE_NODE];
 
 /** One step turning the current top-level blocks into the requested ones. */
 type BlockStep =
@@ -63,7 +80,7 @@ function blockMarkdown(blocks: SerializedLexicalNode[]): string[] {
 
 /**
  * The most cells the LCS table may hold (16 MiB of Uint32), well inside a
- * Worker's memory. A changed middle larger than this is replaced whole.
+ * Worker's memory. A larger changed middle goes to `largeMiddleSteps`.
  */
 const MAX_LCS_CELLS = 4 * 1024 * 1024;
 
@@ -111,14 +128,7 @@ function middleSteps(
   const width = requested.length + 1;
   const cells = (current.length + 1) * width;
   if (cells > MAX_LCS_CELLS)
-    return [
-      ...current.map(
-        (_, i): BlockStep => ({ kind: 'remove', current: offset + i })
-      ),
-      ...requested.map(
-        (_, j): BlockStep => ({ kind: 'insert', requested: offset + j })
-      ),
-    ];
+    return largeMiddleSteps(current, requested, offset);
 
   const common = new Uint32Array(cells);
   for (let i = current.length - 1; i >= 0; i--)
@@ -152,6 +162,42 @@ function middleSteps(
       i++;
     }
   }
+  return steps;
+}
+
+/** The most removed plus inserted blocks the diff of a large middle looks for. */
+const MAX_CHANGED_BLOCKS = 2000;
+
+/**
+ * Steps for a middle too long for the LCS table, such as two edits far apart
+ * in a long document: a shortest edit script (Myers), whose cost grows with
+ * the document's length times the number of changed blocks. Past
+ * `MAX_CHANGED_BLOCKS` the middle is replaced whole.
+ */
+function largeMiddleSteps(
+  current: string[],
+  requested: string[],
+  offset: number
+): BlockStep[] {
+  const changes = diffArrays(current, requested, {
+    maxEditLength: MAX_CHANGED_BLOCKS,
+  }) ?? [
+    { count: current.length, added: false, removed: true },
+    { count: requested.length, added: true, removed: false },
+  ];
+  const steps: BlockStep[] = [];
+  let i = 0;
+  let j = 0;
+  for (const change of changes)
+    for (let step = 0; step < change.count; step++) {
+      if (change.added) steps.push({ kind: 'insert', requested: offset + j++ });
+      else if (change.removed)
+        steps.push({ kind: 'remove', current: offset + i++ });
+      else {
+        steps.push({ kind: 'keep', current: offset + i++ });
+        j++;
+      }
+    }
   return steps;
 }
 
@@ -202,15 +248,23 @@ export async function prepareMarkdownBody(
   const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, { documentId });
   try {
     const live = await sessionFromSnapshot(manager, snapshot);
-    const requested = createEditingSession();
-    loadMarkdown(requested, markdown);
-
     const currentBlocks = toSnapshot(live).root.children;
-    const requestedBlocks = toSnapshot(requested).root.children;
-    const steps = blockSteps(
-      blockMarkdown(currentBlocks),
-      blockMarkdown(requestedBlocks)
+    const currentMarkdown = blockMarkdown(currentBlocks);
+
+    // Table-shaped text already in a paragraph stays text, so writing a block
+    // back unchanged never turns it into a table.
+    const paragraphMarkdown = currentMarkdown.filter(
+      (_, index) => currentBlocks[index].type === 'paragraph'
     );
+    const requested = createEditingSession();
+    loadMarkdown(
+      requested,
+      isolatePipeTables(markdown, paragraphMarkdown),
+      BODY_IMPORT_TRANSFORMERS
+    );
+
+    const requestedBlocks = toSnapshot(requested).root.children;
+    const steps = blockSteps(currentMarkdown, blockMarkdown(requestedBlocks));
     if (steps.every((step) => step.kind === 'keep')) return undefined;
 
     live.editor.update(

@@ -56,17 +56,29 @@ test.describe('mobile recovery', () => {
   });
 });
 
-test('an already-sent background save clears the draft without offering recovery', async ({
+// The refused save was still queued, so the server never took its text and
+// the message sent elsewhere lacks it.
+test('an already-sent background save keeps its unsent text as a new draft without offering recovery', async ({
   page,
 }) => {
   await page.goto('/?recovery');
-  await page
-    .getByRole('textbox', { name: 'Message' })
-    .fill('Already delivered');
+  const editor = page.getByRole('textbox', { name: 'Message' });
+  await editor.fill('Never delivered');
   await expect(page.getByTestId('save-count')).toHaveText('1');
   await expect(page.getByTestId('has-draft')).toHaveText('true');
   await page.getByRole('button', { name: 'Report already sent' }).click();
-  await expect(page.getByTestId('has-draft')).toHaveText('false');
+  await expect(
+    page.getByRole('status').filter({
+      hasText:
+        'This email was already sent. Your newer text was kept as a new draft and was not sent.',
+    })
+  ).toBeVisible();
+  await expect(page.getByTestId('save-count')).toHaveText('2');
+  await expect(page.getByTestId('saved-body')).toContainText('Never delivered');
+  const ids = JSON.parse(
+    (await page.getByTestId('saved-draft-ids').textContent()) ?? '[]'
+  );
+  expect(ids[0]).not.toBe(ids[1]);
   await expect(
     page.getByRole('button', { name: 'Save as new draft' })
   ).toHaveCount(0);

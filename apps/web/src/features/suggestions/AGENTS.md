@@ -14,19 +14,34 @@ only, behind `enable-suggestions`.
   `context/`.
 - Polling is narrow on purpose. `queries/generation.ts` reads
   `GET /suggestions/generation` once, then every 3 s only while a generation
-  runs. The feed is read again after each write, every 10 s while a card's
+  runs. The feed is read again after each write, every 10 s while a
   run or a generation is under way, and once when a generation ends. Nothing
   else polls; `queries/polling.test.tsx` holds these numbers.
 - `primitives/refresh.ts` and `components/refresh-suggestions.tsx` are the
   header's Refresh control (`POST /suggestions/regenerate`): running while a
   generation runs, "Available at h:mm" during the hourly cooldown (one timer
   ends it), hidden where the server has no status to give.
-- `primitives/feed.ts` decides what a card's action does for its kind: a
-  composer prompt accepts, then opens the composer; a background prompt only
-  accepts, which starts its run; an entity suggestion accepts, then opens its item
-  or draft; a routine suggestion saves its drafted routine.
+- `primitives/feed.ts` holds each list's rows (`view(list)`, `counts()`),
+  the topics that group them (`topics()`, `groups(list, topic)`)
+  and decides what a row's action does for its kind: a composer prompt
+  accepts, then opens the composer; a background prompt only accepts, which
+  starts its run; an entity suggestion accepts, then opens its item
+  or draft; a routine suggestion saves its drafted routine. Whether a row is
+  then done is the server's: a reply suggestion stays open until the person
+  replies on its thread (the browser fixture's Send replies plays that).
+  `look` opens what a prompt or routine would do without accepting it, and
+  `open` what a finished one left.
 - `suggestion-actions.ts` is the only place that knows the app's splits, composer
   and routine suggestions.
+- `draft-origin.tsx` is the footer the email thread draws under a reply
+  draft a session wrote (`rendering.renderDraftOrigin`, supplied in
+  `features/email-thread/email-thread.tsx`). `draftOrigin` in
+  `core/suggestion.ts` finds the feed's suggestion, open or done, whose draft
+  is that message; `queries/draft-origin.ts` reads the feed's own entry and
+  never polls. The bar links the suggestion's other `about` items, and
+  Rewrite opens the agent composer with the thread mentioned and the request
+  typed, unsent. A send time takes the card's footer instead, and a draft
+  whose suggestion has left the feed (done over a day ago) has none.
 - The first generation starts in onboarding, not here: connecting an inbox
   calls `/suggestions/generate` once when either the person's suggestions or
   routine suggestions are on (`features/onboarding`,
@@ -34,8 +49,10 @@ only, behind `enable-suggestions`.
 
 ## Start here
 
-- `core/suggestion.ts`: the suggestion and feed model, the tab filter.
-- `primitives/feed.ts`: card actions, dismiss and undo.
+- `core/suggestion.ts`: the suggestion and feed model.
+- `primitives/feed.ts`: the lists, row actions, dismiss and undo.
+- `core/lists.ts`: which list holds a suggestion, and a row's states.
+- `core/topics.ts`: which topics group Today's rows, and their colours.
 - `route-views.tsx`, `home-priorities.tsx`: the two production compositions.
 
 ## Scope
@@ -53,54 +70,124 @@ only, behind `enable-suggestions`.
 
 ## Gotchas
 
-- Clicking Run on a background suggestion is the approval: the card must show
-  `sends` (or that it sends nothing) before Run, and there is no approval UI.
+- Clicking Run on a background suggestion is the approval, and there is no
+  approval UI: a run that posts or sends something leads its line with
+  `sends`, so it is read before Run and is never the part a long line cuts
+  off; it stays there while the run is under way and after it failed, since
+  Retry sends it again. A run that sends nothing doesn't say so.
 - The server decides and the page shows: each suggestion's `status`, the
-  feed's order (what waits or runs, then what is done), the tab `counts`,
-  `isNew`, what a finished one left (`result`, absent until its run
+  feed's order (what waits or runs, then what is done), `isNew`, what a
+  finished one left (`result`, absent until its run
   settled), a reply's `waitingSince`, `from` and draft `preview`, and a
   routine suggestion's `routine` sentence and when-line. Don't
   derive any of these here. Home asks for its rows with `?limit=5`
   (`queries/top-suggestions.ts`).
-- A dismissal is sent at once; the suggestion stays as a row for the visit,
-  and Undo calls `POST /suggestions/{id}/restore`, which the server allows
-  for a few minutes. A refused dismissal leaves the card with the
-  failed-action line; a refused Undo says it may be too late. Dismissing a
+- A dismissal is sent at once and its row shows dismissed from the press
+  (the feed drops the suggestion before the call answers); it stays as a row
+  for the visit, and Undo calls `POST /suggestions/{id}/restore`, which the
+  server allows for a few minutes. `restore` takes the suggestion as the row
+  held it, so it shows open at once, back in the feed, even if the read after
+  it fails or lands behind a read that predates the restore, unless the
+  suggestion was written to again meanwhile; it resolves once the feed's
+  readers have the restored row, without waiting for the read after it.
+  Don't cancel the feed's reads there: another write waiting on its read
+  would be let go on a feed from before it. Each write also waits for
+  the reads later writes started while its own was out, and the ones that
+  replaced those (`followReplacingReads`), since a later write's read
+  replaces its own; a poll, or a read started after its own answered,
+  doesn't hold it. A dismissed routine suggestion has no Undo: its idea goes
+  with it, which the server can't bring back. A dismissal also reads the
+  routine ideas again, for the sidebar's Ideas count, dropping a read already
+  out (it may predate the dismissal); the row doesn't wait for it. A failed
+  dismissal reads the feed again to learn what happened: still listed and
+  waiting, it was refused and the row opens with the failed-action line; no
+  longer listed, the server has it (only the answer was lost), so the row
+  stays dismissed, with Undo; settled first (a run finished), the row shows
+  what it left. The Ideas count is read again either way; a refused Undo says
+  it may be too late. The Undo that replaces a pressed ✓ or ✕ takes the focus
+  it left, once it can be pressed, unless the person pressed or focused
+  something outside the row meanwhile (`createFocusHandoff`). Dismissing a
   running suggestion stops its run (the control and the row say so), and
   restoring it brings it back open, not running.
 - Leaving For you calls `POST /suggestions/viewed` (also on `pagehide`, with
   `keepalive`): what is proposed after that is new next time.
-- Accept sends the suggestion's `updatedAt` as the card read it. If the suggestion was
+- Accept sends the suggestion's `updatedAt` as the row read it. If the suggestion was
   rewritten since, the server refuses (409) and answers with the suggestion as it
   is now: the source puts that in the feed and answers `changed`, and the
-  card shows the new text with a note, so nothing is taken up or run on text
+  row shows the new text with a note, so nothing is taken up or run on text
   the person didn't see.
-- The page follows the chosen design frames: one column of cards, then
-  "Done today" and "Dismissed". Every card is the app's `Card` from `@ui`
-  (`variant="filled" depth={3}`, as the routine cards) built from its own
-  parts: `Card.Header` with an `Item` (`Item.Media` tile, `Card.Title`,
-  `Card.Description`), an optional `Card.Body` holding a nested
-  `Card variant="filled" offset={1}`, and `Card.Footer` with `Card.Metadata`
-  and `Card.Actions`. Don't restyle these with local surface, border or type
-  classes.
-- A card shows only what the person needs to act: the title, one block of
-  text, and one quiet line of facts beside one main action. There is never a
-  second block repeating the first: a background run shows its summary and
-  what it sends, not its prompt (Open in chat shows that); a drafted reply
-  shows the draft in place of the summary; every finished suggestion is one
-  row. The one part that reads the app's items (`SuggestionItemParts`: the
-  source link's icon and name) is supplied by `suggestion-items.tsx`.
-- Nothing on a card is loud: the main action is the app's `secondary`
-  button and the other a `ghost` one (no `primary`: several white buttons on
-  one page read as shouting), line icons take the muted ink, and dismiss
-  shows on hover or keyboard focus. Colour is left to the tile (each kind has
-  its own, from the routine cards' tints), the state badges and the values
-  AI picked.
-- The API has no due times; a reply's "waiting 2 days" is the feed's
-  `waitingSince`. Without it a card shows when the suggestion arrived.
-- Rows are kept by suggestion id (`Key`), so a feed read updates a card in
-  place: don't key a branch on an object that is rebuilt on every read.
-- What a card holds belongs to the account that read it. Accept and
+- The page is a sidebar of lists and the chosen list (`?view=`, Today by
+  default) under its name and the date (`views/for-you-view.tsx`,
+  `components/for-you-sidebar.tsx`). Every change of list, from the sidebar
+  or from history, and choosing the list already shown, opens the list at its top, unless a link names a
+  suggestion to scroll to. `core/lists.ts` says which suggestions
+  each list holds: Today all that wait or run, To do entity suggestions,
+  Suggestions prompts and routines, Done what the server lists as done. Each
+  list's count is the server's (`counts`), so a row that settles here stops
+  being counted while it stays in view. The sidebar's Routines links
+  (`queries/routines-source.ts`: idea and routine counts, a routine's
+  switch) open Agents → Routines; `features/routines` and
+  `features/routine-suggestions` own those screens, so only import from them.
+- What waits or runs, and what settles or is dismissed during the visit,
+  stays where it was until the person leaves (`core/hold.ts`); its row
+  shows the settled state (`RowState`): marked done (struck through, with
+  Undo while the page can restore it), a finished run (a green check and
+  the one line its run reported, `run.report`, else its summary), a routine
+  turned on (a green dot and when it runs, Edit and the routine's switch),
+  or dismissed (Undo). Switched off from its row, a turned-on routine reads
+  "is off" with a grey dot. With nothing waiting in Today, the page says "You’re
+  all caught up" above whatever settled here.
+- Topics are the server's (`suggestion.topic`, `feed.topics` with each one's
+  name and reason); the page decides only which to show. One groups rows from
+  two, in Today alone, in the order of its first row, and a row that settled
+  during the visit still counts towards the two, so a group doesn't come apart
+  while the person works through it. Rows outside the shown topics come last
+  under "Everything else", or with no heading when there is no topic: then
+  Today is one flat list. The sidebar lists the same topics with how many of
+  their rows wait; choosing one (`forYou.topic` in the URL, which replaces `forYou.view`) shows its
+  rows alone, its name as the page's and its reason in place of the date. One
+  that groups nothing shows Today for as long as that holds: the URL keeps it,
+  since a cached feed may lack a new topic. A reason is shown as
+  written or not at all: never build one here.
+- Where topics group rows, a topic's hue tints its rows' tiles in every list
+  and its square in the sidebar, and other rows' tiles are neutral. Hues are
+  taken in key order (`huesOf`), so reordered rows keep theirs.
+- Every row is one `components/suggestion-row.tsx`: an `Item size="sm"`
+  with `border-0`, 56px whatever its state (`h-14`), a 32px tile tinted by
+  the suggestion's kind (`suggestionLook`) or its topic (above), a medium
+  `text-sm` title and one dimmer 13px line (`text-ink-extra-muted`). Both
+  stay on one line, cut where the row ends; pointing at a cut line shows all
+  of it (`Cut`). A
+  failed action or a rewritten suggestion replaces the line with its note,
+  after what the run sends (`SendsFirst`), since Run stays one press away.
+  The rows sit flat on the page: no cards, outlines, or local surfaces.
+  `for-you.browser.e2e.ts` holds that every row in a list is the same
+  height.
+- A row that waits or runs shows only its age at rest, right-aligned
+  (`RowEnd`). Pointing at the row or focusing in it shows its buttons
+  (`data-suggestion-hover`): ✓ marks it done where taking it up finishes it
+  (`doneWhenTakenUp`; never a reply, whose person's reply finishes it, or a
+  run, which taking up starts), ✕ dismisses, then its action. The buttons
+  keep their room while hidden, so nothing in the row moves; don't size or
+  show them conditionally.
+- A row's action, by kind: Run, Open chat, Turn on or Retry for work Macro
+  can do; Open or Open draft for a to-do; Stop while a run is under way
+  (`feed.stop`; the run's `stopping` flag reads "Stopping…" until the
+  server opens it again); Open on a finished run. Pressing a waiting
+  prompt's or routine's text looks without taking it up (`feed.look`); a
+  to-do's opens it; a settled one's opens what it left (`feed.open`). Rows
+  don't open in place.
+- Marking done and turning a routine on each show a toast: Undo for the
+  first, View routine (the saved routine, `savedRoutineId`) for the second.
+- Nothing on a row is loud: actions are `secondary` or `ghost` buttons (no
+  `primary`), and colour is left to the row's tile, the settled marks and a
+  failed run.
+- The API has no due times; a to-do's "2 days" is the feed's `waitingSince`,
+  or when the suggestion arrived without it (`ageLabel`).
+- Rows are kept by suggestion id (`Key`), so a feed read updates a row in
+  place: don't key a branch on an object that is rebuilt on every read. A
+  row keeps its place when its status changes.
+- What a row holds belongs to the account that read it. Accept and
   regenerate compare the signed-in account before acting on an answer.
 - Every change to the feed also invalidates Home's rows
   (`suggestionsKeys.top`), which are a separate read.

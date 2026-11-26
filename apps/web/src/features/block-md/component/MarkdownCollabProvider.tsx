@@ -4,6 +4,7 @@ import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/const
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
+import { recordOwnContentEdit } from '@queries/soup/normalized-cache/editing-touch';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, Setter } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -35,7 +36,8 @@ export type MarkdownCollabProviderProps = {
  */
 export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   const flow = useFlow();
-  const { documentSource, permissions, state } = useMarkdownDocument();
+  const { documentId, documentSource, permissions, state } =
+    useMarkdownDocument();
   const syncSource = () => {
     const source = documentSource();
     return source.type === 'sync' ? source.source : undefined;
@@ -57,6 +59,9 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       canEdit={permissions.canEdit}
       editorError={state.editor.error}
       span={flow.span}
+      // The viewer's edit is their touch: Recent moves the document when an
+      // editing session starts.
+      onLocalEdit={() => recordOwnContentEdit(documentId())}
     />
   );
 }

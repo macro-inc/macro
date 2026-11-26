@@ -3,7 +3,7 @@
 //! These traits define the boundaries between the domain logic and external
 //! dependencies, following hexagonal architecture principles.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::future::Future;
 use std::sync::Arc;
 
@@ -16,8 +16,10 @@ use uuid::Uuid;
 use model_entity::Entity;
 use models_pagination::{CreatedAt, Query};
 
+use crate::domain::channel_settings::ChannelNotificationSettings;
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::{NotificationStatusPayload, TaggedContent};
+use crate::domain::section_settings::{ChannelSection, SectionNotificationSettings};
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
 use crate::domain::models::request::{NotificationListFilters, NotificationStatus};
@@ -63,12 +65,37 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 
-    /// Get users who have unsubscribed from notifications for a specific item.
+    /// Get users who silenced a specific item for this notification: every
+    /// unsubscribed user, minus those who kept direct mentions when
+    /// `is_direct_mention` is set.
     fn get_unsubscribed_users<'a>(
         &self,
         item_id: &str,
+        is_direct_mention: bool,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// Each of these users' own settings for a channel. Users without any
+    /// are omitted.
+    fn get_channel_notification_settings<'a>(
+        &self,
+        channel_id: Uuid,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> impl Future<
+        Output = Result<HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>, Report>,
+    > + Send;
+
+    /// Each of these users' settings for any of their Chat sections. Users
+    /// without any are omitted.
+    fn get_channel_section_settings<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> impl Future<
+        Output = Result<
+            HashMap<MacroUserIdStr<'static>, BTreeMap<ChannelSection, SectionNotificationSettings>>,
+            Report,
+        >,
+    > + Send;
 
     /// Create a notification and user notification records.
     ///

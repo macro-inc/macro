@@ -568,12 +568,6 @@ export type AgentSessionLifecycleEvent = {
      */
     metadata: InputReceivedMetadata;
 } | {
-    event_type: 'agent_session.mentioned';
-    /**
-     * A prompt named other users who can open the session.
-     */
-    metadata: SessionMentionedMetadata;
-} | {
     event_type: 'agent_session.stopped';
     /**
      * The session's live actor is gone.
@@ -1466,6 +1460,11 @@ export type AttachmentChange = {
         remove: Array<string>;
     };
 };
+
+/**
+ * A kind of attachment a thread's messages carry, by MIME type.
+ */
+export type AttachmentKind = 'pdf' | 'image' | 'document';
 
 /**
  * RSVP state for an attendee.
@@ -3570,6 +3569,32 @@ export type ChannelAccessRequestedMetadata = {
 };
 
 /**
+ * A bot's membership in a channel, stored under the principal `bot|<id>`.
+ */
+export type ChannelBotParticipant = {
+    /**
+     * Participant bot id.
+     */
+    bot_id: string;
+    /**
+     * Channel id for the participant membership.
+     */
+    channel_id: string;
+    /**
+     * Timestamp when the bot joined the channel.
+     */
+    joined_at: string;
+    /**
+     * Timestamp when the bot left the channel, if any.
+     */
+    left_at?: string | null;
+    /**
+     * Participant role in the channel.
+     */
+    role: ParticipantRole;
+};
+
+/**
  * Metadata for [`ChannelTopicEvent::Created`].
  */
 export type ChannelCreatedMetadata = {
@@ -3608,6 +3633,12 @@ export type ChannelDeletedMetadata = {
      * The id of the deleted channel.
      */
     channel_id: string;
+    /**
+     * Active participants just before the delete. The channel and its
+     * memberships are gone by the time this is consumed, so consumers that
+     * tell members about the delete cannot look them up.
+     */
+    participant_user_ids?: Array<MacroUserIdStr>;
 };
 
 /**
@@ -3629,7 +3660,10 @@ export type ChannelFilters = {
     /**
      * Filter by whether the requesting user is an active participant of the channel.
      * Presence of this filter also widens the candidate set to team channels of the
-     * user's teams that they have not joined, so `false` matches those channels.
+     * user's teams that they have not joined, so `false` matches those channels,
+     * and, when the filter admits only channels it names by id, to public
+     * channels too. Soup listings apply the filter and its widening; channel
+     * search (`/search`) reads only the channels the user joined and ignores it.
      * None to ignore (participant channels only, today's default).
      */
     is_participant?: boolean | null;
@@ -3975,7 +4009,9 @@ export type ChannelTopicEvent = {
 } | {
     event_type: 'channel.updated';
     /**
-     * A channel's metadata was updated (rename).
+     * A channel's settings were patched (a rename, a team conversion, or an
+     * auto-join change), or the bots in it changed; the names are equal when
+     * it was not a rename.
      */
     metadata: ChannelUpdatedMetadata;
 } | {
@@ -4022,7 +4058,8 @@ export type ChannelUpdatedMetadata = {
      */
     channel_id: string;
     /**
-     * New channel name.
+     * Stored channel name after the update; equal to `previous_name` when
+     * the update was not a rename.
      */
     channel_name?: string | null;
     /**
@@ -4039,6 +4076,10 @@ export type ChannelWebhookRequest = {
      * Message body.
      */
     content: string;
+    /**
+     * Who hears about the message; `Silent` notifies no one.
+     */
+    notification_policy?: PostMessageNotificationPolicy;
 };
 
 /**
@@ -4056,6 +4097,10 @@ export type ChannelWebhookResponse = {
  */
 export type ChannelWithParticipants = {
     /**
+     * Bots that are participants in the channel.
+     */
+    bot_participants?: Array<ChannelBotParticipant>;
+    /**
      * Channel metadata.
      */
     channel: Channel;
@@ -4065,7 +4110,7 @@ export type ChannelWithParticipants = {
      */
     is_participant?: boolean;
     /**
-     * Participants in the channel.
+     * Participants in the channel. Bots are in `bot_participants`.
      */
     participants: Array<ChannelParticipant>;
 };
@@ -4739,6 +4784,37 @@ export type CompanyContactsPageResponse = {
 };
 
 /**
+ * One of a company's domains. It travels in the body, as a contact's
+ * addresses do.
+ */
+export type CompanyDomainRequest = {
+    /**
+     * A bare domain such as "example.com": no scheme, path or email. An
+     * identical retry is accepted.
+     */
+    domain: string;
+};
+
+/**
+ * The 409 answer when another company of the team already tracks the domain.
+ */
+export type CompanyDomainTakenResponse = {
+    /**
+     * The company that tracks the domain. Absent when the caller cannot see
+     * it: an archived company, for a team member.
+     */
+    companyId?: string | null;
+    /**
+     * That company's display name, when the caller can see it.
+     */
+    companyName?: string | null;
+    /**
+     * What happened, naming the other company when the caller can see it.
+     */
+    message: string;
+};
+
+/**
  * What a companies import did.
  */
 export type CompanyImportResponse = {
@@ -5306,8 +5382,10 @@ export type CreateCrmContactRequest = {
  */
 export type CreateCrmTeamContactRequest = {
     /**
-     * The contact's email address, of any domain. Optional: omit it to
-     * add the contact by name only.
+     * The contact's email address, of any domain. A company-domain address
+     * also links the contact to that domain's company, unless the team
+     * blocks the domain or the company is hidden. Optional: omit it to add
+     * the contact by name only.
      */
     email?: string | null;
     /**
@@ -5685,6 +5763,7 @@ export type CreateProjectResponse = {
 };
 
 export type CreateSavedViewDefinitionRequest = {
+    appearance?: null | EntityAppearance;
     /**
      * Consumer configuration with its `kind` and `version`, at most 32 KiB.
      */
@@ -5803,6 +5882,10 @@ export type CreateTaskRequest = {
      */
     markdown?: string | null;
     /**
+     * Property definition IDs to pin in the first task snapshot. Omission keeps implicit defaults.
+     */
+    pinnedPropertyDefinitionIds?: Array<string> | null;
+    /**
      * Optional project ID to associate the task with.
      */
     projectId?: string | null;
@@ -5854,6 +5937,28 @@ export type CreateTaskResponse = {
      * A pre-generated permission token that you can use for SS
      */
     token: string;
+};
+
+/**
+ * Create a personal template or one owned by a current team.
+ */
+export type CreateTaskTemplateRequest = {
+    /**
+     * Reusable task fields and description.
+     */
+    configuration: TaskTemplateConfiguration;
+    /**
+     * Client-generated creation identity; reuse the same ID and input when retrying.
+     */
+    id?: string | null;
+    /**
+     * Template name.
+     */
+    name: string;
+    /**
+     * Owning team; omission creates a personal template.
+     */
+    teamId?: string | null;
 };
 
 /**
@@ -6121,9 +6226,14 @@ export type CrmCompanyFilters = {
  */
 export type CrmCompanyPreview = {
     /**
-     * The company.
+     * The requested company id.
      */
     id: string;
+    /**
+     * The company the requested one was merged into, which is the one the
+     * rest of the preview shows. Absent for a company that was not merged.
+     */
+    mergedInto?: string | null;
     /**
      * The team's name override, else the primary domain's directory name.
      */
@@ -6236,9 +6346,14 @@ export type CrmContactPreview = {
      */
     email?: string | null;
     /**
-     * The contact.
+     * The requested contact id.
      */
     id: string;
+    /**
+     * The contact the requested one was merged into, which is the one the
+     * rest of the preview shows. Absent for a contact that was not merged.
+     */
+    mergedInto?: string | null;
     /**
      * The contact's display name.
      */
@@ -6829,6 +6944,16 @@ export type DirectAccess = {
      * Recipient.
      */
     userId: string;
+};
+
+/**
+ * Discard the caller's timer.
+ */
+export type DiscardTimerRequest = {
+    /**
+     * The timer to discard.
+     */
+    timerId: string;
 };
 
 /**
@@ -7637,6 +7762,22 @@ export type DocumentUpdatedMetadata = {
      * Whether share permissions were updated.
      */
     share_permission_updated: boolean;
+};
+
+/**
+ * One value a merge drops.
+ */
+export type DroppedValue = {
+    /**
+     * The record merged away that held it.
+     */
+    recordId: string;
+    /**
+     * The value.
+     */
+    value: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -9280,9 +9421,37 @@ export type EmailAttachmentsReleasedMetadata = {
 export type EmailBlockScope = 'team' | 'personal';
 
 /**
+ * Current mailbox consent without loading domain exclusion lists.
+ */
+export type EmailContributionConsent = {
+    /**
+     * Whether this exact mailbox has explicit contribution consent.
+     */
+    enabled: boolean;
+    /**
+     * The primary mailbox that would contribute, if connected.
+     */
+    mailbox_email?: string | null;
+    /**
+     * Exact current primary mailbox connection.
+     */
+    mailbox_link_id?: string | null;
+};
+
+/**
+ * The scope of an explicitly granted mailbox contribution.
+ */
+export type EmailContributionMode = 'all' | 'selected';
+
+/**
  * The email filters used to filter down what emails you search over.
  */
 export type EmailFilters = {
+    /**
+     * Only threads with at least one attachment of one of these kinds, by
+     * MIME type, on any of their messages. Empty applies no constraint.
+     */
+    attachments?: Array<AttachmentKind>;
     /**
      * Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC.
      */
@@ -9303,7 +9472,8 @@ export type EmailFilters = {
      * fully-qualified addresses. Each address is authorized against
      * `crm_contacts` + `crm_companies` (contact must not be hidden, company
      * must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_domains`.
+     * Mutually exclusive with `crm_domains`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_addresses?: Array<string>;
     /**
@@ -9312,9 +9482,16 @@ export type EmailFilters = {
      * domains (in any of sender/cc/bcc/recipient). Each domain is authorized
      * against `crm_domains` + `crm_companies` (must exist for the caller's
      * team, company must not be hidden, `email_sync` must be true).
-     * Mutually exclusive with `crm_addresses`.
+     * Mutually exclusive with `crm_addresses`. Listing email only: search
+     * rejects a request that sets it with a 400.
      */
     crm_domains?: Array<string>;
+    /**
+     * Filter by whether the thread is done: true for threads out of the
+     * inbox (archived), false for threads still in it. This is the mailbox
+     * state the Email view's Done filter uses, independent of notifications.
+     */
+    done?: boolean | null;
     /**
      * Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads.
      */
@@ -9324,6 +9501,20 @@ export type EmailFilters = {
      * Note: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.
      */
     exclude_labels?: Array<string>;
+    /**
+     * Leave out the threads in these mailbox views. Search only.
+     */
+    exclude_views?: Array<EmailSearchView>;
+    /**
+     * True for the caller's favorite threads only, false to leave them out.
+     * Search only.
+     */
+    favorite?: boolean | null;
+    /**
+     * True for threads with an attachment on any message, false for threads
+     * with none. Search only.
+     */
+    has_attachment?: boolean | null;
     /**
      * Filter by email importance. None to not filter. True to show only important emails
      * (drafts, personal, sent, or uncategorized). False to show only unimportant emails
@@ -9340,6 +9531,14 @@ export type EmailFilters = {
      */
     is_read?: boolean | null;
     /**
+     * Tags or labels each thread must carry, or must not, by name, as typing
+     * `label:` or `in:<name>` into the search does. A name matches the
+     * caller's tags with that label and the labels with that name in the
+     * caller's inboxes, ignoring case; a name that is neither matches
+     * nothing. Search only.
+     */
+    label_names?: Array<EmailLabelMatch>;
+    /**
      * Restrict to specific inboxes by email_links.id. Empty means "any inbox the
      * caller can access" (soup expands to the full set at the router edge).
      */
@@ -9349,7 +9548,14 @@ export type EmailFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * A list of project ids to search within. Empty to ignore project filtering.
+     * Drive folder (project) ids to search within: threads filed in any of
+     * these folders. Besides the caller's own threads, it reaches every
+     * thread in a folder shared with the caller, whoever's inbox holds it,
+     * as the folder's list does. Search takes at most 50 folders and
+     * rejects more with a 400, and matches the query against at most 10,000
+     * of their threads in all; threads past that are not searched, unless
+     * `email_thread_ids` names them, and at most 10,000 named threads are
+     * searched in all. Empty to ignore project filtering.
      */
     project_ids?: Array<string>;
     /**
@@ -9361,10 +9567,27 @@ export type EmailFilters = {
      */
     senders?: Array<string>;
     /**
+     * Only messages sent at or after this instant. Mail with no sent time
+     * never matches. Search only.
+     */
+    sent_after?: string | null;
+    /**
+     * Only messages sent before this instant. Mail with no sent time never
+     * matches. Search only.
+     */
+    sent_before?: string | null;
+    /**
      * Controls whether shared email threads are included in results.
      * Defaults to "exclude" (only the user's own threads).
      */
     shared?: SharedEmailFilter;
+    /**
+     * Words or phrases each message must contain, or must not, in one part
+     * of it, as typing `subject:`, `from:`, `to:`, `cc:`, `bcc:` or a minus
+     * into the search does. Search only.
+     */
+    text_matches?: Array<EmailTextMatch>;
+    view?: null | EmailSearchView;
 };
 
 /**
@@ -9446,6 +9669,350 @@ export type EmailFollowupResponse = {
 };
 
 /**
+ * One positive whole-thread selector; denials always take precedence.
+ */
+export type EmailInclusionRule = {
+    kind: 'thread';
+    /**
+     * Internal thread ID, never a provider thread ID.
+     */
+    thread_id: string;
+} | {
+    /**
+     * Address to normalize and validate before activation.
+     */
+    address: string;
+    kind: 'address';
+} | {
+    /**
+     * Stable contact ID, resolved live rather than expanded on activation.
+     */
+    contact_id: string;
+    kind: 'contact';
+} | {
+    /**
+     * Bare domain to normalize and validate before activation.
+     */
+    domain: string;
+    kind: 'domain';
+} | {
+    /**
+     * Stable company ID, resolved live rather than expanded on activation.
+     */
+    company_id: string;
+    kind: 'company';
+};
+
+/**
+ * A tag or provider label that an email thread must, or must not, carry,
+ * named by its label.
+ */
+export type EmailLabelMatch = {
+    /**
+     * Leave out the threads that carry it instead.
+     */
+    exclude?: boolean;
+    /**
+     * The label of one of the caller's tags, or the name of a label in one
+     * of the caller's inboxes, ignoring case.
+     */
+    name: string;
+};
+
+/**
+ * Provenance established by authenticated credentials, never a request field.
+ */
+export type EmailPolicyActorKind = 'member' | 'agent' | 'api' | 'system';
+
+/**
+ * An audit record may predate incarnation-aware writers.
+ */
+export type EmailPolicyAudit = {
+    /**
+     * Absent only for a legacy audit row.
+     */
+    consent_incarnation?: string | null;
+    /**
+     * Database commit transaction's creation time.
+     */
+    created_at: string;
+    /**
+     * Stored event and provenance.
+     */
+    entry: NewEmailPolicyAudit;
+    /**
+     * Exact mailbox at the time of the event.
+     */
+    link_id: string;
+    /**
+     * Committed policy version within the recorded lifetime.
+     */
+    policy_version: number;
+};
+
+/**
+ * Events in the member-only policy history; records never contain mail content.
+ */
+export type EmailPolicyAuditAction = 'rules_activated' | 'all_mail_enabled' | 'withdrawn' | 'mailbox_revoked' | 'live_targets_changed' | 'records_merged';
+
+/**
+ * One explicit sharing command; member and team never come from the body.
+ */
+export type EmailPolicyChange = {
+    action: 'replace_rules';
+    /**
+     * Positive selectors for eligible past and future whole threads.
+     */
+    rules: EmailRuleSet;
+} | {
+    action: 'enable_all';
+} | {
+    action: 'withdraw';
+};
+
+/**
+ * Retry-safe command with the exact state observed by the caller.
+ */
+export type EmailPolicyCommand = {
+    /**
+     * The explicit sharing operation.
+     */
+    change: EmailPolicyChange;
+    /**
+     * State returned by inspection; stale tokens produce a conflict.
+     */
+    if_policy: EmailPolicyToken;
+    /**
+     * One UUID per intended operation, reused only for its retries.
+     */
+    request_id: string;
+};
+
+/**
+ * Owner history has a fixed fifty-event page.
+ */
+export type EmailPolicyHistory = {
+    /**
+     * Audit entries without mailbox contents or expanded source identities.
+     */
+    events: Array<EmailPolicyAudit>;
+    /**
+     * Exclusive UUID cursor for the next page.
+     */
+    next_cursor?: string | null;
+};
+
+/**
+ * Recorded outcome. A replay describes the original commit, not current state.
+ */
+export type EmailPolicyOutcome = {
+    /**
+     * Owner history entry identifying this operation.
+     */
+    audit_event_id: string;
+    /**
+     * Sharing and retention effects of the committed operation.
+     */
+    effect: string;
+    /**
+     * Whether this commit granted contribution.
+     */
+    enabled: boolean;
+    /**
+     * Committed scope.
+     */
+    mode: EmailContributionMode;
+    /**
+     * True means the stored result was returned without repeating any effects.
+     */
+    replayed: boolean;
+    /**
+     * Committed definition revision, if selected.
+     */
+    revision?: number | null;
+    /**
+     * State token produced by this commit.
+     */
+    token: EmailPolicyToken;
+};
+
+/**
+ * Count-only preview output; no mailbox contents or target identities.
+ */
+export type EmailPolicyPreviewCounts = {
+    /**
+     * Threads newly included by the proposal.
+     */
+    added?: number;
+    /**
+     * Currently included threads encountered so far.
+     */
+    current?: number;
+    /**
+     * Matching threads vetoed by other privacy settings.
+     */
+    denied?: number;
+    /**
+     * Proposed included threads encountered so far.
+     */
+    proposed?: number;
+    /**
+     * Threads held back by the proposal.
+     */
+    removed?: number;
+    /**
+     * Threads included by both policies.
+     */
+    retained?: number;
+};
+
+/**
+ * Preview state is independent of the contribution grant.
+ */
+export type EmailPolicyPreviewStatus = 'pending' | 'running' | 'complete' | 'partial' | 'cancelled' | 'stale';
+
+/**
+ * One immutable owner-only definition, fetched separately from history pages.
+ */
+export type EmailPolicyRevision = {
+    /**
+     * Time this definition was committed.
+     */
+    created_at: string;
+    /**
+     * Mailbox the saved definition refers to.
+     */
+    link_id: string;
+    /**
+     * Revision in this member's rule history.
+     */
+    revision: number;
+    /**
+     * Stored selectors; no expanded contact details or mail content.
+     */
+    rules: EmailRuleSet;
+};
+
+/**
+ * An observed consent state, not an authorization credential. Never refresh
+ * this token automatically after a conflict and replay a sharing command.
+ */
+export type EmailPolicyToken = {
+    /**
+     * Opaque observation; the first write compares it before initialization.
+     */
+    fingerprint: string;
+    kind: 'legacy';
+} | {
+    /**
+     * Explicit mailbox and membership authority, excluding sync state.
+     */
+    authority_fingerprint: string;
+    /**
+     * Never reused after deletion and recreation of consent.
+     */
+    consent_incarnation: string;
+    kind: 'policy';
+    /**
+     * Database-owned version observed by the caller.
+     */
+    policy_version: number;
+};
+
+/**
+ * Owner-only view. GET never initializes identity or transfers historical work.
+ */
+export type EmailPolicyView = {
+    /**
+     * Whether new rule authoring is available for this caller.
+     */
+    authoring_available: boolean;
+    /**
+     * Explain whole-thread sharing, live targets and overriding exclusions.
+     */
+    effect: string;
+    /**
+     * Current effective grant.
+     */
+    enabled: boolean;
+    /**
+     * Exact mailbox represented by the consent or prospective first grant.
+     */
+    link_id?: string | null;
+    /**
+     * The caller's mailbox address.
+     */
+    mailbox_email?: string | null;
+    /**
+     * Current scope of contribution.
+     */
+    mode: EmailContributionMode;
+    /**
+     * Active immutable definition revision.
+     */
+    revision?: number | null;
+    rules?: null | EmailRuleSet;
+    token?: null | EmailPolicyToken;
+};
+
+/**
+ * A bounded preview request. The slot token fences delayed starts after replacement.
+ */
+export type EmailPreviewRequest = {
+    /**
+     * Observed sharing state; never refreshed automatically after a conflict.
+     */
+    if_policy: EmailPolicyToken;
+    /**
+     * Current preview ID from inspection, or null before the first preview.
+     */
+    if_preview_id?: string | null;
+    /**
+     * Hypothetical selected contribution; validation never activates it.
+     */
+    rules: EmailRuleSet;
+};
+
+/**
+ * Count-only result. Complete counts describe one stable snapshot; every other
+ * status is incomplete and must not be presented as the total mailbox count.
+ */
+export type EmailPreviewView = {
+    /**
+     * Time of the stable read snapshot, once a worker starts.
+     */
+    as_of?: string | null;
+    /**
+     * A new worker attempt gets a new context; old completions cannot overwrite it.
+     */
+    context_id: string;
+    /**
+     * Distinct counts of this member's mailbox-local threads, never team conversations.
+     */
+    counts: EmailPolicyPreviewCounts;
+    /**
+     * Enqueue time, used to explain queue delay.
+     */
+    created_at: string;
+    /**
+     * Five-minute work deadline; results remain inspectable after the deadline.
+     */
+    expires_at: string;
+    /**
+     * The member's current preview slot occupant.
+     */
+    preview_id: string;
+    /**
+     * Progress counts contain no identities, subjects, participants or bodies.
+     */
+    scanned_threads: number;
+    /**
+     * Pending, running, complete, partial, cancelled or stale.
+     */
+    status: EmailPolicyPreviewStatus;
+};
+
+/**
  * One explicit privacy change, avoiding lost updates to whole blocklists.
  */
 export type EmailPrivacyChange = {
@@ -9491,9 +10058,22 @@ export type EmailPrivacyChange = {
 };
 
 /**
+ * Full settings by default, or mailbox consent when explicitly requested.
+ */
+export type EmailPrivacyResponse = EmailPrivacySettings | EmailContributionConsent;
+
+/**
  * Current consent and exclusions, readable by any team member.
  */
 export type EmailPrivacySettings = {
+    /**
+     * Team domains listed because their company is archived, mapped to that
+     * company. They can't be removed until the company is restored. Empty for
+     * members, who can't see archived companies.
+     */
+    archived_team_domains: {
+        [key: string]: string;
+    };
     /**
      * Whether the caller can remove a team exclusion.
      */
@@ -9511,9 +10091,21 @@ export type EmailPrivacySettings = {
      */
     mailbox_link_id?: string | null;
     /**
+     * Existing personal exclusions that cover the caller's whole mailbox.
+     */
+    personal_domain_warnings: {
+        [key: string]: MailboxDomainConflict;
+    };
+    /**
      * Domains excluded only for the caller's contributions.
      */
     personal_domains: Array<string>;
+    /**
+     * Existing team exclusions that cover a connected member's whole mailbox.
+     */
+    team_domain_warnings: {
+        [key: string]: MailboxDomainConflict;
+    };
     /**
      * Domains excluded across the team, including legacy company exclusions.
      */
@@ -9552,6 +10144,72 @@ export type EmailReminderSummary = {
      */
     threadId: string;
 };
+
+/**
+ * A complete replacement definition; an empty list selects no mail.
+ * Contact/company edits affect matching without rewriting this definition.
+ */
+export type EmailRuleSet = {
+    /**
+     * OR-combined positive selectors over all non-draft thread participants.
+     */
+    include: Array<EmailInclusionRule>;
+    /**
+     * Wire-format version, not a contribution grant or revision number.
+     */
+    schema_version: number;
+};
+
+/**
+ * Canonical rules and bounded warnings; validation does not grant contribution.
+ */
+export type EmailRuleValidation = {
+    /**
+     * Indices that may select most mail because they match the owner or domain.
+     */
+    broad_rule_indices: Array<number>;
+    /**
+     * Human-readable effect to show before an agent changes sharing.
+     */
+    effect: string;
+    /**
+     * Indices into the canonical list that currently have no live targets.
+     */
+    inactive_rule_indices: Array<number>;
+    /**
+     * Normalized, sorted and deduplicated, without expanding live references.
+     */
+    rules: EmailRuleSet;
+};
+
+/**
+ * A mailbox view the Email list scopes a search to, as its tabs do.
+ */
+export type EmailSearchView = 'sent' | 'drafts' | 'calendar';
+
+/**
+ * A word or phrase that must, or must not, appear in one part of a message.
+ */
+export type EmailTextMatch = {
+    /**
+     * Leave out the messages that match instead.
+     */
+    exclude?: boolean;
+    /**
+     * The part of the message matched.
+     */
+    part: EmailTextPart;
+    /**
+     * One word, matched as a search word is (a prefix unless the search is
+     * exact), or several words, matched as an adjacent phrase.
+     */
+    text: string;
+};
+
+/**
+ * The part of an email message a search condition matches.
+ */
+export type EmailTextPart = 'any' | 'subject' | 'from' | 'to' | 'cc' | 'bcc';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -10692,6 +11350,13 @@ export type ExternalChatSendReply = {
      * Message being quoted, within this chat.
      */
     replyTo?: string | null;
+    /**
+     * The user's own reply approving this send, quoted verbatim. Required
+     * from an agent's program; never the request that asked for the message.
+     * Not part of the send's intent: it is neither stored nor compared on a
+     * retry.
+     */
+    userConfirmation?: string | null;
 };
 
 /**
@@ -10885,6 +11550,31 @@ export type FavoritesList = {
      * The requesting user's favorites, in manual order.
      */
     favorites: Array<Favorite>;
+};
+
+/**
+ * A team-visible field whose values differ. The value of the record that
+ * stays is kept; the others are dropped and kept in the merge log.
+ */
+export type FieldConflict = {
+    /**
+     * The values dropped, with the record each came from.
+     */
+    dropped: Array<DroppedValue>;
+    /**
+     * The value kept.
+     */
+    kept: {
+        [key: string]: unknown;
+    };
+    /**
+     * The property definition.
+     */
+    propertyId: string;
+    /**
+     * The property's name.
+     */
+    propertyName: string;
 };
 
 /**
@@ -11940,6 +12630,13 @@ export type GetBatchProjectPreviewRequest = {
 
 export type GetBatchProjectPreviewResponse = {
     previews: Array<ProjectPreview>;
+};
+
+/**
+ * Response from looking up a CRM company by domain.
+ */
+export type GetCompanyByDomainResponse = {
+    company?: null | CrmCompanyResponse;
 };
 
 /**
@@ -13334,7 +14031,7 @@ export type InitiativeActivityRecord = {
  */
 export type InitiativeDescription = {
     /**
-     * GitHub-flavored markdown; empty while no one has opened or written it.
+     * Internal markdown, chips as XML tags such as `<m-user-mention>`; empty while no one has opened or written it.
      */
     markdown: string;
 };
@@ -13492,6 +14189,10 @@ export type InitiativePropertySnapshot = {
      * Priority option id, or unset.
      */
     priority?: string | null;
+    /**
+     * Start timestamp, or unset.
+     */
+    startDate?: string | null;
     /**
      * Status option id, or unset.
      */
@@ -14013,7 +14714,56 @@ export type LocationResponseV3 = {
     type: 'syncServiceContent';
 };
 
+/**
+ * Typed time to log on a task.
+ */
+export type LogTimeRequest = {
+    /**
+     * The logger's calendar day for the work, `YYYY-MM-DD`.
+     */
+    date: string;
+    /**
+     * When the work ended, after `startedAt`.
+     */
+    endedAt?: string | null;
+    /**
+     * A UUIDv7 chosen by the client, so a retry logs once; generated when omitted.
+     */
+    id?: string | null;
+    /**
+     * Length in whole minutes, 1 to 1440.
+     */
+    minutes: number;
+    /**
+     * What the time was spent on, up to 2000 characters.
+     */
+    note?: string | null;
+    /**
+     * When the work started; given with `endedAt` or not at all.
+     */
+    startedAt?: string | null;
+};
+
+/**
+ * An entry and its task's Time logged after the write that returned it.
+ */
+export type LoggedTime = {
+    /**
+     * The entry as stored.
+     */
+    entry: TimeEntry;
+    /**
+     * The task's Time logged, in minutes.
+     */
+    totalMinutes: number;
+};
+
 export type MacroUserIdStr = string;
+
+/**
+ * Why a domain exclusion would hide an affected mailbox's entire history.
+ */
+export type MailboxDomainConflict = 'company' | 'personal_provider';
 
 /**
  * Mark messages through this message read.
@@ -14124,9 +14874,229 @@ export type MeetingsResponse = {
 };
 
 /**
+ * Why a merge can't go ahead until someone changes the records.
+ */
+export type MergeBlock = {
+    kind: 'same_address_people';
+    /**
+     * Every person involved, archived ones too.
+     */
+    people: Array<SameAddressPerson>;
+} | {
+    kind: 'different_companies';
+    /**
+     * The people who would change company.
+     */
+    people: Array<OtherCompanyPerson>;
+};
+
+/**
+ * A reviewed merge to commit.
+ */
+export type MergeCommitRequest = {
+    /**
+     * The kind of record merged.
+     */
+    recordType: MergeRecordType;
+    /**
+     * A new key per merge, reused only to retry the same one: a retry
+     * returns the first result.
+     */
+    requestKey: string;
+    /**
+     * The revision of the review being confirmed.
+     */
+    revision: string;
+    /**
+     * What happens to teammates' email sharing that names a record merged
+     * away; keeps sharing it when left out.
+     */
+    sharingRules?: SharingRulesChoice;
+    /**
+     * The records merged into it.
+     */
+    sourceIds: Array<string>;
+    /**
+     * The record that stays.
+     */
+    survivorId: string;
+};
+
+/**
+ * What email sync does after the merge. The record that stays keeps its
+ * setting; domains whose sync was off stay out of sync.
+ */
+export type MergeEmailSync = {
+    /**
+     * Domains joining it whose mail stays out of sync.
+     */
+    keptOut: Array<string>;
+    /**
+     * Whether the record that stays syncs mail.
+     */
+    survivorSyncs: boolean;
+};
+
+/**
+ * Why a merge was refused.
+ */
+export type MergeErrorResponse = {
+    blocked?: null | MergeBlock;
+    /**
+     * A stable code: `merge_permission_required`, `merge_unavailable`,
+     * `record_unavailable`, `record_hidden`, `record_already_merged`,
+     * `merge_preview_stale`, `merge_request_reused`, `merge_conflict`,
+     * `merge_sharing_rules_too_large`, `invalid_request`.
+     */
+    code: string;
+    /**
+     * For `record_already_merged`, the record it opens now.
+     */
+    currentId?: string | null;
+    /**
+     * What happened, for people.
+     */
+    message: string;
+    /**
+     * The record a `record_hidden` or `record_already_merged` refusal is about.
+     */
+    recordId?: string | null;
+};
+
+/**
  * How `mergeShapes` combines the shapes (PowerPoint's Merge Shapes).
  */
 export type MergeMode = 'union' | 'combine' | 'fragment' | 'intersect' | 'subtract';
+
+/**
+ * What moves to the record that stays.
+ */
+export type MergeMoves = {
+    /**
+     * People filed under the records merged away.
+     */
+    contacts: number;
+    /**
+     * Discussion messages on them.
+     */
+    discussionMessages: number;
+    /**
+     * Pipeline entries tracking the records merged away.
+     */
+    pipelineEntries: number;
+    /**
+     * Tasks, notes, emails, calls, events and rows that reference them.
+     */
+    references: number;
+};
+
+/**
+ * A committed merge.
+ */
+export type MergeOutcome = {
+    /**
+     * When the merge committed.
+     */
+    committedAt: string;
+    /**
+     * The merge's id in the merge log.
+     */
+    mergeId: string;
+    /**
+     * The records merged into it; their ids now open the record that stays.
+     */
+    mergedIds: Array<string>;
+    /**
+     * The kind of record merged.
+     */
+    recordType: MergeRecordType;
+    /**
+     * The record that stays.
+     */
+    survivorId: string;
+};
+
+/**
+ * The review an admin confirms before merging.
+ */
+export type MergePreview = {
+    blocked?: null | MergeBlock;
+    /**
+     * Team-visible values that differ.
+     */
+    conflicts: Array<FieldConflict>;
+    /**
+     * What email sync does.
+     */
+    emailSync: MergeEmailSync;
+    /**
+     * The domains (or addresses) the record that stays has after the merge,
+     * its own first.
+     */
+    identifiers: Array<string>;
+    /**
+     * What moves.
+     */
+    moves: MergeMoves;
+    /**
+     * The kind of record merged.
+     */
+    recordType: MergeRecordType;
+    /**
+     * Changes whenever anything shown here changes; the commit must name it.
+     */
+    revision: string;
+    /**
+     * Pipelines where the record that stays will have several entries.
+     */
+    sharedPipelines: Array<SharedPipeline>;
+    sharingRules?: null | SharingRulesPreview;
+    /**
+     * The records merged into it.
+     */
+    sources: Array<MergedRecord>;
+    /**
+     * The record that stays.
+     */
+    survivor: MergedRecord;
+};
+
+/**
+ * The records a merge names.
+ */
+export type MergePreviewRequest = {
+    /**
+     * The kind of record merged.
+     */
+    recordType: MergeRecordType;
+    /**
+     * The records merged into it, at most ten.
+     */
+    sourceIds: Array<string>;
+    /**
+     * The record that stays.
+     */
+    survivorId: string;
+};
+
+/**
+ * The kind of record a merge combines.
+ */
+export type MergeRecordType = 'company' | 'contact';
+
+/**
+ * A record as the review names it.
+ */
+export type MergedRecord = {
+    /**
+     * Record id.
+     */
+    id: string;
+    /**
+     * Display name, as listings show it.
+     */
+    name: string;
+};
 
 /**
  * Shared message representation for channel timelines and entity discussions.
@@ -14943,6 +15913,44 @@ export type NewColumn = {
 };
 
 /**
+ * Audit data supplied by the authorized use case, without mail content.
+ */
+export type NewEmailPolicyAudit = {
+    /**
+     * The operation that committed.
+     */
+    action: EmailPolicyAuditAction;
+    /**
+     * Provenance derived from authenticated credentials.
+     */
+    actor_kind: EmailPolicyActorKind;
+    /**
+     * Verified agent identity, if available.
+     */
+    agent_id?: string | null;
+    /**
+     * Verified session identity, if available; never inferred from a request.
+     */
+    agent_session_id?: string | null;
+    /**
+     * Bounded metadata, never email IDs, addresses, subjects or bodies.
+     */
+    details: unknown;
+    /**
+     * Server-generated UUIDv7, stable for a retried system event.
+     */
+    event_id: string;
+    /**
+     * New immutable definition.
+     */
+    next_revision?: number | null;
+    /**
+     * Previous immutable definition.
+     */
+    previous_revision?: number | null;
+};
+
+/**
  * One entry to add: at most one of `recordId` or `email`. A tracked
  * pipeline's entry names its record; a generic pipeline's names none.
  */
@@ -15461,6 +16469,28 @@ export type OptionRename = {
 };
 
 /**
+ * A person a contact merge would move to another company.
+ */
+export type OtherCompanyPerson = {
+    /**
+     * The company it is filed under.
+     */
+    companyId: string;
+    /**
+     * That company's name, as listings show it.
+     */
+    companyName: string;
+    /**
+     * Contact id.
+     */
+    contactId: string;
+    /**
+     * Contact name, when it has one.
+     */
+    name?: string | null;
+};
+
+/**
  * A pending pairing, as shown to the approving user.
  */
 export type PairingDetails = {
@@ -15739,7 +16769,7 @@ export type PasswordAgentEditableMetadata = {
 /**
  * Closed, payload-free failure codes of the agent vault API.
  */
-export type PasswordAgentErrorCode = 'unauthorized' | 'invalid_agent' | 'invalid_session_attribution' | 'not_found' | 'not_granted' | 'pending' | 'forbidden' | 'invalid_request' | 'unsupported_kind' | 'field_not_set' | 'version_conflict' | 'vault_busy' | 'rate_limited' | 'vault_unavailable';
+export type PasswordAgentErrorCode = 'unauthorized' | 'invalid_agent' | 'invalid_session_attribution' | 'not_found' | 'not_granted' | 'pending' | 'forbidden' | 'invalid_request' | 'unsupported_kind' | 'field_not_set' | 'version_conflict' | 'vault_busy' | 'rate_limited' | 'vault_unavailable' | 'vault_not_provisioned';
 
 /**
  * Sanitized agent vault failure.
@@ -16016,7 +17046,7 @@ export type PasswordCreateFolderBody = {
 /**
  * Closed, payload-free failure codes exposed by the human vault API.
  */
-export type PasswordErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'folder_missing' | 'vault_unavailable';
+export type PasswordErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'folder_missing' | 'vault_unavailable' | 'vault_not_provisioned';
 
 /**
  * Sanitized vault failure shared with generated HTTP clients.
@@ -16131,7 +17161,7 @@ export type PasswordImportBatchResult = {
 /**
  * Closed, sanitized per-item failure categories.
  */
-export type PasswordImportErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'folder_missing' | 'busy' | 'vault_unavailable';
+export type PasswordImportErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'folder_missing' | 'busy' | 'vault_unavailable' | 'vault_not_provisioned';
 
 /**
  * Source folder; parents must precede children in every batch.
@@ -16250,7 +17280,7 @@ export type PasswordItemFields = {
      */
     createdAt: string;
     /**
-     * Whether the item is marked as a favorite.
+     * The current viewer's private favorite in responses; legacy initial flag in storage.
      */
     favorite: boolean;
     /**
@@ -16364,7 +17394,7 @@ export type PasswordPatchItem = {
      */
     expectedVersion: number;
     /**
-     * Whether the item is marked as a favorite.
+     * Legacy accepted field, ignored; change private preferences through the favorite endpoint.
      */
     favorite: boolean;
     /**
@@ -16539,7 +17569,7 @@ export type PasswordWriteItem = {
      */
     expectedVersion?: number | null;
     /**
-     * Whether the item is marked as a favorite.
+     * Initial creator preference on create; ignored on update. Use the favorite endpoint afterward.
      */
     favorite: boolean;
     /**
@@ -17225,13 +18255,20 @@ export type PostMessage = {
      */
     nonce?: string | null;
     /**
+     * Who hears about this post. `Silent` still delivers and shows the
+     * message, but sends no notification of any kind, mentions included.
+     * Channel messages only; other parents accept only `Default`.
+     */
+    notification_policy?: PostMessageNotificationPolicy;
+    /**
      * Root to reply to, if this is a reply.
      */
     thread_id?: string | null;
 };
 
 /**
- * Internal notification behavior for a posted channel message.
+ * Who hears about a posted message. A caller may choose it for its own
+ * channel message, since every choice only narrows who is notified.
  */
 export type PostMessageNotificationPolicy = 'Default' | 'MentionsOnly' | 'Silent';
 
@@ -17513,6 +18550,20 @@ export type PropertyDateRanges = {
 };
 
 /**
+ * A reusable default using the task creation property's existing value contract.
+ */
+export type PropertyDefault = {
+    /**
+     * Definition that receives the default.
+     */
+    propertyId: string;
+    /**
+     * Default value; absence from the configuration leaves the field blank.
+     */
+    value: SetPropertyValue;
+};
+
+/**
  * Property definition model (service representation).
  */
 export type PropertyDefinition = {
@@ -17664,10 +18715,14 @@ export type PropertyValue = {
      */
     value: string;
 } | {
+    /**
+     * True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone.
+     */
+    has_time?: boolean;
     type: 'Date';
     /**
-     * Date/timestamp value
-     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
+     * Date value, with or without a time of day
+     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
      */
     value: string;
 } | {
@@ -18383,9 +19438,54 @@ export type RunPatch = {
     underline?: boolean | null;
 };
 
+/**
+ * A person's running timer.
+ */
+export type RunningTimer = {
+    /**
+     * The timer's id, kept by the entry it becomes.
+     */
+    id: string;
+    /**
+     * When it started, by the server's clock.
+     */
+    startedAt: string;
+    /**
+     * The task being timed.
+     */
+    taskId: string;
+};
+
 export type S3ObjectInfo = {
     bucket: string;
     key: string;
+};
+
+/**
+ * A person blocking the merge: they share an address with someone filed
+ * under another of the records.
+ */
+export type SameAddressPerson = {
+    /**
+     * The address both hold.
+     */
+    address: string;
+    /**
+     * Whether the contact is archived.
+     */
+    archived: boolean;
+    /**
+     * Contact id.
+     */
+    contactId: string;
+    /**
+     * Contact name, when it has one.
+     */
+    name?: string | null;
+    /**
+     * The record it is filed under.
+     */
+    recordId: string;
 };
 
 export type SaveBomPart = {
@@ -18510,6 +19610,7 @@ export type SavedQuery = {
  * A saved filter definition, not a snapshot of matching entities.
  */
 export type SavedViewDefinition = {
+    appearance?: null | EntityAppearance;
     /**
      * Versioned configuration interpreted by the consuming feature, with its
      * `kind` (such as `email` or `task`) and `version`.
@@ -18656,34 +19757,6 @@ export type SessionIdentity = {
 };
 
 /**
- * A prompt named other users who can open the session. Published when the
- * prompt is accepted, not when it is answered: "come look at this" should
- * not wait for the turn.
- */
-export type SessionMentionedMetadata = {
-    /**
-     * The action carrying the prompt.
-     */
-    action_id: AgentActionId;
-    /**
-     * The session.
-     */
-    identity: SessionIdentity;
-    /**
-     * The users named, already narrowed to those who can open the session
-     * and never including the author.
-     */
-    mentioned: Array<MacroUserIdStr>;
-    mentioned_by?: null | MacroUserIdStr;
-    /**
-     * The channel or document message the prompt was posted as, when it
-     * arrived from a thread rather than the session view. That message
-     * already notified the users it named when it was posted.
-     */
-    origin_message_id?: string | null;
-};
-
-/**
  * A session was created.
  */
 export type SessionOpenedMetadata = {
@@ -18794,7 +19867,9 @@ export type SetCompanyNameRequest = {
 };
 
 /**
- * Link or switch a contact with a known personal-provider email.
+ * Link a contact without a company, or switch the company of a contact
+ * whose primary email is at a known personal provider. A contact with an
+ * address on its current company's domain cannot switch.
  */
 export type SetContactCompanyRequest = {
     /**
@@ -18896,6 +19971,7 @@ export type SetPropertyValue = {
     type: 'boolean';
     value: boolean;
 } | {
+    has_time?: boolean;
     type: 'date';
     value: string;
 } | {
@@ -19025,6 +20101,47 @@ export type SharedExternalChatReference = {
      * Macro user who added the chat and shared it.
      */
     ownerId: string;
+};
+
+/**
+ * A pipeline in which the record that stays will have more than one entry.
+ * Entries are distinct deals, so they stay separate.
+ */
+export type SharedPipeline = {
+    /**
+     * Entries the record that stays has in it after the merge.
+     */
+    entriesAfter: number;
+    /**
+     * Pipeline name.
+     */
+    name: string;
+    /**
+     * Pipeline id.
+     */
+    pipelineId: string;
+};
+
+/**
+ * What happens to a teammate's email-sharing rule that names a record merged
+ * away. A rule is never pointed at the record that stays, which would share
+ * more than its owner chose.
+ */
+export type SharingRulesChoice = 'keep' | 'stop';
+
+/**
+ * Teammates whose email-sharing rules name a record merged away. Whose rules
+ * they are is not shown.
+ */
+export type SharingRulesPreview = {
+    /**
+     * Whether every changed rule set still fits the rule limits when kept.
+     */
+    keepFits: boolean;
+    /**
+     * How many teammates' rules change.
+     */
+    teammates: number;
 };
 
 /**
@@ -21708,6 +22825,39 @@ export type StageRequirement = {
 };
 
 /**
+ * Start timing a task.
+ */
+export type StartTimerRequest = {
+    /**
+     * A UUIDv7 chosen by the client, so a retry starts once; generated when omitted.
+     */
+    id?: string | null;
+    /**
+     * An earlier start within the last 24 hours; only Undo on a switch sends it.
+     */
+    startedAt?: string | null;
+    /**
+     * The task to time.
+     */
+    taskId: string;
+    /**
+     * IANA zone whose day a stopped previous timer's entry takes; UTC when omitted.
+     */
+    timeZone?: string | null;
+};
+
+/**
+ * A started timer, and the entry saved for the timer it replaced.
+ */
+export type StartedTimer = {
+    stopped?: null | LoggedTime;
+    /**
+     * The timer now running.
+     */
+    timer: RunningTimer;
+};
+
+/**
  * Starter result. A missing database means the user already started or removed it.
  */
 export type StarterDatabase = {
@@ -21737,6 +22887,35 @@ export type StarterDocumentsResponse = {
      * Id of the user's "Macro how to guide".
      */
     how_to_guide_id: string;
+};
+
+/**
+ * Stop the caller's timer.
+ */
+export type StopTimerRequest = {
+    /**
+     * When the person stopped working, for a timer past the limit.
+     */
+    endedAt?: string | null;
+    /**
+     * Log all the time until now, for a timer past the limit.
+     */
+    logAll?: boolean;
+    /**
+     * IANA zone whose calendar day the entry takes; UTC when omitted.
+     */
+    timeZone?: string | null;
+    /**
+     * The timer to stop.
+     */
+    timerId: string;
+};
+
+/**
+ * The entry a stop saved, or none when the timer was discarded.
+ */
+export type StoppedTimer = {
+    logged?: null | LoggedTime;
 };
 
 /**
@@ -22269,6 +23448,88 @@ export type TaskSimilaritySearchResponse = {
 };
 
 /**
+ * A personal or team-owned template with viewer-specific management capability.
+ */
+export type TaskTemplate = {
+    /**
+     * Whether the current viewer can update or delete the template.
+     */
+    canManage: boolean;
+    /**
+     * Reusable task fields and description.
+     */
+    configuration: TaskTemplateConfiguration;
+    /**
+     * Creation time.
+     */
+    createdAt: string;
+    /**
+     * Original creator; cleared when that account is deleted.
+     */
+    creatorId?: string | null;
+    /**
+     * Stable template ID.
+     */
+    id: string;
+    /**
+     * User-supplied template name.
+     */
+    name: string;
+    /**
+     * Positive revision used for conditional updates and deletes.
+     */
+    revision: number;
+    /**
+     * Owning team; absent for personal templates.
+     */
+    teamId?: string | null;
+    /**
+     * Last content update time.
+     */
+    updatedAt: string;
+    /**
+     * Personal owner; absent for team-owned templates.
+     */
+    userId?: string | null;
+};
+
+/**
+ * Selected fields, optional task title and sharing defaults, and description Markdown.
+ */
+export type TaskTemplateConfiguration = {
+    /**
+     * Defaults for selected fields only.
+     */
+    defaults?: Array<PropertyDefault>;
+    /**
+     * Markdown inserted only when the current description is blank.
+     */
+    descriptionMarkdown: string;
+    /**
+     * Visible definition IDs, including fields without a default value.
+     */
+    propertyIds: Array<string>;
+    /**
+     * Default task sharing, independent of template ownership; absence preserves the current choice.
+     */
+    shareWithTeam?: boolean | null;
+    /**
+     * Default task title, separate from the template name; absence leaves the task untitled.
+     */
+    title?: string | null;
+};
+
+/**
+ * A task's Time logged.
+ */
+export type TaskTimeTotal = {
+    /**
+     * The task's Time logged, in minutes.
+     */
+    totalMinutes: number;
+};
+
+/**
  * Availability for exactly the members selected by the domain service.
  */
 export type TeamAvailability = {
@@ -22615,6 +23876,28 @@ export type ThreadAnchor = {
 };
 
 /**
+ * A channel grant the thread owner can see in the sharing roster.
+ */
+export type ThreadChannelShare = {
+    /**
+     * The access level granted to the channel.
+     */
+    access_level: AccessLevel;
+    /**
+     * The channel with access to the thread.
+     */
+    channel_id: string;
+    /**
+     * The channel's configured name, if it has one.
+     */
+    channel_name?: string | null;
+    /**
+     * Whether the share is with a conversation or a group.
+     */
+    channel_type: ChannelType;
+};
+
+/**
  * The thread a session was opened from, when it was.
  */
 export type ThreadOrigin = {
@@ -22687,6 +23970,243 @@ export type ThreadState = {
 };
 
 /**
+ * Time a person logged on a task.
+ */
+export type TimeEntry = {
+    /**
+     * When it was logged.
+     */
+    createdAt: string;
+    /**
+     * The logger's own calendar day for the work.
+     */
+    date: string;
+    /**
+     * When the work ended, given exactly when `started_at` is.
+     */
+    endedAt?: string | null;
+    /**
+     * The entry's id; a timer's entry keeps the timer's id.
+     */
+    id: string;
+    /**
+     * Length in whole minutes; the truth even when a start and end are given.
+     */
+    minutes: number;
+    /**
+     * What the time was spent on.
+     */
+    note?: string | null;
+    /**
+     * How the entry was made.
+     */
+    source: TimeEntrySource;
+    /**
+     * When the work started, if known.
+     */
+    startedAt?: string | null;
+    /**
+     * The task document the time was spent on.
+     */
+    taskId: string;
+    /**
+     * When it last changed.
+     */
+    updatedAt: string;
+    /**
+     * Who logged it.
+     */
+    userId: string;
+};
+
+/**
+ * Where a page of entries continues: after this day and id, newest first.
+ */
+export type TimeEntryCursor = {
+    /**
+     * The day of the last entry returned.
+     */
+    date: string;
+    /**
+     * The id of the last entry returned.
+     */
+    id: string;
+};
+
+/**
+ * A task's entries, newest day first, with its Time logged.
+ */
+export type TimeEntryPage = {
+    /**
+     * Entries of this page.
+     */
+    entries: Array<TimeEntry>;
+    nextCursor?: null | TimeEntryCursor;
+    /**
+     * The task's Time logged, in minutes.
+     */
+    totalMinutes: number;
+};
+
+/**
+ * How a time entry was made.
+ */
+export type TimeEntrySource = 'manual' | 'timer';
+
+/**
+ * A scope's entries over a period as CSV text.
+ */
+export type TimeExport = {
+    /**
+     * False when entries were left out: past 10,000 entries or 16 MiB, or
+     * past the first 5,000 tasks of the scope.
+     */
+    complete: boolean;
+    /**
+     * The CSV: one row per entry, oldest day first.
+     */
+    csv: string;
+    /**
+     * Entries written.
+     */
+    rows: number;
+};
+
+/**
+ * The total of one group, and its split by the second grouping.
+ */
+export type TimeGroup = {
+    /**
+     * What the group is for.
+     */
+    key: TimeGroupKey;
+    /**
+     * Minutes logged in the group.
+     */
+    minutes: number;
+    /**
+     * The group's totals by the second grouping, in report order; empty
+     * without one.
+     */
+    rows: Array<TimeTotal>;
+    /**
+     * Tasks with time in the group.
+     */
+    taskCount: number;
+};
+
+/**
+ * What one total is for.
+ */
+export type TimeGroupKey = {
+    by: 'person';
+    /**
+     * The person.
+     */
+    userId: string;
+} | {
+    by: 'task';
+    /**
+     * The task document.
+     */
+    taskId: string;
+} | {
+    by: 'day';
+    /**
+     * The loggers' calendar day.
+     */
+    date: string;
+};
+
+/**
+ * What a report's totals are grouped by.
+ */
+export type TimeGrouping = 'person' | 'task' | 'day';
+
+/**
+ * Whose time a report reads.
+ */
+export type TimeScopeName = 'project' | 'mine' | 'team';
+
+/**
+ * The time a scope logged over a period.
+ */
+export type TimeSummary = {
+    /**
+     * False when the scope held more than 5,000 tasks and only the first
+     * 5,000 were read.
+     */
+    complete: boolean;
+    /**
+     * The first day of the period.
+     */
+    from: string;
+    /**
+     * Totals by the first grouping, in report order: days in calendar order,
+     * people and tasks with the most time first. For the caller's own and
+     * their team's time grouped by person, every current member has a group,
+     * with or without time.
+     */
+    groups: Array<TimeGroup>;
+    /**
+     * For a project, its tasks the caller can see that are out of the
+     * Trash, with time or not; absent for other scopes.
+     */
+    scopeTaskCount?: number | null;
+    /**
+     * Tasks with time in the period.
+     */
+    taskCount: number;
+    /**
+     * Totals by the second grouping across all groups, in report order;
+     * empty without one.
+     */
+    thenTotals: Array<TimeTotal>;
+    /**
+     * The last day of the period.
+     */
+    to: string;
+    /**
+     * Minutes logged in the period.
+     */
+    totalMinutes: number;
+};
+
+/**
+ * A total of minutes.
+ */
+export type TimeTotal = {
+    /**
+     * What the total is for.
+     */
+    key: TimeGroupKey;
+    /**
+     * Minutes logged.
+     */
+    minutes: number;
+};
+
+/**
+ * Error body of the time tracking endpoints.
+ */
+export type TimeTrackingApiError = {
+    /**
+     * Machine-readable failure category.
+     */
+    code: TimeTrackingErrorCode;
+    /**
+     * Human-readable failure description.
+     */
+    message: string;
+    timer?: null | RunningTimer;
+};
+
+/**
+ * Machine-readable reason a time tracking request failed.
+ */
+export type TimeTrackingErrorCode = 'not_found' | 'forbidden' | 'not_author' | 'invalid_input' | 'timer_over_limit' | 'conflict' | 'unavailable' | 'internal';
+
+/**
  * A displayable fact returned together with a message page.
  */
 export type TimelineActivity = {
@@ -22710,6 +24230,17 @@ export type TimelineActivity = {
      * The action's stored payload.
      */
     payload?: unknown;
+};
+
+/**
+ * The caller's timer, if any, and the server's clock to count it from.
+ */
+export type TimerState = {
+    /**
+     * The server's current time.
+     */
+    serverNow: string;
+    timer?: null | RunningTimer;
 };
 
 /**
@@ -23280,6 +24811,50 @@ export type UpdateSharePermissionRequestV2 = {
 };
 
 /**
+ * Replace content without changing ownership.
+ */
+export type UpdateTaskTemplateRequest = {
+    /**
+     * Replacement task fields and description.
+     */
+    configuration: TaskTemplateConfiguration;
+    /**
+     * Replacement name.
+     */
+    name: string;
+    /**
+     * Revision observed when editing began.
+     */
+    revision: number;
+};
+
+/**
+ * Changes to one's own entry. Omitted fields stay; `null` clears a note or span.
+ */
+export type UpdateTimeEntryRequest = {
+    /**
+     * A new day, `YYYY-MM-DD`.
+     */
+    date?: string | null;
+    /**
+     * A new end, or `null` to clear the span; changed with `startedAt`.
+     */
+    endedAt?: string | null;
+    /**
+     * A new length in whole minutes, 1 to 1440.
+     */
+    minutes?: number | null;
+    /**
+     * A new note, or `null` for none.
+     */
+    note?: string | null;
+    /**
+     * A new start, or `null` to clear the span; changed with `endedAt`.
+     */
+    startedAt?: string | null;
+};
+
+/**
  * An updated entry.
  */
 export type UpdatedPipelineEntry = {
@@ -23591,6 +25166,7 @@ export type VersionedTable = {
 };
 
 export type View = {
+    appearance?: null | EntityAppearance;
     /**
      * It is an explicit choice that the structure of the view configuration
      * is up to the frontend. The structure and composition of view configuration
@@ -27945,6 +29521,40 @@ export type CreateCrmCompanyResponses = {
 
 export type CreateCrmCompanyResponse = CreateCrmCompanyResponses[keyof CreateCrmCompanyResponses];
 
+export type GetCompanyByDomainData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The company domain to resolve within the caller's team, such as
+         * `acme.com`.
+         */
+        domain: string;
+    };
+    url: '/crm/companies/by-domain';
+};
+
+export type GetCompanyByDomainErrors = {
+    /**
+     * The domain is not a bare domain like acme.com.
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetCompanyByDomainError = GetCompanyByDomainErrors[keyof GetCompanyByDomainErrors];
+
+export type GetCompanyByDomainResponses = {
+    /**
+     * The company for the domain, or a null company when none is visible.
+     */
+    200: GetCompanyByDomainResponse;
+};
+
+export type GetCompanyByDomainResponse2 = GetCompanyByDomainResponses[keyof GetCompanyByDomainResponses];
+
 export type ImportCrmCompaniesCsvData = {
     body: ImportCompaniesCsvRequest;
     path?: never;
@@ -28099,6 +29709,63 @@ export type ListCompanyContactsPageResponses = {
 };
 
 export type ListCompanyContactsPageResponse = ListCompanyContactsPageResponses[keyof ListCompanyContactsPageResponses];
+
+export type RemoveCrmCompanyDomainData = {
+    body: CompanyDomainRequest;
+    path: {
+        /**
+         * The company to update
+         */
+        company_id: string;
+    };
+    query?: never;
+    url: '/crm/companies/{company_id}/domains';
+};
+
+export type RemoveCrmCompanyDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveCrmCompanyDomainError = RemoveCrmCompanyDomainErrors[keyof RemoveCrmCompanyDomainErrors];
+
+export type RemoveCrmCompanyDomainResponses = {
+    200: CrmCompanyResponse;
+};
+
+export type RemoveCrmCompanyDomainResponse = RemoveCrmCompanyDomainResponses[keyof RemoveCrmCompanyDomainResponses];
+
+export type AddCrmCompanyDomainData = {
+    body: CompanyDomainRequest;
+    path: {
+        /**
+         * The company to update
+         */
+        company_id: string;
+    };
+    query?: never;
+    url: '/crm/companies/{company_id}/domains';
+};
+
+export type AddCrmCompanyDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: CompanyDomainTakenResponse;
+    500: ErrorResponse;
+};
+
+export type AddCrmCompanyDomainError = AddCrmCompanyDomainErrors[keyof AddCrmCompanyDomainErrors];
+
+export type AddCrmCompanyDomainResponses = {
+    200: CrmCompanyResponse;
+};
+
+export type AddCrmCompanyDomainResponse = AddCrmCompanyDomainResponses[keyof AddCrmCompanyDomainResponses];
 
 export type SetEmailSyncData = {
     body: SetEmailSyncRequest;
@@ -28495,12 +30162,17 @@ export type SetCrmContactNameResponse = SetCrmContactNameResponses[keyof SetCrmC
 export type GetCrmEmailPrivacyData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Return only consent and mailbox fields, without querying domain lists.
+         */
+        consent_only?: boolean;
+    };
     url: '/crm/email-privacy';
 };
 
 export type GetCrmEmailPrivacyResponses = {
-    200: EmailPrivacySettings;
+    200: EmailPrivacyResponse;
 };
 
 export type GetCrmEmailPrivacyResponse = GetCrmEmailPrivacyResponses[keyof GetCrmEmailPrivacyResponses];
@@ -28518,6 +30190,126 @@ export type UpdateCrmEmailPrivacyResponses = {
 
 export type UpdateCrmEmailPrivacyResponse = UpdateCrmEmailPrivacyResponses[keyof UpdateCrmEmailPrivacyResponses];
 
+export type GetCrmEmailPolicyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy';
+};
+
+export type GetCrmEmailPolicyResponses = {
+    200: EmailPolicyView;
+};
+
+export type GetCrmEmailPolicyResponse = GetCrmEmailPolicyResponses[keyof GetCrmEmailPolicyResponses];
+
+export type UpdateCrmEmailPolicyData = {
+    body: EmailPolicyCommand;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy';
+};
+
+export type UpdateCrmEmailPolicyErrors = {
+    /**
+     * Consent changed; inspect before deciding again
+     */
+    409: unknown;
+};
+
+export type UpdateCrmEmailPolicyResponses = {
+    200: EmailPolicyOutcome;
+};
+
+export type UpdateCrmEmailPolicyResponse = UpdateCrmEmailPolicyResponses[keyof UpdateCrmEmailPolicyResponses];
+
+export type ListCrmEmailPolicyHistoryData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Exclusive audit event cursor; pages contain at most fifty events.
+         */
+        before?: string | null;
+    };
+    url: '/crm/email-privacy/policy/history';
+};
+
+export type ListCrmEmailPolicyHistoryResponses = {
+    200: EmailPolicyHistory;
+};
+
+export type ListCrmEmailPolicyHistoryResponse = ListCrmEmailPolicyHistoryResponses[keyof ListCrmEmailPolicyHistoryResponses];
+
+export type GetCrmEmailRulePreviewData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy/preview';
+};
+
+export type GetCrmEmailRulePreviewResponses = {
+    200: null | EmailPreviewView;
+};
+
+export type GetCrmEmailRulePreviewResponse = GetCrmEmailRulePreviewResponses[keyof GetCrmEmailRulePreviewResponses];
+
+export type PreviewCrmEmailRulesData = {
+    body: EmailPreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy/preview';
+};
+
+export type PreviewCrmEmailRulesResponses = {
+    200: EmailPreviewView;
+};
+
+export type PreviewCrmEmailRulesResponse = PreviewCrmEmailRulesResponses[keyof PreviewCrmEmailRulesResponses];
+
+export type CancelCrmEmailRulePreviewData = {
+    body?: never;
+    path: {
+        preview_id: string;
+    };
+    query?: never;
+    url: '/crm/email-privacy/policy/preview/{preview_id}';
+};
+
+export type CancelCrmEmailRulePreviewResponses = {
+    204: void;
+};
+
+export type CancelCrmEmailRulePreviewResponse = CancelCrmEmailRulePreviewResponses[keyof CancelCrmEmailRulePreviewResponses];
+
+export type GetCrmEmailRuleRevisionData = {
+    body?: never;
+    path: {
+        revision: number;
+    };
+    query?: never;
+    url: '/crm/email-privacy/policy/revisions/{revision}';
+};
+
+export type GetCrmEmailRuleRevisionResponses = {
+    200: null | EmailPolicyRevision;
+};
+
+export type GetCrmEmailRuleRevisionResponse = GetCrmEmailRuleRevisionResponses[keyof GetCrmEmailRuleRevisionResponses];
+
+export type ValidateCrmEmailRulesData = {
+    body: EmailRuleSet;
+    path?: never;
+    query?: never;
+    url: '/crm/email-privacy/policy/validate';
+};
+
+export type ValidateCrmEmailRulesResponses = {
+    200: EmailRuleValidation;
+};
+
+export type ValidateCrmEmailRulesResponse = ValidateCrmEmailRulesResponses[keyof ValidateCrmEmailRulesResponses];
+
 export type ListCrmExcludedEmailThreadsData = {
     body?: never;
     path?: never;
@@ -28526,6 +30318,10 @@ export type ListCrmExcludedEmailThreadsData = {
          * Read entries after this thread ID.
          */
         after?: string | null;
+        /**
+         * Look up one thread instead of paging. Cannot be combined with `after`.
+         */
+        thread_id?: string | null;
     };
     url: '/crm/email-privacy/threads';
 };
@@ -28548,6 +30344,52 @@ export type GetCrmMemberAccessResponses = {
 };
 
 export type GetCrmMemberAccessResponse = GetCrmMemberAccessResponses[keyof GetCrmMemberAccessResponses];
+
+export type CommitCrmMergeData = {
+    body: MergeCommitRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/merges';
+};
+
+export type CommitCrmMergeErrors = {
+    400: MergeErrorResponse;
+    401: ErrorResponse;
+    403: MergeErrorResponse;
+    404: MergeErrorResponse;
+    409: MergeErrorResponse;
+};
+
+export type CommitCrmMergeError = CommitCrmMergeErrors[keyof CommitCrmMergeErrors];
+
+export type CommitCrmMergeResponses = {
+    200: MergeOutcome;
+};
+
+export type CommitCrmMergeResponse = CommitCrmMergeResponses[keyof CommitCrmMergeResponses];
+
+export type PreviewCrmMergeData = {
+    body: MergePreviewRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/merges/preview';
+};
+
+export type PreviewCrmMergeErrors = {
+    400: MergeErrorResponse;
+    401: ErrorResponse;
+    403: MergeErrorResponse;
+    404: MergeErrorResponse;
+    409: MergeErrorResponse;
+};
+
+export type PreviewCrmMergeError = PreviewCrmMergeErrors[keyof PreviewCrmMergeErrors];
+
+export type PreviewCrmMergeResponses = {
+    200: MergePreview;
+};
+
+export type PreviewCrmMergeResponse = PreviewCrmMergeResponses[keyof PreviewCrmMergeResponses];
 
 export type ListCrmPipelinesData = {
     body?: never;
@@ -32670,6 +34512,10 @@ export type ExternalChatSendData = {
 
 export type ExternalChatSendErrors = {
     /**
+     * An agent's program sent without userConfirmation (code confirmation_required), or the caller may not send
+     */
+    403: unknown;
+    /**
      * One send request per second per user; Retry-After: 1
      */
     429: unknown;
@@ -34198,6 +36044,10 @@ export type GetItemsSoupErrors = {
      */
     403: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type GetItemsSoupError = GetItemsSoupErrors[keyof GetItemsSoupErrors];
@@ -34226,6 +36076,10 @@ export type PostItemsSoupErrors = {
      */
     403: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type PostItemsSoupError = PostItemsSoupErrors[keyof PostItemsSoupErrors];
@@ -34258,6 +36112,10 @@ export type PostItemsSoupAstErrors = {
      */
     404: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type PostItemsSoupAstError = PostItemsSoupAstErrors[keyof PostItemsSoupAstErrors];
@@ -34593,6 +36451,9 @@ export type PasswordsAgentCreateErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -34634,6 +36495,9 @@ export type PasswordsAgentUpdateErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -34744,6 +36608,9 @@ export type PasswordsAgentDiscloseErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -34781,6 +36648,9 @@ export type PasswordsAgentSetTotpErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -34818,6 +36688,9 @@ export type PasswordsAgentTotpCodeErrors = {
     401: PasswordAgentFailure;
     403: PasswordAgentFailure;
     404: PasswordAgentFailure;
+    /**
+     * A conflict code, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordAgentFailure;
     503: PasswordAgentFailure;
 };
@@ -34898,6 +36771,9 @@ export type PasswordsFoldersData = {
 
 export type PasswordsFoldersErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -34926,6 +36802,9 @@ export type PasswordsCreateFolderData = {
 
 export type PasswordsCreateFolderErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -34955,6 +36834,9 @@ export type PasswordsRemoveFolderData = {
 
 export type PasswordsRemoveFolderErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -34984,6 +36866,9 @@ export type PasswordsRenameFolderData = {
 
 export type PasswordsRenameFolderErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35015,6 +36900,9 @@ export type PasswordsMoveFolderErrors = {
     400: PasswordFailure;
     403: PasswordFailure;
     404: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35075,6 +36963,9 @@ export type PasswordsListData = {
 
 export type PasswordsListErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35103,6 +36994,9 @@ export type PasswordsCreateData = {
 
 export type PasswordsCreateErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35162,6 +37056,9 @@ export type PasswordsRemoveData = {
 
 export type PasswordsRemoveErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35185,6 +37082,9 @@ export type PasswordsDetailData = {
 
 export type PasswordsDetailErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35214,6 +37114,9 @@ export type PasswordsPatchData = {
 
 export type PasswordsPatchErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35243,6 +37146,9 @@ export type PasswordsUpdateData = {
 
 export type PasswordsUpdateErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35266,6 +37172,9 @@ export type PasswordsActivityData = {
 
 export type PasswordsActivityErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35361,6 +37270,9 @@ export type PasswordsCopyData = {
 
 export type PasswordsCopyErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35371,6 +37283,64 @@ export type PasswordsCopyResponses = {
 };
 
 export type PasswordsCopyResponse = PasswordsCopyResponses[keyof PasswordsCopyResponses];
+
+export type PasswordsRemoveFavoriteData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/favorite';
+};
+
+export type PasswordsRemoveFavoriteErrors = {
+    404: PasswordFailure;
+    503: PasswordFailure;
+};
+
+export type PasswordsRemoveFavoriteError = PasswordsRemoveFavoriteErrors[keyof PasswordsRemoveFavoriteErrors];
+
+export type PasswordsRemoveFavoriteResponses = {
+    204: void;
+};
+
+export type PasswordsRemoveFavoriteResponse = PasswordsRemoveFavoriteResponses[keyof PasswordsRemoveFavoriteResponses];
+
+export type PasswordsSetFavoriteData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/favorite';
+};
+
+export type PasswordsSetFavoriteErrors = {
+    404: PasswordFailure;
+    503: PasswordFailure;
+};
+
+export type PasswordsSetFavoriteError = PasswordsSetFavoriteErrors[keyof PasswordsSetFavoriteErrors];
+
+export type PasswordsSetFavoriteResponses = {
+    204: void;
+};
+
+export type PasswordsSetFavoriteResponse = PasswordsSetFavoriteResponses[keyof PasswordsSetFavoriteResponses];
 
 export type PasswordsHistoryData = {
     body?: never;
@@ -35384,6 +37354,9 @@ export type PasswordsHistoryData = {
 
 export type PasswordsHistoryErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35413,6 +37386,9 @@ export type PasswordsRevealData = {
 
 export type PasswordsRevealErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35436,6 +37412,9 @@ export type PasswordsGrantsData = {
 
 export type PasswordsGrantsErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35465,6 +37444,9 @@ export type PasswordsShareData = {
 
 export type PasswordsShareErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35494,6 +37476,9 @@ export type PasswordsRemoveTotpData = {
 
 export type PasswordsRemoveTotpErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35523,6 +37508,9 @@ export type PasswordsSetTotpData = {
 
 export type PasswordsSetTotpErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35552,6 +37540,9 @@ export type PasswordsTotpData = {
 
 export type PasswordsTotpErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35575,6 +37566,9 @@ export type PasswordsUsernameData = {
 
 export type PasswordsUsernameErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -35604,6 +37598,9 @@ export type PasswordsCopyUsernameData = {
 
 export type PasswordsCopyUsernameErrors = {
     403: PasswordFailure;
+    /**
+     * `version_conflict`, `vault_busy`, `folder_missing`, or `vault_not_provisioned` when the team's vault is not set up
+     */
     409: PasswordFailure;
 };
 
@@ -36453,6 +38450,33 @@ export type UpdateSavedViewDefinitionResponses = {
 
 export type UpdateSavedViewDefinitionResponse = UpdateSavedViewDefinitionResponses[keyof UpdateSavedViewDefinitionResponses];
 
+export type SetSavedViewAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * The saved view to edit
+         */
+        saved_view_id: string;
+    };
+    query?: never;
+    url: '/saved_views/definitions/{saved_view_id}/appearance';
+};
+
+export type SetSavedViewAppearanceErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetSavedViewAppearanceError = SetSavedViewAppearanceErrors[keyof SetSavedViewAppearanceErrors];
+
+export type SetSavedViewAppearanceResponses = {
+    200: SavedViewDefinition;
+};
+
+export type SetSavedViewAppearanceResponse = SetSavedViewAppearanceResponses[keyof SetSavedViewAppearanceResponses];
+
 export type ExcludeDefaultViewHandlerData = {
     body: ExcludeDefaultViewRequest;
     path?: never;
@@ -36721,6 +38745,115 @@ export type BulkWakeupSyncServiceDocumentsResponses = {
 
 export type BulkWakeupSyncServiceDocumentsResponse = BulkWakeupSyncServiceDocumentsResponses[keyof BulkWakeupSyncServiceDocumentsResponses];
 
+export type ListTaskTemplatesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        teamId?: string;
+    };
+    url: '/task_templates';
+};
+
+export type ListTaskTemplatesErrors = {
+    403: ErrorResponse;
+};
+
+export type ListTaskTemplatesError = ListTaskTemplatesErrors[keyof ListTaskTemplatesErrors];
+
+export type ListTaskTemplatesResponses = {
+    200: Array<TaskTemplate>;
+};
+
+export type ListTaskTemplatesResponse = ListTaskTemplatesResponses[keyof ListTaskTemplatesResponses];
+
+export type CreateTaskTemplateData = {
+    body: CreateTaskTemplateRequest;
+    path?: never;
+    query?: never;
+    url: '/task_templates';
+};
+
+export type CreateTaskTemplateErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type CreateTaskTemplateError = CreateTaskTemplateErrors[keyof CreateTaskTemplateErrors];
+
+export type CreateTaskTemplateResponses = {
+    201: TaskTemplate;
+};
+
+export type CreateTaskTemplateResponse = CreateTaskTemplateResponses[keyof CreateTaskTemplateResponses];
+
+export type DeleteTaskTemplateData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        revision: number;
+    };
+    url: '/task_templates/{id}';
+};
+
+export type DeleteTaskTemplateErrors = {
+    404: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type DeleteTaskTemplateError = DeleteTaskTemplateErrors[keyof DeleteTaskTemplateErrors];
+
+export type DeleteTaskTemplateResponses = {
+    204: void;
+};
+
+export type DeleteTaskTemplateResponse = DeleteTaskTemplateResponses[keyof DeleteTaskTemplateResponses];
+
+export type GetTaskTemplateData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/task_templates/{id}';
+};
+
+export type GetTaskTemplateErrors = {
+    404: ErrorResponse;
+};
+
+export type GetTaskTemplateError = GetTaskTemplateErrors[keyof GetTaskTemplateErrors];
+
+export type GetTaskTemplateResponses = {
+    200: TaskTemplate;
+};
+
+export type GetTaskTemplateResponse = GetTaskTemplateResponses[keyof GetTaskTemplateResponses];
+
+export type UpdateTaskTemplateData = {
+    body: UpdateTaskTemplateRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/task_templates/{id}';
+};
+
+export type UpdateTaskTemplateErrors = {
+    404: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type UpdateTaskTemplateError = UpdateTaskTemplateErrors[keyof UpdateTaskTemplateErrors];
+
+export type UpdateTaskTemplateResponses = {
+    200: TaskTemplate;
+};
+
+export type UpdateTaskTemplateResponse = UpdateTaskTemplateResponses[keyof UpdateTaskTemplateResponses];
+
 export type EditThreadV2Data = {
     body: PatchThreadRequestV2;
     path: {
@@ -36745,6 +38878,353 @@ export type EditThreadV2Responses = {
 };
 
 export type EditThreadV2Response = EditThreadV2Responses[keyof EditThreadV2Responses];
+
+export type GetThreadChannelSharesData = {
+    body?: never;
+    path: {
+        /**
+         * Thread ID
+         */
+        thread_id: string;
+    };
+    query?: never;
+    url: '/threads/{thread_id}/channel-shares';
+};
+
+export type GetThreadChannelSharesErrors = {
+    /**
+     * Invalid thread ID
+     */
+    400: unknown;
+    /**
+     * Owner access required
+     */
+    401: unknown;
+    /**
+     * User session required
+     */
+    403: unknown;
+    /**
+     * Unable to read thread shares
+     */
+    500: unknown;
+};
+
+export type GetThreadChannelSharesResponses = {
+    200: Array<ThreadChannelShare>;
+};
+
+export type GetThreadChannelSharesResponse = GetThreadChannelSharesResponses[keyof GetThreadChannelSharesResponses];
+
+export type DeleteTimeEntryData = {
+    body?: never;
+    path: {
+        /**
+         * The entry's id.
+         */
+        entry_id: string;
+    };
+    query?: never;
+    url: '/time/entries/{entry_id}';
+};
+
+export type DeleteTimeEntryErrors = {
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type DeleteTimeEntryError = DeleteTimeEntryErrors[keyof DeleteTimeEntryErrors];
+
+export type DeleteTimeEntryResponses = {
+    200: TaskTimeTotal;
+};
+
+export type DeleteTimeEntryResponse = DeleteTimeEntryResponses[keyof DeleteTimeEntryResponses];
+
+export type UpdateTimeEntryData = {
+    body: UpdateTimeEntryRequest;
+    path: {
+        /**
+         * The entry's id.
+         */
+        entry_id: string;
+    };
+    query?: never;
+    url: '/time/entries/{entry_id}';
+};
+
+export type UpdateTimeEntryErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type UpdateTimeEntryError = UpdateTimeEntryErrors[keyof UpdateTimeEntryErrors];
+
+export type UpdateTimeEntryResponses = {
+    200: LoggedTime;
+};
+
+export type UpdateTimeEntryResponse = UpdateTimeEntryResponses[keyof UpdateTimeEntryResponses];
+
+export type ExportTimeData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Whose time to read.
+         */
+        scope: TimeScopeName;
+        /**
+         * The project, with `scope=project` only.
+         */
+        projectId?: string;
+        /**
+         * The first day, `YYYY-MM-DD`.
+         */
+        from: string;
+        /**
+         * The last day, `YYYY-MM-DD`, at most 365 days after `from`.
+         */
+        to: string;
+    };
+    url: '/time/export';
+};
+
+export type ExportTimeErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type ExportTimeError = ExportTimeErrors[keyof ExportTimeErrors];
+
+export type ExportTimeResponses = {
+    200: TimeExport;
+};
+
+export type ExportTimeResponse = ExportTimeResponses[keyof ExportTimeResponses];
+
+export type GetTimeSummaryData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Whose time to read.
+         */
+        scope: TimeScopeName;
+        /**
+         * The project, with `scope=project` only.
+         */
+        projectId?: string;
+        /**
+         * The first day, `YYYY-MM-DD`.
+         */
+        from: string;
+        /**
+         * The last day, `YYYY-MM-DD`, at most 365 days after `from`.
+         */
+        to: string;
+        /**
+         * What the totals are grouped by.
+         */
+        groupBy: TimeGrouping;
+        /**
+         * What each group is split by; another grouping than `groupBy`.
+         */
+        thenBy?: TimeGrouping;
+    };
+    url: '/time/summary';
+};
+
+export type GetTimeSummaryErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type GetTimeSummaryError = GetTimeSummaryErrors[keyof GetTimeSummaryErrors];
+
+export type GetTimeSummaryResponses = {
+    200: TimeSummary;
+};
+
+export type GetTimeSummaryResponse = GetTimeSummaryResponses[keyof GetTimeSummaryResponses];
+
+export type ListTimeEntriesData = {
+    body?: never;
+    path: {
+        /**
+         * The task document's id.
+         */
+        task_id: string;
+    };
+    query?: {
+        /**
+         * Entries per page, 1 to 200; 50 when omitted.
+         */
+        limit?: number;
+        /**
+         * The `date` of the previous page's `nextCursor`.
+         */
+        cursorDate?: string;
+        /**
+         * The `id` of the previous page's `nextCursor`.
+         */
+        cursorId?: string;
+    };
+    url: '/time/tasks/{task_id}/entries';
+};
+
+export type ListTimeEntriesErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type ListTimeEntriesError = ListTimeEntriesErrors[keyof ListTimeEntriesErrors];
+
+export type ListTimeEntriesResponses = {
+    200: TimeEntryPage;
+};
+
+export type ListTimeEntriesResponse = ListTimeEntriesResponses[keyof ListTimeEntriesResponses];
+
+export type LogTimeData = {
+    body: LogTimeRequest;
+    path: {
+        /**
+         * The task document's id.
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/time/tasks/{task_id}/entries';
+};
+
+export type LogTimeErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    409: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type LogTimeError = LogTimeErrors[keyof LogTimeErrors];
+
+export type LogTimeResponses = {
+    200: LoggedTime;
+};
+
+export type LogTimeResponse = LogTimeResponses[keyof LogTimeResponses];
+
+export type GetTimerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/time/timer';
+};
+
+export type GetTimerErrors = {
+    401: ErrorResponse;
+    500: TimeTrackingApiError;
+};
+
+export type GetTimerError = GetTimerErrors[keyof GetTimerErrors];
+
+export type GetTimerResponses = {
+    200: TimerState;
+};
+
+export type GetTimerResponse = GetTimerResponses[keyof GetTimerResponses];
+
+export type DiscardTimerData = {
+    body: DiscardTimerRequest;
+    path?: never;
+    query?: never;
+    url: '/time/timer/discard';
+};
+
+export type DiscardTimerErrors = {
+    401: ErrorResponse;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type DiscardTimerError = DiscardTimerErrors[keyof DiscardTimerErrors];
+
+export type DiscardTimerResponses = {
+    204: void;
+};
+
+export type DiscardTimerResponse = DiscardTimerResponses[keyof DiscardTimerResponses];
+
+export type StartTimerData = {
+    body: StartTimerRequest;
+    path?: never;
+    query?: never;
+    url: '/time/timer/start';
+};
+
+export type StartTimerErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    409: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type StartTimerError = StartTimerErrors[keyof StartTimerErrors];
+
+export type StartTimerResponses = {
+    200: StartedTimer;
+};
+
+export type StartTimerResponse = StartTimerResponses[keyof StartTimerResponses];
+
+export type StopTimerData = {
+    body: StopTimerRequest;
+    path?: never;
+    query?: never;
+    url: '/time/timer/stop';
+};
+
+export type StopTimerErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    404: TimeTrackingApiError;
+    409: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type StopTimerError = StopTimerErrors[keyof StopTimerErrors];
+
+export type StopTimerResponses = {
+    200: StoppedTimer;
+};
+
+export type StopTimerResponse = StopTimerResponses[keyof StopTimerResponses];
 
 export type ListUserApiKeysData = {
     body?: never;

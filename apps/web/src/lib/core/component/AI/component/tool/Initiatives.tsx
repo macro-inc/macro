@@ -5,10 +5,8 @@ import type { ProjectSection } from '@app/features/projects/core/project';
 import { projectActivityEvent } from '@app/features/projects/core/project-activity';
 import { openProject } from '@app/features/projects/open-project';
 import { refreshProjectQueries } from '@app/features/projects/queries/project-revalidation';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
 import ProjectIcon from '@icon/system/regular/cube.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createSignal, For, type JSX, Show } from 'solid-js';
@@ -19,7 +17,6 @@ import { createToolRenderer, type RenderContext } from './ToolRenderer';
 type ProjectDetails = NamedTool<'CreateInitiative', 'response'>['data'];
 
 async function refreshProjectsAfterMutation(): Promise<void> {
-  if (!isFeatureEnabled(enableProjects)) return;
   await refreshProjectQueries();
 }
 
@@ -33,23 +30,20 @@ function ProjectLink(props: {
   section?: ProjectSection;
 }) {
   const layout = useSplitLayout();
-  const projectsFlag = useFeatureFlag(enableProjects);
   return (
-    <Show when={projectsFlag().enabled} fallback={<span>{props.name}</span>}>
-      <ProjectChip
-        reference={{
-          state: 'visible',
-          id: props.id,
-          name: props.name ?? 'Project',
-        }}
-        onOpen={(id, event) =>
-          openProject(layout, id, {
-            section: props.section,
-            newSplit: event.shiftKey,
-          })
-        }
-      />
-    </Show>
+    <ProjectChip
+      reference={{
+        state: 'visible',
+        id: props.id,
+        name: props.name ?? 'Project',
+      }}
+      onOpen={(id, event) =>
+        openProject(layout, id, {
+          section: props.section,
+          newSplit: event.shiftKey,
+        })
+      }
+    />
   );
 }
 

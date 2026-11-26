@@ -3,6 +3,8 @@ import {
   alreadyInMacroSummary,
   buildPlanTree,
   EMPTY_IMPORT_DRAFT,
+  failureCopy,
+  hubspotTotals,
   type ImportPlanEntry,
   type ImportProgress,
   importCount,
@@ -255,6 +257,13 @@ describe('already in Macro', () => {
 });
 
 describe('planSummary', () => {
+  it('does not call an undecided plan an empty import', () => {
+    const waiting = entries.map((entry) => ({ ...entry, decision: null }));
+    const summary = planSummary(planCounts(waiting), importVolume(waiting, []));
+    expect(summary).toContain('Deciding what to import');
+    expect(summary).not.toContain('importing nothing');
+  });
+
   it('reads the plan size and decisions', () => {
     expect(planSummary(planCounts(entries), importVolume(entries, []))).toBe(
       'Notion shared 4 pages and 1 database — importing 2 pages, 40 tasks · 1 skipped, 1 needs you'
@@ -279,6 +288,10 @@ describe('importVolume', () => {
     const all = [...entries, database];
     expect(importVolume(all, [])).toEqual({
       projects: 0,
+      pipelines: 0,
+      companies: 0,
+      contacts: 0,
+      deals: 0,
       documents: 2,
       databases: 1,
       rows: 405,
@@ -297,6 +310,7 @@ describe('importReviewPhase', () => {
   const progress: ImportProgress = {
     reviewId: 'review',
     status: 'importing',
+    errorKind: null,
     error: null,
     scanned: null,
     onTeam: true,
@@ -305,6 +319,7 @@ describe('importReviewPhase', () => {
     waiting: 1,
     writing: 1,
     failures: [],
+    hubspot: null,
   };
 
   it('follows the review item until the plan is approved', () => {
@@ -331,7 +346,95 @@ describe('importReviewPhase', () => {
         { status: 'dismissed', error: null },
         undefined
       )
-    ).toEqual({ kind: 'dismissed' });
+    ).toEqual({ kind: 'dismissed', planFailure: null });
+  });
+
+  it('says planning failed, by its kind, before the plan was approved', () => {
+    const pending = { status: 'pending', error: null } as const;
+    expect(
+      importReviewPhase({ presentedAt: 1 }, pending, {
+        ...progress,
+        status: 'failed',
+        errorKind: 'access_lost',
+      })
+    ).toEqual({ kind: 'planFailed', errorKind: 'access_lost' });
+    expect(
+      importReviewPhase({ presentedAt: 1 }, pending, {
+        ...progress,
+        status: 'failed',
+        errorKind: null,
+      })
+    ).toEqual({ kind: 'planFailed', errorKind: null });
+  });
+
+  it('keeps the planning failure on a dismissed review', () => {
+    const dismissed = { status: 'dismissed', error: null } as const;
+    expect(
+      importReviewPhase({ presentedAt: 1 }, dismissed, {
+        ...progress,
+        status: 'failed',
+        errorKind: 'connection_unavailable',
+      })
+    ).toEqual({
+      kind: 'dismissed',
+      planFailure: { errorKind: 'connection_unavailable' },
+    });
+    expect(
+      importReviewPhase({ presentedAt: 1 }, dismissed, {
+        ...progress,
+        status: 'ready',
+      })
+    ).toEqual({ kind: 'dismissed', planFailure: null });
+  });
+
+  it('explains a write that failed by its kind', () => {
+    expect(failureCopy('write', 'notion', 'interrupted')).toEqual({
+      headline: "Couldn't finish this import.",
+      detail:
+        'It stopped before it finished. Start it again to pick up what is left.',
+      reconnect: false,
+    });
+    expect(failureCopy('write', 'notion', 'access_lost')).toEqual({
+      headline: "Couldn't finish this import.",
+      detail:
+        'Notion no longer accepts Macro’s connection. Reconnect Notion, then plan the import again.',
+      reconnect: true,
+    });
+    expect(failureCopy('write', 'jira', null).detail).toBeNull();
+  });
+
+  it('explains each failure kind, offering a reconnect only for a lost connection', () => {
+    expect(failureCopy('plan', 'notion', 'access_lost')).toEqual({
+      headline: "Couldn't plan this import.",
+      detail:
+        'Notion no longer accepts Macro’s connection. Reconnect Notion, then plan the import again.',
+      reconnect: true,
+    });
+    expect(failureCopy('plan', 'notion', 'connection_unavailable')).toEqual({
+      headline: "Couldn't plan this import.",
+      detail:
+        'Macro couldn’t use your Notion connection. Reconnect Notion, then plan the import again.',
+      reconnect: true,
+    });
+    expect(failureCopy('plan', 'linear', null)).toEqual({
+      headline: "Couldn't plan this import.",
+      detail: null,
+      reconnect: false,
+    });
+    for (const kind of [
+      'not_found',
+      'forbidden',
+      'not_connected',
+      'rate_limited',
+      'unreachable',
+      'usage_refused',
+      'interrupted',
+      'internal',
+    ] as const) {
+      const copy = failureCopy('plan', 'notion', kind);
+      expect(copy.reconnect, kind).toBe(false);
+      expect(copy.detail, kind).toBeTruthy();
+    }
   });
 
   it('follows the run once the plan is approved', () => {
@@ -346,16 +449,15 @@ describe('importReviewPhase', () => {
       importReviewPhase({ presentedAt: 1 }, completed, {
         ...progress,
         status: 'dismissed',
-        error: 'Cancelled',
       })
     ).toEqual({ kind: 'stopped' });
     expect(
       importReviewPhase({ presentedAt: 1 }, completed, {
         ...progress,
         status: 'failed',
-        error: 'Notion is unreachable',
+        errorKind: 'interrupted',
       })
-    ).toEqual({ kind: 'failed', error: 'Notion is unreachable' });
+    ).toEqual({ kind: 'failed', errorKind: 'interrupted' });
     expect(
       importReviewPhase({ presentedAt: 1 }, completed, {
         ...progress,
@@ -372,6 +474,7 @@ describe('planning', () => {
   const running: ImportProgress = {
     reviewId: 'review',
     status: 'running',
+    errorKind: null,
     error: null,
     scanned: { pages: 40, databases: 12 },
     onTeam: true,
@@ -380,6 +483,7 @@ describe('planning', () => {
     waiting: 0,
     writing: 0,
     failures: [],
+    hubspot: null,
   };
 
   it('reads Notion until the plan is staged, then counts what is decided', () => {
@@ -398,6 +502,10 @@ describe('planning', () => {
     expect(planCounts(staged).deciding).toBe(3);
     expect(importVolume(staged, [])).toEqual({
       projects: 0,
+      pipelines: 0,
+      companies: 0,
+      contacts: 0,
+      deals: 0,
       documents: 1,
       databases: 0,
       rows: 0,
@@ -454,6 +562,10 @@ it('counts tracker issues as tasks independently of their projects', () => {
   ];
   expect(importVolume(tracker, [])).toEqual({
     projects: 1,
+    pipelines: 0,
+    companies: 0,
+    contacts: 0,
+    deals: 0,
     documents: 0,
     databases: 0,
     rows: 0,
@@ -465,4 +577,80 @@ it('counts tracker issues as tasks independently of their projects', () => {
     { label: 'Projects', value: '1' },
     { label: 'Tasks', value: '1' },
   ]);
+});
+
+describe('initiallyCollapsed', () => {
+  it('never hides a failed object under a collapsed parent', () => {
+    const tree = buildPlanTree([
+      { ...entries[0], id: 'home', parentId: null },
+      { ...entries[0], id: 'handbook', parentId: 'home' },
+      {
+        ...entries[0],
+        id: 'onboarding',
+        parentId: 'handbook',
+        error: "Notion couldn't be reached.",
+      },
+      { ...entries[0], id: 'notes', parentId: 'home' },
+      { ...entries[0], id: 'draft', parentId: 'notes' },
+    ]);
+    const collapsed = initiallyCollapsed(tree);
+    expect(collapsed.has('handbook')).toBe(false);
+    expect(collapsed.has('notes')).toBe(true);
+  });
+});
+
+it('including a parent does not opt in an external dependency below it', () => {
+  const dependency: ImportPlanEntry = {
+    ...entries[1],
+    id: 'linked',
+    parentId: 'wiki',
+    decision: 'copy',
+    linkedFrom: ['Wiki'],
+  };
+  const nodes = buildPlanTree([entries[0], dependency]);
+  const draft = { ...EMPTY_IMPORT_DRAFT, excluded: ['wiki', 'linked'] };
+  expect(setExcluded(draft, nodes, 'wiki', false).excluded).toEqual(['linked']);
+  expect(setExcluded(draft, nodes, 'linked', false).excluded).toEqual(['wiki']);
+});
+
+describe('HubSpot plans', () => {
+  it('totals CRM records per kind and lists owners and losses', () => {
+    const crm: ImportPlanEntry[] = [
+      { ...entries[0], id: 'pipeline', kind: 'pipeline' },
+      { ...entries[0], id: 'company', kind: 'company' },
+      { ...entries[0], id: 'contact', kind: 'contact', parentId: 'company' },
+      { ...entries[0], id: 'deal', kind: 'deal', parentId: 'pipeline' },
+      {
+        ...entries[0],
+        id: 'orphan',
+        kind: 'deal',
+        decision: 'skip',
+        reason: 'It has no company.',
+      },
+    ];
+    expect([
+      ...planTotals(crm, ['contact']),
+      ...hubspotTotals({
+        owners: 2,
+        ownersMatched: 1,
+        created: 3,
+        linked: 1,
+        losses: [
+          { loss: 'owner_not_member', count: 25 },
+          { loss: 'deal_without_company', count: 10 },
+        ],
+      }),
+    ]).toEqual([
+      { label: 'Pipelines', value: '1' },
+      { label: 'Companies', value: '1' },
+      { label: 'Deals', value: '1' },
+      { label: 'Skipped', value: '1' },
+      { label: 'Owners matched', value: '1 of 2' },
+      { label: 'Created', value: '3' },
+      { label: 'Matched existing', value: '1' },
+      { label: 'Owners not on your team', value: '25' },
+      { label: 'Deals without a company', value: '10' },
+    ]);
+    expect(hubspotTotals(null)).toEqual([]);
+  });
 });

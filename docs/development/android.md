@@ -65,6 +65,46 @@ The app's Gradle packaging excludes the duplicate
 OSGi metadata is unused on Android. Keep the exclusion exact: broad `META-INF`
 exclusions can remove service-provider registrations used by OpenTelemetry.
 
+## Native certificate verification
+
+Native HTTP (reqwest) verifies certificates through `rustls-platform-verifier`,
+which calls Android's certificate checker through a Kotlin library (an AAR).
+`MainActivity` initializes it through `src-tauri/src/android_tls.rs` before
+networking starts.
+
+- `app/rustls-verifier.gradle.kts` reads the AAR's version from the resolved
+  `rustls-platform-verifier-android` crate and downloads it from upstream's Maven
+  repository on GitHub. `gradle/verification-metadata.xml` pins its SHA-256;
+  Gradle fails the build when the artifact differs or the version has no pin.
+  After a verifier upgrade, download the new AAR, check it against upstream's
+  published checksum, and add its SHA-256 there.
+- Certificates from CAs that no longer list an OCSP responder (Let's Encrypt,
+  Google Trust Services, SSL.com) are checked against the CA's revocation list,
+  which most CAs serve over plain HTTP. The AAR's merged
+  `network_security_config` allows plain HTTP to those CRL hosts only. Once a
+  network security config is present, Android ignores `usesCleartextTraffic`.
+- Debug builds replace that config with
+  `app/src/debug/res/xml/network_security_config.xml`, which allows plain HTTP
+  everywhere for the dev server and local services. Release builds keep the
+  library's config.
+
+## Performance benchmark
+
+`just android-benchmark --serial <emulator>` (from `apps/web`) times cold start, view
+switches, opening a channel and documents, and going back, on a signed-in benchmark build,
+using the app's own perf spans so lab and Datadog field numbers compare. It navigates and
+reads only. It waits for the boot `view.app` flow to end before the first timed tap, opens
+the first channel of an ordered candidate list that shows no unread (it never opens an
+unread row), and stops the run when a scenario cannot reach its starting list. Building
+the benchmark APK, the emulator settings it was baselined on, the private targets file,
+comparing two runs (`compare.ts`) and how to read its noise figures are in
+[`apps/web/scripts/android-benchmark/README.md`](../../apps/web/scripts/android-benchmark/README.md).
+Measure before and after every Android performance change with it. Add
+`--cpu-throttle 4` to slow the WebView to an Android phone's CPU when judging work on its
+main thread, such as view switches; the README says when to use which profile and what
+throttling does not model (the Android UI thread, Rust, and the emulator's slow software
+rendering, which makes IPC-bound flows such as a cold channel open slower than on phones).
+
 ## Release signing
 
 The existing upload keystore and signing credentials are stored in Doppler
@@ -240,7 +280,10 @@ To release:
    It then repeats the head guard, writes the release notes' provenance
    stamp (`native tree <hash> for PR #<n>`, the twin of the iOS TestFlight
    stamp) from `main`'s hashing script, uploads the bundle to the
-   **internal** track with `status=completed`, checks the native code once
+   **internal** track with `status=completed` (a failed upload is retried
+   once with a fresh edit: Play keeps one open edit per app, so another
+   edit opened meanwhile fails the first attempt with "This edit has
+   expired"), checks the native code once
    more, and promotes it to **production** as a full rollout (Google review
    applies), recording the promotion as the `android-play/release` status.
    A failed build comments on the PR; otherwise the publisher comments the
@@ -260,7 +303,12 @@ To release:
    minutes) notices the version code being published on production, marks
    the PR head `android-play/live`, re-runs the failed jobs of the PR's latest
    `PR CI` run (the `Android Native Check` among them), and comments; the PR merges if auto-merge is
-   on.
+   on. Its status read opens a Play edit, which would invalidate a
+   publisher's, so it skips each PR while a run of `Android Play Publish` or
+   `publish-android-play.yml` is queued or running and checks it in the next
+   run. The two do not share a concurrency group: GitHub replaces a pending
+   run in a group with the next one queued, so a watcher run could cancel a
+   waiting publish.
 4. Pushes after the label: web-only commits need nothing. Native commits make
    the bundle stale: **`Android Release Drift`** cancels an in-progress build,
    removes the label and comments. A Play production release cannot be
@@ -870,6 +918,23 @@ and `MIN_NATIVE_BUILD_IOS`; production builds read them from
 `apps/web/min-native-build.json`, whose Android floor `just android-bump`
 raises. See the
 [native compatibility contract](../../apps/web/tauri/src-tauri/README.md).
+
+OTA bundles live in the app's data directory (`bundle-updates`), not its cache
+directory, which Android empties when storage runs low. The first launch of the
+release that moved them ignores the old cache copy and downloads again (see
+[OTA bundle storage](../../apps/web/tauri/src-tauri/README.md#ota-bundle-storage)).
+
+At startup, the updater rejects a saved or previously downloaded OTA whose bundle
+build is older than the binary's embedded bundle, or that is missing a file its
+completion record lists, falling back to the embedded assets when needed. That prevents an older cached OTA from automatically surviving every
+native upgrade. It does not prove reverse IPC compatibility: a later-built OTA
+or republished rollback can still contain older JS and satisfy the native floor.
+Preserve the legacy command contract on newer binaries when older bundles omit
+new arguments. The [CRM cache authority contract](../../apps/web/docs/ios-releases.md#crm-cache-command-compatibility)
+uses this rule; an omitted `generation` keeps legacy cache behavior, while a
+supplied stale generation is rejected on response writes. Reads and watches do
+not require an admission claim. Cut the store build from the final
+native tree, including this compatibility behavior.
 
 Android ConnectivityManager reports the validated default network and takes a
 fresh snapshot on resume. Captive/unvalidated networks count as offline. Older

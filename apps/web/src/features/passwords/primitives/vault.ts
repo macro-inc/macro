@@ -3,7 +3,7 @@ import { makePersistedState } from '@app/lib/persistence';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { type Span, Telemetry } from '@macro-inc/observability';
-import { useQuery } from '@tanstack/solid-query';
+import { useQuery, useQueryClient } from '@tanstack/solid-query';
 import { createSignal, onCleanup } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import { v7 as uuidv7 } from 'uuid';
@@ -33,7 +33,7 @@ import {
   type PasswordListViewEntry,
 } from '../persistence';
 import { passwordKeys } from '../queries/keys';
-import { isUnreachable } from '../queries/source';
+import { isServiceUnavailable, isUnreachable } from '../queries/source';
 
 /**
  * An unsaved new item or an in-place edit of an existing one. Drafts live only
@@ -52,6 +52,11 @@ export type VaultDraft = {
   busy: boolean;
 };
 
+/** Why the list on screen may be out of date. */
+export type ConnectionProblem = Extract<
+  PasswordFailure,
+  'unreachable' | 'serviceUnavailable'
+>;
 export type VaultSelection =
   | { kind: 'item'; id: string }
   | { kind: 'draft'; key: string };
@@ -76,6 +81,10 @@ const editKey = (itemId: string) => `edit:${itemId}`;
 /** `entry` keeps the list's type filter and grouping with a split history entry. */
 export function createVault(options: { entry?: PasswordListViewEntry } = {}) {
   const { scope, source, writeClipboard } = usePasswords();
+  const queryClient = useQueryClient();
+  const [favoritePending, setFavoritePending] = createSignal<
+    ReadonlySet<string>
+  >(new Set());
   /** False once the viewer's account or session changed under this vault. */
   const stale = () => !scope.isCurrent();
   const items = useQuery(() => ({
@@ -199,12 +208,18 @@ export function createVault(options: { entry?: PasswordListViewEntry } = {}) {
       fireAndForget(loadUsername(item), 'passwords');
   }
   /**
-   * No answer from Macro: the last request for the selected item, or the
-   * latest list reload. The list on screen may be out of date until it answers.
+   * No answer from Macro, or a service that answered it can't serve the vault
+   * right now: the last request for the selected item, or the latest list
+   * reload. The list on screen may be out of date until it answers.
    */
-  const unreachable = () =>
-    failure() === 'unreachable' ||
-    (items.isError && isUnreachable(items.error));
+  const connectionProblem = (): ConnectionProblem | undefined => {
+    const last = failure();
+    if (last === 'unreachable' || last === 'serviceUnavailable') return last;
+    if (!items.isError) return undefined;
+    if (isUnreachable(items.error)) return 'unreachable';
+    if (isServiceUnavailable(items.error)) return 'serviceUnavailable';
+    return undefined;
+  };
   /** Ask again: reload the list and folders, and the selected item's username. */
   function retryConnection() {
     fireAndForget(items.refetch(), 'passwords');
@@ -549,16 +564,36 @@ export function createVault(options: { entry?: PasswordListViewEntry } = {}) {
     await items.refetch();
   }
   async function toggleFavorite(item: PasswordItem) {
-    const response = await source.move(
-      { ...item, favorite: !item.favorite },
-      item.folderId
-    );
-    if (stale()) return;
-    if (response.isErr()) {
-      setFailure(response.error);
-      return;
+    const id = item.id;
+    if (stale() || favoritePending().has(id)) return;
+    const previous = item.favorite;
+    const favorite = !previous;
+    const key = passwordKeys.items(scope.key).queryKey;
+    const update = (value: boolean) =>
+      queryClient.setQueryData<PasswordItem[]>(key, (current) =>
+        current?.map((entry) =>
+          entry.id === id ? { ...entry, favorite: value } : entry
+        )
+      );
+    setFavoritePending((current) => new Set([...current, id]));
+    setFailure(undefined);
+    try {
+      await queryClient.cancelQueries({ queryKey: key });
+      if (stale()) return;
+      update(favorite);
+      const response = await source.setFavorite(id, favorite);
+      if (stale()) return;
+      if (response.isErr()) {
+        update(previous);
+        setFailure(response.error);
+        return;
+      }
+      await items.refetch();
+    } finally {
+      setFavoritePending(
+        (current) => new Set([...current].filter((pending) => pending !== id))
+      );
     }
-    await items.refetch();
   }
   async function share(grants: PasswordGrant[]) {
     const item = selected();
@@ -726,7 +761,7 @@ export function createVault(options: { entry?: PasswordListViewEntry } = {}) {
     usernameLoading,
     usernameCopied,
     failure,
-    unreachable,
+    connectionProblem,
     retryConnection,
     reveal,
     copy: copyPassword,
@@ -743,6 +778,7 @@ export function createVault(options: { entry?: PasswordListViewEntry } = {}) {
     share,
     move,
     toggleFavorite,
+    favoritePending: (id: string) => favoritePending().has(id),
     createFolder,
     renameFolder,
     moveFolder,

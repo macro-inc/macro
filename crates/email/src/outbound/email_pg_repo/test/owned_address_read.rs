@@ -94,6 +94,7 @@ const CAPPED: OwnedReadTuning = OwnedReadTuning {
     superset_per_walked: 1,
     max_round_window: 16,
     max_superset_cap: 27,
+    walk_budget: None,
 };
 
 fn any_direction(email: Email) -> Expr<EmailLiteral> {
@@ -1072,6 +1073,7 @@ async fn a_window_without_rows_probes_the_superset(pool: Pool<Postgres>) -> anyh
         probes: 2,
         probe_cap: Some(25_000),
         walked: 500,
+        continue_below: None,
     };
     assert_eq!(
         taken(&pool, &inbox, &busy, 10, OwnedReadTuning::DEFAULT).await?,
@@ -1177,3 +1179,5 @@ fn probes_grow_and_end_at_the_most() {
     assert!(CAPPED.probes_again(27, 10));
     assert!(!CAPPED.probes_again(27, 27));
 }
+
+mod sender_probe_cap;

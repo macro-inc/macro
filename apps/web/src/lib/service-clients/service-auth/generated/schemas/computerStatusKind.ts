@@ -17,6 +17,7 @@ export const ComputerStatusKind = {
   needs_attention: 'needs_attention',
   waiting_for_capacity: 'waiting_for_capacity',
   ready: 'ready',
+  unhealthy: 'unhealthy',
   starting: 'starting',
   stopping: 'stopping',
   stopped: 'stopped',

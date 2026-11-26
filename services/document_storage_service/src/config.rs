@@ -118,6 +118,9 @@ pub struct Config {
     /// In-plan AI allowance per Premium seat per period, in cents at provider
     /// cost. Mandatory; set in Doppler.
     pub ai_usage_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// In-plan AI allowance per Business seat per period, in cents at provider
+    /// cost. Mandatory; set in Doppler.
+    pub ai_usage_business_included_allowance_cents: ai_billing::IncludedAllowanceCents,
     /// In-plan AI allowance per Max seat per period, in cents at provider
     /// cost. Mandatory; set in Doppler.
     pub ai_usage_max_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -184,6 +187,11 @@ pub struct Config {
     /// Enable read-only calendar projections shared with current teammates.
     #[macro_config_default(false)]
     pub calendar_team_sharing_enabled: bool,
+
+    /// Use the backfilled source_items projection for flat Soup listings.
+    /// Keep disabled until projection parity and replica catch-up are verified.
+    #[macro_config_default(false)]
+    pub soup_source_items_enabled: bool,
 
     /// Enable Slack import creation and uploads. Existing receipts remain
     /// readable, finalizable and cancellable when this switch is off.
@@ -255,6 +263,7 @@ impl Config {
             ai_billing::PlanAllowances {
                 free: self.ai_usage_free_included_allowance_cents,
                 premium: self.ai_usage_included_allowance_cents,
+                business: self.ai_usage_business_included_allowance_cents,
                 max: self.ai_usage_max_included_allowance_cents,
             },
             self.ai_usage_overage_markup_percent,

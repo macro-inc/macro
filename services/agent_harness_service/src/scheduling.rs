@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use axum::Router;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use connectors::{ConnectionManagementService, McpConnectionsService};
 use email_service_client::EmailServiceClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::OwnerGrantPolicy;
@@ -16,6 +17,7 @@ use macro_authorization::{
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_service_urls::{ConnectionGatewayUrl, EmailServiceUrl, LexicalServiceUrl};
+use macro_user_id::user_id::MacroUserIdStr;
 pub mod config;
 mod routine_analytics;
 mod routine_drafting;
@@ -33,9 +35,11 @@ use scheduled_action::domain::event_runs::{
 };
 use scheduled_action::domain::models::CreatedItem;
 use scheduled_action::domain::ports::{
-    DraftHandBacks, DraftJobStore, RequestSessions, ScheduledActionDispatcher, SessionCreations,
+    DraftHandBacks, DraftJobStore, KnobEntities, KnownPeople, LiveItems, RequestSessions,
+    ScheduledActionDispatcher, SessionCreations,
 };
 use scheduled_action::domain::program_runner::ProgramRunner;
+use scheduled_action::domain::run_stops::RunStops;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
 use scheduled_action::domain::suggestions::{
     RoutineBriefing, RoutineSuggestionService, StoredSuggestionOrigins,
@@ -58,18 +62,23 @@ use scheduled_action::inbound::template_router::{
 };
 use scheduled_action::outbound::agent_session_client::AgentSessionClient;
 use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdates;
+use scheduled_action::outbound::email_owner_inboxes::EmailOwnerInboxes;
 use scheduled_action::outbound::event_access::EventAccessAdapter;
 use scheduled_action::outbound::event_content::EventContentAdapter;
 use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
+use scheduled_action::outbound::knob_entities::KnobEntityAccess;
 use scheduled_action::outbound::pg_code_upgrades::PgCodeUpgrades;
 use scheduled_action::outbound::pg_draft_hand_backs::PgDraftHandBacks;
 use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
+use scheduled_action::outbound::pg_inbox_delegates::PgInboxDelegates;
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
 };
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
+use scheduled_action::outbound::pg_run_stops::{PgStopRelay, listen_for_stops};
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo as PgRoutineSuggestionRepo;
+use scheduled_action::outbound::routine_plans::EntitlementRoutinePlans;
 use scheduled_action::swagger::ApiDoc;
 use suggestion_generation::domain::audience::PaidAudience;
 use suggestion_generation::domain::model::GenerationAgent;
@@ -298,6 +307,7 @@ where
                 action: action.clone(),
                 prompt: prompt.to_owned(),
                 context: None,
+                withhold_content: false,
             })
             .await
         {
@@ -445,6 +455,78 @@ where
     }
 }
 
+/// People an entity knob may name: Macro users, as notifications find them.
+struct RoutinePeople(notification::outbound::user_existence_checker::DbUserExistenceChecker);
+
+impl KnownPeople for RoutinePeople {
+    async fn exists(&self, user: &MacroUserIdStr<'_>) -> Result<bool, rootcause::Report> {
+        use notification::domain::models::email_notification_digest::ports::UserExistenceChecker as _;
+        self.0.user_exists(user.clone()).await
+    }
+}
+
+/// Whether an item an entity knob names is out of the trash, and a task
+/// still a task, from the domains that own each kind.
+struct RoutineLiveItems {
+    documents: documents::outbound::pg_document_repo::PgDocumentRepo<PgBotsRepo>,
+    projects: projects::outbound::pg_project_repo::PgProjectRepo<PgBotsRepo>,
+    chats: chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
+}
+
+impl LiveItems for RoutineLiveItems {
+    async fn live(&self, item: &routine_program::EntityValue) -> Result<bool, rootcause::Report> {
+        use chat::domain::ports::ChatRepo as _;
+        use documents::domain::ports::DocumentRepo as _;
+        use projects::domain::ports::ProjectRepo as _;
+        use routine_program::EntityKind;
+        let id = item.id.as_str();
+        match item.kind {
+            EntityKind::Document | EntityKind::Task => {
+                match self.documents.get_basic_document(id).await {
+                    Ok(document) => Ok(document.deleted_at.is_none()
+                        && (item.kind != EntityKind::Task
+                            || document.sub_type
+                                == Some(document_sub_type::DocumentSubType::Task))),
+                    Err(sqlx::Error::RowNotFound) => Ok(false),
+                    Err(error) => Err(live_check_error(&error)),
+                }
+            }
+            EntityKind::Project => match self.projects.get_basic_project(id).await {
+                Ok(project) => Ok(project.is_some_and(|project| project.deleted_at.is_none())),
+                Err(error) => Err(live_check_error(&error)),
+            },
+            EntityKind::Chat => match self.chats.get_metadata(id).await {
+                Ok(chat) => Ok(chat.deleted_at.is_none()),
+                Err(chat::domain::models::ChatErr::NotFound) => Ok(false),
+                Err(error) => Err(live_check_error(&error)),
+            },
+            // Deleted outright: the access check already found it gone.
+            EntityKind::Channel
+            | EntityKind::Database
+            | EntityKind::User
+            | EntityKind::EmailThread
+            | EntityKind::CrmCompany
+            | EntityKind::CrmContact
+            | EntityKind::Initiative => Ok(true),
+        }
+    }
+}
+
+/// A failed lookup's error for its report, which `routine.unusable_knobs`
+/// records on its span. A stored owner that doesn't parse is left out:
+/// [`model_owner::OwnerParseError`] carries the raw principal, an email for a
+/// person.
+fn live_check_error(error: &(dyn std::error::Error + 'static)) -> rootcause::Report {
+    let mut cause = Some(error);
+    while let Some(current) = cause {
+        if current.is::<model_owner::OwnerParseError>() {
+            return rootcause::report!("the item's stored owner doesn't parse");
+        }
+        cause = current.source();
+    }
+    rootcause::report!("{error:?}")
+}
+
 /// Scheduling routes and workers owned by the harness process.
 pub struct SchedulingRuntime {
     pub router: Router,
@@ -467,7 +549,11 @@ impl SchedulingRuntime {
 }
 
 /// Compose routine scheduling and event workers alongside the harness API.
-pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each argument is a separate resource the composition root shares with scheduling; bundling them only moves the list"
+)]
+pub async fn build<Ingress, S>(
     config: Config,
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
@@ -475,7 +561,12 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
     search: search_service_client::SearchServiceClient,
-) -> Result<SchedulingRuntime> {
+    connectors: Arc<S>,
+) -> Result<SchedulingRuntime>
+where
+    Ingress: notification::domain::service::NotificationIngress,
+    S: McpConnectionsService + ConnectionManagementService,
+{
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
     let generation_ready = ready.clone();
@@ -499,10 +590,30 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         db.clone(),
     )));
+    // The items routines' entity knobs name, checked as the owner on save
+    // and before each code step that uses one, each item once a run.
+    let knob_entities: Arc<dyn KnobEntities> = Arc::new(KnobEntityAccess::new(
+        access.as_ref().clone(),
+        RoutinePeople(
+            notification::outbound::user_existence_checker::DbUserExistenceChecker::new(db.clone()),
+        ),
+        RoutineLiveItems {
+            documents: documents::outbound::pg_document_repo::PgDocumentRepo::new(
+                db.clone(),
+                registrar.clone(),
+            ),
+            projects: projects::outbound::pg_project_repo::PgProjectRepo::new(
+                db.clone(),
+                registrar.clone(),
+            ),
+            chats: chat::outbound::postgres::PgChatRepo::new(db.clone(), registrar.clone()),
+        },
+    ));
     let event_access = Arc::new(EventAccessAdapter::new(
         access.as_ref().clone(),
         PgGithubInstallationClaims::new(db.clone()),
     ));
+    let inbox_delegates = Arc::new(PgInboxDelegates::new(db.clone()));
     let ai_admission = ai_billing::composition::pg_admission_service(
         db.clone(),
         config.enable_ai_usage_enforcement,
@@ -572,8 +683,19 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             Arc::new(TargetRunner::new(Arc::clone(&sessions))),
             Arc::clone(&event_content),
         )
-        .with_code(Arc::clone(&code), Arc::clone(&upgrades)),
+        .with_code(Arc::clone(&code), Arc::clone(&upgrades))
+        .with_knob_entities(Arc::clone(&knob_entities)),
     );
+    // A stop of a run can reach any instance; every instance hears it through
+    // Postgres and the one running the run ends it.
+    let run_stops = RunStops::new(Some(Arc::new(PgStopRelay::new(db.clone()))));
+    listen_for_stops(
+        db.clone(),
+        run_stops.clone(),
+        &lifecycle.workers,
+        lifecycle.stop_workers.clone(),
+    )
+    .await;
     let dispatcher_executor = InProcessExecutor::new(
         Arc::clone(&repo),
         runner,
@@ -581,6 +703,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         lifecycle.executions.clone(),
         lifecycle.stop_executions.clone(),
     )
+    .with_stops(run_stops.clone())
     .with_admission(Arc::clone(&ai_admission))
     .with_observer(Arc::new((
         routine_analytics::RoutineAnalytics(
@@ -646,7 +769,14 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .transpose()
         .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
     // Event routines follow each owner's PostHog flag; without PostHog no one has it.
-    let event_routines = routine_flags.clone().map(FlaggedEventRoutines::new);
+    // `email.labeled` is on in development until PostHog has its flag.
+    let email_labels_without_flag = matches!(
+        config.environment,
+        macro_env::Environment::Develop | macro_env::Environment::Local
+    );
+    let event_routines = routine_flags.clone().map(|flags| {
+        FlaggedEventRoutines::new(flags).with_email_labels_without_flag(email_labels_without_flag)
+    });
     let event_dispatch = EventDispatchService::new(
         Arc::clone(&event_repo),
         Arc::clone(&event_access),
@@ -669,6 +799,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             let admission = EventAdmissionService::new(
                 Arc::clone(&event_repo),
                 Arc::clone(&event_access),
+                Arc::clone(&inbox_delegates),
                 PageSize::try_from(ADMISSION_PAGE_SIZE).expect("valid admission bound"),
             );
             let brokers = brokers.clone();
@@ -719,13 +850,22 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             access.clone(),
         )
         .with_event_routines(event_routines)
+        .with_run_stops(run_stops)
+        .with_routine_plans(EntitlementRoutinePlans::new(
+            ai_billing::composition::pg_entitlement_source(db.clone()),
+        ))
         .with_conditions_enabled(conditions_enabled)
-        .with_target_validation(TargetValidation::new(Arc::clone(&sessions)))
+        .with_target_validation(
+            TargetValidation::new(Arc::clone(&sessions)).with_knob_entities(knob_entities),
+        )
         .with_draft_hand_backs(Arc::clone(&hand_backs), Arc::clone(&request_sessions))
         .with_run_sessions(Arc::clone(&request_sessions))
         .with_suggestion_origins(Arc::new(StoredSuggestionOrigins(Arc::clone(
             &suggestion_repo,
         ))))
+        .with_owner_inboxes(Arc::new(EmailOwnerInboxes(
+            email::outbound::EmailPgRepo::new(db.clone()),
+        )))
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
         .with_code(code, upgrades),
     );
@@ -751,6 +891,11 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
         )))
         .with_conditions_enabled(conditions_enabled)
+        // A routine's draft may require the apps its owner connected,
+        // counted as saving and every run count them.
+        .with_apps(Arc::new(
+            crate::routine_sessions::RoutineConnectedApps::new(Arc::clone(&connectors)),
+        ))
         .with_finding(DraftFinding {
             model: Arc::new(routine_drafting::RouterDraftModels {
                 admission: Arc::clone(&ai_admission),
@@ -799,33 +944,47 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // non-billable (`SessionBilling::NonBillable`), so their usage is
     // recorded, never billed. Suggestions sessions write through `macro.suggestions.*`;
     // routines sessions through `macro.routines.suggest`, reading the newest
-    // mail through email_service, which reads it from the provider.
+    // mail through email_service, which reads it from the provider. With
+    // `routine-suggestions-find-work` on, onboarding first finds the work in
+    // the person's month of mail in one model call, recorded with the
+    // first drafting session's usage.
     let generations = Arc::new(PgGenerationRepo::new(db.clone()));
     let plans: Arc<dyn suggestion_generation::domain::ports::Plans> = Arc::new(EntitlementPlans(
         ai_billing::composition::pg_entitlement_source(db.clone()),
     ));
-    let suggestions = Arc::new(RoutineSuggestionService::new(
-        Arc::clone(&service),
-        suggestion_repo,
-        Arc::new(routine_suggestions::HarnessSuggestionSources {
-            email: Arc::new(EmailServiceClient::new(
-                config.internal_api_key.to_string(),
-                EmailServiceUrl::new()?.to_string(),
-            )),
-            apps: crate::routine_sessions::PipedreamConnectedApps(
-                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
+    let suggestions = Arc::new(
+        RoutineSuggestionService::new(
+            Arc::clone(&service),
+            suggestion_repo,
+            Arc::new(routine_suggestions::HarnessSuggestionSources {
+                email: Arc::new(EmailServiceClient::new(
+                    config.internal_api_key.to_string(),
+                    EmailServiceUrl::new()?.to_string(),
+                )),
+                apps: crate::routine_sessions::RoutineConnectedApps::new(connectors),
+                teams: entity_access::outbound::PgAccessRepository::new(db.clone()),
+                crm: crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
+            }),
+            suggestion_code,
+            request_sessions,
+            generations.clone(),
+            generations.clone(),
+            routine_flags.clone(),
+            RoutineBriefing {
+                guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+                agent_model: chat::domain::models::FREE_MODEL.to_owned(),
+                conditions: conditions_enabled,
+            },
+        )
+        .with_work_model(Arc::new(routine_suggestions::RouterWorkModel {
+            recorder: ai_billing::composition::pg_settling_recorder(
+                db.clone(),
+                config.enable_ai_usage_enforcement,
+                config.ai_pricing(),
+                config.settlement_route()?,
             ),
-        }),
-        suggestion_code,
-        request_sessions,
-        generations.clone(),
-        generations.clone(),
-        routine_flags.clone(),
-        RoutineBriefing {
-            guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
-            agent_model: chat::domain::models::FREE_MODEL.to_owned(),
-        },
-    ));
+        })),
+    );
     let feed_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
     let suggestion_access = Arc::new(EntitySuggestionAccess {
         access: access.as_ref().clone(),

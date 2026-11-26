@@ -1,12 +1,22 @@
-import { ViewShell, ViewSidebar } from '@app/components/view-shell';
+import {
+  ViewShell,
+  type ViewShellRootProps,
+  ViewSidebar,
+} from '@app/components/view-shell';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
+import {
+  type ChannelPreviewSelection,
+  markChannelNotificationsSeenOnOpen,
+  navigateChannelEntityToTarget,
+} from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { TutorialPill } from '@app/features/video-tutorials';
 import { SplitRouter } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
+import { ChannelDetailLayout } from '@channel/Channel/ChannelDetailLayout';
 import { ChannelLoading } from '@channel/Channel/ChannelLoading';
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
 import { ChannelAccessDenied } from '@channel/ChannelAccessDenied';
@@ -14,21 +24,28 @@ import { ChannelUnavailable } from '@channel/components/ChannelUnavailable';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { isPendingDirectMessageId } from '@channel/primitives/pending-direct-messages';
 import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@components/app/GlobalAppState';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useIsAuthenticated } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ListEntityMetadataQueryProvider } from '@entity';
+import { type ChannelEntity, ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import {
+  type Accessor,
   createContext,
   createEffect,
   createMemo,
   createSignal,
   on,
+  onCleanup,
   onMount,
   Show,
   useContext,
@@ -37,6 +54,8 @@ import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelDetailView } from './components/ChannelDetailView';
 import { MAX_PINNED_CHANNELS } from './components/ChannelPins';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
+import { ChannelsTouchSidebar } from './components/ChannelsTouchSidebar';
+import { ChannelsViewMain } from './components/ChannelsViewMain';
 import { ChannelThreadsView } from './components/ChannelThreadsView';
 import { PendingDirectMessageDetail } from './components/PendingDirectMessageDetail';
 import { ChannelsRail } from './components/rail/ChannelsRail';
@@ -65,9 +84,66 @@ export type ChannelsViewProps = {
 };
 
 // Mounted inside the mobile list's Suspense boundary.
-function MobileChannelsList(props: { sources: ChannelsSources }) {
-  const { sectionsEnabled, sectionsLoading } = useChannelsView();
-  const listChannels = useChannelListSearchPool();
+function MobileChannelsList(props: {
+  sources: ChannelsSources;
+  localChannels: Accessor<ChannelEntity[]>;
+}) {
+  const {
+    mobileLayout,
+    selectedChannel,
+    setSelectedChannel,
+    sectionsEnabled,
+    sectionsLoading,
+  } = useChannelsView();
+  const panel = useSplitPanelOrThrow();
+  const notificationSource = useGlobalNotificationSource();
+  const orchestrator = useGlobalBlockOrchestrator();
+  let activation = 0;
+  onCleanup(() => activation++);
+  const refreshSelection = async (
+    channel: ChannelEntity,
+    selection: ChannelPreviewSelection,
+    request: number,
+    reaim: boolean
+  ) => {
+    const hydrated = await hydrateChannelNotificationSelection(
+      channel,
+      notificationSource.withLocalOverrides
+    );
+    const current = selectedChannel();
+    if (
+      request !== activation ||
+      mobileLayout() ||
+      !panel.handle.isActive() ||
+      current?.id !== selection.id ||
+      current.target
+    )
+      return;
+    markChannelNotificationsSeenOnOpen(
+      withEntityNotifications(hydrated, notificationSource),
+      notificationSource,
+      { channelReadScope: 'top-level' }
+    );
+    if (reaim) await navigateChannelEntityToTarget(selection, orchestrator);
+  };
+  const openPreview = (channel: ChannelEntity) => {
+    const request = ++activation;
+    if (channel.isParticipant === false) return false;
+    const previous = selectedChannel();
+    const selection: ChannelPreviewSelection = {
+      type: 'channel',
+      id: channel.id,
+    };
+    if (!setSelectedChannel(selection)) return false;
+    if (previous?.id === selection.id) {
+      fireAndForget(
+        refreshSelection(channel, selection, request, !previous.target),
+        'channels-view'
+      );
+    }
+    return true;
+  };
+  const listChannels = props.localChannels;
   const mobileSearchText = () => '';
   const mobileSearchSource = createChannelSearchSource({
     additionalLocalChannels: listChannels,
@@ -98,10 +174,16 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
             pinned={pinned().slice(0, MAX_PINNED_CHANNELS)}
             searchQuery={mobileSearchText()}
             onClearSearch={() => SearchState.setQuery('')}
+            openPreview={mobileLayout() ? undefined : openPreview}
           />
         }
       >
-        <MobileSectionsView sources={props.sources} pinned={pinned()} />
+        <MobileSectionsView
+          sources={props.sources}
+          localChannels={listChannels}
+          pinned={pinned()}
+          openPreview={mobileLayout() ? undefined : openPreview}
+        />
       </Show>
     </Show>
   );
@@ -109,10 +191,11 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
 
 function DesktopChannelsRail(props: {
   sources: ChannelsSources;
+  localChannels: Accessor<ChannelEntity[]>;
   searchOpen: boolean;
   onSearchOpenChange: (open: boolean) => void;
 }) {
-  const listChannels = useChannelListSearchPool();
+  const listChannels = props.localChannels;
   const { sectionsEnabled } = useChannelsView();
   const [searchQuery, setSearchQuery] = createSignal('');
   const searchSource = createChannelSearchSource({
@@ -168,7 +251,11 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
     />
   );
 }
-function ChannelsViewRoot() {
+type ChannelsAsideList = ViewShellRootProps['asideList'];
+
+function ChannelsViewRoot(props: {
+  registerAsideList: (list: (() => ChannelsAsideList) | undefined) => void;
+}) {
   const panel = useSplitPanelOrThrow();
   const {
     state,
@@ -180,17 +267,29 @@ function ChannelsViewRoot() {
     selectedChannel,
     setSelectedChannel,
   } = useChannelsView();
-  const threadsTab = () => !mobileLayout() && tab() === 'threads';
+  const threadsTab = () => !isTouchDevice() && tab() === 'threads';
   // Threads fill Main like a conversation, so going back leaves them first.
   const returnToList = () => {
     if (threadsTab()) setTab('browse');
     else setSelectedChannel(undefined);
   };
+  // Narrow desktop, the rail and the conversation take turns at full width.
+  // The loading spinner has no rail to take turns with.
+  props.registerAsideList(() =>
+    isTouchDevice() || sectionsLoading()
+      ? undefined
+      : {
+          open: selectedChannel() !== undefined || threadsTab(),
+          onBack: returnToList,
+        }
+  );
+  onCleanup(() => props.registerAsideList(undefined));
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
+  const localChannels = useChannelListSearchPool();
 
   const sources = useChannelsSources(
     (scope) => {
-      if (mobileLayout()) {
+      if (isTouchDevice()) {
         return (
           scope === 'recents' ||
           (!sectionsLoading() &&
@@ -205,9 +304,13 @@ function ChannelsViewRoot() {
       if (scope === 'threads') return tab() === 'threads';
       return tab() === 'browse';
     },
-    (group) => state.sortBy[group]
+    (group) => state.sortBy[group],
+    localChannels
   );
-  onMount(() => panel.handle.setDisplayName('Channels'));
+  onMount(() => {
+    panel.handle.setDisplayName('Channels');
+    panel.handle.updateMeta?.({ splitPanelLayout: 'composable' });
+  });
 
   return (
     <ListEntityMetadataQueryProvider>
@@ -224,110 +327,105 @@ function ChannelsViewRoot() {
             </div>
           }
         >
-          <SplitPanel.Root>
-            <SplitPanel.Body>
-              <Show
-                when={mobileLayout()}
+          <Show when={!mobileLayout()}>
+            <ViewShell.Aside>
+              <DebugSuspense
+                name="ChannelsView.rail"
                 fallback={
-                  <div class="size-full min-h-0 bg-panel">
-                    <ViewShell.Root
-                      asidePreferenceKey="channels"
-                      // The empty state only points at the rail, so keep it open.
-                      asideRequired={selectedChannel() === undefined}
-                      // Threads are chosen in the rail's tabs, so keep it docked.
-                      asidePinned={threadsTab()}
-                      // Narrow, the rail and the conversation take turns.
-                      asideList={{
-                        open: selectedChannel() !== undefined || threadsTab(),
-                        onBack: returnToList,
-                      }}
-                      aside={{ preserveDuringResize: false }}
-                      main={{ preferredWidth: 640 }}
-                      resizable
-                    >
-                      <ViewShell.Aside>
-                        <DebugSuspense
-                          name="ChannelsView.rail"
-                          fallback={
-                            <SpinnerIcon
-                              aria-hidden={false}
-                              aria-label="Loading channels"
-                              class="size-5 animate-spin"
-                            />
-                          }
-                        >
-                          <DesktopChannelsRail
-                            sources={sources}
-                            searchOpen={railSearchOpen()}
-                            onSearchOpenChange={setRailSearchOpen}
-                          />
-                        </DebugSuspense>
-                      </ViewShell.Aside>
-                      <ViewShell.Main class="overflow-hidden">
-                        <ViewTour tour={channelsTour} />
-                        <Show
-                          when={!threadsTab()}
-                          fallback={
-                            <DebugSuspense name="ChannelsView.threads">
-                              <DesktopChannelThreads sources={sources} />
-                            </DebugSuspense>
-                          }
-                        >
-                          <ChannelSourcesContext.Provider value={sources}>
-                            <DebugSuspense name="ChannelsView.outlet">
-                              <SplitRouter.Outlet
-                                fallback={() => (
-                                  <>
-                                    <ViewShell.TopBar>
-                                      <ViewSidebar.Title caret={false}>
-                                        Chat
-                                      </ViewSidebar.Title>
-                                    </ViewShell.TopBar>
-                                    <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
-                                      <div class="flex max-w-sm flex-col gap-2">
-                                        <h2 class="text-base font-semibold text-ink">
-                                          Select a conversation
-                                        </h2>
-                                        <p class="text-sm leading-5 text-ink-muted">
-                                          Choose a channel or person from the
-                                          sidebar to open the conversation here.
-                                        </p>
-                                        <TutorialPill
-                                          tutorial="chat"
-                                          class="mt-3 self-center"
-                                        />
-                                      </div>
-                                    </div>
-                                  </>
-                                )}
-                              />
-                            </DebugSuspense>
-                          </ChannelSourcesContext.Provider>
-                        </Show>
-                      </ViewShell.Main>
-                    </ViewShell.Root>
-                  </div>
+                  <SpinnerIcon
+                    aria-hidden={false}
+                    aria-label="Loading channels"
+                    class="size-5 animate-spin"
+                  />
                 }
               >
+                <Show
+                  when={isTouchDevice()}
+                  fallback={
+                    <DesktopChannelsRail
+                      sources={sources}
+                      localChannels={localChannels}
+                      searchOpen={railSearchOpen()}
+                      onSearchOpenChange={setRailSearchOpen}
+                    />
+                  }
+                >
+                  <ChannelsTouchSidebar>
+                    <MaybeSoupEntityActionDrawerManager>
+                      <MobileChannelsList
+                        sources={sources}
+                        localChannels={localChannels}
+                      />
+                    </MaybeSoupEntityActionDrawerManager>
+                  </ChannelsTouchSidebar>
+                </Show>
+              </DebugSuspense>
+            </ViewShell.Aside>
+          </Show>
+          <ChannelsViewMain
+            mobileLayout={mobileLayout()}
+            sidebarToggle={
+              isTouchDevice() && !mobileLayout() && !selectedChannel()
+            }
+          >
+            <Show
+              when={!mobileLayout()}
+              fallback={
                 <MaybeSoupEntityActionDrawerManager>
                   <DebugSuspense
                     name="ChannelsView.mobile"
-                    fallback={
-                      <div class="grid size-full place-items-center text-ink-muted">
-                        <SpinnerIcon
-                          aria-hidden={false}
-                          aria-label="Loading channels"
-                          class="size-5 animate-spin"
-                        />
-                      </div>
-                    }
+                    fallback={<SpinnerIcon class="size-5 animate-spin" />}
                   >
-                    <MobileChannelsList sources={sources} />
+                    <MobileChannelsList
+                      sources={sources}
+                      localChannels={localChannels}
+                    />
                   </DebugSuspense>
                 </MaybeSoupEntityActionDrawerManager>
+              }
+            >
+              <ViewTour tour={channelsTour} />
+              <Show
+                when={!threadsTab()}
+                fallback={
+                  <DebugSuspense name="ChannelsView.threads">
+                    <DesktopChannelThreads sources={sources} />
+                  </DebugSuspense>
+                }
+              >
+                <ChannelSourcesContext.Provider value={sources}>
+                  <DebugSuspense name="ChannelsView.outlet">
+                    <SplitRouter.Outlet
+                      fallback={() => (
+                        <>
+                          <ViewShell.TopBar>
+                            <ViewSidebar.Title caret={false}>
+                              Chat
+                            </ViewSidebar.Title>
+                          </ViewShell.TopBar>
+                          <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
+                            <div class="flex max-w-sm flex-col gap-2">
+                              <h2 class="text-base font-semibold text-ink">
+                                Select a conversation
+                              </h2>
+                              <p class="text-sm leading-5 text-ink-muted">
+                                Choose a channel or person from the sidebar to
+                                open the conversation here.
+                              </p>
+                              <TutorialPill
+                                tutorial="chat"
+                                class="mt-3 self-center"
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    />
+                  </DebugSuspense>
+                </ChannelSourcesContext.Provider>
               </Show>
-            </SplitPanel.Body>
-          </SplitPanel.Root>
+            </Show>
+          </ChannelsViewMain>
         </Show>
       </StaticMarkdownContext>
     </ListEntityMetadataQueryProvider>
@@ -419,12 +517,16 @@ function ChannelDetailRouteContent() {
       <Show
         when={visibleChannel()}
         fallback={
-          <>
-            <ViewShell.TopBar>
-              <span class="truncate text-sm font-semibold">
-                {loaded()?.name ?? 'Conversation'}
-              </span>
-            </ViewShell.TopBar>
+          <ChannelDetailLayout
+            scrollBehindHeader={false}
+            header={
+              <ViewShell.TopBar class="touch:flex touch:h-10 touch:px-0 touch:py-0">
+                <span class="truncate text-sm font-semibold">
+                  {loaded()?.name ?? 'Conversation'}
+                </span>
+              </ViewShell.TopBar>
+            }
+          >
             <Show when={unavailable()} fallback={<ChannelLoading />}>
               <Show
                 when={deniedChannelId()}
@@ -445,7 +547,7 @@ function ChannelDetailRouteContent() {
                 )}
               </Show>
             </Show>
-          </>
+          </ChannelDetailLayout>
         }
       >
         {(channel) => (
@@ -480,11 +582,30 @@ export function ChannelDetailRouteView() {
 
 /** Chat workspace with shared workspace navigation. */
 export function ChannelsView(props: ChannelsViewProps) {
+  const inlinePreviewLayout = useInlinePreviewLayout();
+  // The selection lives in the provider, which needs the shell around it.
+  const [asideList, setAsideList] = createSignal<() => ChannelsAsideList>();
   return (
     <DebugSuspense name="ChannelsView.root">
-      <ChannelsViewProvider initialState={props.initialState}>
-        <ChannelsViewRoot />
-      </ChannelsViewProvider>
+      <SplitPanel.Root>
+        <SplitPanel.Body>
+          <ViewShell.Root
+            asidePreferenceKey="channels"
+            aside={
+              inlinePreviewLayout() ? { preserveDuringResize: false } : false
+            }
+            asideList={asideList()?.()}
+            main={{ preferredWidth: 640 }}
+            resizable
+          >
+            <ChannelsViewProvider initialState={props.initialState}>
+              <ChannelsViewRoot
+                registerAsideList={(list) => setAsideList(() => list)}
+              />
+            </ChannelsViewProvider>
+          </ViewShell.Root>
+        </SplitPanel.Body>
+      </SplitPanel.Root>
     </DebugSuspense>
   );
 }

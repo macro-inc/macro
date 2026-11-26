@@ -10,7 +10,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHasPaidAccess } from '@core/auth/license';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import {
-  enableRoutineCodeSteps,
   enableRoutineSuggestions,
   enableSuggestions,
 } from '@core/constant/featureFlags';
@@ -52,10 +51,7 @@ type DraftedSuggestion = Extract<RoutineSuggestion, { kind: 'routine' }>;
 export function useRoutineSuggestionsEnabled(): () => boolean {
   const userId = useUserId();
   const suggestions = useFeatureFlag(enableRoutineSuggestions);
-  // Suggestions are built on code-step routines and ship with them.
-  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
-  return () =>
-    userId() !== undefined && suggestions().enabled && codeSteps().enabled;
+  return () => userId() !== undefined && suggestions().enabled;
 }
 
 /**
@@ -155,7 +151,6 @@ export function createAppRoutinesStep(): RoutinesStepSource {
   const enabled = useRoutineSuggestionsEnabled();
   const query = useQuery(() => routineSuggestionsQueryOptions(enabled()));
   const catalog = useRoutineCatalog();
-  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
   const hasPaidAccess = useHasPaidAccess();
   const ensureTagSet = useEnsureTagSetMutation();
   const entryFor = (key: string) =>
@@ -173,7 +168,7 @@ export function createAppRoutinesStep(): RoutinesStepSource {
         { ...createEmptyDraft(model), triggers: [], steps: [], enabled: true },
         {
           target: { kind: 'model', model },
-          codeSteps: codeSteps().enabled,
+          codeSteps: true,
         }
       ),
     };

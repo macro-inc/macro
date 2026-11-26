@@ -4,7 +4,7 @@ import type {
   TransferRecoveryResponse,
 } from '../../../generated/email/types.gen';
 import type { ListEmailRemindersData } from '../../../generated/storage/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { SearchOpts } from '../search/options';
 import { EmailAttachment } from './attachment';
@@ -21,7 +21,7 @@ import {
 import { EmailThread } from './thread';
 
 /** Options for listing inbox threads. */
-export interface InboxOptions {
+export interface InboxOptions extends IterationOptions {
   /** Threads fetched per request (default 50, max 500). */
   pageSize?: number;
   /** Sort order. Defaults to `viewed_updated`. */
@@ -77,7 +77,20 @@ export class EmailNamespace {
    *
    * @readonly
    */
-  async *scheduled(options?: {
+  scheduled(options?: {
+    pageSize?: number;
+    inbox?: Link;
+    maxItems?: number;
+  }): AsyncGenerator<EmailDraft> {
+    return iterate(
+      'email.scheduled',
+      options,
+      { pageSize: true, inbox: true },
+      () => this.scheduledPages(options),
+    );
+  }
+
+  private async *scheduledPages(options?: {
     pageSize?: number;
     inbox?: Link;
   }): AsyncGenerator<EmailDraft> {
@@ -149,7 +162,7 @@ export class EmailNamespace {
   }
 
   /**
-   * Follow-up reminders with thread handles, automatically paginated.
+   * Follow-up reminders with thread handles, automatically paginated; `maxItems` caps the total.
    *
    * @readonly
    */
@@ -157,23 +170,38 @@ export class EmailNamespace {
     options?: Omit<
       NonNullable<ListEmailRemindersData['query']>,
       'inboxIds' | 'cursor'
-    > & { inboxes?: Link[] },
+    > & { inboxes?: Link[]; maxItems?: number },
   ) {
-    const { inboxes, ...query } = options ?? {};
-    return paginate(async (cursor) => {
-      const page = unwrap(
-        await this.client.storage.listEmailReminders({
-          query: { ...query, inboxIds: inboxes?.map((i) => i.id), cursor },
+    const { inboxes, maxItems: _maxItems, ...query } = options ?? {};
+    return iterate(
+      'email.reminders',
+      options,
+      {
+        noInboxes: true,
+        done: true,
+        read: true,
+        calendar: true,
+        tags: true,
+        attachments: true,
+        limit: true,
+        inboxes: true,
+      },
+      () =>
+        paginate(async (cursor) => {
+          const page = unwrap(
+            await this.client.storage.listEmailReminders({
+              query: { ...query, inboxIds: inboxes?.map((i) => i.id), cursor },
+            }),
+          );
+          return {
+            items: page.items.map(({ threadId, ...item }) => ({
+              ...item,
+              thread: EmailThread.byId(this.client, threadId),
+            })),
+            nextCursor: page.nextCursor,
+          };
         }),
-      );
-      return {
-        items: page.items.map(({ threadId, ...item }) => ({
-          ...item,
-          thread: EmailThread.byId(this.client, threadId),
-        })),
-        nextCursor: page.nextCursor,
-      };
-    });
+    );
   }
 
   constructor(private readonly client: MacroClient) {}
@@ -282,6 +310,14 @@ export class EmailNamespace {
    * matches where that display name appears. Resolve the address first, for
    * example with `macro.users.search(name)`.
    *
+   * The query also takes Gmail's operators, ANDed with its words:
+   * `subject:lunch`, `from:ana@example.com`, `to:` (To, Cc and Bcc), `cc:`,
+   * `bcc:`, `in:sent` and the other Mail views, `in:` or `label:` a tag or
+   * label name, `is:unread`, `is:starred`, `is:shared`, `has:attachment`,
+   * `after:2025/01/31`, `before:`, `newer_than:3d`, `older_than:1m`, and a
+   * minus to leave matches out (`-in:inbox`, `-lunch`). Dates are read in this
+   * runtime's time zone; for another, use `macro.search` with `timeZone`.
+   *
    * @readonly
    */
   search(query: string, opts?: SearchOpts): AsyncGenerator<EmailThread> {
@@ -289,7 +325,7 @@ export class EmailNamespace {
   }
 
   /**
-   * The threads in the inbox, most recent first, auto-paginated.
+   * The threads in the inbox, most recent first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
@@ -299,22 +335,24 @@ export class EmailNamespace {
       throw new Error('pageSize must be positive');
     const limit = Math.min(requestedLimit, 500);
 
-    return paginate(async (cursor) => {
-      const page = unwrap(
-        await this.client.email.previewsInboxCursor({
-          path: { view: 'inbox' },
-          query: {
-            limit,
-            ...(opts?.sort ? { sort_method: opts.sort } : {}),
-            ...(cursor ? { cursor } : {}),
-          },
-        }),
-      );
-      return {
-        items: page.items.map((t) => EmailThread.byId(this.client, t.id)),
-        nextCursor: page.next_cursor,
-      };
-    });
+    return iterate('email.inbox', opts, { pageSize: true, sort: true }, () =>
+      paginate(async (cursor) => {
+        const page = unwrap(
+          await this.client.email.previewsInboxCursor({
+            path: { view: 'inbox' },
+            query: {
+              limit,
+              ...(opts?.sort ? { sort_method: opts.sort } : {}),
+              ...(cursor ? { cursor } : {}),
+            },
+          }),
+        );
+        return {
+          items: page.items.map((t) => EmailThread.fromPreview(this.client, t)),
+          nextCursor: page.next_cursor,
+        };
+      }),
+    );
   }
 
   /**

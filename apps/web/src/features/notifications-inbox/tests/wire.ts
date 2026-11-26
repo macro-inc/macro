@@ -9,6 +9,7 @@ type WireRow = NotificationInboxEntryFieldsFragment['rows'][number];
 type RowFixture = {
   id: string;
   rowType?: NotificationInboxRowType;
+  alsoListedAs?: NotificationInboxRowType[];
   latestAt: string;
   revision?: string;
   unseen?: boolean;
@@ -81,6 +82,7 @@ export function inboxEntry(fixture: {
       id: row.id,
       threadId: null,
       rowType: row.rowType ?? 'DISCUSSION_MESSAGES',
+      alsoListedAs: row.alsoListedAs ?? [],
       revision: row.revision ?? `rev-${row.id}`,
       latestAt: row.latestAt,
       actor:

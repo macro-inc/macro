@@ -59,6 +59,18 @@ describe('createFrameWidth', () => {
     expect(view.width()).toBe(1000);
   });
 
+  it('reads a hidden element as unmeasured until it is laid out', () => {
+    const view = setup();
+    view.resizeTo(0);
+    view.mount();
+
+    expect(view.width()).toBeUndefined();
+
+    view.resizeTo(867);
+    vi.advanceTimersToNextFrame();
+    expect(view.width()).toBe(867);
+  });
+
   it('applies observed widths in the next frame, not during delivery', () => {
     const view = setup();
     view.mount();

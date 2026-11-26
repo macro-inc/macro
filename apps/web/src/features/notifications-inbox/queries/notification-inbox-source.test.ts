@@ -80,7 +80,10 @@ const docC = inboxEntry({
 
 function setup(
   mutationData: Record<string, unknown> = {},
-  scope: () => InboxScope = () => ({ rowTypes: ALL_INBOX_ROW_TYPES }),
+  scope: () => InboxScope = () => ({
+    rowTypes: ALL_INBOX_ROW_TYPES,
+    allKinds: true,
+  }),
   includeRow?: NotificationInboxSourceOptions['includeRow']
 ) {
   const fake = createFakeAttentionFeedClient(mutationData);
@@ -182,6 +185,35 @@ describe('createNotificationInboxSource', () => {
       'document:doc-a#task',
       'document:doc-b#top_level',
     ]);
+  });
+
+  it('changes the server scope when all known categories become explicitly selected', async () => {
+    vi.useFakeTimers();
+    const [scope, setScope] = createSignal<InboxScope>({
+      rowTypes: ALL_INBOX_ROW_TYPES,
+      allKinds: true,
+    });
+    const { fake } = setup({}, scope);
+    await flush();
+    expect(fake.queries[0].variables).toEqual({
+      input: { scope: WIRE_SCOPE, limit: 50, cursor: null },
+    });
+
+    setScope({ rowTypes: ALL_INBOX_ROW_TYPES });
+    await flush();
+    const selectedScope = {
+      rowTypes: expect.arrayContaining([
+        'EMAIL',
+        'TASK',
+        'PASSWORD_ACCESS_REQUESTED',
+      ]),
+    };
+    expect(fake.queries.at(-1)?.variables).toEqual({
+      input: { scope: selectedScope, limit: 50, cursor: null },
+    });
+    expect(fake.subscriptions.at(-1)?.variables).toEqual({
+      scope: selectedScope,
+    });
   });
 
   it('writes live changes into the cached pages without a read', async () => {
@@ -380,6 +412,35 @@ describe('createNotificationInboxSource', () => {
       { input: { clearId: sent.clearId } },
     ]);
     expect(rowIds()).toContain('document:doc-a#task');
+  });
+
+  it('hides a row listed under a cleared kind besides its own', async () => {
+    vi.useFakeTimers();
+    const mentioned = inboxEntry({
+      docId: 'doc-m',
+      sortAt: '2026-02-01T10:10:00Z',
+      rows: [
+        {
+          id: 'document:doc-m#top_level',
+          rowType: 'DISCUSSION_MENTION',
+          alsoListedAs: ['DISCUSSION_MESSAGES'],
+          latestAt: '2026-02-01T10:10:00Z',
+        },
+      ],
+    });
+    const { fake, feed, rowIds } = setup({
+      ClearNotificationInbox: {
+        clearNotificationInbox: { clear: wireClear('DONE') },
+      },
+    });
+    await flush();
+    fake.queries[0].resolve(inboxPage([mentioned, docA]));
+    await flush();
+
+    await feed.clear({ rowTypes: ['discussion_messages'], unreadOnly: false });
+
+    // Comments that mention you are comments too.
+    expect(rowIds()).toEqual(['document:doc-a#task']);
   });
 
   it('keeps hiding what a clear still at work takes, and announces its end', async () => {
@@ -671,6 +732,7 @@ describe('createNotificationInboxSource', () => {
     vi.useFakeTimers();
     const [scope, setScope] = createSignal<InboxScope>({
       rowTypes: ALL_INBOX_ROW_TYPES,
+      allKinds: true,
     });
     const { fake, feed, row } = setup(
       {
@@ -701,6 +763,7 @@ describe('createNotificationInboxSource', () => {
     vi.useFakeTimers();
     const [scope, setScope] = createSignal<InboxScope>({
       rowTypes: ALL_INBOX_ROW_TYPES,
+      allKinds: true,
     });
     let answerUndo = (_answer: unknown) => {};
     const undoAnswer = new Promise((resolve) => {
@@ -768,6 +831,7 @@ describe('createNotificationInboxSource', () => {
     vi.useFakeTimers();
     const { fake } = setup({}, () => ({
       rowTypes: ALL_INBOX_ROW_TYPES,
+      allKinds: true,
       unreadOnly: true,
     }));
     await flush();
@@ -783,6 +847,7 @@ describe('createNotificationInboxSource', () => {
     vi.useFakeTimers();
     const [scope, setScope] = createSignal<InboxScope>({
       rowTypes: ALL_INBOX_ROW_TYPES,
+      allKinds: true,
       unreadOnly: true,
     });
     const { fake, feed, row, rowIds } = setup(
@@ -805,9 +870,13 @@ describe('createNotificationInboxSource', () => {
     expect(rowIds()).toContain('document:doc-b#top_level');
     expect(row('document:doc-b#top_level').unseen).toBe(false);
 
-    setScope({ rowTypes: ALL_INBOX_ROW_TYPES });
+    setScope({ rowTypes: ALL_INBOX_ROW_TYPES, allKinds: true });
     await flush();
-    setScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true });
+    setScope({
+      rowTypes: ALL_INBOX_ROW_TYPES,
+      allKinds: true,
+      unreadOnly: true,
+    });
     await flush();
     fake.queries.at(-1)?.resolve(inboxPage([docA]));
     await flush();

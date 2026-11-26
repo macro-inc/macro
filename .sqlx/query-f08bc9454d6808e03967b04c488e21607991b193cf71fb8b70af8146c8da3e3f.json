@@ -17,7 +17,9 @@
                 "capacity_changed",
                 "billing_ends",
                 "past_due_grace",
-                "retention_expired"
+                "retention_expired",
+                "agent_start_due",
+                "charge_unsettled"
               ]
             }
           }

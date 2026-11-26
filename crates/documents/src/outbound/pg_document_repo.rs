@@ -24,7 +24,7 @@ use sqlx::PgPool;
 use model_entity::{Entity, EntityType};
 use sqlx::Row;
 
-use crate::domain::content::{DocumentContent, DocumentContentState};
+use crate::domain::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use crate::domain::models::{
     BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, DocumentError,
     DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome, ImportEmailAttachmentRepoArgs,
@@ -933,6 +933,35 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(document_id), err)]
+    async fn ready_imported_document(
+        &self,
+        document_id: &str,
+        edited_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), Self::Err> {
+        let content = DocumentContent::ready(DocumentContentLocation::SyncService);
+        let result = sqlx::query!(
+            r#"
+            UPDATE "Document"
+            SET "uploaded" = TRUE,
+                "contentState" = $2,
+                "contentLocation" = $3,
+                "updatedAt" = $4
+            WHERE id = $1 AND NOT "uploaded"
+            "#,
+            document_id,
+            content.state_db_value(),
+            content.location_db_value(),
+            edited_at.naive_utc(),
+        )
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_team_ids_for_user(&self, user_id: &str) -> Result<Vec<uuid::Uuid>, Self::Err> {
         let rows = sqlx::query!(
@@ -1422,5 +1451,16 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         copy::copy_pdf_parts(&mut transaction, new_document_id, original_document_id).await?;
         transaction.commit().await?;
         Ok(())
+    }
+}
+
+impl<B: BotFacts + 'static> crate::domain::ports::DocumentLifecycleReads for PgDocumentRepo<B> {
+    #[tracing::instrument(skip(self), err)]
+    async fn document_is_live(&self, id: uuid::Uuid) -> anyhow::Result<bool> {
+        match self.get_basic_document(&id.to_string()).await {
+            Ok(document) => Ok(document.deleted_at.is_none()),
+            Err(sqlx::Error::RowNotFound) => Ok(false),
+            Err(error) => Err(error.into()),
+        }
     }
 }

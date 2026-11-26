@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { isResponseFreeNetworkError } from '@core/util/request-error';
 import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import {
   type Cleanup,
@@ -199,12 +200,23 @@ function changeIntent(event: Event) {
     .otherwise(() => undefined);
 }
 
-function joinFailureMessage(error: unknown) {
+function joinFailureMessage(error: unknown, intent: CallJoinIntent) {
   if (thrownResultErrorHasCode(error, 'CONFLICT'))
     return ALREADY_IN_CALL_MESSAGE;
   if (thrownResultErrorHasCode(error, 'GONE'))
     return 'This call has ended. Start a new call to continue.';
   if (isMicrophoneAccessError(error)) return MICROPHONE_BLOCKED_MESSAGE;
+
+  // The call service answered, so the user's connection is fine. Timeouts and
+  // media connection failures are untyped and stay on the connection copy.
+  const serverAnswered =
+    error instanceof ThrownResultError && !isResponseFreeNetworkError(error);
+  if (serverAnswered) {
+    return intent.kind === 'start'
+      ? "Couldn't start the call. Try again."
+      : "Couldn't join the call. Try again.";
+  }
+
   return 'Unable to join the call. Please check your connection.';
 }
 
@@ -625,9 +637,9 @@ export function createCallLifecycle(options: {
           active = false;
         };
       },
-      failed: ({ channelId, error }) => {
+      failed: ({ channelId, intent, error }) => {
         options.rollbackJoin();
-        options.setError(joinFailureMessage(error));
+        options.setError(joinFailureMessage(error, intent));
         if (isMicrophoneAccessError(error)) options.microphoneBlocked();
         let active = true;
         // Recovery must not keep Try again pending, or tear down a newer join.

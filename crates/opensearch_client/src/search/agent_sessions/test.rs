@@ -12,7 +12,10 @@ fn args(mode: AgentSessionSearchMode) -> AgentSessionSearchArgs {
 #[test]
 fn access_allowlist_is_required_and_filters_parents() {
     let mut args = args(AgentSessionSearchMode::Content);
-    let query = build_query(&args, "partial").unwrap().build().to_json();
+    let query = build_query(&args, "partial", &[])
+        .unwrap()
+        .build()
+        .to_json();
     let filter = query["bool"]["filter"].as_array().unwrap();
     assert!(filter.contains(&serde_json::json!({"terms":{"agent_session_id":args.session_ids}})));
     assert!(filter.contains(&serde_json::json!({"term":{"_index":"agent_sessions"}})));
@@ -20,12 +23,12 @@ fn access_allowlist_is_required_and_filters_parents() {
         filter.contains(&serde_json::json!({"term":{"agent_session_relation":"agent_session"}}))
     );
     args.session_ids.clear();
-    assert!(build_query(&args, "partial").is_err());
+    assert!(build_query(&args, "partial", &[]).is_err());
 }
 
 #[test]
 fn modes_keep_names_and_folded_content_separate_and_terms_in_one_session() {
-    let content = build_query(&args(AgentSessionSearchMode::Content), "partial")
+    let content = build_query(&args(AgentSessionSearchMode::Content), "partial", &[])
         .unwrap()
         .build()
         .to_json();
@@ -34,13 +37,13 @@ fn modes_keep_names_and_folded_content_separate_and_terms_in_one_session() {
     let terms = clauses[0]["bool"]["must"].as_array().unwrap();
     assert_eq!(terms.len(), 2);
     assert_eq!(terms[0]["has_child"]["type"], "message");
-    assert!(terms[0]["has_child"]["query"]["match_phrase_prefix"].is_object());
-    let name = build_query(&args(AgentSessionSearchMode::Name), "exact")
+    assert!(terms[0]["has_child"]["query"]["match_bool_prefix"].is_object());
+    let name = build_query(&args(AgentSessionSearchMode::Name), "exact", &[])
         .unwrap()
         .build()
         .to_json();
     assert!(!name.to_string().contains("has_child"));
-    let both = build_query(&args(AgentSessionSearchMode::NameContent), "exact")
+    let both = build_query(&args(AgentSessionSearchMode::NameContent), "exact", &[])
         .unwrap()
         .build()
         .to_json();
@@ -61,7 +64,10 @@ fn term_clauses_share_one_message_budget_per_session() {
     ] {
         let mut args = args(AgentSessionSearchMode::Content);
         args.terms = terms.iter().map(|term| term.to_string()).collect();
-        let query = build_query(&args, "partial").unwrap().build().to_json();
+        let query = build_query(&args, "partial", &[])
+            .unwrap()
+            .build()
+            .to_json();
         let clauses = query["bool"]["should"][0]["bool"]["must"]
             .as_array()
             .unwrap();
@@ -87,7 +93,10 @@ fn only_the_first_ten_term_clauses_carry_inner_hits() {
     ]
     .map(String::from)
     .to_vec();
-    let query = build_query(&args, "partial").unwrap().build().to_json();
+    let query = build_query(&args, "partial", &[])
+        .unwrap()
+        .build()
+        .to_json();
     let clauses = query["bool"]["should"][0]["bool"]["must"]
         .as_array()
         .unwrap();
@@ -104,7 +113,7 @@ fn only_the_first_ten_term_clauses_carry_inner_hits() {
 
 #[test]
 fn each_term_fetches_only_the_navigation_fields_of_matching_messages() {
-    let query = build_query(&args(AgentSessionSearchMode::Content), "partial")
+    let query = build_query(&args(AgentSessionSearchMode::Content), "partial", &[])
         .unwrap()
         .build()
         .to_json();

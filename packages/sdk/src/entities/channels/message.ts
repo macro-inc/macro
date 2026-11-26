@@ -316,11 +316,18 @@ export class Message extends FavoritableEntity<MessageRecord> {
   }
 
   /**
-   * Post a reply in this message's thread.
+   * Post a reply in this message's thread; pass `silent: true` for a routine
+   * update that should notify nobody.
+   *
+   * @param opts.silent - Send no push, email or inbox entry to anyone,
+   *   mentioned people included; the reply still appears in the thread.
    *
    * @write
    */
-  async reply(body: string | RichMessage): Promise<Message> {
-    return this.thread().reply(body);
+  async reply(
+    body: string | RichMessage,
+    opts?: { silent?: boolean },
+  ): Promise<Message> {
+    return this.thread().reply(body, opts);
   }
 }

@@ -4,7 +4,7 @@ import {
 } from '@app/features/calendar/types';
 import type { InvitationResolution } from '@service-email/generated/schemas/invitationResolution';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { type Accessor, createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarInvitation } from '../email-message/core/calendar-invitation';
 import {
@@ -13,8 +13,15 @@ import {
 } from '../email-message/core/calendar-invitation-fixtures';
 import { EmailCalendarInvitation } from './calendar-invitation';
 
-const calendarUi = vi.hoisted(() => ({ enabled: true, addSharedEvent: true }));
+const calendarUi = vi.hoisted(() => ({
+  addSharedEvent: true,
+  syncing: (): boolean => false,
+}));
 const copyState = vi.hoisted(() => ({ mutate: vi.fn() }));
+vi.mock('@queries/calendar/first-sync', () => ({
+  useCalendarFirstSync: (enabled: Accessor<boolean>) => () =>
+    enabled() && calendarUi.syncing(),
+}));
 const queryState = vi.hoisted(() => ({
   failed: (): boolean => false,
   data: {} as Record<string, InvitationResolution>,
@@ -60,7 +67,6 @@ vi.mock('@queries/calendar/calendars', () => ({
 vi.mock('@core/email-link', () => ({ useAddInboxFlow: () => vi.fn() }));
 vi.mock('@core/util/url', () => ({ openExternalUrl: vi.fn() }));
 vi.mock('../calendar/hooks/use-calendar-ui-flag', () => ({
-  useCalendarUiFlag: () => () => calendarUi.enabled,
   useCalendarAddSharedEventFlag: () => () => calendarUi.addSharedEvent,
 }));
 vi.mock('../calendar/hooks/create-calendar-rsvp-controller', () => ({
@@ -89,8 +95,8 @@ vi.mock('@ui', async () => ({
 }));
 afterEach(() => {
   cleanup();
-  calendarUi.enabled = true;
   calendarUi.addSharedEvent = true;
+  calendarUi.syncing = () => false;
   copyState.mutate.mockReset();
 });
 
@@ -209,21 +215,6 @@ describe('email invitation production host', () => {
   );
 });
 
-it('shows the saved invitation without calendar state when the calendar UI is off', () => {
-  calendarUi.enabled = false;
-  render(() => (
-    <EmailCalendarInvitation
-      threadId="thread"
-      messageId="message"
-      invitation={invitationFixture}
-      hour12
-    />
-  ));
-  expect(screen.queryByText(/Calendar unavailable/)).toBeNull();
-  expect(screen.getByText(/Saved invitation/)).toBeTruthy();
-  expect(screen.queryByRole('group', { name: 'Your response' })).toBeNull();
-});
-
 describe('forwarded event email', () => {
   const shared = invitationFixtures.shared;
   const key = `message:${shared.id}`;
@@ -246,6 +237,31 @@ describe('forwarded event email', () => {
     expect(screen.getByText('Not on your calendar.')).toBeTruthy();
     expect(screen.queryByText(/Saved invitation/)).toBeNull();
     expect(screen.queryByRole('radio', { name: 'Yes' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to calendar' }));
+    expect(copyState.mutate).toHaveBeenCalledWith({
+      threadId: 'thread',
+      messageId: 'message',
+      invitationId: shared.id,
+      calendarId: 'work-calendar',
+    });
+  });
+
+  it('holds the shared-event action until its first calendar can save it', () => {
+    const [syncing, setSyncing] = createSignal(true);
+    calendarUi.syncing = syncing;
+    queryState.failed = () => false;
+    queryState.data = { [key]: { kind: 'no_match' } };
+    renderShared();
+
+    expect(
+      screen.getByText('Syncing your calendar…').getAttribute('role')
+    ).toBe('status');
+    expect(
+      screen.queryByRole('button', { name: 'Add to calendar' })
+    ).toBeNull();
+    expect(copyState.mutate).not.toHaveBeenCalled();
+
+    setSyncing(false);
     fireEvent.click(screen.getByRole('button', { name: 'Add to calendar' }));
     expect(copyState.mutate).toHaveBeenCalledWith({
       threadId: 'thread',

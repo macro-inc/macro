@@ -9,16 +9,9 @@ import {
 import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { scheduleToEntity } from '@app/features/routines/queries/entities';
 import { useSchedulesQuery } from '@app/features/routines/queries/schedules';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import {
-  enableCrm,
-  enableDatabases,
-  enableForms,
-  enableProjects,
-} from '@core/constant/featureFlags';
-import {
-  useChannelsContext,
+  useChannelDirectory,
   useDmActivityByUserId,
 } from '@core/context/channels';
 import { useEmailLinksContext } from '@core/context/emailLinks';
@@ -36,6 +29,7 @@ import type {
   SnippetEntity,
 } from '@entity';
 import { useCachedGraphqlChannelsQuery } from '@queries/channel/channels';
+import { toChannelListItem } from '@queries/channel/directory-core';
 import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
@@ -49,7 +43,10 @@ import {
 } from '@queries/email/quick-access';
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
-import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
+import {
+  type HistoryItem,
+  useHistoryQueryWhileRead,
+} from '@queries/history/history';
 import { materializeCachedGraphqlInitiatives } from '@queries/soup/graphql/initiatives';
 import { useQuickAccessAgentSessionsQuery } from '@queries/soup/quick-access-agent-sessions';
 import { useQuickAccessInitiativesQuery } from '@queries/soup/quick-access-initiatives';
@@ -59,13 +56,26 @@ import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useDatabasesQuery } from '@queries/storage/databases';
 import { useFormsQuery } from '@queries/storage/forms';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
-import { ACCOUNT_WIDE_REFRESH_INTERVAL_MS } from '@queries/visible-refresh';
+import { useTeammateIds } from '@queries/team/roster';
+import {
+  ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
+  intervalWhileRead,
+} from '@queries/visible-refresh';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
-import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createRenderEffect,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import { deduplicateContactItems, toCrmContactItem } from './crm-contacts';
 import {
   filterQuickAccessItems,
@@ -392,11 +402,20 @@ function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
 
 /** Builds Quick Access from history and its supporting entity sources. */
 export function createQuickAccessValue(): QuickAccessContextValue {
-  const crmFlag = useFeatureFlag(enableCrm);
-  const projectsFlag = useFeatureFlag(enableProjects);
+  // History and the recent channel list follow cache changes closely only while
+  // some list here reads the cache (an open menu, a typed search), and at most
+  // once a minute otherwise: every cache change in a busy workspace would
+  // reread them with nothing on screen, and a read as a list opens would
+  // reorder the rows it has just shown.
+  const [cacheReaders, setCacheReaders] = createSignal<Accessor<boolean>[]>([]);
+  const listsReadCache = createMemo(() =>
+    cacheReaders().some((reading) => reading())
+  );
+
   // queries
-  const historyQuery = useHistoryQuery();
-  const { channels, isLoading: channelsLoading } = useChannelsContext();
+  const historyQuery = useHistoryQueryWhileRead(listsReadCache);
+  const directory = useChannelDirectory();
+  const channelsLoading = () => !directory.complete();
   const directoryScope = useContactDirectoryScope();
   const rawDmActivityByUserId = useDmActivityByUserId();
   const dmActivityByUserId = createMemo(rawDmActivityByUserId, undefined, {
@@ -405,8 +424,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const { links: emailLinks, isConnectedSecondaryInbox } =
     useEmailLinksContext();
   // Read reactively: if the session abandons its cache mid-session, Quick
-  // Access falls back to the REST channel list instead of the dead host. The
-  // memo keeps the subscription below until the host itself changes.
+  // Access falls back to the directory's in-memory pages instead of the dead
+  // host. The memo keeps the subscription below until the host itself changes.
   const cacheHost = createMemo(() => getGraphqlSoupCacheHost());
   const localDrafts = createLocalDraftSource(() => true);
   const draftItems = createMemo(() =>
@@ -423,7 +442,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         () => cachedChannelsQuery.refetch({ cancelRefetch: false }),
         {
           searchBuckets: () => ['channel', 'dm'],
-          intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
+          intervalMs: intervalWhileRead(
+            listsReadCache,
+            ACCOUNT_WIDE_REFRESH_INTERVAL_MS
+          ),
         }
       )
     );
@@ -440,15 +462,23 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   const { query: agentSessionsQuery, sessions: agentSessionsAccessor } =
     useQuickAccessAgentSessionsQuery();
   const databasesQuery = useDatabasesQuery();
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const formsQuery = useFormsQuery();
-  const formsFlag = useFeatureFlag(enableForms);
   const schedulesQuery = useSchedulesQuery(() => true);
   const { query: initiativesQuery, initiatives: initiativesAccessor } =
     useQuickAccessInitiativesQuery();
 
   // stable cache for transformed items
   const itemCache = new Map<string, CacheEntry>();
+  // Retire copied CRM rows even when no list observes the lazy index memos.
+  createRenderEffect(
+    on(crmAccessAllowed, (allowed) => {
+      if (allowed) return;
+      for (const [id, { item }] of itemCache) {
+        if (item.bucket === 'crm_company' || item.bucket === 'crm_contact')
+          itemCache.delete(id);
+      }
+    })
+  );
 
   const recentlyViewedQuery = useRecentlyViewedSoupQuery();
 
@@ -530,21 +560,35 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const startedAt = performance.now();
     const viewedAtMap = soupViewedAtMap();
     const allEntries: IndexEntry[] = [];
-    const completeChannels = channels();
+    const completeChannels = directory.channels();
     const cachedChannels =
       cacheHost() && queryReadyGate(cachedChannelsQuery)
         ? cachedChannelsQuery.data
         : [];
 
-    // A partial cache must not hide channels already available in the complete
-    // channel list. Cached metadata wins for duplicates, retaining newer views.
+    // The recent cached list must not hide channels already in the directory.
+    // Cached metadata wins for duplicates, retaining newer views, unless the
+    // directory changed later: the cached list rereads only while a list here
+    // reads the cache.
     const channelData = new Map(
       completeChannels.map((channel) => [
         channel.id,
-        apiChannelToQuickAccessChannel(channel),
+        apiChannelToQuickAccessChannel(toChannelListItem(channel)),
       ])
     );
     for (const channel of cachedChannels) {
+      const known = channelData.get(channel.id);
+      if (
+        known &&
+        toTimestamp(known.updatedAt) > toTimestamp(channel.updatedAt)
+      ) {
+        channelData.set(channel.id, {
+          ...known,
+          viewedAt: latestDate(known.viewedAt, channel.viewedAt),
+          interactedAt: latestDate(known.interactedAt, channel.interactedAt),
+        });
+        continue;
+      }
       channelData.set(channel.id, {
         ...channel,
         viewedAt: latestDate(
@@ -587,6 +631,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   });
 
   const crmCompanyEntries = createLazyMemo(() => {
+    if (!crmAccessAllowed()) return [];
     const viewedAtMap = soupViewedAtMap();
     const allEntries: IndexEntry[] = [];
 
@@ -650,6 +695,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // CRM contacts (live CRM list, most recently interacted first). They are
   // not Macro users, so they stay out of the 'person' bucket.
   const crmContactEntries = createLazyMemo(() => {
+    if (!crmAccessAllowed()) return [];
     const allEntries: IndexEntry[] = [];
     for (const contact of crmContactsAccessor()) {
       if (contact.hidden) continue;
@@ -830,7 +876,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // Databases are not Soup entities and have no view history, so creation
   // time is the only timestamp to sort on.
   const databaseEntries = createLazyMemo(() => {
-    if (!databasesFlag().enabled) return [];
     const entries: IndexEntry[] = [];
     const listed = databasesQuery.isSuccess ? databasesQuery.data : [];
     for (const { database, grant } of listed) {
@@ -868,7 +913,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   // Forms, like databases, have only a creation time to sort on.
   const formEntries = createLazyMemo(() => {
-    if (!formsFlag().enabled) return [];
     const entries: IndexEntry[] = [];
     const listed = formsQuery.isSuccess ? formsQuery.data : [];
     for (const { form, access } of listed) {
@@ -993,9 +1037,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   });
 
   const getById = (id: string): QuickAccessItem | undefined => {
-    return (
-      draftItems().find((item) => item.id === id) ?? itemCache.get(id)?.item
-    );
+    const item =
+      draftItems().find((item) => item.id === id) ?? itemCache.get(id)?.item;
+    if (
+      !crmAccessAllowed() &&
+      (item?.bucket === 'crm_company' || item?.bucket === 'crm_contact')
+    )
+      return undefined;
+    return item;
   };
 
   const resolveEntries = (entries: IndexEntry[]): QuickAccessItem[] => {
@@ -1081,9 +1130,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const projectedBuckets = createMemo(() =>
       (buckets.length ? buckets : BUCKET_COMBINATIONS.all).filter(
         (bucket) =>
-          ((bucket !== 'crm_company' && bucket !== 'crm_contact') ||
-            crmFlag().enabled) &&
-          (bucket !== 'initiative' || projectsFlag().enabled)
+          (bucket !== 'crm_company' && bucket !== 'crm_contact') ||
+          crmAccessAllowed()
       )
     );
     const personExclusions = createContactExclusions(
@@ -1096,12 +1144,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       },
       () => (options?.excludeSelf ? directoryScope().userId : undefined)
     );
+    const listsPeople = () =>
+      projectedBuckets().includes('person') && options?.enabled?.() !== false;
     const personList = createPersonList({
       scope: directoryScope,
       resetKey: personExclusions.key,
+      localBudgetMs: options?.peopleLocalBudgetMs,
       search: () => options?.searchTerm?.() ?? '',
-      enabled: () =>
-        projectedBuckets().includes('person') && options?.enabled?.() !== false,
+      enabled: listsPeople,
+      teammates: useTeammateIds(listsPeople),
       policy: () => {
         const viewer = directoryScope().userId;
         return {
@@ -1111,6 +1162,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
               ? viewer?.split('@')[1]
               : undefined,
           excluded: personExclusions.native(),
+          listPriority: options?.peopleListPriority?.(),
         };
       },
       activity: dmActivityByUserId,
@@ -1165,12 +1217,24 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     );
     // A retired host degrades this list to local items; later lists skip it.
     const projectionHost = options ? cacheHost() : undefined;
+    const readsCache = () =>
+      options?.enabled?.() !== false && options?.readsCache?.() !== false;
+    if (projectionHost) {
+      const reading = () => cacheHost() === projectionHost && readsCache();
+      setCacheReaders((readers) => [...readers, reading]);
+      onCleanup(() =>
+        setCacheReaders((readers) =>
+          readers.filter((entry) => entry !== reading)
+        )
+      );
+    }
     const [cacheRevision, setCacheRevision] = createSignal(0);
     createEffect(() => {
       if (!projectionHost || cacheHost() !== projectionHost) return;
-      // A disabled list searches afresh when enabled, so it has no use for
-      // change notifications; in a busy workspace they arrive constantly.
-      if (options?.enabled?.() === false) return;
+      // A list that stops reading the cache searches afresh when it starts
+      // again, so it has no use for change notifications meanwhile; in a busy
+      // workspace they arrive constantly.
+      if (!readsCache()) return;
       onCleanup(
         subscribeToVisibleCacheChanges(
           projectionHost,
@@ -1195,8 +1259,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
             revision: () => cacheRevision() + manualRefreshRevision(),
             searchTerm: options.searchTerm,
             // An empty bucket list means "all" to the cache, not "none".
-            enabled: () =>
-              projectedBuckets().length > 0 && options.enabled?.() !== false,
+            enabled: () => projectedBuckets().length > 0 && readsCache(),
             existingItems: localItems,
             filterPreviousItems: filterQuickAccessItems,
             sourceAttributes: () => {
@@ -1418,6 +1481,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       loadMore: async () => {
         await Promise.all([personList.loadMore(), projected?.loadMore()]);
       },
+      // Each failed source reads its page again; the projected list retries
+      // through its ordinary pagination.
+      retry: async () => {
+        await Promise.all([
+          personList.error() ? personList.retry?.() : undefined,
+          projected?.error() ? projected.loadMore() : undefined,
+        ]);
+      },
     };
   }) as QuickAccessContextValue['useList'];
 
@@ -1438,10 +1509,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     fireAndForget(snippetsQuery.refetch(), 'quick-access');
     fireAndForget(skillsQuery.refetch(), 'quick-access');
     fireAndForget(agentSessionsQuery.refetch(), 'quick-access');
-    if (databasesFlag().enabled)
-      fireAndForget(databasesQuery.refetch(), 'quick-access');
-    if (formsFlag().enabled)
-      fireAndForget(formsQuery.refetch(), 'quick-access');
+    fireAndForget(databasesQuery.refetch(), 'quick-access');
+    fireAndForget(formsQuery.refetch(), 'quick-access');
     fireAndForget(schedulesQuery.refetch(), 'quick-access');
     fireAndForget(initiativesQuery.refetch(), 'quick-access');
   };

@@ -284,7 +284,9 @@ fn a_task_status_change_carries_the_task_as_it_reads_now() {
                 is_multi_select: false,
                 is_system: true,
                 value: Some(PropertyValue::Date(
-                    Utc.with_ymd_and_hms(2026, 10, 9, 0, 0, 0).unwrap(),
+                    models_properties::shared::DateValue::new(
+                        Utc.with_ymd_and_hms(2026, 10, 9, 0, 0, 0).unwrap(),
+                    ),
                 )),
                 options: Vec::new(),
             },
@@ -326,6 +328,7 @@ fn a_task_status_change_carries_the_task_as_it_reads_now() {
                 markdown: "Steps: open login on Safari 17.".into(),
                 status: Some("In review".into()),
                 priority: Some("High".into()),
+                start: None,
                 due: Some(Utc.with_ymd_and_hms(2026, 10, 9, 0, 0, 0).unwrap()),
                 assignees: vec![ContextPerson {
                     id: "macro|sam@example.com".into(),
@@ -402,7 +405,7 @@ fn a_received_email_carries_its_headers_and_reply_free_body() {
         subject: Some("Invoice #42".into()),
         snippet: Some("Please find attached".into()),
         from: Some(ContactInfo {
-            email: "billing@vendor.com".into(),
+            email: "billing@vendor.example".into(),
             name: Some("Vendor Billing".into()),
             photo_url: Some("https://example.com/p.png".into()),
         }),
@@ -425,6 +428,7 @@ fn a_received_email_carries_its_headers_and_reply_free_body() {
             photo_url: None,
         }],
         labels: vec![ParsedLabel {
+            id: None,
             provider_id: "INBOX".into(),
             name: "Inbox".into(),
         }],
@@ -450,7 +454,7 @@ fn a_received_email_carries_its_headers_and_reply_free_body() {
             email: EmailSnapshot {
                 thread_id: Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-00000000e7a1").unwrap(),
                 subject: "Invoice #42".into(),
-                from: "Vendor Billing <billing@vendor.com>".into(),
+                from: "Vendor Billing <billing@vendor.example>".into(),
                 to: vec![
                     "dana@example.com".into(),
                     "Accounts Payable <ap@example.com>".into(),
@@ -502,6 +506,7 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
         channel: ChannelMetadata {
             channel_type: ChannelKind::Public,
             channel_name: "eng".into(),
+            named: true,
         },
         message: Some(ChannelMessage {
             message: prompt.clone(),
@@ -655,4 +660,75 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
             },
         }
     );
+}
+
+#[test]
+fn a_labeled_email_names_only_the_labels_its_thread_gained() {
+    let thread_id = Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-00000000e7a1").unwrap();
+    let invoices = Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-0000000001b1").unwrap();
+    let finance = Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-0000000001b2").unwrap();
+    let received_at = Utc.with_ymd_and_hms(2026, 11, 24, 9, 0, 0).unwrap();
+    let event: EventReference = serde_json::from_value(json!({
+        "event_id": "01928f3e-6a2b-7c3d-8e4f-0123456789ab",
+        "event_name": "email.labeled",
+        "entity_id": thread_id,
+        "message_id": null,
+        "labels_gained": [invoices],
+    }))
+    .unwrap();
+    let label = |id: Uuid, name: &str| ParsedLabel {
+        id: Some(id),
+        provider_id: format!("Label_{name}"),
+        name: name.into(),
+    };
+    let content = EventContent::Email(Some(ParsedMessage {
+        draft_generation: 0,
+        db_id: Uuid::now_v7(),
+        link_id: Uuid::nil(),
+        thread_db_id: thread_id,
+        subject: Some("Invoice #42".into()),
+        snippet: None,
+        from: Some(ContactInfo {
+            email: "billing@vendor.example".into(),
+            name: None,
+            photo_url: None,
+        }),
+        to: Vec::new(),
+        cc: Vec::new(),
+        bcc: Vec::new(),
+        labels: vec![
+            label(finance, "Finance"),
+            label(invoices, "Finance/Invoices"),
+        ],
+        body_parsed: Some("Your invoice for October is $420.".into()),
+        body_text: None,
+        body_html_sanitized: None,
+        body_macro: None,
+        body_replyless: None,
+        internal_date_ts: Some(received_at),
+        sent_at: None,
+        is_read: false,
+        is_starred: false,
+        is_sent: false,
+        is_draft: false,
+        has_attachments: false,
+        created_at: received_at,
+        updated_at: received_at,
+    }));
+
+    assert_eq!(
+        routine_event(&event, content).unwrap(),
+        RoutineEvent::EmailLabeled {
+            email: EmailSnapshot {
+                thread_id,
+                subject: "Invoice #42".into(),
+                from: "billing@vendor.example".into(),
+                to: Vec::new(),
+                received_at,
+                body: "Your invoice for October is $420.".into(),
+            },
+            labels: vec!["Finance/Invoices".into()],
+        }
+    );
+    assert!(routine_event(&event, EventContent::Email(None)).is_err());
 }

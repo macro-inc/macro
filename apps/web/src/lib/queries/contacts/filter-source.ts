@@ -2,10 +2,8 @@ import { tryMacroId } from '@core/user/macroId';
 import { validate as isEmail } from 'email-validator';
 import type { Accessor } from 'solid-js';
 import { readContactDirectory } from './directory';
-import {
-  type ContactWindowHost,
-  createContactDirectoryWindow,
-} from './directory-query';
+import { createContactDirectoryList } from './directory-list';
+import type { ContactWindowHost } from './directory-query';
 import { MAX_CONTACT_LOOKUP, resolveContactDirectory } from './lookup';
 import { createContactResolution } from './lookup-query';
 
@@ -15,10 +13,14 @@ export function createContactFilterSource(
   selectedEmails: Accessor<string[]>,
   enabled: Accessor<boolean>,
   read = readContactDirectory,
-  resolve = resolveContactDirectory
+  resolve = resolveContactDirectory,
+  /** Members of the viewer's team, to rank a page the server did not. */
+  teammates?: Accessor<ReadonlySet<string>>
 ) {
   return {
-    suggestions: createContactDirectoryWindow(scope, read, enabled),
+    suggestions: createContactDirectoryList(scope, read, enabled, {
+      teammates,
+    }),
     selection: createContactResolution(
       scope,
       () => ({
@@ -37,11 +39,15 @@ export function createContactIdFilterSource(
   selectedIds: Accessor<readonly string[]>,
   enabled: Accessor<boolean>,
   read = readContactDirectory,
-  resolve = resolveContactDirectory
+  resolve = resolveContactDirectory,
+  /** Members of the viewer's team, to rank a page the server did not. */
+  teammates?: Accessor<ReadonlySet<string>>
 ) {
   return {
     viewer: () => scope().userId,
-    suggestions: createContactDirectoryWindow(scope, read, enabled),
+    suggestions: createContactDirectoryList(scope, read, enabled, {
+      teammates,
+    }),
     selection: createContactResolution(
       scope,
       () => {

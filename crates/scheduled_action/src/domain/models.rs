@@ -13,10 +13,12 @@ use std::str::FromStr;
 use utoipa::ToSchema;
 
 use agent_session::domain::model::SessionVisibility;
+use bots::domain::models::AgentMcpServer;
 use routine_program::{AgentStep, StepRecord};
 
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
+use super::routine_limit::RoutineLimit;
 
 #[cfg(test)]
 mod test;
@@ -180,6 +182,12 @@ pub struct ActionConfiguration {
     /// What the routine is for, in the owner's words; empty when unset.
     #[serde(default)]
     pub description: String,
+    /// An icon and colour an agent picked for what the routine does. Saved
+    /// unless the owner chose the routine's appearance, which only the
+    /// appearance endpoint does; absent leaves the stored one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub appearance: Option<EntityAppearance>,
 }
 
 /// What saving a routine would find wrong, without saving it: the answer to
@@ -196,6 +204,11 @@ pub struct RoutineCheck {
     /// The routine as saving would store it: code steps named and the SDK
     /// their code checks against stamped.
     pub routine: ActionConfiguration,
+    /// Apps the routine needs that its owner hasn't connected, as a routine
+    /// draft's session named them (`missingApps`): the person connects each
+    /// one before saving. Never ones the routine already requires.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub missing_apps: Vec<AgentMcpServer>,
 }
 
 /// Something a routine draft's session created for the routine to use, such
@@ -243,6 +256,11 @@ pub struct ActionConfigurationUpdate {
     /// An empty string clears it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// An icon and colour an agent picked, as on create. Saved only when the
+    /// update is made for the routine's owner; skipped for anyone else.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub appearance: Option<EntityAppearance>,
 }
 
 impl ActionConfigurationUpdate {
@@ -259,6 +277,7 @@ impl ActionConfigurationUpdate {
             description: self
                 .description
                 .unwrap_or_else(|| stored.description.clone()),
+            appearance: self.appearance,
         }
     }
 }
@@ -272,14 +291,23 @@ pub enum ActionPolicyError {
     NoFutureFirings,
     #[error("event-trigger management is not enabled")]
     EventManagementDisabled,
+    #[error("email label triggers are not enabled")]
+    EmailLabelsDisabled,
     #[error("trigger conditions are not enabled")]
     ConditionsDisabled,
     #[error("connect GitHub before enabling a GitHub trigger")]
     GithubNotLinked,
+    #[error("pick only inboxes you have connected or that are shared with you")]
+    UnknownInboxes,
     #[error("a routine description can be at most {MAX_DESCRIPTION_CHARS} characters")]
     DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error(
+        "You've reached your plan's limit of {} active routines. Pause or delete a routine to activate another.",
+        .0.max_active()
+    )]
+    RoutineLimitReached(RoutineLimit),
     #[error("{0}")]
     InvalidAppearance(String),
     #[error("only a routine suggestion session may suggest routines")]
@@ -295,6 +323,16 @@ pub enum ActionPolicyError {
     InvalidKey,
     #[error("this routine was not created by another routine")]
     NotSubRoutine,
+    #[error(
+        "Macro rewrote this routine's code and you haven't reviewed it yet: \
+         edit its code before it can write as you"
+    )]
+    UnreviewedRewrite,
+    #[error(
+        "only you can make a routine write as you: an agent or a routine can't create or \
+         change one to"
+    )]
+    OwnerIdentityNeedsPerson,
 }
 
 /// Most active sub-routines one routine can have; finished one-time ones
@@ -360,14 +398,27 @@ pub struct RunningRun {
     pub run_id: Uuid,
 }
 
-/// How a create request says it comes from a routine's run. Both come from
-/// the request's signed credential, never from its body.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// How a create request says it comes from a routine's run. All of it comes
+/// from the request's signed credential, never from its body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RunCaller {
     /// The routine a code step's credential is signed for.
     pub routine: Option<Uuid>,
     /// The code-mode invocation of an agent session, validated against it.
     pub correlation: Option<Uuid>,
+    /// Whether a person or a program sends the request.
+    pub requester: Requester,
+}
+
+/// Who sends a request, as far as a routine's identity goes: only a person
+/// may make a routine write as them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Requester {
+    /// The person in the app, with a credential signed for no program.
+    Person,
+    /// A program acting for them: an agent's or a routine's run
+    /// (`macro_authorization::is_program_run`), or an internal caller.
+    Program,
 }
 
 /// Which of a person's routines a list holds.
@@ -582,6 +633,10 @@ pub struct ExecutionResult {
     /// What started the run and when, for runs of programs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run: Option<RunInfo>,
+    /// The owner stopped the run before it finished. Older records, and
+    /// replicas built before it, leave it out.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stopped: bool,
 }
 
 impl ExecutionResult {
@@ -594,6 +649,7 @@ impl ExecutionResult {
             steps: Vec::new(),
             configuration_revision: None,
             run: None,
+            stopped: false,
         }
     }
 
@@ -606,6 +662,12 @@ impl ExecutionResult {
     /// What started the run and when.
     pub fn with_run(mut self, run: Option<RunInfo>) -> Self {
         self.run = run;
+        self
+    }
+
+    /// Whether the owner stopped the run.
+    pub fn with_stopped(mut self, stopped: bool) -> Self {
+        self.stopped = stopped;
         self
     }
 

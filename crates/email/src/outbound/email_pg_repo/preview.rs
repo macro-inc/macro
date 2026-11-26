@@ -1,6 +1,5 @@
 use crate::domain::models::{
-    Attachment, Contact, EmailThreadPreview, Label, PreviewCursorQuery, PreviewView,
-    PreviewViewStandardLabel,
+    Attachment, Contact, Label, PreviewCursorQuery, PreviewView, PreviewViewStandardLabel,
 };
 use doppleganger::{Doppleganger, Mirror};
 use either::Either;
@@ -12,13 +11,15 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use super::db_types::{AttachmentDbRow, LabelDbRow, ThreadPreviewCursorDbRow};
+use super::{PreviewReadError, RuleDiscoveryPort};
 
-#[tracing::instrument(err, skip(pool, query), fields(link_count = query.link_ids.len(), view = %query.view))]
+#[tracing::instrument(err, skip(pool, query, user_id, discovery), fields(link_count = query.link_ids.len(), view = query.view.span_value()))]
 pub(super) async fn previews_for_view_cursor(
     pool: &PgPool,
     query: PreviewCursorQuery,
     user_id: MacroUserIdStr<'static>,
-) -> Result<Vec<EmailThreadPreview>, sqlx::Error> {
+    discovery: Option<&RuleDiscoveryPort>,
+) -> Result<crate::domain::models::PreviewCursorPage, PreviewReadError> {
     let PreviewCursorQuery {
         view,
         link_ids,
@@ -28,10 +29,11 @@ pub(super) async fn previews_for_view_cursor(
     } = query;
 
     let query = query.split_option();
+    let mut continue_below = None;
 
-    Ok(match (view, query) {
+    let rows = match (view, query) {
         (view, Either::Right(dynamic_query)) => {
-            super::dynamic::dynamic_email_thread_cursor(
+            let (rows, below) = super::dynamic::dynamic_email_thread_page_with_discovery(
                 pool,
                 &link_ids,
                 limit,
@@ -39,8 +41,11 @@ pub(super) async fn previews_for_view_cursor(
                 dynamic_query,
                 user_id.as_ref(),
                 team_id,
+                discovery,
             )
-            .await?
+            .await?;
+            continue_below = below;
+            rows
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox), Either::Left(query)) => {
             super::preview_views::new_inbox::new_inbox_preview_cursor(
@@ -61,7 +66,7 @@ pub(super) async fn previews_for_view_cursor(
             // CalendarOnly(false) is the documented no-op literal.
             let query =
                 query.map_filter(|()| Arc::new(Expr::Literal(EmailLiteral::CalendarOnly(false))));
-            super::dynamic::dynamic_email_thread_cursor(
+            super::dynamic::dynamic_email_thread_cursor_with_discovery(
                 pool,
                 &link_ids,
                 limit,
@@ -69,6 +74,7 @@ pub(super) async fn previews_for_view_cursor(
                 query,
                 user_id.as_ref(),
                 team_id,
+                discovery,
             )
             .await?
         }
@@ -102,10 +108,14 @@ pub(super) async fn previews_for_view_cursor(
             )
             .await?
         }
-    }
-    .into_iter()
-    .map(|row: ThreadPreviewCursorDbRow| row.into_preview())
-    .collect())
+    };
+    Ok(crate::domain::models::PreviewCursorPage {
+        previews: rows
+            .into_iter()
+            .map(|row: ThreadPreviewCursorDbRow| row.into_preview())
+            .collect(),
+        continue_below,
+    })
 }
 
 /// Attachments of the given threads, oldest first.
@@ -169,31 +179,54 @@ pub(super) async fn contacts_by_thread_ids(
     .collect())
 }
 
-#[tracing::instrument(err, skip(pool, thread_ids))]
+#[tracing::instrument(err, skip_all)]
 pub(super) async fn labels_by_thread_ids(
     pool: &PgPool,
     thread_ids: &[Uuid],
+    reader: Option<&MacroUserIdStr<'_>>,
 ) -> Result<Vec<Label>, sqlx::Error> {
     Ok(sqlx::query_as!(
         LabelDbRow,
         r#"
-    SELECT DISTINCT ON (l.id, m.thread_id)
-        l.id,
-        m.thread_id as "thread_id!",
-        l.link_id,
-        l.provider_label_id,
-        l.name,
-        l.created_at,
-        l.message_list_visibility as "message_list_visibility: _",
-        l.label_list_visibility as "label_list_visibility: _",
-        l.type as "type_: _"
-    FROM
-         email_messages m
-    JOIN email_effective_message_labels ml ON m.id = ml.message_id
-    JOIN email_labels l ON ml.label_id = l.id
-    WHERE m.thread_id = ANY($1)
+    SELECT
+        labels.id,
+        labels.thread_id as "thread_id!",
+        labels.link_id,
+        labels.provider_label_id,
+        labels.name,
+        labels.created_at,
+        labels.message_list_visibility as "message_list_visibility: _",
+        labels.label_list_visibility as "label_list_visibility: _",
+        labels.type as "type_: _"
+    FROM (
+        SELECT DISTINCT ON (l.id, m.thread_id)
+            l.id,
+            m.thread_id,
+            l.link_id,
+            l.provider_label_id,
+            l.name,
+            l.created_at,
+            l.message_list_visibility,
+            l.label_list_visibility,
+            l.type
+        FROM
+             email_messages m
+        JOIN email_effective_message_labels ml ON m.id = ml.message_id
+        JOIN email_labels l ON ml.label_id = l.id
+        WHERE m.thread_id = ANY($1)
+        -- Read before the reader's inboxes are checked: checked inside, the
+        -- planner reads every label to check it first.
+        OFFSET 0
+    ) labels
+    WHERE labels.type = 'System'
+        OR labels.link_id IN (
+            SELECT el.id FROM email_links el WHERE el.macro_id = $2
+            UNION ALL
+            SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = $2
+        )
     "#,
-        thread_ids
+        thread_ids,
+        reader.map(|reader| reader.as_ref()),
     )
     .fetch_all(pool)
     .await?

@@ -9,14 +9,6 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NewMeetingButton } from '../NewMeetingButton';
 
-const mocks = vi.hoisted(() => ({
-  flag: { loading: false, enabled: true },
-}));
-
-vi.mock('../../../meetings/use-quick-calls-flag', () => ({
-  useQuickCallsFlag: () => () => mocks.flag,
-}));
-
 vi.mock('@app/features/meetings/manage-meetings-dialog', () => ({
   ManageMeetingsDialog: () => <div>Manage dialog</div>,
 }));
@@ -24,7 +16,6 @@ vi.mock('@app/features/meetings/manage-meetings-dialog', () => ({
 describe('NewMeetingButton', () => {
   let motionStyles: HTMLStyleElement;
   beforeEach(() => {
-    mocks.flag = { loading: false, enabled: true };
     // jsdom omits the CSS motion defaults required by Kobalte's presence tracking.
     motionStyles = document.createElement('style');
     motionStyles.textContent =
@@ -38,7 +29,7 @@ describe('NewMeetingButton', () => {
     vi.unstubAllGlobals();
   });
 
-  it('offers an instant call first when quick calls are enabled', async () => {
+  it('offers an instant call first', async () => {
     const onInstantCall = vi.fn();
     const onChannelCall = vi.fn();
     render(() => (
@@ -61,21 +52,5 @@ describe('NewMeetingButton', () => {
     expect(onInstantCall).toHaveBeenCalledOnce();
     expect(onChannelCall).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
-  });
-
-  it('keeps the channel picker as the only action without quick calls', () => {
-    mocks.flag = { loading: false, enabled: false };
-    const onInstantCall = vi.fn();
-    const onChannelCall = vi.fn();
-    render(() => (
-      <NewMeetingButton
-        onChannelCall={onChannelCall}
-        onInstantCall={onInstantCall}
-      />
-    ));
-    fireEvent.click(screen.getByRole('button', { name: 'New call' }));
-    expect(onChannelCall).toHaveBeenCalledOnce();
-    expect(onInstantCall).not.toHaveBeenCalled();
-    expect(screen.queryByRole('menu')).toBeNull();
   });
 });

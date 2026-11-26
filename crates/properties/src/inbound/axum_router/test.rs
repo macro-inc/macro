@@ -1,3 +1,8 @@
+#[cfg(feature = "outbound")]
+mod crm_contact_access;
+mod merged_company;
+mod merged_contact;
+
 use entity_access::domain::models::TeamRole;
 use std::sync::{Arc, Mutex};
 
@@ -31,9 +36,11 @@ use uuid::Uuid;
 use super::{
     PropertiesRouterState, PropertyTeamExtractor,
     extract::{EditReceiptExtractor, ViewReceiptExtractor},
+    properties_err_status,
 };
 use crate::{
     PropertiesServiceImpl,
+    domain::error::PropertiesErr,
     domain::ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo},
 };
 
@@ -905,6 +912,29 @@ async fn creating_a_managed_team_definition_is_forbidden() {
 }
 
 #[tokio::test]
+async fn creating_a_definition_under_a_built_in_name_is_a_conflict_that_names_it() {
+    // The service's repository has no expectations: the name is refused first.
+    let router = managed_router(
+        no_op_properties_service(),
+        FakeEntityAccessService::on_team(Uuid::from_u128(0x7EA3)),
+    );
+    let body = serde_json::json!({
+        "scope": "user",
+        "display_name": "contacts",
+        "data_type": { "type": "entity", "specific_type": null, "multi": true },
+    });
+    let response = router
+        .oneshot(json_request("POST", "/definitions", body))
+        .await
+        .expect("request should complete");
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        response_body(response).await,
+        "\"Contacts\" is a built-in property, so another property can't use its name"
+    );
+}
+
+#[tokio::test]
 async fn writes_to_a_managed_team_definition_are_forbidden() {
     let definition_id = Uuid::from_u128(0xD001);
     let option_id = Uuid::from_u128(0xD002);
@@ -996,4 +1026,20 @@ async fn the_guard_only_covers_team_definitions_with_a_managed_name() {
             .await;
         assert_eq!(result.is_ok(), allowed, "{name} owned by {owner:?}");
     }
+}
+
+#[test]
+fn taken_names_and_values_are_conflicts_and_blank_values_bad_requests() {
+    assert_eq!(
+        properties_err_status(&PropertiesErr::DuplicateDefinitionName),
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        properties_err_status(&PropertiesErr::DuplicateOptionValue),
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        properties_err_status(&PropertiesErr::Validation("blank".to_string())),
+        StatusCode::BAD_REQUEST
+    );
 }

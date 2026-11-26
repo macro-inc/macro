@@ -20,6 +20,12 @@ vi.mock('@service-storage/graphql-contacts', () => ({
   fetchContactDirectoryByIds: vi.fn(),
 }));
 
+const lists = vi.hoisted(() => ({ selected: (): boolean => false }));
+vi.mock('./lists', () => ({
+  contactListsSelected: () => lists.selected(),
+  useContactListsSelected: () => lists.selected,
+}));
+
 const GENERATION = '00000000-0000-4000-8000-000000000001';
 const REPLACEMENT = '00000000-0000-4000-8000-000000000002';
 const viewer = 'macro|viewer@example.com';
@@ -55,9 +61,13 @@ const page = (cursor: string | null) => ({
   user: { id: viewer, contacts: { nextCursor: cursor } },
 });
 
+const [listsSelected, setListsSelected] = createSignal(false);
+lists.selected = listsSelected;
+
 beforeEach(() => {
   localStorage.clear();
   setAccount({ userId: viewer, session: 0 });
+  setListsSelected(false);
 });
 
 it('persists only successful progress, resumes failures, and accepts empty pages with a cursor', async () => {
@@ -421,4 +431,164 @@ it('a 100k-directory scan consumes bounded hydration and verification windows wi
   expect(
     localStorage.getItem(`graphql-contacts-backfill:v2:${viewer}`)!.length
   ).toBeLessThan(300);
+});
+
+it('scans lists cold under their own checkpoint and leaves the plain one intact', async () => {
+  const cache = host();
+  const fetchPage = vi
+    .fn<typeof hydrateGraphqlContacts>()
+    .mockResolvedValue(page(null));
+  await Effect.runPromise(
+    runContactBackfill(viewer, cache, { fetchPage, pageDelayMs: 0 })
+  );
+  const plain = loadContactCheckpoint(viewer, GENERATION, false);
+  expect(plain.completedAt).not.toBeNull();
+  expect(fetchPage.mock.calls[0][4]).toEqual({ lists: false });
+  expect(localStorage.getItem(`graphql-contacts-backfill:v3:${viewer}`)).toBe(
+    null
+  );
+
+  // A completed plain scan is no evidence that lists were stored.
+  expect(
+    loadContactCheckpoint(viewer, GENERATION, true).completedAt
+  ).toBeNull();
+  await Effect.runPromise(
+    runContactBackfill(viewer, cache, {
+      fetchPage,
+      pageDelayMs: 0,
+      lists: true,
+    })
+  );
+  expect(fetchPage).toHaveBeenCalledTimes(2);
+  expect(fetchPage.mock.calls[1][2]).toBeNull();
+  expect(fetchPage.mock.calls[1][4]).toEqual({ lists: true });
+  expect(
+    loadContactCheckpoint(viewer, GENERATION, true).completedAt
+  ).not.toBeNull();
+  expect(loadContactCheckpoint(viewer, GENERATION, false)).toEqual(plain);
+
+  // Readers follow the flag to the checkpoint that matches what is stored.
+  setListsSelected(true);
+  expect(loadContactCheckpoint(viewer, GENERATION).completedAt).toBe(
+    loadContactCheckpoint(viewer, GENERATION, true).completedAt
+  );
+});
+
+it('restarts the mounted runner with lists when the flag turns on', async () => {
+  const cache = host();
+  const calls: { lists: boolean | undefined; aborted: Promise<void> }[] = [];
+  const started = [
+    Promise.withResolvers<void>(),
+    Promise.withResolvers<void>(),
+  ];
+  vi.mocked(hydrateGraphqlContacts).mockImplementation(
+    (_host, _scope, _after, signal, selection) => {
+      const aborted = Promise.withResolvers<void>();
+      signal.addEventListener('abort', () => aborted.resolve(), {
+        once: true,
+      });
+      calls.push({ lists: selection?.lists, aborted: aborted.promise });
+      started[calls.length - 1]?.resolve();
+      // Like the real page, an aborted fetch settles, releasing its write turn.
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), {
+          once: true,
+        });
+      });
+    }
+  );
+  const mounted = render(() => {
+    useContactBackfill(
+      () => viewer,
+      () => cache,
+      () => 0
+    );
+    return null;
+  });
+  try {
+    await started[0].promise;
+    expect(calls[0].lists).toBe(false);
+    setListsSelected(true);
+    await calls[0].aborted;
+    await started[1].promise;
+    expect(calls[1].lists).toBe(true);
+  } finally {
+    mounted.unmount();
+  }
+});
+
+it('hears another tab complete the checkpoint the flag selects', async () => {
+  const notified = vi.fn();
+  const stop = subscribeContactCheckpoint(viewer, notified);
+  const completed = {
+    ...loadContactCheckpoint(viewer, GENERATION, true),
+    nextCursor: null,
+    pages: 1,
+    phase: 'verify',
+    completedAt: 1_000,
+  };
+  const announce = (version: number) =>
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: `graphql-contacts-backfill:v${version}:${viewer}`,
+        newValue: JSON.stringify(completed),
+      })
+    );
+  try {
+    setListsSelected(true);
+    announce(2);
+    expect(notified).not.toHaveBeenCalled();
+    announce(3);
+    expect(notified).toHaveBeenCalledOnce();
+  } finally {
+    stop();
+  }
+});
+
+it('returns to a recent plain checkpoint when the flag turns off', async () => {
+  const cache = host();
+  vi.mocked(hydrateGraphqlContacts).mockResolvedValue(page(null));
+  await Effect.runPromise(
+    runContactBackfill(viewer, cache, { pageDelayMs: 0 })
+  );
+  expect(hydrateGraphqlContacts).toHaveBeenCalledTimes(1);
+  setListsSelected(true);
+  const started = Promise.withResolvers<void>();
+  vi.mocked(hydrateGraphqlContacts).mockImplementation(
+    (_host, _scope, _after, signal) => {
+      started.resolve();
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), {
+          once: true,
+        });
+      });
+    }
+  );
+  const mounted = render(() => {
+    useContactBackfill(
+      () => viewer,
+      () => cache,
+      () => 0
+    );
+    return null;
+  });
+  try {
+    await started.promise;
+    expect(vi.mocked(hydrateGraphqlContacts).mock.calls[1][4]).toEqual({
+      lists: true,
+    });
+    const searched = cache.search.mock.calls.length;
+    setListsSelected(false);
+    // The plain scan finished minutes ago, so the restarted runner confirms
+    // it without fetching a page.
+    await vi.waitFor(() =>
+      expect(cache.search.mock.calls.length).toBeGreaterThan(searched)
+    );
+    expect(hydrateGraphqlContacts).toHaveBeenCalledTimes(2);
+    expect(
+      loadContactCheckpoint(viewer, GENERATION).completedAt
+    ).not.toBeNull();
+  } finally {
+    mounted.unmount();
+  }
 });

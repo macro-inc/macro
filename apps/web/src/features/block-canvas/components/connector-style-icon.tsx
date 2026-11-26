@@ -85,3 +85,22 @@ export function StrokeStyleIcon(props: { style: Appearance['strokeStyle'] }) {
     </svg>
   );
 }
+
+/** The elbow connector tool's glyph, drawn to sit beside the system icons. */
+export function ElbowConnectorIcon(props: { class?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 256 256"
+      class={props.class}
+      fill="none"
+      stroke="currentColor"
+      stroke-width="16"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M40 200H128V64H208" />
+      <path d="M176 32 208 64 176 96" />
+    </svg>
+  );
+}

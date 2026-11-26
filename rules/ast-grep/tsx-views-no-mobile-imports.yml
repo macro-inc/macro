@@ -13,6 +13,8 @@ files:
   - apps/web/src/**/views/shared/**/*.tsx
 ignores:
   - '**/*.test.tsx'
+  # The glob's `*` also matches `mobile/`; a mobile view may compose another.
+  - apps/web/src/**/views/mobile/**
 rule:
   kind: string
   regex: ^['"](\./mobile/|\.\./mobile/|.*/views/mobile/)

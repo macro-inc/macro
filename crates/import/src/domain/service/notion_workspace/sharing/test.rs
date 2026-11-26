@@ -17,6 +17,7 @@ fn verdict(decision: NotionDecision, shared: Option<bool>) -> Verdict {
 
 fn item(import: u128, parent: Option<u128>, kind: ImportKind, shared: bool) -> WriteItem {
     WriteItem {
+        dependency_of: Vec::new(),
         import_id: Uuid::from_u128(import),
         parent: parent.map(Uuid::from_u128),
         notion_id: NotionId::parse(&"a".repeat(32)).unwrap(),

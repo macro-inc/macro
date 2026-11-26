@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT request.id, request.lease_holder IS NOT NULL AS attempted\n                FROM agent_runtime_update request\n                JOIN hosted_runtime computer ON computer.id = request.computer_id\n                WHERE request.outcome IS NULL AND request.lease_until <= now()\n                  AND computer.host_id = ANY($3)\n                ORDER BY request.lease_until, request.id LIMIT 1\n                FOR UPDATE OF request SKIP LOCKED\n            )\n            UPDATE agent_runtime_update item\n            SET lease_holder = $1, lease_until = now() + $2::bigint * interval '1 second'\n            FROM candidate WHERE item.id = candidate.id\n            RETURNING item.id, item.computer_id, item.version, item.digest,\n                      item.source_url AS \"source_url!\", item.deadline_at, candidate.attempted AS \"attempted!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "digest",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "source_url!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "deadline_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "attempted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "cab067779f25246471e7aa33596c8b73588046e3ce4f2d1e25857685aaa90e5c"
+}

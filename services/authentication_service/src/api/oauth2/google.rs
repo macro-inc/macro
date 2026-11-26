@@ -186,19 +186,18 @@ async fn link_user(
     // email belongs to an existing macro user, the link must therefore live on THAT user's FA
     // account — attaching it to the requester would capture the owner's sign-in. Only
     // mailboxes with no macro user of their own link under the requester.
-    let idp_link_owner =
-        match macro_db_client::user::get::get_macro_user_id_by_email(&ctx.db, &user_info_email)
+    let mailbox_account =
+        macro_db_client::user::get::get_macro_user_id_by_email(&ctx.db, &user_info_email)
             .await
-        {
-            Ok(Some(mailbox_owner_fa)) => mailbox_owner_fa.to_string(),
-            Ok(None) => macro_user_id.to_string(),
-            Err(e) => {
-                return Err((
+            .map_err(|e| {
+                (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     format!("unable to look up mailbox owner for linked email {e}"),
-                ));
-            }
-        };
+                )
+            })?;
+    let idp_link_owner = mailbox_account
+        .map(|mailbox_owner_fa| mailbox_owner_fa.to_string())
+        .unwrap_or_else(|| macro_user_id.to_string());
 
     // Attempt to create the FA IdP link. Three terminal cases:
     //   Ok                                  → fresh link created; data-source path downstream.
@@ -206,7 +205,10 @@ async fn link_user(
     //   Err(alreadyLinked, owned by other) → cross-account add; init promotes to graph edge.
     // The FA error doesn't distinguish self vs other in the typed variant, but it doesn't need
     // to — init re-derives ownership via macrodb's User table to pick its dispatch path.
-    match ctx
+    // Only a link this attempt created on the requester is released when the
+    // attempt ends without an inbox: an existing link may back a sign-in or a
+    // connected inbox.
+    let identity_link_created = match ctx
         .auth_client
         .link_user(LinkUserRequest {
             identity_provider_link: IdentityProviderLink {
@@ -219,7 +221,7 @@ async fn link_user(
         })
         .await
     {
-        Ok(()) => {}
+        Ok(()) => mailbox_account.is_none(),
         Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists) => {
             // A plain `link_user` leaves the existing grant untouched. Reconnects
             // replace a stale token when Google returns a fresh one.
@@ -231,6 +233,7 @@ async fn link_user(
                 &token_response.refresh_token,
             )
             .await?;
+            false
         }
         Err(e) => {
             return Err((
@@ -238,24 +241,38 @@ async fn link_user(
                 format!("unable to link user {e}"),
             ));
         }
-    }
+    };
 
     // Stash the linked identity and Google's actual grant (which may be a
     // subset of what was requested). /email/init applies these capabilities
     // atomically to the durable link and schedules any newly unlocked work.
-    macro_db_client::in_progress_user_link::set_linked_google_grant(
+    if let Err(e) = macro_db_client::in_progress_user_link::set_linked_google_grant(
         &ctx.db,
         link_id,
         &user_info_email,
         &granted_scopes,
+        identity_link_created,
     )
     .await
-    .map_err(|e| {
-        (
+    {
+        // Unrecorded, the link this attempt created would never be released.
+        if identity_link_created {
+            let _ = ctx
+                .auth_client
+                .unlink_user(&idp_link_owner, identity_provider_id, &user_info.sub)
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(
+                        ?error,
+                        "unable to undo the identity link of an unrecorded attempt"
+                    );
+                });
+        }
+        return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("unable to record linked Google grant on in_progress_user_link {e}"),
-        )
-    })?;
+        ));
+    }
 
     tracing::Span::current().record("outcome", "linked");
     Ok(GoogleLinkOutcome::Linked)

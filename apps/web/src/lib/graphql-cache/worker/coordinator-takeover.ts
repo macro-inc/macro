@@ -35,6 +35,8 @@ export type CacheTakeoverReply = {
   requestId: string;
   /** Sent only by the build whose engine holds the database. */
   decision: 'yield' | 'keep';
+  /** The holder's build time. Absent from builds that did not send it yet. */
+  buildTime?: number;
 };
 
 export type CacheTakeoverMessage = CacheTakeoverRequest | CacheTakeoverReply;
@@ -44,6 +46,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0;
+
+const isBuildTime = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
 /** Reads a message from any build. Unknown fields are ignored, not rejected,
  * so later builds can add them. */
@@ -59,17 +64,13 @@ export function parseCacheTakeoverMessage(
     return;
   }
   const { scope, requestId } = value;
-  if (
-    value.kind === 'request' &&
-    Number.isSafeInteger(value.buildTime) &&
-    (value.buildTime as number) >= 0
-  ) {
+  if (value.kind === 'request' && isBuildTime(value.buildTime)) {
     return {
       takeover: CACHE_TAKEOVER_VERSION,
       kind: 'request',
       scope,
       requestId,
-      buildTime: value.buildTime as number,
+      buildTime: value.buildTime,
     };
   }
   if (
@@ -82,6 +83,7 @@ export function parseCacheTakeoverMessage(
       scope,
       requestId,
       decision: value.decision,
+      ...(isBuildTime(value.buildTime) ? { buildTime: value.buildTime } : {}),
     };
   }
 }

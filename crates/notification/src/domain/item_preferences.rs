@@ -6,13 +6,25 @@ use model_entity::{Entity, EntityType};
 use rootcause::Report;
 use std::{collections::HashMap, future::Future};
 
-/// An item whose notifications are muted, indefinitely or until a deadline.
+/// The event type of a channel message that @mentions its recipient.
+const CHANNEL_MENTION_EVENT_TYPE: &str = "channel_mention";
+
+/// Whether a notification of this event type @mentions its recipient directly,
+/// which a mentions-only preference lets through. Replies, reactions, document
+/// mentions and ordinary messages are not direct mentions.
+pub fn is_direct_mention(notification_event_type: &str) -> bool {
+    notification_event_type == CHANNEL_MENTION_EVENT_TYPE
+}
+
+/// An item whose notifications are silenced, indefinitely or until a deadline.
 #[derive(Debug, Clone)]
 pub struct ItemNotificationPreference {
     /// The notification's primary entity.
     pub entity: Entity<'static>,
     /// None denotes a permanent mute.
     pub snoozed_until: Option<DateTime<Utc>>,
+    /// The item still notifies its owner when a message @mentions them directly.
+    pub mentions_only: bool,
 }
 
 /// Persistence of preferences scoped to their authenticated owner.
@@ -22,12 +34,18 @@ pub trait ItemNotificationPreferenceRepository: Send + Sync {
         &self,
         user: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<ItemNotificationPreference>, Report>> + Send;
-    /// Replace this user's preference for an item.
+    /// Replace this user's preference for an item with a mute or snooze.
     fn set(
         &self,
         user: MacroUserIdStr<'_>,
         entity: Entity<'_>,
         until: Option<DateTime<Utc>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// Replace this user's preference for an item with indefinite mentions-only.
+    fn set_mentions_only(
+        &self,
+        user: MacroUserIdStr<'_>,
+        entity: Entity<'_>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
     /// Atomically replace this user's preferences for all items.
     fn set_bulk(
@@ -62,6 +80,9 @@ pub enum ItemNotificationPreferenceError {
     /// An item ID cannot refer to different entity types in one request.
     #[error("Conflicting entity types for the same item ID")]
     ConflictingTypes,
+    /// Only channels have direct mentions to keep.
+    #[error("Only channels can notify for mentions only")]
+    MentionsOnlyUnsupported,
     /// Persistence failed.
     #[error("Could not update notification preference: {0}")]
     Repository(Report),
@@ -100,6 +121,23 @@ impl<R: ItemNotificationPreferenceRepository> ItemNotificationPreferenceService<
         }
         self.repository
             .set(user, entity, until)
+            .await
+            .map_err(ItemNotificationPreferenceError::Repository)
+    }
+
+    /// Silence a channel for the authenticated user except for messages that
+    /// @mention them directly, replacing any mute or snooze on it.
+    pub async fn set_mentions_only(
+        &self,
+        user: MacroUserIdStr<'_>,
+        entity: Entity<'_>,
+    ) -> Result<(), ItemNotificationPreferenceError> {
+        if entity.entity_type != EntityType::Channel {
+            return Err(ItemNotificationPreferenceError::MentionsOnlyUnsupported);
+        }
+
+        self.repository
+            .set_mentions_only(user, entity)
             .await
             .map_err(ItemNotificationPreferenceError::Repository)
     }

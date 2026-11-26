@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,import_started_at)\n            SELECT $2,s.link_id,s.generation,'mail_folder_live',s.scope_id,true,COALESCE(s.round_started_at,s.lease_started_at,now())\n            FROM email_sync_streams s\n            WHERE s.id = $1 AND NOT s.initial_complete\n            ON CONFLICT (link_id,generation,kind,scope_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ad287068236c00281ddcf5362b6894636a0bf6c25f941c8f7ca3e6cb8d49135"
+}

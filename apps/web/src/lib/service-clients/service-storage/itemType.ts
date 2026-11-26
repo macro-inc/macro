@@ -116,4 +116,5 @@ export const ITEM_TYPES = [
   'foreign',
   'crm_company',
   'crm_contact',
+  'initiative',
 ] as const satisfies readonly ItemType[];

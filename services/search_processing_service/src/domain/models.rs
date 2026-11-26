@@ -9,10 +9,13 @@ use thiserror::Error;
 /// For queue-backed backfills, completion means source publication only, not
 /// consumption, indexing, or OpenSearch refresh. Failed/stale jobs can be retried
 /// with the same scope; search upserts are idempotent.
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize)]
 pub struct BackfillReceipt {
     /// Total number of source rows the backfill processed.
     pub enqueued: usize,
+    /// Messages the search event queue would not take, after resends. A job
+    /// with any is not complete.
+    pub not_queued: usize,
 }
 
 /// One page of work produced by a [`super::ports`] source. Holding the
@@ -70,6 +73,17 @@ pub enum BackfillError {
     Publish(#[source] anyhow::Error),
     #[error("failed reindexing entity properties")]
     Reindex(#[source] anyhow::Error),
+    #[error("failed updating the search index")]
+    Index(#[source] anyhow::Error),
+    #[error("failed reading or writing the backfill pause switch")]
+    Control(#[source] anyhow::Error),
+    /// The search index refused writes, so the job stopped instead of
+    /// retrying. `cursor` is the last key it finished, to resume after.
+    #[error("stopped because the search index refused writes: {reason}")]
+    Stopped {
+        reason: String,
+        cursor: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]

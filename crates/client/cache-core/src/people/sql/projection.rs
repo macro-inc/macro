@@ -16,7 +16,7 @@ use uuid::Uuid;
 /// Predicate profile owned by local people SQL.
 pub const PROFILE: &str = "people-sql-v1";
 /// Disposable fact layout; changing it rebuilds only this owned profile.
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 /// Fields required from a normalized contact; local ranking facts are unrelated.
 pub const FIELDS: &[&str] = &["userId", "email", "name"];
 /// Fields copied by storage for this projection. Private context is an input to
@@ -26,6 +26,7 @@ pub const INPUT_FIELDS: &[&str] = &[
     FIELDS[1],
     FIELDS[2],
     crate::people::CONTEXT_FIELD,
+    crate::people::name_search::LISTS_FIELD,
 ];
 
 /// Opaque account partition, bound by the engine rather than supplied in SQL.

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT domain FROM (SELECT domain, team_id FROM crm_domains WHERE company_id = $2 OFFSET 0) company_domains WHERE team_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "domain",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "61bd099882527f0fa9cb02767b00a294055c6bbb2001dd377ddbb7f72a09dc92"
+}

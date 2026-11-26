@@ -41,7 +41,7 @@ use graphql_favorite::{
 };
 use graphql_initiative::{
     GraphqlInitiativeTasksPage, InitiativeMutationRoot, InitiativeTasksInput, resolve_initiative,
-    resolve_initiative_tasks,
+    resolve_initiative_tasks, resolve_visible_initiative,
 };
 use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
@@ -56,9 +56,9 @@ use graphql_notification_inbox::{
 use graphql_permission::{EntityPermissionEdgeReader, NoOpEntityPermissionEdgeReader};
 use graphql_properties::{
     EntityPropertyReader, EntityPropertyWriter, GraphqlPropertyDefinition,
-    GraphqlPropertyDefinitionScope, GraphqlPropertyOption, NoOpEntityPropertyReader,
-    NoOpEntityPropertyWriter, PropertiesMutationRoot, load_property_definitions,
-    load_property_options,
+    GraphqlPropertyDefinitionScope, GraphqlPropertyOption, GraphqlTagSet, NoOpEntityPropertyReader,
+    NoOpEntityPropertyWriter, PropertiesMutationRoot, PropertyCatalogMutationRoot,
+    load_property_definitions, load_property_options, load_tag_sets,
 };
 use graphql_registered_work::{
     GraphqlRegisteredWork, RegisteredWorkSubscriptionRoot, resolve_registered_work,
@@ -71,6 +71,7 @@ use graphql_soup::{
     resolve_soup, resolve_soup_agent_session, resolve_soup_email_thread,
     resolve_soup_email_threads, resolve_soup_entity, resolve_soup_updates,
 };
+use graphql_time_tracking::{GraphqlTimeTracking, TimeTrackingMutationRoot};
 use graphql_work_feed::{
     GraphqlWorkFeedPage, WorkFeedInput, WorkFeedMutationRoot, WorkFeedSubscriptionRoot,
     resolve_work_feed,
@@ -98,6 +99,7 @@ use crate::SoupEdges;
 #[derive(MergedObject)]
 pub struct CompleteMutationRoot<
     W: EntityPropertyWriter,
+    PR: EntityPropertyReader,
     M: EntityMutationService,
     F: FavoritesMutationService,
     E: SoupEntityEdges,
@@ -107,6 +109,7 @@ pub struct CompleteMutationRoot<
     ES: EmailService + EmailSendService,
 >(
     PropertiesMutationRoot<W>,
+    PropertyCatalogMutationRoot<W, PR>,
     EntityMutationRoot<M, E>,
     FavoriteMutationRoot<F, E>,
     ChannelMutationRoot<C, A>,
@@ -114,6 +117,7 @@ pub struct CompleteMutationRoot<
     GraphqlEmailMutation<ES, SoupEmailThreadMutationOutput<E>>,
     graphql_email::GraphqlEmailSendMutation<ES, SoupEmailThreadMutationOutput<E>>,
     InitiativeMutationRoot<E>,
+    TimeTrackingMutationRoot<E>,
     CalendarMutationRoot,
     WorkFeedMutationRoot<E>,
     NotificationInboxMutationRoot<E>,
@@ -122,6 +126,7 @@ pub struct CompleteMutationRoot<
 
 impl<
     W: EntityPropertyWriter,
+    PR: EntityPropertyReader,
     M: EntityMutationService,
     F: FavoritesMutationService,
     E: SoupEntityEdges,
@@ -129,12 +134,13 @@ impl<
     N: NotificationMutationService,
     A: ChannelActivityAuthorizer,
     ES: EmailService + EmailSendService,
-> CompleteMutationRoot<W, M, F, E, C, N, A, ES>
+> CompleteMutationRoot<W, PR, M, F, E, C, N, A, ES>
 {
     /// Construct the composed mutation root.
     fn new() -> Self {
         Self(
             PropertiesMutationRoot::<W>::new(),
+            PropertyCatalogMutationRoot::<W, PR>::new(),
             EntityMutationRoot::<M, E>::new(),
             FavoriteMutationRoot::<F, E>::new(),
             ChannelMutationRoot::<C, A>::new(),
@@ -142,6 +148,7 @@ impl<
             GraphqlEmailMutation::<ES, SoupEmailThreadMutationOutput<E>>::new(),
             graphql_email::GraphqlEmailSendMutation::<ES, SoupEmailThreadMutationOutput<E>>::default(),
             InitiativeMutationRoot::<E>::default(),
+            TimeTrackingMutationRoot::<E>::default(),
             CalendarMutationRoot,
             WorkFeedMutationRoot::<E>::default(),
             NotificationInboxMutationRoot::<E>::default(),
@@ -191,7 +198,7 @@ where
 pub type SoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR, AR, AcR> =
     Schema<
         SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
-        CompleteMutationRoot<W, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>,
+        CompleteMutationRoot<W, PR, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>,
         CompleteSubscriptionRoot<R, NS, AS, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
     >;
 
@@ -218,6 +225,21 @@ pub type SharedSoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR
         AR,
         AcR,
     >;
+
+/// The Soup service a schema's query root runs on. Request data the
+/// resolvers look up by that service's type, such as
+/// [`graphql_soup::PrimaryChannelSoup`], is typed through it so it cannot
+/// drift from the schema: `PrimaryChannelSoup<<Schema as SoupSchemaService>::Service>`.
+pub trait SoupSchemaService {
+    /// The query root's Soup service: `Arc<S>` in a [`SharedSoupSchema`].
+    type Service;
+}
+
+impl<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR, M, Sub> SoupSchemaService
+    for Schema<SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>, M, Sub>
+{
+    type Service = S;
+}
 
 /// GraphQL Soup schema type backed by the no-op services, used only for
 /// SDL export or introspection.
@@ -470,7 +492,8 @@ where
 {
     Schema::build(
         SoupQueryRoot::new(service),
-        CompleteMutationRoot::<W, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>::new(),
+        CompleteMutationRoot::<W, PR, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>::new(
+        ),
         CompleteSubscriptionRoot(
             SoupSubscriptionRoot::new(realtime_service),
             NotificationSubscriptionRoot::new(notification_subscription_service),
@@ -838,12 +861,26 @@ where
     }
 
     /// One initiative accessible to the authenticated viewer.
+    #[graphql(
+        deprecation = "Use visibleInitiative, which answers a missing or hidden project with null instead of NOT_FOUND. Remove after 2026-12-31."
+    )]
     async fn initiative(
         &self,
         ctx: &Context<'_>,
         initiative_id: ID,
     ) -> async_graphql::Result<GraphqlSoupInitiative<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
         resolve_initiative(ctx, initiative_id).await
+    }
+
+    /// One initiative accessible to the authenticated viewer, or null when it
+    /// is missing or not visible to them.
+    async fn visible_initiative(
+        &self,
+        ctx: &Context<'_>,
+        initiative_id: ID,
+    ) -> async_graphql::Result<Option<GraphqlSoupInitiative<SoupEdges<NR, PR, ER, FR, AR, AcR>>>>
+    {
+        resolve_visible_initiative(ctx, initiative_id).await
     }
 
     /// A permission-filtered page of task identifiers within an initiative.
@@ -860,6 +897,27 @@ where
             input.unwrap_or_default(),
         )
         .await
+    }
+
+    /// The authenticated user's running timer and the server's clock.
+    async fn time_tracking(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<GraphqlTimeTracking<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
+        graphql_time_tracking::resolve_time_tracking(ctx, &self.user_id).await
+    }
+
+    /// The authenticated user's time over a period, for a project, themselves
+    /// or their team, grouped by person, task or day. Only tasks they can see
+    /// count. Reads the latest writes, so read it again after a change.
+    async fn time_summary(
+        &self,
+        ctx: &Context<'_>,
+        input: graphql_time_tracking::TimeSummaryInput,
+    ) -> async_graphql::Result<
+        graphql_time_tracking::GraphqlTimeSummary<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    > {
+        graphql_time_tracking::resolve_time_summary(ctx, &self.user_id, input).await
     }
 
     /// AI routines the authenticated user can access.
@@ -887,6 +945,12 @@ where
         property_definition_id: ID,
     ) -> async_graphql::Result<Vec<GraphqlPropertyOption>> {
         load_property_options::<PR>(ctx, property_definition_id).await
+    }
+
+    /// The viewer's tag sets: their personal set, plus their team's set
+    /// whenever they are on a team, with each set's labels.
+    async fn tag_sets(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<GraphqlTagSet<PR>>> {
+        load_tag_sets::<PR>(ctx).await
     }
 
     /// The authenticated user's favorites in manual order, optionally
@@ -962,6 +1026,12 @@ where
     #[graphql(flatten)]
     async fn contact_directory(&self) -> graphql_contacts::GraphqlContactsQuery {
         graphql_contacts::GraphqlContactsQuery::new(self.user_id.clone())
+    }
+
+    /// Authenticated user channel fields supplied by `graphql_channel`.
+    #[graphql(flatten)]
+    async fn channels(&self) -> graphql_channel::GraphqlChannelUserQuery {
+        graphql_channel::GraphqlChannelUserQuery::new(self.user_id.clone())
     }
 
     /// Authenticated user calendar fields supplied by `graphql_calendar`.

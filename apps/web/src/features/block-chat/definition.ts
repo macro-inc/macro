@@ -5,11 +5,11 @@ import {
   loadResult,
 } from '@core/block';
 import { Model } from '@core/component/AI/constant/model';
+import { lazy } from '@core/util/lazy';
 import { fetchAndCacheChat } from '@queries/cognition/chat-data';
 import type { Entity } from '@service-cognition/generated/schemas/entity';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 
 export const DEFAULT_CHAT_NAME = 'New Chat';
 

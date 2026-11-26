@@ -346,6 +346,17 @@ export function createServer() {
       deliver();
       return find(id);
     },
+    /** Another device sends the draft a handle or server id names, as the server holds it. */
+    sendElsewhere: (id: string) => {
+      const row = find(id);
+      if (row?.state !== 'draft') throw new Error(`No draft ${id} to send`);
+      row.state = 'sent';
+      delivered.push({
+        attemptId: crypto.randomUUID(),
+        draftId: row.id,
+        body: row.body,
+      });
+    },
     drafts: () => {
       deliver();
       return [...rows.values()].filter((row) => row.state !== 'sent');

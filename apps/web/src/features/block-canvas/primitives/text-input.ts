@@ -1,7 +1,3 @@
-import {
-  enableCanvasArtifacts,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { screenToWorld, textTargetAt } from '@macro-inc/graphics';
 import type { CanvasState } from './create-canvas-state';
 /** Canvas text gestures stay separate from geometric drawing and pointer capture. */
@@ -22,7 +18,21 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
       : undefined;
     pendingTap = undefined;
   };
-  let origin: { x: number; y: number; id: number } | undefined;
+  // A Text tool press, waiting for its release. `target` is the text or
+  // labelled shape under it; without one the release starts new text.
+  let origin:
+    | {
+        x: number;
+        y: number;
+        id: number;
+        touch: boolean;
+        target: string | undefined;
+      }
+    | undefined;
+  // A pen or mouse press waiting for its release keeps the tool: a palm that
+  // lands beside the pen must not take the press over. The other way round, the
+  // pen takes it from a palm that was already resting.
+  const heldByPenOrMouse = () => origin !== undefined && !origin.touch;
   const canvas = () =>
     root.querySelector<HTMLElement>('[aria-label="Graphics canvas"]');
   const point = (x: number, y: number) => {
@@ -42,7 +52,7 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
       return;
     }
     if (item?.type === 'artifact') {
-      if (isFeatureEnabled(enableCanvasArtifacts)) state.embeds.enter(item.id);
+      state.embeds.enter(item.id);
       return;
     }
     const id = textTargetAt(state.editor.document, p);
@@ -103,35 +113,52 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
       return;
     event.preventDefault();
     event.stopPropagation();
-    const p = point(event.clientX, event.clientY),
-      id = textTargetAt(state.editor.document, p);
-    if (id) {
-      state.text.edit(id);
-      return;
-    }
-    origin = { x: event.clientX, y: event.clientY, id: event.pointerId };
+    const touch = event.pointerType === 'touch';
+    if (touch && heldByPenOrMouse()) return;
+    // Editing starts on release, never on the press: a press that is cancelled
+    // (a second finger landing to pinch or pan) must not open an editor.
+    origin = {
+      x: event.clientX,
+      y: event.clientY,
+      id: event.pointerId,
+      touch,
+      target: textTargetAt(
+        state.editor.document,
+        point(event.clientX, event.clientY)
+      ),
+    };
     window.addEventListener('pointerup', up, true);
-    window.addEventListener('pointercancel', cancel, true);
+    window.addEventListener('pointercancel', pointerCancel, true);
   };
   const cancel = () => {
     origin = undefined;
     window.removeEventListener('pointerup', up, true);
-    window.removeEventListener('pointercancel', cancel, true);
+    window.removeEventListener('pointercancel', pointerCancel, true);
+  };
+  // Only the press's own pointer ends it: a palm the system takes away must not
+  // drop the pen's press.
+  const pointerCancel = (event: PointerEvent) => {
+    if (event.pointerId === origin?.id) cancel();
   };
   const up = (event: PointerEvent) => {
     if (!origin || event.pointerId !== origin.id) return;
+    const { target } = origin;
     const start = point(origin.x, origin.y),
       end = point(event.clientX, event.clientY);
     const width =
       Math.abs(event.clientX - origin.x) > 3
         ? Math.max(40, Math.abs(end.x - start.x))
         : undefined;
+    cancel();
+    event.stopPropagation();
+    if (target) {
+      state.text.edit(target);
+      return;
+    }
     state.text.begin(
       { x: width ? Math.min(start.x, end.x) : start.x, y: start.y },
       width
     );
-    cancel();
-    event.stopPropagation();
   };
   const doubleClick = (event: MouseEvent) => {
     if (
@@ -168,12 +195,18 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
     space = false;
     cancel();
   };
+  const anyPointerCancel = (event: PointerEvent) => {
+    pendingTap = undefined;
+    lastTap = undefined;
+    space = false;
+    pointerCancel(event);
+  };
   root.addEventListener('keydown', keyDown, true);
   window.addEventListener('keyup', keyUp);
   window.addEventListener('blur', blur);
   window.addEventListener('pointermove', trackMove, true);
   window.addEventListener('pointerup', trackUp, true);
-  window.addEventListener('pointercancel', blur);
+  window.addEventListener('pointercancel', anyPointerCancel);
   root.addEventListener('pointerdown', down, true);
   root.addEventListener('dblclick', doubleClick, true);
   return () => {
@@ -183,7 +216,7 @@ export function attachTextInput(root: HTMLElement, state: CanvasState) {
     window.removeEventListener('blur', blur);
     window.removeEventListener('pointermove', trackMove, true);
     window.removeEventListener('pointerup', trackUp, true);
-    window.removeEventListener('pointercancel', blur);
+    window.removeEventListener('pointercancel', anyPointerCancel);
     root.removeEventListener('pointerdown', down, true);
     root.removeEventListener('dblclick', doubleClick, true);
   };

@@ -151,6 +151,9 @@ pub(crate) struct Mailbox {
     pub(crate) notified_history_id: u64,
     pub(crate) filters: Vec<(String, Value)>,
     pub(crate) send_as: Vec<SeedSendAs>,
+    /// The HTML signature of the primary address: the seed's, until
+    /// `GmailEmulator::set_signature` replaces it.
+    pub(crate) signature: String,
     /// Draft id to the id of the message holding its current revision.
     pub(crate) drafts: BTreeMap<String, String>,
     pub(crate) contacts: ContactBook,
@@ -193,6 +196,7 @@ impl Mailbox {
             notified_history_id: history_id,
             filters: Vec::new(),
             send_as: seed.send_as.clone(),
+            signature: seed.signature.clone().unwrap_or_default(),
             drafts: BTreeMap::new(),
             contacts: ContactBook::new("people/c", &seed.contacts),
             other_contacts: ContactBook::new("otherContacts/c", &seed.other_contacts),
@@ -437,15 +441,15 @@ impl Mailbox {
         Ok((id, thread_id))
     }
 
-    /// The labels the mailbox's filters put on, and take off, an arriving
-    /// message.
-    pub(crate) fn filtered_labels(&self, raw: &[u8], labels: &mut BTreeSet<String>) {
+    /// The labels the mailbox's filters put on, and take off, a message
+    /// arriving at `now_ms`.
+    pub(crate) fn filtered_labels(&self, raw: &[u8], now_ms: i64, labels: &mut BTreeSet<String>) {
         let Ok(parsed) = mime::parse(raw) else {
             return;
         };
 
         for (_, filter) in &self.filters {
-            if !crate::query::filter_matches(&filter["criteria"], &parsed) {
+            if !crate::query::filter_matches(&filter["criteria"], &parsed, now_ms) {
                 continue;
             }
             for label in label_list(&filter["action"]["addLabelIds"]) {

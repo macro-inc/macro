@@ -1,0 +1,673 @@
+{
+  "scenario": "ideas-founder",
+  "description": "Lumenfold (B2B reconciliation SaaS, raising a Series A). Owner Priya Natarajan (CEO) with Dmitri (CTO), Hannah (Head of CS), Sofia (finance and ops) and Marcus (engineer). Workspace matches the founder benchmark inbox and plants cross-source suggestion opportunities plus stale decoys.",
+  "users": {
+    "owner": {
+      "email": "priya@lumenfold.example",
+      "first_name": "Priya",
+      "last_name": "Natarajan",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "dmitri": {
+      "email": "dmitri@lumenfold.example",
+      "first_name": "Dmitri",
+      "last_name": "Okafor",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "hannah": {
+      "email": "hannah@lumenfold.example",
+      "first_name": "Hannah",
+      "last_name": "Wu",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "sofia": {
+      "email": "sofia@lumenfold.example",
+      "first_name": "Sofia",
+      "last_name": "Reyes",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    },
+    "marcus": {
+      "email": "marcus@lumenfold.example",
+      "first_name": "Marcus",
+      "last_name": "Bell",
+      "roles": [
+        "team_subscriber",
+        "sub_opus"
+      ]
+    }
+  },
+  "teams": {
+    "lumenfold": {
+      "name": "Lumenfold",
+      "owner": "owner",
+      "members": {
+        "dmitri": "admin",
+        "hannah": "member",
+        "sofia": "admin",
+        "marcus": "member"
+      }
+    }
+  },
+  "channels": {
+    "general": {
+      "type": "team",
+      "name": "general",
+      "team": "lumenfold"
+    },
+    "customers": {
+      "type": "public",
+      "name": "customers",
+      "owner": "hannah",
+      "members": [
+        "owner",
+        "dmitri",
+        "sofia",
+        "marcus"
+      ]
+    },
+    "eng": {
+      "type": "private",
+      "name": "eng",
+      "owner": "dmitri",
+      "members": [
+        "owner",
+        "marcus",
+        "hannah"
+      ]
+    },
+    "dm-priya-sofia": {
+      "type": "direct_message",
+      "members": [
+        "owner",
+        "sofia"
+      ]
+    }
+  },
+  "projects": {
+    "series-a": {
+      "owner": "owner",
+      "name": "Series A",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "view"
+        }
+      ]
+    },
+    "board-q4": {
+      "owner": "owner",
+      "name": "Board & Planning Q4",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "view"
+        }
+      ]
+    },
+    "customer-ops": {
+      "owner": "hannah",
+      "name": "Customer Ops",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "view"
+        }
+      ]
+    }
+  },
+  "documents": {
+    "q4-plan": {
+      "owner": "owner",
+      "name": "Lumenfold Q4 2026 Company Plan",
+      "project": "board-q4",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "edit"
+        }
+      ],
+      "content": "# Lumenfold Q4 2026 Company Plan\n\nOwner: Priya Natarajan. Last updated: Oct 5, 2026. Review cadence: Monday leadership sync.\n\nWe start Q4 at $2.31M ARR with 23 months of runway and 12 people. The quarter has one job above all others: close the Series A without dropping a customer. Every goal below has a single owner and a date. If a goal has no owner, it is not going to happen.\n\n## Goals for Q4\n\n| # | Goal | Owner | Due | Tracked in |\n|---|------|-------|-----|------------|\n| G1 | Close the Series A (target $14M) with first close before Thanksgiving | Priya | Nov 30 | Series A data room checklist |\n| G2 | Zero silent failures on nightly runs: chunked matching for every tenant plus a zero-exception alert | Dmitri | Nov 15 | LUM-431 |\n| G3 | Renew Kessler & Moore (renewal date Dec 1) with SAML SSO delivered as a committed deliverable | Marcus (SSO), Hannah (renewal) | Nov 20 | PR #1201 |\n| G4 | Ship region-scoped roles for Ortega Foods and remove the temporary all-access setting before their year-end audit | Dmitri | Nov 16 | LUM-447 |\n| G5 | Start SOC 2 Type II: pick the audit firm, sign the engagement letter, and begin the observation window on Dec 1 | TBD | Nov 30 | (none yet) |\n| G6 | Hire a founding product designer and two senior backend engineers | Priya | Dec 15 | Hiring plan |\n| G7 | Exit the year at $2.6M ARR (net new $290k: K&M uplift, Ortega region 2, Brightwater expansion) | Priya, Hannah | Dec 31 | Stripe + billing export |\n\n## Notes on G5 (SOC 2 Type II)\n\nWe have the Type I report (dated Jun 14, 2026). Every serious buyer and the Series A lead will now ask for Type II. We received two quotes in September:\n\n- Halden & Pryce (did our Type I): $41,000, 6-month window, fieldwork in June 2027.\n- Cobalt Assurance: $36,500, 6-month window, includes a readiness review in December.\n\nBudget assumes $38,000 in 2027 opex. Neither quote has been accepted. Scope (which systems, which subprocessors) needs a decision from engineering before the letter can be signed. If the window does not start Dec 1, the report slips past June and lands after the Kessler & Moore and Tidepool renewals.\n\n## Things we are explicitly not doing in Q4\n\n- No self-serve tier. Northmoor asked about it in the deep dive; the answer is 2027 H2 at the earliest.\n- No EU data residency. We stay in us-west-2 only.\n- No new outbound sales hire until after close.\n\n## Weekly scorecard (filled in at leadership sync)\n\n| Week of | ARR | Runway (months) | Nightly run failures | Open escalations |\n|---------|-----|-----------------|----------------------|------------------|\n| Oct 5 | $2.31M | 23 | 0 | 1 |\n| Oct 12 | $2.31M | 23 | 1 | 1 |\n| Oct 19 | $2.31M | 23 | 3 | 2 |\n"
+    },
+    "plan-2027": {
+      "owner": "owner",
+      "name": "2027 Operating Plan (draft)",
+      "project": "board-q4",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "edit"
+        }
+      ],
+      "content": "# 2027 Operating Plan (draft)\n\nStatus: DRAFT, not ready to share outside leadership. Owner: Priya. Finance model: Sofia.\n\nNeeded for: the Q4 board meeting on Nov 12 (2027 plan section of the deck) and the Northmoor data room (02 Financials). The spreadsheet version exists on Priya's laptop; this doc is the clean narrative version.\n\n## 1. Starting point\n\n- ARR at Sep 30, 2026: $2.31M across 31 customers.\n- Gross margin: 74% (AWS and Pipewell are 81% of COGS).\n- Net revenue retention (trailing 12 months): 114% conservative, 118% counting the Ortega region-2 expansion in Q3.\n- Headcount: 12 (6 engineering, 2 customer success, 1 sales, 1 finance and ops, 2 founders).\n\n## 2. Revenue plan\n\n| Quarter | Ending ARR | Net new | Main drivers |\n|---------|-----------|---------|--------------|\n| Q1 2027 | $2.9M | $300k | Brightwater CA + MX entities, Tidepool clinics, K&M uplift |\n| Q2 2027 | $3.5M | $600k | First outbound AE ramped, 4 new mid-market logos |\n| Q3 2027 | $4.3M | $800k | Second AE, partner channel with two ERP consultancies |\n| Q4 2027 | $5.2M | $900k | Expansion motion led by CS |\n\nAssumes 3% logo churn per quarter and that multi-entity pricing (see Pricing & packaging) ships in Q1.\n\n## 3. Headcount by quarter\n\nTODO (Priya): hires by function and quarter, including Maya (designer, starts Nov 30), the two senior backend roles, a finance lead after close, and the first two AEs. Raj and Ben both want this as a table.\n\n## 4. Burn and runway\n\nTODO (Sofia, blocked on section 3): monthly burn by quarter. Pre-close runway is 23 months at the current burn; the deck number for post-close runway is 41 months at plan burn, but that number was computed before the hiring plan changed.\n\n## 5. When we raise next\n\nTODO (Priya): target milestones for a Series B (ARR, NRR, gross margin) and the earliest date we would start. Ben's view: not before $6M ARR.\n\n## 6. What changes because of the Series A\n\nTODO: the board wants one slide on how $14M changes the plan versus the no-raise case.\n\n## 7. Risks\n\n- ERP-native recon modules (Ortega's CFO compared us to one this month).\n- Concentration: top 3 customers are 38% of ARR.\n- SOC 2 Type II timing (see the Q4 plan, goal G5).\n"
+    },
+    "leadership-notes": {
+      "owner": "owner",
+      "name": "Leadership weekly - Oct 26 notes",
+      "project": "board-q4",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "edit"
+        }
+      ],
+      "content": "# Leadership weekly, Oct 26\n\nAttendees: Priya, Dmitri, Hannah, Sofia. Notes: Priya.\n\n## Brightwater incident (Oct 19)\n\n- Chunked matching is live for Brightwater; last night's run took 11 minutes on 41k lines.\n- RCA draft is written; Priya reads it before Hannah sends it to Owen.\n- Decision: roll recon_chunked out to all tenants the weekend of Oct 31 if Brightwater stays clean all week.\n\n## Series A\n\n- Northmoor product deep dive is today at 10. Wen will probe scale above 100k lines.\n- Data room: financials and MSA are in. Sofia is building the cohort NRR table. Gaps: 2027 plan (Priya), churn reasons (Hannah).\n- Theo asked about the Halvorsen downgrade in the 2024 Q2 cohort. Sofia drafts a note.\n\n## Security questionnaires\n\n- Tidepool's updated questionnaire (214 questions, new HIPAA section) arrives this week and is due Nov 6.\n- Decision: Dmitri owns every security questionnaire from now on. The last three sat unassigned for days because everyone assumed CS had it.\n- Dmitri will keep the Security & compliance answers doc current so CS and sales stop asking engineering one question at a time.\n\n## Customers\n\n- Kessler & Moore: SSO must be in the order form as a committed deliverable with a date. Marcus says Nov 20 is realistic.\n- Ortega: Southwest clerks are on the temporary all-access setting. Their auditors want it gone by year end. Region-scoped roles spec is in LUM-447.\n- Hannah to start a monthly volume review: any customer above 90% of contracted lines gets flagged for a tier conversation.\n\n## Spend\n\n- AWS will land around $19k for October against an $18k budget. Pipewell is up 37% month over month.\n- Sofia to come back next week with options.\n\n## Action items\n\n- Priya: read the RCA today; finish the 2027 plan narrative.\n- Dmitri: own the Tidepool questionnaire; keep the security answers doc current.\n- Hannah: send the RCA; write up churn reasons for the data room.\n- Sofia: cohort NRR table by Friday; AWS and Pipewell options for next week.\n"
+    },
+    "commitments-tracker": {
+      "owner": "hannah",
+      "name": "Customer commitments tracker",
+      "project": "customer-ops",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "edit"
+        }
+      ],
+      "content": "# Customer commitments tracker\n\nPurpose: every promise we have made to a customer (feature, date, report, document) in one place, so nothing is promised twice or forgotten. Update within 24 hours of any customer call where something is promised (see Customer escalation process).\n\nLast updated: Oct 12, 2026 (Hannah)\n\n| Customer | Commitment | Promised by | Promised on | Due | Status |\n|----------|-----------|-------------|-------------|-----|--------|\n| Kessler & Moore | SAML SSO | Priya | Sep 30 | Q1 2027, Enterprise plan only | Not committed |\n| Kessler & Moore | Send SOC 2 Type I under NDA | Hannah | Oct 2 | Oct 9 | Waiting on NDA |\n| Ortega Foods | Region-scoped permissions for AP clerks | Priya | Sep 28 (kickoff prep) | Oct 30 | In design |\n| Ortega Foods | Implementation plan | Hannah | Oct 1 | Oct 26 | Not started |\n| Tidepool Health | SOC 2 bridge letter | Hannah | Sep 21 | Oct 15 | Done |\n| Tidepool Health | Data residency options | Priya | Sep 21 | Oct 30 | Not started |\n| Brightwater Logistics | Faster nightly runs for US entity | Dmitri | Sep 20 | Q4 | Investigating |\n| Halvorsen Supply | Re-expansion proposal after downgrade | Priya | Jul 14 | Sep 30 | Not started |\n\n## Not yet added (from Hannah's notebook, to clean up)\n\n- Something about a weekly report for Ortega?\n- Brightwater wanted alert emails to go to their team too.\n\n## How to use\n\n1. Add a row the same day.\n2. Change status when anything moves.\n3. Review every row in the Monday leadership sync.\n"
+    },
+    "saas-spend": {
+      "owner": "sofia",
+      "name": "Software & vendor spend - FY26 H2",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "edit"
+        }
+      ],
+      "content": "# Software and vendor spend, FY26 H2\n\nOwner: Sofia Reyes. Last reviewed: Sep 30, 2026. All amounts monthly unless noted. Card: Visa ending 0921 unless noted.\n\n## Infrastructure\n\n| Vendor | Plan | Monthly cost | Notes |\n|--------|------|--------------|-------|\n| AWS (lumenfold-prod) | On-demand, no reservations or savings plans | $17,900 (Sep), $19,487 (Oct) | Budget $18,000. RDS is the largest line ($6.9k Sep, +$1.8k Oct). Two r6g.2xlarge primary/replica instances have run 24/7 since March. |\n| Pipewell (warehouse) | Team plan + credits | $3,591 (Oct) | +37% vs Sep, mostly recon_prod. No credit quota set. |\n\n## Collaboration and productivity\n\n| Vendor | Seats | Price | Monthly | Usage notes |\n|--------|-------|-------|---------|-------------|\n| Macro (team) | 12 | included in team plan | - | Company channels moved here in September. #general, #customers active. |\n| Huddle Business | 14 | $12.50 | $175 | Only #eng still posts there (Dmitri, Jun, Marcus). 2 seats belong to people who left in June. |\n| Figwork | 9 editors | $120 | $1,080 | Renews Nov 21. Editors active in the last 30 days: 4 (Marcus, Hannah, Priya, Jun). Designer starts Nov 30. |\n| Trackline | 12 | $10 | $120 | Used daily by eng. |\n| Callwise (call recorder) | 6 | $45 | $270 | Rolled out in August for every customer call; auto-recaps to the inbox. |\n| Minutely (call notetaker) | 5 | $30 | $150 | Bought in March before Callwise. Last recording by anyone other than Priya: Jul 30. Annual plan, renews Jan 15. |\n\n## Go-to-market and hiring\n\n| Vendor | Plan | Monthly | Notes |\n|--------|------|---------|-------|\n| Hireloop (ATS) | Growth | $399 | Active: 2 open roles. |\n| Talentbridge (recruiter) | Retainer | $9,500 per installment | Designer search; final installment at offer acceptance. |\n| Vaultroom (data room) | Deal plan | $750 | Cancel after the Series A closes. |\n| Stripe | 2.9% + 30c / ACH 0.8% | about $1,400 per payout cycle | Push larger customers to ACH. |\n\n## TODO\n\n- Sofia: review Figwork seats before the Nov 21 renewal.\n- Sofia: look at RDS reservations (1-year no-upfront was quoted at roughly 35% off on-demand).\n- Who still needs Huddle?\n- Minutely vs Callwise: do we need both?\n"
+    },
+    "pricing": {
+      "owner": "owner",
+      "name": "Pricing & packaging (2026)",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "edit"
+        }
+      ],
+      "content": "# Pricing and packaging, 2026\n\nOwner: Priya. Applies to new contracts and renewals signed after Oct 1, 2026.\n\n## Tiers (by contracted monthly reconciliation lines)\n\n| Tier | Contracted lines / month | Price / month (annual) | Includes |\n|------|--------------------------|------------------------|----------|\n| Growth | up to 25,000 | $3,000 | 1 entity, bank feeds, vendor-file matching, email support |\n| Business | 25,001 to 75,000 | $6,500 | up to 3 entities, SAML SSO (decided Oct 27, previously Enterprise only), region-scoped roles, priority support |\n| Enterprise | above 75,000 | custom, floor $11,000 | unlimited entities, SCIM, custom retention, named CSM |\n\n## Add-ons\n\n- Additional entity beyond the tier allowance: $900 per entity per month.\n- Multi-currency: included in all tiers.\n- Spanish-language invoice matching: beta, free until GA (target Q1 2027).\n- Dedicated sandbox tenant: $500 per month.\n\n## Volume and true-ups\n\n- A customer above 90% of contracted lines for two consecutive months is moved to the next tier at renewal, or earlier by amendment if they agree.\n- Customer Success flags these accounts in the monthly health review. Finance drafts the amendment. The CEO makes the call to the customer.\n- We do not bill overage retroactively.\n- Custom-volume Business contracts are priced at $0.13 per contracted line per month (floor $3,250).\n\n## Current customers near a threshold (Sep review)\n\n| Customer | Tier | Contracted lines | Aug actual | Sep actual |\n|----------|------|------------------|------------|------------|\n| Tidepool Health | Business (custom: 40k lines, $5,200/month) | 40,000 | 37,100 | 38,000 |\n| Brightwater Logistics | Business | 75,000 | 61,200 | 63,800 |\n\n## Discounts\n\n- Annual prepay: 5%. Multi-year: up to 10% with CEO approval.\n- Uplift at renewal: 3% standard; waived only with a committed deliverable trade (example: K&M accepted 3% for the SSO commitment).\n"
+    },
+    "security-faq": {
+      "owner": "dmitri",
+      "name": "Security & compliance answers",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "edit"
+        }
+      ],
+      "content": "# Security and compliance answers\n\nOwner: Dmitri Okafor. This is the source of truth for questionnaires, customer security calls and investor diligence. Check here before asking in a channel. Last updated: Oct 27, 2026.\n\n## Certifications\n\n1. **SOC 2 Type I.** Yes. Report dated Jun 14, 2026, auditor Halden & Pryce. Shared only under NDA (mutual NDA template: Legal / Templates / Mutual NDA v3, Calloway Reed approved).\n2. **SOC 2 Type II.** Not yet engaged. Planned observation window: Dec 1, 2026 to May 31, 2027, subject to auditor selection. Official customer answer: \"Type II observation window planned to begin in December 2026; report expected mid-2027.\" Do not promise a Q1 report.\n3. **ISO 27001.** No plans in 2027.\n\n## Data protection\n\n4. Hosting: AWS us-west-2 only. No EU region; we do not offer EU data residency.\n5. Encryption in transit: TLS 1.2+ everywhere.\n14. Encryption at rest: AES-256 via AWS KMS for primary storage (RDS), RDS automated snapshots and manual backups, and S3 (SSE-KMS). Backups are encrypted at rest, yes.\n15. Backup retention: 35 days for RDS snapshots; nightly logical dumps kept 90 days.\n16. Customer data deletion after termination: within 60 days, certificate on request.\n\n## Testing\n\n21. Penetration test: last external test by Redfern Security, completed Sep 18, 2025. Summary letter available under NDA. Next test: not yet booked.\n22. Vulnerability scanning: weekly, Inspector + dependency scanning in CI.\n\n## Healthcare\n\n30. PHI: possible if customers upload lab or clinic vendor invoices. We have not signed a BAA with anyone yet. Any BAA template goes to Calloway Reed (Martin Feld) before signature.\n\n## Identity and access\n\n40. SSO for customers: SAML 2.0, IdP-initiated and SP-initiated, just-in-time provisioning (Business tier and up, from Nov 20, 2026). Mapped attributes: email (NameID), firstName, lastName, groups (optional, maps to Lumenfold roles).\n41. SCIM: not yet.\n42. Employee access: Google Workspace SSO + hardware keys for production.\n\n## Subprocessors\n\nAWS, Pipewell (warehouse), Stripe (billing only, no ledger data), Postmark (email). Changes announced 30 days ahead on the status page.\n"
+    },
+    "brightwater-retro": {
+      "owner": "dmitri",
+      "name": "Retro: Brightwater nightly run failure (Oct 19)",
+      "project": "customer-ops",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "edit"
+        }
+      ],
+      "content": "# Retro: Brightwater nightly run failure, Oct 19\n\nFacilitator: Dmitri. Attendees: Dmitri, Jun, Marcus, Hannah, Priya. Date: Oct 30.\n\n## What happened\n\nBrightwater's US entity grew from 18k to 41k open lines after their September ERP migration. The matcher loaded all open lines into memory before scoring, crossed our hard 30-minute timeout at 4:12am Pacific, and exited as \"succeeded\" with zero matches. Their AP team came in at 7 to an empty exceptions queue and assumed everything had matched. It was the third failed run that month; the first two were retried silently by the scheduler.\n\n## Timeline\n\n- Oct 1 and Oct 9: runs time out; scheduler retry succeeds slowly; nobody notices.\n- Oct 19, 4:12am: run times out with zero matches. 7:45am: Owen emails Priya and Hannah.\n- Oct 19, 9:30am: Jun re-runs manually with the timeout raised to 90 minutes.\n- Oct 21: exceptions queue (2,184 lines) confirmed by Owen.\n- Oct 22: RCA draft. Oct 26: chunked matching on for Brightwater (11 minutes).\n- Nov 1: recon_chunked on for all tenants.\n\n## What went well\n\n- Hannah had Owen on the phone within two hours.\n- The chunking fix took 1.5 weeks, as estimated.\n- Owen volunteered as a Series A reference call afterwards.\n\n## What did not\n\n- A \"success\" with zero matches on a large tenant was never treated as suspicious.\n- Retries hid the first two failures.\n- We had no idea which tenants were close to the line limit.\n\n## Action items\n\n| Action | Owner | Status |\n|--------|-------|--------|\n| Chunked matching with checkpoints (PR #1192) | Dmitri | Done |\n| Zero-exception alert for tenants with >1k open lines | Dmitri | Done |\n| Index on (tenant_id, run_id) for the checkpoint table | Jun | Done |\n| Route the zero-exception alert to the customer's AP distribution list as well as ours | Dmitri | Not started |\n| Late-run email to the customer when a run is 30+ minutes past its usual finish | Dmitri | Not started |\n| Runbook for manual re-runs | Jun | Done |\n| Add tenants above 30k open lines to the monthly volume review | Hannah | Not started |\n"
+    },
+    "data-room": {
+      "owner": "sofia",
+      "name": "Series A data room checklist",
+      "project": "series-a",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "edit"
+        }
+      ],
+      "content": "# Series A data room checklist (Vaultroom)\n\nOwner: Sofia. Lead investor: Northmoor Capital (Elena Vasquez-Hart, Theo Lindqvist). Counsel: Calloway Reed (Martin Feld). Last updated: Nov 6.\n\nClosing timeline from Martin: definitive docs first draft Nov 11, our comments Nov 16, consents Nov 23, signing and first close Nov 30.\n\n| Folder | Item | Owner | Status |\n|--------|------|-------|--------|\n| 01 Corporate | Charter, bylaws, board minutes | Sofia | Uploaded |\n| 01 Corporate | Cap table (confirm with Priya before signing) | Sofia | Uploaded, needs Priya confirmation |\n| 02 Financials | Monthly P&L and balance sheet, trailing 24 months | Sofia | Uploaded |\n| 02 Financials | ARR bridge by customer | Sofia | Uploaded |\n| 02 Financials | 2027 operating plan | Priya | Draft only, not uploaded |\n| 03 Customers | Top 20 customers by ARR | Sofia | Uploaded |\n| 03 Customers | Cohort NRR table | Sofia | Uploaded Oct 23 |\n| 03 Customers | Note on the Halvorsen downgrade (2024 Q2 cohort) | Sofia | Drafting |\n| 03 Customers | Churned logos with reasons | Hannah | Not started |\n| 04 Product & Security | SOC 2 Type I report | Dmitri | Uploaded |\n| 04 Product & Security | Architecture overview | Dmitri | Uploaded |\n| 05 Legal | Form MSA v2026 | Sofia | Uploaded |\n| 05 Legal | Signed Ortega order form | Hannah | Unsigned version uploaded; signed copy missing |\n| 06 IP Assignments | Employee and contractor IP assignment agreements | Sofia | 11 of 12 employees; 2 contractors missing |\n\n## 07 Confirmatory (new, target Nov 13)\n\n| Item | Owner | Status |\n|------|-------|--------|\n| Signed IP assignments for all current and former employees and contractors | Sofia | Chasing 2 former contractors |\n| Open-source license audit | Dmitri | Not started |\n| Three largest customer contracts, signed | Sofia | Have Brightwater and K&M; Tidepool countersigned copy needed |\n| Evidence of SOC 2 Type II audit engagement | ? | No engagement letter exists |\n| Pending or threatened litigation list | Priya | None; one-line statement |\n\n## Access requests\n\nPending in Vaultroom: Wen Hao (04), Carla Bright and Devin Stroud (05, 06). Requests expire after 7 days.\n"
+    },
+    "hiring-plan": {
+      "owner": "owner",
+      "name": "Hiring plan & option grants - Q4",
+      "project": "board-q4",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "edit"
+        }
+      ],
+      "content": "# Hiring plan and option grants, Q4\n\nOwner: Priya. For board approval on Nov 12 (option grants need a formal vote; we ran out of time last quarter).\n\n## Open roles\n\n| Role | Stage | Candidates | Notes |\n|------|-------|-----------|-------|\n| Founding Product Designer | Filled | Maya Okonkwo | Offer accepted Nov 3, start date Nov 30. Base $190k. |\n| Senior Backend Engineer (platform) | Interviewing | Carlos Ibanez (referral from Jun; take-home done, very strong), Tomasz W. (references ready), Priscilla Nakamura (phone screen Oct 30; notice period until mid-December) | Target offer by Nov 20. Comp band $205k to $230k. |\n| Senior Backend Engineer (recon engine) | Sourcing | Arjun S. (Talentbridge) | Renee O. accepted another offer. |\n| Finance lead | Not opened | - | Open after first close. |\n\n## Option grants for approval\n\n| Grantee | Role | Shares | % fully diluted | Vesting | Status |\n|---------|------|--------|-----------------|---------|--------|\n| Maya Okonkwo | Founding Product Designer | 45,000 | 0.45% | 4 years, 1-year cliff | Needs board vote |\n| Jun Park | Refresh (promotion to staff) | 20,000 | 0.20% | 4 years, no cliff | Needs board vote |\n| Senior Backend #1 | TBD | up to 35,000 | 0.35% | 4 years, 1-year cliff | Pre-approval range |\n\nPool after Series A: 8.5% pre-money (agreed in the final term sheet). Grants above use about 1.0% of it.\n\n## Recruiting spend\n\n- Talentbridge designer search: retainer installments of $9,500 (1 and 2 paid or invoiced); final installment due at offer acceptance.\n- Hireloop: $399 per month.\n"
+    },
+    "escalation-process": {
+      "owner": "hannah",
+      "name": "Customer escalation process",
+      "project": "customer-ops",
+      "share": [
+        {
+          "with": "team:lumenfold",
+          "level": "edit"
+        }
+      ],
+      "content": "# Customer escalation process\n\nOwner: Hannah Wu. Applies to every paying customer.\n\n## Severity\n\n- **Sev 1:** a nightly run failed or produced wrong results for a customer in close week, or any data exposure. Response: phone call to the customer within 1 hour, CEO informed immediately.\n- **Sev 2:** degraded matching (auto-match rate down more than 10 points), a blocked user group, or a missed committed date. Response within 4 business hours.\n- **Sev 3:** questions, how-to, feature requests. Response within 1 business day.\n\n## Roles\n\n- CS owner (Hannah or the account's CSM) runs the escalation and is the single voice to the customer.\n- Engineering on-call (rotation in Trackline) owns diagnosis and the fix.\n- Priya joins any Sev 1 call and any call where the customer's CFO is on the line.\n\n## Steps\n\n1. Acknowledge in writing, with the next update time.\n2. Open a Trackline issue, link it in #customers.\n3. Workaround first, fix second. Write down any workaround that loosens a control (for example temporary all-access) and set an end date.\n4. Written RCA within 5 business days for every Sev 1.\n5. **Within 24 hours of any customer call where we promise something, add it to the Customer commitments tracker with an owner and a date.**\n6. Close the loop: confirm with the customer that the fix worked, then mark the commitment done.\n\n## Templates\n\n- RCA template: Customers / Templates / RCA.\n- Customer update email: three sentences: what happened, what we are doing, when you will hear from us next.\n\n## Recent escalations\n\n- Brightwater, Oct 19 (Sev 1): RCA delivered Oct 23, accepted Oct 29.\n- Ortega, Oct 23 (Sev 2): temporary all-access for Southwest clerks; end date: when LUM-447 ships.\n"
+    }
+  },
+  "tasks": {
+    "tidepool-questionnaire": {
+      "owner": "dmitri",
+      "name": "Tidepool security questionnaire (214 questions, HIPAA section)",
+      "project": "customer-ops",
+      "status": "completed",
+      "assignees": [
+        "dmitri"
+      ],
+      "share_with_team": true,
+      "content": "# Tidepool security questionnaire\n\nDue Nov 6. Owner: Dmitri (questionnaires are engineering-owned since Oct 26).\n\n- [x] Reuse last year's answers (171 of 214)\n- [x] New HIPAA section (PHI via lab vendor invoices: yes, possible)\n- [x] Sent to Samuel Adeyemi Nov 5, 214/214 answered\n\nFollow-ups from Samuel are tracked separately (backup encryption, BAA, pen test evidence).\n"
+    },
+    "brightwater-rca": {
+      "owner": "dmitri",
+      "name": "Write and send Brightwater RCA",
+      "project": "customer-ops",
+      "status": "completed",
+      "assignees": [
+        "dmitri",
+        "hannah"
+      ],
+      "share_with_team": true,
+      "content": "# Brightwater RCA\n\n- [x] Draft (Oct 22)\n- [x] Priya review\n- [x] Hannah sends to Owen (Oct 23)\n- [x] RCA review call with Owen and Keisha (Oct 29): accepted\n"
+    },
+    "kessler-sso": {
+      "owner": "marcus",
+      "name": "SAML SSO for Kessler & Moore (committed Nov 20)",
+      "project": "customer-ops",
+      "status": "in_progress",
+      "assignees": [
+        "marcus"
+      ],
+      "share_with_team": true,
+      "content": "# SAML SSO\n\nCommitted in the K&M order form: Nov 20, 2026.\n\n- [x] Metadata upload + cert validation\n- [x] IdP-initiated login, JIT provisioning\n- [x] Staging test with K&M IT (worked first try, Nov 5)\n- [ ] Priya review on PR #1201\n- [ ] Production rollout behind tenant flag\n- [ ] Customer-facing setup guide (attribute mapping)\n"
+    },
+    "ortega-permissions": {
+      "owner": "dmitri",
+      "name": "LUM-447 region-scoped roles for Ortega",
+      "project": "customer-ops",
+      "status": "in_review",
+      "assignees": [
+        "dmitri"
+      ],
+      "share_with_team": true,
+      "content": "# Region-scoped roles (LUM-447)\n\nShip date communicated to Ortega: Nov 16. Ortega auditors want the temporary all-access setting gone before year end.\n\n- [x] Spec\n- [x] Implementation\n- [ ] Review (Jun)\n- [ ] Migrate Southwest clerks off all-access\n"
+    },
+    "ortega-weekly-report": {
+      "owner": "hannah",
+      "name": "Weekly unmatched-lines-by-region report for Ortega",
+      "project": "customer-ops",
+      "status": "in_progress",
+      "assignees": [
+        "hannah"
+      ],
+      "share_with_team": true,
+      "content": "# Ortega weekly unmatched report\n\nAsk from Nadia Brennan (Oct 30): every Monday morning, unmatched lines per region to Nadia and the regional leads.\n\nStarted Oct 31. Building it in Chartbay off the nightly recon CSV export, one tab per region, scheduled email at 7am Pacific on Mondays.\n\n- [x] Export columns agreed\n- [ ] Region mapping (needs the LUM-447 role data, using a manual vendor-to-region sheet for now)\n- [ ] Schedule + recipients\n- [ ] Send first version to Nadia\n"
+    },
+    "board-ceo-slides": {
+      "owner": "owner",
+      "name": "Board deck: CEO narrative, Series A summary, hiring plan slides",
+      "project": "board-q4",
+      "status": "in_progress",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# CEO slides for the Nov 12 board deck\n\nSofia asked for these by Fri Nov 6 EOD; deck goes to Ben Mon Nov 9, 9am.\n\n- [ ] CEO narrative\n- [ ] Series A summary (final term sheet)\n- [ ] Hiring plan + option grant table (for vote)\n- [ ] Brightwater incident slide (Ben's ask)\n- [ ] 2027 plan slide: headcount by quarter, burn, next raise (Raj's ask)\n"
+    },
+    "maya-offer": {
+      "owner": "owner",
+      "name": "Offer for Maya Okonkwo (Founding Product Designer)",
+      "project": "board-q4",
+      "status": "completed",
+      "assignees": [
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Maya offer\n\n- [x] Scorecards (4/4)\n- [x] Offer sent Nov 2 ($190k + 0.45%)\n- [x] Accepted Nov 3, start Nov 30\n- [x] Tell Kelsey (final Talentbridge installment)\n"
+    },
+    "cohort-nrr": {
+      "owner": "sofia",
+      "name": "Cohort NRR table for data room",
+      "project": "series-a",
+      "status": "completed",
+      "assignees": [
+        "sofia"
+      ],
+      "share_with_team": true,
+      "content": "# Cohort NRR table\n\nBuilt from the billing export, uploaded to 03 Customers on Oct 23.\n"
+    },
+    "halvorsen-note": {
+      "owner": "sofia",
+      "name": "Note on Halvorsen downgrade for Theo",
+      "project": "series-a",
+      "status": "not_started",
+      "assignees": [
+        "sofia",
+        "owner"
+      ],
+      "share_with_team": true,
+      "content": "# Halvorsen downgrade note\n\nTheo asked Oct 23: 2024 Q2 cohort shows 142% NRR but the ARR bridge shows a $96k contraction in Q1 2026. Explain the downgrade and whether they re-expanded. Needs Priya's account of the July re-expansion conversation.\n"
+    },
+    "option-grant-table": {
+      "owner": "sofia",
+      "name": "Option grant table for board vote",
+      "project": "board-q4",
+      "status": "in_progress",
+      "assignees": [
+        "sofia"
+      ],
+      "share_with_team": true,
+      "content": "# Option grant table\n\nFor the Nov 12 vote. Rows: Maya (0.45%), Jun refresh (0.20%), Senior Backend #1 pre-approval range. Needs Martin to confirm the 409A is still valid through Nov 30.\n"
+    },
+    "brightwater-alert-routing": {
+      "owner": "dmitri",
+      "name": "Route zero-exception alert + late-run email to Brightwater AP list",
+      "project": "customer-ops",
+      "status": "not_started",
+      "assignees": [
+        "dmitri"
+      ],
+      "share_with_team": true,
+      "content": "# Customer-facing alert routing\n\nFrom the Oct 29 RCA review with Owen: send the zero-exception alert to Brightwater's AP distribution list too, and email them when a run is late.\n\nNot started.\n"
+    },
+    "ortega-case-study": {
+      "owner": "hannah",
+      "name": "Ortega case study",
+      "project": "customer-ops",
+      "status": "canceled",
+      "assignees": [
+        "hannah"
+      ],
+      "share_with_team": true,
+      "content": "# Ortega case study\n\nCanceled Nov 4: not while their CFO is reviewing tools. Revisit after the 60-day ROI review.\n"
+    }
+  },
+  "calls": {
+    "leadership-sync": {
+      "channel": "general",
+      "created_by": "owner",
+      "participants": [
+        "owner",
+        "dmitri",
+        "hannah",
+        "sofia"
+      ],
+      "duration_minutes": 45,
+      "ended_minutes_ago": 10200,
+      "name": "Leadership sync - Nov 2",
+      "transcript": [
+        {
+          "speaker": "owner",
+          "text": "Three things today: spend, the data room, and who owns what for the next four weeks. Sofia, spend first."
+        },
+        {
+          "speaker": "sofia",
+          "text": "AWS will be about nineteen and a half thousand for October against eighteen budgeted. RDS is the biggest jump and we are still fully on-demand. A one-year no-upfront reservation on the two r6g.2xlarge database instances saves roughly fourteen hundred a month. I'll buy the reservations by Friday, and I'll set a credit quota on Pipewell at two thousand credits so we stop getting surprised."
+        },
+        {
+          "speaker": "dmitri",
+          "text": "Fine with reservations. Those instance sizes will not change before Q2."
+        },
+        {
+          "speaker": "owner",
+          "text": "Do it. Hannah, the data room still has churn reasons as not started, and Theo will ask."
+        },
+        {
+          "speaker": "hannah",
+          "text": "I have notes on all five churned logos. I'll write them up as one paragraph each and give them to Sofia by Thursday."
+        },
+        {
+          "speaker": "owner",
+          "text": "And SOC 2 Type II. We keep telling people Q1, and nobody has picked the auditor. The quotes are from September."
+        },
+        {
+          "speaker": "sofia",
+          "text": "I can run the paperwork, but I need a scope from engineering before I can sign anything."
+        },
+        {
+          "speaker": "dmitri",
+          "text": "Let's do scope after the board meeting, this week is the SSO release and the permissions work."
+        },
+        {
+          "speaker": "hannah",
+          "text": "One more: Tidepool has been above ninety percent of their contracted lines for three months. I'll bring it to the customer health review."
+        },
+        {
+          "speaker": "owner",
+          "text": "Good. Dmitri, questionnaires are yours now, including Tidepool's, due Friday."
+        },
+        {
+          "speaker": "dmitri",
+          "text": "Already on it, I'll have it out Thursday."
+        }
+      ]
+    },
+    "customer-health": {
+      "channel": "customers",
+      "created_by": "hannah",
+      "participants": [
+        "hannah",
+        "owner",
+        "sofia"
+      ],
+      "duration_minutes": 30,
+      "ended_minutes_ago": 8700,
+      "name": "Customer health review - November",
+      "transcript": [
+        {
+          "speaker": "hannah",
+          "text": "Monthly health review. Brightwater is green again, seven clean runs in a row. Ortega is yellow: CFO tool review plus the permissions delay. Kessler and Moore is green, signing on the tenth."
+        },
+        {
+          "speaker": "hannah",
+          "text": "Tidepool: thirty-eight point six thousand lines in October against forty thousand contracted. August and September were also above ninety percent, and the two clinics in January add maybe fifteen thousand a month."
+        },
+        {
+          "speaker": "sofia",
+          "text": "Per the pricing doc that is a tier conversation. They are on a custom Business contract at thirteen cents a line. Moving them to sixty thousand contracted lines is about thirty-one thousand a year more, and above seventy-five thousand they would be Enterprise."
+        },
+        {
+          "speaker": "owner",
+          "text": "I'll call Samuel this week and frame it around the clinic rollout, before their security follow-ups close and they start budgeting January."
+        },
+        {
+          "speaker": "sofia",
+          "text": "Once you've talked to him I'll draft the amendment."
+        },
+        {
+          "speaker": "hannah",
+          "text": "I'll also update the commitments tracker after this, it's behind since the Brightwater week."
+        },
+        {
+          "speaker": "owner",
+          "text": "Please do. I can't tell anymore what we've promised Ortega."
+        }
+      ]
+    }
+  },
+  "messages": [
+    {
+      "channel": "general",
+      "from": "owner",
+      "text": "Big week: we signed the Northmoor term sheet. $14M, first close targeted for Nov 30. Please keep it inside the company until we announce."
+    },
+    {
+      "channel": "general",
+      "from": "hannah",
+      "text": "Maya accepted! Offer signed Nov 3, she starts Nov 30. Sofia, Kelsey's final Talentbridge installment is triggered now.",
+      "mentions": [
+        "user:sofia"
+      ]
+    },
+    {
+      "channel": "general",
+      "from": "sofia",
+      "text": "Open enrollment closes Friday. Pick a plan or you get the default PPO."
+    },
+    {
+      "channel": "customers",
+      "from": "hannah",
+      "text": "Kessler & Moore's auditors want our SOC 2 report. Grace says Type I under NDA is fine. Do we have an NDA template or does every one go through Martin?"
+    },
+    {
+      "channel": "customers",
+      "from": "dmitri",
+      "text": "NDA template and the Type I PDF are both in the security answers doc. Please check there first.",
+      "mentions": [
+        "document:security-faq"
+      ]
+    },
+    {
+      "channel": "customers",
+      "from": "hannah",
+      "text": "Tidepool is asking again whether backups are encrypted at rest, not just primary storage. Same question they asked last year."
+    },
+    {
+      "channel": "customers",
+      "from": "dmitri",
+      "text": "Yes. AES-256 via KMS for RDS snapshots and S3. It's question 14 in the doc."
+    },
+    {
+      "channel": "customers",
+      "from": "sofia",
+      "text": "Theo asked me on a call where we are on SOC 2 Type II. What is the official answer? I said 'Q1' and then wasn't sure."
+    },
+    {
+      "channel": "customers",
+      "from": "hannah",
+      "text": "Tidepool also wants pen test evidence from the last 12 months. Dmitri, when was our last one?"
+    },
+    {
+      "channel": "customers",
+      "from": "dmitri",
+      "text": "Sept 18, 2025 with Redfern. So it's 13 months old. We need to book a new one."
+    },
+    {
+      "channel": "customers",
+      "from": "marcus",
+      "text": "K&M IT asked which SAML attributes we map for JIT provisioning. Is that written anywhere customer-facing?"
+    },
+    {
+      "channel": "customers",
+      "from": "hannah",
+      "text": "Ortega asked if we can sign a DPA with EU data residency for a future subsidiary. Do we have an EU region?"
+    },
+    {
+      "channel": "customers",
+      "from": "hannah",
+      "text": "Brightwater: last 7 nightly runs all under 15 minutes. Owen accepted the RCA on the Oct 29 call."
+    },
+    {
+      "channel": "customers",
+      "from": "sofia",
+      "text": "Kessler & Moore is on ACH now. Fresh invoice INV-2026-0203-R went out Nov 3 and was paid Nov 5. The failed card payment is closed."
+    },
+    {
+      "channel": "customers",
+      "from": "hannah",
+      "text": "Ortega's weekly unmatched-by-region report: I'm building it in Chartbay off the recon export. First version to Nadia next Monday.",
+      "mentions": [
+        "project:customer-ops"
+      ]
+    },
+    {
+      "channel": "customers",
+      "from": "hannah",
+      "text": "@Priya can you join the Ortega CFO follow-up? Victor wants the 60-day ROI review template before he decides anything.",
+      "mentions": [
+        "user:owner"
+      ]
+    },
+    {
+      "channel": "customers",
+      "from": "marcus",
+      "text": "Grace's IT lead asked if we support SCIM. Pretty sure no, but is there a date I can give?"
+    },
+    {
+      "channel": "eng",
+      "from": "dmitri",
+      "text": "Tidepool questionnaire is out: 214/214 answered, sent Nov 5. BAA template from their counsel is still pending."
+    },
+    {
+      "channel": "eng",
+      "from": "marcus",
+      "text": "SSO is on staging and K&M IT logged in through their IdP on the first try. PR #1201 still needs Priya's review before the Nov 20 committed date.",
+      "mentions": [
+        "user:owner"
+      ]
+    },
+    {
+      "channel": "eng",
+      "from": "dmitri",
+      "text": "LUM-447 region-scoped roles is in review. On track for Nov 16."
+    },
+    {
+      "channel": "eng",
+      "from": "dmitri",
+      "text": "Side project: I've started a cron job that emails Ortega an unmatched-lines-by-region summary every Monday at 6am straight from the recon DB, reusing the LUM-447 region mapping. Should ship with the Nov 16 release."
+    },
+    {
+      "channel": "eng",
+      "from": "marcus",
+      "text": "Third time this week someone from CS or finance pinged me about a security answer. Can we make that not go through engineering?"
+    },
+    {
+      "channel": "eng",
+      "from": "dmitri",
+      "text": "recon_chunked has been on for every tenant since Nov 1. No rollbacks, Ortega's run is 22 minutes."
+    },
+    {
+      "channel": "eng",
+      "from": "hannah",
+      "text": "Who is on call this weekend? Brightwater closes November on the 6th business day and Owen asked."
+    },
+    {
+      "channel": "eng",
+      "from": "dmitri",
+      "text": "Jun this weekend, me next. Rotation is in Trackline."
+    },
+    {
+      "channel": "dm-priya-sofia",
+      "from": "sofia",
+      "text": "Data room: the 2027 plan is still a draft. Can you give me the headcount-by-quarter numbers so I can do the burn section? I can't do runway post-close without them.",
+      "mentions": [
+        "document:plan-2027"
+      ]
+    },
+    {
+      "channel": "dm-priya-sofia",
+      "from": "owner",
+      "text": "Yes, tonight."
+    },
+    {
+      "channel": "dm-priya-sofia",
+      "from": "sofia",
+      "text": "Option grant table: I have Maya at 0.45% and Jun's refresh at 0.20%. Senior backend row as a pre-approval range up to 0.35%?",
+      "mentions": [
+        "document:hiring-plan"
+      ]
+    },
+    {
+      "channel": "dm-priya-sofia",
+      "from": "owner",
+      "text": "Yes, range is fine. Carlos isn't offered yet."
+    },
+    {
+      "channel": "dm-priya-sofia",
+      "from": "sofia",
+      "text": "Also, Ben wants the deck at 9am Monday. Your slides are the last missing piece."
+    }
+  ]
+}

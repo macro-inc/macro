@@ -1,14 +1,14 @@
 //! The Focus classifier port, backed by Jev and metered as email focus usage.
 
 use ai_usage::{AiFeature, UsageContext};
-use email::domain::focus::{FocusClassifier, FocusClassifierError};
+use email::domain::focus::{ClassifierLane, FocusClassifier, FocusClassifierError};
 use jev::domain::{JevClassifier, JevProvider, Probability, YesNoClassifier, YesNoQuestion};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value;
 use uuid::Uuid;
 
 /// Model id recorded with each classification; Jev's own name for its latest model.
-const MODEL: &str = "jev-latest";
+pub const MODEL: &str = "jev-latest";
 
 /// Jev answering Focus questions on the owner's behalf.
 pub struct JevFocusClassifier<P> {
@@ -29,6 +29,7 @@ impl<P: JevProvider> FocusClassifier for JevFocusClassifier<P> {
         thread_id: Uuid,
         input: &Value,
         questions: &[&'static str],
+        _lane: ClassifierLane,
     ) -> Result<Vec<f32>, FocusClassifierError> {
         let questions = questions
             .iter()

@@ -365,7 +365,7 @@ export function TaskListBar(props: {
       <Show when={props.hasTasks()}>
         <div
           class={cn(
-            'relative shrink-0 transition-opacity duration-150',
+            'shrink-0 transition-opacity duration-150',
             filterVisible() ? 'opacity-100' : 'pointer-events-none opacity-0'
           )}
         >
@@ -387,16 +387,15 @@ export function TaskListBar(props: {
                 filters: { status: [], priority: [], assignees: [], due: [] },
               })
             }
+            size={activeFilterCount() > 0 ? 'xs' : undefined}
+            activeCount={activeFilterCount()}
             class={cn(
-              'size-6 shrink-0 p-1',
-              activeFilterCount() > 0 ? 'text-accent' : 'text-ink-extra-muted'
+              'shrink-0',
+              activeFilterCount() > 0
+                ? 'text-accent'
+                : 'size-6 p-1 text-ink-extra-muted'
             )}
           />
-          <Show when={activeFilterCount() > 0}>
-            <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-3.5 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-              {activeFilterCount()}
-            </span>
-          </Show>
         </div>
       </Show>
     </div>

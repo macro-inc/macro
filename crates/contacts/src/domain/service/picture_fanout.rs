@@ -1,5 +1,5 @@
 use crate::domain::models::page::{ContactCursor, ContactPageSize};
-use crate::domain::ports::{ContactsPageRepository, UserPictureNotifier};
+use crate::domain::ports::{ContactListReader, ContactsPageRepository, UserPictureNotifier};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::{Report, report};
@@ -35,13 +35,30 @@ pub fn coalesce_users(
 }
 
 /// Tells a user's contacts, page by page, that the user's picture changed.
+///
+/// While the `contacts-list-reads` flag ramps, each recipient's directory comes
+/// from the legacy graph or the list-aware tables, and nothing tells the
+/// fan-out which. It notifies both audiences, so a recipient whose directory
+/// has the user under either store hears of it; one in both is notified twice
+/// and refetches the picture twice.
 pub struct UserPictureFanout<R, N> {
     repository: R,
     notifier: N,
 }
 
-impl<R: ContactsPageRepository, N: UserPictureNotifier> UserPictureFanout<R, N> {
-    /// Build the fan-out over a paged contact reader and a notifier.
+/// Which audience a fan-out pass reads.
+#[derive(Clone, Copy)]
+enum Audience {
+    /// The user's legacy graph neighbors (undirected, so also who has them).
+    Legacy,
+    /// Who has the user in their list-aware directory.
+    Lists,
+}
+
+impl<R: ContactsPageRepository + ContactListReader, N: UserPictureNotifier>
+    UserPictureFanout<R, N>
+{
+    /// Build the fan-out over paged contact readers and a notifier.
     pub fn new(repository: R, notifier: N) -> Self {
         Self {
             repository,
@@ -49,21 +66,21 @@ impl<R: ContactsPageRepository, N: UserPictureNotifier> UserPictureFanout<R, N> 
         }
     }
 
-    /// Notify every contact of `user_id` (including themselves).
+    /// Notify everyone who has `user_id` in their directory (including
+    /// themselves), under either store.
     ///
-    /// Reads only the indexed, bounded contact-ID pages and sends one gateway
-    /// message per page, so memory and query cost stay constant however large
-    /// the contact list is. A failed page aborts with an error; the caller may
-    /// retry, which re-notifies earlier pages harmlessly (clients just refetch).
+    /// Reads only indexed, bounded id pages and sends one gateway message per
+    /// page, so memory and query cost stay constant however large the
+    /// audience is. A failed page aborts with an error; the caller may retry,
+    /// which re-notifies earlier pages harmlessly (clients just refetch).
     pub async fn fan_out(&self, user_id: &MacroUserIdStr<'_>) -> Result<FanoutSummary, Report> {
         let span = tracing::info_span!(
             "contacts.user_picture_fanout",
-            user_id = %user_id.as_ref(),
             pages = tracing::field::Empty,
             recipients = tracing::field::Empty,
             outcome = tracing::field::Empty,
         );
-        let result = self.fan_out_pages(user_id).instrument(span.clone()).await;
+        let result = self.fan_out_both(user_id).instrument(span.clone()).await;
         match &result {
             Ok(summary) => {
                 span.record("pages", summary.pages);
@@ -78,14 +95,35 @@ impl<R: ContactsPageRepository, N: UserPictureNotifier> UserPictureFanout<R, N> 
         result
     }
 
-    async fn fan_out_pages(&self, user_id: &MacroUserIdStr<'_>) -> Result<FanoutSummary, Report> {
+    async fn fan_out_both(&self, user_id: &MacroUserIdStr<'_>) -> Result<FanoutSummary, Report> {
+        let legacy = self.fan_out_pages(user_id, Audience::Legacy).await?;
+        let lists = self.fan_out_pages(user_id, Audience::Lists).await?;
+        Ok(FanoutSummary {
+            pages: legacy.pages + lists.pages,
+            recipients: legacy.recipients + lists.recipients,
+        })
+    }
+
+    async fn fan_out_pages(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        audience: Audience,
+    ) -> Result<FanoutSummary, Report> {
         let mut summary = FanoutSummary::default();
         let mut cursor: Option<ContactCursor> = None;
         loop {
-            let page = self
-                .repository
-                .contact_id_page(user_id.copied(), cursor.as_ref(), FANOUT_PAGE_SIZE)
-                .await?;
+            let page = match audience {
+                Audience::Legacy => {
+                    self.repository
+                        .contact_id_page(user_id.copied(), cursor.as_ref(), FANOUT_PAGE_SIZE)
+                        .await?
+                }
+                Audience::Lists => {
+                    self.repository
+                        .audience_page(user_id.copied(), cursor.as_ref(), FANOUT_PAGE_SIZE)
+                        .await?
+                }
+            };
             summary.pages += 1;
             // A page can be empty yet continue (skipped malformed legacy IDs).
             if !page.contacts.is_empty() {

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use analytics_client::{MetaActionSource, MetaUserData};
+use analytics_client::MetaActionSource;
 use std::{collections::HashSet, future::Future};
 
 use crate::service::signup_policy::SignupPolicy;
@@ -16,6 +16,10 @@ use rand::Rng;
 
 use crate::service::user::agent_signup::AGENT_SIGNUP_DATA_KEY;
 use crate::service::user::create_user::create_user;
+use crate::service::user::email_code_signup::created_by_email_code;
+use crate::service::user::signup_meta::{
+    SignupClickIds, registration_user_data, sends_complete_registration, signup_event_id,
+};
 use crate::service::user::support_channel_welcome::{
     AuthorizedSupportChannelMessages, post_support_channel_welcome,
 };
@@ -277,6 +281,7 @@ async fn create_user_webhook_complete(
         user_id = tracing::field::Empty,
         organization_id = tracing::field::Empty,
         is_agent = tracing::field::Empty,
+        email_code_signup = created_by_email_code(req.event.user.data.as_ref()),
     ),
     err
 )]
@@ -284,6 +289,11 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     let ip_address = req.event.info.ip_address;
     let email = req.event.user.email.to_lowercase();
     let requested_agent = signup_requested_agent(&req.event.user);
+    // An email-code request creates the account before anyone has shown they
+    // receive mail at the address, though FusionAuth calls it verified. Its
+    // proof, domain team and referral wait for the first code used
+    // (`service::user::email_code_signup`).
+    let email_code_signup = created_by_email_code(req.event.user.data.as_ref());
     let (first_name, last_name) = identity_provider_name(&req.event.user);
     let username = req.event.user.username.unwrap_or(email.clone());
     let fusionauth_user_id = req.event.user.id;
@@ -349,7 +359,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         &fusionauth_user_id,
         &username,
         &email,
-        req.event.user.verified,
+        req.event.user.verified && !email_code_signup,
         &ctx.db,
         &ctx.stripe_client,
         is_agent,
@@ -377,15 +387,20 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     // Authoritative signup analytics: fired here so every creation path
     // (SSO, passwordless, iOS) counts exactly once, even if the user never
     // returns to the app. Meta's CompleteRegistration fires here too
-    // (Conversions API) — only a minority of new accounts ever load the web
-    // app with the `signed_up=true` marker, so the browser pixel alone
-    // misses most signups. The browser still fires the same event with the
-    // shared `signup:{user_id}` event id purely to contribute click-id
-    // cookies for attribution; Meta dedupes the pair on that id (see the
-    // web app's signupCompletion.ts). Uses the same distinct id
-    // ("macro|{email}") the app identifies with. Fire-and-forget.
+    // (Conversions API) for a real account, and nowhere else — a mobile
+    // "email me a link" submit is a Lead, not a registration. Only a minority
+    // of new accounts load the web app with the `signed_up=true` marker, so
+    // the browser pixel alone misses most signups. When that browser does
+    // load, it fires the same event with `signup:{profile id}`
+    // (`macro|{email}`, the id legacy user permissions returns) so Meta
+    // dedupes the pair (see signupCompletion.ts). Logins never reach this
+    // webhook. Fire-and-forget.
+    let environment = ctx.environment;
+    let event_user_agent = req.event.info.user_agent.clone();
+    let stored_user_data = req.event.user.data.clone();
     tokio::spawn({
         let analytics_client = ctx.analytics_client.clone();
+        let macro_cache_client = ctx.macro_cache_client.clone();
         let db = ctx.db.clone();
         let fusionauth_user_id = fusionauth_user_id.clone();
         let user_id = user_id.clone();
@@ -425,22 +440,44 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 .inspect(|_| tracing::info!("tracked PostHog sign_up event"))
                 .inspect_err(|e| tracing::warn!(error=?e, "failed to track PostHog sign_up event"));
 
-            // Ad platforms optimize toward people who sign up.
-            if is_agent {
+            // Ad platforms optimize toward people who create an account.
+            // Develop, staging, and local must not send the production pixel.
+            if !sends_complete_registration(environment, is_agent) {
                 return;
             }
 
-            let user_data = MetaUserData {
-                email: Some(email),
-                client_ip_address: Some(ip_address),
-                ..Default::default()
+            let stored_clicks = SignupClickIds::from_user_data(stored_user_data.as_ref());
+            let stashed = if stored_clicks.has_click_id() {
+                None
+            } else if let Some(user_agent) =
+                SignupClickIds::normalized_user_agent(event_user_agent.as_deref())
+            {
+                match macro_cache_client
+                    .take_signup_meta(&ip_address, &user_agent)
+                    .await
+                {
+                    Ok(json) => json.as_deref().and_then(SignupClickIds::from_json),
+                    Err(error) => {
+                        tracing::warn!(error = ?error, "failed to read signup meta attribution");
+                        None
+                    }
+                }
+            } else {
+                None
             };
+            let user_data = registration_user_data(
+                &email,
+                &ip_address,
+                event_user_agent.as_deref(),
+                stored_user_data.as_ref(),
+                stashed,
+            );
             let _ = analytics_client
                 .track_meta(
                     "CompleteRegistration",
                     &user_data,
                     MetaActionSource::Website,
-                    Some(&format!("signup:{user_id}")),
+                    Some(&signup_event_id(&user_id)),
                     serde_json::json!({
                         // Must mirror the browser payload in the web app's
                         // signupCompletion.ts: Meta keeps whichever of the
@@ -483,10 +520,34 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
 
     // Automatically add the new user to a team whose auto-join domain
     // matches their email domain. Fire-and-forget: a failed auto-join must
-    // never block user creation.
+    // never block user creation. An email-code signup joins once its first
+    // code proves the address.
+    if !email_code_signup {
+        spawn_domain_team_join(ctx, &user_id);
+    }
+
+    // Agents get an SDK token instead: no marketing sequence, sample content,
+    // or support channel.
+    if !is_agent {
+        spawn_human_signup_content(ctx, &user_id, &email);
+    }
+
+    // Allow to fail silently
+    let _ = ctx
+        .macro_cache_client
+        .increment_create_user_hourly_rate_limit(&ip_address)
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "unable to increment create user rate limit"));
+
+    Ok(())
+}
+
+/// Joins the new user to the team whose auto-join domain is their email
+/// domain, in the background.
+fn spawn_domain_team_join(ctx: &ApiContext, user_id: &str) {
     tokio::spawn({
         let teams_service = ctx.teams_service.clone();
-        let user_id = user_id.clone();
+        let user_id = user_id.to_owned();
         async move {
             let user_id = match MacroUserIdStr::parse_from_str(&user_id) {
                 Ok(user_id) => user_id,
@@ -509,21 +570,6 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         }
         .in_current_span()
     });
-
-    // Agents get an SDK token instead: no marketing sequence, sample content,
-    // or support channel.
-    if !is_agent {
-        spawn_human_signup_content(ctx, &user_id, &email);
-    }
-
-    // Allow to fail silently
-    let _ = ctx
-        .macro_cache_client
-        .increment_create_user_hourly_rate_limit(&ip_address)
-        .await
-        .inspect_err(|e| tracing::error!(error=?e, "unable to increment create user rate limit"));
-
-    Ok(())
 }
 
 /// Marketing and sample content for a person's new account. Fire-and-forget:

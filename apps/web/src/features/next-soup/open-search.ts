@@ -1,6 +1,7 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { ReferredFrom } from '@components/app/split-layout/layoutManager';
+import type { SearchOperatorBinding } from './core/search-operators';
 import type { Query } from './filters/filter-store';
 import type { SetPredicatesInput } from './filters/filter-store/predicates-store';
 import { getSearchSplit } from './soup-view/search-controllers';
@@ -11,6 +12,8 @@ export function createGlobalSearchOpener(referredFrom: ReferredFrom) {
   return (
     search: {
       query: string;
+      /** What the opener's tokens in `query` stand for, by id. */
+      bindings?: SearchOperatorBinding[];
       filters: Query;
       clientFilters: SetPredicatesInput<string>;
     },
@@ -38,6 +41,7 @@ export function createGlobalSearchOpener(referredFrom: ReferredFrom) {
         preserveParams: true,
         params: {
           initialQuery: search.query,
+          initialBindings: search.bindings,
           initialFilters: search.filters,
           initialClientFilters: search.clientFilters,
         },

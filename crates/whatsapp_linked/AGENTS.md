@@ -135,6 +135,7 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
 
 ## Gotchas
 
+- `POST /whatsapp/connect`, `GET /whatsapp/pairing/{id}` and `POST /whatsapp/pairing/{id}/passkey` refuse an agent's program (`refuse_programs` in `inbound/router.rs`, 403): the QR code or passkey is all a phone needs to link a lasting device. A person pairs in Settings.
 - Pairing reads and account controls require a human session (the
   authority rules, send budget and `SendRateLimiter` are `external_chat`'s).
 - Lock accounts before groups, then child rows; lock every group in a batch in UUID order. Pairing expiry locks affected accounts before pairing rows. Media completion takes the group lock before attachment/message writes.

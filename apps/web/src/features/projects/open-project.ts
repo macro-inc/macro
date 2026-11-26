@@ -2,7 +2,6 @@ import { paneRoute } from '@app/routes/app-route';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { useSplitLayout } from '@components/app/split-layout/layout';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
-import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
 import { Telemetry } from '@macro-inc/observability';
 import type { ProjectSection } from './core/project';
 
@@ -42,7 +41,6 @@ export function openProject(
     discussionId?: string;
   } = {}
 ) {
-  if (!isFeatureEnabled(enableProjects)) return;
   const section = options.discussionId
     ? 'overview'
     : (options.section ?? 'overview');

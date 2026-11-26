@@ -15,6 +15,22 @@ export type ActivityAction =
   | { kind: 'participant-removed'; participant: string }
   | { kind: 'task-added'; taskId?: string }
   | { kind: 'task-removed'; taskId?: string }
+  /** Time logged on a task, in whole minutes, for the day the person chose. */
+  | {
+      kind: 'time-logged';
+      minutes: number;
+      entryDate: string;
+      source: 'manual' | 'timer';
+    }
+  /**
+   * Other records were merged into this one (a CRM company or person), with the
+   * team-visible values of theirs that this one's own replaced.
+   */
+  | {
+      kind: 'record-merged';
+      merged: { id: string; name: string | null }[];
+      dropped: { property: string; record: string; value: unknown }[];
+    }
   | { kind: 'unknown'; tag: string };
 
 /**

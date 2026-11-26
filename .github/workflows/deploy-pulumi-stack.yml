@@ -5,21 +5,21 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        type: choice
-        required: true
-        default: dev
-        options:
-        - dev
-        - prod
         description: The environment we are deploying to.
-      pulumi-service-name:
-        type: string
         required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+      pulumi-service-name:
         description: The name of the pulumi service to deploy. This will be the exact name of the folder containing your stacks.
-      cloud-storage-service-name:
+        required: true
         type: string
-        required: false
+      cloud-storage-service-name:
         description: Optional service key from .github/services-config.json; set this for Lambda-backed stacks so CI can build Lambda zips before Pulumi runs.
+        required: false
+        type: string
 jobs:
   setup:
     name: Check whether ${{ inputs.pulumi-service-name }} ships service code
@@ -27,79 +27,88 @@ jobs:
     outputs:
       ships_code: ${{ steps.check.outputs.ships_code }}
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        persist-credentials: 'false'
-        sparse-checkout: .github/
-    - id: check
-      name: Check artifact config
-      run: |
-        set -euo pipefail
-        # The deploy runs Pulumi in infra/stacks/$STACK, so any other
-        # spelling of a folder (`stack/`, `./stack`) would deploy it while
-        # missing its services-config entry below.
-        if [[ ! "$STACK" =~ ^[A-Za-z0-9_-]+$ ]]; then
-          echo "::error::pulumi-service-name must be a folder name under infra/stacks, such as agent-harness-service; got '$STACK'."
-          exit 1
-        fi
-        ships_code=$(jq -r --arg stack_path "infra/stacks/$STACK/**" '
-          [.services[] | select(.stack_path == $stack_path) | (.deploy_binaries // []) + (.deploy_lambdas // []) | length]
-          | add // 0
-          | . > 0
-        ' .github/services-config.json)
-        echo "ships_code=$ships_code" >> "$GITHUB_OUTPUT"
-        echo "stack=$STACK ships_code=$ships_code"
-      env:
-        STACK: ${{ inputs.pulumi-service-name }}
+      - name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: 'false'
+          sparse-checkout: .github/
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - id: check
+        name: Check artifact config
+        run: |
+          set -euo pipefail
+          # The deploy runs Pulumi in infra/stacks/$STACK, so any other
+          # spelling of a folder (`stack/`, `./stack`) would deploy it while
+          # missing its services-config entry below.
+          if [[ ! "$STACK" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "::error::pulumi-service-name must be a folder name under infra/stacks, such as agent-harness-service; got '$STACK'."
+            exit 1
+          fi
+          ships_code=$(jq -r --arg stack_path "infra/stacks/$STACK/**" '
+            [.services[] | select(.stack_path == $stack_path) | (.deploy_binaries // []) + (.deploy_lambdas // []) | length]
+            | add // 0
+            | . > 0
+          ' .github/services-config.json)
+          echo "ships_code=$ships_code" >> "$GITHUB_OUTPUT"
+          echo "stack=$STACK ships_code=$ships_code"
+        env:
+          STACK: ${{ inputs.pulumi-service-name }}
   check-migrations:
     needs:
-    - setup
-    if: ${{ needs.setup.outputs.ships_code == 'true' }}
+      - setup
+    if: needs.setup.outputs.ships_code == 'true'
     name: Check ${{ inputs.pulumi-service-name }} migrations are applied
     runs-on: db-migrator
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        persist-credentials: 'false'
-        sparse-checkout: .github/
-    - name: Check migrations
-      uses: ./.github/actions/check-macro-db-migrations
-      with:
-        environment: ${{ inputs.environment }}
+      - name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: 'false'
+          sparse-checkout: .github/
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Check migrations
+        uses: ./.github/actions/check-macro-db-migrations
+        with:
+          environment: ${{ inputs.environment }}
   deploy:
     needs:
-    - setup
-    - check-migrations
-    if: ${{ !failure() && !cancelled() }}
+      - setup
+      - check-migrations
+    if: '!failure() && !cancelled()'
     runs-on: namespace-profile-linux-mid
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        persist-credentials: 'false'
-    - name: Mount /nix cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-      continue-on-error: true
-    - name: Setup Nix
-      uses: ./.github/actions/setup-nix
-    - name: Deploy ${{ inputs.pulumi-service-name }}
-      uses: ./.github/actions/deploy-cloud-storage-pulumi
-      with:
-        environment: ${{ inputs.environment }}
-        aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-        pulumi-service-name: ${{ inputs.pulumi-service-name }}
-        cloud-storage-service-name: ${{ inputs.cloud-storage-service-name }}
-        dd-app-key: ${{ secrets.DD_APP_KEY }}
-        dd-api-key: ${{ secrets.DD_API_KEY }}
-    - name: Teardown Nix
-      if: always()
-      uses: ./.github/actions/teardown-nix
+      - name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount /nix cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+      - name: Deploy ${{ inputs.pulumi-service-name }}
+        uses: ./.github/actions/deploy-cloud-storage-pulumi
+        with:
+          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          pulumi-service-name: ${{ inputs.pulumi-service-name }}
+          dd-app-key: ${{ secrets.DD_APP_KEY }}
+          dd-api-key: ${{ secrets.DD_API_KEY }}
+          environment: ${{ inputs.environment }}
+          cloud-storage-service-name: ${{ inputs.cloud-storage-service-name }}
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.pulumi-service-name }}-${{ inputs.environment }}
   cancel-in-progress: false

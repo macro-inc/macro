@@ -1,5 +1,6 @@
+import { installedNativeBuild } from '@app/lib/tauri/native-build';
 import { getNativeMobilePlatform } from '@core/util/platform';
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
 
 const CURRENT_PROFILE = 'soup-mail-v5';
 const LEGACY_PROFILE = 'soup-mail-v2';
@@ -15,6 +16,7 @@ type MailCacheProfile = {
 };
 
 let nativeProfile: Promise<MailCacheProfile> | undefined;
+const TIMED_OUT = Symbol('timed out');
 
 /** Negotiate against the installed engine, including when JS arrived by OTA. */
 export function mailCacheProfile(): Promise<MailCacheProfile> {
@@ -28,13 +30,13 @@ export function mailCacheProfile(): Promise<MailCacheProfile> {
 async function installedNativeProfile(): Promise<MailCacheProfile> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    const info = await Promise.race([
-      invoke<{ nativeBuild: number }>('get_bundle_debug_info'),
-      new Promise<null>((resolve) => {
-        timeout = setTimeout(() => resolve(null), 1500);
+    const nativeBuild = await Promise.race([
+      installedNativeBuild(),
+      new Promise<typeof TIMED_OUT>((resolve) => {
+        timeout = setTimeout(() => resolve(TIMED_OUT), 1500);
       }),
     ]);
-    if (info === null) {
+    if (nativeBuild === TIMED_OUT) {
       return { profile: LEGACY_PROFILE, outcome: 'native_lookup_timeout' };
     }
     const platform = getNativeMobilePlatform();
@@ -42,14 +44,15 @@ async function installedNativeProfile(): Promise<MailCacheProfile> {
       platform === 'ios' ? 193 : platform === 'android' ? 20 : null;
     if (
       minimum !== null &&
-      Number.isInteger(info.nativeBuild) &&
-      info.nativeBuild >= minimum
+      typeof nativeBuild === 'number' &&
+      Number.isInteger(nativeBuild) &&
+      nativeBuild >= minimum
     ) {
       return { profile: CURRENT_PROFILE, outcome: 'native_supported' };
     }
     return { profile: LEGACY_PROFILE, outcome: 'native_unsupported' };
   } catch {
-    // Older engines may not expose build information. Never infer support from JS.
+    // The binary did not answer with its build. Never infer support from JS.
     return { profile: LEGACY_PROFILE, outcome: 'native_lookup_failed' };
   } finally {
     clearTimeout(timeout);

@@ -1,7 +1,6 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { toQuerySchema } from '@app/features/database-query/queries/query-source';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSearchParams } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
@@ -15,7 +14,6 @@ import { useBlockId } from '@core/block';
 import { DATABASE_MODEL, modelsForPlan } from '@core/component/AI/constant';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toast } from '@core/component/Toast/Toast';
-import { enableDatabases } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -23,6 +21,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazy } from '@core/util/lazy';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import {
@@ -37,18 +36,21 @@ import { Button } from '@ui';
 import { okAsync } from 'neverthrow';
 import {
   type Component,
+  createEffect,
   createMemo,
   createSignal,
   ErrorBoundary,
   For,
+  on,
   onCleanup,
   Show,
+  Suspense,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { DatabaseSearch } from '../../database/components/database-search';
 import type { ShownLayout } from '../../database/components/database-toolbar';
-import { DatabaseToolbar } from '../../database/components/database-toolbar';
 import type { DatabaseRelatedDestination } from '../../database/core/database-relations';
+import type { CreateTable } from '../../database/core/table-creation';
 import type { NewView } from '../../database/core/view-creation';
 import type { ViewChange } from '../../database/core/view-state';
 import {
@@ -61,12 +63,19 @@ import { createDatabaseSearch } from '../../database/primitives/database-search'
 import { createDatabaseUndo } from '../../database/primitives/undo-controller';
 import { createViewCreation } from '../../database/primitives/view-creation';
 import { databaseChat } from '../core/chat-context';
+import {
+  DatabasePageHeader,
+  DatabasePageNoTables,
+  DatabasePageRecords,
+  DatabasePageToolbar,
+} from '../database-page-controls';
 import { databaseDetailSearch } from '../database-route';
 import {
   createDatabaseViewSelection,
   followRouteLocation,
   selectLocation,
 } from '../primitives/view-selection';
+import { createTableWithName } from '../queries/create-table';
 import { searchDatabase } from '../queries/database-search';
 import { toViewColumn } from '../queries/table-rows';
 import { trashDatabase } from '../queries/trash-database';
@@ -81,7 +90,12 @@ import {
 import { DatabaseGrid } from './DatabaseGrid';
 import { DatabasePageShell } from './DatabasePageShell';
 import { DatabaseSidePanelSections } from './sidepanel/DatabaseSidePanelSections';
-import { TopBar } from './TopBar';
+
+// Forms load only when the flag is on, and only through this boundary.
+const DatabaseFormsEntry = lazy(async () => ({
+  default: (await import('@app/features/block-form/database-forms-entry'))
+    .DatabaseFormsEntry,
+}));
 
 const Block: Component = () => {
   const databaseId = useBlockId();
@@ -290,6 +304,49 @@ const Block: Component = () => {
       allRecordsView(table.table)
     );
   };
+  /** The active table's forms, in whichever menu switches tables. */
+  const tableMenuItems = () => {
+    if (!activeTable()) return undefined;
+
+    return () => (
+      <Suspense>
+        <DatabaseFormsEntry
+          databaseId={databaseId}
+          tableId={activeTableId()}
+          tableName={activeTable()?.table.name}
+          canCreate={detail()?.grant === 'owner'}
+          enabled
+        />
+      </Suspense>
+    );
+  };
+  const createTableNamed: CreateTable = (name, existingTableId) =>
+    createTableWithName({ databaseId, name, existingTableId });
+  const createTable = () => (canEdit() ? createTableNamed : undefined);
+  /**
+   * The table whose toolbar should give its table menu focus as it appears:
+   * the one just chosen from that menu, whose own button went with the table
+   * it named.
+   */
+  const [tableMenuFocus, setTableMenuFocus] = createSignal<string>();
+  function selectTableFromMenu(tableId: string) {
+    setTableMenuFocus(tableId);
+    setSelection((current) => ({ ...current, tableId }));
+  }
+  // A request is for the switch that made it: whatever opens another table
+  // (a link, a related record, a header tab) drops one that was never met.
+  createEffect(
+    on(
+      activeTableId,
+      (tableId) => {
+        if (tableMenuFocus() !== tableId) setTableMenuFocus(undefined);
+      },
+      { defer: true }
+    )
+  );
+  function selectTable(tableId: string) {
+    setSelection((current) => ({ ...current, tableId }));
+  }
   function selectView(id?: string) {
     const tableId = activeTableId();
     if (!tableId) return;
@@ -355,14 +412,13 @@ const Block: Component = () => {
           databaseId={databaseId}
           database={detail()?.database}
         />
-        <TopBar
+        <DatabasePageHeader
           databaseId={databaseId}
           detail={detail()}
           canEdit={canEdit()}
           activeTable={activeTable()}
-          onSelectTable={(tableId) =>
-            setSelection((current) => ({ ...current, tableId }))
-          }
+          tableMenuItems={tableMenuItems()}
+          onSelectTable={selectTable}
           onDelete={() =>
             trashDatabase(getEntityGraphqlClient(), databaseId).map(() =>
               returnSplitToRecentListView(panel.handle)
@@ -372,7 +428,7 @@ const Block: Component = () => {
           onOpenChat={() => fireAndForget(openDatabaseChat(), 'database-view')}
         />
         <div
-          class="@container/database flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-canvas-base text-ink"
+          class="@container/database flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-canvas-base text-ink touch:pt-(--mobile-content-inset-top) touch:[&>*]:[--mobile-content-inset-top:0px]"
           style={{ '--database-title-column-width': '18rem' }}
         >
           <ErrorBoundary
@@ -425,9 +481,10 @@ const Block: Component = () => {
                 <Show
                   when={activeTable()}
                   fallback={
-                    <div class="grid flex-1 place-items-center p-6 text-sm text-ink-muted">
-                      Add a table to start organizing your data.
-                    </div>
+                    <DatabasePageNoTables
+                      onCreateTable={createTable()}
+                      onOpenTable={selectTable}
+                    />
                   }
                 >
                   <Show
@@ -472,100 +529,121 @@ const Block: Component = () => {
                               </div>
                             )}
                           </Show>
-                          <DatabaseGrid
-                            host="block"
-                            schema="opened"
-                            databaseId={databaseId}
-                            table={table()}
-                            canEdit={canEdit() && !activeCreation()}
-                            view={shown().view}
-                            stored={!!selectedView() && !activeCreation()}
-                            preparingView={!!activeCreation()?.needsColumn}
-                            onViewChange={changeView}
-                            onClearConstraints={() => {
-                              changeView({
-                                query: {
-                                  ...shown().view.query,
-                                  filter: null,
-                                },
-                              });
-                            }}
-                            onOpenRelated={openRelated}
-                            actionsRef={(actions) => {
-                              gridEntry = {
-                                tableId: table().table.id,
-                                openRecord: actions.openRecord,
-                              };
-                              openRequestedRecord();
-                            }}
-                            renderToolbar={(actions) => (
-                              <DatabaseToolbar
-                                columns={columns()}
-                                views={storedViews()}
-                                view={shown().view}
-                                selectedViewId={selectedView()?.id}
-                                canEdit={canEdit() && !activeCreation()}
-                                search={
-                                  <DatabaseSearch
-                                    term={search.term()}
-                                    isOpen={search.isOpen()}
-                                    results={search.results()}
-                                    onTermChange={search.setTerm}
-                                    onOpen={search.open}
-                                    onClose={search.close}
-                                    inputRef={search.setInput}
-                                    onChoose={(choice) =>
-                                      fireAndForget(
-                                        openRelated({
-                                          databaseId,
-                                          ...choice,
-                                        }),
-                                        'database-view'
-                                      )
-                                    }
-                                  />
-                                }
-                                onSelectView={selectView}
-                                onChangeView={changeView}
-                                onCreateView={(created) =>
-                                  createView(shown().view, created)
-                                }
-                                onRenameView={(target, name) =>
-                                  updateDatabaseView(target, { name }).map(
-                                    () => undefined
-                                  )
-                                }
-                                onShowViewAs={showViewAs}
-                                onDeleteView={(target) => {
-                                  if (selectedView()?.id === target.id)
-                                    selectView();
-                                  return deleteDatabaseView(target);
-                                }}
-                                onReorderViews={(order) => {
-                                  reorderDatabaseViews(
-                                    databaseId,
-                                    table().table.id,
-                                    order
-                                  ).mapErr((failure) =>
-                                    toast.failure(
-                                      databaseOpMessage(failure, 'these views')
-                                    )
-                                  );
-                                }}
-                                onCreateRecord={
-                                  canEdit()
-                                    ? () =>
+                          <DatabasePageRecords>
+                            <DatabaseGrid
+                              host="block"
+                              schema="opened"
+                              databaseId={databaseId}
+                              table={table()}
+                              contentClass="mx-4 mb-4 mt-1 rounded-xl border border-edge-muted touch:mb-[calc(var(--mobile-content-inset-bottom,0px)+0.5rem)]"
+                              canEdit={canEdit() && !activeCreation()}
+                              view={shown().view}
+                              stored={!!selectedView() && !activeCreation()}
+                              preparingView={!!activeCreation()?.needsColumn}
+                              onViewChange={changeView}
+                              onClearConstraints={() => {
+                                changeView({
+                                  query: {
+                                    ...shown().view.query,
+                                    filter: null,
+                                  },
+                                });
+                              }}
+                              onOpenRelated={openRelated}
+                              actionsRef={(actions) => {
+                                gridEntry = {
+                                  tableId: table().table.id,
+                                  openRecord: actions.openRecord,
+                                };
+                                openRequestedRecord();
+                              }}
+                              renderToolbar={(actions) => (
+                                <DatabasePageToolbar
+                                  columns={columns()}
+                                  views={storedViews()}
+                                  view={shown().view}
+                                  selectedViewId={selectedView()?.id}
+                                  canEdit={canEdit() && !activeCreation()}
+                                  tables={tables().map((entry) => ({
+                                    id: entry.table.id,
+                                    name: entry.table.name,
+                                  }))}
+                                  activeTableId={activeTableId()}
+                                  onSelectTable={selectTableFromMenu}
+                                  onCreateTable={createTable()}
+                                  focusTableMenu={
+                                    tableMenuFocus() !== undefined &&
+                                    tableMenuFocus() === activeTableId()
+                                  }
+                                  onTableMenuFocused={() =>
+                                    setTableMenuFocus(undefined)
+                                  }
+                                  tableMenuItems={tableMenuItems()}
+                                  search={
+                                    <DatabaseSearch
+                                      term={search.term()}
+                                      isOpen={search.isOpen()}
+                                      results={search.results()}
+                                      onTermChange={search.setTerm}
+                                      onOpen={search.open}
+                                      onClose={search.close}
+                                      inputRef={search.setInput}
+                                      onChoose={(choice) =>
                                         fireAndForget(
-                                          actions.createRecord(),
+                                          openRelated({
+                                            databaseId,
+                                            ...choice,
+                                          }),
                                           'database-view'
                                         )
-                                    : undefined
-                                }
-                                canCreateRecord={columns().length > 0}
-                                creating={actions.pending()}
-                              />
-                            )}
-                          />
+                                      }
+                                    />
+                                  }
+                                  onSelectView={selectView}
+                                  onChangeView={changeView}
+                                  onCreateView={(created) =>
+                                    createView(shown().view, created)
+                                  }
+                                  onRenameView={(target, name) =>
+                                    updateDatabaseView(target, { name }).map(
+                                      () => undefined
+                                    )
+                                  }
+                                  onShowViewAs={showViewAs}
+                                  onDeleteView={(target) => {
+                                    if (selectedView()?.id === target.id)
+                                      selectView();
+                                    return deleteDatabaseView(target);
+                                  }}
+                                  onReorderViews={(order) => {
+                                    reorderDatabaseViews(
+                                      databaseId,
+                                      table().table.id,
+                                      order
+                                    ).mapErr((failure) =>
+                                      toast.failure(
+                                        databaseOpMessage(
+                                          failure,
+                                          'these views'
+                                        )
+                                      )
+                                    );
+                                  }}
+                                  onCreateRecord={
+                                    canEdit()
+                                      ? () =>
+                                          fireAndForget(
+                                            actions.createRecord(),
+                                            'database-view'
+                                          )
+                                      : undefined
+                                  }
+                                  canCreateRecord={columns().length > 0}
+                                  creating={actions.pending()}
+                                />
+                              )}
+                            />
+                          </DatabasePageRecords>
                         </>
                       );
                     }}
@@ -597,20 +675,6 @@ function DatabaseSkeleton() {
   );
 }
 
-const DatabaseBlock: Component = () => {
-  const flag = useFeatureFlag(enableDatabases);
-  return (
-    <Show
-      when={flag().enabled}
-      fallback={
-        <div class="grid size-full place-items-center p-6 text-sm text-ink-muted">
-          Databases are not enabled for this account.
-        </div>
-      }
-    >
-      <Block />
-    </Show>
-  );
-};
+const DatabaseBlock: Component = () => <Block />;
 
 export default DatabaseBlock;

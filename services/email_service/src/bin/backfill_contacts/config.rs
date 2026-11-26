@@ -1,15 +1,26 @@
 use anyhow::Context;
-use macro_env_var::env_vars;
+use email_service::config::Environment;
+use macro_env_var::{env_vars, maybe_env_vars};
 
 /// Holds all configuration loaded from environment variables.
 pub struct Config {
     pub macro_ids: String,
     pub database_url: String,
+    pub environment: Environment,
+    /// PostHog project key the `contacts-list-writes` flag is read with;
+    /// without one, only legacy contacts messages are sent.
+    pub posthog_api_key: Option<PosthogApiKey>,
+    pub posthog_host: Option<PosthogHost>,
 }
 
 env_vars! {
     struct MacroIds;
     struct DatabaseUrl;
+}
+
+maybe_env_vars! {
+    pub struct PosthogApiKey;
+    pub struct PosthogHost;
 }
 
 impl Config {
@@ -21,6 +32,9 @@ impl Config {
             database_url: DatabaseUrl::new()
                 .context("DATABASE_URL not set")?
                 .to_string(),
+            environment: Environment::new_or_prod(),
+            posthog_api_key: PosthogApiKey::new(),
+            posthog_host: PosthogHost::new(),
         })
     }
 }

@@ -1,5 +1,7 @@
 use super::*;
 use crate::date_format::EpochMillis;
+use crate::error::WriteRefusal;
+use crate::test_support::serve_once;
 
 fn args(doc_id: &str, node_id: &str) -> UpsertDocumentArgs {
     UpsertDocumentArgs {
@@ -13,6 +15,7 @@ fn args(doc_id: &str, node_id: &str) -> UpsertDocumentArgs {
         updated_at_millis: EpochMillis::new(1_700_000_000_123).unwrap(),
         sub_type: None,
         properties: vec![],
+        is_email_attachment: false,
     }
 }
 
@@ -30,6 +33,27 @@ fn parent_doc_body_has_metadata_no_chunk_fields() {
     assert!(doc.get("content").is_none());
     assert!(doc.get("node_id").is_none());
     assert!(doc.get("raw_content").is_none());
+}
+
+#[test]
+fn parent_doc_body_writes_the_email_attachment_flag_either_way() {
+    // A full `index` overwrite drops any field it omits, so `false` is
+    // written explicitly: an unlinked document must not keep a stale `true`.
+    let doc = parent_doc_body(&args("doc1", "n1"));
+    assert_eq!(doc["is_email_attachment"], false);
+
+    let mut a = args("doc1", "n1");
+    a.is_email_attachment = true;
+    let doc = parent_doc_body(&a);
+    assert_eq!(doc["is_email_attachment"], true);
+}
+
+#[test]
+fn child_doc_body_omits_the_email_attachment_flag() {
+    let mut a = args("doc1", "n1");
+    a.is_email_attachment = true;
+    let doc = child_doc_body(&a);
+    assert!(doc.get("is_email_attachment").is_none());
 }
 
 #[test]
@@ -112,6 +136,7 @@ fn parent_only_bulk_body_writes_parent_and_no_children() {
         values: vec!["opt-1".to_string()],
         ..Default::default()
     }];
+    a.is_email_attachment = true;
     let body = parent_only_bulk_body(&a);
 
     assert_eq!(body.len(), 2);
@@ -129,6 +154,7 @@ fn parent_only_bulk_body_writes_parent_and_no_children() {
     assert_eq!(doc["sub_type"], "task");
     assert_eq!(doc["properties"][0]["definition_id"], "tag-def");
     assert_eq!(doc["properties"][0]["values"][0], "opt-1");
+    assert_eq!(doc["is_email_attachment"], true);
     // No chunk is written and no chunk fields leak onto the parent.
     assert!(doc.get("content").is_none());
     assert!(doc.get("node_id").is_none());
@@ -234,4 +260,272 @@ fn child_body_truncates_on_char_boundary() {
         doc["content"].as_str().unwrap().chars().count(),
         MAX_CHUNK_CONTENT_CHARS
     );
+}
+
+#[test]
+fn email_attachment_update_sends_one_routed_partial_update_per_document() {
+    let body = email_attachment_update_bulk_body(&["doc1".to_string(), "doc2".to_string()], true);
+    let lines: Vec<serde_json::Value> = body
+        .iter()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+
+    assert_eq!(
+        lines,
+        vec![
+            serde_json::json!({"update": {"_id": "doc1", "routing": "doc1", "retry_on_conflict": 3}}),
+            serde_json::json!({"doc": {"is_email_attachment": true}, "detect_noop": false}),
+            serde_json::json!({"update": {"_id": "doc2", "routing": "doc2", "retry_on_conflict": 3}}),
+            serde_json::json!({"doc": {"is_email_attachment": true}, "detect_noop": false}),
+        ]
+    );
+}
+
+#[test]
+fn email_attachment_update_can_clear_the_flag() {
+    let body = email_attachment_update_bulk_body(&["doc1".to_string()], false);
+    let update: serde_json::Value = serde_json::from_str(&body[1]).unwrap();
+
+    assert_eq!(
+        update,
+        serde_json::json!({"doc": {"is_email_attachment": false}, "detect_noop": false})
+    );
+}
+
+#[test]
+fn email_attachment_update_counts_updated_missing_and_failed_items() {
+    let body = serde_json::json!({
+        "errors": true,
+        "items": [
+            {"update": {"_id": "doc1", "status": 200, "result": "updated"}},
+            {"update": {"_id": "doc2", "status": 404, "error": {
+                "type": "document_missing_exception",
+                "reason": "[doc2]: document missing",
+            }}},
+            {"update": {"_id": "doc3", "status": 409, "error": {
+                "type": "version_conflict_engine_exception",
+                "reason": "[doc3]: version conflict",
+            }}},
+            {"update": {"_id": "doc4", "status": 404, "error": {
+                "type": "index_not_found_exception",
+                "reason": "no such index [documents]",
+            }}},
+        ],
+    });
+
+    let result = classify_email_attachment_update_response(200, &body.to_string()).unwrap();
+
+    assert_eq!(
+        result,
+        EmailAttachmentUpdateResult {
+            updated: 1,
+            missing: 1,
+            failed: vec![
+                FailedDocumentUpdate {
+                    document_id: "doc3".to_string(),
+                    status: 409,
+                    error_type: "version_conflict_engine_exception".to_string(),
+                },
+                FailedDocumentUpdate {
+                    document_id: "doc4".to_string(),
+                    status: 404,
+                    error_type: "index_not_found_exception".to_string(),
+                },
+            ],
+        }
+    );
+}
+
+#[test]
+fn an_item_rejected_with_429_refuses_the_whole_batch() {
+    let body = serde_json::json!({
+        "errors": true,
+        "items": [
+            {"update": {"_id": "doc1", "status": 200, "result": "updated"}},
+            {"update": {"_id": "doc2", "status": 429, "error": {
+                "type": "es_rejected_execution_exception",
+                "reason": "rejected execution of coordinating operation",
+            }}},
+        ],
+    });
+
+    let error = classify_email_attachment_update_response(200, &body.to_string()).unwrap_err();
+
+    let OpensearchClientError::WritesRefused {
+        cause, operation, ..
+    } = error
+    else {
+        panic!("expected a refusal, got {error:?}");
+    };
+    assert_eq!(cause, WriteRefusal::TooManyRequests);
+    assert_eq!(
+        operation,
+        OpensearchOperation::BulkUpdateDocumentEmailAttachment
+    );
+}
+
+#[test]
+fn a_flood_stage_block_on_an_item_is_a_cluster_block() {
+    let body = serde_json::json!({
+        "errors": true,
+        "items": [
+            {"update": {"_id": "doc1", "status": 429, "error": {
+                "type": "cluster_block_exception",
+                "reason": "index [documents_v2] blocked by: [TOO_MANY_REQUESTS/12/disk usage exceeded flood-stage watermark, index has read-only-allow-delete block];",
+            }}},
+        ],
+    });
+
+    let error = classify_email_attachment_update_response(200, &body.to_string()).unwrap_err();
+
+    let OpensearchClientError::WritesRefused { cause, details, .. } = error else {
+        panic!("expected a refusal, got {error:?}");
+    };
+    assert_eq!(cause, WriteRefusal::ClusterBlock);
+    assert!(details.contains("flood-stage watermark"), "{details}");
+}
+
+#[test]
+fn a_request_level_429_without_json_is_a_refusal() {
+    let error =
+        classify_email_attachment_update_response(429, "429 Too Many Requests").unwrap_err();
+
+    assert_eq!(
+        error,
+        OpensearchClientError::WritesRefused {
+            details: "429 Too Many Requests".to_string(),
+            cause: WriteRefusal::TooManyRequests,
+            operation: OpensearchOperation::BulkUpdateDocumentEmailAttachment,
+        }
+    );
+}
+
+#[test]
+fn a_request_level_cluster_block_is_a_refusal() {
+    let body = serde_json::json!({
+        "error": {
+            "type": "cluster_block_exception",
+            "reason": "index [documents_v2] blocked by: [FORBIDDEN/8/index write (api)];",
+        },
+        "status": 403,
+    });
+
+    let error = classify_email_attachment_update_response(403, &body.to_string()).unwrap_err();
+
+    assert!(
+        matches!(
+            error,
+            OpensearchClientError::WritesRefused {
+                cause: WriteRefusal::ClusterBlock,
+                ..
+            }
+        ),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn a_request_level_403_that_is_not_a_block_is_not_a_refusal() {
+    let body = serde_json::json!({
+        "error": {"type": "security_exception", "reason": "no permissions"},
+        "status": 403,
+    });
+
+    let error = classify_email_attachment_update_response(403, &body.to_string()).unwrap_err();
+
+    assert!(
+        matches!(error, OpensearchClientError::Unknown { .. }),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn an_undecodable_success_body_is_a_deserialization_failure() {
+    let error = classify_email_attachment_update_response(200, "not json").unwrap_err();
+
+    assert!(
+        matches!(error, OpensearchClientError::DeserializationFailed { .. }),
+        "{error:?}"
+    );
+}
+
+#[tokio::test]
+async fn an_empty_batch_sends_no_request() {
+    // Nothing listens on port 1, so any request would fail.
+    let client =
+        crate::OpensearchClient::new("http://127.0.0.1:1".into(), "".into(), "".into()).unwrap();
+
+    let result = client
+        .bulk_update_email_attachment(&[], true)
+        .await
+        .unwrap();
+
+    assert_eq!(result, EmailAttachmentUpdateResult::default());
+}
+
+#[tokio::test]
+async fn email_attachment_update_writes_through_the_documents_alias() {
+    let (url, server) = serve_once(
+        "200 OK",
+        r#"{"errors":false,"items":[{"update":{"_id":"doc1","status":200,"result":"updated"}}]}"#,
+    );
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    let result = client
+        .bulk_update_email_attachment(&["doc1".to_string()], true)
+        .await
+        .unwrap();
+    let (request_line, request_body) = server.join().unwrap();
+
+    assert_eq!(result.updated, 1);
+    assert!(
+        request_line.starts_with("POST /documents/_bulk?"),
+        "{request_line}"
+    );
+    assert!(
+        request_line.contains("require_alias=true"),
+        "{request_line}"
+    );
+    assert!(
+        request_body.contains(r#""routing":"doc1""#),
+        "{request_body}"
+    );
+}
+
+#[tokio::test]
+async fn a_refused_update_is_not_resent() {
+    // `serve_once` answers one request, so a resend would fail to connect
+    // instead of returning the refusal.
+    let (url, server) = serve_once(
+        "429 Too Many Requests",
+        r#"{"error":{"type":"es_rejected_execution_exception","reason":"rejected"},"status":429}"#,
+    );
+    let client = crate::OpensearchClient::new(url, "".into(), "".into()).unwrap();
+
+    let result = client
+        .bulk_update_email_attachment(&["doc1".to_string()], true)
+        .await;
+    server.join().unwrap();
+
+    assert!(
+        matches!(
+            result,
+            Err(OpensearchClientError::WritesRefused {
+                cause: WriteRefusal::TooManyRequests,
+                ..
+            })
+        ),
+        "{result:?}"
+    );
+}
+
+#[test]
+fn a_success_without_items_acknowledges_nothing() {
+    for body in ["{}", r#"{"items":null}"#, r#"{"errors":false}"#] {
+        let error = classify_email_attachment_update_response(200, body).unwrap_err();
+        assert!(
+            matches!(error, OpensearchClientError::DeserializationFailed { .. }),
+            "{body}: {error:?}"
+        );
+    }
 }

@@ -3,7 +3,6 @@ import {
   EntityPropertiesSection,
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   GithubPullRequestDetailsRows,
@@ -19,21 +18,22 @@ import { openDocument } from '@core/component/LexicalMarkdown/component/core/Blo
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
 import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
-import {
-  enableProjects,
-  USE_MACRO_PR_SUMMARY_BLOCK,
-} from '@core/constant/featureFlags';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
 import type { DateValue } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
+import {
+  buildStartDateDefaultProperty,
+  buildTaskProjectDefaultProperty,
+} from '@entity/extractors-property';
 import { useOpenEntityNotifications } from '@notifications';
 import {
   getBuiltinPropertyIds,
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
+import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { queryReadyGate } from '@queries/gate';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
@@ -184,14 +184,12 @@ function PropertiesSectionContent(props: {
   const mdData = state.editor.md;
 
   const entityType: PropertiesEntityType = props.isTask ? 'TASK' : 'DOCUMENT';
+  const startDateEnabled = useStartDateEnabled();
+  const pairsStartAndDue = () => props.isTask && startDateEnabled();
 
-  const projects = useFeatureFlag(enableProjects);
   const defaultTitlePropertyDefinitionIds = () =>
     props.isTask
-      ? [
-          ...getDefaultPinnedProperties('task'),
-          ...(projects().enabled ? [SYSTEM_PROPERTY_IDS.PROJECT] : []),
-        ]
+      ? [...getDefaultPinnedProperties('task'), SYSTEM_PROPERTY_IDS.PROJECT]
       : [];
   const pins = createPinnedProperties(
     () => mdData.editor,
@@ -212,17 +210,22 @@ function PropertiesSectionContent(props: {
       }
       pinnedPropertyIds={pins.ids}
       defaultTitlePropertyDefinitionIds={defaultTitlePropertyDefinitionIds}
-      pinnedPropertyDefinitionOrder={PINNED_ORDER}
+      pinnedPropertyDefinitionOrder={
+        pairsStartAndDue() ? PINNED_ORDER_WITH_DATES : PINNED_ORDER
+      }
+      pairStartAndDue={pairsStartAndDue}
       onPropertyPinned={mdData.editor ? pins.pin : undefined}
       onPropertyUnpinned={pins.unpin}
       showTags={false}
       renderSection={props.renderSection}
       // A task joins a project through its Project property, edited like the others.
-      defaultProperties={() =>
-        props.isTask && projects().enabled
-          ? [buildTaskProjectDefaultProperty()]
-          : []
-      }
+      defaultProperties={() => {
+        if (!props.isTask) return [];
+        const project = buildTaskProjectDefaultProperty();
+        return pairsStartAndDue()
+          ? [project, buildStartDateDefaultProperty()]
+          : [project];
+      }}
     />
   );
 }
@@ -235,6 +238,13 @@ const PINNED_ORDER: readonly string[] = [
   SYSTEM_PROPERTY_IDS.PRIORITY,
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
   SYSTEM_PROPERTY_IDS.PROJECT,
+];
+
+// With start dates, Start Date sits right above the Due Date it begins.
+const PINNED_ORDER_WITH_DATES: readonly string[] = [
+  ...PINNED_ORDER,
+  SYSTEM_PROPERTY_IDS.START_DATE,
+  SYSTEM_PROPERTY_IDS.DUE_DATE,
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

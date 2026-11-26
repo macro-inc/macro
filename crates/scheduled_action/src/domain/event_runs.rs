@@ -196,6 +196,8 @@ pub struct PendingEventRun {
     pub revision: ConfigurationRevision,
     pub event: EventReference,
     pub admitted_at: DateTime<Utc>,
+    /// The trace the event was admitted in, which its run joins.
+    pub traceparent: Option<String>,
 }
 
 impl PendingEventRun {
@@ -453,6 +455,16 @@ pub trait CurrentOwnerAccess: Send + Sync + 'static {
         owner: &MacroUserIdStr<'static>,
         event: &EventReference,
     ) -> impl Future<Output = Result<Option<EventAccessCapability>, Report>> + Send;
+}
+
+/// The accounts an inbox's owner delegated it to (multi-inbox), who read its
+/// mail as their own. Err is transient, like `CurrentOwnerAccess`.
+pub trait InboxDelegates: Send + Sync + 'static {
+    fn delegates(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -228,7 +228,16 @@ async fn foundation_preserves_existing_all_mail_consent(pool: PgPool) -> anyhow:
     let team = Uuid::now_v7();
     seed_team(&pool, team, OWNER).await?;
     let link = insert_email_link(&pool, OWNER, "owner@example.com").await?;
-    consent_to_mailbox(&pool, team, link).await?;
+    // Seed the deployed writer's columns before the foundation exists. The
+    // current repository now reads selected_enabled in its response.
+    sqlx::query!(
+        "INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING",
+        team, OWNER
+    ).execute(&pool).await?;
+    sqlx::query!(
+        "INSERT INTO crm_email_consent (team_id, user_id, link_id, enabled) VALUES ($1, $2, $3, TRUE)",
+        team, OWNER, link
+    ).execute(&pool).await?;
     MACRO_DB_MIGRATIONS.run(&pool).await?;
     let state = sqlx::query!(
         "SELECT enabled, mode, selected_enabled, active_rule_revision, policy_version FROM crm_email_consent WHERE team_id = $1 AND user_id = $2",
@@ -249,7 +258,7 @@ async fn foundation_preserves_existing_all_mail_consent(pool: PgPool) -> anyhow:
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn legacy_readers_fail_closed_and_old_writes_cannot_expand_selected(
+async fn compatible_readers_recognize_selected_and_old_writes_cannot_expand_it(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let (team, link) = setup(&pool).await?;
@@ -259,8 +268,8 @@ async fn legacy_readers_fail_closed_and_old_writes_cannot_expand_selected(
     let company = insert_company(&pool, team, true, &["example.org"]).await?;
     insert_contact(&pool, company, "person@example.org").await?;
     let version = seed_selected(&pool, team).await?;
-    assert!(!repo.email_privacy(team, OWNER).await?.enabled);
-    assert!(repo.contribution_mailbox(team, OWNER).await?.is_none());
+    assert!(repo.email_privacy(team, OWNER).await?.enabled);
+    assert!(repo.contribution_mailbox(team, OWNER).await?.is_some());
     assert!(
         !sqlx::query_scalar!(
             r#"SELECT crm_email_thread_allowed($1, $2) AS "allowed!""#,
@@ -503,5 +512,32 @@ async fn membership_and_mailbox_deletion_remove_private_policy_history(
         .await?,
         Some(0)
     );
+    Ok(())
+}
+
+/// The migration runs before all inline readers have been upgraded. A selected
+/// row at that point violates the rollout premise, even if its grant is off.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn eligibility_upgrade_refuses_preexisting_selected_mode(pool: PgPool) -> anyhow::Result<()> {
+    let (team, _) = setup(&pool).await?;
+    seed_selected(&pool, team).await?;
+    for granted in [true, false] {
+        sqlx::query!(
+            "UPDATE crm_email_consent SET selected_enabled = $2 WHERE team_id = $1",
+            team,
+            granted
+        )
+        .execute(&pool)
+        .await?;
+        let mut tx = pool.begin().await?;
+        let error = sqlx::raw_sql(include_str!("../../../../../macro_db_client/migrations/20261116223559_crm_selected_email_eligibility.sql"))
+            .execute(&mut *tx).await.expect_err("old inline readers cannot coexist with selected rows during this rollout");
+        assert!(
+            error
+                .to_string()
+                .contains("selected consent exists before compatible eligibility readers")
+        );
+        tx.rollback().await?;
+    }
     Ok(())
 }

@@ -18,6 +18,8 @@ pub struct GraphqlSavedView {
     name: String,
     /// Versioned filter configuration interpreted by the consuming feature.
     config: Json<serde_json::Value>,
+    /// Icon and color metadata, separate from the filter configuration.
+    appearance: Option<Json<model_entity::EntityAppearance>>,
     /// Team with effective access, or null when the definition is private.
     shared_team_id: Option<ID>,
     /// Current revision required for conditional updates and deletion.
@@ -35,6 +37,7 @@ impl From<View> for GraphqlSavedView {
             owner_id: view.user_id.into(),
             name: view.name,
             config: Json(view.config),
+            appearance: view.appearance.map(Json),
             shared_team_id: view.shared_team_id.map(Into::into),
             revision: view.revision,
             created_at: view.created_at.to_rfc3339(),
@@ -146,6 +149,8 @@ pub struct CreateSavedViewInput {
     config: Json<serde_json::Value>,
     /// Current team to share with, or null for a private definition.
     shared_team_id: Option<ID>,
+    /// Initial icon and color metadata, validated on first creation.
+    appearance: Option<Json<model_entity::EntityAppearance>>,
 }
 
 /// Explicit sharing action: an omitted input leaves sharing unchanged; null team ID makes it private.
@@ -209,6 +214,7 @@ impl SavedViewMutationRoot {
                 input.name,
                 input.config.0,
                 input.shared_team_id.map(parse_id).transpose()?,
+                input.appearance.map(|appearance| appearance.0),
             )
             .await
             .map(Into::into)

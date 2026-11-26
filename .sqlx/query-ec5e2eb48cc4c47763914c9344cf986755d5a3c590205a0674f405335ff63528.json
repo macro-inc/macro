@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET online_meeting_providers=$2 WHERE id=$1 AND online_meeting_providers IS DISTINCT FROM $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ec5e2eb48cc4c47763914c9344cf986755d5a3c590205a0674f405335ff63528"
+}

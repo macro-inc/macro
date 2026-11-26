@@ -22,6 +22,7 @@
 
 @media (max-width: 599px) {
  .tutorial-video-embed { width: calc(100% - 32px); margin-bottom: 48px; border-radius: 28px; }
+ .product-page .tutorial-video-embed { width: 100%; }
  .tutorial-video-embed .tutorial-video-play { height: auto; min-height: 48px; width: max-content; max-width: calc(100% - 24px); gap: 8px; padding: 6px 12px 6px 6px; white-space: normal; }
  .tutorial-video-disc { width: 40px; height: 40px; }
  .tutorial-video-play img { width: 36px; height: 36px; }
@@ -125,6 +126,13 @@ html[data-theme-light='true'] .tutorial-video-play:focus-visible { outline-color
   width: 100%;
   height: 100%;
   pointer-events: none;
+}
+
+/* The diagram is line art drawn in light strokes for the dark page, not a
+   product capture. The light palette flips its lightness and turns the hue
+   back, so strokes read dark and the accents keep their colors. */
+html[data-theme-light='true'] .benefit-video-poster {
+  filter: invert(1) hue-rotate(180deg);
 }
 
 /* Keep the play control outside the focal product detail. */

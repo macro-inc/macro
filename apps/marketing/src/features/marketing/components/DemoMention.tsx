@@ -1,3 +1,4 @@
+import AddressBook from '@phosphor/address-book.svg?raw';
 import Envelope from '@phosphor/envelope.svg?raw';
 import File from '@phosphor/file.svg?raw';
 import Hash from '@phosphor/hash.svg?raw';
@@ -12,6 +13,7 @@ import {
 import './demo-mentions.css';
 
 const icons = {
+  contact: AddressBook,
   document: File,
   email: Envelope,
   task: ListChecks,

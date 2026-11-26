@@ -18,7 +18,7 @@ use axum::{
 };
 use macro_authorization::{
     CredentialAttribution, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, UserOrInternal, is_agent_run,
+    MacroAuthorizationState, UserOrInternal, is_agent_run, is_program_run,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -491,19 +491,20 @@ fn refuse_program_create(
     Ok(())
 }
 
-/// Make an agent run name the copy it changes when the meeting is on several
-/// of the requester's inboxes. The web picks a copy by opening it, so a
-/// request that is not an agent run and names no `inbox` is not checked; a
+/// Make a program name the copy it changes when the meeting is on several of
+/// the requester's inboxes; an owner routine step too, since it cannot open a
+/// copy and a wrong guess changes another inbox's. The web picks a copy by
+/// opening it, so a person's request that names no `inbox` is not checked; a
 /// request naming `inbox` is checked whoever sends it.
 async fn confirm_copy<S: CalendarCopyConfirmation>(
     service: &S,
     requester_id: &str,
-    is_agent_run: bool,
+    is_program_run: bool,
     event_id: Uuid,
     inbox: Option<&str>,
     change: CopyChange,
 ) -> Result<(), CalendarMutationApiError> {
-    if !is_agent_run && inbox.is_none() {
+    if !is_program_run && inbox.is_none() {
         return Ok(());
     }
     match service
@@ -836,7 +837,7 @@ where
         confirm_copy(
             &*state.service,
             requester_id,
-            is_agent_run(user.authorization.user.attribution(), &headers),
+            is_program_run(user.authorization.user.attribution(), &headers),
             event_id,
             request.inbox.as_deref(),
             CopyChange::Update {
@@ -916,7 +917,7 @@ where
     confirm_copy(
         &*state.service,
         requester_id,
-        is_agent_run(user.authorization.user.attribution(), &headers),
+        is_program_run(user.authorization.user.attribution(), &headers),
         event_id,
         query.inbox.as_deref(),
         CopyChange::Delete,
@@ -1031,7 +1032,7 @@ where
     confirm_copy(
         &*state.service,
         requester_id,
-        is_agent_run(user.authorization.user.attribution(), &headers),
+        is_program_run(user.authorization.user.attribution(), &headers),
         event_id,
         request.inbox.as_deref(),
         CopyChange::InviteGuests,

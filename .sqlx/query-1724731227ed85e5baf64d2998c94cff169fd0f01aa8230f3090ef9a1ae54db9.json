@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (disconnect_requested_at IS NOT NULL OR deleting_at IS NOT NULL) AS \"being_removed!\"\n            FROM email_links WHERE id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "being_removed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1724731227ed85e5baf64d2998c94cff169fd0f01aa8230f3090ef9a1ae54db9"
+}

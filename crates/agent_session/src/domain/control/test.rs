@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::model::PrompterKind;
 use entity_access::domain::models::{AccessLevel, Entity, EntityPermission, EntityType};
 
 fn user() -> MacroUserIdStr<'static> {
@@ -251,4 +252,49 @@ fn a_program_using_a_persons_credential_cannot_name_a_tab() {
     // The prompt still goes through, as the user, but no tab is kept.
     assert_eq!(event.client, None);
     assert_eq!(event.actor, Some(user()));
+}
+
+/// A program's prompt opens a turn nothing in it may take as the user's
+/// decision, so its event says a program sent it; a person's says a person.
+#[test]
+fn a_programs_prompt_is_marked_as_a_programs() {
+    let prompt = |principal| {
+        ControlEvent::authorized(
+            AgentAction::prompt("approve the review".to_owned()),
+            None,
+            None,
+            None,
+            principal,
+            access(AccessLevel::Owner),
+        )
+        .unwrap()
+        .prompter
+    };
+
+    assert_eq!(prompt(ControlPrincipal::Program), PrompterKind::Program);
+    assert_eq!(prompt(ControlPrincipal::User), PrompterKind::User);
+}
+
+/// Only the harness withholds a prompt's content from traces: a caller that
+/// asks for it is refused, whoever it is.
+#[test]
+fn no_caller_can_withhold_a_prompts_content() {
+    let action: AgentAction = serde_json::from_value(serde_json::json!({
+        "type": "prompt", "prompt": "draft", "withholdContent": true
+    }))
+    .unwrap();
+    assert!(matches!(&action, AgentAction::Prompt(prompt) if prompt.withhold_content));
+    for principal in [ControlPrincipal::User, ControlPrincipal::Program] {
+        assert!(matches!(
+            ControlEvent::authorized(
+                action.clone(),
+                None,
+                None,
+                None,
+                principal,
+                access(AccessLevel::Owner),
+            ),
+            Err(AgentSessionError::Forbidden)
+        ));
+    }
 }

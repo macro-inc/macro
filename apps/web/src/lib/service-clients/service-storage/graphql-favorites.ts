@@ -270,6 +270,8 @@ export function graphqlSetFavoriteResult(
   }
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
   if (result.error) throw result.error;
+  if (disposition?.kind === 'committed' && !disposition.data)
+    return { kind: 'committed' };
   const payload = result.data?.setFavorite;
   if (!payload) throw new Error('setFavorite mutation returned no data');
   if (payload.result.__typename === 'GraphqlMutationError') {
@@ -358,6 +360,7 @@ export function graphqlReorderFavoritesResult(
     throw disposition.error;
   }
   if (result.error) throw result.error;
+  if (disposition?.kind === 'committed') return { kind: 'committed' };
   if (!result.data) {
     throw new Error('reorderFavorites mutation returned no data');
   }

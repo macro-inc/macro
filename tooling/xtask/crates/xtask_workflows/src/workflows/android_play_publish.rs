@@ -29,18 +29,104 @@
 //! `publish` joins the per-branch concurrency group (a queued no-op run would
 //! otherwise cancel a pending publish).
 
+use gh_workflow::expr::typed::{
+    Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, always, failure, github, job_status,
+    runner, success,
+};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowRun,
+    Concurrency, Event, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowRun,
     WorkflowRunType,
 };
 
-use crate::workflows::{runners, steps};
+use crate::workflows::actions::{
+    ActionsDownloadArtifact, ActionsGithubScript, R0adkllUploadGooglePlay,
+};
+use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
 mod test;
 
 /// The `publish` job's name, which its failure comment looks up.
 const PUBLISH_JOB_NAME: &str = "Android Play Publish";
+
+struct CheckOutputs {
+    /// Whether a build is to be published.
+    publish: JobOutput<Flag>,
+    /// The PR the build was made for.
+    pr_number: JobOutput<Str>,
+    /// The build's version code.
+    version_code: JobOutput<Str>,
+    /// The Play release name for the build.
+    release_name: JobOutput<Str>,
+}
+
+/// The `check` job, which `publish` waits on.
+const CHECK: JobHandle<CheckOutputs> = JobHandle::new(
+    "check",
+    CheckOutputs {
+        publish: JobOutput::new("check", "publish"),
+        pr_number: JobOutput::new("check", "pr_number"),
+        version_code: JobOutput::new("check", "version_code"),
+        release_name: JobOutput::new("check", "release_name"),
+    },
+);
+
+struct VerifyOutputs {
+    /// Whether to publish, behind `CHECK.outputs.publish`.
+    publish: StepOutput<Flag>,
+    pr_number: StepOutput<Str>,
+    version_code: StepOutput<Str>,
+    release_name: StepOutput<Str>,
+}
+
+/// The [`verify`] step, whose outputs become [`CHECK`]'s.
+const VERIFY: StepHandle<VerifyOutputs> = StepHandle::new(
+    "verify",
+    VerifyOutputs {
+        publish: StepOutput::new("verify", "publish"),
+        pr_number: StepOutput::new("verify", "pr_number"),
+        version_code: StepOutput::new("verify", "version_code"),
+        release_name: StepOutput::new("verify", "release_name"),
+    },
+);
+
+struct StampOutputs {
+    /// The native tree hash, from main's hashing script.
+    native_hash: StepOutput<Str>,
+}
+
+/// The [`provenance_stamp`] step.
+const STAMP: StepHandle<StampOutputs> = StepHandle::new(
+    "stamp",
+    StampOutputs {
+        native_hash: StepOutput::new("stamp", "native_hash"),
+    },
+);
+
+struct PickFilesOutputs {
+    /// The App Bundle's path.
+    bundle: StepOutput<Str>,
+    /// The R8 mapping's path.
+    mapping: StepOutput<Str>,
+}
+
+/// The [`pick_files`] step.
+const PICK_FILES: StepHandle<PickFilesOutputs> = StepHandle::new(
+    "artifact",
+    PickFilesOutputs {
+        bundle: StepOutput::new("artifact", "bundle"),
+        mapping: StepOutput::new("artifact", "mapping"),
+    },
+);
+
+/// The first [`upload_internal`] step.
+const UPLOAD: StepHandle<()> = StepHandle::new("upload", ());
+/// The second [`upload_internal`] step, run when the first failed.
+const UPLOAD_RETRY: StepHandle<()> = StepHandle::new("upload_retry", ());
+/// The [`mark_promotion_pending`] step.
+const PENDING: StepHandle<()> = StepHandle::new("pending", ());
+/// The [`promote_production`] step.
+const PROMOTE: StepHandle<()> = StepHandle::new("promote", ());
 
 /// Build the workflow.
 pub fn android_play_publish() -> Workflow {
@@ -50,7 +136,7 @@ pub fn android_play_publish() -> Workflow {
                 .add_type(WorkflowRunType::Completed)
                 .add_workflow("Android Play Release"),
         ))
-        .add_job("check", check_job())
+        .add_job(CHECK, check_job())
         .add_job("publish", publish_job())
 }
 
@@ -59,11 +145,21 @@ fn check_job() -> Job {
         .name("Check the release request")
         // The build job skips fork PRs, and fork runs never get here with a
         // successful build; the head-repository test is belt and braces.
-        .cond(Expression::new(
-            "github.event.workflow_run.conclusion == 'success' && \
-             github.event.workflow_run.event == 'pull_request' && \
-             github.event.workflow_run.head_repository.full_name == github.repository",
-        ))
+        .cond(
+            github()
+                .event::<Str>("workflow_run.conclusion")
+                .eq("success")
+                .and(
+                    github()
+                        .event::<Str>("workflow_run.event")
+                        .eq("pull_request"),
+                )
+                .and(
+                    github()
+                        .event::<Str>("workflow_run.head_repository.full_name")
+                        .eq(github().repository()),
+                ),
+        )
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(10u32)
         .permissions(
@@ -73,12 +169,21 @@ fn check_job() -> Job {
                 .issues(Level::Read)
                 .pull_requests(Level::Write),
         )
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_output("publish", "${{ steps.verify.outputs.publish }}")
-        .add_output("pr_number", "${{ steps.verify.outputs.pr_number }}")
-        .add_output("version_code", "${{ steps.verify.outputs.version_code }}")
-        .add_output("release_name", "${{ steps.verify.outputs.release_name }}")
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_output(CHECK.outputs.publish.name(), VERIFY.outputs.publish.read())
+        .add_output(
+            CHECK.outputs.pr_number.name(),
+            VERIFY.outputs.pr_number.read(),
+        )
+        .add_output(
+            CHECK.outputs.version_code.name(),
+            VERIFY.outputs.version_code.read(),
+        )
+        .add_output(
+            CHECK.outputs.release_name.name(),
+            VERIFY.outputs.release_name.read(),
+        )
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_bun_pinned())
         .add_step(verify())
@@ -93,23 +198,26 @@ fn verify() -> Step<Run> {
             include_str!("scripts/android_play_publish_verify.sh")
         ),
     )
-    .id("verify")
+    .id(VERIFY.id())
     .working_directory(xtask_paths::repo_dir!("apps/web"))
-    .add_env(("RUN_ID", "${{ github.event.workflow_run.id }}"))
+    .add_env(("RUN_ID", github().event::<Str>("workflow_run.id")))
     .add_env((
         "RUN_ATTEMPT",
-        "${{ github.event.workflow_run.run_attempt }}",
+        github().event::<Str>("workflow_run.run_attempt"),
     ))
-    .add_env(("RUN_PATH", "${{ github.event.workflow_run.path }}"))
-    .add_env(("RUN_ACTOR", "${{ github.event.workflow_run.actor.login }}"))
+    .add_env(("RUN_PATH", github().event::<Str>("workflow_run.path")))
+    .add_env((
+        "RUN_ACTOR",
+        github().event::<Str>("workflow_run.actor.login"),
+    ))
     .add_env((
         "RUN_CREATED_AT",
-        "${{ github.event.workflow_run.created_at }}",
+        github().event::<Str>("workflow_run.created_at"),
     ))
-    .add_env(("HEAD_SHA", "${{ github.event.workflow_run.head_sha }}"))
+    .add_env(("HEAD_SHA", github().event::<Str>("workflow_run.head_sha")))
     .add_env((
         "HEAD_BRANCH",
-        "${{ github.event.workflow_run.head_branch }}",
+        github().event::<Str>("workflow_run.head_branch"),
     ))
 }
 
@@ -123,30 +231,34 @@ fn refusal_comment() -> Step<Run> {
 
             A person with write access can remove and re-add the \`android-update\` label to release the PR's current head."
         "#})
-        .if_condition(Expression::new(
-            "failure() && steps.verify.outputs.pr_number != ''",
-        ))
+        .if_condition(failure().and(VERIFY.outputs.pr_number.read().ne("")))
         .shell("bash")
-        .add_env(("PR_NUMBER", "${{ steps.verify.outputs.pr_number }}"))
-        .add_env(("BUILD_URL", "${{ github.event.workflow_run.html_url }}"))
+        .add_env(("PR_NUMBER", VERIFY.outputs.pr_number.read()))
+        .add_env(("BUILD_URL", github().event::<Str>("workflow_run.html_url")))
         .add_env((
             "RUN_URL",
-            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            format!(
+                "{}/{}/actions/runs/{}",
+                github().server_url(),
+                github().repository(),
+                github().run_id()
+            ),
         ))
 }
 
 fn publish_job() -> Job {
     Job::default()
         .name(PUBLISH_JOB_NAME)
-        .add_needs("check")
-        .cond(Expression::new("needs.check.outputs.publish == 'true'"))
+        .add_needs(CHECK)
+        .cond(CHECK.outputs.publish.read().is_set())
         // A hosted image: the upload action and the promotion script need Node.
         .runs_on("ubuntu-24.04")
         .timeout_minutes(30u32)
         // One release at a time per PR branch, queued rather than cancelled:
         // a cancelled run can leave a promotion half-reported.
-        .concurrency(Concurrency::new(Expression::new(
-            "android-play-publish-${{ github.event.workflow_run.head_branch }}",
+        .concurrency(Concurrency::new(format!(
+            "android-play-publish-{}",
+            github().event::<Str>("workflow_run.head_branch")
         )))
         .permissions(
             Permissions::default()
@@ -157,11 +269,11 @@ fn publish_job() -> Job {
                 .pull_requests(Level::Write)
                 .statuses(Level::Write),
         )
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("PR_NUMBER", "${{ needs.check.outputs.pr_number }}"))
-        .add_env(("VERSION_CODE", "${{ needs.check.outputs.version_code }}"))
-        .add_env(("BUILT_SHA", "${{ github.event.workflow_run.head_sha }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env(("PR_NUMBER", CHECK.outputs.pr_number.read()))
+        .add_env(("VERSION_CODE", CHECK.outputs.version_code.read()))
+        .add_env(("BUILT_SHA", github().event::<Str>("workflow_run.head_sha")))
         .add_env(("BASE_BRANCH", "main"))
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_bun_pinned())
@@ -170,7 +282,11 @@ fn publish_job() -> Job {
         .add_step(download_artifact())
         .add_step(pick_files())
         .add_step(steps::google_play_auth(true))
-        .add_step(upload_internal())
+        .add_step(upload_internal(UPLOAD, "Upload to internal testing").continue_on_error(true))
+        .add_step(
+            upload_internal(UPLOAD_RETRY, "Retry the upload to internal testing")
+                .if_condition(UPLOAD.outcome().eq("failure")),
+        )
         .add_step(head_guard("promote"))
         .add_step(mark_promotion_pending())
         .add_step(promote_production())
@@ -214,21 +330,17 @@ fn provenance_stamp() -> Step<Run> {
             echo "Stamp: native tree ${hash} for PR #${PR_NUMBER}"
         "#},
     )
-    .id("stamp")
+    .id(STAMP.id())
     .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
 fn download_artifact() -> Step<Use> {
-    Step::new("Download the built App Bundle")
-        .uses(
-            "actions",
-            "download-artifact",
-            "634f93cb2916e3fdff6788551b99b062d0335ce0",
-        ) // v5
-        .add_with(("name", "android-release"))
-        .add_with(("run-id", "${{ github.event.workflow_run.id }}"))
-        .add_with(("github-token", "${{ github.token }}"))
-        .add_with(("path", "${{ runner.temp }}/android-release"))
+    ActionsDownloadArtifact::new("Download the built App Bundle")
+        .name("android-release")
+        .run_id(github().event::<Str>("workflow_run.id"))
+        .github_token(github().token())
+        .path(format!("{}/android-release", runner().temp()))
+        .step()
 }
 
 /// The artifact was written by PR code: take exactly one bundle and one
@@ -256,28 +368,26 @@ fn pick_files() -> Step<Run> {
             echo "Bundle ${bundles[0]}, mapping ${mappings[0]}."
         "#},
     )
-    .id("artifact")
+    .id(PICK_FILES.id())
 }
 
-fn upload_internal() -> Step<Use> {
-    Step::new("Upload to internal testing")
-        .uses(
-            "r0adkll",
-            "upload-google-play",
-            "e738b9dd8f2476ea806d921b64aacd24f34515a5",
-        ) // v1
-        .id("upload")
-        .add_with((
-            "serviceAccountJson",
-            "${{ steps.auth.outputs.credentials_file_path }}",
-        ))
-        .add_with(("packageName", "com.macro.workspace.mobile"))
-        .add_with(("releaseFiles", "${{ steps.artifact.outputs.bundle }}"))
-        .add_with(("mappingFile", "${{ steps.artifact.outputs.mapping }}"))
-        .add_with(("releaseName", "${{ needs.check.outputs.release_name }}"))
-        .add_with(("track", "internal"))
-        .add_with(("status", "completed"))
-        .add_with(("whatsNewDirectory", "${{ runner.temp }}/whatsnew"))
+/// Play keeps one open edit per app, and opening another (Play Console, a
+/// manual publish) invalidates it: the upload then fails with "This edit has
+/// expired". The action opens a fresh edit each time, so the upload runs
+/// twice at most. A second attempt cannot release twice: the first one
+/// failed before its commit, or committed and the second is refused for
+/// reusing the version code.
+fn upload_internal(handle: StepHandle<()>, name: &str) -> Step<Use> {
+    R0adkllUploadGooglePlay::new(name, "com.macro.workspace.mobile")
+        .service_account_json(steps::GOOGLE_PLAY_AUTH.outputs.credentials_file_path.read())
+        .release_files(PICK_FILES.outputs.bundle.read())
+        .mapping_file(PICK_FILES.outputs.mapping.read())
+        .release_name(CHECK.outputs.release_name.read())
+        .track("internal")
+        .status("completed")
+        .whats_new_directory(format!("{}/whatsnew", runner().temp()))
+        .step()
+        .id(handle.id())
 }
 
 /// Set before the promotion starts, so a drift check running meanwhile
@@ -292,9 +402,9 @@ fn mark_promotion_pending() -> Step<Run> {
                   "$(android_release_description "$VERSION_CODE" "$NATIVE_HASH")"
             "#}
         ))
-        .id("pending")
+        .id(PENDING.id())
         .shell("bash")
-        .add_env(("NATIVE_HASH", "${{ steps.stamp.outputs.native_hash }}"))
+        .add_env(("NATIVE_HASH", STAMP.outputs.native_hash.read()))
 }
 
 /// Internal → production, full rollout. Play can take a moment to show the
@@ -315,9 +425,9 @@ fn promote_production() -> Step<Run> {
             exit 1
         "#},
     )
-    .id("promote")
+    .id(PROMOTE.id())
     .working_directory(xtask_paths::repo_dir!("apps/web"))
-    .add_env(("GOOGLE_PLAY_ACCESS_TOKEN", "${{ steps.auth.outputs.access_token }}"))
+    .add_env(("GOOGLE_PLAY_ACCESS_TOKEN", steps::GOOGLE_PLAY_AUTH.outputs.access_token.read()))
     .add_env(("CHANGES_NOT_SENT_FOR_REVIEW", "false"))
 }
 
@@ -337,30 +447,29 @@ fn mark_promotion_result() -> Step<Run> {
                   "$(android_release_description "$VERSION_CODE" "$NATIVE_HASH")"
             "#}
         ))
-        .if_condition(Expression::new(
-            "always() && steps.pending.outcome == 'success'",
-        ))
+        .if_condition(always().and(PENDING.outcome().eq("success")))
         .shell("bash")
-        .add_env(("NATIVE_HASH", "${{ steps.stamp.outputs.native_hash }}"))
-        .add_env(("PROMOTE_OUTCOME", "${{ steps.promote.outcome }}"))
+        .add_env(("NATIVE_HASH", STAMP.outputs.native_hash.read()))
+        .add_env(("PROMOTE_OUTCOME", PROMOTE.outcome()))
 }
 
 fn pr_comment() -> Step<Use> {
-    Step::new("Comment on the PR")
-        .uses(
-            "actions",
-            "github-script",
-            "f28e40c7f34bde8b3046d885e986cb6290c5673b",
-        )
-        .if_condition(Expression::new("success() || failure()"))
-        .add_with(("github-token", "${{ secrets.GITHUB_TOKEN }}"))
-        .add_env(("JOB_NAME", PUBLISH_JOB_NAME))
-        .add_env(("BUILD_URL", "${{ github.event.workflow_run.html_url }}"))
-        .add_env(("RELEASE_NAME", "${{ needs.check.outputs.release_name }}"))
-        .add_env(("JOB_STATUS", "${{ job.status }}"))
-        .add_env(("UPLOAD_OUTCOME", "${{ steps.upload.outcome }}"))
-        .add_with((
-            "script",
-            include_str!("scripts/android_play_publish_comment.js"),
-        ))
+    ActionsGithubScript::new(
+        "Comment on the PR",
+        include_str!("scripts/android_play_publish_comment.js"),
+    )
+    .github_token(vars::GITHUB_TOKEN)
+    .step()
+    .if_condition(success().or(failure()))
+    .add_env(("JOB_NAME", PUBLISH_JOB_NAME))
+    .add_env(("BUILD_URL", github().event::<Str>("workflow_run.html_url")))
+    .add_env(("RELEASE_NAME", CHECK.outputs.release_name.read()))
+    .add_env(("JOB_STATUS", job_status()))
+    .add_env((
+        "UPLOADED",
+        UPLOAD
+            .outcome()
+            .eq("success")
+            .or(UPLOAD_RETRY.outcome().eq("success")),
+    ))
 }

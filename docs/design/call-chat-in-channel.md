@@ -1,6 +1,6 @@
 # Call chat in the channel
 
-Status: implemented behind the server flag `enable-call-channel-thread`, off by default.
+Status: implemented and on for every new channel call.
 
 Mockup: [Call chat in the channel](https://claude.ai/artifact/V1h77fWX2oMtqLihZbuaeA)
 (every artboard is clickable; start at the first one).
@@ -220,14 +220,11 @@ and the Soup thread filters (`channelThreadParticipantId`, `channelThreadRootSen
 `MessageService::post` rejects `MessageParent::Call` posts on a `channel_thread` call, so a
 stale client cannot write to a chat nobody will see.
 
-### Flag
+### Rollout
 
-`enable-call-channel-thread`, through `crates/feature_flags`, evaluated for the caller when
-the call is created and targeted by team in PostHog. The stored type then applies to everyone
-on that call, so people on one call cannot end up in different discussions. There is no client
-flag. `document_storage_service` requires `POSTHOG_API_KEY` at startup and always wires
-`PostHogFeatureFlags`. Evaluation has a 300 ms timeout; a failed load keeps that call
-`call_chat` for its lifetime. Joining an existing call does not evaluate the flag again.
+The `enable-call-channel-thread` server flag rolled this out and has been removed. A new
+channel call stores `channel_thread` when it is created, and the stored type applies to
+everyone on that call, so people on one call cannot end up in different discussions.
 
 ## Frontend
 

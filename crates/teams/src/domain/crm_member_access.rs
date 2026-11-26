@@ -1,6 +1,8 @@
 //! Policy for per-member CRM access, independent of mailbox contribution.
 
-use super::model::{TeamError, TeamRole};
+use super::model::TeamError;
+#[cfg(feature = "outbound")]
+use super::model::TeamRole;
 use std::{future::Future, pin::Pin};
 
 /// Rollout check for changing preferences, independent of their enforcement.
@@ -21,6 +23,8 @@ impl CrmAccessRollout for DisabledCrmAccessRollout {
 
 /// Validate roles read under the membership write lock. The repository holds
 /// that lock through the update so concurrent promotions cannot cause lockout.
+/// Only the repository calls it, so it exists only where the repository does.
+#[cfg(feature = "outbound")]
 pub(crate) fn validate_change(
     actor: Option<TeamRole>,
     target: Option<TeamRole>,

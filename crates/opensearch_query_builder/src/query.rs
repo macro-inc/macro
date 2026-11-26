@@ -5,12 +5,14 @@ use serde::Serialize;
 mod bool;
 mod function_score;
 mod has_child;
+mod match_bool_prefix;
 mod match_phrase;
 mod match_phrase_prefix;
 mod match_query;
 mod nested;
 mod range;
 mod regexp;
+mod script;
 mod simple_query_string;
 mod term;
 mod terms;
@@ -23,12 +25,14 @@ pub use function_score::{
     RandomScore, ScoreFunction, ScoreFunctionType, ScoreMode, ScriptScore,
 };
 pub use has_child::{HasChildQuery, InnerHits};
+pub use match_bool_prefix::MatchBoolPrefixQuery;
 pub use match_phrase::MatchPhraseQuery;
 pub use match_phrase_prefix::MatchPhrasePrefixQuery;
 pub use match_query::MatchQuery;
 pub use nested::NestedQuery;
 pub use range::{RangeQuery, RangeQueryBuilder};
 pub use regexp::{RegexpQuery, RegexpQueryFlags};
+pub use script::ScriptQuery;
 use serde_json::Value;
 pub use simple_query_string::SimpleQueryStringQuery;
 pub use term::TermQuery;
@@ -47,6 +51,8 @@ pub enum QueryType<'a> {
     MatchPhrase(MatchPhraseQuery<'a>),
     /// Match phrase prefix query
     MatchPhrasePrefix(MatchPhrasePrefixQuery<'a>),
+    /// Match bool prefix query
+    MatchBoolPrefix(MatchBoolPrefixQuery<'a>),
     /// Match query
     Match(MatchQuery<'a>),
     /// Range query
@@ -67,6 +73,8 @@ pub enum QueryType<'a> {
     Nested(NestedQuery<'a>),
     /// Match documents with an indexed value for this field.
     Exists(Cow<'a, str>),
+    /// script query (matches documents its script returns true for)
+    Script(ScriptQuery<'a>),
 }
 
 impl<'a> ToOpenSearchJson for QueryType<'a> {
@@ -76,6 +84,7 @@ impl<'a> ToOpenSearchJson for QueryType<'a> {
             QueryType::FunctionScore(function_score) => function_score.to_json(),
             QueryType::MatchPhrase(match_phrase) => match_phrase.to_json(),
             QueryType::MatchPhrasePrefix(match_phrase_prefix) => match_phrase_prefix.to_json(),
+            QueryType::MatchBoolPrefix(match_bool_prefix) => match_bool_prefix.to_json(),
             QueryType::Match(match_query) => match_query.to_json(),
             QueryType::Term(term) => term.to_json(),
             QueryType::Terms(terms) => terms.to_json(),
@@ -86,6 +95,7 @@ impl<'a> ToOpenSearchJson for QueryType<'a> {
             QueryType::HasChild(has_child) => has_child.to_json(),
             QueryType::Nested(nested) => nested.to_json(),
             QueryType::Exists(field) => serde_json::json!({ "exists": { "field": field } }),
+            QueryType::Script(script) => script.to_json(),
         }
     }
 }
@@ -165,6 +175,9 @@ impl<'a> QueryType<'a> {
             QueryType::MatchPhrasePrefix(match_phrase_prefix) => {
                 QueryType::MatchPhrasePrefix(match_phrase_prefix.to_owned())
             }
+            QueryType::MatchBoolPrefix(match_bool_prefix) => {
+                QueryType::MatchBoolPrefix(match_bool_prefix.to_owned())
+            }
             QueryType::Match(match_query) => QueryType::Match(match_query.to_owned()),
             QueryType::Range(range) => QueryType::Range(range.to_owned()),
             QueryType::Regexp(regexp) => QueryType::Regexp(regexp.to_owned()),
@@ -175,6 +188,7 @@ impl<'a> QueryType<'a> {
             QueryType::HasChild(has_child) => QueryType::HasChild(has_child.to_owned()),
             QueryType::Nested(nested) => QueryType::Nested(nested.to_owned()),
             QueryType::Exists(field) => QueryType::Exists(Cow::Owned(field.to_string())),
+            QueryType::Script(script) => QueryType::Script(script.to_owned()),
         }
     }
 }

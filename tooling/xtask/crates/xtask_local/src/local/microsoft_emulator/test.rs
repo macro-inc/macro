@@ -53,3 +53,23 @@ fn only_the_login_page_is_addressed_for_a_browser() {
     assert_eq!(browser_url, Some(format!("http://localhost:{port}")));
     assert_eq!(idp().issuer, "http://outlook-emulator:8080/common/v2.0");
 }
+
+/// Graph only notifies an HTTPS address, so the workers hand the emulator
+/// the email service behind the stack's proxy, whose authority it trusts.
+#[test]
+fn change_notifications_go_through_the_proxy() {
+    let instance = Instance::derive(Some("notify"), Some(20_000)).unwrap();
+    let [(name, callback)] = pubsub_workers_env(&instance);
+    assert_eq!(name, "OVERRIDE_EMAIL_SERVICE_URL");
+    assert_eq!(
+        callback,
+        format!("https://proxy:{}/email", instance.port(Port::Proxy))
+    );
+    let command = command(&instance);
+    let trusted = command
+        .iter()
+        .position(|argument| argument == "--trust-certificate")
+        .map(|flag| command[flag + 1].clone());
+    assert_eq!(trusted.as_deref(), Some(AUTHORITY_MOUNT));
+    assert!(authority_volume().ends_with(&format!(":{AUTHORITY_MOUNT}:ro")));
+}

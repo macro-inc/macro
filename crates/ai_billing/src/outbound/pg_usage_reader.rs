@@ -126,6 +126,7 @@ fn parse_plan(plan: &str) -> Result<PlanTier> {
     match plan {
         "free" => Ok(PlanTier::Free),
         "premium" => Ok(PlanTier::Premium),
+        "business" => Ok(PlanTier::Business),
         "max" => Ok(PlanTier::Max),
         _ => Err(BillingError::Storage(anyhow::anyhow!(
             "invalid recorded plan"

@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT DISTINCT effect.computer_id AS \"computer_id!\"\n                    FROM hosted_runtime_effect effect\n                    LEFT JOIN hosted_runtime computer ON computer.id = effect.computer_id\n                    WHERE effect.worker = $1 AND effect.run_after <= $2\n                      AND ($3::UUID[] IS NULL OR computer.host_id = ANY($3))\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "computer_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "computer_effect_worker",
+            "kind": {
+              "Enum": [
+                "fleet",
+                "billing",
+                "agents"
+              ]
+            }
+          }
+        },
+        "Timestamptz",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0bad55a722847640a3a8151876aed7da01450c861314978b654da6cd49b11ce3"
+}

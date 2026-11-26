@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, name, endpoint, server_certificate_pem, max_concurrent_starts\n            FROM hosted_runtime_host\n            ORDER BY id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "endpoint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "server_certificate_pem",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "max_concurrent_starts",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "006c4872dfc4fce149b70d8fb7c26f1407d9673c2fe36c35f0e141224d575c2a"
+}

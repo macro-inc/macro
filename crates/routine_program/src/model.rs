@@ -112,6 +112,17 @@ impl CodeStep {
             .map(|knob| (knob.name().to_string(), knob.value()))
             .collect()
     }
+
+    /// Its entity knobs: each knob, the item picked (if any) and the kinds
+    /// it allows.
+    pub fn entities(
+        &self,
+    ) -> impl Iterator<Item = (&Knob, Option<&crate::EntityValue>, &[crate::EntityKind])> {
+        self.knobs.iter().filter_map(|knob| {
+            let (value, kinds) = knob.entity()?;
+            Some((knob, value, kinds))
+        })
+    }
 }
 
 /// Identifies the SDK API code was type-checked against: its version and a

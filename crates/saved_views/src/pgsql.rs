@@ -11,6 +11,35 @@ pub struct PgViewStorage {
     pool: PgPool,
 }
 
+/// Persistence-only JSON decoding stays outside the saved-view domain model.
+struct StoredView {
+    id: Uuid,
+    user_id: String,
+    name: String,
+    config: serde_json::Value,
+    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+    revision: i64,
+    shared_team_id: Option<Uuid>,
+}
+
+impl From<StoredView> for View {
+    fn from(row: StoredView) -> Self {
+        Self {
+            id: row.id,
+            user_id: row.user_id,
+            name: row.name,
+            config: row.config,
+            appearance: row.appearance.map(|appearance| appearance.0),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            revision: row.revision,
+            shared_team_id: row.shared_team_id,
+        }
+    }
+}
+
 impl PgViewStorage {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -70,15 +99,15 @@ impl crate::domain::ViewRepository for PgViewStorage {
 
     #[tracing::instrument(skip(self), err)]
     async fn get(&self, id: Uuid) -> Result<Option<View>, Self::Err> {
-        sqlx::query_as!(View, "SELECT id, user_id, name, config, created_at, updated_at, revision, shared_team_id FROM saved_view WHERE id = $1", id)
-            .fetch_optional(&self.pool).await
+        sqlx::query_as!(StoredView, "SELECT id, user_id, name, config, created_at, updated_at, revision, shared_team_id, appearance AS \"appearance: sqlx::types::Json<model_entity::EntityAppearance>\" FROM saved_view WHERE id = $1", id)
+            .fetch_optional(&self.pool).await.map(|view| view.map(Into::into))
     }
 
     async fn legacy_list(&self, viewer: &str) -> Result<Vec<View>, Self::Err> {
-        sqlx::query_as!(View,
-            "SELECT id, user_id, name, config, created_at, updated_at, revision, shared_team_id FROM saved_view WHERE user_id = $1",
+        sqlx::query_as!(StoredView,
+            "SELECT id, user_id, name, config, created_at, updated_at, revision, shared_team_id, appearance AS \"appearance: sqlx::types::Json<model_entity::EntityAppearance>\" FROM saved_view WHERE user_id = $1",
             viewer
-        ).fetch_all(&self.pool).await
+        ).fetch_all(&self.pool).await.map(|views| views.into_iter().map(Into::into).collect())
     }
 
     #[tracing::instrument(skip(self, view), fields(view_id = %view.id), err)]
@@ -94,10 +123,10 @@ impl crate::domain::ViewRepository for PgViewStorage {
             return Ok(None);
         }
         sqlx::query!(
-            "INSERT INTO saved_view (id, user_id, name, config, created_at, updated_at, shared_team_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id) DO NOTHING",
+            "INSERT INTO saved_view (id, user_id, name, config, created_at, updated_at, shared_team_id, appearance)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (id) DO NOTHING",
             view.id, view.user_id, view.name, view.config, view.created_at, view.updated_at,
-            view.shared_team_id,
+            view.shared_team_id, view.appearance.as_ref().map(sqlx::types::Json) as _,
         ).execute(&mut *tx).await?;
         // A legacy delete can commit while INSERT waits on the old row. Check
         // again in a fresh statement snapshot before making a replacement live.
@@ -111,22 +140,22 @@ impl crate::domain::ViewRepository for PgViewStorage {
             tx.rollback().await?;
             return Ok(None);
         }
-        let created = sqlx::query_as!(View, "SELECT id, user_id, name, config, created_at, updated_at, revision, shared_team_id FROM saved_view WHERE id = $1", view.id)
+        let created = sqlx::query_as!(StoredView, "SELECT id, user_id, name, config, created_at, updated_at, revision, shared_team_id, appearance AS \"appearance: sqlx::types::Json<model_entity::EntityAppearance>\" FROM saved_view WHERE id = $1", view.id)
             .fetch_optional(&mut *tx).await?;
         tx.commit().await?;
-        Ok(created)
+        Ok(created.map(Into::into))
     }
 
     #[tracing::instrument(skip_all, fields(count = ids.len()), err)]
     async fn get_many(&self, ids: &[Uuid]) -> Result<Vec<View>, Self::Err> {
         sqlx::query_as!(
-            View,
-            "SELECT id, user_id, name, config, created_at, updated_at, revision, shared_team_id
+            StoredView,
+            "SELECT id, user_id, name, config, created_at, updated_at, revision, shared_team_id, appearance AS \"appearance: sqlx::types::Json<model_entity::EntityAppearance>\"
              FROM saved_view WHERE id = ANY($1::uuid[])",
             ids
         )
         .fetch_all(&self.pool)
-        .await
+        .await.map(|views| views.into_iter().map(Into::into).collect())
     }
 
     // Unplaced views sort after placed ones; the sentinel stays inside SQL.
@@ -141,7 +170,7 @@ impl crate::domain::ViewRepository for PgViewStorage {
     ) -> Result<Vec<PositionedView>, Self::Err> {
         let rows = sqlx::query!(
             r#"SELECT v.id, v.user_id, v.name, v.config, v.created_at, v.updated_at, v.revision,
-                    v.shared_team_id, p.position AS "position?"
+                    v.shared_team_id, v.appearance AS "appearance: sqlx::types::Json<model_entity::EntityAppearance>", p.position AS "position?"
              FROM saved_view v
              LEFT JOIN saved_view_position p ON p.saved_view_id = v.id AND p.user_id = $1
              WHERE (v.user_id = $1 OR v.shared_team_id = ANY($2::uuid[]))
@@ -172,6 +201,7 @@ impl crate::domain::ViewRepository for PgViewStorage {
                     updated_at: row.updated_at,
                     revision: row.revision,
                     shared_team_id: row.shared_team_id,
+                    appearance: row.appearance.map(|appearance| appearance.0),
                 },
                 position: row.position,
             })
@@ -218,12 +248,12 @@ impl crate::domain::ViewRepository for PgViewStorage {
         changes: crate::domain::ViewChanges<'_>,
     ) -> Result<Option<View>, Self::Err> {
         sqlx::query_as!(
-            View,
+            StoredView,
             "UPDATE saved_view SET name = COALESCE($4, name), config = COALESCE($5, config),
                 shared_team_id = $6,
                 revision = revision + 1, updated_at = NOW()
              WHERE id = $1 AND user_id = $2 AND revision = $3
-             RETURNING id, user_id, name, config, created_at, updated_at, revision, shared_team_id",
+             RETURNING id, user_id, name, config, created_at, updated_at, revision, shared_team_id, appearance AS \"appearance: sqlx::types::Json<model_entity::EntityAppearance>\"",
             id,
             owner,
             revision,
@@ -232,7 +262,29 @@ impl crate::domain::ViewRepository for PgViewStorage {
             changes.shared_team_id
         )
         .fetch_optional(&self.pool)
+        .await.map(|view| view.map(Into::into))
+    }
+
+    #[tracing::instrument(skip_all, fields(view_id = %id), err)]
+    async fn set_appearance(
+        &self,
+        id: Uuid,
+        owner: &str,
+        appearance: &model_entity::EntityAppearance,
+    ) -> Result<Option<View>, Self::Err> {
+        sqlx::query_as!(
+            StoredView,
+            "UPDATE saved_view SET appearance = $3
+             WHERE id = $1 AND user_id = $2
+             RETURNING id, user_id, name, config, created_at, updated_at, revision, shared_team_id,
+                 appearance AS \"appearance: sqlx::types::Json<model_entity::EntityAppearance>\"",
+            id,
+            owner,
+            sqlx::types::Json(appearance) as _
+        )
+        .fetch_optional(&self.pool)
         .await
+        .map(|view| view.map(Into::into))
     }
 
     #[tracing::instrument(skip_all, fields(view_id = %id, revision), err)]

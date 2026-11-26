@@ -4,9 +4,8 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
-import { Button, Dropdown } from '@ui';
+import { Dropdown } from '@ui';
 import { createSignal, Show } from 'solid-js';
-import { useQuickCallsFlag } from '../../meetings/use-quick-calls-flag';
 
 type NewMeetingActions = {
   presentation?: 'sidebar' | 'toolbar';
@@ -17,34 +16,12 @@ type NewMeetingActions = {
 };
 
 export function NewMeetingButton(props: NewMeetingActions) {
-  const flag = useQuickCallsFlag();
   return (
-    <Show
-      when={!flag().loading && flag().enabled}
-      fallback={
-        <Show
-          when={props.presentation}
-          fallback={
-            <Button variant="primary" size="sm" onClick={props.onChannelCall}>
-              <VideoCameraIcon class="size-3.5" />
-              New call
-            </Button>
-          }
-        >
-          <ViewCreateButton
-            presentation={props.presentation}
-            aria-label="New call"
-            onClick={props.onChannelCall}
-          />
-        </Show>
-      }
-    >
-      <NewMeetingMenu
-        onChannelCall={props.onChannelCall}
-        onInstantCall={props.onInstantCall}
-        presentation={props.presentation}
-      />
-    </Show>
+    <NewMeetingMenu
+      onChannelCall={props.onChannelCall}
+      onInstantCall={props.onInstantCall}
+      presentation={props.presentation}
+    />
   );
 }
 

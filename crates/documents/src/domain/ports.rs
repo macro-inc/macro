@@ -117,6 +117,13 @@ pub trait DocumentRepo: Send + Sync + 'static {
         content: DocumentContent,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Finalize a pending imported body with the source's original edited time.
+    fn ready_imported_document(
+        &self,
+        document_id: &str,
+        edited_at: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Get the latest document version ID (for editable files: js, py).
     /// Returns (version_id, uploaded).
     fn get_latest_document_version_id(
@@ -756,4 +763,11 @@ pub trait EditingActivityStore: Send + Sync {
         source_event_id: uuid::Uuid,
         idle: std::time::Duration,
     ) -> impl Future<Output = Result<Vec<bool>, rootcause::Report>> + Send;
+}
+
+/// Physical lifecycle facts for trusted backend hosts; grants no content access.
+pub trait DocumentLifecycleReads: Send + Sync + 'static {
+    /// True only for an existing document outside trash, independent of a viewer.
+    fn document_is_live(&self, id: uuid::Uuid)
+    -> impl Future<Output = anyhow::Result<bool>> + Send;
 }

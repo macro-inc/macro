@@ -21,11 +21,6 @@ vi.mock(
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 
-vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
-  useCalendarUiFlag: () => () => true,
-  useCalendarPromptAllowed: () => () => true,
-}));
-
 vi.mock('@core/context/user', () => ({ useUserId: () => userId }));
 
 vi.mock('@core/email-link', () => ({
@@ -115,6 +110,31 @@ describe('CalendarPermissionPrompt', () => {
     renderPrompt();
 
     expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('tells an inbox whose calendar stopped syncing to reconnect, past an old Enable dismissal', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem(PERSIST_KEY, JSON.stringify(['old']));
+    setLinks([
+      link('old', { has_calendar_data: true, is_sync_active: true }),
+      link('new', { is_sync_active: true }),
+    ]);
+    renderPrompt();
+
+    expect(screen.getByText('Calendar stopped syncing')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Reconnect old@example.com to show its events in Macro again.'
+      )
+    ).toBeTruthy();
+    expect(screen.getByText('Enable calendar')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Reconnect' }));
+    expect(mocks.startAddInbox).toHaveBeenCalledWith({
+      scopes: 'calendar',
+      provider: 'GMAIL',
+      reconnectLinkId: 'old',
+      emailAddress: 'old@example.com',
+    });
   });
 
   it('keeps a closed prompt closed while the viewer is still loading', () => {

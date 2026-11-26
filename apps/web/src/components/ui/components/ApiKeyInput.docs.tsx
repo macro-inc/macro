@@ -48,7 +48,7 @@ export default defineDoc({
   name: 'ApiKeyInput',
   category: 'Inputs',
   description:
-    'A field for pasting a secret API key: masked, never prefilled with a stored key, and kept out of autofill, spellcheck and session replay.',
+    'A `SecretInput` for pasting an API key: a key icon and the provider prefix in the placeholder. Masked, with a reveal for what is typed, never prefilled with a stored key.',
   status: 'stable',
   exports: ['ApiKeyInput'],
   import: "import { ApiKeyInput } from '@ui';",

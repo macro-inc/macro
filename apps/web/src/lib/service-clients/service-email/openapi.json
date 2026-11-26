@@ -440,7 +440,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "The inbox holding the copy cannot send for the viewer",
+            "description": "The inbox holding the copy cannot send for the viewer, or an agent's program asked to forward",
             "content": {
               "application/json": {
                 "schema": {
@@ -1899,7 +1899,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SharedInboxConflictResponse"
+                  "$ref": "#/components/schemas/InitConflictResponse"
                 }
               }
             }
@@ -6052,7 +6052,8 @@
           "not_found",
           "invalid_recipients",
           "inbox_unavailable",
-          "send_failed"
+          "send_failed",
+          "confirmation_required"
         ]
       },
       "ForwardCalendarEventRecipient": {
@@ -6212,6 +6213,70 @@
             "description": "Whether guests may see the guest list."
           }
         }
+      },
+      "InitConflictResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Returned when a connect targets an external mailbox another macro user has\nalready connected. The client surfaces a confirmation; on confirm it retries\n`/email/init` with `force_share=true` to promote the mailbox to a shared inbox.",
+            "required": [
+              "email_address",
+              "existing_owner_email",
+              "existing_link_id",
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["SHARED_INBOX_CONFLICT"]
+              },
+              "email_address": {
+                "type": "string",
+                "description": "The mailbox address that is already connected."
+              },
+              "existing_link_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The existing link that would be shared if the caller confirms."
+              },
+              "existing_owner_email": {
+                "type": "string",
+                "description": "The email of the macro user who first connected the mailbox."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The mailbox signed in at consent is not the one the inbox at its address\nsyncs ([`InitializationError::IdentityConflict`]).",
+            "required": ["message", "code"],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["INBOX_IDENTITY_CONFLICT"]
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable explanation."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The inbox changed while it was being connected; connecting again works\n([`InitializationError::Changed`]).",
+            "required": ["message", "code"],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": ["INBOX_CHANGED"]
+              },
+              "message": {
+                "type": "string",
+                "description": "Human-readable explanation."
+              }
+            }
+          }
+        ],
+        "description": "Body of every `409 Conflict` from `/email/init`; `code` says which conflict it\nis. Clients offer to share the inbox only for a `SHARED_INBOX_CONFLICT`."
       },
       "InitErrorCodeResponse": {
         "type": "object",
@@ -7410,34 +7475,17 @@
           }
         }
       },
-      "SharedInboxConflictResponse": {
-        "type": "object",
-        "description": "Returned with a `409 Conflict` when a connect targets an external mailbox another\nmacro user has already connected. The client surfaces a confirmation; on confirm it\nretries `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.",
-        "required": [
-          "email_address",
-          "existing_owner_email",
-          "existing_link_id"
-        ],
-        "properties": {
-          "email_address": {
-            "type": "string",
-            "description": "The mailbox address that is already connected."
-          },
-          "existing_link_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The existing link that would be shared if the caller confirms."
-          },
-          "existing_owner_email": {
-            "type": "string",
-            "description": "The email of the macro user who first connected the mailbox."
-          }
-        }
-      },
       "SyncStatus": {
         "type": "string",
-        "description": "Coarse sync state for an inbox, used to render a one-line hint in the\nmulti-inbox settings list. Derived from the link's `is_sync_active` flag, its\nreauth health, and its most recent backfill job.",
-        "enum": ["SYNCING", "UP_TO_DATE", "ERROR", "NEEDS_REAUTH", "INACTIVE"]
+        "description": "Coarse sync state for an inbox, used to render a one-line hint in the\nmulti-inbox settings list. Derived from the link's `is_sync_active` flag, its\nreauth health, whether the provider serves its mailbox, and its most recent\nbackfill job.",
+        "enum": [
+          "SYNCING",
+          "UP_TO_DATE",
+          "ERROR",
+          "NEEDS_REAUTH",
+          "MAILBOX_UNAVAILABLE",
+          "INACTIVE"
+        ]
       },
       "Thread": {
         "type": "object",

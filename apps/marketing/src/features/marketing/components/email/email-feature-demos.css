@@ -77,6 +77,9 @@
 .email-tag-summary > svg { width: 16px; height: 16px; }
 .email-tag-summary > :last-child { margin-left: auto; white-space: nowrap; }
 
+/* The outer frame contributes another 8px below the shortcut row. */
+#keyboard-speed .email-keyboard-stage .email-shortcut-dock { padding: 14px 0 6px; }
+
 .email-keyboard-demo:focus { outline: none; }
 .email-keyboard-demo:focus-visible .mail-app { outline: 1px solid var(--color-accent); outline-offset: 4px; }
 .email-keyboard-content { flex: 1; min-height: 440px; }

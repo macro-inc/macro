@@ -1,7 +1,8 @@
 import type { RemoteFlag } from '@core/constant/featureFlags';
+import { lazy } from '@core/util/lazy';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { FeatureFlagResult, PostHog } from 'posthog-js';
-import { type JSX, lazy, Suspense } from 'solid-js';
+import { type JSX, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PosthogProvider, ShowFeatureFlag, useFeatureFlag } from './posthog';
 
@@ -10,6 +11,7 @@ const posthog = vi.hoisted(() => ({
   getFeatureFlagResult: vi.fn<PostHog['getFeatureFlagResult']>(),
   featureFlags: { getFlags: vi.fn<() => string[]>() },
   unsubscribe: vi.fn(),
+  __loaded: true,
 }));
 
 vi.mock('./analytics-context', () => ({
@@ -76,6 +78,7 @@ beforeEach(() => {
   posthog.getFeatureFlagResult.mockReset();
   posthog.featureFlags.getFlags.mockReturnValue([]);
   posthog.onFeatureFlags.mockReturnValue(posthog.unsubscribe);
+  posthog.__loaded = true;
 });
 afterEach(cleanup);
 
@@ -172,6 +175,31 @@ describe('reactive PostHog flags', () => {
     await failToReachPostHog();
     expect(view.result()).toEqual({
       enabled: false,
+      payload: 'fallback',
+      loading: false,
+    });
+  });
+
+  // No API key, or the Vite dev server: PostHog never fetches, so a flag
+  // that waited for its answer would stay loading for good.
+  it('answers flags-off at once in a build that never started PostHog', () => {
+    posthog.__loaded = false;
+    const view = renderFlag();
+
+    expect(view.result()).toEqual({
+      enabled: false,
+      payload: 'fallback',
+      loading: false,
+    });
+    expect(screen.queryByRole('button', { name: 'New label' })).toBeNull();
+  });
+
+  it('lets a reader stay on in a build that never started PostHog', () => {
+    posthog.__loaded = false;
+    const view = renderFlag(channelTags, { enabledWhenUnreachable: true });
+
+    expect(view.result()).toEqual({
+      enabled: true,
       payload: 'fallback',
       loading: false,
     });

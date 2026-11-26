@@ -4,10 +4,14 @@ import { message } from '../../email-message/tests/messages';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
+import { resetScheduledNoticesForTests } from './email-send-schedule';
 
 // Keep the scheduling fixtures in the future regardless of the wall clock.
 beforeEach(() => vi.useFakeTimers({ now: new Date('2026-09-01T12:00:00Z') }));
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  resetScheduledNoticesForTests();
+});
 
 function hoursFromNow(hours: number): Date {
   return new Date(Date.now() + hours * 60 * 60 * 1000);

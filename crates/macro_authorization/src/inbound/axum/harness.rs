@@ -12,7 +12,7 @@ use super::{
 };
 
 /// Header carrying a harness authentication token.
-pub const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
+pub use macro_auth::credential::HARNESS_TOKEN_HEADER;
 /// Header carrying the Macro user ID a harness claims to act for.
 pub const HARNESS_FOR_MACRO_USER_ID_HEADER: &str = "x-macro-harness-for-macro-user-id";
 
@@ -35,6 +35,7 @@ where
         .await
         .map_err(harness_authorization_rejection)?;
 
+    super::record_verified_harness(&harness);
     Ok(Some(harness))
 }
 

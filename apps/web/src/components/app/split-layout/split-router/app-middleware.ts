@@ -10,6 +10,7 @@ import {
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
+import { crmRecordSectionSearch } from '@app/features/crm/crm-record-block';
 import {
   crmPeopleSearch,
   crmRecordSearch,
@@ -21,7 +22,6 @@ import {
   driveDocumentFromContent,
   drivePath,
 } from '@app/features/drive-view/primitives/drive-route';
-import { driveDocumentBlockType } from '@app/features/drive-view/primitives/drive-route-schema';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import { composeDraftSearch } from '@app/features/email-compose/compose-route-draft';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
@@ -47,6 +47,8 @@ import { decodeLegacyPair } from './legacy-route';
 
 type AppMiddlewareState = {
   isTouchDevice: () => boolean;
+  /** Phone layout; defaults to touch, which shows one pane. */
+  isMobile?: () => boolean;
 };
 
 function crmPipelinePath(pipelineId: string): string {
@@ -84,8 +86,8 @@ function redirectRetiredCrmDatabases({
   return destination ? redirect(destination) : undefined;
 }
 
-/** Upgrade legacy component and block URLs when supported; on touch, keep
- * document details in their full-block routes instead of inline Drive views. */
+/** Upgrade legacy component and block URLs when supported. Drive's host
+ * decides whether selections open inline using its measured pane width. */
 function redirectLegacyRoutes(
   { routes, to, redirect }: SplitRouterMiddlewareContext,
   options: AppMiddlewareState
@@ -94,25 +96,28 @@ function redirectLegacyRoutes(
   const rootId = paneRootMatch(route)?.id;
 
   const isTouch = options.isTouchDevice();
+  const isPhone = options.isMobile?.() ?? isTouch;
 
-  if (rootId === 'drive' && isTouch) {
-    const { documentType, documentId } = routeParams(route);
-    if (typeof documentType === 'string' && typeof documentId === 'string') {
-      return redirect(
-        `/${driveDocumentBlockType(documentType)}/${encodeURIComponent(documentId)}`
-      );
-    }
-  }
-
-  // Touch shows records on their own pages, as the Customers lists open them.
+  // Touch shows records on their own pages, as the Customers lists open them,
+  // on the section the link names.
   if (rootId === 'view-companies' && isTouch) {
-    const { recordType, recordId, itemId } = routeParams(route);
+    const { recordType, recordId, itemId, section } = routeParams(route);
     if (
       typeof recordType === 'string' &&
       typeof recordId === 'string' &&
       typeof itemId !== 'string'
     ) {
-      return redirect(`/${recordType}/${encodeURIComponent(recordId)}`);
+      const page = `/${recordType}/${encodeURIComponent(recordId)}`;
+      if (typeof section !== 'string') return redirect(page);
+      const query = new URLSearchParams();
+      // An explicit query replaces the entry's search, so keep what it carries.
+      replacePaneSearchParams(query, [
+        {
+          ...to.location.search,
+          [crmRecordSectionSearch.namespace]: { section: [section] },
+        },
+      ]);
+      return redirect(`${page}?${query}`);
     }
   }
 
@@ -143,10 +148,10 @@ function redirectLegacyRoutes(
     .with({ type: 'component', id: CALENDAR_VIEW_ID }, () =>
       calendarPath(getPreferredCalendarPeriodView())
     )
-    // Desktop writes a new email beside the Email list; touch keeps the
-    // full-screen composer.
+    // A new email is written beside the Email list, as a selected thread is
+    // read there; phones keep the full-screen composer.
     .with({ type: 'component', id: 'email-compose' }, () =>
-      isTouch ? undefined : '/mail/new'
+      isPhone ? undefined : '/mail/new'
     )
     .with({ type: 'component' }, ({ id }) =>
       routes.byId.has(`view-${id}`) ? `/${id}` : undefined

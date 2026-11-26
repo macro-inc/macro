@@ -10,20 +10,27 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { gunzipSync } from 'node:zlib';
+import { backupStatements } from '../host-policy';
 import {
   type StackResources,
   replacementChecks,
   principalArnOf,
   stackResources,
 } from './iam-preflight';
-import { IMAGE_INPUTS, imageFiles, imageSourceKey } from './image-key';
+import {
+  IMAGE_INPUTS,
+  NOT_IMAGE_INPUTS,
+  imageFiles,
+  imageSourceKey,
+} from './image-key';
 import { DURABLE, INSTANCE, checkPlan, resourceOf } from './plan';
 import { imageFile } from './publish';
 import {
-  SMOKE_ALARM_TOPIC,
+  RELAY_URL,
   SMOKE_PREFIX,
   UNITS,
   hostCheckScript,
+  pagingCheckScript,
   smokeHostPolicy,
   smokeNames,
   smokeSecret,
@@ -58,6 +65,8 @@ describe('image source key', () => {
     'index.ts': 'export {}',
     'README.md': '# docs',
     'nixos/database-collector/host.nix': '{ }',
+    'nixos/grafana-provisioning/default.nix': '{ }',
+    'nixos/grafana.nix': '{ }',
   };
 
   test('changes with the image source only', () => {
@@ -66,6 +75,12 @@ describe('image source key', () => {
     writeFileSync(join(dir, 'README.md'), '# other docs');
     writeFileSync(join(dir, 'index.ts'), 'export const x = 1;');
     writeFileSync(join(dir, 'nixos/database-collector/host.nix'), '{ a = 1; }');
+    // Only the observability cluster reads these.
+    writeFileSync(
+      join(dir, 'nixos/grafana-provisioning/default.nix'),
+      '{ a = 1; }'
+    );
+    writeFileSync(join(dir, 'nixos/grafana.nix'), '{ a = 1; }');
     writeFileSync(join(dir, 'nixos/untracked.nix'), '{ }');
     expect(imageSourceKey(dir)).toBe(key);
     writeFileSync(join(dir, 'nixos/host.nix'), '{ b = 1; }');
@@ -106,6 +121,12 @@ describe('image source key', () => {
           `${file} reads ${target}, outside the image inputs`
         ).toBe(true);
         expect(
+          NOT_IMAGE_INPUTS.some(
+            (input) => target === input || target.startsWith(input)
+          ),
+          `${file} reads ${target}, which the image key leaves out`
+        ).toBe(false);
+        expect(
           tracked.has(target) || existsDirectory(target),
           `${file} reads ${target}`
         ).toBe(true);
@@ -133,10 +154,6 @@ describe('plan check', () => {
     ),
     step(
       'replace',
-      'aws:lb/targetGroupAttachment:TargetGroupAttachment::observability'
-    ),
-    step(
-      'replace',
       'aws:lb/targetGroupAttachment:TargetGroupAttachment::observability-oncall'
     ),
     step(
@@ -150,7 +167,7 @@ describe('plan check', () => {
   test('applies an image change', () => {
     const plan = checkPlan({ steps: imageChange });
     expect(plan.refused).toEqual([]);
-    expect(plan.changes).toHaveLength(6);
+    expect(plan.changes).toHaveLength(5);
     expect(plan.instanceUrn).toBe(
       urn('aws:ec2/instance:Instance', 'observability')
     );
@@ -215,42 +232,58 @@ describe('smoke boot', () => {
   const target = {
     instanceProfile: names.role,
     secretArn: `arn:aws:secretsmanager:us-east-2:569036502058:secret:${names.secret}-AbCdEf`,
-    logsBucket: names.logsBucket,
-    tracesBucket: names.tracesBucket,
+    backupBucket: names.backupBucket,
   };
 
   test('names every resource after the run, inside the sweep prefixes', () => {
     expect(names).toEqual({
       role: 'observability-smoke-42135788731-2',
-      logsBucket: 'observability-smoke-42135788731-2-logs',
-      tracesBucket: 'observability-smoke-42135788731-2-traces',
+      backupBucket: 'observability-smoke-42135788731-2-backup',
       secret: 'observability/smoke-42135788731-2',
     });
-    for (const bucket of [names.logsBucket, names.tracesBucket]) {
-      expect(bucket).toMatch(/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/);
-      expect(bucket.startsWith(SMOKE_PREFIX)).toBe(true);
-    }
+    expect(names.backupBucket).toMatch(/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/);
+    expect(names.backupBucket.startsWith(SMOKE_PREFIX)).toBe(true);
     expect(() => smokeNames('../x')).toThrow();
   });
 
-  test('the smoke host may reach only its own buckets and secret', () => {
+  test('the smoke host may reach only its own bucket and secret', () => {
     const policy = JSON.stringify(
-      smokeHostPolicy(names.logsBucket, names.tracesBucket, target.secretArn)
+      smokeHostPolicy(names.backupBucket, target.secretArn)
     );
     const resources = [...policy.matchAll(/"arn:aws:[^"]+"/g)].map(
       (match) => match[0]
     );
     for (const arn of resources) {
       expect(
-        arn.includes(names.logsBucket) ||
-          arn.includes(names.tracesBucket) ||
-          arn.includes(names.secret),
+        arn.includes(names.backupBucket) || arn.includes(names.secret),
         arn
       ).toBe(true);
     }
     expect(policy).not.toMatch(
       /cloudwatch|sns:|"\*"|observability-logs|observability-traces/
     );
+  });
+
+  test('the host may touch only GoAlert backups in its bucket', () => {
+    const bucket = 'arn:aws:s3:::observability-logs-1a2b3c4';
+    const statements = backupStatements(bucket);
+    for (const statement of statements) {
+      const actions = [statement.Action].flat();
+      expect(actions.every((action) => action.startsWith('s3:'))).toBe(true);
+      expect(actions).not.toContain('s3:DeleteObject');
+    }
+    const objects = statements.filter(
+      (statement) => statement.Resource !== bucket
+    );
+    expect(objects.map((statement) => statement.Resource)).toEqual([
+      `${bucket}/goalert/*`,
+    ]);
+    expect(
+      statements.find((statement) => statement.Resource === bucket)?.Condition
+    ).toEqual({ StringLike: { 's3:prefix': 'goalert/*' } });
+    // The backup writes where the policy allows.
+    const goalert = readFileSync(join(stackDir, 'nixos/goalert.nix'), 'utf8');
+    expect(goalert).toContain('"s3://$BACKUP_BUCKET/goalert/goalert-');
   });
 
   test('cleanup removes every kind of resource the smoke boot creates', () => {
@@ -278,26 +311,30 @@ describe('smoke boot', () => {
     }
   });
 
-  test('user data points only at smoke storage and a topic nobody reads', () => {
+  test('user data points only at smoke storage and names nothing in production', () => {
     const payload = JSON.parse(
       gunzipSync(
         Buffer.from(smokeUserData(target, 'vol-0abc'), 'base64')
       ).toString()
     );
-    expect(payload.settings).toMatchObject({
-      volumeId: 'vol-0abc',
-      logsBucket: target.logsBucket,
-      tracesBucket: target.tracesBucket,
+    expect(payload.settings).toEqual({
+      region: 'us-east-2',
+      otlpHost: 'otlp-smoke.macro-internal.com',
+      oncallHost: 'oncall-smoke.macro-internal.com',
       secretArn: target.secretArn,
-      alarmTopicArn: SMOKE_ALARM_TOPIC,
+      volumeId: 'vol-0abc',
+      backupBucket: target.backupBucket,
     });
-    expect(JSON.stringify(payload)).not.toContain('grafana.macro-internal.com');
     // The host's own validator accepts it.
     const source = readFileSync(
       join(stackDir, 'nixos/read-user-data.py'),
       'utf8'
     );
     expect(source).toContain(`payload['version'] != ${payload.version}`);
+    const keys = /SETTING_KEYS = \{([^}]+)\}/.exec(source)?.[1] ?? '';
+    expect(
+      [...keys.matchAll(/'([A-Za-z]+)'/g)].map((m) => m[1]).sort()
+    ).toEqual(Object.keys(payload.settings).sort());
   });
 
   test('the throwaway secret has exactly the fields the host validates, and no paging keys', () => {
@@ -315,7 +352,6 @@ describe('smoke boot', () => {
       expect(value).not.toMatch(/\s/);
     }
     for (const key of [
-      'grafana_secret_key',
       'otlp_token',
       'goalert_encryption_key',
       'goalert_admin_password',
@@ -323,6 +359,9 @@ describe('smoke boot', () => {
       expect(secret[key].length).toBeGreaterThanOrEqual(32);
     }
     expect(secret.macro_alerts_webhook_url).toStartWith('https://');
+    expect(new URL(secret.macro_alerts_webhook_url).hostname).toEndWith(
+      '.invalid'
+    );
     expect(
       Object.keys(secret).some((key) => key.includes('integration_key'))
     ).toBe(false);
@@ -332,12 +371,36 @@ describe('smoke boot', () => {
     const script = hostCheckScript('0123456789abcdef0123456789abcdef');
     execFileSync('bash', ['-n'], { input: script });
     for (const unit of UNITS) expect(script).toContain(unit);
-    // Every unit the README tells operators to check.
+    // Every unit the README tells operators to check, and no other.
     const readme = readFileSync(join(stackDir, 'README.md'), 'utf8');
     const listed =
       /systemctl status ([a-z -]+)\n/.exec(readme)?.[1].split(' ') ?? [];
-    expect(listed.length).toBeGreaterThan(5);
-    for (const unit of listed) expect(UNITS).toContain(unit);
+    expect(listed.sort()).toEqual([...UNITS].sort());
+    // Every unit the image hardens or feeds secrets to is checked.
+    const host = readFileSync(join(stackDir, 'nixos/host.nix'), 'utf8');
+    const services = /services = \[([^\]]+)\]/.exec(host)?.[1] ?? '';
+    const hostUnits = [...services.matchAll(/"([a-z-]+)"/g)].map((m) => m[1]);
+    expect(hostUnits.length).toBeGreaterThan(0);
+    for (const unit of hostUnits) {
+      expect(UNITS).toContain(unit);
+    }
+  });
+
+  test('the paging check pages GoAlert the way production does', () => {
+    const script = pagingCheckScript('0123456789abcdef0123456789abcdef');
+    execFileSync('bash', ['-n'], { input: script });
+    for (const path of [
+      '/health',
+      '/api/v2/generic/incoming',
+      '/api/v2/grafana/incoming',
+      '/api/v2/heartbeat/',
+    ]) {
+      expect(script).toContain(path);
+    }
+    // GoAlert may post only to the relay (goalert.nix `AllowedURLs`).
+    const goalert = readFileSync(join(stackDir, 'nixos/goalert.nix'), 'utf8');
+    expect(goalert).toContain(`relayUrl = "${RELAY_URL}";`);
+    expect(script).toContain(`id: \\"${RELAY_URL}\\"`);
   });
 });
 

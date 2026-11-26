@@ -50,6 +50,7 @@ export default defineConfig({
       },
       ...[
         '@service-storage/client',
+        '@service-search/client',
         '@service-storage/crm-contacts',
         '@service-storage/crm-visibility',
         '@service-storage/crm-contact-edit',
@@ -57,6 +58,7 @@ export default defineConfig({
         '@app/lib/analytics/posthog',
         '@app/features/next-soup/filters/filter-store',
         '../context/crm-context',
+        '../add-to-pipeline',
       ].map((find) => ({
         find: new RegExp(`^${find}$`),
         replacement: `${directory}/preview-adapters.ts`,

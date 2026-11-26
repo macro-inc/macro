@@ -1,12 +1,9 @@
-import {
-  SearchBar,
-  useViewControlHotkeys,
-  ViewShell,
-} from '@app/components/view-shell';
+import { SearchBar, useViewControlHotkeys } from '@app/components/view-shell';
 import {
   ListHeader,
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PlusIcon from '@icon/system/regular/plus.svg';
@@ -46,10 +43,9 @@ export function ActivitySection(
       aria-label={props.label}
       class="@container/record flex min-h-0 min-w-0 flex-1 flex-col"
     >
-      <Show
-        when={!isTouchDevice()}
-        fallback={
-          <ViewShell.Header class="py-2">
+      <MobileListLayout
+        header={
+          isTouchDevice() ? (
             <div class="flex min-w-0 items-center gap-3">
               {props.controls}
               <SearchBar
@@ -71,28 +67,30 @@ export function ActivitySection(
                 {props.createLabel}
               </Button>
             </div>
-          </ViewShell.Header>
+          ) : undefined
         }
       >
-        <ListHeader title={props.title ?? props.label}>
-          {props.controls}
-          <ViewCreateButton
-            aria-label={props.createLabel}
-            tooltip={props.createLabel}
-            onClick={props.onCreate}
-          />
-          <ListHeaderSearch
-            label={props.searchLabel}
-            value={props.search}
-            onValueChange={props.onSearchChange}
-            focusResults={view.host.focus}
-            registerFocus={(focus) => (focusSearch = focus)}
-          />
-        </ListHeader>
-      </Show>
-      <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-6 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1.5rem)] touch:[--mobile-content-inset-top:0px]">
-        {props.children}
-      </div>
+        <Show when={!isTouchDevice()}>
+          <ListHeader title={props.title ?? props.label}>
+            {props.controls}
+            <ViewCreateButton
+              aria-label={props.createLabel}
+              tooltip={props.createLabel}
+              onClick={props.onCreate}
+            />
+            <ListHeaderSearch
+              label={props.searchLabel}
+              value={props.search}
+              onValueChange={props.onSearchChange}
+              focusResults={view.host.focus}
+              registerFocus={(focus) => (focusSearch = focus)}
+            />
+          </ListHeader>
+        </Show>
+        <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-6 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1.5rem)] touch:pt-(--mobile-content-inset-top)">
+          {props.children}
+        </div>
+      </MobileListLayout>
     </section>
   );
 }

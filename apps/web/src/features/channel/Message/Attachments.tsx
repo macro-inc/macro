@@ -1,15 +1,18 @@
-import { PullRequestAttachment } from '@app/features/block-pr/component/PullRequestAttachment';
-import { ProjectAttachment } from '@app/features/projects/project-attachment';
+import { t } from '@app/lib/i18n';
 import {
   type MediaItem,
   mapMediaItems,
   partitionAttachments,
 } from '@channel/Media/media-items';
-import { ItemPreview } from '@core/component/ItemPreview';
-import { stringToItemType } from '@service-storage/client';
+import { VoiceMemoPlayer } from '@channel/Media/VoiceMemoPlayer';
+import { staticFileIdEndpoint } from '@core/constant/servers';
+import { getDocumentMentions } from '@core/util/documentMentions';
 import { cn } from '@ui';
-import { createMemo, For, Match, Show, Switch } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
+import { AttachmentChip } from './AttachmentChip';
+import { splitMessageContent } from './agent-session-link';
 import { useMessage } from './context';
+import { DocumentImagePreview } from './DocumentImagePreview';
 import { MediaPreview } from './MediaPreview';
 
 type AttachmentsProps = {
@@ -24,9 +27,25 @@ export function Attachments(props: AttachmentsProps) {
   const mediaItems = createMemo<MediaItem[]>((previous = []) =>
     mapMediaItems(buckets().mediaAttachments, previous)
   );
+  // A document the text also mentions already previews under the text
+  // (MentionedImages); previewing the attachment too would show it twice.
+  const documentIds = createMemo(() => {
+    const mentioned = getDocumentMentions(
+      splitMessageContent(message()).body
+    ).map((mention) => mention.documentId);
+
+    return buckets()
+      .documentAttachments.filter(
+        (attachment) =>
+          attachment.entity_type === 'document' &&
+          !mentioned.includes(attachment.entity_id)
+      )
+      .map((attachment) => attachment.entity_id);
+  });
   const hasAttachments = createMemo(
     () =>
       buckets().mediaAttachments.length > 0 ||
+      buckets().audioAttachments.length > 0 ||
       buckets().documentAttachments.length > 0
   );
   const shouldRender = createMemo(
@@ -40,30 +59,27 @@ export function Attachments(props: AttachmentsProps) {
           <MediaPreview items={mediaItems()} />
         </Show>
 
+        <Show when={buckets().audioAttachments.length > 0}>
+          <div class="flex flex-col gap-2" data-message-voice-memos>
+            <For each={buckets().audioAttachments}>
+              {(attachment) => (
+                <VoiceMemoPlayer
+                  src={staticFileIdEndpoint(attachment.entity_id)}
+                  label={t('channelComposer.voiceMemo')}
+                />
+              )}
+            </For>
+          </div>
+        </Show>
+
+        <For each={documentIds()}>
+          {(documentId) => <DocumentImagePreview documentId={documentId} />}
+        </For>
+
         <Show when={buckets().documentAttachments.length > 0}>
           <div class="flex flex-row mt-2 gap-2 flex-wrap max-w-full">
             <For each={buckets().documentAttachments}>
-              {(attachment) => (
-                <Switch
-                  fallback={
-                    <ItemPreview
-                      id={attachment.entity_id}
-                      type={stringToItemType(attachment.entity_type)}
-                    />
-                  }
-                >
-                  <Match when={attachment.entity_type === 'initiative'}>
-                    <ProjectAttachment id={attachment.entity_id} />
-                  </Match>
-                  <Match
-                    when={
-                      stringToItemType(attachment.entity_type) === 'foreign'
-                    }
-                  >
-                    <PullRequestAttachment id={attachment.entity_id} />
-                  </Match>
-                </Switch>
-              )}
+              {(attachment) => <AttachmentChip attachment={attachment} />}
             </For>
           </div>
         </Show>

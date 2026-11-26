@@ -1,3 +1,8 @@
+import type {
+  TaskTemplateEditorDraft,
+  TaskTemplateSelection,
+} from '@app/features/task-composer/core/template-selection';
+import type { TaskTemplateContents } from '@app/features/task-templates/core/template';
 import { makePersistedState } from '@app/lib/persistence';
 import type { PropertyApiValues } from '@property/types';
 import type { SerializedEditorState } from 'lexical';
@@ -12,11 +17,15 @@ const storedDraftSchema = taskComposerDraftSchema.extend({
 const STORAGE_KEY = 'task-composer-draft';
 
 /** Recovered submissions keep their sharing choice separate from new-task defaults. */
-export function createTaskComposerSharing(recoveredShare?: boolean) {
+export function createTaskComposerSharing(
+  recoveredShare?: boolean,
+  options?: { initialValue?: boolean; canPersist?: () => boolean }
+) {
   if (recoveredShare !== undefined) return createSignal(recoveredShare);
   return makePersistedState(createSignal(true), {
     storages: {
       restore: () => {
+        if (options?.initialValue !== undefined) return options.initialValue;
         const stored = localStorage.getItem('task-composer-share-with-team');
         return stored === 'true'
           ? true
@@ -24,8 +33,10 @@ export function createTaskComposerSharing(recoveredShare?: boolean) {
             ? false
             : undefined;
       },
-      write: (value) =>
-        localStorage.setItem('task-composer-share-with-team', String(value)),
+      write: (value) => {
+        if (options?.canPersist?.() === false) return;
+        localStorage.setItem('task-composer-share-with-team', String(value));
+      },
     },
   });
 }
@@ -64,6 +75,12 @@ export type TaskComposerDraftStorage = {
 
 export interface TaskComposerDraft {
   title: string;
+  shareWithTeam?: boolean;
+  templateSelection?: TaskTemplateSelection;
+  /** Template mode never overwrites the underlying task fields. */
+  templateEditor?: TaskTemplateEditorDraft;
+  /** Last programmatically applied property and description state. */
+  templateBaseline?: TaskTemplateContents;
   /** Serialized Lexical editor state (lossless — preserves images, dimensions, etc.) */
   editorState?: SerializedEditorState;
   /** Markdown text fallback (used by older drafts and for the createTask API) */
@@ -79,7 +96,7 @@ export interface TaskComposerDraft {
 export function saveTaskComposerDraft(
   draft: Omit<TaskComposerDraft, 'timestamp'>,
   storage?: TaskComposerDraftStorage
-): void {
+): boolean {
   try {
     const draftWithTimestamp: TaskComposerDraft = {
       ...draft,
@@ -89,8 +106,10 @@ export function saveTaskComposerDraft(
       storage?.storageKey ?? STORAGE_KEY,
       JSON.stringify(draftWithTimestamp)
     );
+    return true;
   } catch (error) {
     console.warn('Failed to save task composer draft:', error);
+    return false;
   }
 }
 

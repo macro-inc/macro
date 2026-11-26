@@ -1,24 +1,21 @@
 import { openChatWithMessage } from '@app/features/chat/ChatWithAgentButton';
+import { searchTypeOperator } from '@app/features/next-soup/core/search-operator-filters';
 import { createGlobalSearchOpener } from '@app/features/next-soup/open-search';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { ReferredFrom } from '@components/app/split-layout/layoutManager';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName } from '@core/constant/allBlocks';
-import {
-  enableProjects,
-  USE_MACRO_PR_SUMMARY_BLOCK,
-} from '@core/constant/featureFlags';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import { openExternalUrl } from '@core/util/url';
 import { isGithubPrEntity } from '@entity';
 import { projectRouteId } from '../projects/core/route';
 import { routineContent } from '../routines/routine-navigation';
-import { getCategorySearchFilters } from './category-search-filters';
+import { categorySearchIndex } from './category-search-filters';
 import {
   type CommandMenuItem,
   isAskAiItem,
@@ -33,7 +30,6 @@ export function createCommandResultOpener(
 ) {
   const { openWithSplit } = useSplitLayout();
   const navigateSearch = createGlobalSearchOpener(referredFrom);
-  const projectsFlag = useFeatureFlag(enableProjects);
   const openDm = useOpenDirectMessage();
   // A person without a conversation yet: open one, as the user card does.
   const openDirectMessage = async (
@@ -89,15 +85,20 @@ export function createCommandResultOpener(
     item: Extract<CommandMenuItem, { kind: 'search' }>,
     openInNewSplit: boolean
   ) => {
-    // Fall back to the search preset (not `{}`) so uncategorized searches
-    // keep the search view's baseline exclusions (foreign entities, CRM).
+    // The category becomes a typed type: in the Search field, which shows
+    // the whole search; the preset (not `{}`) keeps the view's baseline
+    // exclusions (foreign entities, CRM).
     const preset = getViewPreset('search');
-    const overrides = getCategorySearchFilters(item.category);
-    const filters = overrides?.filters ?? preset?.filters ?? {};
-    const clientFilters =
-      overrides?.clientFilters ?? preset?.clientFilters ?? {};
+    const index = categorySearchIndex(item.category);
+    const query = [index && searchTypeOperator(index), item.query.trim()]
+      .filter(Boolean)
+      .join(' ');
     navigateSearch(
-      { query: item.query, filters, clientFilters },
+      {
+        query,
+        filters: preset?.filters ?? {},
+        clientFilters: preset?.clientFilters ?? {},
+      },
       openInNewSplit
     );
     return true;
@@ -105,7 +106,6 @@ export function createCommandResultOpener(
 
   return (item: CommandMenuItem, openInNewSplit = false): boolean => {
     const isProject = isEntityItem(item) && item.bucket === 'initiative';
-    if (isProject && !projectsFlag().enabled) return false;
     if (isProject) {
       openWithSplit(
         {

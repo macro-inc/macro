@@ -24,7 +24,6 @@ export {
   isPreviewItemNoAccess,
 } from './types';
 export {
-  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueueDocumentWakeup,
   enqueuePreviewWakeup,
   isWakeableDocument,

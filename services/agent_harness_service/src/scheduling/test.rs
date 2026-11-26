@@ -252,3 +252,25 @@ fn the_suggestions_brief_names_only_real_sdk_symbols() {
         );
     }
 }
+
+/// A live check's error reaches `routine.unusable_knobs`'s span, so a stored
+/// owner that doesn't parse, which carries the raw principal, stays out of it
+/// however the lookup wraps it; other errors keep their detail.
+#[test]
+fn live_check_errors_leave_out_a_stored_owner() {
+    let principal = "someone-stored-wrongly";
+    let decode = || {
+        let Err(error) = model_owner::Owner::from_principal_str(principal) else {
+            panic!("{principal} parsed");
+        };
+        sqlx::Error::Decode(Box::new(error))
+    };
+    let chat = chat::domain::models::ChatErr::Unknown(anyhow::Error::from(decode()));
+    for report in [live_check_error(&decode()), live_check_error(&chat)] {
+        let text = format!("{report:?} {report}");
+        assert!(!text.contains("someone"), "{text}");
+        assert!(text.contains("stored owner doesn't parse"), "{text}");
+    }
+    let timeout = live_check_error(&sqlx::Error::PoolTimedOut);
+    assert!(format!("{timeout}").contains("PoolTimedOut"), "{timeout}");
+}

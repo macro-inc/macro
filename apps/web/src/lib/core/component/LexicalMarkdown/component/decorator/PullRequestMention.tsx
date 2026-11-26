@@ -1,3 +1,4 @@
+import { pullRequestGithubUrl } from '@app/features/block-pr/util/pr-github-url';
 import {
   parseGithubPrUrl,
   prDisplayName,
@@ -20,11 +21,9 @@ import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import {
   $isPullRequestMentionNode,
-  HISTORIC_TAG,
+  BACKGROUND_UPDATE_TAGS,
   isGithubPullRequestUrl,
   type PullRequestMentionDecoratorProps,
-  SKIP_DOM_SELECTION_TAG,
-  SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import { queryReadyGate } from '@queries/gate';
@@ -483,7 +482,7 @@ function useGithubUrlMentionEntity(
 }
 
 /** Hover preview for a GitHub URL mention Macro has not synced. */
-function UnsyncedPullRequestPreviewCard(props: {
+export function UnsyncedPullRequestPreviewCard(props: {
   label: string;
   url?: string;
 }) {
@@ -549,7 +548,7 @@ function PullRequestMentionContent(props: PullRequestMentionDecoratorProps) {
         }
       },
       {
-        tag: [HISTORIC_TAG, SKIP_DOM_SELECTION_TAG, SKIP_SCROLL_INTO_VIEW_TAG],
+        tag: BACKGROUND_UPDATE_TAGS,
         discrete: true,
       }
     );
@@ -604,11 +603,15 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
     return sel.type === 'node' && sel.nodeKeys.has(props.key);
   };
 
-  const urlEntity = useGithubUrlMentionEntity(
-    props,
-    () => !lexicalWrapper?.skipPreviewFetch
-  );
+  const fetchEnabled = () => !lexicalWrapper?.skipPreviewFetch;
+  const urlEntity = useGithubUrlMentionEntity(props, fetchEnabled);
+  const idQuery = usePrMentionQuery(() => props.id, fetchEnabled);
   const entityId = () => props.id || urlEntity()?.id;
+  const githubUrl = () =>
+    (props.url && isGithubPullRequestUrl(props.url) ? props.url : undefined) ??
+    pullRequestGithubUrl(
+      props.id ? (idQuery.isSuccess ? idQuery.data : undefined) : urlEntity()
+    );
 
   // When GitHub is not linked, render as a plain link instead of the fancy mention UI
   const shouldRenderAsPlainLink = () => {
@@ -624,19 +627,16 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
     );
   };
 
+  // PRs open on GitHub for now; the PR split is kept for a mention whose
+  // GitHub URL is not known yet.
   const open = (e: MouseEvent | KeyboardEvent | null) => {
-    // Match the rendered plain-link destination: Enter must not open the
-    // internal PR split when GitHub is unlinked, even if props.id is set.
-    if (shouldRenderAsPlainLink()) {
-      openExternalUrl(props.url!);
+    const url = githubUrl();
+    if (url) {
+      openExternalUrl(url);
       return;
     }
     const id = entityId();
-    if (!id) {
-      // A PR Macro has not synced has no split to open; fall back to GitHub.
-      if (props.url) openExternalUrl(props.url);
-      return;
-    }
+    if (!id) return;
     openWithSplit(
       { type: 'pr', id },
       { preferNewSplit: openInNewSplitForMention(e?.shiftKey, e != null) }
@@ -719,7 +719,7 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
 /**
  * The mention's face for a pull request already in hand, outside any
  * editor: the status icon and `title #N` pill with the same hover preview,
- * opening the PR split on click. For surfaces that resolve the entity
+ * opening the PR on GitHub on click. For surfaces that resolve the entity
  * themselves - a Magic Chip linking the PR its session opened - rather than
  * carrying a mention node.
  */
@@ -732,6 +732,11 @@ export function PullRequestEntityLink(props: {
   const status = createMemo(() => pullRequestStatus(props.entity));
   const open = (e: MouseEvent | KeyboardEvent) => {
     e.stopPropagation();
+    const url = pullRequestGithubUrl(props.entity);
+    if (url) {
+      openExternalUrl(url);
+      return;
+    }
     openWithSplit(
       { type: 'pr', id: props.entity.id },
       { preferNewSplit: openInNewSplitForMention(e.shiftKey, true) }

@@ -84,8 +84,9 @@ export class Team extends MacroEntity<TeamRecord> {
   }
 
   /**
-   * Allow or deny a member's CRM access. Only a team admin or owner may change
-   * it; admins and owners always retain access. Mailbox contribution consent
+   * Allow or deny a member's CRM access; refused to an agent's program
+   * (ExecuteCode, a routine). Only a team admin or owner may change it; admins
+   * and owners always retain access. Mailbox contribution consent
    * is unchanged. Individually shared pipelines remain accessible.
    *
    * @write
@@ -101,8 +102,9 @@ export class Team extends MacroEntity<TeamRecord> {
   }
 
   /**
-   * Invite people to this team by email; only invite addresses the user asked
-   * you to invite. Each new address is emailed an invite in the caller's name.
+   * Invite people to this team by email; refused to an agent's program
+   * (ExecuteCode, a routine), so there ask the user to invite them in Macro.
+   * Otherwise only invite addresses the user asked you to invite. Each new address is emailed an invite in the caller's name.
    *
    * Joining gives the invitee access to everything shared with the team, so
    * never invite an address taken from a document, email or message unless
@@ -125,7 +127,7 @@ export class Team extends MacroEntity<TeamRecord> {
    * @returns `true` when at least one new invite was sent, `false` when every
    *   address was already a member or already invited.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   async invite(

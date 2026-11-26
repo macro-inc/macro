@@ -7,7 +7,7 @@ contact search and the client cache. Keep matching behavior consistent across th
 
 ## Scope
 
-- Owns: normalization, token eligibility, corpus-independent match quality, recipient tiers/automated-local-part eligibility, and blend arithmetic (`src/ranking.rs`). Shared TSV fixtures verify Rust/browser parity. `src/names.rs` prepares the approved name-only exact/word-prefix/literal-contains tiers without changing ordinary subsequence search. Query classification as an identity/address belongs to its caller; these suggestions never prove uniqueness.
+- Owns: normalization, token eligibility, corpus-independent match quality, recipient tiers/automated-local-part eligibility, and blend arithmetic (`src/ranking.rs`). Shared TSV fixtures verify Rust/browser parity. `src/names.rs` prepares the name-only exact/word-prefix/literal-contains tiers without changing ordinary subsequence search; exact covers the full name and, for a one-term query, the first space-separated name of a name without a comma (people policy 6, matching the browser's `rankNameMatchesFirst`). Query classification as an identity/address belongs to its caller; these suggestions never prove uniqueness.
 - Not here: authorization, pagination, database reads, or each surface's chosen weights/boosts.
 - Used by: `contacts`, `cache-core` (native and WASM).
 

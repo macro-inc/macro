@@ -6,7 +6,7 @@ use std::{collections::HashMap, fmt::Display};
 use chrono::{DateTime, Utc};
 use models_opensearch::SearchEntityType;
 
-use crate::search::query::Keys;
+use crate::search::{channels::LINKS_KEY, query::Keys};
 
 /// Injects `fragment_size` into every highlight field config in the query JSON.
 /// The `opensearch_query_builder` crate doesn't support `fragment_size` natively,
@@ -29,12 +29,14 @@ pub(crate) fn inject_fragment_size(query: &mut serde_json::Value, fragment_size:
 
 /// Excludes `content` from `_source` in the query JSON. The content field is
 /// only needed in highlights, not in the raw source — excluding it cuts ~40%
-/// of the OpenSearch response payload.
+/// of the OpenSearch response payload. Agent-session parents' record of their
+/// children (`indexed_messages`, `pending_messages`) is excluded too: it grows
+/// with the session and only the indexer reads it.
 pub(crate) fn exclude_source_content(query: &mut serde_json::Value) {
     if let Some(obj) = query.as_object_mut() {
         obj.insert(
             "_source".to_string(),
-            serde_json::json!({"excludes": ["content"]}),
+            serde_json::json!({"excludes": ["content", LINKS_KEY, "indexed_messages", "pending_messages"]}),
         );
     }
 }
@@ -302,8 +304,11 @@ pub(crate) fn parse_highlight_hit(
             .or_else(|| highlight.get("source_names"))
             .and_then(|v| v.first())
             .map(|v| v.to_string()),
+        // A channel message found only through a link it shares has its
+        // match under `links`, so that link stands in for the text.
         content: highlight
             .get(keys.content_key)
+            .or_else(|| highlight.get(LINKS_KEY))
             .map(|v| v.iter().map(|f| normalize_highlight_fragment(f)).collect())
             .unwrap_or_default(),
         sender: highlight
@@ -361,6 +366,18 @@ pub(crate) struct SearchResponse<T> {
     pub took: i32,
     pub timed_out: bool,
     pub _shards: Shards,
+    /// Per-phase milliseconds, returned only when the request asks for
+    /// `phase_took`.
+    #[serde(default)]
+    pub phase_took: Option<PhaseTook>,
+}
+
+/// Wall time of the query and fetch phases of one search, in milliseconds,
+/// as the coordinating node measured them.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct PhaseTook {
+    pub query: u64,
+    pub fetch: u64,
 }
 
 impl<T> SearchResponse<T> {
@@ -407,7 +424,9 @@ pub struct SearchGotoEmail {
     pub bcc: Vec<String>,
     /// The cc of the email
     pub cc: Vec<String>,
-    /// The labels of the email
+    /// The inbox holding the email
+    pub link_id: String,
+    /// The labels of the email, when the caller may read its inbox's labels
     pub labels: Vec<String>,
     /// The sent_at timestamp of the email
     pub sent_at: Option<chrono::DateTime<chrono::Utc>>,

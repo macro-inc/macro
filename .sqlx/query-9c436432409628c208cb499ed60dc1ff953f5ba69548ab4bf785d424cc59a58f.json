@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT preview_id, consent_incarnation, policy_version, context_id, definition,\n                      status, counts, after_thread_id, scanned_threads, created_at, expires_at\n               FROM crm_email_policy_previews WHERE team_id = $1 AND user_id = $2\n                 AND preview_id = $3 AND consent_incarnation = $4 AND policy_version = $5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "preview_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "consent_incarnation",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "policy_version",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "definition",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "counts",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "after_thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "scanned_threads",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9c436432409628c208cb499ed60dc1ff953f5ba69548ab4bf785d424cc59a58f"
+}

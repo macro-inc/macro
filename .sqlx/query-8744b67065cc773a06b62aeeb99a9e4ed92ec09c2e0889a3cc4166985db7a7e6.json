@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE hosted_runtime_host\n            SET resident_memory_mib = $2, memory_reported_at = $3,\n                admitted_since_report = CASE\n                    WHEN last_admitted_at IS NULL OR last_admitted_at <= $3 THEN 0\n                    ELSE admitted_since_report\n                END\n            WHERE id = $1 AND (memory_reported_at IS NULL OR memory_reported_at <= $3)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8744b67065cc773a06b62aeeb99a9e4ed92ec09c2e0889a3cc4166985db7a7e6"
+}

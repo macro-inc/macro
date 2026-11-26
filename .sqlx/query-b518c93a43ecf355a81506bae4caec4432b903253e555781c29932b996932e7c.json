@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"macro_user_email_verification\"\n        SET \"is_verified\" = true\n        WHERE \"email\" = $1 AND \"macro_user_id\" = $2 AND NOT \"is_verified\"\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b518c93a43ecf355a81506bae4caec4432b903253e555781c29932b996932e7c"
+}

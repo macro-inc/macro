@@ -17,7 +17,8 @@ pub struct PasswordService {
     pub availability: Arc<dyn Availability>,
 }
 impl PasswordService {
-    fn view(mut record: Record, actor: &Actor, admin: bool) -> ItemView {
+    fn view(mut record: Record, actor: &Actor, admin: bool, favorite: bool) -> ItemView {
+        record.metadata.favorite = favorite;
         record.metadata.share_count = record
             .grants
             .iter()
@@ -41,8 +42,65 @@ impl PasswordService {
             .repository
             .is_team_admin(&actor.user_id, record.metadata.team_id)
             .await?;
-        Ok(Self::view(record, actor, admin))
+        let favorite = !self
+            .repository
+            .favorites(actor, record.metadata.team_id, &[record.metadata.id])
+            .await?
+            .is_empty();
+        Ok(Self::view(record, actor, admin, favorite))
     }
+    async fn views(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        records: Vec<Record>,
+        admin: bool,
+    ) -> Result<Vec<ItemView>, Error> {
+        let records: Vec<_> = records
+            .into_iter()
+            .filter(|record| admin || Self::permission(actor, team, record, false))
+            .collect();
+        let ids: Vec<_> = records.iter().map(|record| record.metadata.id).collect();
+        let favorites: std::collections::HashSet<_> = self
+            .repository
+            .favorites(actor, team, &ids)
+            .await?
+            .into_iter()
+            .collect();
+        Ok(records
+            .into_iter()
+            .map(|record| {
+                let favorite = favorites.contains(&record.metadata.id);
+                Self::view(record, actor, admin, favorite)
+            })
+            .collect())
+    }
+
+    /// Set a private preference using current human view access, without the credential lease.
+    #[tracing::instrument(skip_all, err, name="passwords.favorite", fields(team_id=%team.0,item_id=%item.0,outcome=tracing::field::Empty))]
+    pub async fn set_favorite(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+        favorite: bool,
+    ) -> Result<(), Error> {
+        let result = async {
+            self.access(actor, team, item, false).await?;
+            self.repository
+                .set_favorite(actor, team, item, favorite)
+                .await
+        }
+        .await;
+        tracing::Span::current()
+            .record("outcome", if result.is_ok() { "updated" } else { "failed" });
+        match result {
+            Ok(()) => Ok(()),
+            Err(Error::Busy | Error::Conflict) => Err(Error::Unavailable),
+            Err(error) => Err(error),
+        }
+    }
+
     /// List currently enabled vault memberships.
     pub async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error> {
         self.availability.require_enabled(actor).await?;
@@ -232,14 +290,8 @@ impl PasswordService {
             return Err(Error::Invalid);
         }
         let admin = self.repository.is_team_admin(&actor.user_id, team).await?;
-        Ok(self
-            .repository
-            .list(actor, team, search)
-            .await?
-            .into_iter()
-            .filter(|record| admin || Self::permission(actor, team, record, false))
-            .map(|record| Self::view(record, actor, admin))
-            .collect())
+        let records = self.repository.list(actor, team, search).await?;
+        self.views(actor, team, records, admin).await
     }
     /// Read an authorized metadata detail without consulting the secret provider.
     pub async fn get(&self, actor: &Actor, team: TeamId, item: ItemId) -> Result<ItemView, Error> {
@@ -427,7 +479,6 @@ impl PasswordService {
         record.metadata.kind = command.kind;
         record.metadata.url = command.url;
         record.metadata.folder_id = command.folder_id;
-        record.metadata.favorite = command.favorite;
         record.metadata.updated_at = Utc::now();
         self.repository
             .stage(command.operation_id, &record, &actor.user_id)
@@ -463,7 +514,6 @@ impl PasswordService {
         record.metadata.kind = command.kind;
         record.metadata.url = command.url;
         record.metadata.folder_id = command.folder_id;
-        record.metadata.favorite = command.favorite;
         record.metadata.updated_at = Utc::now();
         let version = record.metadata.version;
         self.repository.save(&record, Some(version)).await?;

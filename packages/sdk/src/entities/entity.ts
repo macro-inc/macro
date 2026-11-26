@@ -49,6 +49,20 @@ type Normalized<V> = null extends V
     ? NonNullable<V> | undefined
     : V;
 
+/** Each handle's lazy detail, for {@link forgetCachedDetail}. */
+const CACHED_DETAILS = new WeakMap<object, Lazy<unknown>>();
+
+/**
+ * Drop the cached detail of handles a write outside them changed (a merge the
+ * namespace commits), as {@link MacroEntity.mutate} does for a handle's own
+ * writes, so their next reads refetch.
+ */
+export function forgetCachedDetail(
+  entities: readonly MacroEntity<unknown>[],
+): void {
+  for (const entity of entities) CACHED_DETAILS.get(entity)?.clear();
+}
+
 /**
  * Base for entity handles: a free-to-construct `(client, id)` pair whose
  * detail record loads lazily on first field access and is dropped after any
@@ -64,6 +78,18 @@ export abstract class MacroEntity<Detail> {
     seed?: Detail,
   ) {
     this.detail = new Lazy(() => this.fetch(), seed);
+    CACHED_DETAILS.set(this, this.detail);
+  }
+
+  /**
+   * Seed fields a listing returned, so {@link field} and {@link mappedField}
+   * read them without loading the detail. Map listing fields onto detail keys
+   * only where both mean the same thing; leave out anything the listing
+   * leaves empty or reports differently. Returns this handle.
+   */
+  protected withListed(fields: Partial<Detail>): this {
+    this.detail.know(fields);
+    return this;
   }
 
   /** Load the detail record backing {@link field} accessors. */
@@ -74,7 +100,7 @@ export abstract class MacroEntity<Detail> {
     key: K,
   ): () => Promise<Normalized<Detail[K]>> {
     return async () =>
-      ((await this.detail.get())[key] ?? undefined) as Normalized<Detail[K]>;
+      (await this.readDetailField(key)) as Normalized<Detail[K]>;
   }
 
   /**
@@ -87,9 +113,17 @@ export abstract class MacroEntity<Detail> {
     map: (value: Normalized<Detail[K]>) => T,
   ): () => Promise<T> {
     return async () =>
-      map(
-        ((await this.detail.get())[key] ?? undefined) as Normalized<Detail[K]>,
-      );
+      map((await this.readDetailField(key)) as Normalized<Detail[K]>);
+  }
+
+  private async readDetailField<K extends keyof Detail>(
+    key: K,
+  ): Promise<Detail[K] | undefined> {
+    return (
+      this.detail.listedField(key) ??
+      (await this.detail.get())[key] ??
+      undefined
+    );
   }
 
   toJSON(): { id: string; detail?: Detail } {
@@ -297,7 +331,8 @@ export abstract class PropertiedEntity<Detail>
   }
 
   /**
-   * Remove a property from this entity, given its {@link properties} entry.
+   * Clear one property's value on this item, given its {@link properties}
+   * entry; the item itself and the property's definition are kept.
    *
    * @destructive
    * @idempotent

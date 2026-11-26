@@ -1,3 +1,4 @@
+import { useViewShell } from '@app/components/view-shell';
 import {
   type ChannelPreviewSelection,
   channelIdForPreviewNavigation,
@@ -62,7 +63,7 @@ export type SelectChannelOptions = {
 
 export type ChannelsViewContext = {
   state: Store<ChannelsViewState>;
-  /** The mobile list opens channels in the split; only desktop renders detail. */
+  /** Narrow touch opens channels full-screen; wider panes render inline detail. */
   mobileLayout: () => boolean;
   /** Whether the redesigned desktop sections are enabled. */
   sectionsEnabled: Accessor<boolean>;
@@ -137,6 +138,7 @@ export const [ChannelsViewProvider, useChannelsView] =
     'ChannelsView',
     (props) => {
       const panel = useSplitPanelOrThrow();
+      const shell = useViewShell();
       const userId = useUserId();
       const navigate = useNavigate();
       const params = useRouteParams(channelDetailRoute);
@@ -168,7 +170,8 @@ export const [ChannelsViewProvider, useChannelsView] =
         )
       );
 
-      const mobileLayout = () => isTouchDevice();
+      const mobileLayout = () =>
+        isTouchDevice() && (shell.breakpoints.narrow?.() ?? false);
       const selectedChannel = createMemo<ChannelPreviewSelection | undefined>(
         () => {
           const channelId = params.channelId;

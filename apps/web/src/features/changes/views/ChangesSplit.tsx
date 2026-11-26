@@ -14,17 +14,27 @@ import {
   Show,
 } from 'solid-js';
 import { useChanges } from '../context/changes-controller';
+import {
+  CHANGES_PANE_MIN_WIDTH,
+  changesTakeoverWidth,
+  DEFAULT_HOST_MIN_WIDTH,
+} from '../core/layout';
 import { createChangesNarrow } from '../primitives/create-changes-narrow';
 import { createSplitPresence } from '../primitives/create-split-presence';
 import { ChangesPane } from './ChangesPane';
 
-const HOST_MIN_PX = 320;
-const CHANGES_MIN_PX = 400;
-
-export function ChangesSplit(props: ParentProps) {
+export function ChangesSplit(
+  props: ParentProps<{
+    /** The narrowest the host stays usable beside the pane, such as its header's actions. */
+    hostMinWidth?: number;
+  }>
+) {
   const { available, layout } = useChanges();
   const [root, setRoot] = createSignal<HTMLDivElement>();
-  const narrow = createChangesNarrow(root);
+  const hostMinWidth = () => props.hostMinWidth ?? DEFAULT_HOST_MIN_WIDTH;
+  const narrow = createChangesNarrow(root, () =>
+    changesTakeoverWidth(hostMinWidth())
+  );
   let zone: ResizeZoneCtx | undefined;
   let hostContent: HTMLDivElement | undefined;
   // A host that can never have changes keeps the session alone on screen,
@@ -75,7 +85,7 @@ export function ChangesSplit(props: ParentProps) {
             {/* Hiding retains resize intent and the host's editor/composer owner. */}
             <Resize.Panel
               id="changes-content"
-              minSize={HOST_MIN_PX}
+              minSize={hostMinWidth()}
               index={0}
               persistent
               hidden={() => !hostVisible()}
@@ -97,7 +107,7 @@ export function ChangesSplit(props: ParentProps) {
             <Show when={presence.present()}>
               <Resize.Panel
                 id="changes-pane"
-                minSize={CHANGES_MIN_PX}
+                minSize={CHANGES_PANE_MIN_WIDTH}
                 index={1}
                 target={layout.changesShare()}
                 onSizeChangeEnd={(size) => {

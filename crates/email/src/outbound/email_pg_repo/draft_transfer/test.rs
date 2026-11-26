@@ -532,7 +532,7 @@ async fn expired_or_replaced_cleanup_cannot_renew_or_complete(db: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn thread_pages_omit_deleted_and_moved_drafts(db: PgPool) {
+async fn thread_pages_omit_discarded_moved_drafts_and_deleted_messages(db: PgPool) {
     let (repo, request) = fixture(&db).await;
     let thread = sqlx::query_scalar!(
         "SELECT thread_id FROM email_messages WHERE id=$1",
@@ -543,6 +543,10 @@ async fn thread_pages_omit_deleted_and_moved_drafts(db: PgPool) {
     .unwrap();
     let (parent, kept, discarded) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
     sqlx::query!("INSERT INTO email_messages(id,thread_id,link_id,provider_id,is_draft,subject,mailbox_state) VALUES($1,$2,$3,'outlook-parent',false,'Parent','{\"in_inbox\":true}')",parent,thread,request.source_link_id).execute(&db).await.unwrap();
+    // A received message deleted at Outlook stays as a `provider_missing`
+    // tombstone, as the mailbox's absence handling leaves it.
+    let deleted = Uuid::now_v7();
+    sqlx::query!("INSERT INTO email_messages(id,thread_id,link_id,provider_id,is_draft,subject,mailbox_state) VALUES($1,$2,$3,'outlook-deleted',false,'Re: Parent','{\"in_inbox\":true,\"provider_missing\":true}')",deleted,thread,request.source_link_id).execute(&db).await.unwrap();
     for draft in [kept, discarded] {
         sqlx::query!("INSERT INTO email_messages(id,thread_id,link_id,is_draft,replying_to_id,subject,body_html_sanitized) VALUES($1,$2,$3,true,$4,'Re: Parent','<p>Reply</p>')",draft,thread,request.source_link_id,parent).execute(&db).await.unwrap();
     }
@@ -659,5 +663,97 @@ async fn returning_a_reply_to_its_original_inbox_never_rebinds_the_old_draft(db:
         .unwrap()
         .as_deref(),
         Some("Keep this subject")
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_transfer_runs_beside_a_population_and_gives_up_behind_a_worker(db: PgPool) {
+    let (repo, request) = fixture(&db).await;
+    let begin = || {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            repo.begin_transfer(ACTOR, &request),
+        )
+    };
+    let transfers = || async {
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM email_draft_transfers"#)
+            .fetch_one(&db)
+            .await
+            .unwrap()
+    };
+
+    // A mailbox worker or a disconnect holds the source link exclusively.
+    let mut worker = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_links WHERE id = $1 FOR UPDATE",
+        request.source_link_id
+    )
+    .fetch_one(&mut *worker)
+    .await
+    .unwrap();
+    let blocked = begin().await.expect("waited past its lock timeout");
+    assert!(matches!(blocked, Err(EmailErr::Contended)));
+    assert_eq!(transfers().await, 0);
+    worker.rollback().await.unwrap();
+
+    // A CRM contact population holds it this way for its whole transaction.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_links WHERE id = $1 FOR SHARE",
+        request.source_link_id
+    )
+    .fetch_one(&mut *population)
+    .await
+    .unwrap();
+    let prepared = begin().await.expect("waited past its lock timeout");
+    population.rollback().await.unwrap();
+    assert!(matches!(prepared, Ok(TransferPreparation::Pending(_))));
+    assert_eq!(transfers().await, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_transfer_waiting_on_a_schedule_sees_it_and_refuses(db: PgPool) {
+    let (repo, request) = fixture(&db).await;
+    // Scheduling shares the link lock too, so the transfer waits on the
+    // draft's row while the schedule commits.
+    let mut schedule = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_messages WHERE id = $1 FOR UPDATE",
+        request.source_id
+    )
+    .fetch_one(&mut *schedule)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id) VALUES ($1,$2,now()+interval '1 hour',$3)",request.source_link_id,request.source_id,ACTOR)
+        .execute(&mut *schedule)
+        .await
+        .unwrap();
+    let transfer = tokio::spawn({
+        let repo = repo.clone();
+        let request = request.clone();
+        async move { repo.begin_transfer(ACTOR, &request).await }
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(4), async {
+        while sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'"#)
+            .fetch_one(&db)
+            .await
+            .unwrap()
+            == 0
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the transfer never waited on the draft");
+    schedule.commit().await.unwrap();
+
+    let refused = transfer.await.unwrap();
+    assert!(matches!(refused, Err(EmailErr::InvalidDraft(_))));
+    assert_eq!(
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM email_draft_transfers"#)
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+        0
     );
 }

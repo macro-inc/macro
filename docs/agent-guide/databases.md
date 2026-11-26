@@ -23,11 +23,27 @@ table opens on its remembered view.
 A database contains tables; records belong to a table and
 its properties describe each record. The database name in the split header is a
 static label until edited. Double-click it or choose **Rename** in Database actions
-to edit the same inline title with the current name selected. On touch devices,
-use **Database actions → Rename**. Enter or leaving the input saves and closes it; Escape cancels. Saving
+to edit the same inline title with the current name selected. Enter or leaving the input saves and closes it; Escape cancels. Saving
 a title does not enter the grid, and a failed rename shows a toast. Reload to verify
 the saved name persists. Viewers cannot enter rename from either entry point and
 see the split header's `viewer` badge instead.
+
+On touch devices the split header is the title, the access badge, Share and Info.
+Tap the title for its menu, a sheet that starts with the whole name and holds
+everything else the desktop header offers: **Ask Macro** (the desktop **AI**
+button), **Rename** (a dialog), Copy Link, Copy ID, Favorite, Change icon,
+Duplicate, Move to folder, Import CSV, Webhooks, **Download table as CSV** and
+Delete. A column's arrow opens a sheet too; **Change type** there shows the
+column's current type and opens the list of types in the same sheet, with **Back**.
+
+On touch devices the page's first row holds the **New** button for records and
+search, and the second row the view tabs, filter, sort and **View actions** (rename
+or delete the selected view, or create one). The selected view's tab is scrolled
+into view. On phones the split header has no table tabs: the first row starts with
+the table menu (the open table's name), which lists every table, **New table**
+(a dialog asks for its name) and the open table's forms; a database with no
+tables shows **New table** in the page instead. Rename, reorder and
+delete tables on a tablet or desktop.
 
 **Database actions → Duplicate** (any grant, viewers included) copies the database
 into a new one named "<name> copy" that you own, and opens it in the same split.
@@ -96,30 +112,14 @@ verified removals disappear from local SQL, while delayed older hydration cannot
 restore them. A later successful positive lookup/backfill can add them again.
 ## Feature flag
 
-Databases is behind the `enable-databases` PostHog flag. A deployed app reads it
-at runtime, and a fresh `/app/database/<uuid>` link waits up to three seconds for
-PostHog before deciding. `VITE_ENABLE_DATABASES=true|false` overrides it at build
-time; `bun run dev` defaults it on, and a local stack's static build defers to
-PostHog unless the variable was set when it was built. With the flag off:
-
-- `/app/database/<uuid>` and a `~/database/<uuid>` split show the 404 view. The
-  database block's code is never fetched and no database request is made.
-- **Create → Database**, its **C → L** shortcut, the command palette entry and
-  the slash menu's **Database** and **Query** actions are absent, and no starter database is
-  created.
-- The sidebar, mentions, search and Quick Access list no databases; Activity
-  and `macro.activity.mine()` leave out database rows.
-- A document's database answer shows its title (or "Database answer") as a
-  plain label, keeps the node unchanged, and never loads the SQL engine.
-- Database tool calls in a chat render as a muted "Database tool" line.
-- The SQL engine's wasm and the database bundles are only fetched once a
-  database surface mounts with the flag on.
-
-`showDatabaseSql` (`VITE_SHOW_DATABASE_SQL`) is separate and only hides SQL.
+`showDatabaseSql` (`VITE_SHOW_DATABASE_SQL`) shows the SQL behind database answers.
 
 The table selector matches the inset project/channel navigation. In narrow panes,
 scroll its tabs horizontally with a trackpad, mouse wheel, or the arrow buttons.
 The **+** menu stays visible, and focusing or selecting a table reveals its tab.
+Tab, Shift+Tab and the number keys switch tables while the keyboard is on the
+database pane itself; on a cell, Tab moves to the next cell as before, and
+with a range of cells selected neither Tab nor a number key changes the table.
 
 The grid’s sticky bottom summary shows the loaded saved records in the current view.
 While more pages remain, it says **records loaded** and calculations cover only
@@ -472,7 +472,7 @@ the table in its own order. Filters, sorts and column changes made on All record
 change only what you see, until you make a view of them. Viewers can search and use
 All records; only editors change stored views.
 
-**New view** (the **+** beside the tabs) opens a dropdown with **Table**,
+**New view** (the **+** beside the tabs; under **View actions** on touch devices) opens a dropdown with **Table**,
 **Board**, and **Timeline**. Choosing one immediately creates and opens it with an
 available default name, keeping the current filter and sort. A board starts grouped
 by the first single-select or single-person column, or creates a Status column if

@@ -6,6 +6,7 @@ import {
   testFacets,
 } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { DateValue } from '@core/util/date';
 import {
@@ -17,7 +18,7 @@ import {
 import { useEmailFocusQuery } from '@queries/email/focus';
 import { createGraphqlSoupDoneProjection } from '@queries/soup/graphql/done-projection';
 import { usePendingGraphqlSoupDone } from '@queries/soup/graphql/optimistic-done';
-import { createMemo } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { EmailFocusSort } from '../constants';
 import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
@@ -44,18 +45,13 @@ const byImportance = (left: EmailEntity, right: EmailEntity) =>
   (right.focus?.importance ?? 0) - (left.focus?.importance ?? 0) ||
   byRecency(left, right);
 
-function matchesSearch(email: EmailEntity, text: string): boolean {
-  return [email.name, email.snippet, email.senderName, email.senderEmail].some(
-    (value) => value?.toLowerCase().includes(text) === true
-  );
-}
-
 /**
- * Applies the view's inbox scope, filters and search to the Focus list, then
- * orders it. The server already sends it newest first, but sorting here keeps
- * rows under their day headers, which go by each row's own date. Done threads
+ * Applies the view's inbox scope and filters to the Focus list, then orders
+ * it. The server already sends it newest first, but sorting here keeps rows
+ * under their day headers, which go by each row's own date. Done threads
  * leave at once, as on Signal: the server drops archived threads only on the
- * next read. Focus has no Read status or Done filters.
+ * next read. Focus has no Read status or Done filters, and a search lists
+ * what the search service finds instead.
  */
 export function selectFocusEmails(
   emails: readonly EmailEntity[],
@@ -64,7 +60,6 @@ export function selectFocusEmails(
 ): EmailEntity[] {
   const inboxes =
     input.inboxIds === undefined ? undefined : new Set(input.inboxIds);
-  const text = input.search.trim().toLowerCase();
   const selected = emails.filter(
     (email) =>
       email.done !== true &&
@@ -75,8 +70,7 @@ export function selectFocusEmails(
         EMAIL_FACETS,
         email,
         facetContext
-      ) &&
-      (text === '' || matchesSearch(email, text))
+      )
   );
   return (
     match(input.focusSort)
@@ -101,17 +95,27 @@ export function buildFocusRows(
 /**
  * The Focus tab: inbox threads the email focus worker found worth the owner's
  * attention. The whole list arrives in one read, so filtering and the chosen
- * order are applied here.
+ * order are applied here. Its thread ids also hold an `in:focus` search.
  */
 export function useFocusEmailSource(
   state: EmailDataSourceInput,
   options: UseEmailDataSourceOptions
-): EmailDataSource {
+): EmailDataSource & {
+  /** The threads Focus lists, undefined until its list has loaded. */
+  threadIds: Accessor<readonly string[] | undefined>;
+} {
   const notificationSource = useGlobalNotificationSource();
   const tabAvailability = useEmailTabAvailability();
+  const analytics = useAnalytics();
   // Never read Focus while its flags are off or still loading.
   const focus = useEmailFocusQuery(
-    () => state.tab === 'focus' && tabAvailability('focus') === 'on'
+    () =>
+      (state.tab === 'focus' || state.searchScope === 'focus') &&
+      tabAvailability('focus') === 'on',
+    (threads) => {
+      if (state.tab === 'focus')
+        analytics.track('email_focus_tab_opened', { threads });
+    }
   );
   const pendingDone = usePendingGraphqlSoupDone();
   const projectDone = createGraphqlSoupDoneProjection();
@@ -147,7 +151,21 @@ export function useFocusEmailSource(
   });
   const items = createSoupRowStore(built);
 
+  // Without Focus, or when its first read fails, an `in:focus` search matches
+  // nothing rather than waiting on a list that will not come; a failed
+  // refresh keeps the threads the last read listed.
+  const threadIds = createMemo((): string[] | undefined => {
+    if (tabAvailability('focus') === 'off') return [];
+    if (!focus.data) return focus.error ? [] : undefined;
+
+    return emails()
+      .filter((email) => email.done !== true)
+      .map((email) => email.id)
+      .sort();
+  });
+
   return {
+    threadIds,
     items,
     isLoading: () =>
       tabAvailability('focus') === 'loading' || focus.isLoading || !ready(),

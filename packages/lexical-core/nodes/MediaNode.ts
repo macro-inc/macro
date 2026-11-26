@@ -215,8 +215,12 @@ export abstract class MediaNode<
       .setWidth(serializedNode.width)
       .setHeight(serializedNode.height)
       .setScale(serializedNode.scale || 1)
-      .setConstrainedWidth(serializedNode.constrainedWidth, false)
-      .setConstrainedHeight(serializedNode.constrainedHeight, false);
+      // Loro stores an absent size as null.
+      .setConstrainedWidth(serializedNode.constrainedWidth ?? undefined, false)
+      .setConstrainedHeight(
+        serializedNode.constrainedHeight ?? undefined,
+        false
+      );
 
     $applyIdFromSerialized(self, serializedNode);
     return self;

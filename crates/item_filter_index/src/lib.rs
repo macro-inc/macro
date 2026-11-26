@@ -21,7 +21,7 @@ use item_filters::ast::{
 };
 use predicate_index::{
     ExactValue, IndexQuery, PartitionPredicate, PredicateExpr, Profile, RangeBound, SortDirection,
-    Token, ValidatedIndexQuery, ValidationError, utc_timestamp_micros,
+    SortFactDerivation, Token, ValidatedIndexQuery, ValidationError, utc_timestamp_micros,
 };
 use thiserror::Error;
 use uuid::Uuid;
@@ -44,6 +44,11 @@ pub const SOUP_FLAT_V3: &str = "soup-flat-v3";
 pub const SOUP_FLAT_V4: &str = "soup-flat-v4";
 /// Host-composed profile with complete selectable property snapshots.
 pub const SOUP_FLAT_V6: &str = "soup-flat-v6";
+
+/// Every sort fact a projection here derives from its other facts; storage
+/// applies them to the documents it already holds when this list changes.
+pub const SORT_FACT_DERIVATIONS: &[SortFactDerivation] =
+    &[mail::INBOX_VIEW_DERIVATION, mail::IMPORTANT_VIEW_DERIVATION];
 
 // Keep this lightweight crate wasm-compatible instead of depending on the
 // native `system_properties` crate. A native test locks this stable UUID to
@@ -646,6 +651,37 @@ fn proves_none<T>(expr: &Expr<T>, is_positive_nil_id: impl Fn(&T) -> bool + Copy
         }
         Expr::Or(_, _) | Expr::Not(_) => false,
     }
+}
+
+/// Prove that a Soup filter excludes CRM records and CRM-derived email grants.
+/// Missing broad filters and negated exclusions cannot establish this proof.
+pub fn excludes_crm_content(ast: &EntityFilterAst) -> bool {
+    ast.crm_association.is_none()
+        && ast.email_filter.crm_scope.is_none()
+        && ast.email_filter.tree.as_deref().is_some_and(|expr| {
+            proves_none(
+                expr,
+                |literal| matches!(literal, EmailLiteral::ThreadId(id) if id.is_nil()),
+            )
+        })
+        && ast.crm_company_filter.as_deref().is_some_and(|expr| {
+            proves_none(
+                expr,
+                |literal| matches!(literal, CrmCompanyLiteral::Id(id) if id.is_nil()),
+            )
+        })
+        && ast.crm_contact_filter.as_deref().is_none_or(|expr| {
+            proves_none(
+                expr,
+                |literal| matches!(literal, CrmContactLiteral::Id(id) if id.is_nil()),
+            )
+        })
+        && ast.database_row_filter.as_deref().is_none_or(|expr| {
+            proves_none(
+                expr,
+                |literal| matches!(literal, DatabaseRowLiteral::Id(id) if id.is_nil()),
+            )
+        })
 }
 
 fn supported_expr<T>(expr: Option<&Expr<T>>, supported: impl Fn(&T) -> bool + Copy) -> bool {

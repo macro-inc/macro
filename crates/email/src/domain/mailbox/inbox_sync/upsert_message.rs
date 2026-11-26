@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::events::{
-    EmailEventOrigin, MessageDraftSyncedMetadata, MessageReceivedMetadata, MessageSentMetadata,
+    EmailEventOrigin, LabelRef, MessageDraftSyncedMetadata, MessageReceivedMetadata,
+    MessageSentMetadata, ThreadLabelsUpdatedMetadata,
 };
 use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts};
 use email_utils::dedupe_emails;
@@ -10,6 +11,7 @@ use models_email::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
 use models_email::service::attachment::{
     Attachment, AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
 };
+use models_email::service::label::system_labels;
 use models_email::service::{
     link,
     message::{Message, SimpleMessage, is_inbound, is_outbound, is_spam_or_trash},
@@ -233,10 +235,11 @@ where
 
     // if the message's thread doesn't exist in the database, we need to fetch and insert the whole thread.
     // if it does exist in the database, we just need to insert the already fetched message.
+    let mut gained_label_ids = None;
     if let Some(thread_db_id) = thread_provider_to_db_map.get(&provider_thread_id) {
         // Retryable: a concurrent delete can drop the thread after the lookup
         // above, and the redelivery then takes the whole-thread branch below.
-        process_and_insert_message(
+        let gained = process_and_insert_message(
             &ctx.repository,
             &ctx.effects,
             link.id,
@@ -245,6 +248,7 @@ where
             resync.as_ref(),
         )
         .await?;
+        gained_label_ids = Some(gained);
     } else {
         // Propagated verbatim: fetch_and_insert_thread already routed provider
         // errors through handle_operation_error (retry queue vs redelivery),
@@ -280,6 +284,16 @@ where
             .await;
     }
 
+    // The user labels the thread gained with this message; spam and trash
+    // bring none. A thread imported whole has no state from before the write,
+    // so the message is compared with the thread's older messages.
+    let labels_gained = match gained_label_ids {
+        _ if is_draft || is_spam_or_trash => Vec::new(),
+        Some(gained) => gained,
+        None => labels_new_to_thread(&ctx.repository, message_db_id).await,
+    };
+    let mut gains_published = false;
+
     // Publish to the macro.email topic immediately after the committed insert.
     // Drafts publish after every sync because their bodies are mutable. Existing
     // immutable messages remain suppressed except when a previously synced provider
@@ -300,6 +314,7 @@ where
                 })
             }
             MessageSyncEventKind::Received => {
+                gains_published = true;
                 EmailMacroEvent::message_received(MessageReceivedMetadata {
                     link_id: link.id,
                     owner: link.macro_id.clone(),
@@ -315,6 +330,7 @@ where
                     attachment_count: message_attachment_count as u32,
                     is_spam_or_trash,
                     received_at: event_received_at,
+                    labels_gained: labels_gained.clone(),
                 })
             }
             MessageSyncEventKind::Sent => EmailMacroEvent::message_sent(MessageSentMetadata {
@@ -333,6 +349,56 @@ where
             }),
         };
         publish_email_event(&ctx.effects, &event);
+    } else if labels_gained.is_empty()
+        && let Some(resync) = &resync
+        && stored_labels_changed(&ctx.repository, message_db_id, resync).await
+    {
+        // A re-sync of a stored message publishes nothing else, and its labels
+        // are indexed for search. Gained labels publish their own event, which
+        // reindexes the thread too.
+        publish_email_event(
+            &ctx.effects,
+            &EmailMacroEvent::thread_reindex_requested(
+                link.id,
+                link.macro_id.clone(),
+                thread_db_id,
+            ),
+        );
+    }
+
+    if !gains_published && !labels_gained.is_empty() {
+        tracing::info!(
+            link_id = %link.id,
+            thread_id = %thread_db_id,
+            message_id = %message_db_id,
+            labels = labels_gained.len() as i64,
+            "a re-synced message gave its thread labels"
+        );
+        let added = message
+            .labels
+            .iter()
+            .filter(|label| !system_labels::is_system(&label.provider_label_id))
+            .map(|label| LabelRef {
+                label_id: None,
+                provider_label_id: label.provider_label_id.clone(),
+                name: None,
+            })
+            .collect();
+        publish_email_event(
+            &ctx.effects,
+            &EmailMacroEvent::thread_labels_updated(ThreadLabelsUpdatedMetadata {
+                link_id: link.id,
+                owner: link.macro_id.clone(),
+                actor: None,
+                thread_id: thread_db_id,
+                added,
+                removed: Vec::new(),
+                origin: EmailEventOrigin::ProviderSync,
+                message_id: Some(message_db_id),
+                labels_gained,
+                automated: false,
+            }),
+        );
     }
 
     let refused_upload = handle_attachment_upload(ctx, link, payload, &message.attachments).await?;
@@ -389,6 +455,39 @@ where
     }
 
     Ok(())
+}
+
+/// The labels a message brought to a thread that was just imported whole. The
+/// thread's older messages were labeled before it reached this inbox's sync. A
+/// failed read costs the event, not the message.
+async fn labels_new_to_thread<R: InboxSyncImportRepository>(db: &R, message_id: Uuid) -> Vec<Uuid> {
+    db.labels_new_to_thread(message_id)
+        .await
+        .inspect_err(|error| tracing::warn!(error = ?error, %message_id, "failed to read the labels a new thread arrived with"))
+        .unwrap_or_default()
+}
+
+/// Whether the message's labels differ from those stored before its re-sync.
+/// A failed read counts as changed: a retry would find the new labels stored
+/// and see no change, and an extra reindex is harmless.
+async fn stored_labels_changed<R: InboxSyncRepository>(
+    db: &R,
+    message_id: Uuid,
+    resync: &InboxSyncResync,
+) -> bool {
+    let Ok(labels) = db
+        .labels(message_id)
+        .await
+        .inspect_err(|error| tracing::warn!(error = ?error, %message_id, "failed to read labels after a message re-sync"))
+    else {
+        return true;
+    };
+    let before: HashSet<&str> = resync.stored_labels.iter().map(String::as_str).collect();
+    let after: HashSet<&str> = labels
+        .iter()
+        .map(|label| label.provider_label_id.as_str())
+        .collect();
+    before != after
 }
 
 /// Capture stored labels and pending writes around a provider fetch.

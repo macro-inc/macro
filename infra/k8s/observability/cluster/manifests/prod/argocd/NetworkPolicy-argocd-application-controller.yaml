@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/component: application-controller
+    app.kubernetes.io/instance: argocd
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: argocd-application-controller
+    app.kubernetes.io/part-of: argocd
+    app.kubernetes.io/version: v3.6.1
+    helm.sh/chart: argo-cd-10.18.0
+  name: argocd-application-controller
+  namespace: argocd
+spec:
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - port: metrics
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: argocd
+      app.kubernetes.io/name: argocd-application-controller
+  policyTypes:
+    - Ingress

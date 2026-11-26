@@ -13,4 +13,8 @@ export type ComputerSetupOutcomeOneOfThree = {
   /** Why, in the words the computer's status shows. */
   failureReason: string;
   kind: ComputerSetupOutcomeOneOfThreeKind;
+  /** Setup gave up a second time, so the computer was released and its
+purchase refunded (and an agent teammate taken back): there is
+nothing to retry. */
+  released?: boolean;
 };

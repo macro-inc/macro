@@ -12,7 +12,8 @@ import type { CrmContactEntity } from '@entity';
 import { crmContactEmailKey } from '@entity/types/entity';
 import type { CommandMenuItem } from './useCommandItems';
 
-function directMessageRecipient(
+/** The other person in a one-to-one DM; group DMs and other rows have none. */
+export function directMessageRecipient(
   item: CommandMenuItem,
   viewerId: string | undefined
 ) {

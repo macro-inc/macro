@@ -51,8 +51,18 @@ export function SavedViewDialog(
     title?: string;
     submitLabel?: string;
     onSaved: (record: SavedView) => void;
+    onChange?: (fields: { name: string; sharedTeamId: string | null }) => void;
   } & (
-      | { mode: 'create'; id: string; name: string; config: unknown }
+      | {
+          mode: 'create';
+          id: string;
+          name: string;
+          config: unknown;
+          sharedTeamId?: string | null;
+          /** A first save succeeded while newer local edits were still pending. */
+          existing?: SavedView;
+          appearance?: SavedView['appearance'];
+        }
       // Edit renames and shares; a consumer that edits filters too passes
       // the replacement configuration, read when the form submits.
       | { mode: 'edit'; record: SavedView; config?: unknown }
@@ -64,27 +74,31 @@ export function SavedViewDialog(
   );
   const create = useCreateSavedView({ refresh: props.refresh });
   const update = useUpdateSavedView({ refresh: props.refresh });
-  const mutation = () => (props.mode === 'edit' ? update : create);
+  const existing = () =>
+    props.mode === 'edit' ? props.record : props.existing;
+  const mutation = () => (existing() ? update : create);
   const save = async (name: string, sharedTeamId: string | null) => {
     if (!lifetime.current() || mutation().isPending) return;
     let record: SavedView | undefined;
-    if (props.mode === 'edit') {
+    const previous = existing();
+    if (previous) {
       const result = await update.mutateAsync({
-        id: props.record.id,
+        id: previous.id,
         name,
-        config: props.config ?? props.record.config,
-        expectedRevision: props.record.revision,
+        config: props.config ?? previous.config,
+        expectedRevision: previous.revision,
         sharedTeamId:
-          sharedTeamId === props.record.sharedTeamId ? undefined : sharedTeamId,
+          sharedTeamId === previous.sharedTeamId ? undefined : sharedTeamId,
       });
       if (!result.error && result.data?.updateSavedView)
         record = toSavedView(result.data.updateSavedView);
-    } else {
+    } else if (props.mode === 'create') {
       const result = await create.mutateAsync({
         id: props.id,
         name,
         config: props.config,
         sharedTeamId,
+        appearance: props.appearance,
       });
       if (!result.error && result.data?.createSavedView)
         record = toSavedView(result.data.createSavedView);
@@ -106,7 +120,11 @@ export function SavedViewDialog(
       <SavedViewForm
         {...props}
         name={props.mode === 'edit' ? props.record.name : props.name}
-        sharedTeamId={props.mode === 'edit' ? props.record.sharedTeamId : null}
+        sharedTeamId={
+          props.mode === 'edit'
+            ? props.record.sharedTeamId
+            : (props.sharedTeamId ?? null)
+        }
         title={
           props.title ??
           (props.mode === 'edit' ? `Edit “${props.record.name}”` : 'Save view')

@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_links l SET mailbox_unavailable_at = COALESCE(l.mailbox_unavailable_at, now()),\n                updated_at = CASE WHEN l.mailbox_unavailable_at IS NULL THEN now() ELSE l.updated_at END\n            FROM email_sync_streams s\n            WHERE s.id = $4 AND s.lease_id = $5 AND s.fence = $6 AND s.lease_until > now()\n                AND l.id = s.link_id AND s.generation = l.sync_generation\n                AND l.id = $1 AND l.sync_generation = $2 AND l.grant_generation = $3 AND l.is_sync_active\n            RETURNING floor(EXTRACT(EPOCH FROM now() - l.mailbox_unavailable_at))::bigint AS \"marked_seconds!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "marked_seconds!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "883ffccbd492834caa0864b9adc1537496901f2278f66d80a1178d53410e227b"
+}

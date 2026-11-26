@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT e.thread_id, e.link_id, message.subject\n                   FROM crm_email_thread_exclusions e\n                   JOIN email_links l ON l.id = e.link_id AND l.macro_id = $2\n                   LEFT JOIN LATERAL (\n                       SELECT subject FROM email_messages WHERE thread_id = e.thread_id\n                       ORDER BY internal_date_ts DESC LIMIT 1\n                   ) message ON TRUE\n                   WHERE e.team_id = $1 AND e.user_id = $2 AND e.thread_id = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "subject",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "a6b4f92839af596895ccab8f123c0cee0cc1f407dd01b9b1e5efcf0190302026"
+}

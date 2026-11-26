@@ -1,4 +1,5 @@
 import type { CrmContactEntity } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { queryReadyGate } from '@queries/gate';
 import { soupKeys } from '@queries/soup/keys';
 import { fetchCrmContacts } from '@service-storage/crm-contacts';
@@ -19,15 +20,22 @@ function crmContactsQueryOptions(
     initialPageParam: null as string | null,
     // Each page names the search it answers, so a consumer reading
     // pages during a key change cannot attribute them to the new search.
-    queryFn: async ({ pageParam, signal }) => ({
-      ...(await fetchCrmContacts({
-        cursor: pageParam,
-        search: searchTerm,
-        limit,
-        signal,
-      })),
-      search: searchTerm,
-    }),
+    queryFn: ({ pageParam, signal }) =>
+      Telemetry.span('crm.contact_search', async (span) => {
+        span.setAttr('contacts.source', 'server');
+        span.setAttr('search.query_length', searchTerm.length);
+        span.setAttr('search.continuation', pageParam !== null);
+        span.setAttr('search.limit', limit);
+        const page = await fetchCrmContacts({
+          cursor: pageParam,
+          search: searchTerm,
+          limit,
+          signal,
+        });
+        span.setAttr('search.result_count', page.contacts.length);
+        span.setAttr('search.has_more', !!page.nextCursor);
+        return { ...page, search: searchTerm };
+      }),
     getNextPageParam: (page) => page.nextCursor,
   });
 }
@@ -52,7 +60,7 @@ export function useQuickAccessCrmContactsQuery(
 ) {
   const query = useCrmContactsQuery(deps, enabled, () => '', 500);
   const contacts = createMemo<CrmContactEntity[]>(() =>
-    queryReadyGate(query)
+    enabled() && queryReadyGate(query)
       ? query.data.pages.flatMap((page) =>
           page.contacts.map(toCrmContactEntity)
         )

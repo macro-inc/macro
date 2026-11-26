@@ -61,6 +61,15 @@ const PING_INTERVAL: Duration = Duration::from_secs(2);
 /// succeeding into a connection that will never answer again.
 const SILENCE_TIMEOUT: Duration = Duration::from_secs(6);
 
+/// How long a socket nobody reads any more waits for every sender to go
+/// before closing anyway.
+///
+/// A caller tearing its channel down drops both halves at once, and its
+/// senders follow the reader within moments; the queue then drains however
+/// long its writes take. A connection evicted while a session still holds
+/// its sender keeps a sender, and closes after this.
+const UNREAD_GRACE: Duration = PING_INTERVAL;
+
 /// A physical WebSocket frame type: one JSON text payload, or a ping.
 ///
 /// Implemented for both `axum`'s and `tokio-tungstenite`'s message types so
@@ -115,11 +124,31 @@ impl WireFrame for TungsteniteMessage {
     }
 }
 
+/// Run one write to the socket, giving up on it after [`SILENCE_TIMEOUT`].
+///
+/// A write into a half-open path can wait on a full send buffer until TCP
+/// itself gives up, minutes later; while it waits, the pump reads nothing and
+/// checks no silence. A peer that hasn't drained a write in that long is as
+/// dead as one that hasn't answered a ping in that long.
+async fn bounded_write<Error>(write: impl Future<Output = Result<(), Error>>) -> bool {
+    match tokio::time::timeout(SILENCE_TIMEOUT, write).await {
+        Ok(Ok(())) => true,
+        Ok(Err(_)) => false,
+        Err(_) => {
+            tracing::warn!("closing a WebSocket whose write did not complete");
+            false
+        }
+    }
+}
+
 /// Drive one physical WebSocket until it closes or fails: outgoing JSON text
 /// pulled from `outgoing` is written to the socket, and incoming text frames
 /// are decoded and pushed onto `incoming`. When `outgoing` ends, this side
 /// sends its close frame and keeps reading until the peer closes (or goes
-/// silent), so nothing the peer already sent is lost.
+/// silent), so nothing the peer already sent is lost. When `incoming`'s
+/// receiver is gone, nothing serves the connection any more: the socket
+/// closes once `outgoing` has drained and ended, or after [`UNREAD_GRACE`]
+/// if a sender is still held.
 ///
 /// A frame that fails to decode as `Rx` is dropped with a warning rather than
 /// closing the connection - the rest of the logical stream is unaffected by
@@ -142,21 +171,49 @@ async fn run_pump<Rx, Socket, Frame, Error>(
     // Set once this side has nothing more to send: its close frame is out,
     // and the pump keeps reading until the peer closes too.
     let mut closing = false;
+    // When this side stops waiting for `outgoing` to end, once nothing reads
+    // what arrives.
+    let mut unread_deadline: Option<Instant> = None;
     loop {
+        let unread_grace_over = async move {
+            match unread_deadline {
+                Some(deadline) => tokio::time::sleep_until(deadline).await,
+                None => std::future::pending().await,
+            }
+        };
         tokio::select! {
             next_outgoing = outgoing.recv(), if !closing => {
                 let Some(payload) = next_outgoing else {
                     // Frames the peer sent before it sees the close are still
                     // delivered; dropping the socket here would discard them.
-                    if sink.close().await.is_err() {
+                    // With nobody reading, there is nothing left to wait for.
+                    if !bounded_write(sink.close()).await || incoming.is_closed() {
                         break;
                     }
                     closing = true;
                     continue;
                 };
-                if sink.send(Frame::text(payload)).await.is_err() {
+                if !bounded_write(sink.send(Frame::text(payload))).await {
                     break;
                 }
+            }
+            () = incoming.closed(), if unread_deadline.is_none() => {
+                if closing {
+                    break;
+                }
+                unread_deadline = Some(Instant::now() + UNREAD_GRACE);
+            }
+            // A queue with no senders left is draining its last frames and
+            // ends by itself; only a held sender keeps an unread socket open.
+            () = unread_grace_over, if !outgoing.is_closed() => {
+                // The guard ran before the wait; a sender may have gone since.
+                if outgoing.is_closed() {
+                    continue;
+                }
+                // The peer sees the close and redials; without it, the pings
+                // would keep an unserved socket looking alive indefinitely.
+                let _ = bounded_write(sink.close()).await;
+                break;
             }
             next_incoming = stream.next() => {
                 // Every frame counts, text or not: a pong carries no logical
@@ -166,10 +223,10 @@ async fn run_pump<Rx, Socket, Frame, Error>(
                     Some(Ok(frame)) => {
                         let Some(text) = frame.into_text() else { continue };
                         match serde_json::from_str::<Rx>(&text) {
+                            // Nobody reading it is handled by the arm above,
+                            // which still lets this side's last frames out.
                             Ok(message) => {
-                                if incoming.send(message).is_err() {
-                                    break;
-                                }
+                                let _ = incoming.send(message);
                             }
                             Err(error) => {
                                 tracing::warn!(error = ?error, "dropping malformed WebSocket frame");
@@ -190,7 +247,7 @@ async fn run_pump<Rx, Socket, Frame, Error>(
                 }
                 // Both halves of a split socket share one connection, so this
                 // is also what flushes any pong the read half queued.
-                if !closing && sink.send(Frame::ping()).await.is_err() {
+                if !closing && !bounded_write(sink.send(Frame::ping())).await {
                     break;
                 }
             }

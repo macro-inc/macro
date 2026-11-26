@@ -17,9 +17,13 @@ import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
 import { mountReplyComposer } from '../tests/reply';
 import type { DraftFormAttachment } from './email-form-state';
+import { resetScheduledNoticesForTests } from './email-send-schedule';
 
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  resetScheduledNoticesForTests();
+});
 
 it.each(['standalone', 'reply'] as const)(
   'requires local persistence but no server acknowledgement for an offline %s send',
@@ -718,6 +722,189 @@ it('refuses a saved reply whose text was deleted before Send', async () => {
 
     expect(context.delivery.sendMessage).not.toHaveBeenCalled();
     expect(context.notices.feedback.failure).toHaveBeenCalledOnce();
+  } finally {
+    root.dispose();
+  }
+});
+
+// A new email sent before its first server save carries only the handles the
+// composer minted; the server never serves a thread under them.
+function sendBeforeFirstServerSave() {
+  const context = queuedReplyContext();
+  vi.mocked(context.delivery.sendMessage).mockImplementationOnce(
+    async (input) => ({
+      draftId: input.clientHandles?.draftId,
+      threadId: input.clientHandles?.threadId,
+      inboxId: 'inbox',
+      sendAttemptId: 'attempt',
+      persistence: 'queued',
+    })
+  );
+  const following: { found?: (threadId: string) => void } = {};
+  const stopFollowing = vi.fn();
+  context.delivery.watchSentThread = vi.fn((_send, found) => {
+    following.found = found;
+    return stopFollowing;
+  });
+  const host = { showThread: vi.fn(), showDraft: vi.fn() };
+  const root = mountEmailComposer(context, host);
+  const undo = () =>
+    vi
+      .mocked(context.notices.feedback.success)
+      .mock.calls.find(([text]) => text === 'Sending…')?.[1]
+      ?.actions?.find(({ kind }) => kind === 'undo')
+      ?.onClick();
+  return { context, host, root, following, stopFollowing, undo };
+}
+
+it('opens a new email by the thread id the server gives its send', async () => {
+  const { context, host, root, following } = sendBeforeFirstServerSave();
+  try {
+    root.edit('Sent before autosave');
+    root.state.context.onSend();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(context.drafts.saveDraft).not.toHaveBeenCalled();
+    expect(context.delivery.watchSentThread).toHaveBeenCalledWith(
+      { sendAttemptId: 'attempt', inboxId: 'inbox' },
+      expect.any(Function)
+    );
+    expect(host.showThread).not.toHaveBeenCalled();
+
+    following.found?.('server-thread');
+    expect(host.showThread).toHaveBeenCalledExactlyOnceWith('server-thread');
+  } finally {
+    root.dispose();
+  }
+});
+
+it('stops waiting for a new email’s thread once the send is undone', async () => {
+  const { context, host, root, stopFollowing, undo } =
+    sendBeforeFirstServerSave();
+  vi.mocked(context.delivery.undoSend).mockImplementationOnce(
+    async ({ onUndone }) => {
+      await onUndone();
+    }
+  );
+  try {
+    root.edit('Sent before autosave');
+    root.state.context.onSend();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(stopFollowing).not.toHaveBeenCalled();
+
+    undo();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(stopFollowing).toHaveBeenCalled();
+    expect(context.delivery.watchSentThread).toHaveBeenCalledOnce();
+    expect(host.showDraft).toHaveBeenCalled();
+    expect(host.showThread).not.toHaveBeenCalled();
+  } finally {
+    root.dispose();
+  }
+});
+
+it('still opens the thread when Undo comes too late to cancel the send', async () => {
+  const { context, host, root, following, undo } = sendBeforeFirstServerSave();
+  try {
+    root.edit('Sent before autosave');
+    root.state.context.onSend();
+    await vi.advanceTimersByTimeAsync(0);
+
+    undo();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(context.delivery.watchSentThread).toHaveBeenCalledTimes(2);
+    expect(host.showThread).not.toHaveBeenCalled();
+
+    following.found?.('server-thread');
+    expect(host.showThread).toHaveBeenCalledExactlyOnceWith('server-thread');
+  } finally {
+    root.dispose();
+  }
+});
+
+it.each([
+  { thread: 'the composer’s handle', serverThreadId: undefined },
+  { thread: 'a server id', serverThreadId: 'server-thread' },
+])(
+  'opens no thread for a send that settles after its composer closed, under $thread',
+  async ({ serverThreadId }) => {
+    const { context, host, root } = sendBeforeFirstServerSave();
+    const sent = Promise.withResolvers<void>();
+    vi.mocked(context.delivery.sendMessage).mockReset();
+    vi.mocked(context.delivery.sendMessage).mockImplementationOnce(
+      async (input) => {
+        await sent.promise;
+        return {
+          draftId: input.clientHandles?.draftId,
+          threadId: serverThreadId ?? input.clientHandles?.threadId,
+          inboxId: 'inbox',
+          sendAttemptId: 'attempt',
+          persistence: 'queued',
+        };
+      }
+    );
+    root.edit('Sent before autosave');
+    root.state.context.onSend();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+
+    root.dispose();
+    sent.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(context.delivery.watchSentThread).not.toHaveBeenCalled();
+    expect(host.showThread).not.toHaveBeenCalled();
+  }
+);
+
+it('stops waiting for a new email’s thread when the composer closes', async () => {
+  const { root, stopFollowing } = sendBeforeFirstServerSave();
+  root.edit('Sent before autosave');
+  root.state.context.onSend();
+  await vi.advanceTimersByTimeAsync(0);
+
+  root.dispose();
+
+  expect(stopFollowing).toHaveBeenCalled();
+});
+
+it.each([
+  {
+    known: 'a draft the server already saved',
+    seed: {
+      draft: message('saved-draft', {
+        is_draft: true,
+        thread_db_id: 'server-thread',
+      }),
+    },
+  },
+  {
+    known: 'a draft whose server thread the outbox recorded',
+    seed: {},
+  },
+])('opens the thread of $known as soon as it is sent', async ({ seed }) => {
+  const context = queuedReplyContext();
+  vi.mocked(context.delivery.sendMessage).mockImplementationOnce(
+    async (input) => ({
+      draftId: input.clientHandles?.draftId,
+      threadId: 'server-thread',
+      inboxId: 'inbox',
+      sendAttemptId: 'attempt',
+      persistence: 'queued',
+    })
+  );
+  context.delivery.watchSentThread = vi.fn(() => () => {});
+  const host = { showThread: vi.fn(), showDraft: vi.fn() };
+  const root = mountEmailComposer(context, host, seed);
+  try {
+    root.edit('Saved draft');
+    root.state.context.onSend();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+    expect(host.showThread).toHaveBeenCalledExactlyOnceWith('server-thread');
+    expect(context.delivery.watchSentThread).not.toHaveBeenCalled();
   } finally {
     root.dispose();
   }

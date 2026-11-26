@@ -8,6 +8,15 @@ internal API key, and the Axum JWT-decode middleware.
 
 ## Start here
 
+- `src/credential.rs`: `request_credential`, the one reading of which
+  credential a request authenticates with and every user token it carries,
+  from every source (percent-decoded `macro-api-token` query keys, bearer,
+  the access-token cookie decoded as cookie jars read it, user API key,
+  bot, harness and internal key headers), kept in the request's
+  extensions. A repeated cookie authenticates with the last, as cookie jars
+  keep it. `macro_authorization` and `agent_correlation` read it;
+  `AccessTokenExtractor` reads `access_token_sources` from the same parse
+  (the first bearer, else the last cookie, nothing else), as it always has.
 - `src/macro_api_token.rs`: the Macro API token (JWT) shape and claims.
 - `src/internal_api_key.rs`: `InternalApiKey`, the shared-secret credential
   for service-to-service calls.
@@ -49,6 +58,7 @@ key-holders signing for a verified context set them, never from request input.
 - Rules: `.agents/rules/rust/security.md`
 
 - SDK JWTs optionally carry signed `agent_correlation_id` and managed-MCP `agent_session_id`; these are attribution, never additional authorization.
-  A code-mode credential whose session runs in a narrower scope also signs
-  `agent_scope` (the scope's stored name), so services with no database can
-  enforce it; it only narrows what the credential may do.
+  A code-mode credential whose session runs in a narrower scope, and a
+  routine dry run's credential (`dry_run`), also sign `agent_scope` (the
+  scope's stored name), so services with no database can enforce it; it only
+  narrows what the credential may do.

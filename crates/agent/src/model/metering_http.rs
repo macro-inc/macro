@@ -3,8 +3,10 @@
 //! each send here also accounts for `GenericEventSource` reconnect executions.
 //! No GenAI spans or aggregate analytics are emitted by this adapter; it only
 //! adds the provider's stop reason to Rig's streaming span, which Rig drops,
-//! and logs responses that mean Macro's provider account is suspended or out
-//! of credit ([`genai_telemetry::provider_account`]).
+//! logs responses that mean Macro's provider account is suspended or out of
+//! credit ([`genai_telemetry::provider_account`]), and drops interim usage
+//! from Gemini streams so Rig's span records the final counts
+//! ([`interim_usage`]).
 
 use std::time::Duration;
 
@@ -22,6 +24,7 @@ use serde_json::Value;
 
 use super::metering::{Attempt, MeteringContext, MeteringError, WireProtocol};
 
+mod interim_usage;
 #[cfg(test)]
 mod test;
 
@@ -306,13 +309,31 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
     where
         T: Into<Bytes> + Send,
     {
-        let result = self.send_streaming_metered(request).await;
+        let result = self.send_streaming_without_interim_usage(request).await;
         self.report_account_failure(&result);
         result
     }
 }
 
 impl<H: HttpClientExt + Clone + 'static> MeteredHttpClient<H> {
+    async fn send_streaming_without_interim_usage<T>(
+        &self,
+        request: Request<T>,
+    ) -> http_client::Result<StreamingResponse>
+    where
+        T: Into<Bytes> + Send,
+    {
+        let response = self.send_streaming_metered(request).await?;
+        if self.protocol != WireProtocol::Gemini || !response.status().is_success() {
+            return Ok(response);
+        }
+        let (parts, body) = response.into_parts();
+        Ok(Response::from_parts(
+            parts,
+            interim_usage::without_interim_usage(body),
+        ))
+    }
+
     async fn send_streaming_metered<T>(
         &self,
         request: Request<T>,
@@ -697,6 +718,20 @@ fn anthropic_optional_count(value: &Value, key: &str) -> Option<u64> {
     optional_count(value, key)
 }
 
+// GPT-6 models split `cache_write_tokens` by cache lifetime. The cache write
+// price is the default 30-minute lifetime's; a 12-hour write has no price here.
+// The breakdown must sum to the total, or neither count can be trusted.
+fn default_retention_writes(details: &Value, cache_written: u64) -> bool {
+    let Some(object) = details.as_object() else {
+        return false;
+    };
+    let default = object.get("ttl_30m_tokens").map_or(Some(0), Value::as_u64);
+    let others_empty = object
+        .iter()
+        .all(|(key, value)| key == "ttl_30m_tokens" || value.as_u64() == Some(0));
+    others_empty && default == Some(cache_written)
+}
+
 fn normalize(protocol: WireProtocol, usage: &Value) -> Option<TrustedTokenUsage> {
     let tokens = match protocol {
         WireProtocol::Anthropic => {
@@ -744,11 +779,12 @@ fn normalize(protocol: WireProtocol, usage: &Value) -> Option<TrustedTokenUsage>
             // Audio and prediction tokens need different rate provenance.
             for details in [input_details, output_details] {
                 if let Some(object) = usage.get(details).and_then(Value::as_object)
-                    && object.iter().any(|(key, value)| {
-                        !matches!(
-                            key.as_str(),
-                            "cached_tokens" | "cache_write_tokens" | "reasoning_tokens"
-                        ) && value.as_u64() != Some(0)
+                    && object.iter().any(|(key, value)| match key.as_str() {
+                        "cached_tokens" | "cache_write_tokens" | "reasoning_tokens" => false,
+                        "cache_write_tokens_details" => {
+                            !default_retention_writes(value, cache_written)
+                        }
+                        _ => value.as_u64() != Some(0),
                     })
                 {
                     return None;

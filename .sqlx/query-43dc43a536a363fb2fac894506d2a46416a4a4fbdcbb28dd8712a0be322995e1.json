@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT personal_folder_ids ->> $3 AS folder FROM import_run\n            WHERE user_id = $1 AND source = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "folder",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "43dc43a536a363fb2fac894506d2a46416a4a4fbdcbb28dd8712a0be322995e1"
+}

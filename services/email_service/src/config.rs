@@ -1,7 +1,7 @@
 use anyhow::Context;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
-use macro_env_var::env_vars;
+use macro_env_var::{env_vars, maybe_env_vars};
 use secretsmanager_client::LocalOrRemoteSecret;
 
 env_vars! {
@@ -16,6 +16,14 @@ env_vars! {
     pub struct AuthenticationServiceSecretKey;
     pub struct EmailServiceCloudfrontDistributionUrl;
     pub struct EmailServiceCloudfrontSignerPublicKeyId;
+}
+
+maybe_env_vars! {
+    /// PostHog project key the Outlook sync's and the contacts list writes'
+    /// feature flags are read with.
+    pub struct PosthogApiKey;
+    /// PostHog host; defaults to the project's US region.
+    pub struct PosthogHost;
 }
 
 #[derive(macro_config::MacroConfig)]
@@ -156,10 +164,25 @@ pub struct Config {
 
     /// The internal api key
     pub internal_api_key: InternalApiKey,
+
+    /// PostHog project key (optional). Without one, the Outlook sync's and
+    /// the contacts list writes' feature flags read off.
+    pub posthog_api_key: PosthogApiKey,
+
+    /// PostHog host (optional).
+    pub posthog_host: PosthogHost,
 }
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         macro_config::ConfigLoader::load::<Config>().context("failed to load config")
+    }
+
+    /// The PostHog project key, when one is configured. A blank value counts
+    /// as none.
+    pub fn posthog_api_key(&self) -> Option<&str> {
+        self.posthog_api_key
+            .value()
+            .filter(|value| !value.trim().is_empty())
     }
 }

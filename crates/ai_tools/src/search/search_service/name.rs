@@ -164,6 +164,7 @@ impl AsyncTool<SearchToolContext> for NameSearch {
             calendar_event_scope: Default::default(),
             term_matching: models_search::TermMatching::All,
             collapse: None,
+            time_zone: None,
         });
         let channel_request = include_channels.then(|| ChannelNameSearchRequest {
             query: self.name.to_owned(),

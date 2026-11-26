@@ -13,9 +13,12 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { useCrmContext } from '../context/crm-context';
-import type { CrmCommentTarget } from '../context/workspace-context';
+import type {
+  CrmCommentTarget,
+  CrmRecordOpenOptions,
+} from '../context/workspace-context';
 import type { CrmContact } from '../core/contact';
 import type {
   CrmRecordRef,
@@ -26,19 +29,38 @@ import { CrmRecordDetail } from './record-detail';
 
 const taskContext = vi.hoisted(() => ({
   records: [] as (() => CrmTaskRecord)[],
+  canAccess: (): boolean => true,
   get record() {
     return this.records.at(-1);
   },
   contactCompanyId: undefined as string | undefined,
+  /** The id a contact read answers with, when it is another contact's. */
+  contactAnswerId: undefined as string | undefined,
+  companyLoaded: false,
   recordError: (): boolean => false,
 }));
+const createOpenTracker = vi.hoisted(() => vi.fn());
+vi.mock('@core/internal/open-tracker', () => ({ createOpenTracker }));
+const trackedItems = () =>
+  createOpenTracker.mock.calls.map(([block, item]) => [block, item()]);
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
+    canAccess: () => taskContext.canAccess(),
+    accessState: () => (taskContext.canAccess() ? 'allowed' : 'denied'),
+    retryAccess: async () => {},
     createNavigation: () => ({ openWithSplit: vi.fn() }),
     listsEnabled: () => () => false,
-    pipelinesEnabled: () => () => false,
     isTeamAdmin: () => () => false,
     openCreateContact: vi.fn(),
+    RecordActivity: (props: {
+      record: { type: string; id: string };
+      order: number;
+    }) => (
+      <div
+        data-record-activity={`${props.record.type}:${props.record.id}`}
+        data-order={props.order}
+      />
+    ),
     registerTaskComposerRecord: (source: () => CrmTaskRecord) => {
       taskContext.records.push(source);
       return () => {
@@ -52,6 +74,7 @@ vi.mock('../context/crm-context', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../../../components/ui/utils/classname')),
   Tooltip: (props: ParentProps) => <>{props.children}</>,
+  EmptyStatePanel: (props: { title: string }) => <p>{props.title}</p>,
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),
@@ -60,11 +83,18 @@ vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
     Root: (props: ParentProps) => <>{props.children}</>,
     Layout: (props: ParentProps) => <>{props.children}</>,
-    Section: (props: ParentProps) => <>{props.children}</>,
+    Section: (props: ParentProps<{ title: string; order?: number }>) => (
+      <section aria-label={props.title} data-order={props.order}>
+        {props.children}
+      </section>
+    ),
     Toggle: () => null,
   },
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
+vi.mock('@app/components/view-shell/create-frame-width', () => ({
+  createFrameWidth: () => () => 1200,
+}));
 vi.mock('./record-header-actions', () => ({ RecordHeaderActions: () => null }));
 vi.mock('./record-details-section', () => ({
   RecordDetailsSection: () => null,
@@ -84,18 +114,25 @@ vi.mock('./use-crm', () => ({
         return taskContext.recordError();
       },
     },
-    company: () => undefined,
+    company: () =>
+      taskContext.companyLoaded
+        ? { id: 'company-1', name: 'Acme', domains: [] }
+        : undefined,
     contacts: () => [],
   }),
-  useContactQuery: () => ({
+  useContactQuery: (contactId: () => string) => ({
     isSuccess: !!taskContext.contactCompanyId,
     get isError() {
       return taskContext.recordError();
     },
     data: taskContext.contactCompanyId
-      ? { companyId: taskContext.contactCompanyId }
+      ? {
+          id: taskContext.contactAnswerId ?? contactId(),
+          companyId: taskContext.contactCompanyId,
+        }
       : undefined,
   }),
+  useCrmPermissions: () => ({ canEditCrm: () => true }),
   useIsTeamAdmin: () => () => false,
   useSetCompanyHiddenMutation: () => ({ isPending: false, mutate: vi.fn() }),
   useSetContactHiddenMutation: () => ({ isPending: false, mutate: vi.fn() }),
@@ -110,6 +147,7 @@ vi.mock('./company-detail', async () => {
     Company: (props: {
       companyId: string;
       onOpenContact(contact: CrmContact): void;
+      onMerged?: (survivorId: string) => void;
     }) => {
       onCleanup(
         useCrmContext().registerTaskComposerRecord(() => ({
@@ -141,6 +179,7 @@ vi.mock('./company-detail', async () => {
           >
             Open Maya
           </button>
+          <button onClick={() => props.onMerged?.('company-9')}>Merged</button>
         </>
       );
     },
@@ -150,6 +189,7 @@ vi.mock('./contact-detail', () => ({
   Contact: (props: {
     contactId: string;
     onOpenCompany(companyId: string): boolean;
+    onMerged?: (survivorId: string) => void;
   }) => {
     onCleanup(
       useCrmContext().registerTaskComposerRecord(() => ({
@@ -164,6 +204,7 @@ vi.mock('./contact-detail', () => ({
         <button onClick={() => props.onOpenCompany('company-1')}>
           Open contact company
         </button>
+        <button onClick={() => props.onMerged?.('contact-9')}>Merged</button>
       </div>
     );
   },
@@ -172,7 +213,7 @@ vi.mock('./contact-detail', () => ({
 vi.mock('./company-contacts-section', () => ({
   CompanyContactsSection: () => null,
 }));
-vi.mock('./company-discussion-section', () => ({
+vi.mock('../company-discussion-section', () => ({
   CompanyDiscussionSection: () => null,
 }));
 vi.mock('./company-emails-section', () => ({
@@ -201,7 +242,14 @@ vi.mock('./record-associations', () => ({
   RecordReferencesSection: () => null,
 }));
 
+// Import the real composition once outside the individual behavior-test budget.
+// Its cold dependency graph can exceed five seconds on a busy CI worker.
+beforeAll(async () => {
+  await vi.importActual('./company-detail');
+  await vi.importActual('./contact-detail');
+}, 30_000);
 beforeEach(() => {
+  taskContext.canAccess = () => true;
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -216,7 +264,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
   taskContext.records.length = 0;
   taskContext.contactCompanyId = undefined;
+  taskContext.contactAnswerId = undefined;
+  taskContext.companyLoaded = false;
   taskContext.recordError = () => false;
+  createOpenTracker.mockReset();
 });
 
 /** Stands in for the route: each open hands the detail a new trail. */
@@ -224,9 +275,19 @@ function renderDetail(record: CrmRecordRef, viewName: string) {
   const [records, setRecords] = createSignal<readonly CrmRecordRef[]>([record]);
   const [section, setSection] = createSignal<CrmRecordSection>();
   const [commentTarget, setCommentTarget] = createSignal<CrmCommentTarget>();
-  const open = (trail: readonly CrmRecordRef[]) =>
+  const opened = vi.fn();
+  const open = (
+    trail: readonly CrmRecordRef[],
+    options?: CrmRecordOpenOptions
+  ) => {
+    opened(
+      trail.map((entry) => entry.id),
+      options
+    );
     setRecords(trail.map((entry) => ({ ...entry })));
+  };
   const close = vi.fn(() => setRecords([]));
+  const merged = vi.fn();
   const failed = vi.fn(() => <div>Navigation failed</div>);
   render(() => (
     <ErrorBoundary fallback={failed}>
@@ -249,12 +310,13 @@ function renderDetail(record: CrmRecordRef, viewName: string) {
             open(records());
           }}
           onClose={close}
+          onMerged={merged}
           navigation={null}
         />
       </Show>
     </ErrorBoundary>
   ));
-  return { close, records, failed, setCommentTarget };
+  return { close, records, failed, setCommentTarget, opened, merged };
 }
 
 const crumbs = () =>
@@ -306,6 +368,110 @@ it('opens a People contact in place and follows its company without duplicating 
   expect(close).toHaveBeenCalledOnce();
 });
 
+it('follows a contact’s company link to a split already showing it, from the trail too', () => {
+  const { opened } = renderDetail(
+    { type: 'contact', id: 'contact-1', name: 'Maya' },
+    'People'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Open contact company' }));
+  expect(opened).toHaveBeenLastCalledWith(['contact-1', 'company-1'], {
+    followLink: true,
+  });
+});
+
+it('follows the company link back along the trail to a split already showing it', () => {
+  const { opened } = renderDetail(
+    { type: 'company', id: 'company-1', name: 'Northstar' },
+    'Pipeline'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Open Maya' }));
+  // The company is already in the trail; the link still follows it.
+  fireEvent.click(screen.getByRole('button', { name: 'Open contact company' }));
+  expect(opened).toHaveBeenLastCalledWith(['company-1'], { followLink: true });
+  expect(crumbs()).toEqual(['Pipeline', 'Northstar']);
+});
+
+it('hands its host the company a shown company was merged into', () => {
+  const { merged, opened } = renderDetail(
+    { type: 'company', id: 'company-1', name: 'Northstar' },
+    'Pipeline'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Merged' }));
+  expect(merged).toHaveBeenCalledExactlyOnceWith({
+    type: 'company',
+    id: 'company-9',
+  });
+  expect(opened).not.toHaveBeenCalled();
+});
+
+it('hands its host the contact a shown contact was merged into', () => {
+  const { merged, opened } = renderDetail(
+    { type: 'contact', id: 'contact-1', name: 'Maya' },
+    'People'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Merged' }));
+  expect(merged).toHaveBeenCalledExactlyOnceWith({
+    type: 'contact',
+    id: 'contact-9',
+  });
+  expect(opened).not.toHaveBeenCalled();
+});
+
+it('hands a company read answering another id to its host, once', async () => {
+  const { Company } =
+    await vi.importActual<typeof import('./company-detail')>(
+      './company-detail'
+    );
+  taskContext.companyLoaded = true;
+  const merged = vi.fn();
+  render(() => (
+    <>
+      <Company companyId="company-0" section="files" onMerged={merged} />
+      <Company companyId="COMPANY-1" section="files" onMerged={merged} />
+    </>
+  ));
+  expect(merged).toHaveBeenCalledExactlyOnceWith('company-1');
+  // The merged company's page leaves the open to the one it moves to.
+  expect(
+    createOpenTracker.mock.calls.map(([block, item, options]) => [
+      block,
+      item(),
+      options,
+    ])
+  ).toEqual([
+    ['company', undefined, { ownBlock: true }],
+    ['company', 'company-1', { ownBlock: true }],
+  ]);
+});
+
+it('hands a contact read answering another id to its host, once', async () => {
+  const { Contact } =
+    await vi.importActual<typeof import('./contact-detail')>(
+      './contact-detail'
+    );
+  taskContext.contactCompanyId = 'company-1';
+  taskContext.contactAnswerId = 'contact-1';
+  const merged = vi.fn();
+  render(() => (
+    <>
+      <Contact contactId="contact-0" section="files" onMerged={merged} />
+      <Contact contactId="CONTACT-1" section="files" onMerged={merged} />
+    </>
+  ));
+  expect(merged).toHaveBeenCalledExactlyOnceWith('contact-1');
+  // The merged contact's page leaves the open to the one it moves to.
+  expect(
+    createOpenTracker.mock.calls.map(([block, item, options]) => [
+      block,
+      item(),
+      options,
+    ])
+  ).toEqual([
+    ['contact', undefined, { ownBlock: true }],
+    ['contact', 'contact-1', { ownBlock: true }],
+  ]);
+});
+
 it('registers the actual company detail while mounted and clears it on unmount', async () => {
   const { Company } =
     await vi.importActual<typeof import('./company-detail')>(
@@ -315,8 +481,52 @@ it('registers the actual company detail while mounted and clears it on unmount',
     <Company companyId="company-1" section="files" />
   ));
   expect(taskContext.record?.()).toEqual({ type: 'company', id: 'company-1' });
+  expect(trackedItems()).toEqual([['company', undefined]]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
+});
+
+it('lists Properties before References in both information panels', async () => {
+  const { Company } =
+    await vi.importActual<typeof import('./company-detail')>(
+      './company-detail'
+    );
+  const { Contact } =
+    await vi.importActual<typeof import('./contact-detail')>(
+      './contact-detail'
+    );
+  const order = (title: string) =>
+    Number(screen.getByRole('region', { name: title }).dataset.order);
+  const company = render(() => (
+    <Company companyId="company-1" section="files" />
+  ));
+  expect(order('Properties')).toBeLessThan(order('Email sharing'));
+  expect(order('Email sharing')).toBeLessThan(order('References'));
+  company.unmount();
+  render(() => <Contact contactId="contact-1" section="files" />);
+  expect(order('Properties')).toBeLessThan(order('References'));
+});
+
+it('shows the company’s Activity in its side panel', async () => {
+  const { Company } =
+    await vi.importActual<typeof import('./company-detail')>(
+      './company-detail'
+    );
+  render(() => <Company companyId="company-1" section="files" />);
+  const section = document.querySelector('[data-record-activity]');
+  expect(section?.getAttribute('data-record-activity')).toBe(
+    'company:company-1'
+  );
+});
+
+it('records an open of a company once it has loaded', async () => {
+  const { Company } =
+    await vi.importActual<typeof import('./company-detail')>(
+      './company-detail'
+    );
+  taskContext.companyLoaded = true;
+  render(() => <Company companyId="company-1" section="files" />);
+  expect(trackedItems()).toEqual([['company', 'company-1']]);
 });
 
 it('registers the actual contact detail with its loaded company', async () => {
@@ -333,6 +543,7 @@ it('registers the actual contact detail with its loaded company', async () => {
     id: 'contact-1',
     companyId: 'company-1',
   });
+  expect(trackedItems()).toEqual([['contact', 'contact-1']]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
 });
@@ -350,6 +561,7 @@ it('registers an unloaded contact without an unrelated company', async () => {
     id: 'contact-2',
     companyId: undefined,
   });
+  expect(trackedItems()).toEqual([['contact', undefined]]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
 });

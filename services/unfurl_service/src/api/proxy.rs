@@ -1,7 +1,7 @@
 use axum::Router;
 use axum::body::Body;
 use axum::extract::{Query, State};
-use axum::http::{HeaderMap, HeaderName, Request};
+use axum::http::{HeaderMap, HeaderName, HeaderValue, Request, header};
 use axum::response::Response;
 use axum::routing::get;
 use serde::Deserialize;
@@ -55,7 +55,6 @@ pub async fn proxy_request_handler(
 
     response_builder
         .header("Cross-Origin-Resource-Policy", "cross-origin")
-        .header("X-Content-Type-Options", "nosniff")
         .body(Body::from_stream(size_limited))
         .map_err(|e| {
             tracing::error!(error=?e, "could not stream chunks");
@@ -138,8 +137,28 @@ fn is_allowed_response_header(header: &HeaderName) -> bool {
     )
 }
 
+/// The image proxy's Content-Security-Policy (`image_proxy_service`'s
+/// `/proxy`). Favicons load through `<img>`, which ignores it.
+const SANDBOX_CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+
+/// Applied to every response of the proxy route, errors included.
+async fn sandbox_headers(mut response: Response) -> Response {
+    let headers = response.headers_mut();
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(SANDBOX_CSP),
+    );
+    response
+}
+
 pub fn router() -> Router<crate::api::context::ApiContext> {
-    Router::new().route("/", get(proxy_request_handler))
+    Router::new()
+        .route("/", get(proxy_request_handler))
+        .layer(axum::middleware::map_response(sandbox_headers))
 }
 
 #[cfg(test)]

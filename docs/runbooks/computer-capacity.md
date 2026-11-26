@@ -1,7 +1,7 @@
 # Computer capacity
 
 Macro computers are sold in units (8 GiB or 4 vCPUs, whichever needs more) on
-bare-metal Incus hosts. A host sells `awake capacity × oversell factor` units,
+bare-metal hosts. A host sells `awake capacity × oversell factor` units,
 and a purchase holds its units from reservation until its charge fails or the
 computer is released, whether it is running or stopped. A purchase that no host
 can fit is refused ("No capacity for <size> right now") and the size shows
@@ -25,4 +25,4 @@ alert at 85% of sold units, per host and across the fleet.
 
 Disk is reported (`resource:disk_gib`) but hosts record no storage-pool size,
 so it has no total and no alert. Check pool usage on the host by hand
-(`incus storage info <pool>`) when ordering.
+(`zpool list`) when ordering.

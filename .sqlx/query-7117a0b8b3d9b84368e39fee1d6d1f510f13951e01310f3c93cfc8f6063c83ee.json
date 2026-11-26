@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM hosted_runtime_usage_sample WHERE minute < $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7117a0b8b3d9b84368e39fee1d6d1f510f13951e01310f3c93cfc8f6063c83ee"
+}

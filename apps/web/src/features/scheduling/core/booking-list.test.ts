@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bookingAbandoned,
   bookingTab,
   bookingTimeRange,
   bookingTimeRangeDisplay,
+  canManageBooking,
   filterBookings,
 } from './booking-list';
 import type { Booking } from './types';
@@ -103,6 +105,32 @@ describe('booking management', () => {
     expect(display.endDate).toBeUndefined();
   });
 
+  it('labels times on the clock it is given, else the locale’s', () => {
+    const source = booking({
+      startsAt: '2026-09-18T17:00:00Z',
+      endsAt: '2026-09-18T18:00:00Z',
+    });
+    const clock = (hour12?: boolean) =>
+      new Intl.DateTimeFormat(undefined, {
+        timeZone: 'UTC',
+        hour: 'numeric',
+        minute: '2-digit',
+        ...(hour12 === undefined ? {} : { hour12 }),
+      }).format(new Date(source.startsAt));
+    expect(bookingTimeRangeDisplay(source, 'UTC', false).start.time).toBe(
+      clock(false)
+    );
+    expect(bookingTimeRange(source, 'UTC', false)).toContain(clock(false));
+    expect(bookingTimeRangeDisplay(source, 'UTC', true).start.time).toBe(
+      clock(true)
+    );
+    expect(clock(false)).not.toBe(clock(true));
+    expect(bookingTimeRange(source, 'UTC')).toBe(
+      bookingTimeRange(source, 'UTC', undefined)
+    );
+    expect(bookingTimeRangeDisplay(source, 'UTC').start.time).toBe(clock());
+  });
+
   it('keeps the end date visible for overnight bookings', () => {
     const source = booking({
       startsAt: '2026-09-18T23:30:00Z',
@@ -151,5 +179,32 @@ describe('booking management', () => {
     expect(display.sharedTimeZone).toBe(false);
     expect(display.start.time).toBe(display.end.time);
     expect(display.start.timeZone).not.toBe(display.end.timeZone);
+  });
+});
+
+describe('abandoned bookings', () => {
+  const abandoned = booking({
+    status: 'failed',
+    abandonedAt: '2026-09-18T15:00:00Z',
+  });
+
+  it('tells a booking Macro stopped retrying from one it still retries', () => {
+    expect(bookingAbandoned(abandoned)).toBe(true);
+    expect(bookingAbandoned(booking({ status: 'failed' }))).toBe(false);
+    expect(
+      bookingAbandoned(
+        booking({ status: 'cancelled', abandonedAt: '2026-09-18T15:00:00Z' })
+      )
+    ).toBe(false);
+  });
+
+  it('lets a host or manager cancel an abandoned booking, even after it ended', () => {
+    const ended = { ...abandoned, startsAt: '2026-09-18T10:00:00Z' };
+    expect(canManageBooking(abandoned, false, 'host', now)).toBe(true);
+    expect(canManageBooking(ended, true, 'someone', now)).toBe(true);
+    expect(canManageBooking(abandoned, false, 'someone', now)).toBe(false);
+    expect(
+      canManageBooking(booking({ status: 'failed' }), true, 'host', now)
+    ).toBe(false);
   });
 });

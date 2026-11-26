@@ -64,6 +64,38 @@ pub struct RunReview {
     pub session_id: AgentSessionId,
 }
 
+/// Why importing a task omitted a property that would grant another user access.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskImportNoticeReason {
+    /// Assigning a teammate would expose a Personal task to that teammate.
+    PersonalAssigneeOmitted,
+}
+
+/// A typed notice payload recorded once per task in the written-object ledger.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TaskImportNotice {
+    /// The task whose imported property was omitted.
+    pub task_id: Uuid,
+    /// Why the property could not be applied.
+    pub reason: TaskImportNoticeReason,
+}
+
+/// A validated count of one notice reason for an owned source item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskImportNoticeCount {
+    /// The source ledger item.
+    pub import_id: Uuid,
+    /// The validated reason.
+    pub reason: TaskImportNoticeReason,
+    /// Distinct tasks carrying that notice.
+    pub count: u32,
+}
+
+/// Canonical tagged outage payload prefix within the existing failure kind.
+pub const NOTION_OUTAGE_PREFIX: &str = "{\"state\":\"notion_failure\",";
+
 /// One thing a write created for a ledger row, recorded as it is created so
 /// a resumed write reuses it.
 #[derive(
@@ -71,18 +103,42 @@ pub struct RunReview {
 )]
 #[strum(serialize_all = "snake_case")]
 pub enum WrittenKind {
+    /// A newer worker wrote an unrecognised prerequisite; stop this source safely.
+    Unsupported,
+    /// Bounded source retry/outage state or a terminal link outcome for this generation.
+    DatabaseReservationFailure,
+    /// This dependency was offered as excluded in a saved draft, keyed by review UUID.
+    DependencyReviewed,
+    /// Explicit inclusion approved for this review UUID, required on resumed writes too.
+    DependencyIncluded,
     /// The folder a page with children became.
     Folder,
     /// The document a page became; minted before it is written.
     Document,
+    /// Fingerprint of the import-produced body revision, keyed by destination document id.
+    LinkBodyRevision,
     /// The database a data source became.
     Database,
+    /// A saved view, keyed by the original view id.
+    View,
+    /// Reserved human-readable saved view name, recorded before creating it.
+    ViewName,
+    /// Durable fidelity fact recorded atomically with its completed object.
+    Loss,
     /// That database's starter table.
     Table,
     /// That table's title column.
     TitleColumn,
     /// The database's columns were created (the id is the database).
     Schema,
+    /// UUIDv5 fingerprint of reserved properties; date-shape facts are durable too.
+    SchemaPlan,
+    /// Fingerprint of display names and option metadata, for soft drift warnings.
+    SchemaMetadata,
+    /// Reserved select option identity and original label.
+    ColumnOption,
+    /// A stable Notion property id reserved as a DateRange column.
+    DateRangeProperty,
     /// A data source row, by its Notion id, and the database row it became.
     Row,
     /// The folder holding a database's row bodies.
@@ -95,21 +151,27 @@ pub enum WrittenKind {
     TasksFolder,
     /// A task, by its row's Notion id; minted before it is written.
     Task,
+    /// A task-property omission; object holds a serialized TaskImportNotice payload.
+    TaskNotice,
     /// A relation column, by its Notion property name.
     Relation,
     /// A relation column whose rows are all linked, by property name.
     RelationLinked,
+    /// The CRM company, contact, pipeline or pipeline entry a HubSpot object
+    /// became; recorded as soon as CRM returns its id.
+    CrmRecord,
 }
 
-/// One thing a write created: `kind` for ledger row `import_id` (and, for
+/// One durable identity or planning fact: `kind` for ledger row `import_id` (and, for
 /// per-row kinds, the Notion `object` it stands for) is Macro's `macro_id`.
+/// Structural folders may also name a visibility branch in `object`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WrittenObject {
     /// The ledger row it was written for.
     pub import_id: Uuid,
     /// What it is.
     pub kind: WrittenKind,
-    /// The Notion row or property it is for; empty for the row's own object.
+    /// The Notion row/property, folder branch, or typed task-notice JSON; empty for an own object.
     pub object: String,
     /// The Macro id.
     pub macro_id: Uuid,

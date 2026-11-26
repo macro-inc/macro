@@ -9,7 +9,7 @@ import type {
   EntityFilters,
   UnifiedSearchResponseItem,
 } from '../../../generated/search/types.gen';
-import { paginate, unwrap } from '../../utils';
+import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 
 type Hit = UnifiedSearchResponseItem;
@@ -18,15 +18,23 @@ export type SearchOn = 'name' | 'content' | 'name_content';
 
 const DEFAULT_SEARCH_PAGE_SIZE = 50;
 
-export interface SearchOpts {
+export interface SearchOpts extends IterationOptions {
   searchOn?: SearchOn;
   pageSize?: number;
 }
 
 /**
+ * The time zone a search's typed dates (`after:2025/01/31`) are read in: the
+ * one asked for, else this runtime's.
+ */
+export function searchTimeZone(timeZone?: string): string | undefined {
+  return timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/**
  * Build a `search(client, query, opts?)` function for one entity type: unified
  * search hits narrowed to `type`, each mapped through `make`.
- * Most relevant first, auto-paginated.
+ * Most relevant first, auto-paginated; `maxItems` caps the total.
  */
 export function entitySearch<T, K extends Hit['type']>(opts: {
   filters?: EntityFilters;
@@ -40,9 +48,22 @@ export function entitySearch<T, K extends Hit['type']>(opts: {
   searchOpts?: SearchOpts,
 ) => AsyncGenerator<T> {
   const { filters, type, make, includeCrm } = opts;
-  return (client, query, searchOpts) => {
+  return (client, query, searchOpts) =>
+    iterate(
+      `${type} search`,
+      searchOpts,
+      { searchOn: true, pageSize: true },
+      () => pages(client, query, searchOpts),
+    );
+
+  function pages(
+    client: MacroClient,
+    query: string,
+    searchOpts: SearchOpts | undefined,
+  ): AsyncGenerator<T> {
     const searchOn = searchOpts?.searchOn ?? 'name_content';
     const pageSize = searchOpts?.pageSize ?? DEFAULT_SEARCH_PAGE_SIZE;
+    const timeZone = searchTimeZone();
     return paginate(async (cursor) => {
       const { results, next_cursor } = unwrap(
         await client.search.unifiedSearch({
@@ -52,6 +73,7 @@ export function entitySearch<T, K extends Hit['type']>(opts: {
             search_on: searchOn,
             ...(filters ? { filters } : {}),
             ...(includeCrm ? { include_crm: true } : {}),
+            ...(timeZone ? { time_zone: timeZone } : {}),
           },
           query: {
             page_size: pageSize,
@@ -67,5 +89,5 @@ export function entitySearch<T, K extends Hit['type']>(opts: {
         nextCursor: next_cursor,
       };
     });
-  };
+  }
 }

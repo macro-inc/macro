@@ -1,6 +1,4 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
-import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { calendarConsentScopes } from '@core/email-link/consent';
@@ -30,7 +28,6 @@ function CalendarSettingsContent() {
   const links = useEmailLinksQuery();
   const { sources, calendarsQuery } = useCalendarSources();
   const userId = useUserId();
-  const multiInbox = useFeatureFlag(enableMultiInbox);
   const startAddInbox = useAddInboxFlow();
   const [preferences, setPreferences] = useCalendarPreferences();
   const availability = useAvailabilityCalendarsQuery(userId);
@@ -111,10 +108,7 @@ function CalendarSettingsContent() {
         loading={links.isPending || calendarsQuery.isPending}
         error={links.isError || calendarsQuery.isError}
         connecting={connecting()}
-        canConnect={
-          links.isSuccess &&
-          (!accounts().some((a) => a.canManage) || multiInbox().enabled)
-        }
+        canConnect={links.isSuccess}
         onRetry={() => {
           fireAndForget(links.refetch(), 'calendar-settings');
           fireAndForget(calendarsQuery.refetch(), 'calendar-settings');

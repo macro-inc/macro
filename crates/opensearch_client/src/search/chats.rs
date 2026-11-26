@@ -6,7 +6,7 @@ use crate::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         model::{Highlight, SearchGotoChat, SearchGotoContent, SearchHit, parse_highlight_hit},
         properties::build_tag_filter,
-        query::Keys,
+        query::{Keys, child_content_query},
         utils::{should_wildcard_field_query_builder, split_inner_hits_budget},
     },
 };
@@ -14,8 +14,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::{
-    BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
-    QueryType, ToOpenSearchJson,
+    BoolQueryBuilder, HasChildQuery, InnerHits, QueryType, ToOpenSearchJson,
 };
 
 /// Relation names for the join field. Kept in sync with the upsert path
@@ -23,18 +22,10 @@ use opensearch_query_builder::{
 const PARENT_RELATION: &str = "chat";
 const CHILD_RELATION: &str = "message";
 
-/// Minimum prefix length before we emit a `match_phrase_prefix`. Mirrors
-/// the documents threshold — shorter prefixes risk hitting
-/// `max_clause_count` on expansion.
-const MIN_PREFIX_LEN: usize = 3;
-
 /// The message `_source` fields a `SearchHit` carries. Inner hits do not
 /// inherit the request-level `_source` filter, so without this every message
 /// comes back with its full `content`, which only the highlight needs.
 const MESSAGE_SOURCE_FIELDS: [&str; 2] = ["chat_message_id", "role"];
-
-/// Cap on terms a `match_phrase_prefix` may expand the last word to.
-const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChatIndex {
@@ -57,8 +48,7 @@ pub(crate) struct ChatQueryBuilder {
     inner: SearchQueryBuilder<ChatSearchConfig>,
     /// The role of the chat message
     role: Vec<String>,
-    tag_option_ids: Vec<String>,
-    match_all_tags: bool,
+    tag_groups: Vec<Vec<String>>,
 }
 
 impl ChatQueryBuilder {
@@ -66,8 +56,7 @@ impl ChatQueryBuilder {
         Self {
             inner: SearchQueryBuilder::new(terms),
             role: Vec::new(),
-            tag_option_ids: Vec::new(),
-            match_all_tags: false,
+            tag_groups: Vec::new(),
         }
     }
 
@@ -80,6 +69,7 @@ impl ChatQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn excluded_terms(excluded_terms: Vec<String>) -> Self;
     }
 
     pub fn role(mut self, role: Vec<String>) -> Self {
@@ -87,13 +77,9 @@ impl ChatQueryBuilder {
         self
     }
 
-    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
-        self.tag_option_ids = tag_option_ids;
-        self
-    }
-
-    pub fn match_all_tags(mut self, match_all_tags: bool) -> Self {
-        self.match_all_tags = match_all_tags;
+    /// Tag groups every hit must meet, each by any one of its option ids.
+    pub fn tag_groups(mut self, tag_groups: Vec<Vec<String>>) -> Self {
+        self.tag_groups = tag_groups;
         self
     }
 
@@ -128,7 +114,7 @@ impl ChatQueryBuilder {
 
         // Tag filter: nested clause(s) matching the parent's
         // `properties.values`, with no definition_id constraint.
-        if let Some(nested) = build_tag_filter(&self.tag_option_ids, self.match_all_tags) {
+        if let Some(nested) = build_tag_filter(&self.tag_groups) {
             bool_query.filter(nested);
         }
 
@@ -151,16 +137,7 @@ impl ChatQueryBuilder {
         let budget = split_inner_hits_budget(self.inner.terms.len());
 
         for (idx, term) in self.inner.terms.iter().enumerate() {
-            let term_query = build_child_content_query(term, &self.inner.match_type);
-            let inner_query = if self.role.is_empty() {
-                term_query
-            } else {
-                let mut combined = BoolQueryBuilder::new();
-                combined.must(term_query);
-                combined.must(should_wildcard_field_query_builder("role", &self.role));
-                combined.build().into()
-            };
-            let has_child = HasChildQuery::new(CHILD_RELATION, inner_query);
+            let has_child = HasChildQuery::new(CHILD_RELATION, self.message_query(term));
             let Some(size) = budget.size_for_clause(idx) else {
                 bool_query.must(has_child.into());
                 continue;
@@ -174,7 +151,27 @@ impl ChatQueryBuilder {
             bool_query.must(has_child.inner_hits(inner_hits).into());
         }
 
+        // A term a minus left out drops every chat with a message it would
+        // match.
+        for term in &self.inner.excluded_terms {
+            let has_child = HasChildQuery::new(CHILD_RELATION, self.message_query(term));
+            bool_query.must_not(has_child.into());
+        }
+
         Ok(bool_query)
+    }
+
+    /// A message matching `term`, from one of the requested roles when any
+    /// are.
+    fn message_query<'a>(&'a self, term: &str) -> QueryType<'a> {
+        let term_query = child_content_query(term, &self.inner.match_type);
+        if self.role.is_empty() {
+            return term_query;
+        }
+        let mut combined = BoolQueryBuilder::new();
+        combined.must(term_query);
+        combined.must(should_wildcard_field_query_builder("role", &self.role));
+        combined.build().into()
     }
 
     fn build_parent_filter<'a>(&'a self) -> Result<QueryType<'a>> {
@@ -222,7 +219,7 @@ pub(super) fn build_all_terms_highlight_query(
 ) -> serde_json::Value {
     let term_queries: Vec<serde_json::Value> = terms
         .iter()
-        .map(|t| build_child_content_query(t, match_type).to_json())
+        .map(|t| child_content_query(t, match_type).to_json())
         .collect();
     if term_queries.len() == 1 {
         return term_queries.into_iter().next().unwrap();
@@ -233,24 +230,6 @@ pub(super) fn build_all_terms_highlight_query(
             "minimum_should_match": 1,
         }
     })
-}
-
-/// Build the per-term query that runs inside `has_child` against `content`.
-pub(super) fn build_child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> {
-    let exact = match_type == "exact"
-        || term.chars().any(|c| c.is_whitespace())
-        || term.chars().count() < MIN_PREFIX_LEN;
-    if exact {
-        QueryType::MatchPhrase(MatchPhraseQuery::new(
-            "content".to_string(),
-            term.to_string(),
-        ))
-    } else {
-        QueryType::MatchPhrasePrefix(
-            MatchPhrasePrefixQuery::new("content".to_string(), term.to_string())
-                .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
-        )
-    }
 }
 
 #[derive(Debug)]
@@ -264,8 +243,7 @@ pub struct ChatSearchArgs {
     pub role: Vec<String>,
     pub collapse: bool,
     pub ids_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
 }
 
 impl From<ChatSearchArgs> for ChatQueryBuilder {
@@ -279,8 +257,7 @@ impl From<ChatSearchArgs> for ChatQueryBuilder {
             .role(args.role)
             .collapse(args.collapse)
             .ids_only(args.ids_only)
-            .tag_option_ids(args.tag_option_ids)
-            .match_all_tags(args.match_all_tags)
+            .tag_groups(args.tag_groups)
     }
 }
 

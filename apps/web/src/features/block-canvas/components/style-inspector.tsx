@@ -13,6 +13,8 @@ import { InspectorSelect } from './inspector-select';
 
 export function StyleInspector(props: {
   canvasColors: readonly string[];
+  /** List each colour's swatches under its field (see InspectorColorField). */
+  swatchRows?: boolean;
   fill: boolean;
   stroke: boolean;
   strokePattern: boolean;
@@ -62,6 +64,7 @@ export function StyleInspector(props: {
           <InspectorColorField
             label={props.text ? 'Text' : 'Fill'}
             canvasColors={props.canvasColors}
+            swatchRow={props.swatchRows}
             value={props.value(props.text ? 'stroke' : 'fill')}
             onChange={(color) =>
               props.onChange(props.text ? { stroke: color } : { fill: color })
@@ -74,6 +77,7 @@ export function StyleInspector(props: {
           <InspectorColorField
             label="Stroke"
             canvasColors={props.canvasColors}
+            swatchRow={props.swatchRows}
             value={props.value('stroke')}
             onChange={(stroke) => props.onChange({ stroke })}
           />

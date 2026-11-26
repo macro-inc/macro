@@ -6,6 +6,7 @@ use crate::LocalE2eConfig;
 const DEFAULT_DOCUMENT_STORAGE_URL: &str = "http://localhost:8086";
 const DEFAULT_CONNECTION_GATEWAY_WS_URL: &str = "ws://localhost:8082/";
 const DEFAULT_NOTIFICATION_URL: &str = "http://localhost:8089";
+const DEFAULT_AUTHENTICATION_URL: &str = "http://localhost:8080";
 
 /// Host URLs for services used by local E2E tests.
 #[derive(Clone, Debug)]
@@ -13,6 +14,7 @@ pub struct LocalE2eServices {
     document_storage_url: String,
     connection_gateway_ws_url: String,
     notification_url: String,
+    authentication_url: String,
 }
 
 impl LocalE2eServices {
@@ -32,6 +34,11 @@ impl LocalE2eServices {
                 .get("LOCAL_E2E_NOTIFICATION_URL")
                 .unwrap_or(DEFAULT_NOTIFICATION_URL),
         );
+        let authentication_url = trim_trailing_slash(
+            config
+                .get("LOCAL_E2E_AUTHENTICATION_URL")
+                .unwrap_or(DEFAULT_AUTHENTICATION_URL),
+        );
 
         validate_local_service_url(
             &document_storage_url,
@@ -48,11 +55,17 @@ impl LocalE2eServices {
             "notification service",
             &["http", "https"],
         )?;
+        validate_local_service_url(
+            &authentication_url,
+            "authentication service",
+            &["http", "https"],
+        )?;
 
         Ok(Self {
             document_storage_url,
             connection_gateway_ws_url,
             notification_url,
+            authentication_url,
         })
     }
 
@@ -70,6 +83,11 @@ impl LocalE2eServices {
     /// Base URL for notification service HTTP endpoints.
     pub fn notification_url(&self) -> &str {
         &self.notification_url
+    }
+
+    /// Base URL for authentication service HTTP endpoints.
+    pub fn authentication_url(&self) -> &str {
+        &self.authentication_url
     }
 
     /// URL for listing user notifications through notification service.

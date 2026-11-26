@@ -6,6 +6,9 @@ use super::{
     ports::{LinkManagerQueue, LinkRepository, RefreshService},
 };
 
+/// Ownerless links queued for removal per hourly run.
+const OWNERLESS_LINKS_PER_RUN: i64 = 100;
+
 pub(crate) struct LinkMaintenance<R, Q> {
     repository: R,
     queue: Q,
@@ -26,7 +29,8 @@ impl<R: LinkRepository, Q: LinkManagerQueue> RefreshService for LinkMaintenance<
     async fn refresh(&self) -> anyhow::Result<()> {
         tokio::try_join!(
             self.send_refresh_messages(),
-            self.send_health_check_messages()
+            self.send_health_check_messages(),
+            self.send_ownerless_delete_messages()
         )?;
 
         // only send delete messages once daily, during the night
@@ -113,6 +117,41 @@ impl<R: LinkRepository, Q: LinkManagerQueue> LinkMaintenance<R, Q> {
                     })
                     .ok();
             }
+        }
+        Ok(())
+    }
+
+    /// Queue removal of links whose owner's account is gone. Account deletion
+    /// queues it as well, but only for links whose credentials that account
+    /// held, and a failed enqueue is not retried; this catches what it misses.
+    /// A queued link is skipped once its removal starts.
+    async fn send_ownerless_delete_messages(&self) -> anyhow::Result<()> {
+        let link_ids = self
+            .repository
+            .fetch_ownerless_link_ids(OWNERLESS_LINKS_PER_RUN)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!(error=?e, "Error fetching ownerless links for deletion");
+                Vec::new()
+            });
+
+        tracing::info!(
+            ownerless_links = link_ids.len(),
+            "Sending delete notifications for links whose owner account is gone"
+        );
+
+        for link_id in link_ids {
+            let notif = LinkManagerMessage::DeleteLink {
+                link_id,
+                deletion_reason: DeletionReason::UserDeleted,
+            };
+            self.queue
+                .enqueue_link_manager_notification(notif)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, link_id=%link_id, "Error enqueueing delete notification for ownerless link");
+                })
+                .ok();
         }
         Ok(())
     }

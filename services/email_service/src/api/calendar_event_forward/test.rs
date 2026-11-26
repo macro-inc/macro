@@ -1,5 +1,6 @@
 use super::*;
 use email::domain::models::EmailErr;
+use macro_authorization::CODE_EXECUTION_HEADER;
 
 fn status_and_code(error: EventForwardError) -> (StatusCode, ForwardCalendarEventErrorCode) {
     let error = ForwardCalendarEventError::from(error);
@@ -46,4 +47,43 @@ fn the_reason_for_invalid_recipients_reaches_the_user() {
         "a recipient is not an email address",
     ));
     assert_eq!(error.message, "a recipient is not an email address");
+}
+
+fn code_execution() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(CODE_EXECUTION_HEADER, "1".parse().unwrap());
+    headers
+}
+
+#[test]
+fn an_agents_program_cannot_forward() {
+    let refusal =
+        refuse_program_forward(CredentialAttribution::Agent, &HeaderMap::new()).unwrap_err();
+    assert_eq!(
+        refusal.code,
+        ForwardCalendarEventErrorCode::ConfirmationRequired
+    );
+    assert_eq!(refusal.message, PROGRAM_SEND_REFUSAL);
+    assert_eq!(refusal.into_response().status(), StatusCode::FORBIDDEN);
+}
+
+#[test]
+fn a_code_execution_request_with_a_persons_token_cannot_forward() {
+    let refusal =
+        refuse_program_forward(CredentialAttribution::Person, &code_execution()).unwrap_err();
+    assert_eq!(
+        refusal.code,
+        ForwardCalendarEventErrorCode::ConfirmationRequired
+    );
+}
+
+#[test]
+fn a_person_in_the_app_forwards() {
+    assert!(refuse_program_forward(CredentialAttribution::Person, &HeaderMap::new()).is_ok());
+}
+
+/// Owner routines send email on a schedule, as on the send route.
+#[test]
+fn an_owner_routine_forwards() {
+    assert!(refuse_program_forward(CredentialAttribution::Routine, &HeaderMap::new()).is_ok());
 }

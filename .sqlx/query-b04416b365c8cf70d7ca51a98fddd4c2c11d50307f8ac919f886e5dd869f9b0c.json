@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Each id is looked up on its own behind OFFSET 0 fences, in the order given\n-- (sorted, so the lookups walk the indexes in order): through the\n-- live-document index, and through the trashed-document index for the rest.\n-- The work is bounded by the ids, never by the Document table.\nSELECT checked.id AS \"id!\", COALESCE(live.owner, trashed.owner) AS \"owner!\"\nFROM unnest($1::uuid[]) AS checked(id)\nLEFT JOIN LATERAL (\n    SELECT d.owner\n    FROM \"Document\" d\n    WHERE d.id = checked.id::text\n        AND d.\"deletedAt\" IS NULL\n    OFFSET 0\n) live ON true\nLEFT JOIN LATERAL (\n    SELECT d.owner\n    FROM \"Document\" d\n    WHERE d.id = checked.id::text\n        AND d.\"deletedAt\" IS NOT NULL\n    OFFSET 0\n) trashed ON true\nWHERE live.owner IS NOT NULL\n    OR trashed.owner IS NOT NULL\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "b04416b365c8cf70d7ca51a98fddd4c2c11d50307f8ac919f886e5dd869f9b0c"
+}

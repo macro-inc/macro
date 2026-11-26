@@ -36,6 +36,29 @@ export function createCanvasState(
   const projection = createGraphicsProjection(editor);
   const inspector = createInspectorPreview(editor, measureText);
   const [tool, setTool] = createSignal<CanvasTool>('select');
+  // A drawing tool hands back to Select once it has drawn. Locked, it stays,
+  // for drawing several of a kind without choosing the tool each time.
+  const [toolLocked, setToolLocked] = createSignal(false);
+  /**
+   * The lock is keeping a drawing tool chosen. It has nothing to keep under
+   * Select or Hand, where what finishes (a connector's end dragged, a text
+   * edited) stays selected as it does without the lock.
+   */
+  const keepsTool = () =>
+    toolLocked() && tool() !== 'select' && tool() !== 'pan';
+  // Who draws. Until a pen has pressed the canvas there is none to speak of
+  // and fingers draw. Its first press makes drawing the pen's alone, with
+  // fingers moving the canvas; from then on it is the person's to switch.
+  const [drawsWith, setDrawsWith] = createSignal<
+    'fingers' | 'pen' | 'pen-and-fingers'
+  >('fingers');
+  const penOnly = () => drawsWith() === 'pen';
+  /**
+   * A finger pans instead of using the tool. Select and Hand are a finger's
+   * as ever, and so is Text: tapping a place to type is not drawing.
+   */
+  const fingersPan = () =>
+    penOnly() && tool() !== 'select' && tool() !== 'pan' && tool() !== 'text';
   const eraser = createEraserState(editor, () => tool() === 'eraser');
   const [defaults, setDefaults] = createSignal(initialAppearance);
   const text = createTextState(editor, measureText, defaults);
@@ -186,8 +209,34 @@ export function createCanvasState(
       if (canGroup()) editor.groupSelection(crypto.randomUUID());
     },
     ungroup: () => editor.ungroupSelection(),
+    toolLocked,
+    setToolLocked,
+    keepsTool,
+    /** A pen has pressed this canvas, so there is a choice to offer. */
+    penSeen: () => drawsWith() !== 'fingers',
+    penOnly,
+    setPenOnly: (only: boolean) =>
+      setDrawsWith(only ? 'pen' : 'pen-and-fingers'),
+    fingersPan,
+    /** A pen pressed the canvas. */
+    penPressed() {
+      if (drawsWith() === 'fingers') setDrawsWith('pen');
+    },
+    /**
+     * A tool has finished what it draws: back to Select. Locked, it stays, and
+     * what it drew is not left selected under a tool about to draw again.
+     */
+    toolDone() {
+      if (keepsTool()) editor.select();
+      else chooseTool('select');
+    },
     shapeCreated(id: string) {
       if (tool() === 'pencil') return;
+      if (toolLocked()) {
+        // Nothing stays selected under a tool that is about to draw again.
+        editor.select();
+        return;
+      }
       editor.select(id);
       setTool('select');
     },

@@ -1,0 +1,14 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  labels:
+    app.kubernetes.io/instance: aws-load-balancer-controller
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: aws-load-balancer-controller
+    app.kubernetes.io/version: v3.6.3
+    helm.sh/chart: aws-load-balancer-controller-3.6.3
+  name: aws-load-balancer-root-issuer
+  namespace: kube-system
+spec:
+  ca:
+    secretName: aws-load-balancer-root-cert

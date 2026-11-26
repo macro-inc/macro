@@ -13,10 +13,16 @@ import * as Schedule from 'effect/Schedule';
 import { type Accessor, createEffect, onCleanup, untrack } from 'solid-js';
 import { useQueryAccount } from '../auth/use-query-account';
 import { ContactDirectoryScopeError } from './cache-scope';
+import { contactListsSelected, useContactListsSelected } from './lists';
 import { reconcileContactPage } from './reconcile';
 import { contactRefreshRevision } from './refresh';
+import { withContactWriteTurn } from './write-turn';
 
 const CHECKPOINT_VERSION = 2;
+// Selecting contact lists stores them only through one full rescan, so that
+// scan runs under its own version. Only clients the flag turns on start cold,
+// and turning it off returns them to their v2 checkpoint.
+const LISTS_CHECKPOINT_VERSION = 3;
 const REFRESH_INTERVAL_MS = 15 * 60_000;
 const NAME_REFRESH_MS = 60 * 60_000;
 const PAGE_DELAY_MS = 250;
@@ -40,8 +46,8 @@ type BackfillHost = Pick<
   'currentStorageGeneration' | 'search' | 'hydrateQuery' | 'disabled' | 'people'
 >;
 
-const checkpointKey = (userId: string) =>
-  `graphql-contacts-backfill:v${CHECKPOINT_VERSION}:${userId}`;
+const checkpointKey = (userId: string, lists: boolean) =>
+  `graphql-contacts-backfill:v${lists ? LISTS_CHECKPOINT_VERSION : CHECKPOINT_VERSION}:${userId}`;
 
 function isCheckpoint(value: unknown): value is ContactCheckpoint {
   return (
@@ -76,14 +82,16 @@ function isCheckpoint(value: unknown): value is ContactCheckpoint {
   );
 }
 
-/** Checkpoints prove only a completed snapshot in the same durable generation. */
+/** Checkpoints prove only a completed snapshot in the same durable generation,
+ * scanned with the contact selection the caller reads (`lists`). */
 export function loadContactCheckpoint(
   userId: string,
-  storageGeneration: string
+  storageGeneration: string,
+  lists = contactListsSelected()
 ): ContactCheckpoint {
   try {
     const value: unknown = JSON.parse(
-      localStorage.getItem(checkpointKey(userId)) ?? 'null'
+      localStorage.getItem(checkpointKey(userId, lists)) ?? 'null'
     );
     if (
       isCheckpoint(value) &&
@@ -117,7 +125,11 @@ export function subscribeContactCheckpoint(
       listener(checkpoint);
   };
   const storageChanged = (event: StorageEvent) => {
-    if (event.key !== checkpointKey(userId) || !event.newValue) return;
+    if (
+      event.key !== checkpointKey(userId, contactListsSelected()) ||
+      !event.newValue
+    )
+      return;
     try {
       const value: unknown = JSON.parse(event.newValue);
       if (isCheckpoint(value)) receive(value);
@@ -133,10 +145,10 @@ export function subscribeContactCheckpoint(
   };
 }
 
-function saveCheckpoint(checkpoint: ContactCheckpoint): void {
+function saveCheckpoint(checkpoint: ContactCheckpoint, lists: boolean): void {
   try {
     localStorage.setItem(
-      checkpointKey(checkpoint.userId),
+      checkpointKey(checkpoint.userId, lists),
       JSON.stringify(checkpoint)
     );
     if (checkpoint.completedAt !== null) {
@@ -160,6 +172,8 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
   host: BackfillHost,
   options: {
     refresh?: boolean;
+    /** Select and store `GraphqlContact.lists`, under its own checkpoint. */
+    lists?: boolean;
     pageDelayMs?: number;
     fetchPage?: typeof hydrateGraphqlContacts;
     reconcilePage?: typeof reconcileContactPage;
@@ -186,7 +200,8 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
     options.onProgress?.(progress);
     return progress;
   }
-  let checkpoint = loadContactCheckpoint(userId, generation);
+  const lists = options.lists ?? false;
+  let checkpoint = loadContactCheckpoint(userId, generation, lists);
   if (checkpoint.completedAt !== null) {
     const refreshAge = options.refresh ? REFRESH_INTERVAL_MS : NAME_REFRESH_MS;
     if (Date.now() - checkpoint.completedAt < refreshAge) {
@@ -213,7 +228,7 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
       verificationIncomplete: false,
       pages: 0,
     };
-  saveCheckpoint(checkpoint);
+  saveCheckpoint(checkpoint, lists);
   options.onProgress?.({
     kind: checkpoint.pages ? 'partial' : 'cold',
     checkpoint,
@@ -221,7 +236,9 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
   const fetchPage = options.fetchPage ?? hydrateGraphqlContacts;
   while (checkpoint.phase === 'hydrate') {
     const page = yield* Effect.tryPromise((signal) =>
-      fetchPage(host, scope, checkpoint.nextCursor, signal)
+      withContactWriteTurn(host, () =>
+        fetchPage(host, scope, checkpoint.nextCursor, signal, { lists })
+      )
     );
     const currentGeneration = yield* Effect.tryPromise(() =>
       host.currentStorageGeneration()
@@ -239,7 +256,7 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
       phase: cursor === null ? 'verify' : 'hydrate',
       completedAt: null,
     };
-    saveCheckpoint(checkpoint);
+    saveCheckpoint(checkpoint, lists);
     const progress = {
       kind: 'partial',
       checkpoint,
@@ -251,7 +268,9 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
   const reconcile = options.reconcilePage ?? reconcileContactPage;
   while (true) {
     const page = yield* Effect.tryPromise((signal) =>
-      reconcile(host, scope, checkpoint.nextCursor, signal)
+      withContactWriteTurn(host, () =>
+        reconcile(host, scope, checkpoint.nextCursor, signal)
+      )
     );
     if (
       (yield* Effect.tryPromise(() => host.currentStorageGeneration())) !==
@@ -269,7 +288,7 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
       verificationIncomplete: incomplete,
       completedAt: page.nextCursor === null && !incomplete ? Date.now() : null,
     };
-    saveCheckpoint(checkpoint);
+    saveCheckpoint(checkpoint, lists);
     const progress = {
       kind: checkpoint.completedAt === null ? 'partial' : 'complete',
       checkpoint,
@@ -292,11 +311,14 @@ export function useContactBackfill(
   generation: Accessor<number>
 ): void {
   const account = useQueryAccount();
+  const listsSelected = useContactListsSelected();
   createEffect(() => {
     const owner = account();
     const id = userId();
     const cache = host();
     generation();
+    // Turning lists on starts their cold scan now, not at the next tick.
+    const lists = listsSelected();
     if (!owner || owner.userId !== id || !id || !cache || cache.disabled)
       return;
     let processedInvalidation = -1;
@@ -304,10 +326,12 @@ export function useContactBackfill(
       Telemetry.span('contacts.backfill', async (span) => {
         const requested = untrack(contactRefreshRevision);
         const startedAt = Date.now();
+        span.setAttr('contacts.lists', lists);
         try {
           const result = await Effect.runPromise(
             runContactBackfill(id, cache, {
               refresh: requested !== processedInvalidation,
+              lists,
               onProgress: (progress) => {
                 span.setAttr('contacts.sync_state', progress.kind);
                 if (progress.kind !== 'unsupported') {

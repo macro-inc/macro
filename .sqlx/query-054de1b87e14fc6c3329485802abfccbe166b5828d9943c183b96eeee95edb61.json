@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT provider::text AS \"provider!\",sync_generation,\n            (macro_id = $2 OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = l.id AND u.primary_macro_id = $2)) AS \"authorized!\"\n            FROM email_links l WHERE id = $1 FOR SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "authorized!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      null
+    ]
+  },
+  "hash": "054de1b87e14fc6c3329485802abfccbe166b5828d9943c183b96eeee95edb61"
+}

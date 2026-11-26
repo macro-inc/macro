@@ -1,7 +1,11 @@
 use crate::{
     OpensearchClient, Result, delete,
     retry::resend_on_lost_connection,
-    upsert::{self, document::UpsertDocumentArgs, properties::IndexedProperty},
+    upsert::{
+        self,
+        document::{EmailAttachmentUpdateResult, UpsertDocumentArgs},
+        properties::{IndexedProperty, PropertyUpdate},
+    },
 };
 
 impl OpensearchClient {
@@ -44,6 +48,25 @@ impl OpensearchClient {
         .await
     }
 
+    /// Deletes the chunks of a document a reindex did not write: every chunk
+    /// but the ones keyed by `node_ids`. The parent stays.
+    pub async fn delete_stale_document_chunks(
+        &self,
+        document_id: &str,
+        node_ids: &[&str],
+        index_override: Option<&str>,
+    ) -> Result<()> {
+        resend_on_lost_connection(|| {
+            delete::document::delete_document_chunks_except(
+                &self.inner,
+                document_id,
+                node_ids,
+                index_override,
+            )
+        })
+        .await
+    }
+
     /// Deletes a document from the opensearch document index
     #[tracing::instrument(skip(self))]
     pub async fn delete_document(
@@ -75,9 +98,34 @@ impl OpensearchClient {
         &self,
         document_id: &str,
         properties: &[IndexedProperty],
-    ) -> Result<()> {
+    ) -> Result<PropertyUpdate> {
         resend_on_lost_connection(|| {
             upsert::document::update_document_properties(&self.inner, document_id, properties, None)
+        })
+        .await
+    }
+
+    /// Set `is_email_attachment` on each document's parent with one partial
+    /// update apiece. A document that is not indexed counts as missing. When
+    /// OpenSearch refuses writes (a 429 or a cluster block) this returns
+    /// [`crate::error::OpensearchClientError::WritesRefused`]; stop instead of
+    /// retrying.
+    #[tracing::instrument(
+        skip(self, document_ids),
+        fields(document_count = document_ids.len()),
+        err
+    )]
+    pub async fn bulk_update_email_attachment(
+        &self,
+        document_ids: &[String],
+        is_email_attachment: bool,
+    ) -> Result<EmailAttachmentUpdateResult> {
+        resend_on_lost_connection(|| {
+            upsert::document::bulk_update_email_attachment(
+                &self.inner,
+                document_ids,
+                is_email_attachment,
+            )
         })
         .await
     }

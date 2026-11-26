@@ -2,9 +2,10 @@
  * Database tool renderers, loaded on first use so the chat bundle never
  * carries the databases UI or SQL engine; inert while databases are off.
  */
-import { enableDatabases, isFeatureEnabled } from '@core/constant/featureFlags';
+
+import { lazy } from '@core/util/lazy';
 import type { ToolName } from '@service-cognition/generated/tools/tool';
-import { lazy, Suspense } from 'solid-js';
+import { Suspense } from 'solid-js';
 import type {
   RenderContext,
   ToolHandler,
@@ -26,15 +27,6 @@ export type DatabaseToolHandlerMap = Pick<
   ToolHandlerMap<RenderContext>,
   DatabaseToolName
 >;
-
-function isDatabaseToolName(name: string): name is DatabaseToolName {
-  return (DATABASE_TOOL_NAMES as readonly string[]).includes(name);
-}
-
-/** Every tool renders, except a database tool while databases are off. */
-export function isToolShown(name: string, databasesEnabled: boolean): boolean {
-  return databasesEnabled || !isDatabaseToolName(name);
-}
 
 export function DatabaseToolPlaceholder() {
   return <span class="text-xs text-ink-muted">Database tool</span>;
@@ -59,12 +51,10 @@ function lazyDatabaseToolHandler<Name extends DatabaseToolName>(
       </Suspense>
     ),
     handleCall: async (context) => {
-      if (!isFeatureEnabled(enableDatabases)) return;
       const handlers = await loadDatabaseToolHandlers();
       await handlers[name].handleCall?.(context);
     },
     handleResponse: async (context) => {
-      if (!isFeatureEnabled(enableDatabases)) return;
       const handlers = await loadDatabaseToolHandlers();
       await handlers[name].handleResponse?.(context);
     },

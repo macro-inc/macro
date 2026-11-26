@@ -4,7 +4,7 @@ import { invalidateUserQuota } from '@queries/auth';
 import { refetchHistory } from '@queries/history/history';
 import { invalidatePreview } from '@queries/preview';
 import { invalidateDeletedItems } from '@queries/storage/deleted';
-import { invalidateProjects } from '@queries/storage/projects';
+import { refreshActiveGraphqlFoldersQueries } from '@queries/storage/graphql-folders';
 
 export function refetchResources() {
   // TODO: fetch documents
@@ -17,7 +17,7 @@ export function refetchResources() {
 }
 
 async function refetchProjectResources(_force = false) {
-  await invalidateProjects();
+  await refreshActiveGraphqlFoldersQueries();
 
   refetchDocumentShareButtonResource();
 }

@@ -53,6 +53,7 @@ pub fn pending(configuration: &EventActionConfiguration) -> PendingEventRun {
         revision: configuration.revision,
         event: incoming().normalize().unwrap(),
         admitted_at: Utc::now(),
+        traceparent: None,
     }
 }
 
@@ -153,6 +154,34 @@ impl CurrentOwnerAccess for Access {
     }
 }
 
+/// Inbox delegations as (owner, inbox, delegate) edges.
+#[derive(Default)]
+pub struct Delegates {
+    pub edges: Mutex<Vec<(MacroUserIdStr<'static>, Uuid, MacroUserIdStr<'static>)>>,
+    pub unavailable: Mutex<bool>,
+    pub calls: Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>,
+}
+impl InboxDelegates for Delegates {
+    async fn delegates(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        link_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.calls.lock().unwrap().push((owner.clone(), link_id));
+        if *self.unavailable.lock().unwrap() {
+            return Err(rootcause::report!("delegations unavailable"));
+        }
+        Ok(self
+            .edges
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(edge_owner, edge_link, _)| edge_owner == owner && *edge_link == link_id)
+            .map(|(_, _, delegate)| delegate.clone())
+            .collect())
+    }
+}
+
 #[derive(Default)]
 pub struct State {
     pub configurations: Vec<EventActionConfiguration>,
@@ -218,6 +247,7 @@ impl EventRunRepository for Repo {
             revision,
             event: event.clone(),
             admitted_at: Utc::now(),
+            traceparent: None,
         };
         if state.pending.iter().any(|p| p.key() == pending.key())
             || state
@@ -475,9 +505,27 @@ pub struct Rollout(pub Option<bool>);
 
 pub const ROLLED_OUT: Rollout = Rollout(Some(true));
 
+/// Event routines rolled out, `email.labeled` not yet.
+#[derive(Clone, Copy)]
+pub struct EmailLabelsOff;
+
+impl crate::domain::event_rollout::EventRoutineRollout for EmailLabelsOff {
+    async fn enabled_for(&self, _user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
+        Ok(true)
+    }
+
+    async fn email_labels_enabled_for(&self, _user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
+        Ok(false)
+    }
+}
+
 impl crate::domain::event_rollout::EventRoutineRollout for Rollout {
     async fn enabled_for(&self, _user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
         self.0
             .ok_or_else(|| rootcause::report!("flags unavailable"))
+    }
+
+    async fn email_labels_enabled_for(&self, user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
+        self.enabled_for(user).await
     }
 }

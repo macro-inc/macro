@@ -948,6 +948,8 @@ async fn a_shared_property_is_editable_by_its_owner_alone(pool: PgPool) {
             vec![],
         )
         .await
+        .unwrap()
+        .into_created()
         .unwrap();
     let theirs = properties
         .create_property_definition(
@@ -959,6 +961,8 @@ async fn a_shared_property_is_editable_by_its_owner_alone(pool: PgPool) {
             vec![],
         )
         .await
+        .unwrap()
+        .into_created()
         .unwrap();
 
     let editable = PgDefinitionStore::new(pool.clone(), properties)

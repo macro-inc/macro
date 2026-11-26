@@ -11,8 +11,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserTooltip } from './UserTooltip';
 
 const mocks = vi.hoisted(() => ({
-  crmFlagEnabled: true,
   teamCrmEnabled: true as boolean | null,
+  crmAllowed: true,
   contact: { id: 'contact-1' } as { id: string } | null | undefined,
   openWithSplit: vi.fn(),
   onClose: vi.fn(),
@@ -30,13 +30,18 @@ const mocks = vi.hoisted(() => ({
   bots: [] as Array<{ id: string }>,
 }));
 
+// The agent screen's View screen action has its own tests (agent-screen).
+vi.mock('@app/features/agent-screen/screen-user-action', () => ({
+  createScreenUserCardAction: () => () => undefined,
+}));
+
 vi.mock('@app/features/runtime-sharing/views/AgentRuntime', () => ({
   AgentRuntime: () => null,
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: (flag: { key: string }) => () => ({
-    enabled: flag.key === 'enable-crm' ? mocks.crmFlagEnabled : true,
+  useFeatureFlag: () => () => ({
+    enabled: true,
     payload: undefined,
   }),
 }));
@@ -76,6 +81,10 @@ vi.mock('@app/features/crm/record-adapter', () => ({
   }),
 }));
 
+vi.mock('@service-storage/crm-access-authority', () => ({
+  crmAccessAllowed: () => mocks.crmAllowed,
+}));
+
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({
     isSuccess: true,
@@ -111,7 +120,7 @@ vi.mock('./UserIcon', () => ({
 }));
 
 beforeEach(() => {
-  mocks.crmFlagEnabled = true;
+  mocks.crmAllowed = true;
   mocks.teamCrmEnabled = true;
   mocks.contact = { id: 'contact-1' };
   mocks.openWithSplit.mockReset();
@@ -203,6 +212,17 @@ describe('UserTooltip direct message action', () => {
 });
 
 describe('UserTooltip CRM contact action', () => {
+  it('offers no CRM action for a denied member even with a cached contact', () => {
+    mocks.crmAllowed = false;
+    render(() => (
+      <UserTooltip
+        displayName="Contact"
+        email="contact@example.com"
+        id="macro|contact@example.com"
+      />
+    ));
+    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+  });
   it('opens the CRM contact resolved for the hovered email', async () => {
     const user = userEvent.setup({ skipHover: true });
     render(() => (
@@ -223,16 +243,6 @@ describe('UserTooltip CRM contact action', () => {
       { preferNewSplit: false, reopen: 'latest' }
     );
     expect(mocks.onClose).toHaveBeenCalledOnce();
-  });
-
-  it('hides the contact action when the CRM feature flag is off', () => {
-    mocks.crmFlagEnabled = false;
-
-    render(() => (
-      <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
-    ));
-
-    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
   });
 
   it('shows the contact action without legacy team email enrollment', () => {

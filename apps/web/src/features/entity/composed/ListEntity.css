@@ -81,15 +81,17 @@
   --soup-row-column-gap: 0px;
 }
 
-/* Full-frame mobile: rows go full-bleed and lead with the unread rail, which
-   each family builds differently — the card as its own left padding, the narrow
-   rows as the indicator cell that holds the dot. */
-@media (max-width: 639px) {
-  html[data-touch-device='true'] .soup-row-card {
-    --soup-row-gutter: 0px;
-    --soup-row-padding-l: var(--soup-inbox-unread);
-  }
+/* Touch cards use the phone feed's layout at every width (a docked feed beside
+   a preview is the same feed): full-bleed rows that lead with the unread rail,
+   since touch never shows the hover checkbox. */
+html[data-touch-device='true'] .soup-row-card {
+  --soup-row-gutter: 0px;
+  --soup-row-padding-l: var(--soup-inbox-unread);
+}
 
+/* Full-frame mobile: narrow rows go full-bleed too, leading with the unread
+   rail as the indicator cell that holds the dot. */
+@media (max-width: 639px) {
   html[data-touch-device='true'] .soup-row-narrow {
     --soup-row-gutter: 0px;
     --soup-row-padding-l: 0px;

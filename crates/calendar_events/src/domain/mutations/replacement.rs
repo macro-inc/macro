@@ -78,6 +78,39 @@ where
     }
 }
 
+/// A replacement carries the editor's details, guests and reminders. Its
+/// conference is `remove_conference`, Outlook has no guest policy, an
+/// out-of-office event has no meeting to replace, and one occurrence has no
+/// repeat rule of its own.
+fn check_replacement_changes(
+    changes: &CalendarEventPatch,
+    recurrence_id: Option<&str>,
+) -> Result<(), CalendarMutationError> {
+    if changes.conference.is_some()
+        || changes.guest_policy.is_some()
+        || changes.out_of_office.is_some()
+    {
+        return Err(CalendarMutationError::InvalidInput(
+            "A replacement carries only the event's details, guests and reminders".into(),
+        ));
+    }
+    if recurrence_id.is_some() && changes.recurrence_lines.is_some() {
+        return Err(CalendarMutationError::InvalidInput(
+            "The repeat rule applies to all events. Replace all events to change it.".into(),
+        ));
+    }
+    if let Some(time) = &changes.time {
+        validate_time(time)?;
+    }
+    if let Some(attendees) = &changes.attendees {
+        validate_attendee_emails(attendees.iter().map(|attendee| &attendee.email))?;
+    }
+    if let Some(reminders) = &changes.reminders {
+        validate_reminders(reminders)?;
+    }
+    Ok(())
+}
+
 impl<R, G, T, B, N> CalendarReplacementService for CalendarMutationServiceImpl<R, G, T, B, N>
 where
     R: CalendarRepository + CalendarReplacementRepository,
@@ -101,7 +134,9 @@ where
         calendar_id: Option<Uuid>,
         recurrence_id: Option<String>,
         remove_conference: bool,
+        changes: CalendarEventPatch,
     ) -> Result<CalendarReplacementView, CalendarMutationError> {
+        check_replacement_changes(&changes, recurrence_id.as_deref())?;
         let target = self
             .resolve_mutation_target(user, event_id, calendar_id)
             .await?;
@@ -120,8 +155,27 @@ where
             .await
             .map_err(internal)?
         {
-            let target = self.replacement_target(user, &active).await?;
-            return self.replacement_view(&active, &target).await;
+            // A preview nobody confirmed froze the editor's older changes, so
+            // it gives way to this one. A started operation is only resumed.
+            let started = active.next_step > 0 || active.command.is_some();
+            let discarded = !started
+                && self
+                    .repository
+                    .discard_replacement(user, active.id)
+                    .await
+                    .map_err(internal)?;
+            // A discard that found nothing lost to a confirmation or to the
+            // client's own discard; only an operation still there is resumed.
+            if !discarded
+                && let Some(active) = self
+                    .repository
+                    .active_replacement(user, target.calendar_id, target.master_provider_event_id())
+                    .await
+                    .map_err(internal)?
+            {
+                let target = self.replacement_target(user, &active).await?;
+                return self.replacement_view(&active, &target).await;
+            }
         }
         let token = self.fetch_token(&target.token_identity).await?;
         let snapshot = self
@@ -132,16 +186,18 @@ where
                 target.master_provider_event_id(),
                 recurrence_id.as_deref(),
                 remove_conference,
+                &changes,
             )
             .await
             .map_err(provider_error)?;
         if !snapshot.is_organizer {
             return Err(CalendarMutationError::InvalidInput("Only the meeting organizer can replace an invitation. Open Outlook to manage your own response.".into()));
         }
+        let id = Uuid::now_v7();
         let operation = self
             .repository
             .prepare_replacement(CalendarReplacement {
-                id: Uuid::now_v7(),
+                id,
                 user_id: user.into(),
                 calendar_id: target.calendar_id,
                 event_id,
@@ -155,6 +211,17 @@ where
             })
             .await
             .map_err(internal)?;
+        // A concurrent prepare stored its preview first, without this
+        // request's edits: a preview is never handed to another request.
+        if operation.id != id {
+            if operation.next_step == 0 && operation.command.is_none() {
+                return Err(CalendarMutationError::Retryable(
+                    "Another replacement of this event is being prepared. Try again.".into(),
+                ));
+            }
+            let target = self.replacement_target(user, &operation).await?;
+            return self.replacement_view(&operation, &target).await;
+        }
         Ok(operation.view(None))
     }
     async fn replacement_status(
@@ -248,8 +315,13 @@ where
                         )
                         .await
                         .map_err(internal)?;
-                    self.announce_retirements(&target.owner_id, target.email_link_id, retired)
-                        .await;
+                    self.announce_retirements(
+                        &target.owner_id,
+                        target.email_link_id,
+                        target.token_identity.provider,
+                        retired,
+                    )
+                    .await;
                 }
                 self.repository
                     .complete_replacement(id, &event)

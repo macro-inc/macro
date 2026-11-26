@@ -1,5 +1,6 @@
-// Existing log contracts: mcp_client's linked_github and oauth adapters,
-// mcp_client's callback parser, and pipedream_mcp's authenticated webhook.
+// Existing log contracts in the connectors crate: the native stack's
+// linked_github and oauth adapters and callback parser, and the Pipedream
+// stack's authenticated webhook.
 // Match final failures, not the normal HTTP 401 challenge that starts OAuth.
 import * as datadog from '@pulumi/datadog';
 import { goalertWebhooks } from '../goalert';
@@ -9,7 +10,7 @@ const monitors = [
   {
     name: 'oauth-linked-token-lookup-failing',
     title: 'OAuth linked-token lookup failing',
-    filter: 'env:prod @target:mcp_client* "failed to read linked GitHub token"',
+    filter: 'env:prod @target:connectors* "failed to read linked GitHub token"',
     window: '15m',
     threshold: 3,
     description: `At least three linked GitHub token lookups failed in fifteen minutes. OAuth may have succeeded while GitHub still appears disconnected: the MCP store suppresses these lookup errors.
@@ -20,7 +21,7 @@ Check the authentication-service response and the caller's resolved AUTHENTICATI
     name: 'oauth-connection-flow-failing',
     title: 'OAuth connection flows failing',
     filter:
-      'env:prod ((@target:mcp_client* ("exchange_code_for_token failed" OR "MCP OAuth provider rejected authorization")) OR (@target:pipedream_mcp* "Pipedream connect flow failed")) -@error:(*access_denied* OR *user_cancelled* OR *user_canceled*) -@reason:(*access_denied* OR *user_cancelled* OR *user_canceled*)',
+      'env:prod @target:connectors* ("exchange_code_for_token failed" OR "MCP OAuth provider rejected authorization" OR "Pipedream connect flow failed") -@error:(*access_denied* OR *user_cancelled* OR *user_canceled*) -@reason:(*access_denied* OR *user_cancelled* OR *user_canceled*)',
     window: '1h',
     threshold: 3,
     description: `At least three native MCP or Pipedream OAuth flows failed in an hour. These are completed failures from the token exchange, provider callback, or authenticated Pipedream webhook; explicit user-denial and cancellation codes are excluded.

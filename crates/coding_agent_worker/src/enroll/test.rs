@@ -1,7 +1,8 @@
 use std::cell::RefCell;
 
-use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use uuid::Uuid;
+use wiremock::matchers::{header, method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
 
@@ -11,6 +12,7 @@ const ENROLLMENT_JSON: &str = r#"{
     "pairing_id": "00000000-0000-0000-0000-00000000000a",
     "device_secret": "mhds_secret",
     "name": "Standard computer",
+    "role": "person",
     "deployment": {
         "agent_harness_url": "http://10.200.0.1:41009/agent-harness/",
         "egress_url": "http://10.200.0.1:41027",
@@ -21,6 +23,20 @@ const ENROLLMENT_JSON: &str = r#"{
 
 fn enrollment() -> Enrollment {
     serde_json::from_str(ENROLLMENT_JSON).expect("the literal is a valid enrollment")
+}
+
+#[test]
+fn the_claim_retries_about_every_250_ms_with_jitter() {
+    let mut delays = claim_retry_delays();
+    let drawn: Vec<Duration> = (0..50).map(|_| delays.next_delay()).collect();
+    assert!(
+        drawn.iter().all(|delay| {
+            (Duration::from_micros(187_500)..=Duration::from_micros(312_500)).contains(delay)
+        }),
+        "{drawn:?}"
+    );
+    // Jittered, so computers booting together do not claim in lockstep.
+    assert!(drawn.iter().any(|delay| *delay != drawn[0]), "{drawn:?}");
 }
 
 #[derive(Default)]
@@ -42,7 +58,7 @@ impl Host for FakeHost {
 
 #[test]
 fn enrollment_sources_parse() {
-    assert_eq!("incus".parse(), Ok(EnrollmentSource::Incus));
+    assert_eq!("mmds".parse(), Ok(EnrollmentSource::Mmds));
     assert_eq!(
         "file:/run/macro/enrollment.json".parse(),
         Ok(EnrollmentSource::File(PathBuf::from(
@@ -50,7 +66,11 @@ fn enrollment_sources_parse() {
         )))
     );
     assert!("file:".parse::<EnrollmentSource>().is_err());
-    assert!("/dev/incus".parse::<EnrollmentSource>().is_err());
+    assert!(
+        "/run/macro/enrollment.json"
+            .parse::<EnrollmentSource>()
+            .is_err()
+    );
 }
 
 #[test]
@@ -74,48 +94,117 @@ fn deployment_urls_come_from_the_typed_deployment() {
 }
 
 #[tokio::test]
-async fn enrollment_reads_from_a_file_and_the_incus_guest_api() {
+async fn enrollment_reads_from_a_file() {
     let directory = tempfile::tempdir().expect("temp dir");
-    let file = directory.path().join("enrollment.json");
-    std::fs::write(&file, ENROLLMENT_JSON).unwrap();
     let paths = SystemPaths {
         root: directory.path().to_owned(),
+        mmds: firecracker_host_api::mmds::ADDRESS.to_owned(),
     };
+    let file = directory.path().join("enrollment.json");
+    assert_eq!(
+        read_enrollment(&EnrollmentSource::File(file.clone()), &paths)
+            .await
+            .unwrap(),
+        None
+    );
+    std::fs::write(&file, ENROLLMENT_JSON).unwrap();
     assert_eq!(
         read_enrollment(&EnrollmentSource::File(file), &paths)
             .await
             .unwrap(),
         Some(enrollment())
     );
+}
 
-    let socket = paths.at(INCUS_SOCKET);
-    std::fs::create_dir_all(socket.parent().unwrap()).unwrap();
-    let listener = tokio::net::UnixListener::bind(&socket).unwrap();
-    let server = tokio::spawn(async move {
-        let (mut stream, _) = listener.accept().await.unwrap();
-        let mut request = Vec::new();
-        let mut buffer = [0u8; 1024];
-        while !request.windows(4).any(|window| window == b"\r\n\r\n") {
-            let read = stream.read(&mut buffer).await.unwrap();
-            request.extend_from_slice(&buffer[..read]);
-        }
-        let response = format!(
-            "HTTP/1.1 200 OK\r\ncontent-type: application/octet-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{ENROLLMENT_JSON}",
-            ENROLLMENT_JSON.len()
-        );
-        stream.write_all(response.as_bytes()).await.unwrap();
-        String::from_utf8(request).unwrap()
-    });
+#[tokio::test]
+async fn enrollment_reads_from_mmds_with_a_session_token() {
+    let mmds = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/latest/api/token"))
+        .and(header("X-metadata-token-ttl-seconds", "60"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("session-token"))
+        .expect(2)
+        .mount(&mmds)
+        .await;
+    // Without the token or `Accept: application/json`, MMDS refuses or
+    // answers IMDS text; neither matches here, so the read finds nothing.
+    Mock::given(method("GET"))
+        .and(path("/macro/enrollment"))
+        .and(header("X-metadata-token", "session-token"))
+        .and(header("Accept", "application/json"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(ENROLLMENT_JSON))
+        .up_to_n_times(1)
+        .mount(&mmds)
+        .await;
+    let directory = tempfile::tempdir().expect("temp dir");
+    let paths = SystemPaths {
+        root: directory.path().to_owned(),
+        mmds: mmds.uri(),
+    };
+
     assert_eq!(
-        read_enrollment(&EnrollmentSource::Incus, &paths)
+        read_enrollment(&EnrollmentSource::Mmds, &paths)
             .await
             .unwrap(),
         Some(enrollment())
     );
-    let request = server.await.unwrap();
+    // The control plane removed it once macrod connected: MMDS answers 404.
+    assert_eq!(
+        read_enrollment(&EnrollmentSource::Mmds, &paths)
+            .await
+            .unwrap(),
+        None
+    );
+}
+
+#[tokio::test]
+async fn an_mmds_error_is_not_a_missing_enrollment() {
+    let mmds = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/latest/api/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("session-token"))
+        .mount(&mmds)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/macro/enrollment"))
+        .respond_with(ResponseTemplate::new(503))
+        .mount(&mmds)
+        .await;
+    let directory = tempfile::tempdir().expect("temp dir");
+    let paths = SystemPaths {
+        root: directory.path().to_owned(),
+        mmds: mmds.uri(),
+    };
+
+    let error = read_enrollment(&EnrollmentSource::Mmds, &paths)
+        .await
+        .unwrap_err();
     assert!(
-        request.starts_with("GET /1.0/config/user.macro.enrollment HTTP/1.1\r\n"),
-        "{request}"
+        format!("{error:?}").contains("MMDS answered 503"),
+        "{error:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_refused_mmds_token_is_an_error() {
+    let mmds = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/latest/api/token"))
+        .respond_with(ResponseTemplate::new(400))
+        .mount(&mmds)
+        .await;
+    let directory = tempfile::tempdir().expect("temp dir");
+    let paths = SystemPaths {
+        root: directory.path().to_owned(),
+        mmds: mmds.uri(),
+    };
+
+    let error = read_enrollment(&EnrollmentSource::Mmds, &paths)
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{error:?}").contains("MMDS refused a session token"),
+        "{error:?}"
     );
 }
 
@@ -147,7 +236,7 @@ pairing_id = "00000000-0000-0000-0000-00000000000a"
     )
     .unwrap();
     let options = EnrollOptions {
-        from: EnrollmentSource::Incus,
+        from: EnrollmentSource::File(directory.path().join("enrollment.json")),
         config: config.clone(),
         workspace: workspace.clone(),
         agent: "claude-code".to_owned(),
@@ -211,6 +300,7 @@ async fn an_enrolled_computer_is_left_alone() {
             root: directory.path().to_owned(),
         },
         &host,
+        |_| (),
     )
     .await
     .unwrap();
@@ -220,10 +310,6 @@ async fn an_enrolled_computer_is_left_alone() {
 
 #[tokio::test]
 async fn the_claim_joins_the_setup_trace() {
-    use wiremock::{
-        Mock, MockServer, ResponseTemplate,
-        matchers::{header, method, path},
-    };
     let parent = "00-11111111111111111111111111111111-2222222222222222-01";
     let server = MockServer::start().await;
     Mock::given(method("POST"))
@@ -287,6 +373,7 @@ async fn a_marker_as_new_as_the_enrollment_is_left_alone() {
             root: directory.path().to_owned(),
         },
         &FakeHost::default(),
+        |_| (),
     )
     .await
     .unwrap();
@@ -297,10 +384,6 @@ async fn a_marker_as_new_as_the_enrollment_is_left_alone() {
 /// from generation 1, the enrollment is generation 2 with a new pairing.
 #[tokio::test]
 async fn a_newer_generation_enrolls_again_and_claims_its_pairing() {
-    use wiremock::{
-        Mock, MockServer, ResponseTemplate,
-        matchers::{method, path},
-    };
     let server = MockServer::start().await;
     // Gone ends the claim at once; reaching it shows the new pairing was claimed.
     Mock::given(method("POST"))
@@ -356,6 +439,7 @@ pairing_id = "00000000-0000-0000-0000-00000000000a"
             root: directory.path().to_owned(),
         },
         &FakeHost::default(),
+        |_| (),
     )
     .await
     .unwrap_err();
@@ -370,59 +454,127 @@ pairing_id = "00000000-0000-0000-0000-00000000000a"
     assert_eq!(std::fs::read_to_string(home_file).unwrap(), "keep me");
 }
 
-#[test]
-fn an_agent_computer_gets_its_brains_environment_file() {
+/// The computer `ENROLLMENT_JSON` enrolls.
+fn computer() -> hosted_runtimes::domain::ids::ComputerId {
+    "00000000-0000-0000-0000-00000000000c".parse().unwrap()
+}
+
+#[tokio::test]
+async fn an_enrollment_naming_an_intake_starts_telemetry_there_over_http() {
     let directory = tempfile::tempdir().expect("temp dir");
-    let config = directory.path().join("macrod.toml");
-    let env_path = directory.path().join("var/lib/macrod/agent.env");
-    let agent: hosted_runtimes::domain::agent::AgentEnrollment = serde_json::from_str(
-        r#"{
-            "agent_user_id": "macro|sam-rivera-abc123@agents.macro.invalid",
-            "env": {
-                "MACRO_API_KEY": "mak_secret",
-                "MACRO_REPO_URL": "http://agent-git:8111/macro%7Csam.git",
-                "ODD_VALUE": "a \"quoted\" \\ value"
-            }
-        }"#,
+    let marker = directory.path().join("var/lib/macrod/enrolled");
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, "00000000-0000-0000-0000-00000000000c\n1\n").unwrap();
+    let source = directory.path().join("enrollment.json");
+    let mut enrollment: serde_json::Value = serde_json::from_str(ENROLLMENT_JSON).unwrap();
+    enrollment["deployment"]["telemetry_url"] = "https://intake.example.com/i/otlp/".into();
+    std::fs::write(&source, enrollment.to_string()).unwrap();
+    let started = RefCell::new(None);
+
+    run_enroll_with_host(
+        EnrollOptions {
+            from: EnrollmentSource::File(source),
+            config: directory.path().join("macrod.toml"),
+            workspace: directory.path().join("work"),
+            agent: "claude-code".to_owned(),
+            root: directory.path().to_owned(),
+        },
+        &FakeHost::default(),
+        |exporter| *started.borrow_mut() = Some(exporter),
     )
+    .await
     .unwrap();
-    let host = FakeHost::default();
-
-    write_agent_env(&env_path, Some(&agent), &config, &host).unwrap();
 
     assert_eq!(
-        std::fs::read_to_string(&env_path).unwrap(),
-        concat!(
-            "MACRO_API_KEY=\"mak_secret\"\n",
-            "MACRO_REPO_URL=\"http://agent-git:8111/macro%7Csam.git\"\n",
-            "ODD_VALUE=\"a \\\"quoted\\\" \\\\ value\"\n",
-        )
-    );
-    assert_eq!(
-        std::fs::metadata(&env_path).unwrap().permissions().mode() & 0o777,
-        0o600
-    );
-    let parent = std::fs::metadata(directory.path()).unwrap();
-    assert_eq!(
-        host.calls.into_inner(),
-        [format!(
-            "chown {} {}:{}",
-            env_path.display(),
-            parent.uid(),
-            parent.gid()
-        )]
+        started.into_inner(),
+        Some(Some(crate::telemetry::Exporter::Http {
+            endpoint: "https://intake.example.com/i/otlp".to_owned(),
+            computer: Some(computer()),
+        }))
     );
 }
 
 #[test]
-fn a_computer_without_an_agent_has_no_brain_environment() {
+fn the_telemetry_settings_are_written_for_the_service_and_removed_without_an_intake() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let path = directory.path().join("var/lib/macrod/telemetry.env");
+
+    write_telemetry_env(
+        &path,
+        Some(&crate::telemetry::Exporter::Http {
+            endpoint: "https://intake.example.com/i/otlp".to_owned(),
+            computer: Some(computer()),
+        }),
+    )
+    .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "OTEL_EXPORTER_OTLP_ENDPOINT=https://intake.example.com/i/otlp\n\
+         OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf\n\
+         OTEL_EXPORTER_OTLP_HEADERS=x-macro-computer-id=00000000-0000-0000-0000-00000000000c\n"
+    );
+
+    write_telemetry_env(&path, None).unwrap();
+    assert!(!path.exists());
+    write_telemetry_env(&path, None).unwrap();
+}
+
+/// A failed write of the telemetry settings leaves the computer unenrolled,
+/// so the retry writes them instead of stopping at "already enrolled".
+#[tokio::test]
+async fn a_failed_telemetry_settings_write_is_retried() {
     let directory = tempfile::tempdir().expect("temp dir");
     let config = directory.path().join("macrod.toml");
-    let env_path = directory.path().join("agent.env");
-    std::fs::write(&env_path, "MACRO_API_KEY=\"stale\"\n").unwrap();
+    // Already claimed, so enrolling needs no server.
+    std::fs::write(
+        &config,
+        r#"
+[macro]
+api_url = "http://127.0.0.1:9/agent-harness"
+storage_url = "http://127.0.0.1:9/dss"
 
-    write_agent_env(&env_path, None, &config, &FakeHost::default()).unwrap();
-    assert!(!env_path.exists());
-    // Nothing to remove is fine too.
-    write_agent_env(&env_path, None, &config, &FakeHost::default()).unwrap();
+[harness]
+command = "claude-code-acp"
+
+[workspace]
+path = "/"
+
+[credentials]
+harness_id = "00000000-0000-0000-0000-0000000000a1"
+token = "mhns_claimed"
+pairing_id = "00000000-0000-0000-0000-00000000000a"
+"#,
+    )
+    .unwrap();
+    let source = directory.path().join("enrollment.json");
+    let mut enrollment: serde_json::Value = serde_json::from_str(ENROLLMENT_JSON).unwrap();
+    enrollment["deployment"]["telemetry_url"] = "https://intake.example.com/i/otlp/".into();
+    std::fs::write(&source, enrollment.to_string()).unwrap();
+    let marker = directory.path().join("var/lib/macrod/enrolled");
+    let settings = directory.path().join("var/lib/macrod/telemetry.env");
+    // A directory where the settings go makes their write fail.
+    std::fs::create_dir_all(&settings).unwrap();
+    let options = || EnrollOptions {
+        from: EnrollmentSource::File(source.clone()),
+        config: config.clone(),
+        workspace: directory.path().join("work"),
+        agent: "claude-code".to_owned(),
+        root: directory.path().to_owned(),
+    };
+
+    run_enroll_with_host(options(), &FakeHost::default(), |_| ())
+        .await
+        .unwrap_err();
+    assert!(!marker.exists(), "enrollment was marked done");
+
+    std::fs::remove_dir(&settings).unwrap();
+    run_enroll_with_host(options(), &FakeHost::default(), |_| ())
+        .await
+        .unwrap();
+    assert!(marker.exists());
+    assert!(
+        std::fs::read_to_string(&settings)
+            .unwrap()
+            .contains("https://intake.example.com/i/otlp")
+    );
 }

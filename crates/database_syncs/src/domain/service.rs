@@ -104,9 +104,11 @@ impl From<SourceError> for DatabaseSyncError {
 fn notion_error(error: NotionError) -> SourceError {
     match error {
         NotionError::NotFound | NotionError::Forbidden => SourceError::NotFound,
+        NotionError::AccessLost | NotionError::ConnectionUnavailable => SourceError::Disconnected,
         NotionError::RateLimited { .. }
         | NotionError::Upstream { .. }
         | NotionError::Decode(_)
+        | NotionError::IncompleteViewList
         | NotionError::Transport(_) => {
             SourceError::Unavailable(rootcause::report!("reading Notion: {error}"))
         }

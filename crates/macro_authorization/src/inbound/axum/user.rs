@@ -1,17 +1,12 @@
 #[cfg(test)]
 mod test;
 
-use ::axum::{
-    extract::{FromRef, FromRequestParts, Query},
-    http::{header, request::Parts},
-};
-use macro_auth::headers::AccessTokenExtractor;
+use ::axum::extract::FromRef;
 #[cfg(feature = "local_auth")]
 use macro_env_var::maybe_env_vars;
 #[cfg(feature = "local_auth")]
 use model_user::UserContext;
 use rootcause::Report;
-use serde::Deserialize;
 
 use crate::{MacroAuthorizationError, MacroAuthorizationService, MacroUserAuthentication};
 
@@ -26,32 +21,31 @@ maybe_env_vars! {
     struct LocalFusionUserId;
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-struct AuthorizationQuery {
-    macro_api_token: Option<String>,
+/// A user's JWT as [`macro_auth::credential::request_credential`] found it.
+pub(super) struct UserToken {
+    pub(super) token: String,
+    /// Sent as a bearer or query parameter, not only as the ambient cookie.
+    pub(super) explicit: bool,
 }
 
-pub(super) fn explicit_user_credential_present(parts: &Parts) -> bool {
-    query_user_credential_present(parts) || parts.headers.contains_key(header::AUTHORIZATION)
-}
-
+/// Authenticate `token`, the request's one user token if it has one. A
+/// token sent explicitly is always the one used; locally, a configured user
+/// stands in for an ambient cookie or none.
 pub(super) async fn authorize_optional_user_request<S, Svc>(
-    parts: &mut Parts,
     state: &S,
+    token: Option<UserToken>,
 ) -> Result<Option<MacroUserAuthentication>, MacroAuthorizationRejection>
 where
     MacroAuthorizationState<Svc>: FromRef<S>,
     Svc: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
-    let query_token = extract_query_token(parts, state).await;
-
-    if explicit_user_credential_present(parts) {
-        let token = extract_explicit_user_token(parts, state, query_token).await?;
-        return authorize_user_token::<S, Svc>(state, &token)
-            .await
-            .map(Some);
+    if let Some(UserToken {
+        token,
+        explicit: true,
+    }) = &token
+    {
+        return authorize_user_token::<S, Svc>(state, token).await.map(Some);
     }
 
     #[cfg(feature = "local_auth")]
@@ -59,62 +53,12 @@ where
         return authenticated_user(user_context, crate::CredentialOrigin::Session).map(Some);
     }
 
-    let Some(token) = extract_ambient_user_token(parts, state).await else {
-        return Ok(None);
-    };
-
-    authorize_user_token::<S, Svc>(state, &token)
-        .await
-        .map(Some)
-}
-
-fn query_user_credential_present(parts: &Parts) -> bool {
-    parts.uri.query().is_some_and(|query| {
-        query.split('&').any(|parameter| {
-            parameter
-                .split_once('=')
-                .map_or(parameter, |(name, _value)| name)
-                == "macro-api-token"
-        })
-    })
-}
-
-async fn extract_query_token<S>(parts: &mut Parts, state: &S) -> Option<String>
-where
-    S: Send + Sync,
-{
-    Query::<AuthorizationQuery>::from_request_parts(parts, state)
-        .await
-        .ok()
-        .and_then(|Query(query)| query.macro_api_token)
-}
-
-async fn extract_explicit_user_token<S>(
-    parts: &mut Parts,
-    state: &S,
-    query_token: Option<String>,
-) -> Result<String, MacroAuthorizationRejection>
-where
-    S: Send + Sync,
-{
-    if let Some(token) = query_token {
-        return Ok(token);
+    match token {
+        Some(UserToken { token, .. }) => authorize_user_token::<S, Svc>(state, &token)
+            .await
+            .map(Some),
+        None => Ok(None),
     }
-
-    match AccessTokenExtractor::from_request_parts(parts, state).await {
-        Ok(token @ AccessTokenExtractor::Header(_)) => Ok(token.as_ref().to_owned()),
-        Ok(AccessTokenExtractor::Cookie(_)) | Err(_) => Err(rejection("unauthorized")),
-    }
-}
-
-async fn extract_ambient_user_token<S>(parts: &mut Parts, state: &S) -> Option<String>
-where
-    S: Send + Sync,
-{
-    AccessTokenExtractor::from_request_parts(parts, state)
-        .await
-        .ok()
-        .map(|token| token.as_ref().to_owned())
 }
 
 #[cfg(feature = "local_auth")]

@@ -44,6 +44,11 @@ const context: ImportJobsContext = {
   createReport: (source) => () =>
     source === 'notion' ? notionReport() : undefined,
   openSession: (sessionId) => setOpened(sessionId),
+  createDismissals: () => ({ restore: () => [], save: () => {} }),
+  reconnect: async (source) => {
+    setOpened(`reconnect:${source}`);
+    return 'connected';
+  },
 };
 
 function scanNotion() {
@@ -89,6 +94,7 @@ function failJira() {
     source: 'jira',
     status: 'failed',
     error: 'Jira refused the request',
+    error_kind: 'access_lost',
     updated_at: new Date().toISOString(),
     review_session_id: 'jira-session',
   });

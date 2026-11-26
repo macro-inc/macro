@@ -4,6 +4,8 @@ mod backfill;
 pub(crate) mod grants;
 mod links;
 mod provider;
+#[cfg(test)]
+mod test;
 mod transactions;
 
 pub use backfill::*;
@@ -32,7 +34,7 @@ impl ConnectionIdentity for LoginEmailIdentity {
 }
 
 // Keep the legacy span while returning only the domain refusal to this adapter.
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "debug", skip_all)]
 fn extract_email_with_response(user_id: &str) -> Result<String, ConnectionError> {
     crate::utils::email_from_user_id(user_id).map_err(|e| {
         tracing::error!(error=?e, "unable to get email from user id");

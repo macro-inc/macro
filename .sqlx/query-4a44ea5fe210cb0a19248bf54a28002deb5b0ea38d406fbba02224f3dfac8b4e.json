@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The archived calls $1 can see, narrowed to the viewer-relative statuses in\n-- $2 when it is not empty.\n--\n-- A call is visible through a grant held by one of the caller's sources (a\n-- standalone call only through the caller's own user grant), or, in a\n-- channel, through a public link share or a team link share whose owner is\n-- in one of the caller's teams.\n--\n-- Grants are read by source, so that part costs what the caller holds. The\n-- link shares are checked with one share permission probe per channel call:\n-- a public call is visible to everyone, so no grant leads to it. OFFSET 0\n-- fences keep both parts to lookups by key, never a join that compares every\n-- grant with every source or scans \"SharePermission\".\nWITH user_source_ids AS (\n    SELECT cp.channel_id::text AS source_id\n    FROM comms_channel_participants cp\n    WHERE cp.user_id = $1 AND cp.left_at IS NULL\n    UNION ALL\n    SELECT t.team_id::text\n    FROM team_user t\n    WHERE t.user_id = $1\n    UNION ALL\n    SELECT $1\n),\ngranted AS (\n    SELECT DISTINCT held.entity_id\n    FROM (\n        SELECT ea.entity_id\n        FROM entity_access ea\n        WHERE ea.source_id = ANY(ARRAY(SELECT source_id FROM user_source_ids))\n            AND ea.entity_type = 'call'\n        OFFSET 0\n    ) held\n),\nvisible AS (\n    SELECT cr.id, cr.channel_id\n    FROM granted g\n    CROSS JOIN LATERAL (\n        SELECT cr.id, cr.channel_id\n        FROM call_records cr\n        WHERE cr.id = g.entity_id\n            AND (\n                cr.channel_id IS NOT NULL\n                OR EXISTS (\n                    SELECT 1\n                    FROM entity_access own\n                    WHERE own.source_id = $1\n                        AND own.entity_type = 'call'\n                        AND own.entity_id = cr.id\n                        AND own.source_type = 'user'\n                )\n            )\n        OFFSET 0\n    ) cr\n    UNION\n    SELECT cr.id, cr.channel_id\n    FROM call_records cr\n    CROSS JOIN LATERAL (\n        SELECT 1\n        FROM \"SharePermission\" sp\n        WHERE sp.id = cr.share_permission_id\n            AND sp.\"linkShareAccessLevel\" IS NOT NULL\n            AND (\n                sp.\"linkShare\" = 'PUBLIC'\n                OR (\n                    sp.\"linkShare\" = 'TEAM'\n                    AND EXISTS (\n                        SELECT 1\n                        FROM team_user owner_team\n                        WHERE owner_team.user_id = cr.created_by\n                            AND owner_team.team_id::text = ANY(ARRAY(SELECT source_id FROM user_source_ids))\n                    )\n                )\n            )\n        OFFSET 0\n    ) link_shared\n    WHERE cr.channel_id IS NOT NULL\n)\n-- Status is worked out only when a filter asks for it.\nSELECT v.id AS \"id!\"\nFROM visible v\nWHERE cardinality($2::text[]) = 0\n    OR CASE\n        WHEN EXISTS (\n            SELECT 1\n            FROM call_record_participants crp\n            WHERE crp.call_record_id = v.id AND crp.user_id = $1\n        ) THEN 'ATTENDED'\n        WHEN EXISTS (\n            SELECT 1\n            FROM comms_channel_participants ccp\n            WHERE ccp.channel_id = v.channel_id\n                AND ccp.user_id = $1\n                AND ccp.left_at IS NULL\n        ) THEN 'MISSED'\n        ELSE 'UNATTENDED'\n    END = ANY($2)\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4a44ea5fe210cb0a19248bf54a28002deb5b0ea38d406fbba02224f3dfac8b4e"
+}

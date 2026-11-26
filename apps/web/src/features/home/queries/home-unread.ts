@@ -45,20 +45,15 @@ export function hasHomeUnreadWitness(
       )
       .with(
         { __typename: 'GraphqlSoupDocument' },
-        (document) =>
-          (capabilities.snippets ||
-            document.subType?.__typename !== 'GraphqlSnippetSubType') &&
-          isRecent(document) &&
-          unread(document.unreadNotifications)
+        (document) => isRecent(document) && unread(document.unreadNotifications)
       )
       .with(
         { __typename: 'GraphqlSoupChat' },
         { __typename: 'GraphqlSoupProject' },
         (entity) => isRecent(entity) && unread(entity.unreadNotifications)
       )
-      .with(
-        { __typename: 'GraphqlSoupCalendarEvent' },
-        (event) => capabilities.calendar && unread(event.unreadNotifications)
+      .with({ __typename: 'GraphqlSoupCalendarEvent' }, (event) =>
+        unread(event.unreadNotifications)
       )
       .with(
         { __typename: 'GraphqlSoupForeignEntity' },

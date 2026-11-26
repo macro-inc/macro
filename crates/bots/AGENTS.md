@@ -32,8 +32,9 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 ## Boundaries
 
-- Depends on: `harnesses` (ports), `channels` (inbound, optional), `entity_access`, `entity_registry`,
-  `messages`, `macro_event_broker`/`macro_event_topics`, `macro_authorization`,
+- Depends on: `harnesses` (ports), `channels` (ports: the channel events it
+  raises; inbound), `entity_access`, `entity_registry`, `messages`,
+  `macro_event_broker`/`macro_event_topics`, `macro_authorization`,
   `connection_gateway_client` and `kafka_util` (`realtime`).
 - Used by: `memory`, `ai_tools`, `agent_trigger`, `complete_graph`, `agent_session`.
 
@@ -41,7 +42,9 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 - Add a bot field or mutation: `src/domain/models.rs` → `src/domain/service.rs`
   → `src/outbound/pg_bots_repo.rs` → `src/inbound/axum_router.rs` → emit/update
-  the matching event in `src/domain/events.rs` if it changes mutable state.
+  the matching event in `src/domain/events.rs` if it changes mutable state; a
+  mutation that changes which bots are in a channel also calls
+  `announce_bot_membership` with the channels it touched, after commit.
 - Add an AI tool over bots: `src/inbound/toolset.rs` (feature `ai_tools`).
 
 ## Checks
@@ -67,6 +70,10 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   gets `auto_accept_permissions = Some(true)` when the harness allows bypass. The
   `macrod`⇔`harness_id` pairing is checked only for a runtime the request
   chooses; a patch that omits `harness` keeps an unbound agent editable.
+- `POST /bots/{id}/tokens` and `POST /channels/{id}/bots/scoped` refuse an agent's program
+  (`macro_authorization::is_program_run`, 403): the response carries the
+  secret. Programs present a `botCredential` card instead, which mints from the
+  user's own session.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
   metadata describes the requested PATCH, not a full snapshot — an omitted
   field serializes as `null` (see `README.md`). Consumers that need the bot's

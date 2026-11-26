@@ -9,6 +9,10 @@ import { createDocumentComposerTags } from '@app/features/block-md/util/document
 import { createTaskWithProperties } from '@app/features/block-md/util/taskComposerProperties';
 import { calendarViewContent } from '@app/features/calendar-view/calendar-navigation';
 import { createEmailComposeContext } from '@app/features/email-compose/compose-adapter';
+import type {
+  DraftClientHandles,
+  DraftSaveResult,
+} from '@app/features/email-compose/context/compose-capabilities';
 import { plainTextToHtml } from '@app/features/email-compose/core/plain-text-to-html';
 import { prepareEmailBody } from '@app/features/email-compose/primitives/prepare-email-body';
 import { parsePropertyDraft } from '@app/features/property/utils/parse-property-draft';
@@ -21,7 +25,7 @@ import { useChatInputContext } from '@core/component/AI/context';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useAddInboxFlow } from '@core/email-link';
 import { recipientEntityMapper } from '@core/user/combinedRecipient';
@@ -32,6 +36,10 @@ import {
 } from '@queries/auth/account-scope';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useCreateCalendarEventMutation } from '@queries/calendar/mutations';
+import {
+  isMessageDestinationChannel,
+  toChannelListItem,
+} from '@queries/channel/directory-core';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
@@ -45,6 +53,7 @@ import { useSendMessageMutation } from '@queries/messages/mutations';
 import type { LexicalEditor } from 'lexical';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
+import { v7 as uuidv7 } from 'uuid';
 import type { RosterAgent } from '../agents-view/core/roster';
 import {
   exportCalendarDescription,
@@ -52,14 +61,18 @@ import {
 } from '../calendar/utils/calendar-description';
 import { buildRecurrenceLines } from '../calendar/utils/recurrence';
 import { authoredMentions } from '../channel/Input/message-payload';
-import { searchNeedsKeywords } from '../next-soup/core/search-filters';
-import { compileSearchQuery } from '../next-soup/core/search-query';
 import { createGlobalSearchOpener } from '../next-soup/open-search';
+import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
+import { createTagOptions } from '../next-soup/soup-view/filters-bar/tag-filter-state';
 import type { InputCapabilities } from './context/capabilities';
 import type { InputFields, Intent, Submission } from './core/input';
 import { type Recipient, resolveRecipients } from './core/recipients';
 import { parseRecurrenceDraft } from './core/recurrence';
-import { resolveSearchFilters } from './core/search';
+import {
+  type SearchDraftText,
+  searchDraftText,
+  searchNeedsWord,
+} from './core/search';
 import { useInputPeople } from './queries/input-people';
 import { createTaskFieldSource } from './queries/task-field-source';
 
@@ -93,12 +106,14 @@ export function createInputActions(
   const group = useGetOrCreatePrivateChannelMutation();
   const sendMessage = useSendMessageMutation();
   const history = useUpsertToHistoryMutation();
-  const channelContext = useChannelsContext();
+  const directory = useChannelDirectory();
   const messageChannels = createMemo(() =>
-    channelContext
+    directory
       .channels()
-      .filter((channel) => channel.participants.length > 2)
-      .map(recipientEntityMapper('channel'))
+      .filter(isMessageDestinationChannel)
+      .map((channel) =>
+        recipientEntityMapper('channel')(toChannelListItem(channel))
+      )
   );
   const destinations = createMemo(() =>
     messageChannels().map(
@@ -112,6 +127,7 @@ export function createInputActions(
   const people = useInputPeople(fields, host.intent, destinations);
   const person = people.lookup;
   const searchableChannels = useQuickAccess().useList('channel', 'dm');
+  const tagOptions = createTagOptions();
   const searchChannels = (): Recipient[] =>
     searchableChannels.items().map((channel) => ({
       id: channel.id,
@@ -144,6 +160,21 @@ export function createInputActions(
       .inboxes()
       .find((a) => a.id === (f.inboxId || email.accounts.primaryId())) ??
     (!f.inboxId ? email.accounts.inboxes()[0] : undefined);
+  const search = (f: InputFields): SearchDraftText =>
+    searchDraftText(f, {
+      people: person,
+      channels: searchChannels(),
+      inboxes: email.accounts.inboxes(),
+      names: {
+        userId,
+        tag: (id) => tagOptions.optionsById().get(id)?.label,
+        channel: (id) =>
+          searchChannels().find((channel) => channel.id === id)?.label,
+        inbox: (id) =>
+          email.accounts.inboxes().find((inbox) => inbox.id === id)
+            ?.email_address,
+      },
+    });
   const connectGoogle = async () => {
     if (connectingGoogle()) return;
     setConnectingGoogle(true);
@@ -203,15 +234,10 @@ export function createInputActions(
   };
   const validate: InputCapabilities['validate'] = (input) => {
     if (input.intent === 'search') {
-      const filters = resolveSearchFilters(
-        input.fields.searchFilters,
-        person,
-        searchChannels(),
-        email.accounts.inboxes()
-      );
-      if (filters.unresolved.length)
-        return `Choose a specific person or channel for ${filters.unresolved.join(', ')}`;
-      if (searchNeedsKeywords(filters.state, input.fields.query))
+      const draft = search(input.fields);
+      if (draft.unresolved.length)
+        return `Choose a specific person or channel for ${draft.unresolved.join(', ')}`;
+      if (searchNeedsWord(draft.text, draft.bindings))
         return 'Add search text to search by sender or speaker.';
     }
     if (input.intent === 'task') {
@@ -236,16 +262,37 @@ export function createInputActions(
     if (input.intent === 'ai' && selectedAgent()?.unavailableReason)
       return selectedAgent()?.unavailableReason;
   };
-  const emailDrafts = new Map<
-    string,
-    { draftId?: string; threadId?: string }
-  >();
+  const emailDrafts = new Map<string, SubmissionDraft>();
+  // Each submission saves into one draft and keeps it until the submission
+  // succeeds. A new draft is saved under a handle the client mints, which the
+  // service maps to one row, so a save retried after a lost response lands on
+  // the same draft. A draft stays in its inbox: choosing another inbox after
+  // a failed send deletes the saved draft and starts a new one there.
+  const submissionDraft = async (
+    input: Submission,
+    inboxId: string
+  ): Promise<SubmissionDraft> => {
+    const known = emailDrafts.get(input.id);
+    if (known?.inboxId === inboxId) return known;
+    if (known?.kind === 'saved')
+      await email.drafts.deleteDraft({
+        draftId: known.draftId,
+        threadId: known.threadId,
+        inboxId: known.inboxId,
+      });
+    const minted: SubmissionDraft = {
+      kind: 'minted',
+      inboxId,
+      handles: { draftId: uuidv7() },
+    };
+    emailDrafts.set(input.id, minted);
+    return minted;
+  };
   let emailEditor: LexicalEditor | undefined;
   let calendarEditor: LexicalEditor | undefined;
   let messageMentions: (() => ItemMention[]) | undefined;
   const emailMessage = (input: Submission) => {
     const body = prepareEmailBody(emailEditor);
-    const prior = emailDrafts.get(input.id);
     return {
       subject: input.fields.subject,
       to: recipients(input.fields).recipients.map((p) => ({
@@ -263,8 +310,6 @@ export function createInputActions(
         body?.bodyHtml ??
         encodeBase64UrlUtf8(plainTextToHtml(input.fields.body)),
       body_macro: input.fields.body,
-      db_id: prior?.draftId,
-      thread_db_id: prior?.threadId,
     };
   };
   const saveEmailDraft: InputCapabilities['saveEmailDraft'] = async (input) => {
@@ -273,8 +318,10 @@ export function createInputActions(
     const account = captureQueryAccount(userId);
     assertQueryAccount(account);
     const inboxId = selectedInbox(input.fields)!.id;
+    const draft = await submissionDraft(input, inboxId);
+    assertQueryAccount(account);
     const saved = await email.drafts.saveDraft({
-      draft: emailMessage(input),
+      ...draftSave(draft, emailMessage(input)),
       inboxId,
     });
     assertQueryAccount(account);
@@ -323,21 +370,16 @@ export function createInputActions(
         };
       })
       .with('search', async () => {
-        const { state } = resolveSearchFilters(
-          f.searchFilters,
-          person,
-          searchChannels(),
-          email.accounts.inboxes()
-        );
-        const search = {
-          query: f.query.trim(),
-          filters: compileSearchQuery(state),
-          clientFilters: {
-            and: ['search-supported' as const],
-            or: state.type === 'all' ? [] : [state.type],
-          },
+        // Search opens on the same text the draft's field shows.
+        const draft = search(f);
+        const preset = getViewPreset('search');
+        const opened = {
+          query: draft.text.trim(),
+          bindings: draft.bindings,
+          filters: preset?.filters ?? {},
+          clientFilters: preset?.clientFilters ?? {},
         };
-        return { message: 'Search opened', open: () => openSearch(search) };
+        return { message: 'Search opened', open: () => openSearch(opened) };
       })
       .with('note', async () => {
         const created = await createDocumentWithTags(
@@ -375,15 +417,28 @@ export function createInputActions(
       .with('email', async () => {
         const inboxId = selectedInbox(f)!.id;
         const message = emailMessage(input);
-        const saved = await email.drafts.saveDraft({ draft: message, inboxId });
+        const prior = await submissionDraft(input, inboxId);
         assertQueryAccount(account);
-        emailDrafts.set(input.id, saved);
+        // A send carries the whole message, so a retry after a failed send
+        // sends the draft it saved without saving it again.
+        const draft =
+          prior.kind === 'saved'
+            ? prior
+            : savedDraft(
+                prior,
+                await email.drafts.saveDraft({
+                  ...draftSave(prior, message),
+                  inboxId,
+                })
+              );
+        assertQueryAccount(account);
+        emailDrafts.set(input.id, draft);
         const sent = await email.delivery.sendMessage({
           inboxId,
           message: {
             ...message,
-            db_id: saved.draftId,
-            thread_db_id: saved.threadId,
+            db_id: draft.draftId,
+            thread_db_id: draft.threadId,
           },
         });
         emailDrafts.delete(input.id);
@@ -425,7 +480,9 @@ export function createInputActions(
         });
         return {
           message: 'Event created',
-          open: () => host.navigate(calendarViewContent({ eventId: event.id })),
+          open: event
+            ? () => host.navigate(calendarViewContent({ eventId: event.id }))
+            : undefined,
         };
       })
       .with('message', async () => {
@@ -486,6 +543,7 @@ export function createInputActions(
     selectedCalendar,
     selectedInbox,
     inboxes: email.accounts.inboxes,
+    search,
     connectGoogle,
     connectingGoogle: () =>
       connectingGoogle() ||
@@ -510,3 +568,47 @@ export function createInputActions(
   };
 }
 export type InputActions = ReturnType<typeof createInputActions>;
+
+/**
+ * The draft a universal input email submission saves into, in one inbox: the
+ * handle the client minted until a save returns the server's ids.
+ */
+type SubmissionDraft = { inboxId: string } & (
+  | { kind: 'minted'; handles: DraftClientHandles }
+  | SavedDraft
+);
+
+type SavedDraft = { kind: 'saved'; draftId: string; threadId: string };
+
+/**
+ * A save of a submission's draft: by the server's ids once a save returned
+ * them, before that by the minted handle. The handle goes in
+ * `clientHandles`, because `draft.db_id` holds only server ids.
+ */
+function draftSave<T extends object>(draft: SubmissionDraft, message: T) {
+  return match(draft)
+    .with({ kind: 'saved' }, ({ draftId, threadId }) => ({
+      draft: { ...message, db_id: draftId, thread_db_id: threadId },
+      clientHandles: undefined,
+    }))
+    .with({ kind: 'minted' }, ({ handles }) => ({
+      draft: message,
+      clientHandles: handles,
+    }))
+    .exhaustive();
+}
+
+/** The draft a submission keeps once a save returned the server's ids. */
+function savedDraft(
+  prior: SubmissionDraft,
+  saved: DraftSaveResult
+): SubmissionDraft & SavedDraft {
+  if (!saved.draftId || !saved.threadId)
+    throw new Error('The email draft was saved without an id');
+  return {
+    kind: 'saved',
+    inboxId: prior.inboxId,
+    draftId: saved.draftId,
+    threadId: saved.threadId,
+  };
+}

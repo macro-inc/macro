@@ -20,15 +20,30 @@ the due date read from an email thread for Focus.
 - `src/inbound/axum_router.rs` owns authenticated HTTP routes. The harness root
   composes providers and mounts the router under `/universal_input`.
 - `domain/temporal/thread_due_date.rs` and `outbound/thread_due_date.rs` read a
-  thread's due date for `email_focus_worker`, which has no model credentials:
-  the model states deadline and closure facts per message; Rust resolves each
+  thread's due date, and the day of the meeting it is about (`event_on`), for
+  `email_focus_worker`, which has no model credentials: the model states
+  deadline, closure and event facts per message in one call; Rust resolves each
   against the day its own message was written and picks the one still standing.
+  An event counts from the latest message stating one. The model says where it
+  lies from that message (`EventTime`: still to come, held, or held on a day the
+  wording puts earlier, as "last Friday" does), and Rust takes the next such day
+  after the message, or the latest on or before it (before it, when held
+  earlier), at most two weeks back, so a month and day with no year or a bare
+  weekday names the day the mail means. The day stands after later mail for two
+  weeks: the caller judges what that mail means, and later mail is about
+  something else.
   Anything uncertain resolves to no date, since a wrong date costs more than a
-  missing one. `/universal_input/thread-due-date` is internal-only and meters
-  against the acting user as `AiFeature::EmailFocus`, which no allowance pays for:
+  missing one, and a wrong event day takes a thread out of Focus early. A
+  deadline or closure citing a message or text the thread lacks makes the
+  whole answer `rejected`: no days, with its usage, and a 200, since the model
+  did answer; only a model that could not answer fails the request.
+  `/universal_input/thread-due-date` is internal-only and meters against the
+  acting user as `AiFeature::EmailFocus`, which no allowance pays for:
   never open it to user credentials, or it becomes a free model proxy. It has no
   OpenAPI entry for the same reason. Mail is untrusted data: it stays in the user
-  message, and the fixed system prompt says so.
+  message, and the fixed system prompt says so. The response carries the read's
+  token usage (`DueDateUsage`), captured from what it records, so the worker
+  can chart Focus cost; the journal row is still the record of it.
 - Suggestions contain display text, never authorized entity identifiers.
   Submission and permission checks belong to the destination services.
 - `eval/baseline.json` and `eval/compare.py` compare live classification and

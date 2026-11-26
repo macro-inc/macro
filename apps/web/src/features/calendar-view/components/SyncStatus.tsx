@@ -15,8 +15,8 @@ export function SyncStatus(props: { syncing: boolean }) {
             Syncing your calendar…
           </span>
           <span class="text-xs text-ink-muted">
-            Events are still being imported from Google. They’ll appear
-            automatically. You can keep using Macro.
+            Events are being imported. This may take a while. You can keep using
+            Macro as normal.
           </span>
         </div>
       </div>

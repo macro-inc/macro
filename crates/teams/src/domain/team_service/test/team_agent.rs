@@ -433,6 +433,58 @@ async fn removing_a_team_agent_leaves_the_subscription_alone() {
     assert_eq!(*team_repository.rollback_remove_calls.lock().unwrap(), 0);
 }
 
+/// Taking back an agent whose computer failed its first start needs no admin: it removes the membership
+/// as an admin's removal does, leaving the subscription alone.
+#[tokio::test]
+async fn taking_back_a_team_agent_removes_it_without_an_admin() {
+    let team_id = uuid::Uuid::from_u128(0x7a_000a);
+    let inviter_id = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+    let agent_id = MacroUserIdStr::parse_from_str("macro|agent@example.com").unwrap();
+
+    let mut team_repository =
+        MockTeamRepository::new(Vec::new(), "Acme", Arc::new(Mutex::new(Vec::new())));
+    team_repository.team_subscription_id = Some("sub_team".parse().unwrap());
+    team_repository.seat_included = true;
+    team_repository.removed_member = Some(TeamMember {
+        team_id,
+        user_id: agent_id.clone().into_owned(),
+        role: TeamRole::Member,
+        plan: SeatPlan::Premium,
+    });
+    let customer_repository = MockCustomerRepository::default();
+    let channel_service = RecordingChannelService::default();
+    let roles_service = MockUserRolesAndPermissionsService::default();
+
+    let service = TeamServiceImpl::new(
+        team_repository.clone(),
+        customer_repository.clone(),
+        channel_service.clone(),
+        roles_service.clone(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    service
+        .take_back_team_agent(team_id, &agent_id, inviter_id.into_owned())
+        .await
+        .unwrap();
+
+    assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
+    assert!(
+        customer_repository
+            .decrement_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        *channel_service.leave_calls.lock().unwrap(),
+        vec![(team_id, "macro|agent@example.com".to_string())]
+    );
+    assert_eq!(roles_service.remove_calls.lock().unwrap().len(), 1);
+}
+
 #[tokio::test]
 async fn removing_a_team_agent_rolls_back_keeping_the_seat_included() {
     let team_id = uuid::Uuid::from_u128(0x7a_0008);

@@ -52,9 +52,9 @@ use crate::domain::{
         JoinTeamDirectlyError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
         RemovedTeamMember, RestorePermissionsForTeamMembersError,
-        RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
-        TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamRole, TeamWithMembers,
-        ToggleAutoJoinDomainError, is_generic_email_domain, team_slug_from_name,
+        RevokePermissionsForTeamMembersError, SeatDowngrade, SeatPlan, SetTeamMemberPlanError,
+        Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamRole,
+        TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain, team_slug_from_name,
     },
     open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease, SeatPlanChange, SubscriptionStart},
     owned_entity_cleanup::{
@@ -371,7 +371,7 @@ where
         // Add the user to the team directly (no invite), then run the same
         // billing / roles / channels side effects as join_team, rolling
         // the membership back if any of them fail.
-        let Some(team_member) = self
+        let Some(mut team_member) = self
             .team_repository
             .add_user_to_team(&team_id, user_id, seat_billing == SeatBilling::Included)
             .await?
@@ -451,6 +451,21 @@ where
                 // Free membership never creates a paid seat or grants premium roles.
                 None => None,
                 Some(subscription_id) => {
+                    match self
+                        .joining_seat_plan(&team_id, user_id, &subscription_id, team_member.plan)
+                        .await
+                    {
+                        Ok(plan) => team_member.plan = plan,
+                        Err(e) => {
+                            self.rollback_add_user_to_team(
+                                &team_id,
+                                user_id,
+                                "choosing the seat plan",
+                            )
+                            .await;
+                            return Err(e.into());
+                        }
+                    }
                     if let Err(e) = self
                         .customer_repository
                         .increment_seat_count(&subscription_id, team_member.plan, 1)
@@ -554,6 +569,8 @@ where
 
         let teammate_ids = self.teammate_ids_except(&team_id, user_id).await;
         self.enqueue_joining_user_contacts(user_id, &teammate_ids)
+            .await;
+        self.send_teammates_changed(&team_id, user_id, &teammate_ids)
             .await;
 
         // NOTE: no TeamJoined analytics event here - that event is tied to
@@ -868,11 +885,11 @@ where
         &self,
         subscription_id: Option<&stripe::SubscriptionId>,
         user_id: &MacroUserIdStr<'_>,
-        pending_plan: Option<SeatPlan>,
+        pending_downgrade: Option<SeatDowngrade>,
     ) {
-        if let (Some(subscription), Some(plan)) = (subscription_id, pending_plan) {
+        if let (Some(subscription), Some(downgrade)) = (subscription_id, pending_downgrade) {
             self.customer_repository
-                .schedule_seat_plan(subscription, user_id, Some(plan))
+                .schedule_seat_plan(subscription, user_id, Some(downgrade))
                 .await
                 .inspect_err(|error| {
                     tracing::error!(
@@ -898,7 +915,7 @@ where
         actor_user_id: MacroUserIdStr<'static>,
     ) -> Result<(), DeleteTeamError> {
         let members = self.team_repository.get_all_team_members(&team_id).await?;
-        let member_user_ids = members
+        let member_user_ids: Vec<_> = members
             .iter()
             .map(|member| member.user_id.clone().into_owned())
             .collect();
@@ -933,6 +950,11 @@ where
             .delete_team(&cleared)
             .await
             .map_err(DeleteTeamError::TeamError)?;
+        // Every member lost every other member as a teammate.
+        if member_user_ids.len() > 1 {
+            self.send_directory_changed(&team_id, member_user_ids.clone(), member_user_ids.clone())
+                .await;
+        }
         self.publish_team_event(&TeamMacroEvent::deleted(TeamDeletedMetadata {
             team_id,
             actor_user_id,
@@ -1045,6 +1067,10 @@ where
             }
             Err(error) => return Err(error),
         };
+        let pending_downgrade = pending_plan.map(|to| SeatDowngrade {
+            from: removed_member.member.plan,
+            to,
+        });
 
         if let Some(subscription_id) = subscription_id.as_ref()
             && let Err(e) = async {
@@ -1067,7 +1093,7 @@ where
                     );
                 })
                 .ok();
-            self.restore_pending_seat_change(Some(subscription_id), user_id, pending_plan)
+            self.restore_pending_seat_change(Some(subscription_id), user_id, pending_downgrade)
                 .await;
             return Err(RemoveUserFromTeamError::CustomerError(e));
         }
@@ -1101,8 +1127,12 @@ where
                         );
                     })
                     .ok();
-                self.restore_pending_seat_change(subscription_id.as_ref(), user_id, pending_plan)
-                    .await;
+                self.restore_pending_seat_change(
+                    subscription_id.as_ref(),
+                    user_id,
+                    pending_downgrade,
+                )
+                .await;
                 return Err(RemoveUserFromTeamError::TeamError(
                     channel_error_to_team_error(error),
                 ));
@@ -1125,7 +1155,7 @@ where
                 "removing team member roles",
             )
             .await;
-            self.restore_pending_seat_change(subscription_id.as_ref(), user_id, pending_plan)
+            self.restore_pending_seat_change(subscription_id.as_ref(), user_id, pending_downgrade)
                 .await;
             return Err(RemoveUserFromTeamError::RemoveRolesFromUserError(e));
         }
@@ -1152,7 +1182,7 @@ where
                 "releasing the open seat",
             )
             .await;
-            self.restore_pending_seat_change(subscription_id.as_ref(), user_id, pending_plan)
+            self.restore_pending_seat_change(subscription_id.as_ref(), user_id, pending_downgrade)
                 .await;
             return Err(RemoveUserFromTeamError::OpenSeatRelease(Box::new(error)));
         }
@@ -1177,6 +1207,10 @@ where
                 "Failed to enqueue DepopulateCrmForUser after remove_user_from_team; CRM rows owned by the removed user's link will be left in place until manual cleanup"
             );
         }
+
+        let remaining_members = self.teammate_ids_except(&team_id, user_id).await;
+        self.send_teammates_changed(&team_id, user_id, &remaining_members)
+            .await;
 
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamLeft {
             team_id,
@@ -1232,7 +1266,7 @@ where
                     error = ?error,
                     team_id = %team_id,
                     user_id = %user_id,
-                    "failed to load team roster for joining-member side effects"
+                    "failed to load team roster for membership side effects"
                 );
             })
             .ok()
@@ -1280,6 +1314,48 @@ where
                     error = ?error,
                     user_id = %user_id,
                     "failed to enqueue team contact connections"
+                );
+            })
+            .ok();
+    }
+
+    /// Tells `member` and `roster` that they gained or lost each other as
+    /// teammates: everyone on the roster re-reads `member`, and `member`
+    /// re-reads the roster. Same shape for a join and a removal.
+    async fn send_teammates_changed(
+        &self,
+        team_id: &uuid::Uuid,
+        member: &MacroUserIdStr<'_>,
+        roster: &[MacroUserIdStr<'static>],
+    ) {
+        if roster.is_empty() {
+            return;
+        }
+
+        let member = member.clone().into_owned();
+        self.send_directory_changed(team_id, roster.to_vec(), vec![member.clone()])
+            .await;
+        self.send_directory_changed(team_id, vec![member], roster.to_vec())
+            .await;
+    }
+
+    /// Best-effort, like the other contacts side effects: the membership is
+    /// already committed, and the clients' periodic scan covers a missed
+    /// message.
+    async fn send_directory_changed(
+        &self,
+        team_id: &uuid::Uuid,
+        users: Vec<MacroUserIdStr<'static>>,
+        changed: Vec<MacroUserIdStr<'static>>,
+    ) {
+        self.contacts_enqueuer
+            .directory_changed(users, changed)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    team_id = %team_id,
+                    "failed to enqueue team directory change"
                 );
             })
             .ok();
@@ -1354,6 +1430,32 @@ where
             .await
             .map_err(|error| TeamError::StorageLayerError(error.into()))?;
         Ok(live.is_some())
+    }
+
+    /// The plan a member joining a paying team is billed at: the plan their
+    /// membership records, raised to the cheapest plan sold at the
+    /// subscription's interval and recorded. Premium is sold monthly only, so
+    /// a member joining an annual team starts on Business.
+    async fn joining_seat_plan(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        subscription_id: &stripe::SubscriptionId,
+        plan: SeatPlan,
+    ) -> Result<SeatPlan, JoinTeamError> {
+        let cadence = self
+            .customer_repository
+            .subscription_terms(subscription_id)
+            .await?
+            .interval;
+        let cheapest = SeatPlan::cheapest_at(cadence);
+        if plan >= cheapest {
+            return Ok(plan);
+        }
+        self.team_repository
+            .patch_team_member_plan(team_id, user_id, cheapest)
+            .await?;
+        Ok(cheapest)
     }
 
     /// Best-effort rollback of a direct team add (from
@@ -1815,6 +1917,16 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn take_back_team_agent(
+        &self,
+        team_id: uuid::Uuid,
+        agent_user_id: &MacroUserIdStr<'_>,
+        removed_by: MacroUserIdStr<'static>,
+    ) -> Result<(), RemoveUserFromTeamError> {
+        self.remove_member(team_id, agent_user_id, removed_by).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn reject_invitation(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -1933,7 +2045,7 @@ where
             .await
             .map_err(JoinTeamError::TeamError)?;
 
-        let team_member = accepted_invite.member.clone();
+        let mut team_member = accepted_invite.member.clone();
         let enterprise = match self
             .team_repository
             .get_team_enterprise_status(&team_member.team_id)
@@ -2059,6 +2171,30 @@ where
                 // Free membership never creates a paid seat or grants premium roles.
                 None => None,
                 Some(subscription_id) => {
+                    match self
+                        .joining_seat_plan(
+                            &team_member.team_id,
+                            user_id,
+                            &subscription_id,
+                            team_member.plan,
+                        )
+                        .await
+                    {
+                        Ok(plan) => team_member.plan = plan,
+                        Err(e) => {
+                            self.team_repository
+                                .rollback_accept_team_invite(&accepted_invite)
+                                .await
+                                .inspect_err(|rollback_err| {
+                                    tracing::error!(
+                                        error=?rollback_err,
+                                        "unable to rollback accepted team invite after choosing the seat plan failed"
+                                    );
+                                })
+                                .ok();
+                            return Err(e);
+                        }
+                    }
                     if let Err(e) = self
                         .customer_repository
                         .increment_seat_count(&subscription_id, team_member.plan, 1)
@@ -2187,6 +2323,8 @@ where
             .teammate_ids_except(&team_member.team_id, user_id)
             .await;
         self.enqueue_joining_user_contacts(user_id, &teammate_ids)
+            .await;
+        self.send_teammates_changed(&team_member.team_id, user_id, &teammate_ids)
             .await;
 
         self.reward_inviter(
@@ -2392,9 +2530,15 @@ where
                     .await?;
                 return Ok(member);
             }
-            if member.plan == SeatPlan::Max && plan == SeatPlan::Premium {
+            // A cheaper plan takes effect at renewal; the seat keeps what it
+            // paid for until then.
+            if plan < member.plan {
+                let downgrade = SeatDowngrade {
+                    from: member.plan,
+                    to: plan,
+                };
                 self.customer_repository
-                    .schedule_seat_plan(subscription, user_id, Some(plan))
+                    .schedule_seat_plan(subscription, user_id, Some(downgrade))
                     .await?;
                 return Ok(member);
             }

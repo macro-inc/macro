@@ -128,7 +128,6 @@ where
     type Output = GetThreadResponse;
 
     #[tracing::instrument(skip_all, fields(
-        user_id=?request_context.user_id,
         thread_id=%self.thread_id,
     ), err)]
     async fn call(

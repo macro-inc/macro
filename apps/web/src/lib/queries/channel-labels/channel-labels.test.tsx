@@ -12,10 +12,8 @@ import { type Ok, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authKeys } from '../auth/keys';
-import { channelKeys } from '../channel/keys';
 import { queryClient } from '../client';
 import {
-  useAvailableSectionChannelsQuery,
   useChannelLabelsData,
   useChannelLabelsQuery,
   useRenameChannelLabelMutation,
@@ -31,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   preview: vi.fn(),
   assign: vi.fn(),
   rename: vi.fn(),
-  channels: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
@@ -45,8 +42,6 @@ vi.mock('@core/context/user', () => ({
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {
-    getChannels: async (args: unknown) =>
-      ok({ items: await mocks.channels(args), next_cursor: null }),
     channelLabels: {
       list: mocks.list,
       preview: mocks.preview,
@@ -80,7 +75,6 @@ beforeEach(() => {
   mocks.userId = () => 'viewer';
   mocks.assign.mockReset().mockResolvedValue(ok(undefined));
   mocks.rename.mockReset();
-  mocks.channels.mockReset().mockResolvedValue([]);
   mocks.list.mockReset().mockResolvedValue(ok(labels));
   mocks.preview
     .mockReset()
@@ -102,47 +96,6 @@ afterEach(() => {
 });
 
 describe('channel tag query rollout', () => {
-  it('isolates available channels by account and follows channel-list invalidation', async () => {
-    mocks.enabled = () => true;
-    const [userId, setUserId] = createSignal('viewer');
-    mocks.userId = userId;
-    let finishOld!: (channels: { id: string }[]) => void;
-    mocks.channels.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishOld = resolve;
-        })
-    );
-    mocks.channels.mockResolvedValueOnce([{ id: 'current' }]);
-    let query!: ReturnType<typeof useAvailableSectionChannelsQuery>;
-    const Probe = () => {
-      query = useAvailableSectionChannelsQuery();
-      return null;
-    };
-    render(() => (
-      <QueryClientProvider client={client}>
-        <Probe />
-      </QueryClientProvider>
-    ));
-    await waitFor(() => expect(mocks.channels).toHaveBeenCalledTimes(1));
-    client.setQueryData(authKeys.userInfo.queryKey, {
-      id: 'new-viewer',
-      authenticated: true,
-    });
-    setUserId('new-viewer');
-    await waitFor(() => expect(query.isPending).toBe(false));
-    expect(query.data?.map((channel) => channel.id)).toEqual(['current']);
-    finishOld([{ id: 'old-account' }]);
-    await waitFor(() => expect(client.isFetching()).toBe(0));
-    expect(query.data?.map((channel) => channel.id)).toEqual(['current']);
-
-    mocks.channels.mockResolvedValueOnce([{ id: 'joined' }]);
-    await client.invalidateQueries({
-      queryKey: channelKeys.listChannels._def,
-    });
-    expect(query.data?.map((channel) => channel.id)).toEqual(['joined']);
-  });
-
   it('does not fetch while disabled and hides cached labels when switched off', async () => {
     const [enabled, setEnabled] = createSignal(false);
     mocks.enabled = enabled;

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_email_consent(team_id,user_id,link_id,consent_incarnation)\n               VALUES($1,$2,$3,$4) ON CONFLICT(team_id,user_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "acb4bd4859cea084e1226e9b0b9c94cb75c0c59c4b3fd7d6df532ac0c3ea1a50"
+}

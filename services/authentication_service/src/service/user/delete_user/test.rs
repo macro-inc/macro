@@ -34,6 +34,9 @@ impl UserDeletionGateway for FakeGateway {
     async fn delete_onboarding(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.call("onboarding", user.as_ref())
     }
+    async fn delete_contacts(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
+        self.call("contacts", user.as_ref())
+    }
     async fn delete_profile(&self, user: &MacroUserIdStr<'static>, _: &Uuid) -> Result<(), Report> {
         self.call("profile", user.as_ref())
     }
@@ -61,6 +64,7 @@ fn expected_calls() -> Vec<String> {
             "teams",
             "items",
             "onboarding",
+            "contacts",
             "profile",
         ] {
             expected.push(format!("{step}:{user}"));
@@ -104,4 +108,31 @@ async fn retry_after_profiles_are_gone_still_deletes_the_account() {
         .await
         .unwrap();
     assert_eq!(*gateway.calls.lock().unwrap(), ["customer:", "account:"]);
+}
+
+#[tokio::test]
+async fn profiles_sharing_a_canonical_id_are_deleted_once() {
+    let gateway = FakeGateway::default();
+    let user = MacroUserIdStr::try_from("macro|E@example.com".to_owned()).unwrap();
+    let same_user = MacroUserIdStr::try_from("macro|e@example.com".to_owned()).unwrap();
+
+    delete_user_data(&gateway, &Uuid::now_v7(), &[user, same_user])
+        .await
+        .unwrap();
+
+    let calls = gateway.calls.lock().unwrap();
+    assert_eq!(
+        *calls,
+        [
+            "actions:macro|e@example.com",
+            "sessions:macro|e@example.com",
+            "teams:macro|e@example.com",
+            "items:macro|e@example.com",
+            "onboarding:macro|e@example.com",
+            "contacts:macro|e@example.com",
+            "profile:macro|e@example.com",
+            "customer:",
+            "account:",
+        ]
+    );
 }

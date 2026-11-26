@@ -41,7 +41,7 @@ export class ProjectNamespace {
   }
 
   /**
-   * Search projects by name and content, most relevant first, auto-paginated.
+   * Search projects by name and content, most relevant first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */

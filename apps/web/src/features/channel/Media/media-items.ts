@@ -4,6 +4,7 @@ import {
 } from '@core/constant/servers';
 import {
   isStaticAttachmentType,
+  STATIC_AUDIO,
   STATIC_IMAGE,
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
@@ -18,6 +19,8 @@ export type MediaItem = {
   fullSrc: string;
   /** Local preview for optimistic media we just uploaded/sent. */
   previewSrc?: string;
+  /** Loads the bytes for copy and download when `fullSrc` can expire. */
+  getBlob?: () => Promise<Blob | undefined>;
   kind: 'image' | 'video';
   width?: number | null;
   height?: number | null;
@@ -46,6 +49,7 @@ export function partitionAttachments<T extends { entity_type: string }>(
   attachments: T[]
 ) {
   const mediaAttachments: T[] = [];
+  const audioAttachments: T[] = [];
   const documentAttachments: T[] = [];
 
   for (const attachment of attachments) {
@@ -54,12 +58,17 @@ export function partitionAttachments<T extends { entity_type: string }>(
       continue;
     }
 
+    if (attachment.entity_type === STATIC_AUDIO) {
+      audioAttachments.push(attachment);
+      continue;
+    }
+
     if (!isStaticAttachmentType(attachment.entity_type)) {
       documentAttachments.push(attachment);
     }
   }
 
-  return { mediaAttachments, documentAttachments };
+  return { mediaAttachments, audioAttachments, documentAttachments };
 }
 
 function mapAttachmentToMediaItem(

@@ -5,7 +5,9 @@
 //! `FinalizeImport`. The user comes from the request context, so the model
 //! can never stage on another user's behalf.
 
-use crate::domain::models::{ImportEntity, ImportSource, ImportStatus, Initiator, metadata_label};
+use crate::domain::models::{
+    ImportEntity, ImportSource, ImportStatus, Initiator, RunErrorKind, metadata_label,
+};
 use crate::domain::ports::{ImportError, ImportedDocumentProperties, ImportedDocumentProperty};
 use crate::domain::service::{
     DiscardOutcome, ImportFinalizer, ImportNotionPageOutcome, ImportStager, NotionPageImporter,
@@ -21,8 +23,21 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod import_from_hubspot;
+
+/// What the agent does after a workspace plan failed: tell the user once,
+/// instead of planning again, which fails the same way.
+const FAILED_NEXT: &str = "Tell the user in one sentence why it failed and what they can do about it. Do not plan again, check its status, or present a review until the user asks you to try again.";
+
+/// Why a workspace plan failed, for the agent, from its typed kind (never the
+/// raw error, which can carry provider detail).
+fn failure_reason(source: ImportSource, kind: Option<RunErrorKind>) -> String {
+    crate::domain::models::explain_failure(kind, source)
+}
+
 mod import_from_notion;
 mod import_from_tracker;
+pub use import_from_hubspot::{HubspotImportResponse, ImportFromHubspot};
 pub use import_from_tracker::{ImportFromJira, ImportFromLinear, TrackerImportResponse};
 
 pub use import_from_notion::{ImportFromNotion, ImportFromNotionResponse, NotionImportAction};
@@ -80,6 +95,7 @@ pub fn import_toolset<T: ImportStager + NotionPageImporter + WorkspaceImporter>(
         .add_tool::<ImportFromNotion, ImportToolContext<T>>()
         .add_tool::<ImportFromLinear, ImportToolContext<T>>()
         .add_tool::<ImportFromJira, ImportToolContext<T>>()
+        .add_tool::<ImportFromHubspot, ImportToolContext<T>>()
         .add_tool::<DeleteImportEntity, ImportToolContext<T>>()
         .add_tool::<ListImportEntities, ImportToolContext<T>>()
 }
@@ -210,7 +226,7 @@ impl ToolAnnotated for CreateImportEntity {
 impl<T: ImportStager> AsyncTool<ImportToolContext<T>> for CreateImportEntity {
     type Output = CreateImportEntityResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id = %request_context.user_id, source = self.source.as_ref(), foreign_id = %self.foreign_id), err)]
+    #[tracing::instrument(skip_all, fields(source = self.source.as_ref(), foreign_id = %self.foreign_id), err)]
     async fn call(
         &self,
         service_context: ServiceContext<ImportToolContext<T>>,
@@ -359,7 +375,7 @@ impl ToolAnnotated for ImportNotionPage {
 impl<T: NotionPageImporter> AsyncTool<ImportToolContext<T>> for ImportNotionPage {
     type Output = ImportNotionPageResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id = %request_context.user_id, page_url = %self.page_url), err)]
+    #[tracing::instrument(skip_all, fields(page_url = %self.page_url), err)]
     async fn call(
         &self,
         service_context: ServiceContext<ImportToolContext<T>>,
@@ -460,7 +476,7 @@ impl ToolAnnotated for DeleteImportEntity {
 impl<T: ImportStager> AsyncTool<ImportToolContext<T>> for DeleteImportEntity {
     type Output = DeleteImportEntityResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id = %request_context.user_id, id = %self.id), err)]
+    #[tracing::instrument(skip_all, fields(id = %self.id), err)]
     async fn call(
         &self,
         service_context: ServiceContext<ImportToolContext<T>>,
@@ -529,7 +545,7 @@ impl ToolAnnotated for ListImportEntities {
 impl<T: ImportStager> AsyncTool<ImportToolContext<T>> for ListImportEntities {
     type Output = ListImportEntitiesResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id = %request_context.user_id), err)]
+    #[tracing::instrument(skip_all, err)]
     async fn call(
         &self,
         service_context: ServiceContext<ImportToolContext<T>>,
@@ -601,7 +617,7 @@ impl ToolAnnotated for FinalizeImport {
 impl<T: ImportFinalizer> AsyncTool<ImportToolContext<T>> for FinalizeImport {
     type Output = FinalizeImportResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id = %request_context.user_id, import_id = %self.import_id), err)]
+    #[tracing::instrument(skip_all, fields(import_id = %self.import_id), err)]
     async fn call(
         &self,
         service_context: ServiceContext<ImportToolContext<T>>,

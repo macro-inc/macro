@@ -125,6 +125,9 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
+email_api_client = { path = "../email_api_client", features = ["outbound-outlook"] }
+macro_service_urls = { path = "../macro_service_urls" }
+outlook_emulator = { path = "../outlook_emulator" }
 models_email = { path = "../models_email" }
 email_db_client = { path = "../email_db_client" }
 crm = { path = "../crm", features = ["outbound"] }

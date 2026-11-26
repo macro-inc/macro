@@ -64,6 +64,9 @@ function CanvasDocumentSession(
   const documentId = props.documentId;
   const initial = props.initial;
   const activePointers = new Set<number>();
+  // Fingers are counted by their touch events too: once two are down, touch
+  // navigation withholds their pointer events from the rest of the page.
+  const activeTouches = new Set<number>();
   const userId = useUserId();
   const openedBy = userId();
   const flow = useFlow();
@@ -130,6 +133,10 @@ function CanvasDocumentSession(
     <div
       class="relative flex size-full min-h-0 flex-col"
       on:pointerdown={(event) => activePointers.add(event.pointerId)}
+      on:touchstart={(event) => {
+        for (const touch of event.changedTouches)
+          activeTouches.add(touch.identifier);
+      }}
     >
       <Show when={!savedLocation.loading}>
         <CanvasAncestry.Provider value={[...ancestors, documentId]}>
@@ -180,7 +187,7 @@ function CanvasDocumentSession(
               // Updating the host's saved view can replace its decorator DOM.
               // Wait until navigation settles, and never interrupt a pointer gesture.
               const notifyLocation = debounce(() => {
-                if (activePointers.size) return;
+                if (activePointers.size || activeTouches.size) return;
                 const camera = current.getCamera();
                 if (
                   camera.x === notifiedCamera.x &&
@@ -199,8 +206,16 @@ function CanvasDocumentSession(
                 if (!activePointers.delete(event.pointerId)) return;
                 notifyLocation();
               };
+              const touchEnd = (event: TouchEvent) => {
+                let lifted = false;
+                for (const touch of event.changedTouches)
+                  lifted = activeTouches.delete(touch.identifier) || lifted;
+                if (lifted) notifyLocation();
+              };
               window.addEventListener('pointerup', pointerEnd, true);
               window.addEventListener('pointercancel', pointerEnd, true);
+              window.addEventListener('touchend', touchEnd, true);
+              window.addEventListener('touchcancel', touchEnd, true);
               const unsubscribe = current.subscribeCamera((camera) => {
                 notifyLocation();
                 if (props.isNested) return;
@@ -232,6 +247,8 @@ function CanvasDocumentSession(
                 notifyLocation.clear();
                 window.removeEventListener('pointerup', pointerEnd, true);
                 window.removeEventListener('pointercancel', pointerEnd, true);
+                window.removeEventListener('touchend', touchEnd, true);
+                window.removeEventListener('touchcancel', touchEnd, true);
                 clearTimeout(viewTimer);
                 window.removeEventListener('pagehide', flush);
                 window.removeEventListener('beforeunload', beforeUnload);

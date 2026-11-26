@@ -7,9 +7,11 @@ import {
 import { SidePanel } from '@components/app/side-panel';
 import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { References } from '@core/component/References';
+import { LabelChip } from '@property/tags';
+import { useShownThreadLabels } from '@queries/email/thread-labels';
 import { queryReadyGate } from '@queries/gate';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
-import { Show, Suspense } from 'solid-js';
+import { For, Show, Suspense } from 'solid-js';
 
 interface EmailSidePanelSectionsProps {
   threadId: string;
@@ -28,6 +30,7 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
         canEdit={canEdit()}
         order={20}
       />
+      <EmailLabelsSection threadId={props.threadId} />
       <SidePanel.Section
         id="properties"
         title="Properties"
@@ -58,6 +61,28 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
         />
       </SidePanel.Footer>
     </>
+  );
+}
+
+/** The thread's labels from its inbox, by their whole names; read-only. */
+function EmailLabelsSection(props: { threadId: string }) {
+  const labels = useShownThreadLabels(() => props.threadId);
+  return (
+    <Show when={labels().length > 0}>
+      <SidePanel.Section id="labels" title="Labels" defaultOpen order={25}>
+        <div class="flex flex-wrap items-center gap-1.5 text-xs">
+          <For each={labels()}>
+            {(label) => (
+              <LabelChip
+                name={label.fullName}
+                size="sm"
+                class="m-px max-w-[30ch]"
+              />
+            )}
+          </For>
+        </div>
+      </SidePanel.Section>
+    </Show>
   );
 }
 

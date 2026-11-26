@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        WITH queued AS (\n                            INSERT INTO hosted_runtime_effect (computer_id, worker, effect, run_after, created_at)\n                            VALUES ($1, $2, $3, $4, $4)\n                            RETURNING worker\n                        )\n                        SELECT pg_notify($5, queued.worker::text) FROM queued\n                        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pg_notify",
+        "type_info": "Void"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "computer_effect_worker",
+            "kind": {
+              "Enum": [
+                "fleet",
+                "billing",
+                "agents"
+              ]
+            }
+          }
+        },
+        "Jsonb",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b55adf42317c37c05a1cb8813661f763b0d9196a1b8fc7992ec037fcd193e45f"
+}

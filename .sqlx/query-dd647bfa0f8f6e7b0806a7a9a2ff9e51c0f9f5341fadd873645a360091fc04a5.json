@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO password_item_favorites(team_id,item_id,user_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dd647bfa0f8f6e7b0806a7a9a2ff9e51c0f9f5341fadd873645a360091fc04a5"
+}

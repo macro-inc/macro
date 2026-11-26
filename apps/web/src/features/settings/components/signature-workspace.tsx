@@ -1,7 +1,8 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { SignatureContent } from '@app/features/email-compose/components/signature-preview';
+import { lazy } from '@core/util/lazy';
 import { ConfirmDialog, TabSelector } from '@ui';
-import { createSignal, lazy, onMount, Show, Suspense } from 'solid-js';
+import { createSignal, onMount, Show, Suspense } from 'solid-js';
 import { requiresHtmlEditing } from '../core/signature-html';
 
 const SignatureEditor = lazy(() => import('../SignatureEditor'));

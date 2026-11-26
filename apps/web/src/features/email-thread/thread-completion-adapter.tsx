@@ -162,7 +162,7 @@ export function createThreadCompletionAdapter(
 
     // Mark-not-done issues the /archived request itself (plus notification
     // and soup-cache restore), so the path below skips archiveMutation and
-    // only mirrors its thread-cache handling via trackExternalThreadArchive.
+    // only mirrors its preview handling via trackExternalThreadArchive.
     const { selectedRow, cachedItem } = resolveThreadSoupLookup(thread.db_id);
 
     const entity =
@@ -176,11 +176,7 @@ export function createThreadCompletionAdapter(
 
     if (entity && markNotDoneAction.canExecute(entity)) {
       fireAndForget(
-        trackExternalThreadArchive(
-          thread.db_id,
-          markNotDoneAction.execute([entity]),
-          false
-        ),
+        trackExternalThreadArchive(markNotDoneAction.execute([entity])),
         'email-thread'
       );
     } else {
@@ -245,7 +241,7 @@ export function createThreadCompletionAdapter(
     if (!thread.inbox_visible) return false;
 
     // Mark done issues the /archived request itself (with undo support), so
-    // the paths below skip archiveMutation and only mirror its thread-cache
+    // the paths below skip archiveMutation and only mirror its preview
     // handling via trackExternalThreadArchive.
     const { selectedRow, cachedItem } = resolveThreadSoupLookup(thread.db_id);
     const entity =
@@ -267,7 +263,6 @@ export function createThreadCompletionAdapter(
     if (opts?.navigate !== false && soup && selectedRow) {
       fireAndForget(
         trackExternalThreadArchive(
-          thread.db_id,
           markAsDoneAction.executeWithSoup(
             [entity],
             soup,
@@ -295,7 +290,6 @@ export function createThreadCompletionAdapter(
     } else {
       fireAndForget(
         trackExternalThreadArchive(
-          thread.db_id,
           markAsDoneAction.execute([entity], undefined, markDoneOpts)
         ),
         'email-thread'

@@ -1,0 +1,17 @@
+config:
+  gcp:project: macro-435922
+  gcp:zone: us-east4-c
+  firecracker-host:hostName: firecracker-dev-1
+  firecracker-host:hostKind: metal
+  # Fallbacks, in order: c3-standard-192-metal, c4-standard-288-metal; or
+  # hostKind nested with n2-standard-32 and a pd-ssd durable disk.
+  firecracker-host:machineType: c3-highcpu-192-metal
+  firecracker-host:durableDisk:
+    type: hyperdisk-balanced
+    sizeGb: 2000
+    provisionedIops: 20000
+    provisionedThroughput: 800
+  firecracker-host:subnetCidr: 10.202.0.0/24
+  # The dev control plane's egress (agent harness NAT); mTLS pins both ends.
+  firecracker-host:controlPlaneSources:
+    - 35.171.97.195/32

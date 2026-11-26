@@ -118,7 +118,7 @@ pub struct ExecutionRecord {
     /// Original turn, preventing another requester from replaying a saved result.
     #[serde(default)]
     pub turn_id: Option<Uuid>,
-    /// The submitted JavaScript module.
+    /// The submitted TypeScript module.
     pub source: String,
     /// Overall execution state.
     pub status: ExecutionStatus,
@@ -232,12 +232,31 @@ pub enum CodeModeError {
     /// Upstream details stay in server diagnostics.
     #[error("the connected app could not be reached; try again later")]
     ConnectedAppUnreachable,
+    /// The account's calls to a connected app exceeded its budget: the
+    /// app kept answering HTTP 429 after the harness paced and retried the
+    /// call, or the queue ahead of it outlasted its deadline. It did not run.
+    #[error(
+        "too many calls to this connected app for this account; this call did not run. Make fewer calls (page or limit results, call per item only for the few items you need) and try again later"
+    )]
+    ConnectedAppRateLimited {
+        /// How long the app last asked callers to wait.
+        retry_after: Option<std::time::Duration>,
+    },
     /// A submitted identity cannot replay an execution or replace its journal.
     #[error("execution_id was already used; execution was not started")]
     Duplicate,
     /// Invalid source, deadline, or discovery arguments.
     #[error("{0}")]
     Invalid(String),
+    /// A saved review can never be presented (an import whose plan failed);
+    /// the message says why. Unlike other presentation failures it is not
+    /// retried: the review is settled as dismissed.
+    #[error("{0}")]
+    Unpresentable(String),
+    /// A submit refused because the review's action cannot start now (an
+    /// import whose plan is not ready for it); nothing was started.
+    #[error("{0}")]
+    NotApprovable(String),
     /// Admission is bounded before starting work.
     #[error("code execution is busy; try again later")]
     Busy,

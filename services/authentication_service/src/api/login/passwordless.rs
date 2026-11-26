@@ -1,7 +1,7 @@
 use axum::{
     Json,
     extract::{self, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode, header::USER_AGENT},
     response::{IntoResponse, Response},
 };
 use macro_middleware::tracking::ClientIp;
@@ -14,18 +14,14 @@ use crate::{
         webhooks::user::create_user_webhook::revert_unconfirmed_agent,
     },
     generate_password::generate_random_password,
-    service::user::agent_signup::AGENT_SIGNUP_DATA_KEY,
+    service::user::email_code_signup::email_code_signup_data,
+    service::user::signup_meta::SignupClickIds,
 };
 use fusionauth::error::FusionAuthClientError;
-use macro_user_id::user_id::MacroUserId;
-use model::{
-    authentication::login::{
-        request::PasswordlessRequest,
-        response::{PasswordlessStartedResponse, SsoRequiredResponse},
-    },
-    response::ErrorResponse,
+use model::authentication::login::{
+    request::PasswordlessRequest,
+    response::{PasswordlessStartedResponse, SsoRequiredResponse},
 };
-use referral::domain::{models::ReferralCode, ports::ReferralService};
 
 /// Initiates a passwordless login
 #[utoipa::path(
@@ -40,9 +36,10 @@ use referral::domain::{models::ReferralCode, ports::ReferralService};
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(ctx, req, ip_context), fields(email=%req.email, client_ip=%ip_context), err(Debug))]
+#[tracing::instrument(skip(ctx, req, headers, ip_context), fields(email=%req.email, client_ip=%ip_context), err(Debug))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    headers: HeaderMap,
     ip_context: ClientIp,
     extract::Json(req): extract::Json<PasswordlessRequest>,
 ) -> Result<Response, Response> {
@@ -111,79 +108,60 @@ pub async fn handler(
                 .await;
             }
         }
-        Err(e) => {
-            match e {
-                FusionAuthClientError::UserDoesNotExist => {
-                    tracing::trace!(email=%lowercase_email, "user does not exist, we need to create user");
-                    ctx.signup_policy
+        Err(e) => match e {
+            FusionAuthClientError::UserDoesNotExist => {
+                tracing::trace!(email=%lowercase_email, "user does not exist, we need to create user");
+                ctx.signup_policy
                         .authorize_public_email(&lowercase_email)
                         .map_err(|denial| {
                             tracing::warn!(error=?denial, "signup policy denied passwordless user creation");
                             signup_forbidden_response()
                         })?;
 
-                    let fusionauth_user_id = ctx
-                        .auth_client
-                        .create_user(
-                            fusionauth::user::create::User {
-                                email: (&lowercase_email).into(),
-                                password: generate_random_password().into(),
-                                username: None,
-                                data: req.is_agent.then(|| {
-                                    serde_json::json!({ AGENT_SIGNUP_DATA_KEY: true })
-                                }),
-                            },
-                            true,
-                            ip_context.origin_ip(),
-                        )
-                        .await
-                        .map_err(|e| {
-                            tracing::error!(error=?e, email=%lowercase_email, "unable to create user");
-                            (StatusCode::INTERNAL_SERVER_ERROR, "unable to create user").into_response()
-                        })?;
+                let mut signup_data = email_code_signup_data(req.is_agent);
+                SignupClickIds::from_parts(
+                    header_text(&headers, "x-macro-fbp").as_deref(),
+                    header_text(&headers, "x-macro-fbc").as_deref(),
+                    header_text(&headers, USER_AGENT.as_str()).as_deref(),
+                )
+                .merge_into(&mut signup_data);
+                let fusionauth_user_id = ctx
+                    .auth_client
+                    .create_user(
+                        fusionauth::user::create::User {
+                            email: (&lowercase_email).into(),
+                            password: generate_random_password().into(),
+                            username: None,
+                            data: Some(signup_data),
+                        },
+                        true,
+                        ip_context.origin_ip(),
+                    )
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(error=?e, email=%lowercase_email, "unable to create user");
+                        (StatusCode::INTERNAL_SERVER_ERROR, "unable to create user").into_response()
+                    })?;
 
-                    tracing::trace!(fusionauth_user_id, "created new fusionauth user");
-
-                    if let Some(referral_code) = req.referral_code {
-                        tracing::trace!(referral_code, "referral code found");
-                        let macro_user_id = format!("macro|{}", req.email.to_lowercase());
-                        let referrerd_user_id = MacroUserId::parse_from_str(&macro_user_id)
-                            .map_err(|_| {
-                                (
-                                    StatusCode::BAD_REQUEST,
-                                    Json(ErrorResponse {
-                                        message: "invalid macro user id".into(),
-                                    }),
-                                )
-                                    .into_response()
-                            })?
-                            .lowercase();
-
-                        // initiates tracking the referral
-                        let _ = ctx
-                            .referral_service
-                            .track_referral(
-                                &referrerd_user_id,
-                                &ReferralCode(referral_code.clone()),
-                            )
-                            .await
-                            .inspect_err(|e| {
-                                tracing::error!(error=?e, "unable to track referral");
-                            });
-                    }
-                }
-                _ => {
-                    tracing::error!(error=?e, email=%lowercase_email, "unable to get user id");
-                    return Err((StatusCode::INTERNAL_SERVER_ERROR).into_response());
-                }
+                tracing::trace!(fusionauth_user_id, "created new fusionauth user");
             }
-        }
+            _ => {
+                tracing::error!(error=?e, email=%lowercase_email, "unable to get user id");
+                return Err((StatusCode::INTERNAL_SERVER_ERROR).into_response());
+            }
+        },
     }
 
-    // Generate code
+    // Generate code. The referral code rides in the code's state: an account
+    // this request created is referred only once the code proves the address
+    // (`GET /oauth/passwordless/{code}`).
     let code = ctx
         .auth_client
-        .start_passwordless_login(&lowercase_email, &req.redirect_uri)
+        .start_passwordless_login(
+            &lowercase_email,
+            &req.redirect_uri,
+            req.referral_code.as_deref(),
+        )
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "unable to start passwordless login");
@@ -226,4 +204,13 @@ pub async fn handler(
     };
 
     Ok((StatusCode::OK, Json(body)).into_response())
+}
+
+fn header_text(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }

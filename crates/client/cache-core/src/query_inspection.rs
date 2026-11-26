@@ -121,7 +121,7 @@ pub(crate) fn prepare(
         return Err(QueryInspectionError::InvalidDepth(path.len()));
     }
 
-    let mut selections = operation.selection_set.as_slice();
+    let mut selections = &operation.selection_set[..];
     let mut type_name = schema.query_root();
     let mut final_variables = BTreeSet::new();
     for (index, response_key) in path.iter().enumerate() {

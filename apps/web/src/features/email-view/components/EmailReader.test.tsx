@@ -1,9 +1,9 @@
+import { lazy } from '@core/util/lazy';
 import { cleanup, render } from '@solidjs/testing-library';
 import {
   type Accessor,
   type Component,
   createSignal,
-  lazy,
   Suspense,
 } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';

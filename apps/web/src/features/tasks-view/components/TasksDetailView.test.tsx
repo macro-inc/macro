@@ -21,7 +21,11 @@ vi.mock(
   async () => await import('@app/components/list/use-list-detail-navigation')
 );
 vi.mock('@app/components/view-shell', () => ({
-  ViewShell: { TopBar: (props: ParentProps) => props.children },
+  ViewShell: {
+    TopBar: (props: ParentProps) => props.children,
+    TopBarTitle: (props: ParentProps) => props.children,
+    TopBarActions: (props: ParentProps) => props.children,
+  },
   ViewBreadcrumbs: { Outlet: () => null },
 }));
 vi.mock('@app/components/entity-detail/EntityDetailBreadcrumbSkeleton', () => ({

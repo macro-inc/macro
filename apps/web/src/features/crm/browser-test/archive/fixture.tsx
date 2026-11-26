@@ -1,19 +1,26 @@
 import '../../../../index.css';
+import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { SidePanel } from '@components/app/side-panel';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { storageServiceClient as Storage } from '@service-storage/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
 import { match } from 'ts-pattern';
+// The fixture aliases `@core/context/user` to its picker stub; the company
+// picker's entity display reads the real context.
+import { UserContextProvider } from '../../../../lib/core/context/user';
 import { RecordOverview } from '../../components/record-overview';
 import { RecordTabs } from '../../components/record-tabs';
 import {
   COMPANY_SECTIONS,
   CONTACT_SECTIONS,
   type CrmRecordSection,
+  RECORD_PANEL_ORDER,
 } from '../../core/record';
 import { useCompanyQuery } from '../../queries/companies';
 import { useContactQuery } from '../../queries/contacts';
@@ -21,6 +28,7 @@ import { CompanyContactsSection } from '../../views/company-contacts-section';
 import { CompanyHeader } from '../../views/company-header';
 import { CompanySharingSection } from '../../views/company-sharing-section';
 import { ContactHeader } from '../../views/contact-header';
+import { RecordReferencesSection } from '../../views/record-associations';
 import { RecordDetailsSection } from '../../views/record-details-section';
 import { RecordHeaderActions } from '../../views/record-header-actions';
 import {
@@ -32,6 +40,7 @@ import {
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const params = new URLSearchParams(location.search);
+applyTheme(params.get('theme') === 'light' ? 'Macro Light' : 'Macro Dark');
 const kind = params.get('kind') === 'company' ? 'company' : 'contact';
 const selectorType: EntityType | EntityType[] | null | undefined = match(
   params.get('selector')
@@ -105,14 +114,34 @@ function Fixture() {
                 company={kind === 'company' ? source.company() : undefined}
                 contact={kind === 'contact' ? contact.data : undefined}
               />
-              <SidePanel.Section id="references" title="References" order={20}>
-                <p>No references</p>
+              <SidePanel.Section
+                id="properties"
+                title="Properties"
+                order={RECORD_PANEL_ORDER.properties}
+                defaultOpen
+              >
+                <SidePanel.Grid class="auto-rows-[minmax(1.75rem,auto)] gap-y-1">
+                  <SidePanel.Row label="Phone">+1 555 0100</SidePanel.Row>
+                </SidePanel.Grid>
+              </SidePanel.Section>
+              <SidePanel.Section
+                id="references"
+                title="References"
+                order={RECORD_PANEL_ORDER.references}
+              >
+                <RecordReferencesSection
+                  scope={
+                    kind === 'company'
+                      ? { type: 'company', id: record.id, domains: [] }
+                      : { type: 'contact', id: record.id, emails: [] }
+                  }
+                />
               </SidePanel.Section>
               <Show when={kind === 'company'}>
                 <SidePanel.Section
                   id="sharing"
                   title="Email sharing"
-                  order={50}
+                  order={RECORD_PANEL_ORDER.sharing}
                 >
                   <CompanySharingSection company={source.company()} />
                 </SidePanel.Section>
@@ -130,7 +159,12 @@ function Fixture() {
 render(
   () => (
     <QueryClientProvider client={client}>
-      <Fixture />
+      {/* The company picker shows channel and user names. */}
+      <ChannelDirectoryProvider directory={staticChannelDirectory(() => [])}>
+        <UserContextProvider>
+          <Fixture />
+        </UserContextProvider>
+      </ChannelDirectoryProvider>
     </QueryClientProvider>
   ),
   document.getElementById('root')!

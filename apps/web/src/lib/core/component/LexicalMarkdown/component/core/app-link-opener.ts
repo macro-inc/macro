@@ -12,3 +12,18 @@ export const AppLinkOpenerContext = createContext<AppLinkOpener>();
 export function useAppLinkOpener(): AppLinkOpener | undefined {
   return useContext(AppLinkOpenerContext);
 }
+
+/** What a link's hover card says in place of its URL. */
+export type AppLinkPreview = { title: string; subtitle: string };
+
+/**
+ * Names a link the surface knows better than its URL, such as a reference to
+ * code; undefined leaves the usual hover card.
+ */
+export type AppLinkDescriber = (url: string) => AppLinkPreview | undefined;
+
+export const AppLinkDescriberContext = createContext<AppLinkDescriber>();
+
+export function useAppLinkDescriber(): AppLinkDescriber | undefined {
+  return useContext(AppLinkDescriberContext);
+}

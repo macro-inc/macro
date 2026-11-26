@@ -73,9 +73,42 @@ declare global {
   /** The item an event is about, as JSON; its fields depend on the event. */
   type RoutineItem = {
     entity_id: string;
+    /** On a message or email event: the id of that message. */
     message_id?: string;
+    /** On a channel message event: the message. */
+    message: RoutineMessage;
+    /**
+     * On a reply: the top-level post that started its thread. Missing once
+     * that post is deleted; `message.is_reply` still says it is a reply.
+     */
+    thread_parent?: RoutineMessage;
     [field: string]: any;
   };
+
+  /** A channel message, as a message event carries it. */
+  interface RoutineMessage {
+    /** Its text, as plain text. */
+    text: string;
+    /** Who sent it: a person's email, or a bot's or imported author's name. */
+    sender: string;
+    /** When it was sent (ISO 8601). */
+    sent_at: string;
+    /** Whether it was edited. */
+    edited: boolean;
+    /** How many items are attached to it. */
+    attachments: number;
+    /** Whether it is a reply in a thread, rather than a top-level post. */
+    is_reply: boolean;
+    /** The id of the top-level post that started its thread: its own id when it is one. */
+    root_id: string;
+    /**
+     * @deprecated The same as `root_id`: set on top-level posts too, so it
+     * never tells a reply apart. Use `is_reply`, and `root_id` for the thread.
+     */
+    thread_id: string;
+    /** Set when the message was deleted before the run read it; nothing else is then. */
+    unavailable?: string;
+  }
 
   /** What a step's output becomes once stored: JSON. */
   type StepOutput<T> = [T] extends [void]

@@ -30,14 +30,13 @@ import type {
   AddDraftAttachmentResponse,
   ApiMessageOperation,
   ApiPaginatedThreadCursor,
-  ArchiveThreadsRequest,
-  ArchiveThreadsResponse,
   CreateDraftRequest,
   CreateDraftResponse,
   GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
   GetScheduledResponse,
   GetThreadResponse,
+  InitConflictResponse,
   InitResponse,
   ListBackfillJobsResponse,
   ListContactsResponse,
@@ -52,7 +51,6 @@ import type {
   ResyncResponse,
   SendMessageRequest,
   SendMessageResponse,
-  SharedInboxConflictResponse,
   ThreadReadReceipts,
   TransferDraftRequest,
   TransferDraftResponse,
@@ -170,11 +168,66 @@ export const ALREADY_INITIALIZED_CODE = 'ALREADY_INITIALIZED' as const;
  */
 export const NO_GMAIL_GRANT_CODE = 'NO_GMAIL_GRANT' as const;
 
+/**
+ * Error code `init` returns (HTTP 400) when the inbox is still being removed
+ * from Macro, after its account was deleted or it was disconnected. Adding it
+ * again works once that removal finishes.
+ */
+export const INBOX_BEING_REMOVED_CODE = 'INBOX_BEING_REMOVED' as const;
+
+/**
+ * Error code `init` returns (HTTP 409) when the Microsoft mailbox signed in at
+ * consent is not the one an inbox at that address syncs.
+ */
+export const INBOX_IDENTITY_CONFLICT_CODE = 'INBOX_IDENTITY_CONFLICT' as const;
+
+/**
+ * Error code `init` returns (HTTP 409) when the inbox changed while it was being
+ * connected. Connecting again works.
+ */
+export const INBOX_CHANGED_CODE = 'INBOX_CHANGED' as const;
+
 type InitErrorCode =
   | 'PAYMENT_REQUIRED'
   | typeof SHARED_INBOX_CONFLICT_CODE
   | typeof ALREADY_INITIALIZED_CODE
-  | typeof NO_GMAIL_GRANT_CODE;
+  | typeof NO_GMAIL_GRANT_CODE
+  | typeof INBOX_BEING_REMOVED_CODE
+  | typeof INBOX_IDENTITY_CONFLICT_CODE
+  | typeof INBOX_CHANGED_CODE;
+
+/** A 409 from `init`; a server released before the codes sends a share conflict's fields alone. */
+type InitConflictBody =
+  | InitConflictResponse
+  | { code?: undefined; email_address?: string; existing_owner_email?: string };
+
+/** The error a 409 from `init` stands for, or none for a body it doesn't know. */
+function initConflict(
+  body: InitConflictBody | null
+): { code: InitErrorCode; message: string } | undefined {
+  if (
+    body?.code === INBOX_IDENTITY_CONFLICT_CODE ||
+    body?.code === INBOX_CHANGED_CODE
+  ) {
+    return { code: body.code, message: body.message };
+  }
+  // Only a coded conflict offers to share the inbox. A server released
+  // before the codes sends a real conflict's fields with no code.
+  if (
+    body?.code === SHARED_INBOX_CONFLICT_CODE ||
+    (body && body.code === undefined && body.email_address)
+  ) {
+    return {
+      code: SHARED_INBOX_CONFLICT_CODE,
+      // The caller formats the prompt; the fields it needs ride along as JSON.
+      message: JSON.stringify({
+        emailAddress: body.email_address ?? '',
+        existingOwnerEmail: body.existing_owner_email ?? '',
+      }),
+    };
+  }
+  return undefined;
+}
 
 /**
  * Error code `patchSettings` returns (HTTP 422) when a signature has images that
@@ -242,9 +295,10 @@ export const emailClient = {
 
     return fetchWithToken<InitResponse, InitErrorCode>(`${emailHost}${path}`, {
       method: 'POST',
-      // A custom handler replaces safeFetch's default status mapping. 409 carries
-      // the shared-inbox conflict fields and 400 a machine-readable code; other
-      // statuses fall back to the same HTTP_ERROR shape callers already branch on.
+      // A custom handler replaces safeFetch's default status mapping. 400 and 409
+      // carry a machine-readable code, and a shared-inbox conflict its fields;
+      // other statuses fall back to the same HTTP_ERROR shape callers already
+      // branch on.
       errorResponseHandler: async (response) => {
         if (response.status === 402)
           return {
@@ -253,17 +307,10 @@ export const emailClient = {
               'A professional subscription is required to add another inbox',
           };
         if (response.status === 409) {
-          const body = (await response
-            .json()
-            .catch(() => null)) as SharedInboxConflictResponse | null;
-          return {
-            code: SHARED_INBOX_CONFLICT_CODE,
-            // The caller formats the prompt; the fields it needs ride along as JSON.
-            message: JSON.stringify({
-              emailAddress: body?.email_address ?? '',
-              existingOwnerEmail: body?.existing_owner_email ?? '',
-            }),
-          };
+          const conflict = initConflict(
+            (await response.json().catch(() => null)) as InitConflictBody | null
+          );
+          if (conflict) return conflict;
         }
         if (response.status === 400) {
           const body = (await response.json().catch(() => null)) as {
@@ -272,7 +319,8 @@ export const emailClient = {
           } | null;
           if (
             body?.code === ALREADY_INITIALIZED_CODE ||
-            body?.code === NO_GMAIL_GRANT_CODE
+            body?.code === NO_GMAIL_GRANT_CODE ||
+            body?.code === INBOX_BEING_REMOVED_CODE
           ) {
             return { code: body.code, message: body.message ?? '' };
           }
@@ -393,36 +441,6 @@ export const emailClient = {
         }
       )
     ).map((result) => result);
-  },
-  async updateThreadProject(args: {
-    thread_id: string;
-    projectId: string | null;
-  }) {
-    const { thread_id, projectId } = args;
-    return emailFetch<{ oldProjectId: string | null }>(
-      `/email/threads/${thread_id}/project`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ projectId }),
-      }
-    );
-  },
-  async flagArchived(args: { value: boolean; id: string }, linkId?: string) {
-    const { value, id } = args;
-    return (
-      await emailFetch<EmptyResponse>(`/email/threads/${id}/archived`, {
-        method: 'PATCH',
-        body: JSON.stringify({ value }),
-        headers: emailLinkHeaders(linkId),
-      })
-    ).map((result) => result);
-  },
-  /** One request for up to 100 threads; the server reports threads it could not change. */
-  async flagArchivedBatch(args: ArchiveThreadsRequest) {
-    return await emailFetch<ArchiveThreadsResponse>('/email/threads/archived', {
-      method: 'PATCH',
-      body: JSON.stringify(args),
-    });
   },
   async startSync() {
     return (
@@ -749,15 +767,6 @@ export const emailClient = {
           headers: emailLinkHeaders(linkId),
         }
       )
-    ).map((result) => result);
-  },
-  async markThreadAsSeen(args: { thread_id: string }, linkId?: string) {
-    const { thread_id } = args;
-    return (
-      await emailFetch<EmptyResponse>(`/email/threads/${thread_id}/seen`, {
-        method: 'POST',
-        headers: emailLinkHeaders(linkId),
-      })
     ).map((result) => result);
   },
   async blockSender(args: { email_address: string }, linkId?: string) {

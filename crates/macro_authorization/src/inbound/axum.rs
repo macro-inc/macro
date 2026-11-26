@@ -8,6 +8,7 @@ mod macro_authorization;
 mod optional;
 mod policy;
 mod program;
+mod program_json;
 mod user;
 mod user_api_key;
 
@@ -50,7 +51,8 @@ pub use policy::{
     UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
     UserOrInternalServiceAuthorization,
 };
-pub use program::{CODE_EXECUTION_HEADER, is_agent_run, is_program_run};
+pub use program::{CODE_EXECUTION_HEADER, PROGRAM_SIGN_IN_REFUSAL, is_agent_run, is_program_run};
+pub use program_json::{request_is_program, rewrite_program_json};
 pub use user_api_key::USER_API_KEY_HEADER;
 
 /// The authenticated entity responsible for a request.
@@ -147,6 +149,7 @@ pub(super) fn authenticated_user(
             rejection("invalid user id")
         })?;
 
+    record_verified_user(credential_kind(&origin), &user_context);
     Ok(MacroUserAuthentication {
         origin,
         agent_id: None,
@@ -155,6 +158,98 @@ pub(super) fn authenticated_user(
         macro_user_id,
         user_context,
     })
+}
+
+/// Span attribute naming the kind of credential this service verified.
+pub const CREDENTIAL_ATTRIBUTE: &str = "auth.credential";
+/// Span attribute holding the verified account's FusionAuth id, an opaque
+/// UUID. Unset when the credential carries none (an internal caller without
+/// the FusionAuth header). Never the Macro user id, which carries an email.
+pub const PRINCIPAL_ATTRIBUTE: &str = "auth.principal_id";
+/// Span attribute set only when the verified account is an agent teammate:
+/// the first 16 hex digits of `agent_credentials::telemetry_id`, the same
+/// value as the agent runtime's `macro.agent.id` resource attribute. An
+/// agent's address is synthetic, so its hash reveals no person.
+pub const AGENT_ATTRIBUTE: &str = "macro.agent.id";
+/// Span attribute holding the verified bot's id.
+pub const BOT_ATTRIBUTE: &str = "auth.bot_id";
+/// Span attribute holding the verified harness's id.
+pub const HARNESS_ATTRIBUTE: &str = "auth.harness_id";
+
+/// The domain of an agent teammate's synthetic address
+/// (`team_agents::domain::models::AGENT_EMAIL_DOMAIN`).
+const AGENT_EMAIL_DOMAIN: &str = "agents.macro.invalid";
+
+/// The kind of a verified credential, as [`CREDENTIAL_ATTRIBUTE`] names it.
+pub fn credential_kind(origin: &CredentialOrigin) -> &'static str {
+    match origin {
+        CredentialOrigin::Session => "session",
+        CredentialOrigin::MacroApiJwt => "macro_api_jwt",
+        CredentialOrigin::ScopedMacroApiJwt => "scoped_macro_api_jwt",
+        CredentialOrigin::UserApiKey => "user_api_key",
+        CredentialOrigin::AccountManager(_) => "account_manager",
+        CredentialOrigin::Bot => "bot",
+        CredentialOrigin::Harness => "harness",
+        CredentialOrigin::Internal => "internal",
+    }
+}
+
+/// The agent id [`AGENT_ATTRIBUTE`] records, when `user_id` is an agent
+/// teammate's account.
+fn agent_telemetry_id(user_id: &str) -> Option<String> {
+    use sha2::{Digest, Sha256};
+
+    let domain = user_id.rsplit_once('@')?.1;
+    if !domain.eq_ignore_ascii_case(AGENT_EMAIL_DOMAIN) {
+        return None;
+    }
+    let digest = format!("{:x}", Sha256::digest(user_id.as_bytes()));
+    Some(digest[..16].to_owned())
+}
+
+/// Records who this service verified the request as on the request's span:
+/// the credential's kind, the account's opaque FusionAuth id, and for an
+/// agent teammate its agent id. This is the server's own finding, unlike any
+/// trace context the caller sent, which only says where the caller claims the
+/// request belongs.
+pub(super) fn record_verified_user(kind: &'static str, user_context: &UserContext) {
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+    let span = tracing::Span::current();
+    span.set_attribute(CREDENTIAL_ATTRIBUTE, kind);
+    if !user_context.fusion_user_id.is_empty() {
+        span.set_attribute(PRINCIPAL_ATTRIBUTE, user_context.fusion_user_id.clone());
+    }
+    if let Some(agent) = agent_telemetry_id(&user_context.user_id) {
+        span.set_attribute(AGENT_ATTRIBUTE, agent);
+    }
+}
+
+/// Records a verified bot credential: its kind, the bot's id, and the
+/// verified acting user, if the request acts for one.
+pub(super) fn record_verified_bot(bot: &crate::BotAuthentication) {
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+    match &bot.acting_user {
+        Some(acting) => record_verified_user(credential_kind(&acting.origin), &acting.user_context),
+        None => tracing::Span::current().set_attribute(
+            CREDENTIAL_ATTRIBUTE,
+            credential_kind(&CredentialOrigin::Bot),
+        ),
+    }
+    tracing::Span::current().set_attribute(BOT_ATTRIBUTE, bot.bot_id.to_string());
+}
+
+/// Records a verified harness credential: its kind, the harness's id, and
+/// the verified user it acts for.
+pub(super) fn record_verified_harness(harness: &crate::HarnessAuthentication) {
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+    record_verified_user(
+        credential_kind(&harness.acting_user.origin),
+        &harness.acting_user.user_context,
+    );
+    tracing::Span::current().set_attribute(HARNESS_ATTRIBUTE, harness.harness_id.to_string());
 }
 
 /// Logs a failed authorization at a level matching its cause: rejected

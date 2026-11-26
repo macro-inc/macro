@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { clearHides, type InboxClearState, withClear } from './inbox-clear';
+import type { InboxRowType } from './inbox-row';
 
 const AS_OF = Date.parse('2026-02-01T10:30:00Z');
 
@@ -14,11 +15,13 @@ const clear = (fields: Partial<InboxClearState> = {}): InboxClearState => ({
 });
 
 const row = (fields: {
-  type?: 'task' | 'email';
+  type?: 'task' | 'email' | 'channel_thread';
+  alsoListedAs?: readonly InboxRowType[];
   unseen?: boolean;
   at?: number;
 }) => ({
   type: fields.type ?? ('task' as const),
+  alsoListedAs: fields.alsoListedAs ?? [],
   unseen: fields.unseen ?? true,
   latestAt: fields.at ?? AS_OF - 60_000,
 });
@@ -38,6 +41,20 @@ describe('clearHides', () => {
     const unread = clear({ takes: { rowTypes: ['task'], unreadOnly: true } });
     expect(clearHides(unread, row({ unseen: false }))).toBe(false);
     expect(clearHides(unread, row({ unseen: true }))).toBe(true);
+  });
+
+  it('hides a row listed under a kind the clear takes', () => {
+    const mentions = clear({
+      takes: { rowTypes: ['channel_mention'], unreadOnly: false },
+    });
+    const thread = { type: 'channel_thread' as const };
+    expect(
+      clearHides(
+        mentions,
+        row({ ...thread, alsoListedAs: ['channel_mention'] })
+      )
+    ).toBe(true);
+    expect(clearHides(mentions, row(thread))).toBe(false);
   });
 
   it('hides nothing once the clear is done, undoing or undone', () => {

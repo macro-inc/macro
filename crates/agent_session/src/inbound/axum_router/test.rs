@@ -584,6 +584,7 @@ impl AgentSessionNotificationRecipient for RecordingControls {
         _: AgentActionId,
         _: String,
         _: Option<MacroUserIdStr<'static>>,
+        _: crate::domain::model::PrompterKind,
     ) -> crate::domain::error::Result<()> {
         unreachable!()
     }

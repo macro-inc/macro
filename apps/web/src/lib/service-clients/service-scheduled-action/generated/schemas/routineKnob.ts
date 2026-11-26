@@ -8,6 +8,7 @@
 import type { RoutineKnobOneOf } from './routineKnobOneOf';
 import type { RoutineKnobOneOfNine } from './routineKnobOneOfNine';
 import type { RoutineKnobOneOfOneone } from './routineKnobOneOfOneone';
+import type { RoutineKnobOneOfOnethree } from './routineKnobOneOfOnethree';
 import type { RoutineKnobOneOfSeven } from './routineKnobOneOfSeven';
 import type { RoutineKnobOneOfThree } from './routineKnobOneOfThree';
 
@@ -22,4 +23,5 @@ export type RoutineKnob =
   | RoutineKnobOneOfThree
   | RoutineKnobOneOfSeven
   | RoutineKnobOneOfNine
-  | RoutineKnobOneOfOneone;
+  | RoutineKnobOneOfOneone
+  | RoutineKnobOneOfOnethree;

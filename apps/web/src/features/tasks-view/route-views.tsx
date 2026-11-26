@@ -1,36 +1,36 @@
+import type { ProjectSection } from '@app/features/projects/core/project';
+import { useOpenProjectTask } from '@app/features/projects/open-project-task';
 import { ProjectBreadcrumb } from '@app/features/projects/project-breadcrumb';
 import { ProjectDetail } from '@app/features/projects/project-detail';
+import { ProjectTasksProvider } from '@app/features/projects/project-tasks-provider';
 import { Projects } from '@app/features/projects/projects';
-import { ProjectTasksProvider } from '@app/features/projects/views/project-tasks-list';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   createSearchParams,
   SplitRouter,
   useNavigate,
+  usePane,
   useParams,
   useRouteParams,
+  useSplitRouter,
 } from '@app/lib/split-router';
-import {
-  projectDetailRoute,
-  projectTaskRoute,
-  tasksSplitRoute,
-} from '@app/routes/routes';
+import { projectDetailRoute, tasksSplitRoute } from '@app/routes/routes';
+import { SplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { SidePanel } from '@components/app/side-panel';
+import { SplitBackButton } from '@components/app/split-layout/components/SplitHeader';
 import {
   AppView,
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { useViewRestoration } from '@components/app/split-layout/view-restoration';
-import { LoadingBlock } from '@core/component/LoadingBlock';
-import { enableProjects } from '@core/constant/featureFlags';
+import { viewRestorationKey } from '@components/app/split-layout/view-restoration-key';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { fireAndForget } from '@core/util/fireAndForget';
-import { onMount, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { TasksDetailView } from './components/TasksDetailView';
 import { projectDetailSearch } from './project-detail-search';
 import { TasksView } from './tasks-view';
 import { TasksViewSkeleton } from './tasks-view-skeleton';
+import { returnToTime, type TasksTimeView } from './time-view';
 
 function TasksLegacyRouteView() {
   const params = useParams<{ taskId?: string; projectId?: string }>();
@@ -44,62 +44,43 @@ function TasksLegacyRouteView() {
 export const TasksRouteView = withAuth(() => {
   useViewRestoration();
   const params = useParams<{ taskId?: string; projectId?: string }>();
+  const pane = usePane();
+  const router = useSplitRouter();
+  const workspaceKey = () =>
+    viewRestorationKey('tasks', router.entry(pane())?.location);
   return (
     <AppView
       id="tasks"
-      detailDesktopOnly
+      detailInlineOnly
       detailRequested={() =>
         typeof params.taskId === 'string' && !params.projectId
       }
       detailFallback={<TasksLegacyRouteView />}
     >
-      <TasksView />
+      {/* Each dock destination restores its own entry state on activation. */}
+      <Show keyed when={workspaceKey()}>
+        {(_workspaceKey) => <TasksView />}
+      </Show>
     </AppView>
   );
 }, TasksViewSkeleton);
 
-function DisabledProjectRoute() {
-  const navigate = useNavigate();
-  onMount(() =>
-    navigate({ route: tasksSplitRoute, params: {} }, { replace: true })
-  );
-  return null;
-}
-
 export function ProjectTaskRouteView() {
   const params = useParams<{
     projectId: string;
-    section: 'overview' | 'tasks';
+    section: ProjectSection;
     taskId: string;
   }>();
   const navigate = useNavigate();
+  const openTask = useOpenProjectTask({
+    projectId: () => params.projectId,
+    section: () => params.section,
+  });
   return (
     <Projects>
       <ProjectTasksProvider
         projectId={params.projectId}
-        onOpenTask={(task, options) => {
-          const event = options?.event;
-          if (
-            isTouchDevice() ||
-            event?.shiftKey ||
-            event?.metaKey ||
-            event?.ctrlKey ||
-            event?.altKey
-          )
-            return false;
-          fireAndForget(
-            navigate({
-              route: projectTaskRoute,
-              params: {
-                projectId: params.projectId,
-                section: params.section,
-                taskId: task.id,
-              },
-            }),
-            'tasks-view'
-          );
-          return true;
-        }}
+        onOpenTask={(task, options) => openTask(task.id, options)}
       >
         <TasksDetailView
           task={{ id: params.taskId }}
@@ -116,20 +97,25 @@ export function ProjectTaskRouteView() {
   );
 }
 
+/** A task opened from My week or Team; closing it returns to that week. */
+export function TasksTimeTaskRouteView() {
+  const params = useParams<{ timeView: TasksTimeView; taskId: string }>();
+  const navigate = useNavigate();
+  return (
+    <TasksDetailView
+      task={{ id: params.taskId }}
+      listNavigation={false}
+      onClose={() => returnToTime(navigate, params.timeView)}
+    />
+  );
+}
+
 export function ProjectDetailRouteView() {
   const params = useRouteParams(projectDetailRoute);
   const [search] = createSearchParams(projectDetailSearch);
-  const flag = useFeatureFlag(enableProjects);
   const navigate = useNavigate();
   return (
-    <Show
-      when={flag().enabled}
-      fallback={
-        <Show when={!flag().loading} fallback={<LoadingBlock />}>
-          <DisabledProjectRoute />
-        </Show>
-      }
-    >
+    <>
       <ProjectBreadcrumb
         entry={{
           value: `initiative:${params.projectId}`,
@@ -140,7 +126,10 @@ export function ProjectDetailRouteView() {
       <SplitRouter.Outlet
         fallback={() => (
           <SidePanel.Root floating defaultOpen={false}>
-            <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+            <SplitHeaderScope.Pane
+              when={isTouchDevice()}
+              leading={<SplitBackButton />}
+            >
               <ProjectDetail
                 route={{
                   id: params.projectId,
@@ -151,10 +140,10 @@ export function ProjectDetailRouteView() {
                   navigate({ route: tasksSplitRoute, params: {} })
                 }
               />
-            </div>
+            </SplitHeaderScope.Pane>
           </SidePanel.Root>
         )}
       />
-    </Show>
+    </>
   );
 }

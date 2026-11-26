@@ -113,6 +113,7 @@ async fn flat(
             cursor,
             exclude_frecency: false,
         },
+        false,
     )
     .await?)
 }

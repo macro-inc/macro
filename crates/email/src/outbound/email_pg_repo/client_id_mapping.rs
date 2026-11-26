@@ -53,6 +53,32 @@ pub(crate) async fn message_id_for_client_draft_id(
     .await
 }
 
+/// Use the authorized draft ID for the existence probe and the inbox-scoped handle to match.
+#[tracing::instrument(skip(pool), err)]
+pub(super) async fn draft_bound_to_another_handle(
+    pool: &PgPool,
+    draft_id: Uuid,
+    link_id: Uuid,
+    client_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT (
+            EXISTS(SELECT 1 FROM email_draft_client_ids WHERE message_id = $1)
+            AND $1 IS DISTINCT FROM (
+                SELECT message_id FROM email_draft_client_ids
+                WHERE link_id = $2 AND client_id = $3
+            )
+        ) AS "bound_to_another!"
+        "#,
+        draft_id,
+        link_id,
+        client_id,
+    )
+    .fetch_one(pool)
+    .await
+}
+
 /// Resolve a client thread handle to its thread ID within the given inboxes.
 #[tracing::instrument(skip(pool, link_ids), err)]
 pub(crate) async fn thread_id_for_client_thread_id(

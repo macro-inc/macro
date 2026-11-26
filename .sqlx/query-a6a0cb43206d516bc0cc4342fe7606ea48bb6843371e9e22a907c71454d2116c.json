@@ -1,0 +1,113 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT team_id,user_id,link_id,preview_id,context_id,definition,status,counts,\n           created_at,expires_at,as_of,scanned_threads,observed_token,observed_fingerprint,request_hash,traceparent\n           FROM crm_email_policy_previews WHERE team_id=$1 AND user_id=$2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "preview_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "context_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "definition",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "counts",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "as_of",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "scanned_threads",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "observed_token",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 13,
+        "name": "observed_fingerprint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "request_hash",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 15,
+        "name": "traceparent",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "a6a0cb43206d516bc0cc4342fe7606ea48bb6843371e9e22a907c71454d2116c"
+}

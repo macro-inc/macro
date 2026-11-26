@@ -243,15 +243,22 @@ export function validateRoutineDraft(
   return null;
 }
 
-/** Null until the owner's connections load; the server checks again on save. */
+/** The routine editor isn't translated yet, so its lists stay English. */
+const APP_LIST = new Intl.ListFormat('en', { type: 'conjunction' });
+
+/**
+ * Names the apps the routine requires that the viewer hasn't connected.
+ * Null until the owner's connections load; the server checks again on save.
+ */
 export function validateRoutineApps(
-  apps: readonly { app_slug: string }[],
+  apps: readonly { app_slug: string; server_name: string }[],
   connectedSlugs: ReadonlySet<string> | undefined
 ): string | null {
   if (!connectedSlugs) return null;
-  return apps.every((app) => connectedSlugs.has(app.app_slug))
-    ? null
-    : 'Connect every app this routine requires.';
+  const missing = apps.filter((app) => !connectedSlugs.has(app.app_slug));
+  if (!missing.length) return null;
+  const names = APP_LIST.format(missing.map((app) => app.server_name));
+  return `Connect ${names}, which this routine requires.`;
 }
 
 export function getErrorMessage(error: unknown): string {

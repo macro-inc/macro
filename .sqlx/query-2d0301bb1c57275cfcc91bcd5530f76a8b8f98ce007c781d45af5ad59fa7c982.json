@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM import_entity_written WHERE import_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2d0301bb1c57275cfcc91bcd5530f76a8b8f98ce007c781d45af5ad59fa7c982"
+}

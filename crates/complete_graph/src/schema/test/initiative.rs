@@ -36,11 +36,18 @@ async fn initiative_soup_and_detail_queries_share_identity_without_loading_domai
             initiative(initiativeId: "{id}") {{
                 __typename id displayName metadata {{ ownerId createdAt updatedAt }}
             }}
+            visibleInitiative(initiativeId: "{id}") {{
+                __typename id displayName metadata {{ ownerId createdAt updatedAt }}
+            }}
         }} }}"#
     )).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert_eq!(data["user"]["soup"]["items"][0], data["user"]["initiative"]);
+    assert_eq!(
+        data["user"]["visibleInitiative"],
+        data["user"]["initiative"]
+    );
     assert_eq!(
         data["user"]["initiative"]["__typename"],
         "GraphqlSoupInitiative"
@@ -67,4 +74,25 @@ async fn initiative_detail_query_does_not_expose_a_project_missing_from_authoriz
         Some(&async_graphql::Value::from("NOT_FOUND"))
     );
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
+}
+
+/// A missing or hidden project is a normal answer, not a failed read: async-graphql
+/// omits an errored field next to its parent instead of nulling it.
+#[tokio::test]
+async fn visible_initiative_is_null_without_an_error_for_a_project_missing_from_authorized_soup() {
+    let harness = harness();
+    harness.soup_service.set_raw_response(Vec::new());
+    let response = execute_initiative_query(
+        &harness,
+        &format!(
+            r#"{{ user {{ id visibleInitiative(initiativeId: "{}") {{ id displayName }} }} }}"#,
+            Uuid::from_u128(42)
+        ),
+    )
+    .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data,
+        async_graphql::value!({ "user": { "id": VALID_USER_ID, "visibleInitiative": null } })
+    );
 }

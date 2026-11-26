@@ -115,12 +115,13 @@ function Message(props: { message: HomepageMessage }) {
 }
 
 export function HomepageConversation(props: {
+  label?: string;
   messages: readonly HomepageMessage[];
 }) {
   return (
     <ol
       class="homepage-conversation workspace-demo"
-      aria-label="Launch conversation"
+      aria-label={props.label ?? 'Launch conversation'}
     >
       <For each={props.messages}>
         {(message) => <Message message={message} />}

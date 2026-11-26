@@ -20,4 +20,5 @@ export const PasswordImportErrorCode = {
   folder_missing: 'folder_missing',
   busy: 'busy',
   vault_unavailable: 'vault_unavailable',
+  vault_not_provisioned: 'vault_not_provisioned',
 } as const;

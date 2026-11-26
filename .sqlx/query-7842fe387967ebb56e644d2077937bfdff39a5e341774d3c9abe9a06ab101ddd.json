@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Exactly two expected witnesses. Identical first/last IDs are valid.\nSELECT count(*) = 2 AS \"valid!\"\nFROM (VALUES\n    ($3::uuid, $4::uuid, $5::timestamptz, $6::boolean, $7::uuid),\n    ($8::uuid, $9::uuid, $10::timestamptz, $11::boolean, $12::uuid)\n) expected(message_id, thread_id, occurred_at, is_sent, contact_id)\nJOIN LATERAL (\n    SELECT id, link_id, thread_id, is_sent, is_draft, mailbox_state,\n           COALESCE(internal_date_ts, created_at) AS occurred_at, from_contact_id\n    FROM email_messages WHERE id = expected.message_id OFFSET 0\n) m ON TRUE\nJOIN LATERAL (\n    SELECT id, link_id, email_address\n    FROM email_contacts WHERE id = expected.contact_id OFFSET 0\n) contact ON TRUE\nWHERE m.link_id = $1 AND m.thread_id = expected.thread_id\n  AND m.is_sent = expected.is_sent AND m.occurred_at = expected.occurred_at\n  AND NOT m.is_draft\n  AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)\n  AND contact.link_id = $1 AND lower(contact.email_address) = $2\n  AND CASE WHEN m.is_sent THEN EXISTS (\n      SELECT 1 FROM email_message_recipients recipient\n      WHERE recipient.message_id = m.id AND recipient.contact_id = contact.id\n  ) ELSE m.from_contact_id = contact.id END\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "valid!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Bool",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7842fe387967ebb56e644d2077937bfdff39a5e341774d3c9abe9a06ab101ddd"
+}

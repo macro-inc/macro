@@ -21,29 +21,32 @@ use agent_harness::outbound::egress::EgressProvisioner;
 use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use agent_session::domain::model::{AgentSessionId, TurnPrompter};
 use agent_session::domain::ports::AgentSessionRepo;
+
 use async_trait::async_trait;
+use connectors::McpConnectionsService;
+use connectors::inbound::toolset::{
+    ConnectMcpServer, ConnectMcpServerResponse, ConnectorToolError, DiscoverConnectors,
+    DiscoverConnectorsResponse, DiscoveryRequest,
+};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::domain::ports::McpServerStore;
-use mcp_client::domain::service::{AddServerError, AddedBy};
-use mcp_client::inbound::toolset::{ConnectMcpServer, ConnectMcpServerResponse};
-use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays};
-use pipedream_mcp::domain::service::discovery::DiscoveryRequest;
-use pipedream_mcp::inbound::toolset::DiscoverConnectorsResponse;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
 /// Most `tools/list` pages read for one app.
 const MAX_TOOL_PAGES: usize = 20;
 
-pub struct SessionConnectedApps<Egress, Connections, Servers, Sessions> {
+pub struct SessionConnectedApps<Egress, S, Sessions> {
     pub egress: Arc<Egress>,
-    pub provisioner: EgressProvisioner<Connections, Servers>,
+    /// The apps a session's agent was given, over the owner's connections as
+    /// the rules decide them: the listing the session's runtime gets.
+    pub provisioner: EgressProvisioner<S>,
     pub sessions: Sessions,
     /// The gate native tools pass, so discovery and adding a server wait for
     /// the owner exactly as `DiscoverConnectors` and `ConnectMcpServer` do.
     pub gate: Arc<dyn NativeToolGate>,
-    pub connectors: ai_tools::ToolConnectorToolContext,
-    pub mcp_servers: ai_tools::ToolMcpServerToolContext,
+    /// The `DiscoverConnectors` and `ConnectMcpServer` tools a program's
+    /// `discover` and `addServer` run.
+    pub connector_tools: ai_tools::ToolConnectorToolContext,
 }
 
 /// A use settled against the session: its grant, the account it spends and
@@ -54,12 +57,10 @@ struct Settled {
     apps: Vec<ConnectedApp>,
 }
 
-impl<Egress, Connections, Servers, Sessions>
-    SessionConnectedApps<Egress, Connections, Servers, Sessions>
+impl<Egress, S, Sessions> SessionConnectedApps<Egress, S, Sessions>
 where
     Egress: SessionMcpExchange + 'static,
-    Connections: ConnectionStore + ConnectorOverlays,
-    Servers: McpServerStore,
+    S: McpConnectionsService,
     Sessions: AgentSessionRepo,
 {
     async fn settle(&self, usage: &ConnectedAppUse) -> Result<Settled, CodeModeError> {
@@ -142,12 +143,10 @@ where
 }
 
 #[async_trait]
-impl<Egress, Connections, Servers, Sessions> ConnectedAppTools
-    for SessionConnectedApps<Egress, Connections, Servers, Sessions>
+impl<Egress, S, Sessions> ConnectedAppTools for SessionConnectedApps<Egress, S, Sessions>
 where
     Egress: SessionMcpExchange + 'static,
-    Connections: ConnectionStore + ConnectorOverlays + 'static,
-    Servers: McpServerStore + 'static,
+    S: McpConnectionsService,
     Sessions: AgentSessionRepo + 'static,
 {
     async fn accounts(&self, session: AgentSessionId) -> Result<SessionAccounts, CodeModeError> {
@@ -243,13 +242,10 @@ where
     ) -> Result<DiscoverConnectorsResponse, CodeModeError> {
         let arguments = json!({ "request": &request });
         self.gate(usage, "DiscoverConnectors", arguments).await?;
-        let result = self
-            .connectors
-            .service
-            .discover(&usage.user, &request)
+        DiscoverConnectors { request }
+            .run(&self.connector_tools, &usage.user)
             .await
-            .map_err(|error| CodeModeError::Invalid(error.to_string()))?;
-        Ok(DiscoverConnectorsResponse::from(result))
+            .map_err(connector_tool_error)
     }
 
     async fn add_server(
@@ -259,29 +255,22 @@ where
     ) -> Result<ConnectMcpServerResponse, CodeModeError> {
         let arguments = json!({ "url": &server.url, "serverName": &server.server_name });
         self.gate(usage, "ConnectMcpServer", arguments).await?;
-        let directory = self
-            .mcp_servers
-            .servers
-            .as_ref()
-            .ok_or(CodeModeError::Unavailable)?;
-        let added = directory
-            .add(
-                usage.user.clone(),
-                &server.url,
-                &server.server_name,
-                AddedBy::Agent,
-            )
+        server
+            .run(&self.connector_tools, &usage.user)
             .await
-            .map_err(|error| match error {
-                AddServerError::InvalidUrl(_)
-                | AddServerError::NonPublicDestination(_)
-                | AddServerError::EmptyName => CodeModeError::Invalid(error.to_string()),
-                AddServerError::Store(error) => {
-                    tracing::error!(?error, "could not save an MCP server");
-                    CodeModeError::Unavailable
-                }
-            })?;
-        Ok(ConnectMcpServerResponse::from(added))
+            .map_err(connector_tool_error)
+    }
+}
+
+/// A refused discovery or server is the caller's to fix (400); a host
+/// without the services, or a store or vendor that failed, is ours (503).
+fn connector_tool_error(error: ConnectorToolError) -> CodeModeError {
+    match error {
+        ConnectorToolError::Refused(description) => CodeModeError::Invalid(description),
+        ConnectorToolError::Unavailable { cause, .. } => {
+            tracing::error!(error = ?cause, "a connector tool failed in code mode");
+            CodeModeError::Unavailable
+        }
     }
 }
 
@@ -314,6 +303,9 @@ fn egress_error(error: EgressError) -> CodeModeError {
         EgressError::Upstream(_) => {
             tracing::warn!(%error, "a connected app could not be reached");
             CodeModeError::ConnectedAppUnreachable
+        }
+        EgressError::RateLimited { retry_after } => {
+            CodeModeError::ConnectedAppRateLimited { retry_after }
         }
         error => {
             tracing::error!(%error, "a connected app could not be reached");

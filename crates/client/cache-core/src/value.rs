@@ -124,7 +124,7 @@ pub enum CacheValue {
     Ref(EntityKey<'static>),
     /// Embedded (non-keyable) object. `__typename` is stored as a regular
     /// field when known, for fragment matching on read.
-    Object(BTreeMap<FieldKey, CacheValue>),
+    Object(#[serde(deserialize_with = "deserialize_fields")] BTreeMap<FieldKey, CacheValue>),
     List(Vec<CacheValue>),
     /// Opaque custom-scalar blob (e.g. `JSON`) as canonical JSON text
     /// (canonical → comparable; text → postcard-serializable).
@@ -141,6 +141,7 @@ impl CacheValue {
 /// A normalized record: field key → value.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Record {
+    #[serde(deserialize_with = "deserialize_fields")]
     pub fields: BTreeMap<FieldKey, CacheValue>,
 }
 
@@ -220,6 +221,32 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn decoded_field_maps_keep_the_last_of_repeated_or_unordered_keys() {
+        let entries = |pairs: &[(&str, &str)]| {
+            pairs
+                .iter()
+                .map(|(key, value)| (key.to_string(), CacheValue::String(value.to_string())))
+                .collect::<Vec<_>>()
+        };
+        // A postcard map has the same bytes as a sequence of pairs, so these
+        // stand in for maps written out of order or with a key repeated.
+        for pairs in [
+            &[("a", "1"), ("b", "2"), ("c", "3")][..],
+            &[("b", "1"), ("a", "2"), ("b", "3")][..],
+            &[("a", "1"), ("a", "2"), ("a", "3")][..],
+            &[("a", "1"), ("b", "2"), ("b", "3")][..],
+        ] {
+            let bytes = postcard::to_allocvec(&entries(pairs)).unwrap();
+            let decoded: Record = postcard::from_bytes(&bytes).unwrap();
+            let expected: BTreeMap<FieldKey, CacheValue> = entries(pairs)
+                .into_iter()
+                .map(|(key, value)| (key.into(), value))
+                .collect();
+            assert_eq!(decoded.fields, expected);
+        }
+    }
+
+    #[test]
     fn canonical_sorts_keys_recursively() {
         let v = json!({"b": {"z": 1, "a": [ {"y": 2, "x": 3} ]}, "a": null});
         assert_eq!(
@@ -256,4 +283,49 @@ mod tests {
         );
         assert_eq!(field_key("id", None), "id");
     }
+}
+
+/// Deserializes a field map by building it from all its entries at once.
+///
+/// Stored maps arrive in key order, so a bulk build skips the per-key search
+/// and node splits that inserting one entry at a time costs. A map whose keys
+/// are out of order or repeated falls back to inserting one by one, so a
+/// repeated key keeps its last value and holds one entry.
+fn deserialize_fields<'de, D>(deserializer: D) -> Result<BTreeMap<FieldKey, CacheValue>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct FieldsVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for FieldsVisitor {
+        type Value = BTreeMap<FieldKey, CacheValue>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a map")
+        }
+
+        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::MapAccess<'de>,
+        {
+            let mut entries: Vec<(FieldKey, CacheValue)> =
+                Vec::with_capacity(map.size_hint().unwrap_or(0).min(1024));
+            while let Some((key, value)) = map.next_entry::<FieldKey, CacheValue>()? {
+                if entries.last().is_some_and(|(last, _)| *last >= key) {
+                    // Out of order or repeated: insert the rest one by one, so a
+                    // repeated key replaces its value instead of piling up.
+                    let mut fields: BTreeMap<_, _> = entries.into_iter().collect();
+                    fields.insert(key, value);
+                    while let Some((key, value)) = map.next_entry()? {
+                        fields.insert(key, value);
+                    }
+                    return Ok(fields);
+                }
+                entries.push((key, value));
+            }
+            Ok(entries.into_iter().collect())
+        }
+    }
+
+    deserializer.deserialize_map(FieldsVisitor)
 }

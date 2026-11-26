@@ -32,6 +32,10 @@ const setup = (overrides: Partial<NotificationRowProps> = {}) => {
   return { onClick, onToggleStack };
 };
 
+// Inert preview text is drawn once on screen and once more, visually hidden,
+// for assistive technology; read the copy on screen.
+const SHOWN = { ignore: '.sr-only' };
+
 const toggle = () => screen.getByRole('button', { name: /3 notifications/ });
 
 const separator = () => document.querySelector('[data-row-separator]');
@@ -46,23 +50,38 @@ describe('NotificationRow', () => {
   it('opens when chosen and leaves its stack folded', () => {
     const { onClick, onToggleStack } = setup();
 
-    fireEvent.click(screen.getByText('Launch plan'));
+    fireEvent.click(screen.getByText('Launch plan', SHOWN));
 
     expect(onClick).toHaveBeenCalledOnce();
     expect(onToggleStack).not.toHaveBeenCalled();
     expect(toggle().getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('unfolds from its own button without opening, and hands it to its last notification', () => {
+  it('unfolds and folds from the same button without opening', () => {
     const { onClick, onToggleStack } = setup();
+    const button = toggle();
 
-    fireEvent.click(toggle());
+    fireEvent.click(button);
+    expect(toggle()).toBe(button);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(button.textContent).toBe('Hide');
 
-    expect(onToggleStack).toHaveBeenCalledOnce();
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(button.textContent).toBe('2 more');
+
+    expect(onToggleStack).toHaveBeenCalledTimes(2);
     expect(onClick).not.toHaveBeenCalled();
-    expect(
-      screen.queryByRole('button', { name: /3 notifications/ })
-    ).toBeNull();
+  });
+
+  it('marks done from its own button without opening', () => {
+    const onDone = vi.fn();
+    const { onClick } = setup({ onDone });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark done' }));
+
+    expect(onDone).toHaveBeenCalledOnce();
+    expect(onClick).not.toHaveBeenCalled();
   });
 
   it('unfolds and folds from its caret on a phone without opening', () => {
@@ -84,9 +103,9 @@ describe('NotificationRow', () => {
 
     fireEvent.click(toggle());
 
-    expect(screen.getByText('Sam and Ana commented')).toBeTruthy();
-    expect(screen.getByText('Launch plan')).toBeTruthy();
-    expect(screen.getByText('Can we move the date?')).toBeTruthy();
+    expect(screen.getByText('Sam and Ana commented', SHOWN)).toBeTruthy();
+    expect(screen.getByText('Launch plan', SHOWN)).toBeTruthy();
+    expect(screen.getByText('Can we move the date?', SHOWN)).toBeTruthy();
   });
 
   it('says only what it has to say', () => {
@@ -107,7 +126,7 @@ describe('NotificationRow', () => {
       />
     ));
 
-    expect(screen.getByText('Dana assigned you a task')).toBeTruthy();
+    expect(screen.getByText('Dana assigned you a task', SHOWN)).toBeTruthy();
     expect(document.querySelector('[data-card-what]')).toBeNull();
     expect(document.querySelector('[data-card-body]')).toBeNull();
   });
@@ -141,8 +160,8 @@ describe('NotificationRow', () => {
   it("keeps a phone's caret on the first line, next to the time", () => {
     layout.phone = true;
     setup();
-    const time = screen.getByText('2m');
-    expect(time.nextElementSibling).toBe(toggle());
+    const time = screen.getByText('2m').closest('[data-card-time]');
+    expect(time?.nextElementSibling).toBe(toggle());
     expect(toggle().textContent).toBe('');
   });
 

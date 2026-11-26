@@ -4,7 +4,7 @@
 
 Org-global Datadog monitors, synthetics, and rollout dashboards. This stack is
 manual and has only a prod stack, even for monitors covering both environments.
-Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,routine-suggestions,harness-runtimes,computer-capacity,storage-pool,agent-sessions}.ts`
+Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,routine-suggestions,harness-runtimes,computer-capacity,storage-pool,agent-sessions,search-freshness}.ts`
 (`prodMonitor()` in `prod-monitor.ts`), each file with a dashboard graphing its
 monitors that their messages link to; every monitor notifies through `notify.ts`.
 `dashboards/web-performance.ts` holds the web app performance dashboard with the
@@ -22,9 +22,9 @@ From `infra/`:
 
 ## Gotchas
 
-- The CloudWatch-based monitors in `macrodb.ts`, `redis.ts` and `queues.ts`
-  have hand-written Grafana copies in
-  `infra/stacks/observability/nixos/prod-alerts.nix`. Change thresholds and windows
+- The CloudWatch-based monitors in `macrodb.ts`, `redis.ts` and `queues.ts`,
+  except those `queues.ts` marks Datadog only, have hand-written Grafana copies in
+  `infra/stacks/observability/nixos/grafana-provisioning/prod-alerts.nix`. Change thresholds and windows
   in both. Grafana pages for those, so their Datadog copies use `pages: false`.
 - Read `README.md` before deployment: imported resources must be adopted first
   to avoid duplicate alerts. Never deploy without explicit approval.
@@ -103,10 +103,31 @@ From `infra/`:
   span-based metric, and only counts from the deploy that creates it. Its tool
   metrics count spans with `gen_ai.conversation.id`, one per session tool call;
   `execute_tool*` alone double-counts tools reached through MCP.
+- `monitors/search-freshness.ts` reads the `search.index.*` metrics that
+  `services/search_processing_service/src/inbound/kafka_consumer/metrics.rs`
+  records, `kafka.consumer.offset_resets` from `crates/kafka_util` and
+  `event_broker.publishes` from `crates/macro_event_broker`; its header is the
+  name and tag contract. `search.index.oldest_pending_ms` is per task and
+  partition: read it with `max`. Its retention monitors repeat each topic's
+  retention from `infra/stacks/kafka-cluster/topics.ts`; change them together.
+  Apply it only after the indexer that records these metrics is deployed:
+  its no-readings monitor fires on missing data. It also reads the
+  `search.freshness.probe_*` metrics of `services/search_freshness_probe`
+  (`src/outbound/metrics.rs`); the probe's heartbeat is declared only once
+  `PROBE_RUNS_IN_PROD` is true, for the same reason.
 - `monitors/storage-pool.ts` reads the `db.client.connection.*` pool metrics
   cloud-storage-service records and the `perform_unified_search` span fields
   from `crates/search_service`; its header is the name and tag contract.
+- The Kafka lag monitors in `monitors/queues.ts` read MSK's offset lag. Do not
+  alert on `aws.kafka.estimated_max_time_lag` or
+  `rolling_estimated_time_lag_max`: they divide lag by the current consumption
+  rate, read years when a consumer slows, and are not event age.
 - `monitors/computer-capacity.ts` reads the `computer.capacity.*` gauges that
   `crates/hosted_runtimes/src/domain/telemetry.rs` records; its header is the
   tag contract. Renaming a gauge, tag or `resource` value there silently turns
   its monitors into missing data.
+- `monitors/firecracker.ts` reads `firecracker_host.*` from the host agent,
+  `computer.host.memory.*` from fleet admission, and the `firecracker_host.launch`
+  span's stable snake_case `source`. Its header and the Firecracker runbook are
+  the contract; the local Datadog hostname must equal fleet `host`. Only the
+  readiness gauge alerts on missing data; an idle host has no failure events.

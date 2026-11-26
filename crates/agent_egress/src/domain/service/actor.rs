@@ -3,13 +3,15 @@
 use super::*;
 use crate::domain::approval::{InProcessCall, refusal};
 use crate::domain::model::{
-    AgentSessionId, SessionGrant, disconnected_text, not_connected_text, tool_error_result,
-    tool_result_response,
+    AgentSessionId, SessionGrant, calls_connect_tool, connect_prompt_listing,
+    connected_since_listing_text, disconnected_text, not_connected_text, out_of_scope_text,
+    tool_error_result, tool_result_response,
 };
 use agent_session::domain::model::TurnPrompter;
 use ai_toolset::actor::{ToolActor, add_actor_schema};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::{Value, json};
+use tracing::Instrument as _;
 
 /// Preserve the original MCP session/callback capabilities for owner calls.
 /// Other-account calls use independently authenticated, actor-keyed sessions.
@@ -52,7 +54,6 @@ where
                 MACRO_SERVER_SLUG,
                 request["params"]["name"].as_str().unwrap_or_default(),
             );
-        let macro_tools = matches!(destination, McpDestination::Macro);
         let (actor, user) = if listing || public {
             // Keep the session owner's configured catalog. Selecting requester
             // changes execution credentials, not which integrations are advertised.
@@ -77,8 +78,15 @@ where
             .resolve_upstream(grant, user, destination, listing)
             .await?
         {
-            Ok(upstream) => upstream,
-            Err(text) => return Ok(tool_result_response(id, text)),
+            Reach::Upstream(_) if calls_connect_tool(&request) => {
+                return Ok(tool_result_response(
+                    id,
+                    connected_since_listing_text(&connect_tool_owner(grant, destination)),
+                ));
+            }
+            Reach::Upstream(upstream) => upstream,
+            Reach::Listed(result) => return listing_response(id, result, destination),
+            Reach::Refused(text) => return Ok(tool_result_response(id, text)),
         };
         let transport = self
             .actor_mcp
@@ -100,41 +108,82 @@ where
             session_id,
             acting_user,
             upstream,
+            destination,
             request,
             listing,
-            macro_tools,
         )
         .await
     }
 
-    /// The upstream `user`'s connection reaches `destination` through, or the
-    /// tool result that says why a call cannot run.
+    /// The upstream `user`'s connection reaches `destination` through, or
+    /// what to answer in its place.
     async fn resolve_upstream(
         &self,
         grant: &SessionGrant,
         user: &MacroUserIdStr<'static>,
         destination: &McpDestination,
         listing: bool,
-    ) -> Result<Result<UpstreamCall, String>, EgressError> {
-        let resolution = match self.credentials.resolve(user, grant.agent, grant.session.as_uuid(), destination).await {
+    ) -> Result<Reach, EgressError> {
+        let name = || match destination {
+            McpDestination::Connected(slug) => grant.display_name(slug),
+            _ => "this MCP server".to_owned(),
+        };
+        let resolution = match self
+            .credentials
+            .resolve(
+                user,
+                grant.agent,
+                grant.session.as_uuid(),
+                &grant.selection,
+                destination,
+            )
+            .await
+        {
             Ok(resolution) => resolution,
-            Err(EgressError::UnknownCustomServer(_)) if !listing => return Ok(Err(
+            Err(EgressError::UnknownCustomServer(_)) if !listing => return Ok(Reach::Refused(
                 "This custom MCP server is not connected for the selected actor. Ask them to add or reconnect that server in Agents → Connections. Do not switch accounts unless they requested it.".into())),
+            Err(EgressError::OutOfScope) if !listing => {
+                return Ok(Reach::Refused(out_of_scope_text(&name())));
+            }
             Err(error) => return Err(error),
         };
         Ok(match resolution {
-            McpResolution::Connected(call) => Ok(call),
-            McpResolution::Unconnected(call) if listing => Ok(call),
-            McpResolution::Unconnected(_) => match destination {
-                McpDestination::Connected(slug) => {
-                    Err(not_connected_text(slug, &grant.display_name(slug)))
-                }
-                _ => Err("The selected actor has no connection for this tool.".into()),
-            },
-            McpResolution::Disconnected { call, .. } if listing => Ok(call),
-            McpResolution::Disconnected { name, .. } => Err(disconnected_text(&name)),
+            McpResolution::Connected(call) => Reach::Upstream(call),
+            // Lists the app's real tools; a call waits for a connection.
+            McpResolution::Unconnected(call) if listing => Reach::Upstream(call),
+            McpResolution::NotConnected if listing => {
+                Reach::Listed(connect_prompt_listing(&name()))
+            }
+            McpResolution::Unconnected(_) | McpResolution::NotConnected => {
+                Reach::Refused(match destination {
+                    McpDestination::Connected(slug) => not_connected_text(slug, &name()),
+                    _ => "The selected actor has no connection for this tool.".into(),
+                })
+            }
+            McpResolution::Disconnected { name } if listing => {
+                Reach::Listed(connect_prompt_listing(&name))
+            }
+            McpResolution::Disconnected { name } => Reach::Refused(disconnected_text(&name)),
         })
     }
+}
+
+/// The name a connect-tool answer gives the app or server it was listed for.
+fn connect_tool_owner(grant: &SessionGrant, destination: &McpDestination) -> String {
+    match destination {
+        McpDestination::Connected(slug) => grant.display_name(slug),
+        _ => "This MCP server".to_owned(),
+    }
+}
+
+/// Where an actor's MCP exchange goes.
+pub(super) enum Reach {
+    /// The upstream the account's connection reaches.
+    Upstream(UpstreamCall),
+    /// No upstream: list these tools in its place.
+    Listed(Value),
+    /// No upstream: answer a tool call with this text.
+    Refused(String),
 }
 
 impl<Sessions, Credentials, Tokens, Forward, Approvals> SessionMcpExchange
@@ -183,8 +232,14 @@ where
             .resolve_upstream(grant, user, destination, listing)
             .await?
         {
-            Ok(upstream) => upstream,
-            Err(text) => return Ok(tool_error_result(text)),
+            Reach::Upstream(_) if calls_connect_tool(&request) => {
+                return Ok(tool_error_result(connected_since_listing_text(
+                    &connect_tool_owner(grant, destination),
+                )));
+            }
+            Reach::Upstream(upstream) => upstream,
+            Reach::Listed(result) => return Ok(result),
+            Reach::Refused(text) => return Ok(tool_error_result(text)),
         };
         if !listing
             && let Some(text) = self
@@ -197,11 +252,19 @@ where
             .actor_mcp
             .clone()
             .ok_or(EgressError::Unauthenticated("actor transport unavailable"))?;
-        match transport
-            .exchange(grant.session, user.clone(), upstream, request)
-            .await
+        match traced_exchange(
+            transport.as_ref(),
+            grant.session,
+            user.clone(),
+            upstream,
+            destination,
+            request,
+        )
+        .await
         {
             Ok(result) => Ok(result),
+            // Refused before it ran: the caller paces and retries it.
+            Err(error @ EgressError::RateLimited { .. }) => Err(error),
             Err(error) if !listing => {
                 tracing::warn!(?error, "actor MCP exchange failed");
                 Ok(tool_error_result(UNKNOWN_OUTCOME.into()))
@@ -272,6 +335,91 @@ where
     }
 }
 
+/// What a call the upstream refused with HTTP 429 says: it did not run.
+const RATE_LIMITED: &str = "The app is rate limiting the selected account; this call did not run. Make fewer calls and try again later.";
+
+/// One MCP exchange with an upstream server, as an outbound span: where it
+/// went, how big it was and how it ended. Never its arguments or result.
+async fn traced_exchange(
+    transport: &dyn crate::domain::ports::ActorMcpTransport,
+    session: crate::domain::model::AgentSessionId,
+    actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+    upstream: UpstreamCall,
+    destination: &McpDestination,
+    request: Value,
+) -> Result<Value, EgressError> {
+    let (app_kind, app_key) = match destination {
+        McpDestination::Connected(slug) => ("connected", slug.as_str()),
+        McpDestination::Custom(key) => ("custom", key.as_str()),
+        McpDestination::Macro => ("macro", MACRO_SERVER_SLUG),
+        McpDestination::Preview => ("preview", "preview"),
+    };
+    let span = tracing::info_span!(
+        "connected_app.mcp_exchange",
+        otel.kind = "client",
+        otel.status_code = tracing::field::Empty,
+        agent_session_id = %session,
+        server.address = upstream.url().host_str().unwrap_or_default(),
+        app.kind = app_kind,
+        app.key = app_key,
+        mcp.method = request["method"].as_str().unwrap_or_default(),
+        mcp.request_bytes = tracing::field::Empty,
+        mcp.response_bytes = tracing::field::Empty,
+        mcp.outcome = tracing::field::Empty,
+    );
+    // Sizing serializes the JSON again; skip it when nobody records the span.
+    let traced = !span.is_disabled();
+    if traced {
+        span.record("mcp.request_bytes", json_bytes(&request));
+    }
+    let result = transport
+        .exchange(session, actor, upstream, request)
+        .instrument(span.clone())
+        .await;
+    match &result {
+        Ok(value) => {
+            if traced {
+                span.record("mcp.response_bytes", json_bytes(value));
+            }
+            let outcome = if value["isError"] == Value::Bool(true) {
+                "tool_error"
+            } else {
+                "ok"
+            };
+            span.record("mcp.outcome", outcome);
+        }
+        Err(error) => {
+            // The limiter's own `mcp.call_budget` span, inside this one,
+            // records its waits, attempts and refusals.
+            let outcome = if matches!(error, EgressError::RateLimited { .. }) {
+                "rate_limited"
+            } else {
+                "upstream_error"
+            };
+            span.record("mcp.outcome", outcome);
+            span.record("otel.status_code", "ERROR");
+        }
+    }
+    result
+}
+
+/// The length of `value` as JSON, without keeping the text.
+fn json_bytes(value: &Value) -> i64 {
+    struct Counter(usize);
+    impl std::io::Write for Counter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0 += bytes.len();
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut counter = Counter(0);
+    let _ = serde_json::to_writer(&mut counter, value);
+    i64::try_from(counter.0).unwrap_or(i64::MAX)
+}
+
 /// What a failed call says: it may have run upstream before failing.
 const UNKNOWN_OUTCOME: &str = "The selected account's tool could not complete. Its outcome may be unknown; check state before retrying writes.";
 
@@ -280,20 +428,39 @@ async fn exchange_result(
     session: crate::domain::model::AgentSessionId,
     actor: macro_user_id::user_id::MacroUserIdStr<'static>,
     upstream: UpstreamCall,
+    destination: &McpDestination,
     request: Value,
     listing: bool,
-    macro_tools: bool,
 ) -> Result<ProxyResponse, EgressError> {
     let id = request["id"].clone();
-    let mut result = match transport.exchange(session, actor, upstream, request).await {
-        Ok(result) => result,
-        Err(error) if !listing => {
-            tracing::warn!(?error, "actor MCP exchange failed");
-            return Ok(tool_result_response(id, UNKNOWN_OUTCOME.into()));
-        }
-        Err(error) => return Err(error),
-    };
-    if listing && let Some(tools) = result["tools"].as_array_mut() {
+    let result =
+        match traced_exchange(transport, session, actor, upstream, destination, request).await {
+            Ok(result) => result,
+            Err(EgressError::RateLimited { .. }) if !listing => {
+                return Ok(tool_result_response(id, RATE_LIMITED.into()));
+            }
+            Err(error) if !listing => {
+                tracing::warn!(?error, "actor MCP exchange failed");
+                return Ok(tool_result_response(id, UNKNOWN_OUTCOME.into()));
+            }
+            Err(error) => return Err(error),
+        };
+    if listing {
+        return listing_response(id, result, destination);
+    }
+    json_response(&json!({"jsonrpc": "2.0", "id": id, "result": result}))
+}
+
+/// A `tools/list` answer as the sandbox sees it: tools that already choose
+/// an account are left out, and every tool that spends one takes
+/// `acting_as`.
+fn listing_response(
+    id: Value,
+    mut result: Value,
+    destination: &McpDestination,
+) -> Result<ProxyResponse, EgressError> {
+    let macro_tools = matches!(destination, McpDestination::Macro);
+    if let Some(tools) = result["tools"].as_array_mut() {
         tools.retain(|tool| {
             !tool["inputSchema"]["properties"]
                 .as_object()
@@ -313,7 +480,11 @@ async fn exchange_result(
             }
         }
     }
-    let body = serde_json::to_vec(&json!({"jsonrpc": "2.0", "id": id, "result": result}))
+    json_response(&json!({"jsonrpc": "2.0", "id": id, "result": result}))
+}
+
+fn json_response(body: &Value) -> Result<ProxyResponse, EgressError> {
+    let body = serde_json::to_vec(body)
         .map_err(|error| EgressError::Internal(rootcause::report!(error).into()))?;
     let mut response = ProxyResponse::new(full_body(body.into()));
     response.headers_mut().insert(

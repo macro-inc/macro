@@ -54,9 +54,7 @@ describe.each(['sidebar', 'toolbar'] as const)(
       ['Task', 'task-compose'],
       ['Project', 'project-compose'],
     ])('opens the %s composer', async (label, id) => {
-      render(() => (
-        <TasksCreateAction presentation={presentation} projectsEnabled />
-      ));
+      render(() => <TasksCreateAction presentation={presentation} />);
       fireEvent.keyDown(
         screen.getByRole('button', {
           name: 'New task, subtask, project, or tag',
@@ -76,9 +74,7 @@ describe.each(['sidebar', 'toolbar'] as const)(
     });
 
     it('opens and closes the tag editor without creating a task or project', async () => {
-      render(() => (
-        <TasksCreateAction presentation={presentation} projectsEnabled />
-      ));
+      render(() => <TasksCreateAction presentation={presentation} />);
       fireEvent.keyDown(
         screen.getByRole('button', {
           name: 'New task, subtask, project, or tag',
@@ -96,18 +92,3 @@ describe.each(['sidebar', 'toolbar'] as const)(
     });
   }
 );
-
-it('keeps project creation behind the existing Projects gate', async () => {
-  render(() => (
-    <TasksCreateAction presentation="sidebar" projectsEnabled={false} />
-  ));
-  fireEvent.keyDown(
-    screen.getByRole('button', { name: 'New task, subtask, or tag' }),
-    {
-      key: 'Enter',
-    }
-  );
-  await screen.findByRole('menuitem', { name: 'Task' });
-  expect(screen.queryByRole('menuitem', { name: 'Project' })).toBeNull();
-  expect(screen.getByRole('menuitem', { name: 'Tag' })).toBeDefined();
-});

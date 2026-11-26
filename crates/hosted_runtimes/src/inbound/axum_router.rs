@@ -25,13 +25,15 @@ use uuid::Uuid;
 
 use crate::domain::ids::ComputerId;
 use crate::domain::models::{
-    ComputerStatus, Purchase, PurchaseBilling, PurchaseKey, PurchaseRequest, SizeOffer,
+    ComputerStatus, Purchase, PurchaseBilling, PurchaseKey, PurchaseOffers, PurchaseRefusalCode,
+    PurchaseRequest, SizeOffer,
 };
 use crate::domain::ports::{
-    Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps,
+    Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps, UsageHistory,
 };
 use crate::domain::service::{Clock, ComputerError, ComputerService};
 use crate::domain::size::ComputerSize;
+use crate::domain::usage::ComputerUsage;
 
 /// Router state: the computer service plus what team access checks need.
 pub struct ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy = NoComps> {
@@ -82,7 +84,7 @@ pub fn team_router<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy, S>(
     state: ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
 ) -> Router<S>
 where
-    Repo: ComputerRepo,
+    Repo: ComputerRepo + UsageHistory,
     Bill: Billing,
     Time: Clock,
     EntityAccess: EntityAccessService,
@@ -100,6 +102,18 @@ where
         .route(
             "/team/computers/offers",
             get(offers::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
+        )
+        .route(
+            "/team/computers/usage",
+            get(usage::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
+        )
+        .route(
+            "/team/computers/purchase-offers",
+            get(purchase_offers::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
+        )
+        .route(
+            "/team/computers/rollout",
+            get(rollout::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/{computer_id}/power",
@@ -177,6 +191,37 @@ pub async fn list<
     Ok(Json(state.service.list(team_id).await?))
 }
 
+/// Each of the team's computers' CPU and memory over the last day, in the
+/// list's order.
+#[utoipa::path(
+    get,
+    path = "/team/computers/usage",
+    operation_id = "list_team_computer_usage",
+    responses(
+        (status = 200, body = Vec<ComputerUsage>),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+    ),
+)]
+#[tracing::instrument(skip_all, err)]
+pub async fn usage<
+    Repo: ComputerRepo + UsageHistory,
+    Bill: Billing,
+    Time: Clock,
+    EntityAccess: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    Attachment: FleetAttachmentSource,
+    Policy: CompPolicy,
+>(
+    access: MacroUserTeamExtractorV2<MemberTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
+) -> Result<Json<Vec<ComputerUsage>>, ComputersHttpError> {
+    let team_id = team_id(&access.entity_access_receipt)?;
+    Ok(Json(state.service.usage(team_id).await?))
+}
+
 /// Every size with its price and availability.
 #[utoipa::path(
     get,
@@ -206,6 +251,83 @@ pub async fn offers<
             .offers(team_id(receipt)?, user_id(receipt)?)
             .await?,
     ))
+}
+
+/// Every size with its price and availability, what buying it charges
+/// today, the renewal date and the card charged: what the buy dialog shows.
+/// For the team's owner and admins, who may buy: it names the team's card.
+#[utoipa::path(
+    get,
+    path = "/team/computers/purchase-offers",
+    operation_id = "list_team_computer_purchase_offers",
+    responses(
+        (status = 200, body = PurchaseOffers),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 422, body = ErrorResponse),
+        (status = 502, body = ErrorResponse),
+        (status = 503, body = ErrorResponse),
+    ),
+)]
+#[tracing::instrument(skip_all, err)]
+pub async fn purchase_offers<
+    Repo: ComputerRepo,
+    Bill: Billing,
+    Time: Clock,
+    EntityAccess: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    Attachment: FleetAttachmentSource,
+    Policy: CompPolicy,
+>(
+    access: MacroUserTeamExtractorV2<AdminTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
+) -> Result<Json<PurchaseOffers>, ComputersHttpError> {
+    let receipt = &access.entity_access_receipt;
+    Ok(Json(
+        state
+            .service
+            .purchase_offers(team_id(receipt)?, user_id(receipt)?)
+            .await?,
+    ))
+}
+
+/// Whether computers are rolled out to the caller.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ComputerRollout {
+    /// The computer UI and purchases are on for this user.
+    pub enabled: bool,
+}
+
+/// Whether the caller sees computers: the same rollout check purchases and
+/// offers make, so the web never shows computers the backend would refuse.
+#[utoipa::path(
+    get,
+    path = "/team/computers/rollout",
+    operation_id = "get_team_computer_rollout",
+    responses((status = 200, body = ComputerRollout)),
+)]
+#[tracing::instrument(skip_all, err)]
+pub async fn rollout<
+    Repo: ComputerRepo,
+    Bill: Billing,
+    Time: Clock,
+    EntityAccess: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    Attachment: FleetAttachmentSource,
+    Policy: CompPolicy,
+>(
+    access: MacroUserTeamExtractorV2<MemberTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
+) -> Result<Json<ComputerRollout>, ComputersHttpError> {
+    let user = user_id(&access.entity_access_receipt)?;
+    Ok(Json(ComputerRollout {
+        enabled: state.service.rollout_enabled(&user).await,
+    }))
 }
 
 /// Body of a team purchase.
@@ -598,6 +720,7 @@ impl IntoResponse for ComputersHttpError {
                 StatusCode::UNPROCESSABLE_ENTITY
             }
             ComputerError::Billing(BillingError::TeamOnTrial) => StatusCode::FORBIDDEN,
+            ComputerError::Billing(BillingError::ChangeInFlight) => StatusCode::CONFLICT,
             ComputerError::Billing(BillingError::Provider(_)) => StatusCode::BAD_GATEWAY,
             ComputerError::Internal(report) => {
                 tracing::error!(error = ?report, "computer request failed");
@@ -610,8 +733,16 @@ impl IntoResponse for ComputersHttpError {
         };
         let code = match &self.0 {
             ComputerError::Billing(BillingError::TeamOnTrial) => {
-                Some(ComputersErrorCode::TeamOnTrial)
+                Some(PurchaseRefusalCode::TeamOnTrial)
             }
+            ComputerError::Billing(BillingError::PaymentFailed) => {
+                Some(PurchaseRefusalCode::PaymentDeclined)
+            }
+            ComputerError::SoldOut(_) => Some(PurchaseRefusalCode::NoRoom),
+            _ => None,
+        };
+        let size = match &self.0 {
+            ComputerError::SoldOut(size) => Some(*size),
             _ => None,
         };
         (
@@ -619,6 +750,7 @@ impl IntoResponse for ComputersHttpError {
             Json(ComputersErrorBody {
                 message: message.into(),
                 code,
+                size,
             }),
         )
             .into_response()
@@ -631,15 +763,10 @@ impl IntoResponse for ComputersHttpError {
 struct ComputersErrorBody {
     message: std::borrow::Cow<'static, str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    code: Option<ComputersErrorCode>,
-}
-
-/// Machine-readable computer error codes.
-#[derive(serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-enum ComputersErrorCode {
-    /// The team's subscription is trialing; computers are for paying teams.
-    TeamOnTrial,
+    code: Option<PurchaseRefusalCode>,
+    /// The size there was no room for, with [`PurchaseRefusalCode::NoRoom`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    size: Option<ComputerSize>,
 }
 
 #[cfg(test)]

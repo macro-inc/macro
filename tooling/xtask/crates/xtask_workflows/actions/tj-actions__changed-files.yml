@@ -1,0 +1,328 @@
+name: Changed Files
+description: Get all Added, Copied, Modified, Deleted, Renamed, Type changed, Unmerged, and Unknown files.
+inputs:
+  separator:
+    description: Split character for output strings.
+    required: false
+    default: ' '
+  include_all_old_new_renamed_files:
+    description: 'Include `all_old_new_renamed_files` output. Note this can generate a large output See: #501.'
+    required: false
+    default: 'false'
+  old_new_separator:
+    description: Split character for old and new filename pairs.
+    required: false
+    default: ','
+  old_new_files_separator:
+    description: Split character for old and new renamed filename pairs.
+    required: false
+    default: ' '
+  files_from_source_file:
+    description: Source file(s) used to populate the `files` input.
+    required: false
+    default: ''
+  files_from_source_file_separator:
+    description: Separator used to split the `files_from_source_file` input.
+    default: |2+
+
+    required: false
+  files:
+    description: |
+      File and directory patterns used to detect changes (Defaults to the entire repo if unset).
+      NOTE: Multiline file/directory patterns should not include quotes.
+    required: false
+    default: ''
+  files_separator:
+    description: Separator used to split the `files` input
+    default: |2+
+
+    required: false
+  files_yaml:
+    description: YAML used to define a set of file patterns to detect changes
+    required: false
+    default: ''
+  files_yaml_from_source_file:
+    description: 'Source file(s) used to populate the `files_yaml` input. Example: https://github.com/tj-actions/changed-files/blob/main/test/changed-files.yml'
+    required: false
+    default: ''
+  files_yaml_from_source_file_separator:
+    description: Separator used to split the `files_yaml_from_source_file` input
+    default: |2+
+
+    required: false
+  files_ignore_yaml:
+    description: YAML used to define a set of file patterns to ignore changes
+    required: false
+    default: ''
+  files_ignore_yaml_from_source_file:
+    description: 'Source file(s) used to populate the `files_ignore_yaml` input. Example: https://github.com/tj-actions/changed-files/blob/main/test/changed-files.yml'
+    required: false
+    default: ''
+  files_ignore_yaml_from_source_file_separator:
+    description: Separator used to split the `files_ignore_yaml_from_source_file` input
+    default: |2+
+
+    required: false
+  files_ignore:
+    description: 'Ignore changes to these file(s). NOTE: Multiline file/directory patterns should not include quotes.'
+    required: false
+    default: ''
+  files_ignore_separator:
+    description: Separator used to split the `files_ignore` input
+    default: |2+
+
+    required: false
+  files_ignore_from_source_file:
+    description: Source file(s) used to populate the `files_ignore` input
+    required: false
+    default: ''
+  files_ignore_from_source_file_separator:
+    description: Separator used to split the `files_ignore_from_source_file` input
+    default: |2+
+
+    required: false
+  sha:
+    description: Specify a different commit SHA or branch used for comparing changes
+    required: false
+  base_sha:
+    description: Specify a different base commit SHA or branch used for comparing changes
+    required: false
+  since:
+    description: Get changed files for commits whose timestamp is older than the given time.
+    required: false
+    default: ''
+  until:
+    description: Get changed files for commits whose timestamp is earlier than the given time.
+    required: false
+    default: ''
+  path:
+    description: Specify a relative path under `$GITHUB_WORKSPACE` to locate the repository.
+    required: false
+    default: .
+  quotepath:
+    description: Use non-ASCII characters to match files and output the filenames completely verbatim by setting this to `false`
+    default: 'true'
+    required: false
+  diff_relative:
+    description: 'Exclude changes outside the current directory and show path names relative to it. NOTE: This requires you to specify the top-level directory via the `path` input.'
+    required: false
+    default: 'true'
+  dir_names:
+    default: 'false'
+    description: 'Output unique changed directories instead of filenames. NOTE: This returns `.` for changed files located in the current working directory which defaults to `$GITHUB_WORKSPACE`.'
+    required: false
+  dir_names_max_depth:
+    description: Limit the directory output to a maximum depth e.g `test/test1/test2` with max depth of `2` returns `test/test1`.
+    required: false
+  dir_names_exclude_current_dir:
+    description: Exclude the current directory represented by `.` from the output when `dir_names` is set to `true`.
+    required: false
+    default: 'false'
+  dir_names_include_files:
+    description: 'File and directory patterns to include in the output when `dir_names` is set to `true`. NOTE: This returns only the matching files and also the directory names.'
+    required: false
+    default: ''
+  dir_names_include_files_separator:
+    description: Separator used to split the `dir_names_include_files` input
+    default: |2+
+
+    required: false
+  dir_names_deleted_files_include_only_deleted_dirs:
+    description: Include only directories that have been deleted as opposed to directory names of files that have been deleted in the `deleted_files` output when `dir_names` is set to `true`.
+    required: false
+    default: 'false'
+  json:
+    description: 'Output list of changed files in a JSON formatted string which can be used for matrix jobs. Example: https://github.com/tj-actions/changed-files/blob/main/.github/workflows/matrix-example.yml'
+    required: false
+    default: 'false'
+  escape_json:
+    description: Escape JSON output.
+    required: false
+    default: 'true'
+  safe_output:
+    description: Apply sanitization to output filenames before being set as output.
+    required: false
+    default: 'true'
+  fetch_depth:
+    description: 'Depth of additional branch history fetched. NOTE: This can be adjusted to resolve errors with insufficient history.'
+    required: false
+    default: '25'
+  skip_initial_fetch:
+    description: |
+      Skip initially fetching additional history to improve performance for shallow repositories.
+      NOTE: This could lead to errors with missing history. It's intended to be used when you've fetched all necessary history to perform the diff.
+    required: false
+    default: 'false'
+  fetch_additional_submodule_history:
+    description: Fetch additional history for submodules.
+    required: false
+    default: 'false'
+  since_last_remote_commit:
+    description: Use the last commit on the remote branch as the `base_sha`. Defaults to the last non-merge commit on the target branch for pull request events and the previous remote commit of the current branch for push events.
+    required: false
+    default: 'false'
+  write_output_files:
+    description: 'Write outputs to the `output_dir` defaults to `.github/outputs` folder. NOTE: This creates a `.txt` file by default and a `.json` file if `json` is set to `true`.'
+    required: false
+    default: 'false'
+  output_dir:
+    description: Directory to store output files.
+    required: false
+    default: .github/outputs
+  output_renamed_files_as_deleted_and_added:
+    description: Output renamed files as deleted and added files.
+    required: false
+    default: 'false'
+  recover_deleted_files:
+    description: Recover deleted files.
+    required: false
+    default: 'false'
+  recover_deleted_files_to_destination:
+    description: Recover deleted files to a new destination directory, defaults to the original location.
+    required: false
+    default: ''
+  recover_files:
+    description: "File and directory patterns used to recover deleted files,\ndefaults to the patterns provided via the `files`, `files_from_source_file`, `files_ignore` and `files_ignore_from_source_file` inputs \nor all deleted files if no patterns are provided.\n"
+    required: false
+    default: ''
+  recover_files_separator:
+    description: Separator used to split the `recover_files` input
+    default: |2+
+
+    required: false
+  recover_files_ignore:
+    description: File and directory patterns to ignore when recovering deleted files.
+    required: false
+    default: ''
+  recover_files_ignore_separator:
+    description: Separator used to split the `recover_files_ignore` input
+    default: |2+
+
+    required: false
+  token:
+    description: GitHub token used to fetch changed files from Github's API.
+    required: false
+    default: ${{ github.token }}
+  api_url:
+    description: Github API URL.
+    required: false
+    default: ${{ github.api_url }}
+  use_rest_api:
+    description: Force the use of Github's REST API even when a local copy of the repository exists
+    required: false
+    default: 'false'
+  fail_on_initial_diff_error:
+    description: Fail when the initial diff fails.
+    required: false
+    default: 'false'
+  fail_on_submodule_diff_error:
+    description: Fail when the submodule diff fails.
+    required: false
+    default: 'false'
+  negation_patterns_first:
+    description: 'Apply the negation patterns first. NOTE: This affects how changed files are matched.'
+    required: false
+    default: 'false'
+  matrix:
+    description: Output changed files in a format that can be used for matrix jobs. Alias for setting inputs `json` to `true` and `escape_json` to `false`.
+    required: false
+    default: 'false'
+  exclude_submodules:
+    description: Exclude changes to submodules.
+    required: false
+    default: 'false'
+  fetch_missing_history_max_retries:
+    description: Maximum number of retries to fetch missing history.
+    required: false
+    default: '20'
+  use_posix_path_separator:
+    description: Use POSIX path separator `/` for output file paths on Windows.
+    required: false
+    default: 'false'
+  tags_pattern:
+    description: Tags pattern to include.
+    required: false
+    default: '*'
+  tags_ignore_pattern:
+    description: Tags pattern to ignore.
+    required: false
+    default: ''
+outputs:
+  added_files:
+    description: Returns only files that are Added (A).
+  added_files_count:
+    description: Returns the number of `added_files`
+  any_added:
+    description: Returns `true` when any of the filenames provided using the `files*` or `files_ignore*` inputs have been added.
+  copied_files:
+    description: Returns only files that are Copied (C).
+  copied_files_count:
+    description: Returns the number of `copied_files`
+  deleted_files:
+    description: Returns only files that are Deleted (D).
+  deleted_files_count:
+    description: Returns the number of `deleted_files`
+  modified_files:
+    description: Returns only files that are Modified (M).
+  modified_files_count:
+    description: Returns the number of `modified_files`
+  renamed_files:
+    description: Returns only files that are Renamed (R).
+  renamed_files_count:
+    description: Returns the number of `renamed_files`
+  all_old_new_renamed_files:
+    description: Returns only files that are Renamed and lists their old and new names. **NOTE:** This requires setting `include_all_old_new_renamed_files` to `true`. Also, keep in mind that this output is global and wouldn't be nested in outputs generated when the `*_yaml_*` input is used. (R)
+  all_old_new_renamed_files_count:
+    description: Returns the number of `all_old_new_renamed_files`
+  type_changed_files:
+    description: Returns only files that have their file type changed (T).
+  type_changed_files_count:
+    description: Returns the number of `type_changed_files`
+  unmerged_files:
+    description: Returns only files that are Unmerged (U).
+  unmerged_files_count:
+    description: Returns the number of `unmerged_files`
+  unknown_files:
+    description: Returns only files that are Unknown (X).
+  unknown_files_count:
+    description: Returns the number of `unknown_files`
+  all_changed_and_modified_files:
+    description: Returns all changed and modified files i.e. a combination of (ACMRDTUX)
+  all_changed_and_modified_files_count:
+    description: Returns the number of `all_changed_and_modified_files`
+  all_changed_files:
+    description: Returns all changed files i.e. a combination of all added, copied, modified and renamed files (ACMR)
+  all_changed_files_count:
+    description: Returns the number of `all_changed_files`
+  any_changed:
+    description: Returns `true` when any of the filenames provided using the `files*` or `files_ignore*` inputs have changed. This defaults to `true` when no patterns are specified. i.e. *includes a combination of all added, copied, modified and renamed files (ACMR)*.
+  only_changed:
+    description: Returns `true` when only files provided using the `files*` or `files_ignore*` inputs have changed. i.e. *includes a combination of all added, copied, modified and renamed files (ACMR)*.
+  other_changed_files:
+    description: Returns all other changed files not listed in the files input i.e. includes a combination of all added, copied, modified and renamed files (ACMR).
+  other_changed_files_count:
+    description: Returns the number of `other_changed_files`
+  all_modified_files:
+    description: Returns all changed files i.e. a combination of all added, copied, modified, renamed and deleted files (ACMRD).
+  all_modified_files_count:
+    description: Returns the number of `all_modified_files`
+  any_modified:
+    description: Returns `true` when any of the filenames provided using the `files*` or `files_ignore*` inputs have been modified. This defaults to `true` when no patterns are specified. i.e. *includes a combination of all added, copied, modified, renamed, and deleted files (ACMRD)*.
+  only_modified:
+    description: Returns `true` when only files provided using the `files*` or `files_ignore*` inputs have been modified. (ACMRD).
+  other_modified_files:
+    description: Returns all other modified files not listed in the files input i.e. a combination of all added, copied, modified, and deleted files (ACMRD)
+  other_modified_files_count:
+    description: Returns the number of `other_modified_files`
+  any_deleted:
+    description: Returns `true` when any of the filenames provided using the `files*` or `files_ignore*` inputs have been deleted. This defaults to `true` when no patterns are specified. (D)
+  only_deleted:
+    description: Returns `true` when only files provided using the `files*` or `files_ignore*` inputs have been deleted. (D)
+  other_deleted_files:
+    description: Returns all other deleted files not listed in the files input i.e. a combination of all deleted files (D)
+  other_deleted_files_count:
+    description: Returns the number of `other_deleted_files`
+  modified_keys:
+    description: Returns all modified YAML keys when the `files_yaml` input is used. i.e. key that contains any path that has either been added, copied, modified, and deleted (ACMRD)
+  changed_keys:
+    description: Returns all changed YAML keys when the `files_yaml` input is used. i.e. key that contains any path that has either been added, copied, modified, and renamed (ACMR)

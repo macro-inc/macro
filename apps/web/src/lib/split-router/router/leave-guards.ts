@@ -55,7 +55,9 @@ export function createLeaveGuards() {
     ): LeaveGuard[] {
       const relevant = (item: RegisteredGuard) => {
         if (item.pane !== pane) return false;
-        if (fromDepth !== undefined && item.depth >= fromDepth) return true;
+        if (fromDepth !== undefined) {
+          if (item.depth >= fromDepth || item.options.descendants) return true;
+        }
         return (
           !!context?.to &&
           !!item.options.search?.some(

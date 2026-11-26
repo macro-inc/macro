@@ -28,9 +28,7 @@ import { prepareEmailBody } from '@app/features/email-compose/primitives/prepare
 import { uploadAttachmentDocuments } from '@app/features/email-compose/upload-documents';
 import { ComposeLayout } from '@app/features/email-compose/views/compose-layout';
 import { EmailComposeToolbar } from '@app/features/email-compose/views/compose-toolbar';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
-import { enableEmailSignatures } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -187,7 +185,6 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
       await replyInboxQuery.refetch();
   };
   const signature = useEmailSignature(() => sendingLink()?.id);
-  const emailSignaturesFlag = useFeatureFlag(enableEmailSignatures);
   // Whether this email includes the signature. Defaults on; the preview's ✕
   // drops it for this one message. Mirrors the normal composer.
   // Initialize from the persisted tool args so a dismiss survives re-render /
@@ -201,7 +198,6 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
   // on. Hidden once dismissed and in the read-only (sent) state. Shown while
   // locked too — the overlay blocks interaction until the lock lifts.
   const previewSignatureHtml = (): string | undefined => {
-    if (!emailSignaturesFlag().enabled) return undefined;
     if (props.readOnly) return undefined;
     if (!includeSignature()) return undefined;
     const sig = signature();

@@ -1,6 +1,12 @@
 import { expect, test } from 'bun:test';
 import type { Entry, Incoming } from '../entry.ts';
-import { inThread, isRelevant, judge, type Probabilities } from '../listen.ts';
+import {
+  inThread,
+  isRelevant,
+  judge,
+  type Probabilities,
+  screenAttributes,
+} from '../listen.ts';
 import { screen } from '../screen.ts';
 
 const me = 'macro|agent@example.com';
@@ -57,12 +63,17 @@ test('a DM always reaches the agent, without the screen', async () => {
     kind: 'relevant',
     mentioned: false,
     p: { addressed: 1 },
+    by: 'dm',
   });
 });
 
 test('a mention always reaches the agent: recorded, or only in the text', async () => {
   const recorded = await judge(incoming({}, { mentions: [me] }), facts(never));
-  expect(recorded).toMatchObject({ kind: 'relevant', mentioned: true });
+  expect(recorded).toMatchObject({
+    kind: 'relevant',
+    mentioned: true,
+    by: 'mention',
+  });
   const tagged = await judge(
     incoming({
       text: `<m-user-mention>{"userId":"${me}","email":"agent@example.com"}</m-user-mention> hi`,
@@ -135,11 +146,68 @@ test('when the screen keeps failing, a reply in a thread the agent is in is for 
     incoming({ thread: 'root1' }),
     facts(failing, history)
   );
-  expect(inside).toMatchObject({ kind: 'relevant', p: { fallback: 1 } });
+  expect(inside).toMatchObject({
+    kind: 'relevant',
+    p: { fallback: 1 },
+    by: 'screen_failed',
+  });
   const outside = await judge(
     incoming({ thread: 'other' }),
     facts(failing, history)
   );
   expect(outside.kind).toBe('irrelevant');
   expect(inThread(history, me, null)).toBe(false);
+});
+
+test('the screen span records the verdict and each probability by question, never the message', () => {
+  expect(
+    screenAttributes({
+      kind: 'relevant',
+      mentioned: false,
+      p: { asks_agent: 0.92, about_agent: 0.1 },
+      by: 'screen',
+    })
+  ).toEqual({
+    'chat.screen.verdict': 'relevant',
+    'chat.screen.reason': 'screen',
+    'chat.screen.mentioned': false,
+    'chat.screen.p.asks_agent': 0.92,
+    'chat.screen.p.about_agent': 0.1,
+  });
+  expect(
+    screenAttributes({
+      kind: 'irrelevant',
+      p: { fallback: 1 },
+      by: 'screen_failed',
+    })
+  ).toEqual({
+    'chat.screen.verdict': 'irrelevant',
+    'chat.screen.reason': 'screen_failed',
+    'chat.screen.p.fallback': 1,
+  });
+  expect(screenAttributes({ kind: 'ignored', because: 'bot' })).toEqual({
+    'chat.screen.verdict': 'ignored',
+    'chat.screen.reason': 'bot',
+  });
+  // The reason is what judge decided, whatever the screen's keys are called.
+  expect(
+    screenAttributes({
+      kind: 'irrelevant',
+      p: { addressed: 0.9, fallback: 0.1 },
+      by: 'screen',
+    })['chat.screen.reason']
+  ).toBe('screen');
+});
+
+test('the screen span records at most eight well-formed question keys', () => {
+  const p = Object.fromEntries([
+    ['Bad Key', 0.5],
+    ...Array.from({ length: 12 }, (_, i) => [`q${i}`, i / 100]),
+  ]);
+  const attributes = screenAttributes({ kind: 'irrelevant', p, by: 'screen' });
+  const keys = Object.keys(attributes).filter((key) =>
+    key.startsWith('chat.screen.p.')
+  );
+  expect(keys).toHaveLength(8);
+  expect(keys).not.toContain('chat.screen.p.Bad Key');
 });

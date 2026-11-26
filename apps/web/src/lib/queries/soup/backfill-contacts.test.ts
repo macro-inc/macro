@@ -8,6 +8,7 @@ import {
 } from './backfill';
 
 vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
+vi.mock('../contacts/top-up', () => ({ useContactTopUp: () => {} }));
 vi.mock('../contacts/use-context-publisher', () => ({
   useContactContextPublisher: () => {},
 }));
@@ -92,7 +93,7 @@ describe('CRM contact backfill', () => {
         { signal: expect.any(AbortSignal) }
       );
       expect(
-        loadSoupBackfillCheckpoint('user-1', 'auxiliary-entities')
+        loadSoupBackfillCheckpoint('user-1', AUXILIARY_SOUP_BACKFILL_LANE)
       ).toMatchObject({
         pagesFetched: 2,
         nextCursor: null,

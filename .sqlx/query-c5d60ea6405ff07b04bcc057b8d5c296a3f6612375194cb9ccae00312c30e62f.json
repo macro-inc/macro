@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH parents AS MATERIALIZED (\n                   SELECT unnest($2::uuid[]) AS id\n                   UNION\n                   SELECT ct.company_id FROM unnest($3::uuid[]) ids(id)\n                   CROSS JOIN LATERAL (SELECT company_id,team_id FROM crm_contacts\n                       WHERE id=ids.id OFFSET 0) ct\n                   WHERE ct.team_id=$1 AND ct.company_id IS NOT NULL\n               )\n               SELECT id FROM crm_companies WHERE id=ANY(ARRAY(\n                   SELECT co.id FROM parents CROSS JOIN LATERAL (\n                       SELECT id,team_id FROM crm_companies WHERE id=parents.id OFFSET 0\n                   ) co WHERE co.team_id=$1\n               )) ORDER BY id FOR SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c5d60ea6405ff07b04bcc057b8d5c296a3f6612375194cb9ccae00312c30e62f"
+}

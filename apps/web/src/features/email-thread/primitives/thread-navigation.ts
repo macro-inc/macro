@@ -32,6 +32,7 @@ import {
   listScrollBehavior,
   messageElement,
   nearestDelta,
+  pageDelta,
   pageThenAdvanceDelta,
   revealMessageAfterLayout,
   type ScrollAlign,
@@ -47,6 +48,12 @@ const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
 /** List navigation — keep within the 300ms UI motion budget (improve-animations). */
 const SCROLL_ANIMATION_MS = 250;
 const KEYBOARD_SCROLL_MS = 250;
+/**
+ * Focused controls whose own Space (activate, toggle, pick) wins over paging.
+ * A focused link is left out: Space on a link scrolls in a browser too.
+ */
+const SPACE_CONTROL_SELECTOR =
+  'button, summary, select, input, textarea, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="checkbox"], [role="radio"], [role="switch"], [role="tab"], [role="option"], [role="combobox"], [role="listbox"], [role="slider"], [role^="menuitem"]';
 
 export function createThreadNavigation(
   props: { threadId: Accessor<string> },
@@ -424,6 +431,29 @@ export function createThreadNavigation(
   const navigateToPreviousMessage = () => navigateMessage('prev');
   const navigateToNextMessage = () => navigateMessage('next');
 
+  // Space pages the list from wherever the keyboard is in the thread. Focus
+  // usually sits on the host's frame around the list, outside its scroller, so
+  // the browser's own Space has nothing to scroll. Paging is the user's scroll,
+  // not a jump to a message, so older messages still load at the top.
+  const pageList = (dir: 'prev' | 'next', event?: KeyboardEvent) => {
+    // The key's own target, inside an email body's shadow root too. The
+    // command menu runs the command with no event, while its field has focus.
+    const target = event?.composedPath()[0];
+    if (target instanceof Element && target.matches(SPACE_CONTROL_SELECTOR))
+      return false;
+
+    const list = untrack(context.messagesListRef);
+    if (!list) return false;
+
+    const top = pageDelta(list, dir);
+    if (top === 0) return false;
+    // A held key repeats faster than the smooth scroll settles; a tap always
+    // pages, as the browser's Space does.
+    if (!tryKeyboardListScroll() && event?.repeat) return true;
+    list.scrollBy({ top, behavior: listScrollBehavior() });
+    return true;
+  };
+
   const getHotkeyTarget = () => {
     const messages = context.messages.list();
     if (messages.length === 0) return;
@@ -643,6 +673,8 @@ export function createThreadNavigation(
       markSenderNoise: context.markSenderNoise,
       navigateToPreviousMessage,
       navigateToNextMessage,
+      pageDown: (event) => pageList('next', event),
+      pageUp: (event) => pageList('prev', event),
       activate,
       cancel,
       expandFocusedMessage,

@@ -4,12 +4,41 @@ use item_filters::SharedEmailFilter;
 
 /// Stable, separately versioned Mail projection; existing Soup profiles remain usable.
 pub fn profile() -> Profile {
-    Profile::new(token("soup-mail-v5"))
+    Profile::new(token(PROFILE))
 }
+const PROFILE: &str = "soup-mail-v5";
 /// Email thread partition.
 pub fn partition() -> Token {
     token("email")
 }
+/// Inbox timestamp of a thread the Inbox view can show: inbox-visible, with a
+/// message. The projection writes it as a sort fact only.
+pub const INBOX_VIEW_SORT: &str = "mail-inbox-view-ts";
+/// How the projection derives [`INBOX_VIEW_SORT`]. Storage applies the same
+/// rule to Mail documents written before it existed. Stored Mail documents
+/// carry the property-aware profile, which keeps every fact of this one.
+pub const INBOX_VIEW_DERIVATION: SortFactDerivation = SortFactDerivation {
+    profiles: &[PROFILE, crate::properties::MAIL_PROFILE],
+    source: "mail-inbox-ts",
+    target: INBOX_VIEW_SORT,
+    required: &[("mail-inbox", &[1]), ("mail-has-message", &[1])],
+};
+/// Inbox timestamp of a thread the Important tab can show: one the Inbox view
+/// can show that is also marked important. Its window then walks only those
+/// threads instead of every inbox thread.
+pub const IMPORTANT_VIEW_SORT: &str = "mail-important-view-ts";
+/// How the projection derives [`IMPORTANT_VIEW_SORT`]; storage applies it to
+/// Mail documents written before it existed.
+pub const IMPORTANT_VIEW_DERIVATION: SortFactDerivation = SortFactDerivation {
+    profiles: &[PROFILE, crate::properties::MAIL_PROFILE],
+    source: "mail-inbox-ts",
+    target: IMPORTANT_VIEW_SORT,
+    required: &[
+        ("mail-inbox", &[1]),
+        ("mail-has-message", &[1]),
+        ("mail-signal", &[1]),
+    ],
+};
 /// Mail-owned fact vocabulary.
 pub fn token(value: &str) -> Token {
     Token::new(value).expect("static Mail token")
@@ -74,11 +103,33 @@ pub fn compile(
         .first()
         .copied()
         .unwrap_or(&SharedEmailFilter::Exclude);
-    let sort = token(match view {
+    let timestamp = token(match view {
         "INBOX" => "mail-inbox-ts",
         "SENT" => "mail-sent-ts",
         _ => "mail-all-ts",
     });
+    // Inbox sorts by a timestamp written only for inbox-visible threads with a
+    // message, so its window skips the threads that left the inbox. The view
+    // still tests both facts: a patch cannot remove that sort fact when a
+    // thread leaves the inbox, so a stale one can remain until the next full
+    // projection. Date filters read the timestamp every thread has.
+    // The Important tab narrows that to threads marked important, so its window
+    // skips the rest of the inbox too.
+    let sort = if view == "INBOX" && requires_importance(ast.email_filter.tree.as_deref()) {
+        token(IMPORTANT_VIEW_SORT)
+    } else if view == "INBOX" {
+        token(INBOX_VIEW_SORT)
+    } else {
+        timestamp.clone()
+    };
+    let owned_scope = links
+        .iter()
+        .map(|id| exact_uuid(token("mail-link-id"), id))
+        .reduce(|a, b| PredicateExpr::Or(Box::new(a), Box::new(b)))
+        .unwrap_or(PredicateExpr::None);
+    // A label matches only on a thread of an inbox the viewer owns or manages,
+    // as on the server; a shared thread can carry Gmail's system labels.
+    let label_scope = &owned_scope;
     let mut predicate = compile_expr(ast.email_filter.tree.as_deref(), |literal| {
         Ok(match literal {
             EmailLiteral::ThreadId(id) => exact_uuid(vocabulary::id(), id),
@@ -86,18 +137,17 @@ pub fn compile(
             EmailLiteral::Read(value) => boolean("mail-read", *value),
             EmailLiteral::InboxVisible(value) => boolean("mail-inbox", *value),
             EmailLiteral::Importance(value) => boolean("mail-signal", *value),
-            EmailLiteral::UpdatedAt(value) => date_expr(sort.clone(), value),
+            EmailLiteral::UpdatedAt(value) => date_expr(timestamp.clone(), value),
             EmailLiteral::Shared(_) => PredicateExpr::All,
             EmailLiteral::CalendarOnly(true) => boolean("mail-calendar", true),
             EmailLiteral::CalendarOnly(false) => PredicateExpr::All,
+            EmailLiteral::Label(id) => PredicateExpr::And(
+                Box::new(exact_uuid(token("mail-label-id"), id)),
+                Box::new(label_scope.clone()),
+            ),
             _ => unreachable!("Mail eligibility checked"),
         })
     })?;
-    let owned_scope = links
-        .iter()
-        .map(|id| exact_uuid(token("mail-link-id"), id))
-        .reduce(|a, b| PredicateExpr::Or(Box::new(a), Box::new(b)))
-        .unwrap_or(PredicateExpr::None);
     let shared_scope = boolean("mail-shared", true);
     let scope = if links.is_empty() {
         // Soup currently skips the entire email leg when no readable inbox exists.
@@ -124,18 +174,12 @@ pub fn compile(
             Box::new(boolean("mail-has-message", true)),
         );
     }
+    // A row matches only with a sort fact, and the Mail projection writes each
+    // timestamp as an integer and a sort fact together (Inbox's sort fact only
+    // with its timestamp), so the Inbox and Sent views need no test that their
+    // timestamp exists: sorting by it is one.
     if view == "INBOX" {
-        predicate = PredicateExpr::And(
-            Box::new(predicate),
-            Box::new(PredicateExpr::And(
-                Box::new(boolean("mail-inbox", true)),
-                Box::new(PredicateExpr::I64Range {
-                    attribute: sort.clone(),
-                    lower: None,
-                    upper: None,
-                }),
-            )),
-        );
+        predicate = PredicateExpr::And(Box::new(predicate), Box::new(boolean("mail-inbox", true)));
     }
     if matches!(view, "DRAFTS" | "SENT") {
         let attribute = token(if view == "DRAFTS" {
@@ -147,16 +191,6 @@ pub fn compile(
             Box::new(predicate),
             Box::new(PredicateExpr::ExactExists { attribute }),
         );
-        if view == "SENT" {
-            predicate = PredicateExpr::And(
-                Box::new(predicate),
-                Box::new(PredicateExpr::I64Range {
-                    attribute: sort.clone(),
-                    lower: None,
-                    upper: None,
-                }),
-            );
-        }
     }
     Ok(LocalCompileOutcome::Supported(ValidatedIndexQuery::new(
         IndexQuery {
@@ -178,6 +212,16 @@ pub fn boolean(attribute: &str, value: bool) -> PredicateExpr {
     PredicateExpr::Exact {
         attribute: token(attribute),
         value: ExactValue::new([u8::from(value)]).expect("bounded boolean"),
+    }
+}
+
+/// Whether every row the tree matches must be marked important: an
+/// `importance: true` literal reached through `And` alone.
+fn requires_importance(expr: Option<&Expr<EmailLiteral>>) -> bool {
+    match expr {
+        Some(Expr::And(a, b)) => requires_importance(Some(a)) || requires_importance(Some(b)),
+        Some(Expr::Literal(EmailLiteral::Importance(true))) => true,
+        _ => false,
     }
 }
 
@@ -213,6 +257,7 @@ fn supported(expr: Option<&Expr<EmailLiteral>>, allow_shared: bool) -> bool {
                 | EmailLiteral::Importance(_)
                 | EmailLiteral::UpdatedAt(_)
                 | EmailLiteral::CalendarOnly(_)
+                | EmailLiteral::Label(_)
         ),
     }
 }

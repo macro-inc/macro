@@ -57,24 +57,27 @@ export function useClaudeCompleteMutation() {
       harnessId: string;
       entry: ClaudeSignInEntry;
       code: string;
-      signal: AbortSignal;
     }) =>
       Telemetry.span('computer.claude.complete', async (span) => {
         span.setAttr('harness.id', vars.harnessId);
         span.setAttr('claude.sign_in.entry', vars.entry);
-        const result = await throwOnErr(() =>
-          computerClaudeClient.completeSignIn(
-            vars.harnessId,
-            vars.code.trim(),
-            vars.signal
-          )
+        // Never aborted: a code being checked finishes even if its dialog
+        // closes, because the computer may still sign in.
+        const answer = await computerClaudeClient.completeSignIn(
+          vars.harnessId,
+          vars.code.trim()
         );
+        if (answer.isErr())
+          span.setAttr(
+            'claude.sign_in.error_code',
+            answer.error[0]?.code ?? 'unknown'
+          );
+        const result = await throwOnErr(() => Promise.resolve(answer));
         if (!result.signedIn)
           throw new Error('Claude sign-in was not completed.');
         return result;
       }),
     onSuccess: (_result, vars) => {
-      if (vars.signal.aborted) return;
       queryClient.setQueryData<ClaudeModeResponse>(modeKey(vars.harnessId), {
         mode: 'own_account',
       });

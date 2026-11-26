@@ -82,12 +82,14 @@ export function getNotificationIcon(
     .with('calendar_event_join_request', () => UserPlusIcon)
     .with('password_access_requested', () => KeyIcon)
     .with('inbox_reauth_required', () => EnvelopeIcon)
+    .with('crm_email_sharing_changed', () => EnvelopeIcon)
     .with('agent_session_settled', () => AgentIcon)
     .with('agent_session_waiting_for_input', () => QuestionIcon)
     .with('agent_session_mentioned', () => AtIcon)
     .with('routine_run_finished', () => ClockIcon)
     .with('agent_sign_in_expiry', () => HardDrivesIcon)
     .with('computer_setup', () => HardDrivesIcon)
+    .with('ping', () => BellIcon)
     .exhaustive(() => BellIcon);
 }
 

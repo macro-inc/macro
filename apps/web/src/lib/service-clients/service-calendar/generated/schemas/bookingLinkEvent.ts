@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BookingLinkEventDailyLimit } from './bookingLinkEventDailyLimit';
+import type { BookingLinkEventEmailLinkId } from './bookingLinkEventEmailLinkId';
 import type { BookingQuestion } from './bookingQuestion';
 import type { SchedulingMode } from './schedulingMode';
 
@@ -34,6 +35,12 @@ export interface BookingLinkEvent {
    * @minimum 0
    */
   durationMinutes: number;
+  /** The connected account, an `emailLinkId` from the listing's `accounts`,
+whose primary calendar takes this link's bookings and sends their
+invitations from its address. Omit to book on the host's primary
+account. Personal links only; team links book on each host's primary
+account. `googleMeet` needs an account whose `videoMeetings` is true. */
+  emailLinkId?: BookingLinkEventEmailLinkId;
   /** Whether new bookings are accepted. */
   enabled: boolean;
   /** Generate a Google Meet conference. Mutually exclusive with `macroCall`. */
@@ -54,7 +61,7 @@ export interface BookingLinkEvent {
   location: string;
   /** Attach a Macro call when someone books. A join link is created for that
 booking and written onto the calendar invitation. Mutually exclusive
-with `googleMeet`. Prefer this for a Macro booking; omit or false when
+with `googleMeet`. Set it when the user wants a Macro call; omit or false when
 the link should use Google Meet or no video. False is omitted so drafts
 saved before this field still round-trip unchanged. */
   macroCall?: boolean;

@@ -1,12 +1,13 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
-import ClockIcon from '@icon/system/regular/clock.svg';
-import ClockCounterIcon from '@icon/system/regular/clock-counter-clockwise.svg';
 import { ComposerSurface, cn, TabSelector } from '@ui';
 import { For, type JSX, type ParentProps, Show } from 'solid-js';
+import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 import type { ScheduleDraft } from '../core/draft';
+import { triggerKind } from '../core/routine-triggers';
 import { RoutineDescription } from './routine-description';
+import { RoutineIcon } from './routine-icon';
 
 /**
  * The raised card a page section or step sits on: the composer surface
@@ -59,10 +60,12 @@ export function RoutineSettingRow(props: {
   return (
     <div class="flex min-h-16 items-center gap-4 border-t border-edge-divider px-6 py-4 first:border-t-0 @max-[600px]/routine:px-4">
       <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span class="text-base text-ink">{props.label}</span>
+        <span class="text-base text-ink wrap-anywhere">{props.label}</span>
         <Show when={props.description}>
           {(description) => (
-            <span class="text-sm text-ink-muted">{description()}</span>
+            <span class="text-sm text-ink-muted wrap-anywhere">
+              {description()}
+            </span>
           )}
         </Show>
       </div>
@@ -101,6 +104,14 @@ function RoutineSection(props: {
  */
 export function RoutineEditor(props: {
   draft: ScheduleDraft;
+  mobile?: boolean;
+  mobileHeader?: (props: {
+    name: string;
+    identityIcon?: JSX.Element;
+    headerActions?: JSX.Element;
+    actions?: JSX.Element;
+    onBack: () => void;
+  }) => JSX.Element;
   onChange: (update: (draft: ScheduleDraft) => ScheduleDraft) => void;
   disabled?: boolean;
   tab: 'settings' | 'history';
@@ -139,7 +150,14 @@ export function RoutineEditor(props: {
   runCount?: number;
   /** The routine menu, shown right after its name. */
   actions?: JSX.Element;
-  identityIcon?: JSX.Element;
+  /** The icon and colour chosen for the routine; absent until it has one. */
+  appearance?: EntityAppearance | null;
+  /**
+   * Makes the top bar's icon a control, such as the owner's Change icon
+   * button, beside the breadcrumb. Without it the icon is part of the
+   * breadcrumb, which leads back to the page.
+   */
+  identityIcon?: (icon: JSX.Element) => JSX.Element;
   feedback?: JSX.Element;
   /** The routines this routine's runs created; absent when it created none. */
   created?: JSX.Element;
@@ -155,6 +173,18 @@ export function RoutineEditor(props: {
         ];
   const breadcrumbName = () =>
     props.draft.name.trim() || (props.creating ? 'New routine' : 'Untitled');
+  const firstTrigger = () => {
+    const first = props.draft.triggers?.[0];
+    return first ? triggerKind(first) : undefined;
+  };
+  // The top bar and the page's header draw the same icon.
+  const icon = (size: string) => (
+    <RoutineIcon
+      appearance={props.appearance}
+      trigger={firstTrigger()}
+      class={size}
+    />
+  );
   return (
     <ViewBreadcrumbs.Root
       value="routine"
@@ -177,16 +207,16 @@ export function RoutineEditor(props: {
       <ViewBreadcrumbs.Item value="routine" metadata={{}} order={1}>
         {(item) => (
           <div class="flex min-w-0 items-center">
-            {props.identityIcon}
+            <Show when={props.identityIcon}>
+              {(control) => control()(icon('size-4'))}
+            </Show>
             <ViewBreadcrumbs.Button
               class="gap-1.5"
               isActive={item.isActive()}
               onClick={item.onSelect}
               tooltip={breadcrumbName()}
             >
-              <Show when={!props.identityIcon}>
-                <ClockIcon class="size-3 shrink-0" />
-              </Show>
+              <Show when={!props.identityIcon}>{icon('size-4')}</Show>
               <span class="truncate">{breadcrumbName()}</span>
             </ViewBreadcrumbs.Button>
             <Show when={props.actions}>
@@ -195,6 +225,15 @@ export function RoutineEditor(props: {
           </div>
         )}
       </ViewBreadcrumbs.Item>
+      <Show when={props.mobile}>
+        {props.mobileHeader?.({
+          name: breadcrumbName(),
+          identityIcon: props.identityIcon?.(icon('size-4')) ?? icon('size-4'),
+          headerActions: props.headerActions,
+          actions: props.actions,
+          onBack: props.onBack,
+        })}
+      </Show>
       <TabSelector.Root
         value={props.tab}
         onChange={(value) => {
@@ -202,43 +241,72 @@ export function RoutineEditor(props: {
         }}
         class="@container/routine flex size-full min-h-0 min-w-0 flex-col text-ink"
       >
-        <ViewShell.TopBar
-          class="gap-x-3 gap-y-2 touch:flex @max-[600px]/routine:h-auto @max-[600px]/routine:flex-wrap"
-          aria-label="Routine toolbar"
-        >
-          <ViewBreadcrumbs.Outlet
-            aria-label="Routine location"
-            class="min-w-0 @max-[600px]/routine:flex-1"
-          />
-          <Show when={!props.creating}>
-            <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
-              <TabSelector class="w-fit">
-                <TabSelector.List aria-label="Routine details">
-                  <For each={tabs()}>
-                    {(tab) => (
-                      <TabSelector.Tab value={tab.value}>
-                        {tab.label}
-                        <Show when={tab.count}>
-                          {(count) => (
-                            <span
-                              aria-hidden="true"
-                              class="ml-1.5 tabular-nums text-ink-extra-muted"
-                            >
-                              {count()}
-                            </span>
-                          )}
-                        </Show>
-                      </TabSelector.Tab>
-                    )}
-                  </For>
-                </TabSelector.List>
-              </TabSelector>
+        <Show when={!props.mobile}>
+          <ViewShell.TopBar
+            class="gap-x-3 gap-y-2 touch:flex @max-[600px]/routine:h-auto @max-[600px]/routine:flex-wrap"
+            aria-label="Routine toolbar"
+          >
+            <ViewShell.TopBarTitle class="max-w-fit @max-[600px]/routine:flex-1">
+              <ViewBreadcrumbs.Outlet
+                aria-label="Routine location"
+                class="min-w-0 @max-[600px]/routine:flex-1"
+              />
+            </ViewShell.TopBarTitle>
+            <Show when={!props.creating}>
+              <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
+                <TabSelector class="w-fit touch:pointer-events-auto">
+                  <TabSelector.List aria-label="Routine details">
+                    <For each={tabs()}>
+                      {(tab) => (
+                        <TabSelector.Tab value={tab.value}>
+                          {tab.label}
+                          <Show when={tab.count}>
+                            {(count) => (
+                              <span
+                                aria-hidden="true"
+                                class="ml-1.5 tabular-nums text-ink-extra-muted"
+                              >
+                                {count()}
+                              </span>
+                            )}
+                          </Show>
+                        </TabSelector.Tab>
+                      )}
+                    </For>
+                  </TabSelector.List>
+                </TabSelector>
+              </div>
+            </Show>
+            <div class="ml-auto flex shrink-0 items-center gap-2">
+              {props.headerActions}
             </div>
-          </Show>
-          <div class="ml-auto flex shrink-0 items-center gap-2">
-            {props.headerActions}
+          </ViewShell.TopBar>
+        </Show>
+        <Show when={props.mobile && !props.creating}>
+          <div class="shrink-0 px-4 pt-3">
+            <TabSelector class="w-fit">
+              <TabSelector.List aria-label="Routine details">
+                <For each={tabs()}>
+                  {(tab) => (
+                    <TabSelector.Tab value={tab.value}>
+                      {tab.label}
+                      <Show when={tab.count}>
+                        {(count) => (
+                          <span
+                            aria-hidden="true"
+                            class="ml-1.5 tabular-nums text-ink-extra-muted"
+                          >
+                            {count()}
+                          </span>
+                        )}
+                      </Show>
+                    </TabSelector.Tab>
+                  )}
+                </For>
+              </TabSelector.List>
+            </TabSelector>
           </div>
-        </ViewShell.TopBar>
+        </Show>
         <TabSelector.Panel
           value="settings"
           class="relative min-h-0 flex-1 outline-none"
@@ -250,7 +318,7 @@ export function RoutineEditor(props: {
                   aria-hidden="true"
                   class="flex size-11 items-center justify-center rounded-xl bg-accent-bg text-accent"
                 >
-                  <ClockCounterIcon class="size-5.5" />
+                  {icon('size-5.5')}
                 </span>
                 <div class="min-w-0">
                   <Show

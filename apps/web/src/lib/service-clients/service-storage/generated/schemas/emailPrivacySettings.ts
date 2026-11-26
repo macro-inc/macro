@@ -4,13 +4,20 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { EmailPrivacySettingsArchivedTeamDomains } from './emailPrivacySettingsArchivedTeamDomains';
 import type { EmailPrivacySettingsMailboxEmail } from './emailPrivacySettingsMailboxEmail';
 import type { EmailPrivacySettingsMailboxLinkId } from './emailPrivacySettingsMailboxLinkId';
+import type { EmailPrivacySettingsPersonalDomainWarnings } from './emailPrivacySettingsPersonalDomainWarnings';
+import type { EmailPrivacySettingsTeamDomainWarnings } from './emailPrivacySettingsTeamDomainWarnings';
 
 /**
  * Current consent and exclusions, readable by any team member.
  */
 export interface EmailPrivacySettings {
+  /** Team domains listed because their company is archived, mapped to that
+company. They can't be removed until the company is restored. Empty for
+members, who can't see archived companies. */
+  archived_team_domains: EmailPrivacySettingsArchivedTeamDomains;
   /** Whether the caller can remove a team exclusion. */
   can_remove_team_domains: boolean;
   /** Whether this exact mailbox has explicit contribution consent. */
@@ -19,8 +26,12 @@ export interface EmailPrivacySettings {
   mailbox_email?: EmailPrivacySettingsMailboxEmail;
   /** Exact current primary connection; clients bind opt-in to this identifier. */
   mailbox_link_id?: EmailPrivacySettingsMailboxLinkId;
+  /** Existing personal exclusions that cover the caller's whole mailbox. */
+  personal_domain_warnings: EmailPrivacySettingsPersonalDomainWarnings;
   /** Domains excluded only for the caller's contributions. */
   personal_domains: string[];
+  /** Existing team exclusions that cover a connected member's whole mailbox. */
+  team_domain_warnings: EmailPrivacySettingsTeamDomainWarnings;
   /** Domains excluded across the team, including legacy company exclusions. */
   team_domains: string[];
 }

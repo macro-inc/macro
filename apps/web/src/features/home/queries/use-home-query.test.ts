@@ -12,7 +12,10 @@ vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),
   ...(await import('@app/features/soup/collection/row-store')),
-  useSearchContext: () => ({ entityPool: () => [], routinePool: () => [] }),
+  useSearchContext: () => ({
+    entityPool: () => () => [],
+    routinePool: () => [],
+  }),
   createSearchState: (options: { text: () => string }) => ({
     isSearching: () => options.text().trim().length > 0,
     data: () => serviceSearch.hits,
@@ -135,6 +138,9 @@ function makeQuery(initial: EntityData[], hasMore = true) {
     },
     get isLoading() {
       return loading();
+    },
+    get hasPageData() {
+      return !loading();
     },
     get hasNextPage() {
       return more();

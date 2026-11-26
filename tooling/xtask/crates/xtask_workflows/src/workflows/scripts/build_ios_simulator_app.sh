@@ -86,7 +86,19 @@ nix develop --command bash -euo pipefail -c '
   cd apps/web
   # Positional: `prebuilt=true` would be passed as the literal argument
   # "prebuilt=true", silently rebuilding the frontend a second time here.
-  just ios-build-sim true
+  #
+  # Xcode cuts long lines from the Rust build phase, so a failed link reaches
+  # the job log without the linker'"'"'s own error after rustc'"'"'s long command
+  # line. Keep the whole build log and Xcode'"'"'s activity logs as artifacts.
+  mkdir -p ../../artifacts
+  if ! just ios-build-sim true 2>&1 | tee ../../artifacts/ios-build.log; then
+    echo "--- linker and compiler errors ---" >&2
+    grep -E "ld: |Undefined symbols|library not found|framework not found|error:" \
+      ../../artifacts/ios-build.log | cut -c1-2000 | tail -40 >&2 || true
+    find "$HOME/Library/Developer/Xcode/DerivedData" -name "*.xcactivitylog" \
+      -exec cp {} ../../artifacts/ \; 2>/dev/null || true
+    exit 1
+  fi
 '
 
 APP="apps/web/tauri/src-tauri/gen/apple/build/arm64-sim/macro.app"

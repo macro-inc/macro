@@ -495,7 +495,7 @@ fn notion_page(id: &str, title: &str, status: &str, owner: &str) -> NotionPage {
         properties: BTreeMap::from([
             (
                 "Status".to_string(),
-                NotionValue::Option(status.to_string()),
+                NotionValue::Option(status.to_string().into()),
             ),
             (
                 "Owner".to_string(),

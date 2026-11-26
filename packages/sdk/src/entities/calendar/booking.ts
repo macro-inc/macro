@@ -61,6 +61,9 @@ export class Booking extends MacroEntity<BookingRecord> {
   /** When the meeting last moved, if it ever did. */
   readonly rescheduledAt = this.field('rescheduledAt');
 
+  /** When Macro stopped trying to update the host's calendar. A `failed` booking with this set is not retried; only a cancellation that returns it `cancelled` releases its time. */
+  readonly abandonedAt = this.field('abandonedAt');
+
   /** Final location or conference URL. */
   readonly location = this.field('location');
 
@@ -94,7 +97,11 @@ export class Booking extends MacroEntity<BookingRecord> {
   /**
    * Move the meeting to a start returned by {@link rescheduleSlots}; only on
    * the user's go-ahead, since the guest and hosts are notified. Returns the
-   * saved booking.
+   * saved booking. Throws with status 422 when the host's calendar refuses
+   * the move and the booking is put back at its original time. If putting it
+   * back could not be saved, it returns the booking as stored instead of
+   * throwing: read its status and start rather than assuming the move
+   * happened or was undone.
    *
    * @destructive
    * @openworld
@@ -106,7 +113,10 @@ export class Booking extends MacroEntity<BookingRecord> {
   /**
    * Cancel the meeting; only on the user's go-ahead, since the guest and
    * hosts are notified. The booking link stays as it is. Returns the saved
-   * booking.
+   * booking. `cancelled` means its time is released. `failed` means the
+   * calendar has not confirmed the cancellation: with `abandonedAt` set Macro
+   * stopped retrying and the reservation stays held; otherwise Macro keeps
+   * retrying. Treat the time as released only once the booking is `cancelled`.
    *
    * @destructive
    * @openworld

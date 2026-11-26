@@ -7,7 +7,8 @@ import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { describe, expect, it, vi } from 'vitest';
 import { EMAIL_TAB_IDS } from '../constants';
-import type { EmailTab, EmailViewConditions } from '../types';
+import type { EmailSearchScope } from '../search/email-search-scope';
+import type { EmailViewConditions } from '../types';
 import {
   buildEmailQuery,
   type EmailQueryContext,
@@ -15,7 +16,10 @@ import {
   emailViewForTab,
 } from './email-query';
 import { groupEmailEntitiesByDate } from './email-results';
-import { buildEmailSearchRequest } from './email-search';
+import {
+  buildEmailSearchRequest,
+  type EmailSearchContext,
+} from './email-search';
 
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
@@ -97,7 +101,6 @@ describe('buildEmailQuery', () => {
     const args = buildEmailQuery(
       contextFor({
         tab: 'favorites',
-        favoriteThreadIds: ['starred-a', 'starred-b'],
         inboxIds: ['inbox-a'],
         facets: { read: ['unread'] },
       })
@@ -115,13 +118,8 @@ describe('buildEmailQuery', () => {
     expect(filter).not.toContain('inboxVisible');
   });
 
-  it('keeps the Soup query identical as favorite membership changes', () => {
+  it('leaves favorite membership to the server', () => {
     const args = buildEmailQuery(contextFor({ tab: 'favorites' }));
-    for (const favoriteThreadIds of [[], ['a'], ['a', 'b']]) {
-      expect(
-        buildEmailQuery(contextFor({ tab: 'favorites', favoriteThreadIds }))
-      ).toEqual(args);
-    }
     expect(args.body.favorites_only).toBe(true);
     const admitted = buildEmailQuery(
       contextFor({ tab: 'favorites', facets: { read: ['unread'] } }),
@@ -303,13 +301,141 @@ describe('buildEmailQuery', () => {
     );
   });
 
-  it('leaves attachment facets to the client on built-in tabs', () => {
-    const plain = buildEmailQuery(contextFor()).body;
-    const withAttachments = buildEmailQuery(
-      contextFor({ facets: { attachments: ['attachment-pdf'] } })
-    ).body;
+  describe('attachment facets on built-in tabs', () => {
+    const treeFor = (overrides: Partial<EmailQueryContext>) => {
+      const args = buildEmailQuery(contextFor(overrides));
+      return serialize(
+        makeGraphqlSoupInput(args).initial?.filters?.emailFilter
+      );
+    };
 
-    expect(withAttachments).toEqual(plain);
+    it.each([
+      ['important', 'INBOX'],
+      ['noise', 'INBOX'],
+      ['all', 'ALL'],
+      ['archived', 'ALL'],
+      ['calendar', 'ALL'],
+      ['favorites', 'ALL'],
+      ['shared', 'ALL'],
+    ] as const)('sends the kind to the server on %s', (tab, view) => {
+      const args = buildEmailQuery(
+        contextFor({ tab, facets: { attachments: ['attachment-pdf'] } })
+      );
+      const input = makeGraphqlSoupInput(args);
+
+      expect(input.initial?.emailView).toBe(view);
+      expect(serialize(input.initial?.filters?.emailFilter)).toContain(
+        serialize({ literal: { attachment: 'PDF' } })
+      );
+    });
+
+    it('matches any of several kinds, beside the other filters', () => {
+      const tree = treeFor({
+        tab: 'important',
+        facets: {
+          attachments: ['attachment-image', 'attachment-document'],
+          read: ['unread'],
+        },
+        inboxIds: ['link-a'],
+      });
+
+      expect(tree).toContain(
+        serialize({
+          or: {
+            left: { literal: { attachment: 'IMAGE' } },
+            right: { literal: { attachment: 'DOCUMENT' } },
+          },
+        })
+      );
+      expect(tree).toContain(serialize({ literal: { read: false } }));
+      expect(tree).toContain(serialize({ literal: { owner: 'link-a' } }));
+    });
+
+    it("leaves a tab's rows looked up by id to the client", () => {
+      const ids = ['thread-a'];
+      const facets = { attachments: ['attachment-pdf'] };
+
+      expect(buildEmailQuery(contextFor({ facets }), ids).body).toEqual(
+        buildEmailQuery(contextFor(), ids).body
+      );
+    });
+
+    it.each(['sent', 'drafts', 'spam', 'trash'] as const)(
+      'leaves the kind to the client on %s',
+      (tab) => {
+        const { body } = buildEmailQuery(
+          contextFor({ tab, facets: { attachments: ['attachment-pdf'] } })
+        );
+
+        expect(body).toEqual(buildEmailQuery(contextFor({ tab })).body);
+      }
+    );
+
+    it('adds nothing when no kind is selected', () => {
+      expect(treeFor({ tab: 'important', facets: { attachments: [] } })).toBe(
+        treeFor({ tab: 'important', facets: {} })
+      );
+    });
+  });
+
+  describe('label facets', () => {
+    const LARKSPUR = '0199a1b2-0000-7000-8000-0000000000c1';
+    const ACME = '0199a1b2-0000-7000-8000-0000000000c2';
+
+    it.each([
+      'important',
+      'all',
+      'sent',
+      'drafts',
+      'favorites',
+      'archived',
+    ] as const)('sends any of the ticked labels to the server on %s', (tab) => {
+      const tree = serialize(
+        makeGraphqlSoupInput(
+          buildEmailQuery(
+            contextFor({ tab, facets: { labels: [LARKSPUR, ACME] } })
+          )
+        ).initial?.filters?.emailFilter
+      );
+
+      expect(tree).toContain(
+        serialize({
+          or: {
+            left: { literal: { label: LARKSPUR } },
+            right: { literal: { label: ACME } },
+          },
+        })
+      );
+    });
+
+    it('keeps the labels over REST, in a saved view and on rows looked up by id', () => {
+      const facets = { labels: [LARKSPUR] };
+      const label = serialize({ l: { Label: LARKSPUR } });
+      const trash = buildEmailQuery(contextFor({ tab: 'trash', facets }));
+
+      expect(trash.transport).toBe('rest');
+      expect(serialize(trash.body)).toContain(label);
+      expect(
+        serialize(buildEmailQuery(contextFor({ facets }), ['thread-a']).body)
+      ).toContain(label);
+      expect(
+        serialize(
+          buildEmailQuery(
+            contextFor({
+              facets,
+              savedView: {
+                conditions: {
+                  participants: [],
+                  participantFields: ['from', 'to', 'cc'],
+                  subject: [],
+                  starred: false,
+                },
+              },
+            })
+          ).body
+        )
+      ).toContain(label);
+    });
   });
 
   describe('saved views', () => {
@@ -365,6 +491,20 @@ describe('buildEmailQuery', () => {
 
       expect(serialize(args.body.ef)).toContain(
         serialize({ l: { ThreadId: NIL } })
+      );
+    });
+
+    it('keeps the attachment kinds when looking up admitted rows by id', () => {
+      const args = buildEmailQuery(
+        contextFor({
+          facets: { attachments: ['attachment-pdf'] },
+          savedView: scope(),
+        }),
+        ['thread-a']
+      );
+
+      expect(serialize(args.body.ef)).toContain(
+        serialize({ l: { Attachment: 'pdf' } })
       );
     });
 
@@ -443,25 +583,27 @@ describe('buildEmailQuery', () => {
 describe('buildEmailSearchRequest', () => {
   const search = { query: 'invoice', matchType: 'partial' as const };
 
-  it.each(['spam', 'trash'] as const)(
-    'fails closed for %s even with retained IDs',
-    (tab) => {
-      expect(
-        buildEmailSearchRequest(contextFor({ tab }), search, [
-          'retained-thread',
-        ]).body.filters?.email_filters?.email_thread_ids
-      ).toEqual([NIL]);
-    }
-  );
+  const searchContextFor = (
+    overrides: Partial<EmailSearchContext> = {}
+  ): EmailSearchContext => ({
+    scope: 'all',
+    inboxIds: undefined,
+    facets: {},
+    facetContext: EMPTY_TAG_FACET_CONTEXT,
+    ...overrides,
+  });
 
-  const requestFor = (overrides: Partial<EmailQueryContext> = {}) => {
-    const { body } = buildEmailSearchRequest(contextFor(overrides), search);
+  const requestFor = (overrides: Partial<EmailSearchContext> = {}) => {
+    const { body } = buildEmailSearchRequest(
+      searchContextFor(overrides),
+      search
+    );
     if (!body.filters) throw new Error('search request has no filters');
 
     return { ...body, filters: body.filters };
   };
 
-  it('searches only email threads', () => {
+  it('searches only email threads, across all mail by default', () => {
     const body = requestFor();
 
     expect(body.query).toBe('invoice');
@@ -471,10 +613,10 @@ describe('buildEmailSearchRequest', () => {
     expect(body.filters.email_filters).toEqual({});
   });
 
-  it('restricts search and retained results to current favorites before pagination', () => {
-    const context = contextFor({
-      tab: 'favorites',
-      favoriteThreadIds: ['starred-a', 'starred-b'],
+  it('restricts in:favorites search and retained results to current favorites before pagination', () => {
+    const context = searchContextFor({
+      scope: 'favorites',
+      scopeThreadIds: ['starred-a', 'starred-b'],
       inboxIds: ['inbox-a'],
     });
     expect(
@@ -488,46 +630,60 @@ describe('buildEmailSearchRequest', () => {
         .filters?.email_filters?.email_thread_ids
     ).toEqual(['starred-b']);
     expect(
-      requestFor({ tab: 'favorites', favoriteThreadIds: [] }).filters
+      requestFor({ scope: 'favorites', scopeThreadIds: [] }).filters
         .email_filters?.email_thread_ids
     ).toEqual([NIL]);
   });
 
-  it('mirrors the tab scoping the list applies', () => {
-    const filtersFor = (tab: EmailTab) =>
-      requestFor({ tab }).filters.email_filters;
+  it('holds in:focus to the threads Focus lists', () => {
+    expect(
+      requestFor({ scope: 'focus', scopeThreadIds: ['focus-a'] }).filters
+        .email_filters
+    ).toEqual({ email_thread_ids: ['focus-a'] });
+    expect(
+      requestFor({ scope: 'focus', scopeThreadIds: [] }).filters.email_filters
+        ?.email_thread_ids
+    ).toEqual([NIL]);
+  });
 
-    expect(filtersFor('important')).toEqual({
+  it('narrows to what the named view lists, its inbox views to mail still in the inbox', () => {
+    const filtersFor = (scope: EmailSearchScope) =>
+      requestFor({ scope }).filters.email_filters;
+
+    expect(filtersFor('inbox')).toEqual({ done: false });
+    expect(filtersFor('signal')).toEqual({
       importance: true,
       shared: 'exclude',
+      done: false,
     });
     expect(filtersFor('noise')).toEqual({
       importance: false,
       shared: 'exclude',
+      done: false,
     });
     expect(filtersFor('calendar')).toEqual({
       calendar_only: true,
       shared: 'exclude',
     });
     expect(filtersFor('shared')).toEqual({ shared: 'only' });
-    expect(filtersFor('all')).toEqual({});
+    expect(filtersFor('drafts')).toEqual({ view: 'drafts' });
+    expect(filtersFor('sent')).toEqual({ view: 'sent' });
+    expect(filtersFor('archived')).toEqual({ shared: 'exclude', done: true });
   });
 
-  it('leaves Drafts and Sent search unscoped', () => {
-    const filtersFor = (tab: EmailTab) =>
-      requestFor({ tab }).filters.email_filters;
-
-    // Macro-composed drafts are unindexed and unlabeled; the client trims
-    // both tabs' results instead (see tabFilters).
-    expect(filtersFor('drafts')).toEqual({});
-    expect(filtersFor('sent')).toEqual({});
-  });
-
-  it('excludes shared threads from archived search', () => {
-    const filtersFor = (tab: EmailTab) =>
-      requestFor({ tab }).filters.email_filters;
-
-    expect(filtersFor('archived')).toEqual({ shared: 'exclude' });
+  it('matches nothing when a view and the Done filter disagree', () => {
+    expect(
+      requestFor({ scope: 'archived', facets: { done: ['not-done'] } }).filters
+        .email_filters?.email_thread_ids
+    ).toEqual([NIL]);
+    expect(
+      requestFor({ scope: 'inbox', facets: { done: ['done'] } }).filters
+        .email_filters?.email_thread_ids
+    ).toEqual([NIL]);
+    expect(
+      requestFor({ scope: 'archived', facets: { done: ['done'] } }).filters
+        .email_filters
+    ).toEqual({ shared: 'exclude', done: true });
   });
 
   it('restricts to the selected inboxes', () => {
@@ -538,36 +694,37 @@ describe('buildEmailSearchRequest', () => {
     expect(none).toEqual({ link_ids: [NIL] });
   });
 
-  it('maps email read independently of notification state selections', () => {
+  it('maps read status and done to the thread states the list filters by', () => {
     const filters = requestFor({
       facets: { read: ['unread'], done: ['not-done'] },
     }).filters.email_filters;
 
-    expect(filters).toEqual({
-      is_read: false,
-      notification_filters: { states: ['unseen', 'seen'] },
-    });
+    expect(filters).toEqual({ is_read: false, done: false });
     expect(
       requestFor({ facets: { read: ['read'] } }).filters.email_filters
     ).toEqual({ is_read: true });
     expect(
       requestFor({ facets: { read: ['read'], done: ['done'] } }).filters
         .email_filters
-    ).toEqual({
-      is_read: true,
-      notification_filters: { states: ['done'] },
-    });
+    ).toEqual({ is_read: true, done: true });
   });
 
-  it('maps the calendar facet and ignores attachment facets', () => {
+  it('maps the calendar facet and the attachment kinds', () => {
     const filters = requestFor({
       facets: {
         calendar: ['has-calendar-invite'],
-        attachments: ['attachment-pdf'],
+        attachments: ['attachment-pdf', 'attachment-image', 'attachment-pdf'],
       },
     }).filters.email_filters;
 
-    expect(filters).toEqual({ calendar_only: true });
+    expect(filters).toEqual({
+      calendar_only: true,
+      attachments: ['pdf', 'image'],
+    });
+    expect(
+      requestFor({ facets: { attachments: ['attachment-document'] } }).filters
+        .email_filters
+    ).toEqual({ attachments: ['document'] });
   });
 
   it('sends selected tags as an entity-wide filter', () => {

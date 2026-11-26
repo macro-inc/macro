@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE crm_email_policy_source_events SET after_user_id = $2, after_revision = $3\n                   WHERE event_id = $1 AND (COALESCE(after_user_id, ''), COALESCE(after_revision, 0)) < ($2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4d6c75f96c9cbc0d473035a36f28d4301adce7828a726bafabaf49191bc34808"
+}

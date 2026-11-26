@@ -6,10 +6,11 @@ use email_api_client::domain::ports::{
 };
 use models_email::email::service::address::ContactInfo;
 use serde_json::json;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
 
-use super::{ADA, BOB, id, message_id, start, token};
-use crate::{Fault, FaultError, Route};
+use super::{ADA, BOB, folders, id, message_id, start, token};
+use crate::{Fault, FaultError, MessageChange, Route};
 
 const TWO_MAILBOXES: &str = r#"
 mailboxes:
@@ -128,9 +129,9 @@ async fn sending_a_draft_delivers_it_to_the_recipients_mailbox() {
     // Bob reads it with the real client, attachment included.
     let bob = token(&emulator, BOB);
     let received = message_id(&emulator, BOB, "Plan");
-    let folders = api.folders(&bob).await.unwrap();
+    let bob_folders = folders(&api, &bob).await;
     let read = api
-        .message(&bob, Uuid::now_v7(), &received, &folders)
+        .message(&bob, Uuid::now_v7(), &received, &bob_folders)
         .await
         .unwrap()
         .unwrap();
@@ -148,14 +149,55 @@ async fn sending_a_draft_delivers_it_to_the_recipients_mailbox() {
     assert_eq!(bytes, b"the plan");
 
     // Ada's copy reads as sent, by the flag that survives folder moves.
-    let folders = api.folders(&ada).await.unwrap();
+    let ada_folders = folders(&api, &ada).await;
     let own = api
-        .message(&ada, Uuid::now_v7(), &draft.id, &folders)
+        .message(&ada, Uuid::now_v7(), &draft.id, &ada_folders)
         .await
         .unwrap()
         .unwrap();
     assert!(own.content.message.is_sent);
     assert_eq!(own.draft_correlation, Some(request.correlation));
+}
+
+#[tokio::test]
+async fn the_sync_read_and_the_draft_read_of_a_draft_hold_the_same_content() {
+    let (emulator, api) = start(TWO_MAILBOXES).await;
+    let ada = token(&emulator, ADA);
+    let created = api
+        .create_draft(&ada, &request("Plan", "<p>First</p>"))
+        .await
+        .unwrap();
+    let ada_folders = folders(&api, &ada).await;
+    let read = async || {
+        let synced = api
+            .message(&ada, Uuid::now_v7(), &created.id, &ada_folders)
+            .await
+            .unwrap()
+            .unwrap();
+        let draft = api.get_draft(&ada, &created.id).await.unwrap().unwrap();
+        assert_eq!(synced.version, draft.version);
+        assert!(synced.draft_content.is_some());
+        assert_eq!(synced.draft_content, draft.content());
+        synced.draft_content
+    };
+
+    let before = read().await;
+    let edit = MessageChange {
+        body: Some("<p>Second</p>".into()),
+        ..MessageChange::default()
+    };
+    emulator
+        .update_message(ADA, created.id.as_str(), &edit)
+        .unwrap();
+    assert_ne!(read().await, before);
+
+    api.submit_draft(&ada, &created.id).await.unwrap();
+    let synced = api
+        .message(&ada, Uuid::now_v7(), &created.id, &ada_folders)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(synced.draft_content, None);
 }
 
 #[tokio::test]
@@ -248,7 +290,9 @@ async fn a_large_attachment_uploads_in_ranges_and_resumes_from_the_servers_offse
     let attachments = api.draft_attachments(&ada, &draft.id).await.unwrap();
     assert_eq!(attachments.len(), 1);
     assert_eq!(attachments[0].name, "big.bin");
-    assert_eq!(attachments[0].size, total);
+    // Graph reports more than the file's length: the attachment's other
+    // properties count too.
+    assert!(attachments[0].size > total);
     assert_eq!(attachments[0].content_id.as_deref(), Some("big-1"));
     let bytes = api
         .attachment(&ada, &draft.id, &attachments[0].id)
@@ -265,4 +309,54 @@ async fn a_large_attachment_uploads_in_ranges_and_resumes_from_the_servers_offse
             .unwrap()
             .is_empty()
     );
+}
+
+#[tokio::test]
+async fn a_subject_keeps_its_first_255_characters() {
+    let (emulator, api) = start(TWO_MAILBOXES).await;
+    let ada = token(&emulator, ADA);
+    let long = "s".repeat(300);
+
+    let draft = api.create_draft(&ada, &request(&long, "<p>Hi</p>")).await;
+    let draft = draft.unwrap();
+
+    let stored = emulator.messages(ADA).unwrap();
+    let stored = stored.iter().find(|m| m.id == draft.id.as_str()).unwrap();
+    assert_eq!(stored.subject, long[..255]);
+}
+
+#[tokio::test]
+async fn a_write_without_a_body_length_is_refused_before_the_mailbox() {
+    let (emulator, api) = start(TWO_MAILBOXES).await;
+    let ada = token(&emulator, ADA);
+    let draft = api.create_draft(&ada, &request("Plan", "<p>Hi</p>")).await;
+    let draft = draft.unwrap();
+    let address = emulator.graph_url();
+    let address = address.strip_prefix("http://").unwrap();
+    let (authority, root) = address.split_once('/').unwrap();
+    let bearer = emulator.access_token(ADA).unwrap();
+
+    // What a client that leaves `Content-Length` off a bodyless POST sends.
+    let mut stream = tokio::net::TcpStream::connect(authority).await.unwrap();
+    let request = format!(
+        "POST /{root}/me/messages/{}/send HTTP/1.1\r\nHost: {authority}\r\n\
+         Authorization: Bearer {bearer}\r\nConnection: close\r\n\r\n",
+        draft.id.as_str()
+    );
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut answer = String::new();
+    stream.read_to_string(&mut answer).await.unwrap();
+
+    assert!(answer.starts_with("HTTP/1.1 411"), "{answer}");
+    assert!(answer.contains("Length Required"), "{answer}");
+    let stored = emulator.messages(ADA).unwrap();
+    assert!(
+        stored
+            .iter()
+            .any(|m| m.id == draft.id.as_str() && m.is_draft)
+    );
+
+    // The real client names the length, and the same draft goes out.
+    let outcome = api.submit_draft(&ada, &draft.id).await.unwrap();
+    assert!(matches!(outcome, SubmissionOutcome::Accepted));
 }

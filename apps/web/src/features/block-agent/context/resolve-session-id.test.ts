@@ -506,6 +506,7 @@ it.each(['Describe this', ''])(
         prompt,
         promptActionId: expect.any(String),
         promptAttachments: attachments,
+        promptClientId: expect.any(String),
       },
     ]);
     expect(create.control).not.toHaveBeenCalled();

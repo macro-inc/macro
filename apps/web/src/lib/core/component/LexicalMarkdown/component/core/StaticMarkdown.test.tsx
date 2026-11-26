@@ -5,7 +5,11 @@ import { render, waitFor } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { replaceCitations } from '../../citationsUtils';
-import { StaticMarkdown, StaticMarkdownContext } from './StaticMarkdown';
+import {
+  StaticLexical,
+  StaticMarkdown,
+  StaticMarkdownContext,
+} from './StaticMarkdown';
 
 const agentPreview = vi.hoisted(() => ({
   label: (): string => 'Loading session',
@@ -337,6 +341,91 @@ describe('static markdown ordered lists', () => {
 
     expect(rendered.container.textContent).toBe('Account manager request');
     expect(rendered.queryByRole('button')).toBeNull();
+  });
+});
+
+describe('saved links a link may not open', () => {
+  // Saved Lexical JSON reaches the renderer without the Markdown importer.
+  const savedLink = (url: string) =>
+    JSON.stringify({
+      root: {
+        type: 'root',
+        version: 1,
+        direction: null,
+        format: '',
+        indent: 0,
+        children: [
+          {
+            type: 'paragraph',
+            version: 1,
+            direction: null,
+            format: '',
+            indent: 0,
+            textFormat: 0,
+            textStyle: '',
+            children: [
+              {
+                type: 'link',
+                version: 1,
+                url,
+                rel: null,
+                target: null,
+                title: null,
+                direction: null,
+                format: '',
+                indent: 0,
+                children: [
+                  {
+                    type: 'text',
+                    version: 1,
+                    text: 'the notes',
+                    format: 0,
+                    style: '',
+                    mode: 'normal',
+                    detail: 0,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+  it.each([
+    'javascript:alert(1)',
+    ' JavaScript:alert(1)',
+    'java\tscript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+  ])('renders a link to %j as text that opens nothing', (url) => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const view = render(() => (
+      <StaticMarkdownContext lazy={false}>
+        <StaticLexical serializedState={savedLink(url)} />
+      </StaticMarkdownContext>
+    ));
+
+    const text = view.getByText('the notes');
+    expect(view.container.querySelector('a')).toBeNull();
+    text.click();
+    text.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, ctrlKey: true })
+    );
+    expect(open).not.toHaveBeenCalled();
+    view.unmount();
+    open.mockRestore();
+  });
+
+  it('renders a web link as a link', () => {
+    const view = render(() => (
+      <StaticMarkdownContext lazy={false}>
+        <StaticLexical serializedState={savedLink('https://example.com/a')} />
+      </StaticMarkdownContext>
+    ));
+    expect(view.getByText('the notes').closest('a')?.getAttribute('href')).toBe(
+      'https://example.com/a'
+    );
+    view.unmount();
   });
 });
 

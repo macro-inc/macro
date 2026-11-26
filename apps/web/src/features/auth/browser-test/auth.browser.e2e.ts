@@ -245,18 +245,6 @@ test('returning from Google sign-up settles into onboarding without flashing', a
   ).toEqual({ signedOut: false, placeholderAfterStep: false });
 });
 
-test('a mobile-web visitor gets a desktop link instead of signing up', async ({
-  page,
-}) => {
-  await openFixture(page, '/?page=mobile-signup');
-  await page.getByLabel('Email address').fill('visitor@acme.com');
-  await page.getByRole('button', { name: 'Sign Up' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Macro is better on desktop.' })
-  ).toBeVisible();
-  expect(await fakeCalls(page)).toContain('lead:visitor@acme.com');
-});
-
 test('a failed provider sign-up falls back to the email form with the reason', async ({
   page,
 }) => {
@@ -292,4 +280,44 @@ test('with Microsoft sign-up off, the work step is Google only as before', async
   await expect(
     page.getByRole('button', { name: 'Continue with Microsoft' })
   ).toHaveCount(0);
+});
+
+test('the Apple sign-in icon fits its viewport on a phone', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openFixture(page, '/?page=login&apple=true');
+  const button = page.getByRole('button', { name: 'Continue with Apple' });
+  await expect(button).toBeVisible();
+  const icon = button.locator('svg');
+  const bounds = await icon.evaluate((svg: SVGSVGElement) => {
+    const viewport = svg.getBoundingClientRect();
+    const paths = Array.from(svg.querySelectorAll('path')).map((path) => {
+      const box = path.getBBox();
+      const matrix = path.getScreenCTM();
+      if (!matrix) throw new Error('Apple icon is not laid out');
+      const start = new DOMPoint(box.x, box.y).matrixTransform(matrix);
+      const end = new DOMPoint(
+        box.x + box.width,
+        box.y + box.height
+      ).matrixTransform(matrix);
+      return { left: start.x, top: start.y, right: end.x, bottom: end.y };
+    });
+    return {
+      viewport: {
+        left: viewport.left,
+        top: viewport.top,
+        right: viewport.right,
+        bottom: viewport.bottom,
+      },
+      paths,
+    };
+  });
+  await page.screenshot({ path: test.info().outputPath('apple-sign-in.png') });
+  for (const path of bounds.paths) {
+    expect(path.left).toBeGreaterThanOrEqual(bounds.viewport.left);
+    expect(path.top).toBeGreaterThanOrEqual(bounds.viewport.top);
+    expect(path.right).toBeLessThanOrEqual(bounds.viewport.right);
+    expect(path.bottom).toBeLessThanOrEqual(bounds.viewport.bottom);
+  }
 });

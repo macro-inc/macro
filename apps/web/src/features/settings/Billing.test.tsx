@@ -22,10 +22,9 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: false }),
 }));
 vi.mock('@core/auth', () => ({ useHasPaidAccess: () => () => false }));
-vi.mock('@core/constant/featureFlags', () => ({
-  LOCAL_ONLY: false,
-  enableAiUsageBilling: {},
-  enableMacroComputers: {},
+vi.mock('@core/constant/featureFlags', () => ({ LOCAL_ONLY: false }));
+vi.mock('@queries/computers/computers', () => ({
+  useMacroComputersRollout: () => () => ({ enabled: false, loading: false }),
 }));
 vi.mock('@core/context/user', () => ({
   usePermissions: () => () => ['write:stripe_subscription'],
@@ -79,6 +78,7 @@ it.each([true, false])(
     fireEvent.click(screen.getByRole('button', { name: 'Get Pro' }));
     expect(mocks.checkout).toHaveBeenCalledWith({
       plan: 'premium',
+      interval: 'month',
       onboardingTrial: eligible,
     });
   }
@@ -103,12 +103,68 @@ it.each(['loading', 'error'])(
       expect(mocks.eligibility.refetch).toHaveBeenCalled();
     }
     fireEvent.click(screen.getByRole('button', { name: 'Get Max' }));
+    // Business and Max confirm their billing cycle in the modal (annual default).
+    expect(mocks.checkout).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue to checkout' })
+    );
     expect(mocks.checkout).toHaveBeenCalledWith({
       plan: 'max',
+      interval: 'year',
       onboardingTrial: false,
     });
   }
 );
+
+it('buys Business monthly once Billed monthly is chosen in the billing-cycle dialog', () => {
+  render(() => <Billing />);
+  fireEvent.click(screen.getByRole('button', { name: 'Get Business' }));
+  fireEvent.click(screen.getByRole('radio', { name: /Billed monthly/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to checkout' }));
+  expect(mocks.checkout).toHaveBeenCalledWith({
+    plan: 'business',
+    interval: 'month',
+    onboardingTrial: false,
+  });
+});
+
+it('offers no paid plan change until the subscription interval is known', () => {
+  render(() => (
+    <BillingSettingsView
+      state={getBillingState({
+        hasPaid: true,
+        canManageSubscription: true,
+        aiUsageEnabled: true,
+        pending: false,
+        summary: { tier: 'premium', canManageBilling: true },
+      })}
+      onManage={() => {}}
+      onSelectPlan={() => {}}
+    />
+  ));
+  expect(screen.queryByRole('button', { name: /^Upgrade to/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Switch to/ })).toBeNull();
+});
+
+it('offers no Pro card to an annual subscription', () => {
+  render(() => (
+    <BillingSettingsView
+      state={getBillingState({
+        hasPaid: true,
+        canManageSubscription: true,
+        aiUsageEnabled: true,
+        pending: false,
+        summary: { tier: 'business', canManageBilling: true },
+        interval: 'year',
+      })}
+      onManage={() => {}}
+      onSelectPlan={() => {}}
+    />
+  ));
+  expect(screen.queryByRole('button', { name: /Pro$/ })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Upgrade to Max' })).toBeTruthy();
+  expect(screen.getByText(/\$200 \/ month, billed annually/)).toBeTruthy();
+});
 
 it('shows subscription management rather than replacement plans for a recoverable subscription', () => {
   mocks.eligibility.data.existingSubscription = true;
@@ -130,13 +186,16 @@ it('keeps Max upgrades available after paid access recovers while eligibility da
         pending: false,
         existingSubscription: true,
         summary: { tier: 'premium', canManageBilling: true },
+        interval: 'month',
       })}
       onManage={() => {}}
       onSelectPlan={select}
     />
   ));
   fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Max' }));
-  expect(select).toHaveBeenCalledWith('max');
+  expect(select).toHaveBeenCalledWith('max', 'month');
+  fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Business' }));
+  expect(select).toHaveBeenCalledWith('business', 'month');
 });
 
 it('keeps known subscription management available after a failed eligibility refresh', () => {

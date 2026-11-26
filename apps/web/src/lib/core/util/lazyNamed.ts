@@ -1,4 +1,5 @@
-import { type Component, lazy } from 'solid-js';
+import { lazy } from '@core/util/lazy';
+import type { JSX } from 'solid-js';
 
 /**
  * `lazy()` for a named export: the module becomes its own chunk, loaded the
@@ -6,7 +7,9 @@ import { type Component, lazy } from 'solid-js';
  */
 export function lazyNamed<
   K extends string,
-  M extends Record<K, Component<any>>,
+  M extends Record<K, (...props: never[]) => JSX.Element>,
 >(load: () => Promise<M>, name: K) {
-  return lazy(async () => ({ default: (await load())[name] }));
+  return lazy<Parameters<M[K]>>(async () => ({
+    default: (await load())[name],
+  }));
 }

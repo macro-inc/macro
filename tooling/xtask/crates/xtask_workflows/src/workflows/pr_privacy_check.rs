@@ -9,9 +9,8 @@
 //! code. There is no checkout: commits come from the PR API. Dependabot PRs are
 //! skipped: their bodies quote upstream release notes, not our writing.
 
-use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Step, Workflow,
-};
+use gh_workflow::expr::typed::{Str, github};
+use gh_workflow::{Event, Job, Level, Permissions, PullRequest, PullRequestType, Step, Workflow};
 
 use crate::workflows::runners;
 
@@ -31,9 +30,11 @@ pub fn pr_privacy_check() -> Workflow {
 fn check_job() -> Job {
     Job::default()
         .name("PR text has no personal or support-channel details")
-        .cond(Expression::new(
-            "github.event.pull_request.user.login != 'dependabot[bot]'",
-        ))
+        .cond(
+            github()
+                .event::<Str>("pull_request.user.login")
+                .ne("dependabot[bot]"),
+        )
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(5u32)
         .permissions(
@@ -41,11 +42,11 @@ fn check_job() -> Job {
                 .contents(Level::Read)
                 .pull_requests(Level::Read),
         )
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
-        .add_env(("PR_TITLE", "${{ github.event.pull_request.title }}"))
-        .add_env(("PR_BODY", "${{ github.event.pull_request.body }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env(("PR_NUMBER", github().event::<Str>("pull_request.number")))
+        .add_env(("PR_TITLE", github().event::<Str>("pull_request.title")))
+        .add_env(("PR_BODY", github().event::<Str>("pull_request.body")))
         .add_step(
             Step::new("Scan PR title, body, and commit messages")
                 .run(include_str!("scripts/pr_privacy_check.sh"))

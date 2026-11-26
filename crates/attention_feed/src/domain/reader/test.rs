@@ -1,7 +1,10 @@
 use item_filters::ast::EntityFilterAst;
 
 use super::*;
-use crate::{domain::models::FeedNotification, test_support::*};
+use crate::{
+    domain::models::{CandidateRead, FeedNotification},
+    test_support::*,
+};
 
 const CHANNEL: u128 = 0xC0;
 const THREAD: u128 = 0x70;
@@ -25,6 +28,8 @@ fn request(keying: CandidateKeying, limit: u16) -> CandidateRequest {
         limit,
         after: None,
         only: None,
+        assume_attention: false,
+        read: CandidateRead::Replica,
     }
 }
 

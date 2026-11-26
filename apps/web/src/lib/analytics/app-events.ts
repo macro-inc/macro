@@ -47,19 +47,6 @@ export type AppEvents = {
     reason: AccountDeletionReason | 'not_provided';
     feedback?: string;
   };
-  login_from_onboarding: Record<string, unknown>;
-  mobile_web_welcome_viewed: Record<string, unknown>;
-  mobile_web_signup_sent_viewed: Record<string, unknown>;
-
-  // --- Interactive tutorial (optional; decoupled from acquisition) ---------
-  tutorial_started: { isFirstTime: boolean };
-  tutorial_step: {
-    id: string;
-    index: number;
-    state: 'viewed' | 'completed' | 'skipped';
-  };
-  tutorial_completed: { isFirstTime: boolean };
-  tutorial_skipped: Record<string, unknown>;
 
   // --- Onboarding v4 (the full-screen /onboarding stepper) -----------------
   /** A GTM invite welcome page resolved its link (`/invite?token=`). */
@@ -144,19 +131,35 @@ export type AppEvents = {
    * everything connected along the way.
    */
   onboarding_v4_completed: {
-    plan: 'free' | 'premium' | 'max';
+    plan: 'free' | 'premium' | 'business' | 'max';
     plan_skipped: boolean;
     emails_connected: number;
     connectors_connected: string[];
   };
   /** A @macro.com account used the staff Bypass button; `step` is where. */
   onboarding_v4_bypassed: { step: string };
+  /**
+   * A phone-browser user reached the last screen, "Macro is better on
+   * desktop", and chose how to go on: `viewed`, then `download_app` (store
+   * link) or `continue_in_browser`.
+   */
+  onboarding_v4_desktop_handoff: {
+    action: 'viewed' | 'download_app' | 'continue_in_browser';
+  };
 
   subscription_start: Record<string, unknown>;
   subscription_cancel: Record<string, unknown>;
   subscription_success: Record<string, unknown>;
 
   sidebar_click: Record<string, unknown>;
+  /**
+   * A desktop installer download started. The marketing download page sends
+   * the same event with `source: 'marketing'`.
+   */
+  desktop_download_clicked: {
+    platform: 'macos' | 'macos-intel' | 'linux';
+    source: 'app_settings';
+  };
   notifications_toggled: Record<string, unknown>;
 
   share_menu_open: { blockType: string };
@@ -205,7 +208,8 @@ export type AppEvents = {
   /**
    * An entity was opened in a split (md, task, pdf, chat, email, channel,
    * canvas, code, project, company, contact, ...). Fired from BlockLoader on
-   * successful load; nested blocks and preview-panel peeks are excluded.
+   * successful load, including blocks a preview panel shows (Home, Agents,
+   * notifications); nested blocks are excluded.
    * Route-owned detail views fire it themselves: documents from
    * FileDetailLoadGate, channels from ChannelDetail, calls and PRs from their
    * detail views. Blocks without an open history row fire it only when they
@@ -262,8 +266,8 @@ export type AppEvents = {
   ai_credits_checkout_start: { amountCents: number };
   /** A payer changed their AI usage billing (overage) settings. */
   ai_overage_updated: { enabled: boolean; limitCents: number };
-  /** An existing subscriber moved between Premium and Max. */
-  plan_changed: { plan: 'premium' | 'max'; from?: string };
+  /** An existing subscriber moved between Premium, Business and Max. */
+  plan_changed: { plan: 'premium' | 'business' | 'max'; from?: string };
 
   /**
    * An email the user sent, counted once when the outbox accepts it. Undo
@@ -283,6 +287,9 @@ export type AppEvents = {
       | 'shared_inbox_conflict'
       | 'payment_required'
       | 'no_gmail_grant'
+      | 'inbox_being_removed'
+      | 'identity_conflict'
+      | 'changed'
       | 'gmail_not_granted'
       | 'failed'
       | 'exception'
@@ -500,6 +507,27 @@ export type AppEvents = {
   email_saved_view_opened: {
     savedViewId: string;
     viewCount: number;
+  };
+
+  // --- Email Focus ---------------------------------------------------------
+  /**
+   * A visit to the Focus tab, sent when the server answers the read the tab
+   * makes as it opens. `threads` is how many the Focus list holds, before the
+   * view's filters and search; 0 is an empty tab. A visit whose read fails,
+   * or that ends before the answer, is not counted.
+   */
+  email_focus_tab_opened: { threads: number };
+  /**
+   * A thread opened from the Focus list by click, tap or Enter, in the pane or
+   * a split. `position` is its 0-based place among the listed threads. Not
+   * counted: opens that follow the keyboard cursor in the reading pane, the
+   * thread the pane already shows, and next/previous from inside a thread.
+   */
+  email_focus_thread_opened: {
+    position: number;
+    rows: number;
+    /** The list's order: `recent` or `importance`. */
+    sort: string;
   };
 };
 

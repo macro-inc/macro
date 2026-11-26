@@ -175,6 +175,10 @@ pub async fn fetch_received_sender_contacts_by_link(
 /// now track interactions in both directions, so the source row must
 /// stay until both directions are gone. `email` is matched
 /// case-insensitively.
+///
+/// A message the provider no longer has (`provider_missing`: an Outlook
+/// message deleted at the provider) doesn't count; it has left every
+/// view, as a Gmail deletion removes the row.
 #[tracing::instrument(skip(pool, email), err)]
 pub async fn link_has_any_message_with(
     pool: &PgPool,
@@ -191,6 +195,7 @@ pub async fn link_has_any_message_with(
             JOIN email_contacts c ON c.id = r.contact_id
             WHERE m.link_id = $1
               AND m.is_sent = true
+              AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
               AND c.link_id = $1
               AND LOWER(c.email_address) = $2
             UNION ALL
@@ -199,6 +204,7 @@ pub async fn link_has_any_message_with(
             JOIN email_contacts c ON c.id = m.from_contact_id
             WHERE m.link_id = $1
               AND m.is_sent = false
+              AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
               AND c.link_id = $1
               AND LOWER(c.email_address) = $2
             LIMIT 1

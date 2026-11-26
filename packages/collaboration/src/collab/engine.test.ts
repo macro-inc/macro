@@ -95,6 +95,43 @@ describe('SyncEngine', () => {
     expect(manager.importUpdate).not.toHaveBeenCalled();
     wal.destroy();
   });
+  it('builds a queued write from the state stored when its turn comes', async () => {
+    const source = new MockLiveSyncSource();
+    const { wal } = makeTestWAL(source);
+    const manager = new MockLoroManager();
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    manager.syncToLoro.mockImplementationOnce(async () => {
+      entered.resolve();
+      await release.promise;
+      return ok(undefined);
+    });
+    const engine = new SyncEngine({
+      loroManager: manager,
+      awareness: makeAwareness(),
+      syncs: { wal, live: source },
+      bindings: { onRemoteState: () => {} },
+    });
+    engine.start();
+    const first = engine.syncStateToLoro({ written: 'first' });
+    await entered.promise;
+    const build = vi.fn((stored: unknown) => ({ builtOn: stored }));
+    const second = engine.syncStateToLoro(build as never);
+    manager.state = {
+      state: { written: 'first' },
+      metadata: { direction: 'TO_LORO' },
+    } as never;
+    expect(build).not.toHaveBeenCalled();
+
+    release.resolve();
+    await Promise.all([first, second]);
+
+    expect(build).toHaveBeenCalledWith({ written: 'first' });
+    expect(manager.syncToLoro).toHaveBeenLastCalledWith({
+      builtOn: { written: 'first' },
+    });
+    wal.destroy();
+  });
   it('registers peer id and calls onRunningChange(true) on start', () => {
     const source = new MockLiveSyncSource();
     const manager = new MockLoroManager();

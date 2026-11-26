@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH contributors AS MATERIALIZED (\n                SELECT * FROM (\n                    SELECT l.id AS link_id,c.user_id,member.team_role::text AS role,c.active_rule_revision AS revision\n                    FROM crm_email_consent c\n                    CROSS JOIN LATERAL (\n                        SELECT id FROM email_links WHERE id=c.link_id AND macro_id=c.user_id\n                            AND is_primary AND deleting_at IS NULL OFFSET 0\n                    )l\n                    CROSS JOIN LATERAL (\n                        SELECT team_role FROM team_user WHERE team_id=c.team_id AND user_id=c.user_id OFFSET 0\n                    )member\n                    WHERE c.team_id=$1 AND c.mode='selected' AND c.selected_enabled\n                        AND ($2::uuid[] IS NULL OR l.id=ANY($2))\n                        AND ($3::text IS NULL OR c.user_id<>$3)\n                    UNION ALL\n                    SELECT l.id,member.user_id,member.team_role::text,NULL::bigint\n                    FROM email_links l JOIN team_user member ON member.user_id=l.macro_id AND member.team_id=$1\n                    WHERE l.id=$4 AND l.macro_id=$3 AND l.is_primary AND l.deleting_at IS NULL\n                )scoped LIMIT $5\n            ), rules AS (\n                SELECT cb.link_id,r.kind,r.value FROM contributors cb\n                CROSS JOIN LATERAL (\n                    SELECT 'thread'::text kind,thread_id::text value FROM crm_email_rule_threads WHERE team_id=$1 AND user_id=cb.user_id AND revision=cb.revision\n                    UNION ALL SELECT 'address',address FROM crm_email_rule_addresses WHERE team_id=$1 AND user_id=cb.user_id AND revision=cb.revision\n                    UNION ALL SELECT 'contact',contact_id::text FROM crm_email_rule_contacts WHERE team_id=$1 AND user_id=cb.user_id AND revision=cb.revision\n                    UNION ALL SELECT 'domain',domain FROM crm_email_rule_domains WHERE team_id=$1 AND user_id=cb.user_id AND revision=cb.revision\n                    UNION ALL SELECT 'company',company_id::text FROM crm_email_rule_companies WHERE team_id=$1 AND user_id=cb.user_id AND revision=cb.revision\n                    OFFSET 0\n                )r\n                WHERE cb.revision IS NOT NULL AND (SELECT count(*) FROM contributors)<$5\n                LIMIT $6\n            )\n            SELECT link_id AS \"link_id!\",user_id AS \"user_id?\",role AS \"role?\",revision,\n                'contributor'::text AS \"kind?\",NULL::text AS \"value?\" FROM contributors\n            UNION ALL\n            SELECT link_id,NULL,NULL,NULL,kind,value FROM rules\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "role?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "value?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Text",
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "73e98a011362a2d403cf246537dbbe4052ffd3b3c3a2c7d89567578e7df71526"
+}

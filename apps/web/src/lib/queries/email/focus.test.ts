@@ -1,10 +1,10 @@
 import { WebsocketEvent } from '@macro-inc/collaboration/websocket';
 import { Telemetry } from '@macro-inc/observability';
-import { createClient, type Operation } from '@urql/core';
+import { CombinedError, createClient, type Operation } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { map, pipe, tap } from 'wonka';
-import { useEmailFocusQuery } from './focus';
+import { isOpenRead, useEmailFocusQuery } from './focus';
 
 const socket = vi.hoisted(() => ({
   messages: new Set<(message: { type: string; data: unknown }) => void>(),
@@ -40,6 +40,8 @@ vi.mock('../soup/transform-utils', () => ({
 }));
 
 const reads: Operation[] = [];
+/** What `onOpenRead` heard, in order. */
+const openReads: number[] = [];
 const client = createClient({
   url: '/graphql',
   exchanges: [
@@ -79,7 +81,7 @@ function setVisibility(value: DocumentVisibilityState) {
 async function mount(enabled = true) {
   const [isEnabled, setEnabled] = createSignal(enabled);
   dispose = createRoot((disposeRoot) => {
-    useEmailFocusQuery(isEnabled);
+    useEmailFocusQuery(isEnabled, (threads) => openReads.push(threads));
     return disposeRoot;
   });
   await vi.advanceTimersByTimeAsync(0);
@@ -94,6 +96,7 @@ beforeEach(() => {
     () => visibility
   );
   reads.length = 0;
+  openReads.length = 0;
 });
 
 afterEach(() => {
@@ -206,5 +209,81 @@ describe('useEmailFocusQuery', () => {
 
     expect(remoteContext).toHaveBeenCalledWith(traceparent);
     expect(reads[0]?.context.macroTraceParent).toBeDefined();
+  });
+});
+
+describe('onOpenRead', () => {
+  it('hears the read the tab makes as it opens, once', async () => {
+    await mount();
+    expect(openReads).toEqual([0]);
+  });
+
+  it('does not hear refreshes', async () => {
+    await mount();
+
+    push(FOCUS_UPDATED);
+    for (const reconnect of socket.reconnects) reconnect();
+    setVisibility('hidden');
+    setVisibility('visible');
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(reads.length).toBeGreaterThan(0);
+    expect(openReads).toEqual([0]);
+  });
+
+  it('hears each visit: leaving the tab and coming back reads again', async () => {
+    const { setEnabled } = await mount(false);
+    expect(openReads).toEqual([]);
+
+    setEnabled(true);
+    await vi.advanceTimersByTimeAsync(0);
+    setEnabled(false);
+    setEnabled(true);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(openReads).toEqual([0, 0]);
+  });
+});
+
+describe('isOpenRead', () => {
+  const read = (
+    requestPolicy: 'cache-and-network' | 'network-only' | 'cache-first',
+    result: {
+      stale?: boolean;
+      error?: boolean;
+      data?: unknown;
+      /** Where the normalized cache says the answer came from. */
+      source?: string;
+    } = {}
+  ) =>
+    isOpenRead({
+      operation: { context: { requestPolicy } } as Operation,
+      data: 'data' in result ? result.data : { user: { emailFocus: [] } },
+      error: result.error ? new CombinedError({}) : undefined,
+      extensions: result.source
+        ? { __macroNormalizedCache: { source: result.source } }
+        : undefined,
+      stale: result.stale ?? false,
+      hasNext: false,
+    });
+
+  it('is the server answer to the opening read', () => {
+    expect(read('cache-and-network')).toBe(true);
+    expect(read('cache-and-network', { source: 'live-network' })).toBe(true);
+  });
+
+  it('is not the cached answer shown first, a failure, or a refresh', () => {
+    expect(read('cache-and-network', { stale: true })).toBe(false);
+    expect(read('cache-and-network', { error: true })).toBe(false);
+    expect(read('cache-and-network', { data: undefined })).toBe(false);
+    expect(read('network-only')).toBe(false);
+    // The cache reading again after a write it holds.
+    expect(read('cache-first')).toBe(false);
+    expect(read('cache-and-network', { source: 'affected-cache-reread' })).toBe(
+      false
+    );
+    expect(read('cache-and-network', { source: 'normalized-cache-hit' })).toBe(
+      false
+    );
   });
 });

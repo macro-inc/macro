@@ -29,6 +29,9 @@ pub struct Event {
 pub struct EventInfo {
     /// IP address of the user the event was initiated for
     pub ip_address: String,
+    /// Browser user agent FusionAuth recorded for the event, when it sends one.
+    #[serde(default)]
+    pub user_agent: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

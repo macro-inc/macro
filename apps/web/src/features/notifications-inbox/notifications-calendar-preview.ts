@@ -18,10 +18,6 @@ import {
   notificationsRoute,
 } from '@app/routes/routes';
 import { previewCalendarTarget } from '@components/app/previewTarget';
-import {
-  enableCalendarUi,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import deepEqual from 'fast-deep-equal';
@@ -50,7 +46,6 @@ export function useNotificationsCalendarPreview() {
     entity: CalendarPreviewSelection,
     navigation: CalendarPreviewNavigation = {}
   ) => {
-    if (!isFeatureEnabled(enableCalendarUi)) return false;
     const target = previewCalendarTarget(entity);
     if (!target.eventId) return false;
     const span = Telemetry.span('calendar.open_from_notifications');

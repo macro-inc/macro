@@ -5,7 +5,9 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+
 import type { ActionConfiguration } from './actionConfiguration';
+import type { AgentMcpServer } from './agentMcpServer';
 import type { CheckedStepProblems } from './checkedStepProblems';
 
 /**
@@ -13,6 +15,10 @@ import type { CheckedStepProblems } from './checkedStepProblems';
 `POST /scheduled-actions/check`.
  */
 export interface RoutineCheck {
+  /** Apps the routine needs that its owner hasn't connected, as a routine
+draft's session named them (`missingApps`): the person connects each
+one before saving. Never ones the routine already requires. */
+  missingApps?: AgentMcpServer[];
   /** Whether saving it would succeed: no problems and no failing steps. */
   ok: boolean;
   /** Why saving it would fail, other than its code, for its author. */

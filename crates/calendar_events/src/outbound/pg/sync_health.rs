@@ -67,6 +67,7 @@ impl CalendarSyncHealthReader for PgCalendarRepository {
                 account.last_synced_at IS NOT NULL AS "account_synced!",
                 calendar.id AS "calendar_id?",
                 calendar.provider_calendar_id AS "provider_calendar_id?",
+                calendar.system_calendar AS "system_calendar?",
                 calendar.synced_at AS "synced_at?",
                 calendar.last_sync_error IS NOT NULL AS "calendar_failed?",
                 calendar.last_sync_error_kind AS "calendar_failure_kind?"
@@ -91,10 +92,13 @@ impl CalendarSyncHealthReader for PgCalendarRepository {
                 }
                 continue;
             };
-            let system = row
-                .provider_calendar_id
-                .as_deref()
-                .is_some_and(is_system_calendar);
+            // Google's system calendars are known by their id; Outlook
+            // discovery marks its own.
+            let system = row.system_calendar.unwrap_or(false)
+                || row
+                    .provider_calendar_id
+                    .as_deref()
+                    .is_some_and(is_system_calendar);
             let refresh_due_at = row.synced_at.map(|synced_at| {
                 if system {
                     synced_at + SYSTEM_CALENDAR_SYNC_INTERVAL

@@ -32,6 +32,10 @@ import {
   MAX_RECORD_SELECTION_PAGE_SIZE,
   type WorkerMessage,
 } from '../protocol';
+import {
+  CACHE_UNAVAILABLE_REASONS,
+  type CacheUnavailableReason,
+} from '../telemetry';
 
 export { isCachePush, isCacheResponse, isWorkerMessage };
 
@@ -44,7 +48,7 @@ function isPeopleTraceparent(value: unknown): boolean {
 }
 
 /** Version of the topology envelope and routed cache RPC surface. */
-export const CACHE_COORDINATOR_PROTOCOL_VERSION = 17 as const;
+export const CACHE_COORDINATOR_PROTOCOL_VERSION = 18 as const;
 /**
  * Startup phases in order. The engine may touch storage only in
  * `opening-database`, which begins once it holds the database owner lock. It
@@ -75,6 +79,9 @@ export type EngineOpenOutcome =
   | 'reset-incompatible'
   | 'reset-corrupt'
   | 'reset-storage-uncertain';
+/** `preserved`: every mutation queued before an engine opened is still queued
+ * under its own ID, even if that engine's storage was reset. */
+export type CacheQueueState = 'preserved' | 'reset';
 export type EngineFatalCode = 'storage-reset-required' | 'runtime-failure';
 /** `storage-busy`: another context kept the database files open through the
  * engine's bounded wait. An open changed nothing; a wipe may have removed one
@@ -108,6 +115,12 @@ export type TabToCoordinatorEnvelope =
       kind: 'cache-request';
       tabId: string;
       request: CacheRequest;
+    }
+  | {
+      /** Asks for a `pong`, to tell a lost connection from a slow engine. */
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
+      kind: 'ping';
+      tabId: string;
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
@@ -155,6 +168,11 @@ export type CoordinatorToTabEnvelope =
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'registered';
       tabId: string;
+      /** Another visible tab's engine is starting or running as this tab
+       * joins, so this tab is not about to own the cache. */
+      ownerElsewhere?: true;
+      /** Held for the coordinator's life: free means it is gone. */
+      coordinatorLockName?: string;
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
@@ -198,6 +216,7 @@ export type CoordinatorToTabEnvelope =
       ownerEpoch: OwnerEpoch;
       /** Whether this engine reopened durable data or created/reset it. */
       openOutcome: EngineOpenOutcome;
+      queue: CacheQueueState;
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
@@ -206,17 +225,21 @@ export type CoordinatorToTabEnvelope =
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
-      kind: 'terminal-error';
-      error: string;
-      storageUntouched?: true;
+      kind: 'pong';
     }
   | {
-      /** Another context holds the database; stop using the cache until reload. */
+      /** The coordinator dropped this page; it may register again. */
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
+      kind: 'connection-closed';
+      reason: string;
+    }
+  | {
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
+      /** Nothing can open the database for now; requests are refused until an
+       * engine does. */
       kind: 'cache-unavailable';
       reason: string;
-      /** A newer build took the database over, so retrying cannot help. */
-      superseded?: true;
+      unavailableReason: CacheUnavailableReason;
     }
   | {
       /** A newer app build took the database over. The page stops using the
@@ -305,8 +328,11 @@ export type EngineToCoordinatorEnvelope =
       ownerEpoch: OwnerEpoch;
       ownerLockName: string;
       ownerLockHeld: true;
+      /** The engine's own client in the browser's list of locks. */
+      ownerLockClientId?: string;
       databaseActionProof: DatabaseActionProof;
       openOutcome: EngineOpenOutcome;
+      queue: CacheQueueState;
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
@@ -437,6 +463,9 @@ const isEngineOpenOutcome = (value: unknown): value is EngineOpenOutcome =>
     'reset-storage-uncertain',
   ].includes(value);
 
+const isCacheQueueState = (value: unknown): value is CacheQueueState =>
+  value === 'preserved' || value === 'reset';
+
 const isEngineFatalCode = (value: unknown): value is EngineFatalCode =>
   value === 'storage-reset-required' || value === 'runtime-failure';
 
@@ -517,7 +546,38 @@ const commonRequest = (record: UnknownRecord): boolean =>
 /** Strictly validates a cache RPC request nested in a coordinator envelope. */
 export function isCacheRequest(value: unknown): value is CacheRequest {
   if (!isRecord(value) || !commonRequest(value)) return false;
+  if (Object.hasOwn(value, 'generation')) {
+    const { generation, ...request } = value;
+    return (
+      (generation === undefined ||
+        (typeof generation === 'string' &&
+          /^[0-9a-f-]{36}$/.test(generation))) &&
+      isCacheRequest(request)
+    );
+  }
   switch (value.kind) {
+    case 'current-authority':
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'identity', 'traceparent']) &&
+        isPeopleTraceparent(value.traceparent) &&
+        isNonEmptyString(value.identity)
+      );
+    case 'transition-authority':
+      return (
+        hasOnlyKeys(value, [
+          'id',
+          'kind',
+          'identity',
+          'expected',
+          'policy',
+          'traceparent',
+        ]) &&
+        isPeopleTraceparent(value.traceparent) &&
+        isNonEmptyString(value.identity) &&
+        isNonEmptyString(value.policy) &&
+        typeof value.expected === 'string' &&
+        /^[0-9a-f-]{36}$/.test(value.expected)
+      );
     case 'init':
       return (
         hasOnlyKeys(value, ['id', 'kind', 'scope', 'hotCapacity']) &&
@@ -1056,6 +1116,11 @@ export function validateTabToCoordinatorEnvelope(
         return pass(value as TabToCoordinatorEnvelope);
       }
       break;
+    case 'ping':
+      if (hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'tabId'])) {
+        return pass(value as TabToCoordinatorEnvelope);
+      }
+      break;
     case 'disconnect-tab':
       if (
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'tabId', 'reason']) &&
@@ -1098,8 +1163,17 @@ export function validateCoordinatorToTabEnvelope(
   switch (value.kind) {
     case 'registered':
       if (
-        hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'tabId']) &&
-        isNonEmptyString(value.tabId)
+        hasOnlyKeys(value, [
+          'coordinatorVersion',
+          'kind',
+          'tabId',
+          'ownerElsewhere',
+          'coordinatorLockName',
+        ]) &&
+        isNonEmptyString(value.tabId) &&
+        (value.ownerElsewhere === undefined || value.ownerElsewhere === true) &&
+        (value.coordinatorLockName === undefined ||
+          isNonEmptyString(value.coordinatorLockName))
       ) {
         return pass(value as CoordinatorToTabEnvelope);
       }
@@ -1189,26 +1263,14 @@ export function validateCoordinatorToTabEnvelope(
           'kind',
           'ownerEpoch',
           'openOutcome',
+          'queue',
         ]) &&
         isPositiveInteger(value.ownerEpoch) &&
-        isEngineOpenOutcome(value.openOutcome)
+        isEngineOpenOutcome(value.openOutcome) &&
+        isCacheQueueState(value.queue)
       ) {
         return pass(value as CoordinatorToTabEnvelope);
       }
-      break;
-    case 'terminal-error':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'error',
-          'storageUntouched',
-        ]) &&
-        isNonEmptyString(value.error) &&
-        (value.storageUntouched === undefined ||
-          value.storageUntouched === true)
-      )
-        return pass(value as CoordinatorToTabEnvelope);
       break;
     case 'protocol-error':
       if (
@@ -1224,14 +1286,22 @@ export function validateCoordinatorToTabEnvelope(
           'coordinatorVersion',
           'kind',
           'reason',
-          'superseded',
+          'unavailableReason',
         ]) &&
         isNonEmptyString(value.reason) &&
-        (value.superseded === undefined || value.superseded === true)
+        CACHE_UNAVAILABLE_REASONS.includes(
+          value.unavailableReason as CacheUnavailableReason
+        )
       ) {
         return pass(value as CoordinatorToTabEnvelope);
       }
       break;
+    case 'pong':
+      if (hasOnlyKeys(value, ['coordinatorVersion', 'kind'])) {
+        return pass(value as CoordinatorToTabEnvelope);
+      }
+      break;
+    case 'connection-closed':
     case 'cache-superseded':
       if (
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'reason']) &&
@@ -1399,15 +1469,20 @@ export function validateEngineToCoordinatorEnvelope(
           'ownerEpoch',
           'ownerLockName',
           'ownerLockHeld',
+          'ownerLockClientId',
           'databaseActionProof',
           'openOutcome',
+          'queue',
         ]) &&
         isNonEmptyString(value.tabId) &&
         isPositiveInteger(value.ownerEpoch) &&
         isNonEmptyString(value.ownerLockName) &&
         value.ownerLockHeld === true &&
+        (value.ownerLockClientId === undefined ||
+          isNonEmptyString(value.ownerLockClientId)) &&
         isDatabaseActionProof(value.databaseActionProof) &&
-        isEngineOpenOutcome(value.openOutcome)
+        isEngineOpenOutcome(value.openOutcome) &&
+        isCacheQueueState(value.queue)
       ) {
         return pass(value as EngineToCoordinatorEnvelope);
       }
@@ -1520,6 +1595,11 @@ const TAB_LIVENESS_LOCK_PREFIX = 'graphql-cache-tab:';
 
 export const tabLivenessLockName = (scope: string, tabId: string): string =>
   `${TAB_LIVENESS_LOCK_PREFIX}${scope}:${tabId}`;
+
+/** Each coordinator has its own, so one that is gone never shares a name with
+ * the one that replaced it. */
+export const coordinatorLivenessLockName = (coordinatorId: string): string =>
+  `graphql-cache-coordinator:${coordinatorId}`;
 
 /** The tab id in a liveness lock name for `scope`, if it is one. */
 export function tabIdFromLivenessLockName(

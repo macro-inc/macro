@@ -281,6 +281,14 @@ async fn calendar_cursor_never_sends_bearer_outside_graph_root() {
     assert!(server.received_requests().await.unwrap().is_empty());
 }
 
+/// What a page lists, as (provider id, master id).
+fn listed(page: &OutlookCalendarPage) -> Vec<(&str, &str)> {
+    page.members
+        .iter()
+        .map(|member| (member.provider_id.as_str(), member.master_id.as_str()))
+        .collect()
+}
+
 #[tokio::test]
 async fn primary_page_preserves_tombstones_and_terminal_cursor_for_durable_reconciliation() {
     let (server, api) = setup().await;
@@ -299,7 +307,7 @@ async fn primary_page_preserves_tombstones_and_terminal_cursor_for_durable_recon
         .await
         .unwrap();
     assert_eq!(page.removed, vec!["old-instance"]);
-    assert_eq!(page.members, vec![("new-instance".into(), "series".into())]);
+    assert_eq!(listed(&page), [("new-instance", "series")]);
     assert_eq!(page.delta, Some(end));
 }
 
@@ -331,15 +339,80 @@ async fn secondary_calendars_use_complete_v1_views_and_follow_every_page() {
         .calendar_page("token", &target(), false, None)
         .await
         .unwrap();
-    assert_eq!(first.members, vec![("one".into(), "one".into())]);
+    assert_eq!(listed(&first), [("one", "one")]);
     assert_eq!(first.next.as_deref(), Some(next.as_str()));
     let last = api
         .calendar_page("token", &target(), false, first.next.as_deref())
         .await
         .unwrap();
-    assert_eq!(last.members, vec![("two".into(), "two".into())]);
+    assert_eq!(listed(&last), [("two", "two")]);
     assert!(last.next.is_none());
     assert!(last.delta.is_none());
+}
+
+#[tokio::test]
+async fn a_listing_carries_each_members_time_when_macro_can_read_it() {
+    let (server, api) = setup().await;
+    let mut unzoned = event("unzoned");
+    unzoned["start"]["timeZone"] = json!("Not A Zone");
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/calendarView"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[
+            event("timed"),
+            {"id":"occurrence","seriesMasterId":"series","type":"occurrence",
+                "start":{"dateTime":"2026-11-20T09:00:00.0000000","timeZone":"UTC"},
+                "end":{"dateTime":"2026-11-20T09:30:00.0000000","timeZone":"UTC"}},
+            unzoned,
+        ]})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let page = api
+        .calendar_page("token", &target(), false, None)
+        .await
+        .unwrap();
+
+    let at = |day, hour, minute| {
+        Utc.with_ymd_and_hms(2026, 11, day, hour, minute, 0)
+            .unwrap()
+    };
+    let occurs: Vec<_> = page
+        .members
+        .iter()
+        .map(|member| (member.master_id.as_str(), member.occurs))
+        .collect();
+    assert_eq!(
+        occurs,
+        [
+            ("timed", Some((at(2, 17, 0), at(2, 18, 0)))),
+            ("series", Some((at(20, 9, 0), at(20, 9, 30)))),
+            ("unzoned", None),
+        ],
+        "a time Macro cannot read leaves the member untimed rather than failing the page"
+    );
+}
+
+#[test]
+fn a_call_macros_admission_refused_is_deferred_and_a_graph_throttle_is_not() {
+    let deferred = error(EmailApiError::RateLimited {
+        retry_after: Some(std::time::Duration::from_secs(3)),
+        origin: RateLimitOrigin::Gate(crate::domain::models::GateLimit::Window),
+    });
+    assert_eq!(deferred.kind(), CalendarProviderErrorKind::Deferred);
+    assert_eq!(
+        deferred.retry_after(),
+        Some(std::time::Duration::from_secs(3))
+    );
+    let throttled = error(EmailApiError::RateLimited {
+        retry_after: Some(std::time::Duration::from_secs(3)),
+        origin: RateLimitOrigin::Provider { concurrency: false },
+    });
+    assert_eq!(
+        throttled.kind(),
+        CalendarProviderErrorKind::Transient,
+        "Microsoft itself throttled the call, which counts as a failure as before"
+    );
 }
 
 /// Discover the calendars of a mailbox whose settings name `time_zone`.
@@ -362,6 +435,108 @@ async fn discover(time_zone: Option<&str>) -> OutlookDiscovery {
         Ok(discovery) => discovery,
         Err(_) => panic!("a mailbox in {time_zone:?} fails discovery"),
     }
+}
+
+#[tokio::test]
+async fn discovery_reads_who_owns_each_calendar_and_whether_it_was_shared() {
+    let (server, api) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailboxSettings"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mailbox_settings(None)))
+        .mount(&server)
+        .await;
+    let mut shared = default_calendar("AAMkShared");
+    shared["isDefaultCalendar"] = json!(false);
+    shared["canEdit"] = json!(false);
+    shared["isSharedWithMe"] = json!(true);
+    shared["owner"] = json!({"name":"Ada","address":"ada@example.com"});
+    let mut unowned = default_calendar("AAMkUnowned");
+    unowned["isDefaultCalendar"] = json!(false);
+    unowned["owner"] = json!({"name":"","address":""});
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value":[default_calendar("AAMkCalendar"), shared, unowned],
+        })))
+        .mount(&server)
+        .await;
+
+    let discovery = api
+        .calendars("token", target().binding.unwrap())
+        .await
+        .unwrap();
+
+    let read: Vec<_> = discovery
+        .calendars
+        .iter()
+        .map(|c| (c.owner_address.as_deref(), c.shared_with_me))
+        .collect();
+    assert_eq!(
+        read,
+        [
+            (Some("olivia@example.com"), false),
+            (Some("ada@example.com"), true),
+            (None, false),
+        ]
+    );
+}
+
+/// The calendars Graph lists for a mailbox that added holidays, Birthdays
+/// and a calendar subscribed from the web, with the properties a real
+/// mailbox returned: only the holidays and Birthdays are its own read-only
+/// calendars, and the subscription keeps its usual rounds.
+#[tokio::test]
+async fn holidays_and_birthdays_are_system_calendars_and_a_web_subscription_is_not() {
+    let (server, api) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailboxSettings"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mailbox_settings(None)))
+        .mount(&server)
+        .await;
+    let added = |id: &str, name: &str| {
+        let mut calendar = default_calendar(id);
+        calendar["name"] = json!(name);
+        calendar["isDefaultCalendar"] = json!(false);
+        calendar["canEdit"] = json!(false);
+        calendar["canShare"] = json!(false);
+        calendar["isRemovable"] = json!(true);
+        calendar
+    };
+    let mut subscription = added("AAMkSubscription", "test");
+    subscription["isSharedWithMe"] = json!(true);
+    subscription["owner"] = Value::Null;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value":[
+                default_calendar("AAMkCalendar"),
+                added("AAMkHolidays", "United States holidays"),
+                added("AAMkBirthdays", "Birthdays"),
+                subscription,
+            ],
+        })))
+        .mount(&server)
+        .await;
+
+    let discovery = api
+        .calendars("token", target().binding.unwrap())
+        .await
+        .unwrap();
+
+    let system: Vec<_> = discovery
+        .calendars
+        .iter()
+        .map(|c| (c.calendar.name.as_str(), c.is_system("olivia@example.com")))
+        .collect();
+    assert_eq!(
+        system,
+        [
+            ("Calendar", false),
+            ("United States holidays", true),
+            ("Birthdays", true),
+            ("test", false),
+        ]
+    );
 }
 
 #[tokio::test]
@@ -885,6 +1060,51 @@ fn description_edits_and_clear_keep_the_provider_meeting_block() {
         .unwrap();
         assert_eq!(body["body"]["content"], format!("{description}{blob}"));
     }
+}
+
+#[test]
+fn a_description_edit_in_macro_writes_outlooks_own_meeting_block_back() {
+    let join = "https://teams.example/join?a=1&b=2";
+    let blob = "<div class=\"me-email-text\"><div><span>Microsoft Teams meeting</span></div><div><a href=\"https://teams.example/join?a=1&amp;b=2\">Join the meeting now</a></div><div><span>Meeting ID: 123<br>Passcode: abc</span></div></div>";
+    let current = json!({"isOnlineMeeting":true,"onlineMeeting":{"joinUrl":join},"body":{"content":format!("<html><body><p>Old description</p>{blob}</body></html>")}});
+    // The description as Macro's editor exports it after an edit.
+    let edited = "<p>New description</p><p>Microsoft Teams meeting</p><p><a href=\"https://teams.example/join?a=1&amp;b=2\">Join the meeting now</a></p><p>Meeting ID: 123<br>Passcode: abc</p>";
+
+    let body = patch_body(
+        &CalendarEventPatch {
+            description: Some(edited.into()),
+            ..Default::default()
+        },
+        Some(&current),
+    )
+    .unwrap();
+
+    assert_eq!(
+        body["body"]["content"],
+        format!("<p>New description</p>{blob}")
+    );
+}
+
+#[test]
+fn a_description_whose_meeting_block_was_already_rewritten_is_written_as_given() {
+    let join = "https://teams.example/join";
+    let flattened = "<p>Old description</p><p><a href=\"https://teams.example/join\">Join the meeting now</a></p>";
+    let current = json!({"isOnlineMeeting":true,"onlineMeeting":{"joinUrl":join},"body":{"content":flattened}});
+    let edited = format!(
+        "<p>New description</p>{}",
+        &flattened["<p>Old description</p>".len()..]
+    );
+
+    let body = patch_body(
+        &CalendarEventPatch {
+            description: Some(edited.clone()),
+            ..Default::default()
+        },
+        Some(&current),
+    )
+    .unwrap();
+
+    assert_eq!(body["body"]["content"], edited);
 }
 
 #[tokio::test]

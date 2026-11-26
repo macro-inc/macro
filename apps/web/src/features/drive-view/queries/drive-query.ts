@@ -16,7 +16,6 @@ export type BuildDriveQueryOptions = {
   selection: DriveSelection;
   userId: string | undefined;
   facetContext: TagFacetContext;
-  snippetsEnabled?: boolean;
 };
 
 type DriveAstBody = BackendAstMap & Pick<SoupAstBody, 'emailView'>;
@@ -48,12 +47,9 @@ function attachmentScope(
 
 function tabDocumentScope(
   selection: DriveSelection,
-  userId: string | undefined,
-  snippetsEnabled: boolean
+  userId: string | undefined
 ): BackendAstNode {
   const nodes: BackendAstNode[] = [{ '!': literal('dst', 'task') }];
-
-  if (!snippetsEnabled) nodes.push({ '!': literal('dst', 'snippet') });
 
   const attachment = attachmentScope(selection);
 
@@ -95,15 +91,14 @@ function selectedFolderDocumentScope(
 
 function baseBody(
   selection: DriveSelection,
-  userId: string | undefined,
-  snippetsEnabled: boolean
+  userId: string | undefined
 ): DriveAstBody {
   const body: DriveAstBody = excludedEntityTargets();
 
   const location = selection.location;
 
   if (location.kind === 'tab') {
-    body.df = tabDocumentScope(selection, userId, snippetsEnabled);
+    body.df = tabDocumentScope(selection, userId);
 
     return body;
   }
@@ -159,7 +154,7 @@ export function buildDriveQuery(
   );
 
   let body: DriveAstBody = mergeAst(
-    baseBody(selection, options.userId, options.snippetsEnabled ?? false),
+    baseBody(selection, options.userId),
     facets
   );
 

@@ -1,6 +1,5 @@
 import './ListEntity.css';
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   SwipableRow,
   SwipableRowContext,
@@ -9,11 +8,7 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { stackNotifications } from '@notifications';
-import {
-  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
-  enqueueDocumentWakeup,
-  isWakeableDocument,
-} from '@queries/preview';
+import { enqueueDocumentWakeup, isWakeableDocument } from '@queries/preview';
 import {
   getStreamState,
   subscribeToStreamState,
@@ -65,6 +60,7 @@ import {
 import { WideLayout } from './list-entity/wide-layout';
 
 export {
+  type EmailRowStyle,
   ListLayoutProvider,
   type NarrowLayoutVariant,
 } from './list-entity/shared';
@@ -81,6 +77,8 @@ export function MaybeEntityRow(props: {
   entityId: string;
   children: JSX.Element;
   config?: EntityRowConfig;
+  /** The swipe surface's opaque fill, when the row has one of its own. */
+  rowBgClass?: string;
 }) {
   const ctx = useContext(SwipableRowContext);
   return (
@@ -91,6 +89,7 @@ export function MaybeEntityRow(props: {
         swipeLeftRevealedComponent={props.config?.swipeLeftRevealedComponent}
         swipeRightColor={props.config?.swipeRightColor}
         swipeRightRevealedComponent={props.config?.swipeRightRevealedComponent}
+        rowBgClass={props.rowBgClass}
       >
         {props.children}
       </SwipableRow>
@@ -113,11 +112,11 @@ export function ListEntity(props: ListEntityProps) {
   const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
+  const classic = () =>
+    props.rowStyle === 'classic' && isEmailEntity(props.entity);
   const isShared = useIsShared(props.entity);
-  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
 
   createEffect(() => {
-    if (!bulkWakeupEnabled().enabled) return;
     if (!isWakeableDocument(props.entity)) return;
 
     enqueueDocumentWakeup(props.entity);
@@ -215,6 +214,9 @@ export function ListEntity(props: ListEntityProps) {
     get unread() {
       return unread();
     },
+    get classic() {
+      return classic();
+    },
     get isShared() {
       return isShared();
     },
@@ -236,6 +238,9 @@ export function ListEntity(props: ListEntityProps) {
     },
     get onFilterByTag() {
       return props.onFilterByTag ?? soupView?.filterByTag;
+    },
+    get labels() {
+      return props.labels;
     },
     get showCalendarAttendance() {
       return (
@@ -279,6 +284,22 @@ export function ListEntity(props: ListEntityProps) {
       email: isEmailEntity(props.entity),
     });
 
+  // A touch row's swipe surface is opaque so the swipe actions stay hidden
+  // under it, which covers the row's own fill; a Classic row paints the
+  // surface with its fill instead. The selection tint is translucent, so it
+  // goes over the panel color rather than replacing it.
+  const swipeFill = () => {
+    if (!classic()) return undefined;
+    // The selected fill is an image over the panel; pressing keeps it under
+    // the press grey (index.css).
+    if (props.checked)
+      return 'bg-panel bg-linear-to-b from-list-selected to-list-selected [--press-underlay:linear-gradient(var(--color-list-selected),var(--color-list-selected))]';
+    return unread() ? 'bg-control' : undefined;
+  };
+
+  // Classic rows run wall to wall too, square, with a line between rows.
+  const fullBleed = () => isNarrowEmail() || classic();
+
   const mobileStacks = createMemo(() => {
     if (!isTouchDevice()) return [];
     if (!props.showUnrollNotifications) return [];
@@ -305,24 +326,37 @@ export function ListEntity(props: ListEntityProps) {
         props.onClick?.(e);
       }}
       ref={mergeRefs(props.ref, draggable)}
+      data-press-surface
       class={cn(
         // The row family class carries the --soup-row-* geometry (ListEntity.css)
         // that the layouts below and the soup group headers both read, so it has
         // to track which layout the Switch actually renders.
         isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow,
         'soup-list-entity @container/entity relative group/narrow flex flex-col py-0.5',
-        isNarrowEmail()
+        fullBleed()
           ? // The gutter moves inside, so text still lines up with the headers.
             'w-full px-(--soup-row-gutter)'
           : 'rounded-xl w-[calc(100%-0.5rem)] mr-1',
         // Keep avatar-group separators in sync with the row background so they
         // blend into it instead of creating visible rings.
         '[--avatar-group-separator:var(--color-panel)]',
+        // Every Classic row ends in the same faint line, wall to wall, so
+        // each pair of rows shares exactly one, read or unread. It sits on
+        // the row's own last pixel, which the stacked layouts reserve with
+        // their (hidden) `InboxDivider`.
+        classic() &&
+          'after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-edge-divider',
+        // Unread rows are lifted onto the control surface of the sidebar's
+        // Accounts section, with no edge of their own beside the shared line.
+        // State fills below (selected, highlighted, hover) still win over it.
+        classic() &&
+          unread() &&
+          'bg-control [--avatar-group-separator:var(--color-control)]',
         {
           'min-h-10': !isMobile() && !usesCondensedNarrowLayout(),
           'min-h-9': !isMobile() && usesCondensedNarrowLayout(),
           'touch:min-h-[44px]': isEmailEntity(props.entity),
-          'mx-(--soup-row-gutter)': !isMobile() && !isNarrowEmail(),
+          'mx-(--soup-row-gutter)': !isMobile() && !fullBleed(),
           'bg-list-selected [--avatar-group-separator:var(--color-list-selected)]':
             props.checked,
           'bg-list-selected-highlighted [--avatar-group-separator:var(--color-list-selected-highlighted)]':
@@ -335,9 +369,8 @@ export function ListEntity(props: ListEntityProps) {
             !!rowActions() && !props.highlighted && !props.checked,
           'before:absolute before:left-0 before:w-0.5 before:bg-accent':
             props.current,
-          'before:inset-y-2 before:rounded-full':
-            props.current && !isNarrowEmail(),
-          'before:inset-y-0': props.current && isNarrowEmail(),
+          'before:inset-y-2 before:rounded-full': props.current && !fullBleed(),
+          'before:inset-y-0': props.current && fullBleed(),
         }
       )}
       aria-current={props.current ? 'true' : undefined}
@@ -348,6 +381,7 @@ export function ListEntity(props: ListEntityProps) {
           <MaybeEntityRow
             entityId={props.entity.id}
             config={props.entityRowConfig}
+            rowBgClass={swipeFill()}
           >
             <WideLayout {...layoutProps} />
           </MaybeEntityRow>
@@ -395,6 +429,7 @@ export function ListEntity(props: ListEntityProps) {
           <MaybeEntityRow
             entityId={props.entity.id}
             config={props.entityRowConfig}
+            rowBgClass={swipeFill()}
           >
             <NarrowInboxLayout {...layoutProps} />
           </MaybeEntityRow>
@@ -442,6 +477,19 @@ export function ListEntity(props: ListEntityProps) {
             />
           </div>
         </div>
+      </Show>
+
+      {/* A Classic row that opens its group (or the list) also gets the line
+          above it, so every row has one on each edge. Rows within a group
+          share the previous row's line instead, so none is doubled. Like
+          the bottom line, it sits in the row's own top padding, outside a
+          touch row's opaque swipe surface. */}
+      <Show when={classic() && props.isFirstInGroup}>
+        <div
+          aria-hidden="true"
+          data-row-top-line
+          class="pointer-events-none absolute inset-x-0 top-0 h-px bg-edge-divider"
+        />
       </Show>
     </Entity.Root>
   );

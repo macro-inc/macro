@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import { InlineNumberEditor } from '../editors/inline/InlineNumberEditor';
 import { InlineTextEditor } from '../editors/inline/InlineTextEditor';
@@ -367,4 +368,123 @@ it('keeps empty-value slots passive for read-only inline fields', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Not set' }));
   expect(screen.queryByRole('textbox')).toBeNull();
   expect(onSave).not.toHaveBeenCalled();
+});
+
+it('shows a pick of remaining references unchanged while the source rewrites its list in place', async () => {
+  const [query, setQuery] = createStore<{ property: EntityProperty }>({
+    property: {
+      propertyId: 'related-assignment',
+      propertyDefinitionId: 'related-definition',
+      displayName: 'Related',
+      isMultiSelect: true,
+      owner: { scope: 'system' },
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+      valueType: 'ENTITY',
+      value: [
+        { entity_id: 'acme', entity_type: 'COMPANY' },
+        { entity_id: 'task', entity_type: 'TASK' },
+        { entity_id: 'doc', entity_type: 'DOCUMENT' },
+      ],
+    },
+  });
+  function RemoveFirst() {
+    const ctx = useProperty();
+    const shown = () => ctx.property() as EntityProperty;
+    const remove = async () => {
+      await ctx.onSave?.(shown(), {
+        valueType: 'ENTITY',
+        refs: (shown().value ?? []).slice(1),
+      });
+    };
+    return (
+      <button onClick={() => fireAndForget(remove(), 'property-root-test')}>
+        {(shown().value ?? []).map((ref) => ref.entity_id).join(',')}
+      </button>
+    );
+  }
+  render(() => (
+    <Root
+      property={query.property}
+      canEdit
+      onSave={() => new Promise<void>(() => {})}
+    >
+      <RemoveFirst />
+    </Root>
+  ));
+
+  await fireEvent.click(screen.getByRole('button', { name: 'acme,task,doc' }));
+  setQuery(
+    'property',
+    'value',
+    reconcile([
+      { entity_id: 'task', entity_type: 'TASK' as const },
+      { entity_id: 'doc', entity_type: 'DOCUMENT' as const },
+    ])
+  );
+
+  expect(screen.getByRole('button').textContent).toBe('task,doc');
+});
+
+it('drops a saved pick once a store source changes in place', async () => {
+  const [query, setQuery] = createStore<{ property: EntityProperty }>({
+    property: {
+      propertyId: 'related-assignment',
+      propertyDefinitionId: 'related-definition',
+      displayName: 'Related',
+      isMultiSelect: true,
+      owner: { scope: 'system' },
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+      valueType: 'ENTITY',
+      value: [
+        { entity_id: 'acme', entity_type: 'COMPANY' },
+        { entity_id: 'task', entity_type: 'TASK' },
+      ],
+    },
+  });
+  function RemoveFirst() {
+    const ctx = useProperty();
+    const shown = () => ctx.property() as EntityProperty;
+    const remove = async () => {
+      await ctx.onSave?.(shown(), {
+        valueType: 'ENTITY',
+        refs: (shown().value ?? []).slice(1),
+      });
+    };
+    return (
+      <button onClick={() => fireAndForget(remove(), 'property-root-test')}>
+        {(shown().value ?? []).map((ref) => ref.entity_id).join(',')}
+      </button>
+    );
+  }
+  const saved = Promise.withResolvers<void>();
+  render(() => (
+    <Root property={query.property} canEdit onSave={() => saved.promise}>
+      <RemoveFirst />
+    </Root>
+  ));
+
+  await fireEvent.click(screen.getByRole('button', { name: 'acme,task' }));
+  setQuery(
+    'property',
+    'value',
+    reconcile([{ entity_id: 'task', entity_type: 'TASK' as const }])
+  );
+  saved.resolve();
+  await saved.promise;
+  await Promise.resolve();
+  expect(screen.getByRole('button').textContent).toBe('task');
+
+  // Someone else adds a reference: the same property object, a new value.
+  setQuery(
+    'property',
+    'value',
+    reconcile([
+      { entity_id: 'task', entity_type: 'TASK' as const },
+      { entity_id: 'doc', entity_type: 'DOCUMENT' as const },
+    ])
+  );
+
+  expect(screen.getByRole('button').textContent).toBe('task,doc');
 });

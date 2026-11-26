@@ -53,17 +53,6 @@ vi.mock('@app/lib/analytics/posthog', () => ({
     loading: !state.flagsLoaded(),
   }),
 }));
-vi.mock('@core/constant/featureFlags', async (importOriginal) => {
-  const original =
-    await importOriginal<typeof import('@core/constant/featureFlags')>();
-  return {
-    ...original,
-    isFeatureEnabled: (flag: typeof original.enableCrmActivity) =>
-      flag === original.enableCrmActivity
-        ? state.enabled()
-        : original.isFeatureEnabled(flag),
-  };
-});
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ pageView: state.pageView, track: state.track }),
 }));
@@ -89,6 +78,12 @@ vi.mock('@app/features/activity/views/my-activity-view', () => ({
     state.mountActivity();
     return <div>Activity feed</div>;
   },
+}));
+vi.mock('@app/features/agent-screen/route-views', () => ({
+  AgentScreenView: (props: { harnessId: string }) => (
+    <div>Screen of {props.harnessId}</div>
+  ),
+  AgentScreenRouteView: () => null,
 }));
 vi.mock('@app/features/activity/open-entity-in-split', () => ({
   openEntityInSplit: vi.fn(),
@@ -133,7 +128,6 @@ vi.mock('@app/features/home/home-view', () => ({
   HomeCalendarRouteView: () => null,
   HomePendingView: () => null,
 }));
-vi.mock('@app/features/next-soup/filters/filter-store', () => ({}));
 vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));
 vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({}));
 vi.mock('@app/features/next-soup/soup-view/soup-view', () => ({}));
@@ -231,12 +225,26 @@ async function renderActivity() {
   return result;
 }
 describe('calendar layout registration', () => {
-  it('owns desktop chrome but keeps the floating split header on touch', () => {
+  it('owns its pane chrome on touch as well as desktop', () => {
     expect(resolveComponent('calendar').initialMeta).toMatchObject({
       splitPanelLayout: 'composable',
     });
     state.touch = () => true;
-    expect(resolveComponent('calendar').initialMeta).toBeUndefined();
+    expect(resolveComponent('calendar').initialMeta).toMatchObject({
+      splitPanelLayout: 'composable',
+    });
+  });
+});
+
+describe('Chat layout registration', () => {
+  it('owns its pane chrome on touch as well as desktop', () => {
+    expect(resolveComponent('channels').initialMeta).toMatchObject({
+      splitPanelLayout: 'composable',
+    });
+    state.touch = () => true;
+    expect(resolveComponent('channels').initialMeta).toMatchObject({
+      splitPanelLayout: 'composable',
+    });
   });
 });
 
@@ -631,60 +639,15 @@ describe('pane create context registration', () => {
   });
 });
 
-describe('project registration', () => {
-  const routes = [
-    ['tasks-projects', 'Project collection'],
-    ['new-project', 'Project composer'],
-    ['project-compose', 'Project composer'],
-    [
-      'initiative-view~01a0cf92-3101-7e21-9a20-6e21058d20e0~overview',
-      'Project detail',
-    ],
-  ] as const;
-
-  it.each(routes)(
-    'gates a restored %s route until PostHog enables Projects',
-    async (route, title) => {
-      const [enabled, setEnabled] = createSignal(false);
-      const [loaded, setLoaded] = createSignal(false);
-      state.enabled = enabled;
-      state.flagsLoaded = loaded;
-      const component = resolveComponent(route);
-      render(() => <Suspense>{component.element()}</Suspense>);
-      expect(state.mountProjects).not.toHaveBeenCalled();
-      expect(state.replace).not.toHaveBeenCalled();
-
-      setEnabled(true);
-      setLoaded(true);
-      expect(await screen.findByText(title)).toBeTruthy();
-      expect(state.replace).not.toHaveBeenCalled();
-
-      setEnabled(false);
-      expect(screen.queryByText(title)).toBeNull();
-      expect(state.replace).toHaveBeenCalledExactlyOnceWith({
-        next: { type: 'component', id: 'tasks' },
-      });
-    }
-  );
-
-  it.each(routes)(
-    'redirects disabled %s without mounting project data',
-    (route) => {
-      const component = resolveComponent(route);
-      render(() => <Suspense>{component.element()}</Suspense>);
-      expect(state.mountProjects).not.toHaveBeenCalled();
-      expect(state.replace).toHaveBeenCalledExactlyOnceWith({
-        next: { type: 'component', id: 'tasks' },
-      });
-    }
-  );
-
-  it('closes a disabled composer popover instead of replacing its background split', () => {
-    state.isPopover = true;
-    const component = resolveComponent('project-compose');
-    render(() => <Suspense>{component.element()}</Suspense>);
-    expect(state.mountProjects).not.toHaveBeenCalled();
-    expect(state.replace).not.toHaveBeenCalled();
-    expect(state.close).toHaveBeenCalledOnce();
+describe('agent screen registration', () => {
+  it('renders split content opened with agentScreenContent through the registry', async () => {
+    const { agentScreenContent } = await import(
+      '@app/features/agent-screen/core/route'
+    );
+    const content = agentScreenContent('harness-1');
+    const screenView = resolveComponent(content.id, content.params);
+    render(() => <Suspense>{screenView.element()}</Suspense>);
+    await import('@app/features/agent-screen/route-views');
+    expect(await screen.findByText('Screen of harness-1')).toBeTruthy();
   });
 });

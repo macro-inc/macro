@@ -109,6 +109,8 @@ pub enum BackfillOperation {
     // either is missing). Triggered when a user gets added to a team so
     // their historical sent-mail recipients seed the team's CRM tables.
     PopulateCrmForUser(PopulateCrmForUserPayload),
+    /// One durable, generation-bound page of policy history. Never adopts a later grant.
+    PopulateCrmPolicy(PopulateCrmPolicyPayload),
     // Tears down every CRM source row owned by the user's email link,
     // plus the contact/company rows that become orphaned as a result
     // (preserving companies with `email_sync = false`). Triggered when a
@@ -133,6 +135,7 @@ impl BackfillOperation {
             BackfillOperation::PopulateCrmContact(s) => Some(s.link_id),
             BackfillOperation::DepopulateCrmContact(s) => Some(s.link_id),
             BackfillOperation::PopulateCrmForUser(_) => None,
+            BackfillOperation::PopulateCrmPolicy(p) => Some(p.link_id),
             BackfillOperation::DepopulateCrmForUser(_) => None,
         }
     }
@@ -152,6 +155,7 @@ impl BackfillOperation {
             BackfillOperation::PopulateCrmContact(_)
             | BackfillOperation::DepopulateCrmContact(_)
             | BackfillOperation::PopulateCrmForUser(_)
+            | BackfillOperation::PopulateCrmPolicy(_)
             | BackfillOperation::DepopulateCrmForUser(_) => None,
         }
     }
@@ -298,6 +302,10 @@ pub struct SeedSentContactPayload {
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct PopulateCrmContactPayload {
+    /// New live-mail reconciliation hints use current stored eligibility. Missing
+    /// on old messages means legacy history, which cannot adopt initialized consent.
+    #[serde(default)]
+    pub live_mail: bool,
     pub contact_email: String,
     /// Display name observed for `contact_email` at producer time — the
     /// caller copies it from the gmail message's recipient header
@@ -347,6 +355,17 @@ pub struct PopulateCrmForUserPayload {
     pub macro_id: MacroUserIdStr<'static>,
 }
 
+/// Identity captured when durable history was scheduled, retained across retries.
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct PopulateCrmPolicyPayload {
+    pub team_id: Uuid,
+    pub macro_id: MacroUserIdStr<'static>,
+    pub link_id: Uuid,
+    pub work_id: Uuid,
+    pub consent_incarnation: Uuid,
+    pub policy_version: i64,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct DepopulateCrmForUserPayload {
     pub macro_id: MacroUserIdStr<'static>,
@@ -357,3 +376,6 @@ pub struct DepopulateCrmForUserPayload {
     /// different team if the user is on multiple.
     pub team_id: Uuid,
 }
+
+#[cfg(test)]
+mod test;

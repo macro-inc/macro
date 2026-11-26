@@ -38,6 +38,7 @@ async fn only_prompts_typed_into_the_session_follow_it() {
                 actor,
                 context,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         );
         let (result, ()) = tokio::join!(prompted, agent.completes_prompt());
@@ -58,6 +59,7 @@ async fn only_prompts_typed_into_the_session_follow_it() {
                 actor: Some(person),
                 context: None,
                 client: None,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         );
         let (result, ()) = tokio::join!(prompted, agent.completes_prompt());
@@ -88,6 +90,7 @@ async fn a_typed_prompt_records_its_tab_on_the_turn() {
                 actor: Some(sender()),
                 context: None,
                 client,
+                prompter: agent_session::domain::model::PrompterKind::User,
             },
         );
         let (result, ()) = tokio::join!(prompted, agent.completes_prompt());

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT co.id,(($3 OR NOT co.hidden) AND EXISTS(SELECT 1 FROM crm_domains WHERE company_id=co.id OFFSET 0)) AS \"active!\"\n           FROM unnest($2::uuid[]) ids(id) CROSS JOIN LATERAL (\n               SELECT id,team_id,hidden FROM crm_companies WHERE id=ids.id OFFSET 0\n           ) co WHERE co.team_id=$1 AND ($3 OR NOT co.hidden)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "active!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "643968eb7c1fcaba15ca0656eca4de89519be356d0a8170c5ebf95fae902bca1"
+}

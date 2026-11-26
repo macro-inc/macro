@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   calendarConsentScopes,
+  calendarStoppedSyncing,
   inboxAuthorizationUrl,
   reconnectScopes,
 } from './consent';
@@ -55,5 +56,29 @@ describe('Google reconnect consent', () => {
     expect(url.searchParams.get('state')).toBe('original');
     expect(url.searchParams.get('scope')).toBe('calendar');
     expect(inboxAuthorizationUrl(initial)).toBe(initial);
+  });
+});
+
+describe('calendarStoppedSyncing', () => {
+  const stopped = {
+    is_sync_active: true,
+    needs_reauth: false,
+    needs_calendar_permission: true,
+    calendar_disabled: false,
+    has_calendar_data: true,
+  };
+
+  it('is a calendar that had data and lost its permission', () => {
+    expect(calendarStoppedSyncing(stopped)).toBe(true);
+  });
+
+  it.each([
+    ['never connected', { has_calendar_data: false }],
+    ['turned off by the user', { calendar_disabled: true }],
+    ['needing a full reconnect', { needs_reauth: true }],
+    ['disconnected', { is_sync_active: false }],
+    ['still permitted', { needs_calendar_permission: false }],
+  ])('is not a calendar %s', (_, overrides) => {
+    expect(calendarStoppedSyncing({ ...stopped, ...overrides })).toBe(false);
   });
 });

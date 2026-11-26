@@ -18,6 +18,7 @@ import { createEmailThreadSource } from './thread-source';
 vi.mock('@queries/client', () => ({
   queryClient: {
     getQueryData: () => ({ authenticated: true, id: 'owner' }),
+    getQueryState: () => undefined,
     getQueryCache: () => ({ subscribe: () => () => {} }),
   },
 }));

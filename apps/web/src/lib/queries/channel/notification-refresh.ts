@@ -1,5 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { isTransientRequestError } from '@core/util/request-error';
+import {
+  isGraphqlServerFault,
+  isTransientRequestError,
+} from '@core/util/request-error';
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
 import { type Client, createRequest } from '@urql/core';
@@ -12,9 +15,13 @@ export type ChannelNotificationReader = {
   scope?: 'all-entities';
   /** Omitted for channel lists, which can gain previously absent channels. */
   channelId?: string;
+  /** The channel types a channel list shows, so it can wait for a new one. */
+  channelTypes?: readonly string[];
   filtered: boolean;
   notificationIds: readonly string[];
 };
+/** A new channel a list's first page has yet to show. */
+type AwaitedChannel = { until: number; reads: number };
 type Waiter = {
   generation: number;
   resolve: () => void;
@@ -30,9 +37,43 @@ type Job = {
   failures: number;
   blocked: boolean;
   waiters: Waiter[];
+  awaited: Map<string, AwaitedChannel>;
 };
 
+/**
+ * How long a list keeps reading its first page for a new channel. List pages
+ * come from a read replica, which can lag the write by tens of seconds.
+ */
+const NEW_CHANNEL_WAIT_MS = 60_000;
+const NEW_CHANNEL_MAX_READ_DELAY_MS = 16_000;
+
 const coordinators = new WeakMap<QueryClient, ChannelNotificationRefresh>();
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Continuation pages cannot show a new channel; only the first page waits. */
+function isFirstSoupPage(query: QueryRevalidation): boolean {
+  const variables: unknown = query.variables;
+  return (
+    isRecord(variables) &&
+    isRecord(variables.input) &&
+    variables.input.initial != null
+  );
+}
+
+function soupItemIds(data: unknown): Set<string> {
+  const soup =
+    isRecord(data) && isRecord(data.user) ? data.user.soup : undefined;
+  const items = isRecord(soup) ? soup.items : undefined;
+  if (!Array.isArray(items)) return new Set();
+  return new Set(
+    items.flatMap((item) =>
+      isRecord(item) && typeof item.id === 'string' ? [item.id] : []
+    )
+  );
+}
 
 /** One queue per client; no global notification feed is mounted or inspected. */
 export function channelNotificationRefresh(client: QueryClient) {
@@ -83,6 +124,7 @@ export class ChannelNotificationRefresh {
         failures: 0,
         blocked: false,
         waiters: [],
+        awaited: new Map(),
       };
       this.jobs.set(key, job);
     }
@@ -148,6 +190,27 @@ export class ChannelNotificationRefresh {
     await Promise.all(promises);
   }
 
+  /**
+   * A push brought a channel the viewer was just added to, read from the
+   * primary. Lists that show its type read their first page again until it is
+   * there, since the page may come from a replica that has not seen it yet.
+   */
+  expectChannel(channel: { id: string; channelType: string }) {
+    const until = Date.now() + NEW_CHANNEL_WAIT_MS;
+    for (const job of this.jobs.values()) {
+      // Each message in a new conversation pushes it again; keep the first wait.
+      if (job.awaited.has(channel.id) || !isFirstSoupPage(job.query)) continue;
+      const shows = [...job.readers].some(
+        (reader) =>
+          reader.enabled && reader.channelTypes?.includes(channel.channelType)
+      );
+      if (!shows) continue;
+      job.awaited.set(channel.id, { until, reads: 0 });
+      this.invalidate(job);
+    }
+    this.schedule();
+  }
+
   suspend(suspended: boolean) {
     this.suspended = suspended;
     if (!suspended) this.reconnect();
@@ -165,6 +228,7 @@ export class ChannelNotificationRefresh {
       job.failures = 0;
       job.retryAt = 0;
       job.blocked = false;
+      job.awaited.clear();
     }
     this.reconnect();
   }
@@ -325,10 +389,16 @@ export class ChannelNotificationRefresh {
       job.failures = 0;
       job.retryAt = 0;
       this.settle(job, generation);
+      if (job.awaited.size) this.readAgainForMissingChannels(job, result.data);
     } catch (error) {
       if (this.disposed || epoch !== this.epoch || !job.readers.size) return;
       job.failures += 1;
-      if (error instanceof Error && isTransientRequestError(error)) {
+      // A resolver fault answers 200 with uncoded GraphQL errors; it clears
+      // when the server recovers, so it backs off like a transport failure.
+      if (
+        error instanceof Error &&
+        (isTransientRequestError(error) || isGraphqlServerFault(error))
+      ) {
         this.settle(job, generation, error);
         job.retryAt =
           Date.now() +
@@ -345,6 +415,28 @@ export class ChannelNotificationRefresh {
       if (!job.readers.size) this.jobs.delete(key);
       this.schedule();
     }
+  }
+
+  private readAgainForMissingChannels(job: Job, data: unknown) {
+    const shown = soupItemIds(data);
+    const now = Date.now();
+    let nextRead: number | undefined;
+    for (const [id, awaited] of job.awaited) {
+      if (shown.has(id) || now >= awaited.until) {
+        job.awaited.delete(id);
+        continue;
+      }
+      awaited.reads += 1;
+      const delay = Math.min(
+        NEW_CHANNEL_MAX_READ_DELAY_MS,
+        1000 * 2 ** (awaited.reads - 1)
+      );
+      nextRead = Math.min(nextRead ?? Infinity, now + delay);
+    }
+    if (nextRead === undefined) return;
+    this.invalidate(job);
+    // An explicit refresh waiting on this job reads at once, not after the backoff.
+    if (job.waiters.length === 0) job.retryAt = nextRead;
   }
 
   private settle(job: Job, generation: number, error?: unknown) {

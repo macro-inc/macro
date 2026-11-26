@@ -7,6 +7,8 @@ use crate::domain::model::{PropertyRow, SystemPropertyKey};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
 
+mod start_date_migration;
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn initiative_initialization_preserves_values_and_folder_namespace(
     pool: Pool<Postgres>,
@@ -405,6 +407,37 @@ async fn test_copy_task_properties_does_not_join_the_project(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("system_properties"))
 )]
+async fn test_copy_task_properties_starts_the_copy_with_no_time_logged(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let from_task_id = "source-task-with-props";
+    let to_task_id = "dest-task-time-logged";
+    let mut tx = pool.begin().await?;
+    crate::time_logged::write_task_time_logged(&mut tx, from_task_id, 95).await?;
+    tx.commit().await?;
+
+    repo.copy_task_properties(from_task_id, to_task_id).await?;
+
+    let properties = get_task_property_values(&pool, to_task_id).await;
+    assert!(!properties.is_empty(), "other properties are copied");
+    assert!(
+        properties
+            .iter()
+            .all(|(id, _)| *id != SystemPropertyKey::TIME_LOGGED_UUID),
+        "the copy has no time entries, so it has no Time logged"
+    );
+    assert_eq!(
+        crate::time_logged::read_task_time_logged(&pool, to_task_id).await?,
+        0
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("system_properties"))
+)]
 async fn test_copy_task_properties_overwrites_existing(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PgSystemPropertiesRepository::new(pool.clone());
 
@@ -555,8 +588,12 @@ async fn project_membership_reads_the_project_property(pool: Pool<Postgres>) -> 
     .await?;
 
     assert_eq!(
-        repo.project_task_ids(first).await?,
+        repo.project_task_ids(first, None).await?,
         ["extra", "task-a", "task-b", "two"]
+    );
+    assert_eq!(
+        repo.project_task_ids(first, Some(2)).await?,
+        ["extra", "task-a"]
     );
     let mut projects = repo
         .task_projects(&[
@@ -576,5 +613,67 @@ async fn project_membership_reads_the_project_property(pool: Pool<Postgres>) -> 
         ]
     );
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_capped_project_read_gives_up_at_the_report_timeout(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let mut holder = pool.begin().await?;
+    sqlx::query!("LOCK TABLE entity_properties IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *holder)
+        .await?;
+
+    let read = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        repo.project_task_ids(Uuid::now_v7(), Some(2)),
+    )
+    .await;
+    holder.rollback().await?;
+
+    assert!(
+        matches!(read, Ok(Err(_))),
+        "a capped read waited out the lock instead of its statement timeout"
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn copy_keeps_start_and_due_dates_and_their_times(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let start =
+        serde_json::json!({"type": "Date", "value": "2026-11-24T21:00:00Z", "has_time": true});
+    let due = serde_json::json!({"type": "Date", "value": "2026-11-27T08:00:00Z"});
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+        VALUES ($1, 'timed-source', 'TASK', $2, $3), ($4, 'timed-source', 'TASK', $5, $6)
+        "#,
+        Uuid::now_v7(),
+        SystemPropertyKey::START_DATE_UUID,
+        start,
+        Uuid::now_v7(),
+        SystemPropertyKey::DUE_DATE_UUID,
+        due,
+    )
+    .execute(&pool)
+    .await?;
+
+    repo.copy_task_properties("timed-source", "timed-copy")
+        .await?;
+
+    let properties = get_task_property_values(&pool, "timed-copy").await;
+    let value_of = |definition: Uuid| {
+        properties
+            .iter()
+            .find(|(id, _)| *id == definition)
+            .and_then(|(_, value)| value.clone())
+    };
+    assert_eq!(value_of(SystemPropertyKey::START_DATE_UUID), Some(start));
+    assert_eq!(value_of(SystemPropertyKey::DUE_DATE_UUID), Some(due));
     Ok(())
 }

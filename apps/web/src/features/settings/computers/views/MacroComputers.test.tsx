@@ -44,9 +44,14 @@ const mocks = vi.hoisted(() => ({
   toastFailure: vi.fn(),
   purchase: vi.fn(),
   toastSuccess: vi.fn(),
+  fetchComputers: vi.fn(),
 }));
 
 vi.mock('@queries/computers/computers', () => ({
+  useMacroComputersRollout: () => () => ({
+    enabled: mocks.rollout,
+    loading: false,
+  }),
   useComputerOffersQuery: () => ({
     get isPending() {
       return mocks.offersPending;
@@ -70,12 +75,14 @@ vi.mock('@queries/computers/computers', () => ({
         : mocks.offers;
     },
   }),
+  fetchComputers: mocks.fetchComputers,
   usePurchaseComputerMutation: () => ({
     mutateAsync: mocks.purchase,
     isPending: false,
   }),
   useSetComputerPowerMutation: () => ({ isPending: false }),
   useCancelComputerMutation: () => ({ isPending: false }),
+  useComputerUsageQuery: () => ({ isPending: true }),
   useUndoCancelComputerMutation: () => ({ isPending: false }),
   useRestoreComputerMutation: () => ({
     isPending: false,
@@ -110,6 +117,7 @@ vi.mock('./computer-setup-dialog', () => ({
   ),
   StepHeader: () => null,
   computerConnected: () => false,
+  defaultAgentName: () => "Maya's Agent",
 }));
 
 vi.mock('@queries/harnesses/harnesses', () => ({
@@ -265,19 +273,72 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
     purchaseKey: expect.any(String),
     size: 'large',
     name: "Maya's Agent Box",
+    parentSpan: expect.anything(),
   });
 
   fireEvent.input(screen.getByLabelText('Name'), {
     target: { value: '  Build machine  ' },
   });
+  mocks.fetchComputers.mockResolvedValue([
+    { id: 'computer-1', status: 'ready' },
+  ]);
   fireEvent.click(buyButton);
-  await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledOnce());
+  expect(
+    screen.getByRole('button', { name: 'Getting your computer…' })
+  ).toBeTruthy();
+  // One status, on the button: no second line under it.
+  expect(screen.queryByText('Starting it…')).toBeNull();
+  // Once it is bought, the same dialog finishes setup, with no steps.
+  // The team's list doesn't have it yet: the dialog waits on it, unstepped.
+  await screen.findByRole('heading', { name: "Setting up Maya's Agent" });
+  expect(screen.queryByRole('list', { name: 'Setup steps' })).toBeNull();
+  expect(mocks.toastSuccess).not.toHaveBeenCalled();
   // The retry reuses the dialog's key, so it can never charge twice.
   expect(mocks.purchase).toHaveBeenNthCalledWith(2, {
     purchaseKey: mocks.purchase.mock.calls[0][0].purchaseKey,
     size: 'large',
     name: 'Build machine',
+    parentSpan: expect.anything(),
   });
+});
+
+it('keeps Buy open on a declined card, with Update card', async () => {
+  mocks.purchase.mockRejectedValueOnce(
+    new ThrownResultError([
+      { code: 'PAYMENT_DECLINED', message: 'payment_declined' },
+    ])
+  );
+  render(() => <Machines />);
+  fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
+  await screen.findByRole('dialog');
+  fireEvent.click(screen.getByRole('button', { name: 'Buy · $40.00/month' }));
+
+  expect((await screen.findByRole('alert')).textContent).toContain(
+    'Nothing was charged'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Update card' }));
+  expect(mocks.openSettings).toHaveBeenCalledWith('Billing');
+});
+
+it('marks a size with no room and buys the next one on sale', async () => {
+  mocks.purchase.mockRejectedValueOnce(
+    new ThrownResultError([{ code: 'NO_ROOM', message: 'no_room' }])
+  );
+  render(() => <Machines />);
+  fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
+  await screen.findByRole('dialog');
+  fireEvent.click(screen.getByRole('button', { name: 'Buy · $40.00/month' }));
+
+  expect((await screen.findByRole('alert')).textContent).toContain(
+    'No room for a Standard computer'
+  );
+  expect(screen.getByRole('radio', { name: 'Standard' })).toHaveProperty(
+    'disabled',
+    true
+  );
+  expect(
+    screen.getByRole('button', { name: 'Buy · $80.00/month' })
+  ).toBeTruthy();
 });
 
 it('offers Restore instead of Turn on for a released computer still kept, and confirms before billing again', async () => {
@@ -431,6 +492,7 @@ it('keeps a zero-price offer included through review and purchase', async () => 
       purchaseKey: expect.any(String),
       size: 'standard',
       name: "Maya's Agent Box",
+      parentSpan: expect.anything(),
     })
   );
 });

@@ -7,6 +7,7 @@ vi.mock('@notifications/mark-row-seen', () => ({
 
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { cleanup, render } from '@solidjs/testing-library';
+import { createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -24,10 +25,16 @@ const mocks = vi.hoisted(() => ({
   tab: (): string => 'important',
   savedView: (): string | undefined => undefined,
   tagSets: (): TagSetResponse[] => [],
+  inboxLabels: (): { id: string; fullName: string; linkId?: string }[] => [],
   /** What the view hands its list: the tab or definition it queries. */
   list: undefined as
     | {
-        input: { tab: string; facets: Record<string, string[]> };
+        input: {
+          tab: string;
+          facets: Record<string, string[]>;
+          search: string;
+          searchScope: string;
+        };
         options: {
           savedView?: () => unknown;
           enabled?: () => boolean;
@@ -61,6 +68,8 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
   useNavigate: () => mocks.navigate,
   useRouteParams: () => mocks.useRouteParams(),
   useMatches: () => () => [],
+  usePane: () => () => 'mail-pane',
+  useSplitRouter: () => ({ entry: () => undefined }),
   createSearchParams: () => [
     {
       get tab() {
@@ -95,6 +104,9 @@ vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@property/tags/tag-sets-context', () => ({
   useTagSets: () => () => mocks.tagSets(),
   useTagSetsReady: () => () => true,
+}));
+vi.mock('@queries/email/label-names', () => ({
+  useEmailInboxLabels: () => () => mocks.inboxLabels(),
 }));
 vi.mock('@queries/email/link', () => ({
   useEmailLinksQuery: () => mocks.useEmailLinksQuery(),
@@ -203,14 +215,149 @@ describe('email view inbox reconciliation', () => {
   });
 });
 
-it('clears persisted text search when entering and leaving Email Reminders', () => {
+it('narrows a running search to the tab picked, keeping its words', () => {
   const { view } = mount();
-  view.setState('search', 'prior inbox search');
+  view.setState('search', 'invoice');
+  // A search of all mail selects no view.
+  expect(view.shownTab()).toBe('search');
+
+  view.setTab('sent');
+  expect(view.state.tab).toBe('sent');
+  expect(view.state.search).toBe('in:sent invoice');
+  expect(view.shownTab()).toBe('sent');
+
+  view.setTab('important');
+  expect(view.state.search).toBe('in:signal invoice');
+  expect(view.shownTab()).toBe('important');
+
+  view.selectInbox();
+  expect(view.state.tab).toBe('important');
+  expect(view.state.search).toBe('in:inbox invoice');
+  expect(view.shownTab()).toBe('inbox');
+
+  view.setTab('all');
+  expect(view.state.search).toBe('invoice');
+  expect(view.shownTab()).toBe('search');
+});
+
+it('ends a search on a tab the search index has no view of', () => {
+  const { view } = mount();
+  view.setState('search', 'invoice');
   view.setTab('reminders');
   expect(view.state.search).toBe('');
-  view.setState('search', 'stale restored search');
-  view.setTab('all');
+  expect(view.shownTab()).toBe('reminders');
+
+  view.setState('search', 'invoice');
+  view.setTab('scheduled');
   expect(view.state.search).toBe('');
+});
+
+it.each([
+  ['in:inbox invoice', 'inbox'],
+  ['in:focus invoice', 'focus'],
+  ['in:signal invoice', 'important'],
+  ['in:noise invoice', 'noise'],
+  ['in:sent invoice', 'sent'],
+  ['invoice', 'search'],
+])('shows no Inbox tabs while the field holds %s', (search, shown) => {
+  const { view } = mount();
+  view.setTab('noise');
+  expect(view.showsInboxTabs()).toBe(true);
+
+  view.setState('search', search);
+  expect(view.showsInboxTabs()).toBe(false);
+  expect(view.shownTab()).toBe(shown);
+
+  view.setState('search', '');
+  expect(view.showsInboxTabs()).toBe(true);
+  expect(view.shownTab()).toBe('noise');
+});
+
+it('keeps the search on screen while an in: filter has no words after it', () => {
+  const { view } = mount();
+  for (const search of ['in', 'in:', 'in:fo', 'in:focus', 'in:focus ']) {
+    view.setState('search', search);
+    expect(mocks.list?.input.search).toBe('in');
+    expect(mocks.list?.input.searchScope).toBe('all');
+    expect(view.shownTab()).toBe('search');
+  }
+
+  view.setState('search', 'in:focus d');
+  expect(mocks.list?.input.search).toBe('d');
+  expect(mocks.list?.input.searchScope).toBe('focus');
+  expect(view.shownTab()).toBe('focus');
+
+  // A finished filter goes on with the search it already narrowed.
+  view.setState('search', 'in:focus ');
+  expect(mocks.list?.input.search).toBe('d');
+  expect(mocks.list?.input.searchScope).toBe('focus');
+
+  view.setState('search', '');
+  expect(mocks.list?.input.search).toBe('');
+});
+
+it.each(['in:', 'in:se', 'in:sent '])(
+  'stays on the open tab’s list, under Search, when %s follows no search',
+  (search) => {
+    const { view } = mount();
+    view.setTab('noise');
+    view.setState('search', search);
+    expect(view.showsInboxTabs()).toBe(false);
+    expect(view.shownTab()).toBe('search');
+    expect(mocks.list?.input.search).toBe('');
+    expect(mocks.list?.input.tab).toBe('noise');
+  }
+);
+
+it('shows an open, empty field as a search over the open tab’s list', () => {
+  const { view } = mount();
+  view.setTab('noise');
+  const [open, setOpen] = createSignal(false);
+  const dispose = createRoot((dispose) => {
+    view.registerSearchField({ open, close: () => setOpen(false) });
+    return dispose;
+  });
+  expect(view.shownTab()).toBe('noise');
+
+  setOpen(true);
+  expect(view.shownTab()).toBe('search');
+  expect(mocks.list?.input.search).toBe('');
+  expect(mocks.list?.input.tab).toBe('noise');
+
+  setOpen(false);
+  expect(view.shownTab()).toBe('noise');
+
+  // A tab with no search keeps its own name, whatever the field says.
+  view.setTab('trash');
+  setOpen(true);
+  expect(view.shownTab()).toBe('trash');
+  dispose();
+});
+
+it('opens a tab picked while the field holds no words, ending the search', () => {
+  const { view } = mount();
+  for (const search of ['in:', 'in:se', 'in:focus ']) {
+    view.setTab('important');
+    view.setState('search', search);
+
+    view.setTab('sent');
+    expect(view.state.tab).toBe('sent');
+    expect(view.state.search).toBe('');
+    expect(view.shownTab()).toBe('sent');
+  }
+
+  view.setTab('noise');
+  view.setState('search', 'in:');
+  view.selectInbox();
+  expect(view.state.search).toBe('');
+  expect(view.shownTab()).toBe('noise');
+});
+
+it('opens a tab as usual when no search runs', () => {
+  const { view } = mount();
+  view.setTab('sent');
+  expect(view.state.search).toBe('');
+  expect(view.shownTab()).toBe('sent');
 });
 
 describe('tag view title', () => {
@@ -234,7 +381,7 @@ describe('tag view title', () => {
     const { view } = mount();
     view.setTab('all');
     view.setFilters({ facets: { tags: [qaTag] } });
-    expect(view.tagViewTitle()).toBe('QA test tag');
+    expect(view.filterViewTitle()).toBe('QA test tag');
   });
 
   it('keeps the tab name when a tag only filters a tab', () => {
@@ -242,7 +389,45 @@ describe('tag view title', () => {
     const { view } = mount();
     view.filterByTag(qaTag);
     expect(view.state.tab).toBe('important');
-    expect(view.tagViewTitle()).toBeUndefined();
+    expect(view.filterViewTitle()).toBeUndefined();
+  });
+});
+
+describe('opening a label', () => {
+  const larkspur = '019a1f40-2c7e-7d10-9a4b-6f2b0c1d2e41';
+  const acme = '019a1f40-2c7e-7d10-9a4b-6f2b0c1d2e42';
+
+  it('shows All mail filtered to the label alone, named after it', () => {
+    mocks.inboxLabels = () => [
+      { id: larkspur, fullName: 'Customers / Larkspur' },
+      { id: acme, fullName: 'Customers / Acme' },
+    ];
+    const { view } = mount();
+    view.setFilters({ facets: { read: ['unread'] } });
+
+    view.openLabel(larkspur);
+    expect(view.state.tab).toBe('all');
+    expect(view.state.facets.labels).toEqual([larkspur]);
+    expect(view.state.facets.read ?? []).toEqual([]);
+    expect(view.activeLabelIds()).toEqual([larkspur]);
+    expect(view.filterViewTitle()).toBe('Customers / Larkspur');
+
+    view.openLabel(acme);
+    expect(view.state.facets.labels).toEqual([acme]);
+
+    // The open label again shows All mail without it.
+    view.openLabel(acme);
+    expect(view.state.tab).toBe('all');
+    expect(view.state.facets.labels ?? []).toEqual([]);
+    expect(view.filterViewTitle()).toBeUndefined();
+    mocks.inboxLabels = () => [];
+  });
+
+  it('counts a label as open only on All', () => {
+    const { view } = mount();
+    view.openLabel(larkspur);
+    view.setTab('sent');
+    expect(view.activeLabelIds()).toEqual([]);
   });
 });
 
@@ -298,7 +483,7 @@ describe('saved views', () => {
   };
 
   /** The URL follows navigation; the detail source knows one view. */
-  function mountSavedViews(options: { known: boolean }) {
+  function mountSavedViews(options: { known: boolean; linkIds?: string[] }) {
     const [search, setSearch] = createStore<{
       tab: string;
       savedView?: string;
@@ -307,7 +492,12 @@ describe('saved views', () => {
     mocks.savedView = () => search.savedView;
     mocks.useEmailLinksQuery.mockReturnValue({
       isSuccess: true,
-      data: { links: [{ id: 'saved-inbox', email_address: 'me@example.com' }] },
+      data: {
+        links: (options.linkIds ?? ['saved-inbox']).map((id) => ({
+          id,
+          email_address: 'me@example.com',
+        })),
+      },
     });
     mocks.useRouteParams.mockReturnValue({});
     mocks.navigate.mockImplementation(
@@ -324,7 +514,6 @@ describe('saved views', () => {
     render(() => (
       <EmailViewProvider
         initialState={{ inboxIds: ['saved-inbox'] }}
-        savedViewsEnabled={() => true}
         savedViewSource={(id) => ({
           data: () => {
             if (!id()) return undefined;
@@ -373,6 +562,46 @@ describe('saved views', () => {
     expect(view.state.conditions?.participants).toEqual([]);
     expect(view.state.inboxIds).toEqual(['saved-inbox']);
     expect(view.state.facets).toEqual({ done: ['not-done'] });
+  });
+
+  it("opens one of the view's labels with its inbox still picked", () => {
+    const label = '019a1f40-2c7e-7d10-9a4b-6f2b0c1d2e43';
+    mocks.inboxLabels = () => [
+      { id: label, fullName: 'Customers / Larkspur', linkId: OTHER_INBOX },
+    ];
+    const view = mountSavedViews({
+      known: true,
+      linkIds: ['saved-inbox', OTHER_INBOX],
+    });
+    view.selectSavedView(VIEW_ID);
+
+    view.openLabel(label);
+
+    expect(view.savedViewActive()).toBe(false);
+    expect(view.state.tab).toBe('all');
+    expect(view.state.facets.labels).toEqual([label]);
+    expect(view.state.inboxIds).toEqual(['saved-inbox', OTHER_INBOX]);
+    mocks.inboxLabels = () => [];
+  });
+
+  it('closes an open search field as a view opens and as it is left', () => {
+    const view = mountSavedViews({ known: true });
+    const [open, setOpen] = createSignal(true);
+    const dispose = createRoot((dispose) => {
+      view.registerSearchField({ open, close: () => setOpen(false) });
+      return dispose;
+    });
+    expect(view.showsInboxTabs()).toBe(false);
+
+    view.selectSavedView(VIEW_ID);
+    expect(open()).toBe(false);
+
+    setOpen(true);
+    view.leaveSavedView();
+    expect(open()).toBe(false);
+    expect(view.state.tab).toBe('important');
+    expect(view.showsInboxTabs()).toBe(true);
+    dispose();
   });
 
   it('offers Save view once a tab’s filters change, and Revert withdraws it', () => {

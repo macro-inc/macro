@@ -15,7 +15,7 @@ const [goToHotkeyVisible, setGoToHotkeyVisible] = createSignal(false);
 /**
  * True while the "g" leader awaits a destination, so nav buttons can show
  * their destination key. Any key in the GoTo scope leaves it, including a
- * view's own GoTo command (Email's g s), so the hints clear with it.
+ * view's own GoTo command (a list's g g), so the hints clear with it.
  */
 export const isGoToLeaderActive = () =>
   goToHotkeyVisible() && activeScope() === GO_TO_COMMAND_SCOPE;
@@ -87,7 +87,7 @@ export function useGoToLeader() {
 
     if (
       context.activeScopeId !== GO_TO_COMMAND_SCOPE ||
-      // The sidebar's letters and those a focused view adds (Email's g s).
+      // The sidebar's letters and those a focused view adds (a list's g g).
       getRunnableHotkeys(GO_TO_COMMAND_SCOPE).has(context.pressedKeysString)
     ) {
       return false;

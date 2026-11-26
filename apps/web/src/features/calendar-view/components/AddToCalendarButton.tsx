@@ -9,7 +9,7 @@ import {
 } from '@queries/calendar/copy';
 import { queryReadyGate } from '@queries/gate';
 import { Button, Dropdown } from '@ui';
-import { For, Show } from 'solid-js';
+import { createMemo, For, Match, Show, Switch } from 'solid-js';
 
 /** Tell the viewer why a snapshot did not reach their calendar. */
 export function toastAddToCalendarFailure(error: unknown) {
@@ -42,17 +42,23 @@ export function AddToCalendarButton(props: {
   // Only Google imports a copy under the meeting's own UID, which is what
   // lets the event resolve to it. Reading `data` while the list is pending
   // would suspend the host; until it arrives there is nothing to pick.
-  const targetCalendars = () =>
-    (queryReadyGate(calendars) ? calendars.data : []).filter(
+  const visibleCalendars = () =>
+    queryReadyGate(calendars) ? calendars.data : [];
+  const targetCalendars = createMemo(() =>
+    visibleCalendars().filter(
       (calendar) =>
         calendar.isWritable &&
         calendar.provider === 'google' &&
         !calendar.isSubscription
-    );
+    )
+  );
+  const needsGoogleCalendar = () =>
+    !calendars.isPlaceholderData &&
+    targetCalendars().length === 0 &&
+    visibleCalendars().some((calendar) => calendar.provider === 'outlook');
 
   return (
-    <Show
-      when={targetCalendars().length > 1}
+    <Switch
       fallback={
         <Button
           variant="secondary"
@@ -71,47 +77,54 @@ export function AddToCalendarButton(props: {
         </Button>
       }
     >
-      <Dropdown onOpenChange={(open) => props.onMenuOpenChange?.(open)}>
-        <Dropdown.Trigger
-          variant="secondary"
-          size={props.size}
-          disabled={props.pending}
-        >
-          <CalendarPlusIcon
-            class={
-              props.size === 'xs'
-                ? 'size-3 shrink-0 touch:size-6'
-                : 'size-4 shrink-0 touch:size-6'
-            }
-          />
-          Add to calendar
-          <CaretDownIcon
-            class={
-              props.size === 'xs'
-                ? 'size-3 shrink-0 touch:size-6'
-                : 'size-4 shrink-0 touch:size-6'
-            }
-          />
-        </Dropdown.Trigger>
-        <Dropdown.Content blockingBackdrop class="z-nested-action-menu">
-          <Dropdown.Group>
-            <For each={targetCalendars()}>
-              {(calendar) => (
-                <Dropdown.Item onSelect={() => props.onAdd(calendar.id)}>
-                  <span class="flex min-w-0 flex-col">
-                    <span class="truncate">{calendar.name}</span>
-                    <Show when={calendar.name !== calendar.emailAddress}>
-                      <span class="truncate text-xs text-ink-muted">
-                        {calendar.emailAddress}
-                      </span>
-                    </Show>
-                  </span>
-                </Dropdown.Item>
-              )}
-            </For>
-          </Dropdown.Group>
-        </Dropdown.Content>
-      </Dropdown>
-    </Show>
+      <Match when={needsGoogleCalendar()}>
+        <span role="status" class="text-xs text-ink-muted">
+          Adding shared events requires a writable Google calendar.
+        </span>
+      </Match>
+      <Match when={targetCalendars().length > 1}>
+        <Dropdown onOpenChange={(open) => props.onMenuOpenChange?.(open)}>
+          <Dropdown.Trigger
+            variant="secondary"
+            size={props.size}
+            disabled={props.pending}
+          >
+            <CalendarPlusIcon
+              class={
+                props.size === 'xs'
+                  ? 'size-3 shrink-0 touch:size-6'
+                  : 'size-4 shrink-0 touch:size-6'
+              }
+            />
+            Add to calendar
+            <CaretDownIcon
+              class={
+                props.size === 'xs'
+                  ? 'size-3 shrink-0 touch:size-6'
+                  : 'size-4 shrink-0 touch:size-6'
+              }
+            />
+          </Dropdown.Trigger>
+          <Dropdown.Content blockingBackdrop class="z-nested-action-menu">
+            <Dropdown.Group>
+              <For each={targetCalendars()}>
+                {(calendar) => (
+                  <Dropdown.Item onSelect={() => props.onAdd(calendar.id)}>
+                    <span class="flex min-w-0 flex-col">
+                      <span class="truncate">{calendar.name}</span>
+                      <Show when={calendar.name !== calendar.emailAddress}>
+                        <span class="truncate text-xs text-ink-muted">
+                          {calendar.emailAddress}
+                        </span>
+                      </Show>
+                    </span>
+                  </Dropdown.Item>
+                )}
+              </For>
+            </Dropdown.Group>
+          </Dropdown.Content>
+        </Dropdown>
+      </Match>
+    </Switch>
   );
 }

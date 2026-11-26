@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM task_template WHERE id = $1 AND revision = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ed99c985f08f7062960564545207dfcdd0da7114bec2c8b62004e8dcc2f42331"
+}

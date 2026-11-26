@@ -8,6 +8,7 @@ fn run(state: RunStateName) -> SuggestionRun {
         started_at: Utc::now(),
         state,
         state_changed_at: Utc::now(),
+        report: None,
     }
 }
 
@@ -186,6 +187,7 @@ fn suggestion(status: SuggestionStatus) -> Suggestion {
         categories: Vec::new(),
         state: SuggestionState::Proposed,
         state_reason: None,
+        topic: None,
         about: Vec::new(),
         produced: Vec::new(),
         created_at: now,

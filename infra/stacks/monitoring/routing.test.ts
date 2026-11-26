@@ -183,6 +183,17 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'computer-fleet-capacity',
     'computer-host-capacity',
     'error-logs-anomaly',
+    'firecracker-create-failures',
+    'firecracker-golden-failures',
+    'firecracker-golden-secret-refused',
+    'firecracker-hibernate-failures',
+    'firecracker-host-memory',
+    'firecracker-host-unhealthy',
+    'firecracker-reconcile-drift',
+    'firecracker-restore-latency',
+    'firecracker-wake-failures',
+    'kafka-consumer-lag-high',
+    'kafka-consumer-not-caught-up',
     'macrodb-blocked-connections',
     'macrodb-cpu',
     'macrodb-free-storage',
@@ -207,9 +218,23 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'redis-memory',
     'redis-memory-forecast',
     'routine-suggestions-failures',
+    'search-dropped-events',
+    'search-email-backlog',
+    'search-email-indexer-silent',
+    'search-email-near-retention',
+    'search-failed-bulk-items',
+    'search-indexer-silent',
+    'search-live-backlog',
+    'search-near-retention',
+    'search-offset-reset',
+    'search-probe-failing',
+    'search-probe-late',
+    'search-probe-prefix-unseen',
+    'search-probe-unseen',
     'sqs-dlq-inflow',
     'sqs-email-backfill-age',
     'sqs-email-backfill-backlog-anomaly',
+    'sqs-link-maintenance-age',
     'sqs-work-queue-age',
     'storage-pool-wait',
   ]);
@@ -268,6 +293,35 @@ test('instance I/O credits alert per instance, well before they run out', () => 
   expect(credits?.inputs.message).toContain('macrodb.md#io-credits');
 });
 
+test('Kafka lag alerts per prod consumer group and topic, without paging', () => {
+  const lag =
+    'max:aws.kafka.sum_offset_lag{cluster_name:prod-macro-event-kafka-cluster,!topic:_amazon_msk_canary} by {consumer_group,topic}';
+  const high = monitors().find((r) => r.name === 'kafka-consumer-lag-high');
+  expect(high?.inputs.query).toBe(`avg(last_15m):${lag} > 5000000`);
+  expect(high?.inputs.monitorThresholds).toEqual({
+    critical: '5000000',
+    warning: '2000000',
+  });
+  const behind = monitors().find(
+    (r) => r.name === 'kafka-consumer-not-caught-up'
+  );
+  expect(behind?.inputs.query).toBe(
+    `min(last_1d):${lag}.rollup(min, 300) > 100`
+  );
+  expect(behind?.inputs.requireFullWindow).toBe(true);
+  expect(high?.inputs.requireFullWindow).toBe(false);
+  for (const monitor of [high, behind]) {
+    expect(monitor?.inputs.name).toStartWith('[PROD] Kafka consumer ');
+    expect(monitor?.inputs.priority).toBe('3');
+    expect(monitor?.inputs.message).toContain('{{consumer_group.name}}');
+    expect(monitor?.inputs.message).toContain('{{topic.name}}');
+    expect(monitor?.inputs.message).toContain(
+      'Runbook: https://github.com/macro-inc/macro/blob/main/docs/runbooks/queues.md#kafka-consumer-lag\nDashboard: https://us5.datadoghq.com/dashboard/queue-alerts/title'
+    );
+    expect(monitor?.inputs.message).not.toContain('Paging on-call');
+  }
+});
+
 test('pool waits alert names the environment and the pool', () => {
   const wait = monitors().find((r) => r.name === 'storage-pool-wait');
   expect(wait?.inputs.name).toStartWith('[PROD] ');
@@ -305,4 +359,96 @@ test('pool graphs never sum or take percentiles across tasks', () => {
   expect(queries.join()).toContain(
     'max:db.client.connection.used{env:$env.value,service:cloud-storage-service} by {db.client.connection.pool.name,availability-zone}, max:db.client.connection.max{'
   );
+});
+
+test('Firecracker readiness detects lost telemetry without paging idle operations', () => {
+  const host = monitors().find((r) => r.name === 'firecracker-host-unhealthy');
+  expect(host?.inputs.notifyNoData).toBe(true);
+  expect(host?.inputs.noDataTimeframe).toBe(5);
+  expect(host?.inputs.query).toContain('by {host}.fill(null) < 1');
+  for (const resource of monitors().filter(
+    (r) => r.name.startsWith('firecracker-') && r !== host
+  )) {
+    expect(resource.inputs.notifyNoData).not.toBe(true);
+  }
+});
+
+test('a heartbeat uses one missing-data mode', () => {
+  const heartbeats = monitors().filter((r) => r.inputs.notifyNoData === true);
+  expect(heartbeats.map((r) => r.name).sort()).toEqual([
+    'firecracker-host-unhealthy',
+    'search-email-indexer-silent',
+    'search-indexer-silent',
+  ]);
+  for (const resource of heartbeats) {
+    expect({
+      name: resource.name,
+      onMissingData: resource.inputs.onMissingData,
+    }).toEqual({ name: resource.name, onMissingData: undefined });
+  }
+  for (const name of ['search-indexer-silent', 'search-email-indexer-silent']) {
+    const silent = heartbeats.find((r) => r.name === name);
+    expect(silent?.inputs.noDataTimeframe).toBe(10);
+  }
+});
+
+test('Firecracker restore percentiles use an enabled distribution of successful snapshot launches', () => {
+  const duration = resources.find(
+    (r) => r.name === 'firecracker-restore-duration'
+  );
+  expect(duration?.inputs.compute).toEqual({
+    aggregationType: 'distribution',
+    path: '@duration',
+    includePercentiles: true,
+  });
+  expect(duration?.inputs.filter.query).toContain(
+    '@source:(golden OR hibernation) status:ok'
+  );
+  expect(duration?.inputs.groupBies).toEqual([
+    { path: 'env', tagName: 'env' },
+    { path: 'host', tagName: 'host' },
+    { path: '@source', tagName: 'source' },
+  ]);
+});
+
+test('Firecracker memory follows admission policy and unresolved drift persists before alerting', () => {
+  const memory = monitors().find((r) => r.name === 'firecracker-host-memory');
+  expect(memory?.inputs.query).toContain(
+    'computer.host.memory.used_ratio{env:prod}'
+  );
+  expect(memory?.inputs.query).toContain(
+    '/ min:computer.host.memory.high_watermark_ratio{env:prod}'
+  );
+  const drift = monitors().find(
+    (r) => r.name === 'firecracker-reconcile-drift'
+  );
+  expect(drift?.inputs.query).toBe(
+    'min(last_5m):max:firecracker_host.reconcile.drift{env:prod,service:firecracker-host} by {host} > 0'
+  );
+});
+
+test('the probe judges rotation rounds per type, the crowded prefix apart and failures per operation', () => {
+  const query = (name: string) =>
+    monitors().find((r) => r.name === name)?.inputs.query as string;
+
+  for (const name of ['search-probe-late', 'search-probe-unseen']) {
+    expect(query(name)).toContain('!operation:crowded_prefix');
+    expect(query(name)).toContain('by {entity_type}.as_count()');
+  }
+  expect(query('search-probe-prefix-unseen')).toBe(
+    'sum(last_30m):sum:search.freshness.probe_rounds{env:prod,service:search-freshness-probe,operation:crowded_prefix,outcome:unseen} by {entity_type}.as_count() >= 2'
+  );
+  expect(query('search-probe-failing')).toContain(
+    'by {entity_type,operation}.as_count()'
+  );
+});
+
+test('failed bulk items alert only when they last, on complete buckets', () => {
+  const failed = monitors().find((r) => r.name === 'search-failed-bulk-items');
+  expect(failed?.inputs.query).toBe(
+    'min(last_30m):default_zero(sum:search.index.failed_bulk_items{env:prod,service:search-processing-service} by {entity_type,failure}.as_rate().rollup(avg, 300)) * 300 > 0'
+  );
+  // An unfinished 5-minute bucket reads as none; the delay keeps the alert
+  // from recovering every 5 minutes.
+  expect(failed?.inputs.evaluationDelay).toBe(420);
 });

@@ -1,5 +1,7 @@
+import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
 import type { Accessor, JSX, Ref, Setter, ValidComponent } from 'solid-js';
 import {
@@ -34,10 +36,17 @@ export type DialogProps = {
   fullscreen?: boolean /* Fill the viewport */;
   children: JSX.Element /* Content children */;
   class?: string /* classes for content */;
+  /** The dialog's accessible name, when it has no `Dialog.Title`. */
+  'aria-label'?: string;
   open: boolean /* if dialog is open */;
   visibleScrim?: boolean /* if the scrim is visible */;
   /** Desktop opening animation; mobile drawers own their transitions. */
   animate?: boolean;
+  /**
+   * Stay open when the app navigates (touch closes dialogs on navigation).
+   * Only for a dialog whose dismissal records a choice the user didn't make.
+   */
+  keepOpenOnNavigation?: boolean;
 };
 
 export function Dialog(props: DialogProps) {
@@ -72,6 +81,7 @@ function DialogDrawer(props: DialogProps) {
         onFinalFocus={props.onCloseAutoFocus}
         restoreFocus
         noOutsidePointerEvents
+        keepOpenOnNavigation={props.keepOpenOnNavigation}
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay
@@ -79,6 +89,7 @@ function DialogDrawer(props: DialogProps) {
           />
           <MobileDrawer.Content
             ref={props.contentRef}
+            aria-label={props['aria-label']}
             maxHeight={100}
             class={cn('mx-auto max-w-[calc(100vw-16px)]', props.class)}
           >
@@ -100,6 +111,13 @@ function DialogDrawer(props: DialogProps) {
 function DesktopDialog(props: DialogProps) {
   const [animateOnOpen, setAnimateOnOpen] = createSignal(false);
   let countedOpen = false;
+
+  // Touch closes dialogs on navigation as it does sheets (phones' fullscreen
+  // dialogs, tablets' cards); desktop keeps its dialogs.
+  createCloseOnNavigation({
+    open: () => isTouchDevice() && !props.keepOpenOnNavigation && props.open,
+    close: () => props.onOpenChange?.(false),
+  });
 
   createEffect(() => {
     if (props.open) {
@@ -163,10 +181,14 @@ function DesktopDialog(props: DialogProps) {
         >
           <KobalteDialog.Content
             ref={props.contentRef}
+            aria-label={props['aria-label']}
             class={cn(
               'portal-scope isolate',
+              // A fullscreen dialog paints the whole screen but keeps its
+              // content between the horizontal safe areas, like the app frame
+              // (the iPhone Duo's clock and camera column is a right safe area).
               props.fullscreen
-                ? 'size-full bg-page'
+                ? 'size-full bg-page pl-(--safe-left) pr-(--safe-right)'
                 : 'w-200 max-w-[calc(100vw-16px)] elevated-surface [&>[data-layer]>[data-surface]]:border-0! [&>[data-layer]>[data-surface]]:bg-transparent [&>[data-layer]>[data-surface]]:rounded-[24px]',
               animateOnOpen() &&
                 (props.fullscreen

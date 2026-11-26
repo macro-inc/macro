@@ -358,7 +358,6 @@ async fn with_the_kill_switch_on_a_kept_session_is_tried_once_and_its_worker_ret
             PromptComposerMock::default(),
             KindDefaultPolicies,
             HarnessDefaultCodingAgents,
-            PromptMentionsMock::new(),
             EgressProvisionerMock::new(),
             None,
             None,
@@ -684,6 +683,7 @@ async fn an_idle_session_of_another_runtime_forgets_its_queue_copy() {
             announced_message_id: None,
             context: None,
             client: None,
+            prompter: agent_session::domain::model::PrompterKind::User,
         }],
     )
     .await

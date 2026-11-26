@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use models_email::email::service::pubsub::LinkManagerMessage;
+use models_email::email::service::pubsub::{LinkManagerMessage, LinkManagerSender};
 
 use crate::domain::ports::LinkManagerQueue;
 
@@ -22,7 +22,7 @@ impl LinkManagerQueue for SqsLinkManagerQueue {
         notification: LinkManagerMessage,
     ) -> Result<(), Self::Error> {
         self.client
-            .enqueue_link_manager_notification(notification)
+            .enqueue_link_manager_notification(notification, LinkManagerSender::Sweep)
             .await
     }
 }

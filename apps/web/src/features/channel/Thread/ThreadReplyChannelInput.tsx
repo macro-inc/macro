@@ -44,6 +44,8 @@ type ThreadReplyChannelInputProps = {
   placeholder?: string;
   /** Observe the mounted input's handle (e.g. for entity drops). */
   onReady?: (handle: InputHandle) => void;
+  /** Offer voice memos; defaults to channel threads, not email discussions. */
+  voiceMemos?: boolean;
 };
 
 /**
@@ -52,6 +54,13 @@ type ThreadReplyChannelInputProps = {
  * the inline `ThreadReplyInput` and the unified-input mode's
  * `UnifiedReplyInput`, which only differ in the chrome around it.
  */
+/**
+ * Snapshots a reply input reported of its own draft. The stored draft already
+ * holds that text, or newer text from the same thread open in another tab, so
+ * a remount restores only snapshots built elsewhere, such as a quote reply.
+ */
+const REPORTED_SNAPSHOTS = new WeakSet<InputSnapshot>();
+
 export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
   onCleanup(() => {
     props.setReplyInputHandle?.(undefined);
@@ -62,12 +71,17 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
   const typingMutation = usePostTypingUpdateMutation();
   const channelBotMentionUsers = useMessageBotMentionUsers(() => props.parent);
 
+  const pendingSnapshot = () => {
+    const snapshot = props.replyInputState();
+    return snapshot && !REPORTED_SNAPSHOTS.has(snapshot) ? snapshot : undefined;
+  };
+
   const tracker = createInputAttachmentTracker({
     persistenceKey: makeAttachmentTrackerPersistenceKey({
       channelId: `${props.parent.type}:${props.parent.id}`,
       threadId: props.threadId,
     }),
-    initialAttachments: props.replyInputState()?.attachments,
+    initialAttachments: pendingSnapshot()?.attachments,
   });
 
   const [replyInputHandle, setLocalReplyInputHandle] =
@@ -91,7 +105,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
     props.setReplyInputHandle?.(handle);
     props.onReady?.(handle);
 
-    const snapshot = props.replyInputState();
+    const snapshot = pendingSnapshot();
     requestAnimationFrame(() => {
       if (snapshot) handle.restoreSnapshot(snapshot, { focus: false });
       focusIfRequested();
@@ -104,12 +118,17 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
       input={{
         id: `thread-reply-input-${props.threadId}`,
         placeholder: props.placeholder ?? 'Send a reply',
-        value: props.replyInputState()?.value,
-        attachments: props.replyInputState()?.attachments,
+        value: pendingSnapshot()?.value,
+        attachments: pendingSnapshot()?.attachments,
         mode: props.mode ?? 'reply',
         host: props.host,
       }}
       collapsible={props.collapsible}
+      // Channel threads take voice memos; email-thread discussions and a
+      // call's own thread do not.
+      features={{
+        voiceMemos: props.voiceMemos ?? props.parent.type === 'channel',
+      }}
       autofocus={false}
       bots={channelBotMentionUsers}
       attachmentTracker={tracker}
@@ -120,6 +139,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
       markdownNamespace={`thread-reply-input-${props.threadId}-markdown`}
       onReady={onReady}
       onChange={(snapshot) => {
+        REPORTED_SNAPSHOTS.add(snapshot);
         props.setReplyInputState(snapshot);
       }}
       onStartTyping={() =>
@@ -164,6 +184,8 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
               // The user may have started a new draft by now; keep it.
               const current = props.replyInputState();
               if (current && hasSendableInputContent(current)) return;
+              // The send cleared the stored draft, so reopening restores it.
+              REPORTED_SNAPSHOTS.delete(snapshot);
               props.setReplyInputState(snapshot);
               props.replyInputHandle?.()?.restoreSnapshot(snapshot, {
                 focus: false,

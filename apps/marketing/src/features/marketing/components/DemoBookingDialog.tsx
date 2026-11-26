@@ -58,6 +58,7 @@ export function DemoBookingDialog() {
       // Compared without the query: analytics scripts append tracking
       // parameters to a link as it is pressed.
       if (!link || link.origin + link.pathname !== DEMO_BOOKING_URL) return;
+      if (link.hasAttribute('data-booking-direct')) return;
       event.preventDefault();
       opener = link;
       changeOpen(true);

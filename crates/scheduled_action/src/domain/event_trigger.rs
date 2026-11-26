@@ -1,7 +1,7 @@
 //! Routine-owned event eligibility and exact selector matching.
 //!
 //! Adapters strip the broker envelope into [`IncomingEvent`]. Only explicitly
-//! allowlisted human actions, inbound emails, call lifecycle events, task status
+//! allowlisted human actions, inbound and labeled emails, call lifecycle events, task status
 //! changes from GitHub pull requests and GitHub App deliveries become
 //! [`EventReference`]s. GitHub deliveries can also be filtered on exact payload
 //! values.
@@ -38,10 +38,12 @@ use super::models::Schedule;
 
 mod describe;
 mod github_selector;
+mod label_selector;
 mod payload_match;
 mod property_selector;
 
 pub use github_selector::{GithubSelector, GithubSelectorError, GithubSelectorInput};
+pub use label_selector::{LabelCountError, LabelSelector};
 pub use payload_match::{
     PayloadConditionInput, PayloadConditions, PayloadMatchError, PayloadScalar,
 };
@@ -54,6 +56,7 @@ mod test;
 pub const MAX_FILTERS: usize = 32;
 pub const MAX_EVENTS_PER_FILTER: usize = 15;
 pub const MAX_IDS_PER_FILTER: usize = 100;
+pub const MAX_INBOXES_PER_FILTER: usize = 25;
 
 /// A routine may run on one trigger or any of several schedules and Macro events.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -141,6 +144,32 @@ impl From<RoutineTriggers> for Vec<RoutineTrigger> {
 }
 
 impl ActionTrigger {
+    /// This trigger for someone other than its owner: inboxes and email
+    /// labels are the owner's own, so it watches every inbox and any label of
+    /// whoever it is for.
+    pub fn without_owners_mail(&self) -> Self {
+        match self {
+            Self::Events { filters } => Self::Events {
+                filters: filters.without_owners_mail(),
+            },
+            Self::Multiple { triggers } => Self::Multiple {
+                triggers: RoutineTriggers(
+                    triggers
+                        .0
+                        .iter()
+                        .map(|trigger| match trigger {
+                            RoutineTrigger::Events { filters } => RoutineTrigger::Events {
+                                filters: filters.without_owners_mail(),
+                            },
+                            other => other.clone(),
+                        })
+                        .collect(),
+                ),
+            },
+            other => other.clone(),
+        }
+    }
+
     pub fn event_filters(&self) -> Option<&EventFilters> {
         match self {
             Self::Events { filters } => Some(filters),
@@ -242,6 +271,10 @@ pub enum EventName {
     TaskPropertyChanged,
     #[serde(rename = "email.message_received")]
     EmailMessageReceived,
+    /// A thread gains a Gmail label or Outlook category someone made, as mail
+    /// arrives with it or later.
+    #[serde(rename = "email.labeled")]
+    EmailLabeled,
     #[serde(rename = "channel.created")]
     ChannelCreated,
     #[serde(rename = "channel.message_posted")]
@@ -272,6 +305,7 @@ impl EventName {
             Self::TaskPriorityChanged => "task.priority_changed",
             Self::TaskPropertyChanged => "task.property_changed",
             Self::EmailMessageReceived => "email.message_received",
+            Self::EmailLabeled => "email.labeled",
             Self::ChannelCreated => "channel.created",
             Self::ChannelMessagePosted => "channel.message_posted",
             Self::ChannelMentioned => "channel.mentioned",
@@ -292,7 +326,7 @@ impl EventName {
             | Self::TaskStatusChanged
             | Self::TaskPriorityChanged
             | Self::TaskPropertyChanged => EventEntityType::Document,
-            Self::EmailMessageReceived => EventEntityType::EmailThread,
+            Self::EmailMessageReceived | Self::EmailLabeled => EventEntityType::EmailThread,
             Self::CallStarted | Self::CallEnded => EventEntityType::Call,
             Self::ChannelCreated
             | Self::ChannelMessagePosted
@@ -320,13 +354,14 @@ impl EventName {
         )
     }
 
-    /// Status and priority also match any-property selectors. The original
-    /// event ID still deduplicates routines that subscribe to both names.
-    pub const fn general_event(self) -> Option<Self> {
-        match self {
-            Self::TaskStatusChanged | Self::TaskPriorityChanged => Some(Self::TaskPropertyChanged),
-            _ => None,
-        }
+    /// A label is seen on a message, or put on a whole thread in Macro.
+    const fn may_have_message(self) -> bool {
+        matches!(self, Self::EmailLabeled)
+    }
+
+    /// Events that report labels a thread gained.
+    const fn takes_labels(self) -> bool {
+        matches!(self, Self::EmailMessageReceived | Self::EmailLabeled)
     }
 }
 
@@ -357,6 +392,16 @@ pub enum FilterValidationError {
     PayloadMatch,
     #[error("a property selector needs task property change events that report its property")]
     PropertyEvents,
+    #[error(
+        "an inbox filter is only for email.message_received or email.labeled, alone in its filter"
+    )]
+    InboxEvents,
+    #[error("expected at most {max} inboxes per filter", max = MAX_INBOXES_PER_FILTER)]
+    InboxCount,
+    #[error("a label selector needs a filter of email.labeled alone")]
+    LabelEvents,
+    #[error(transparent)]
+    Labels(#[from] LabelCountError),
     #[error(transparent)]
     PropertyValues(#[from] PropertyValuesError),
     #[error(transparent)]
@@ -390,6 +435,17 @@ pub struct EventFilter {
     /// The task property that must have changed, and the values it must gain.
     #[serde(skip_serializing_if = "Option::is_none")]
     property: Option<PropertySelector>,
+    /// The inboxes (email link ids) whose new or labeled mail starts the
+    /// routine. Absent: every inbox the owner reads, their own and those
+    /// delegated to them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Vec<String>>)]
+    inboxes: Option<Vec<Uuid>>,
+    /// Email labels, one of which the thread must gain: their row ids. Any
+    /// label when absent. Only for `email.labeled`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Vec<String>>)]
+    labels: Option<LabelSelector>,
     /// Yes/no question about the triggering content, e.g. "Is this email an
     /// invoice?". The routine runs only when the answer is yes.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -410,6 +466,10 @@ struct FilterInput {
     #[serde(default)]
     property: Option<PropertySelector>,
     #[serde(default)]
+    inboxes: Option<Vec<Uuid>>,
+    #[serde(default)]
+    labels: Option<LabelSelector>,
+    #[serde(default)]
     condition: Option<YesNoQuestion>,
 }
 
@@ -420,6 +480,8 @@ impl TryFrom<FilterInput> for EventFilter {
         Self::new(input.events, input.ids)?
             .with_condition(input.condition)
             .with_property(input.property)?
+            .with_inboxes(input.inboxes)?
+            .with_labels(input.labels)?
             .with_external(input.github, input.payload)
     }
 }
@@ -453,6 +515,8 @@ impl EventFilter {
             github: None,
             payload: None,
             property: None,
+            inboxes: None,
+            labels: None,
             condition: None,
         })
     }
@@ -480,6 +544,42 @@ impl EventFilter {
             return Err(FilterValidationError::PropertyEvents);
         }
         self.property = Some(property.canonicalized()?);
+        Ok(self)
+    }
+
+    /// Narrow new or labeled mail to some of the owner's inboxes. None or
+    /// empty is every inbox. Which inboxes are the owner's is checked when the routine is saved.
+    pub fn with_inboxes(
+        mut self,
+        inboxes: Option<Vec<Uuid>>,
+    ) -> Result<Self, FilterValidationError> {
+        let Some(mut inboxes) = inboxes.filter(|inboxes| !inboxes.is_empty()) else {
+            self.inboxes = None;
+            return Ok(self);
+        };
+        if self.events != [EventName::EmailMessageReceived]
+            && self.events != [EventName::EmailLabeled]
+        {
+            return Err(FilterValidationError::InboxEvents);
+        }
+        if inboxes.len() > MAX_INBOXES_PER_FILTER {
+            return Err(FilterValidationError::InboxCount);
+        }
+        inboxes.sort_unstable();
+        inboxes.dedup();
+        self.inboxes = Some(inboxes);
+        Ok(self)
+    }
+
+    /// Narrow `email.labeled` to threads gaining one of these labels.
+    pub fn with_labels(
+        mut self,
+        labels: Option<LabelSelector>,
+    ) -> Result<Self, FilterValidationError> {
+        if labels.is_some() && self.events != [EventName::EmailLabeled] {
+            return Err(FilterValidationError::LabelEvents);
+        }
+        self.labels = labels;
         Ok(self)
     }
 
@@ -522,14 +622,22 @@ impl EventFilter {
         self.property.as_ref()
     }
 
+    /// `None` watches every inbox the owner reads.
+    pub fn inboxes(&self) -> Option<&[Uuid]> {
+        self.inboxes.as_deref()
+    }
+
+    pub fn labels(&self) -> Option<&LabelSelector> {
+        self.labels.as_ref()
+    }
+
     pub fn condition(&self) -> Option<&YesNoQuestion> {
         self.condition.as_ref()
     }
 
     pub fn accepts(&self, event: &EventReference) -> bool {
-        let name = event.event_name;
-        let named = self.events.contains(&name)
-            || name
+        let named = self.events.contains(&event.event_name)
+            || event
                 .general_event()
                 .is_some_and(|general| self.events.contains(&general));
         named
@@ -537,13 +645,26 @@ impl EventFilter {
                 EventSource::Entity {
                     entity_id,
                     property_change,
+                    inbox,
+                    labels_gained,
                     ..
                 } => {
+                    // Received mail always carries its inbox at admission. A
+                    // stored run doesn't unless a label filter took it
+                    // (`run_event`): admission checked it, and a changed
+                    // filter supersedes the run by revision.
                     self.ids.as_ref().is_none_or(|ids| ids.contains(entity_id))
+                        && self.inboxes.as_ref().is_none_or(|inboxes| {
+                            inbox.is_none_or(|inbox| inboxes.contains(&inbox))
+                        })
                         && self
                             .property
                             .as_ref()
                             .is_none_or(|selector| selector.accepts(property_change.as_ref()))
+                        && self
+                            .labels
+                            .as_ref()
+                            .is_none_or(|selector| selector.accepts(labels_gained))
                 }
                 EventSource::Github(delivery) => {
                     self.github
@@ -596,25 +717,99 @@ impl EventFilters {
         event.published_at() >= activated_at && self.0.iter().any(|filter| filter.accepts(event))
     }
 
+    /// Whether only the inboxes these filters pick turn `event` away: the same
+    /// filters watching every inbox would take it.
+    pub fn turn_away_only_for_inbox(
+        &self,
+        event: &EventReference,
+        activated_at: DateTime<Utc>,
+    ) -> bool {
+        self.0.iter().any(|filter| filter.inboxes.is_some())
+            && !self.matches(event, activated_at)
+            && self.without_inboxes().matches(event, activated_at)
+    }
+
     pub fn has_conditions(&self) -> bool {
         self.0.iter().any(|filter| filter.condition.is_some())
     }
 
+    /// The same filters watching every inbox. Two that differed only in their
+    /// inboxes become one.
+    fn without_inboxes(&self) -> Self {
+        self.cleared(|filter| filter.inboxes = None)
+    }
+
+    /// The same filters watching every inbox and any email label.
+    fn without_owners_mail(&self) -> Self {
+        self.cleared(|filter| {
+            filter.inboxes = None;
+            filter.labels = None;
+        })
+    }
+
+    fn cleared(&self, clear: impl Fn(&mut EventFilter)) -> Self {
+        let mut filters: Vec<EventFilter> = self
+            .0
+            .iter()
+            .cloned()
+            .map(|mut filter| {
+                clear(&mut filter);
+                filter
+            })
+            .collect();
+        filters.sort_unstable();
+        filters.dedup();
+        Self(filters)
+    }
+
     /// What a run of this routine keeps of `event`: only routines that test
-    /// property changes keep them.
+    /// property changes keep them, so older replicas can still read every
+    /// other run. Only a run a label filter took keeps the gained labels and
+    /// the inbox, so every replica reads every run of a routine without label
+    /// filters. Mail that arrived labeled starts a label routine's run as a
+    /// label event.
     pub fn run_event(&self, event: &EventReference) -> EventReference {
         let mut kept = event.clone();
-        let tests_properties = self.0.iter().any(|filter| filter.property.is_some());
-        if let (
-            false,
-            EventSource::Entity {
-                property_change, ..
-            },
-        ) = (tests_properties, &mut kept.source)
+        let by_name = self
+            .0
+            .iter()
+            .any(|filter| filter.events.contains(&event.event_name) && filter.accepts(event));
+        if !by_name && event.general_event() == Some(EventName::EmailLabeled) {
+            kept.event_name = EventName::EmailLabeled;
+        }
+        // Read while the event still has its inbox, which the run drops.
+        let label_filter_took_it = self.0.iter().any(|filter| {
+            filter.events.contains(&EventName::EmailLabeled) && filter.accepts(event)
+        });
+        if let EventSource::Entity {
+            property_change,
+            inbox,
+            labels_gained,
+            ..
+        } = &mut kept.source
         {
-            *property_change = None;
+            if !self.0.iter().any(|filter| filter.property.is_some()) {
+                *property_change = None;
+            }
+            // A run a label filter took keeps them and the mail's inbox,
+            // whatever it is named, so dispatch weighs exactly the filters
+            // that took the event: a received-mail run its label filter alone
+            // admits takes on no receipt condition, and a filter for another
+            // inbox applies none of its own. Other runs drop both, so code from
+            // before them, which can't read a run that keeps them, still reads
+            // every run of a routine without label filters.
+            if !label_filter_took_it {
+                labels_gained.clear();
+                *inbox = None;
+            }
         }
         kept
+    }
+
+    pub fn watches_email_labels(&self) -> bool {
+        self.0
+            .iter()
+            .any(|filter| filter.events.contains(&EventName::EmailLabeled))
     }
 
     pub fn watches_github(&self) -> bool {
@@ -706,13 +901,17 @@ pub struct EventReference {
 /// What an event is about.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EventSource {
-    /// A Macro entity, the message the event concerns, and what outside Macro
-    /// changed it.
+    /// A Macro entity, the message the event concerns, what outside Macro
+    /// changed it, and the email labels its thread gained.
     Entity {
         entity_id: Uuid,
         message_id: Option<Uuid>,
         change_source: Option<PropertyChangeSource>,
         property_change: Option<PropertyChange>,
+        /// The inbox (email link) received mail arrived in. Admission only:
+        /// a stored event never keeps it, so a run read back has none.
+        inbox: Option<Uuid>,
+        labels_gained: Vec<Uuid>,
     },
     /// A delivery from Macro's GitHub App. Boxed: it carries its payload.
     Github(Box<GithubWebhookReceived>),
@@ -734,6 +933,13 @@ struct EventReferenceInput {
     change_source: Option<PropertyChangeSource>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     property_change: Option<PropertyChange>,
+    /// Label row ids only, never names.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    labels_gained: Vec<Uuid>,
+    /// The mail's inbox, kept only beside `labels_gained`: code from before
+    /// both can't read a run that keeps them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    inbox: Option<Uuid>,
 }
 
 fn skip_message_id(message_id: &Option<Option<Uuid>>) -> bool {
@@ -748,7 +954,14 @@ impl TryFrom<EventReferenceInput> for EventReference {
         let source = match (input.entity_id, input.github) {
             (Some(entity_id), None) if !name.is_external() => {
                 let message_id = input.message_id.flatten();
-                if name.has_message() != message_id.is_some() {
+                if !name.may_have_message() && name.has_message() != message_id.is_some() {
+                    return Err(EventRejection::InvalidContext);
+                }
+                let labels_needed = name == EventName::EmailLabeled;
+                if (!name.takes_labels() && !input.labels_gained.is_empty())
+                    || (labels_needed && input.labels_gained.is_empty())
+                    || (input.inbox.is_some() && input.labels_gained.is_empty())
+                {
                     return Err(EventRejection::InvalidContext);
                 }
                 EventSource::Entity {
@@ -756,12 +969,15 @@ impl TryFrom<EventReferenceInput> for EventReference {
                     message_id,
                     change_source: input.change_source,
                     property_change: input.property_change,
+                    inbox: input.inbox,
+                    labels_gained: input.labels_gained,
                 }
             }
             (None, Some(delivery))
                 if name == EventName::Github
                     && input.change_source.is_none()
-                    && input.property_change.is_none() =>
+                    && input.property_change.is_none()
+                    && input.labels_gained.is_empty() =>
             {
                 EventSource::Github(delivery)
             }
@@ -785,18 +1001,26 @@ impl From<EventReference> for EventReferenceInput {
             github: None,
             change_source: None,
             property_change: None,
+            labels_gained: Vec::new(),
+            inbox: None,
         };
         match event.source {
+            // The inbox is for admission, and for dispatch of a run a label
+            // filter took; any other stored event never keeps it.
             EventSource::Entity {
                 entity_id,
                 message_id,
                 change_source,
                 property_change,
+                inbox,
+                labels_gained,
             } => {
                 input.entity_id = Some(entity_id);
                 input.message_id = Some(message_id);
                 input.change_source = change_source;
                 input.property_change = property_change;
+                input.inbox = inbox.filter(|_| !labels_gained.is_empty());
+                input.labels_gained = labels_gained;
             }
             EventSource::Github(delivery) => input.github = Some(delivery),
         }
@@ -838,6 +1062,37 @@ impl EventReference {
     }
     pub fn published_at(&self) -> DateTime<Utc> {
         self.event_id.published_at()
+    }
+    /// Row ids of the email labels the event's thread gained.
+    pub fn labels_gained(&self) -> &[Uuid] {
+        match &self.source {
+            EventSource::Entity { labels_gained, .. } => labels_gained,
+            EventSource::Github(_) => &[],
+        }
+    }
+    /// The same event without the labels its thread gained. It keeps its
+    /// inbox, so filters that pick inboxes still judge it by its own.
+    pub fn without_labels(&self) -> Self {
+        let mut event = self.clone();
+        if let EventSource::Entity { labels_gained, .. } = &mut event.source {
+            labels_gained.clear();
+        }
+        event
+    }
+    /// The other name a filter may watch this event by. Status and priority
+    /// changes also match any-property selectors, and mail that arrives
+    /// labeled matches label routines. The original event ID still
+    /// deduplicates routines that watch both names.
+    pub fn general_event(&self) -> Option<EventName> {
+        match self.event_name {
+            EventName::TaskStatusChanged | EventName::TaskPriorityChanged => {
+                Some(EventName::TaskPropertyChanged)
+            }
+            EventName::EmailMessageReceived if !self.labels_gained().is_empty() => {
+                Some(EventName::EmailLabeled)
+            }
+            _ => None,
+        }
     }
 }
 
@@ -924,21 +1179,38 @@ fn document_actor(
 }
 
 impl IncomingEvent {
-    /// Mentions belong to the mentioned user, inbound mail to its inbox owner,
-    /// a started call to who created it, and an ended call to who joined it.
-    /// Entity access is checked separately at admission and dispatch. These
-    /// audience restrictions never turn an event into an access grant.
+    /// Mentions belong to the mentioned user, inbound and labeled mail to its
+    /// inbox owner, a started call to who created it, and an ended call to who
+    /// joined it. Admission also gives an inbox's mail to the people it is
+    /// delegated to (`mail_inbox`). Entity access is checked separately at admission
+    /// and dispatch. These audience restrictions never turn an event into an
+    /// access grant.
     pub fn is_for_owner(&self, owner: &MacroUserIdStr<'static>) -> bool {
         match &self.payload {
             EventPayload::Message(MessageFact::Mentioned(data)) => {
                 data.mentioned.entity_type == "user" && data.mentioned.entity_id == owner.as_ref()
             }
             EventPayload::Email(EmailTopicEvent::MessageReceived(data)) => &data.owner == owner,
+            EventPayload::Email(EmailTopicEvent::ThreadLabelsUpdated(data)) => &data.owner == owner,
             EventPayload::Call(CallTopicEvent::Started(data)) => &data.created_by == owner,
             EventPayload::Call(CallTopicEvent::RecordArchived(data)) => {
                 data.participants.contains(owner)
             }
             _ => true,
+        }
+    }
+
+    /// The owner and id of the inbox a received or labeled email is in.
+    /// Whoever the owner delegated that inbox to gets it too, as their own mail.
+    pub fn mail_inbox(&self) -> Option<(&MacroUserIdStr<'static>, Uuid)> {
+        match &self.payload {
+            EventPayload::Email(EmailTopicEvent::MessageReceived(data)) => {
+                Some((&data.owner, data.link_id))
+            }
+            EventPayload::Email(EmailTopicEvent::ThreadLabelsUpdated(data)) => {
+                Some((&data.owner, data.link_id))
+            }
+            _ => None,
         }
     }
 
@@ -958,6 +1230,8 @@ impl IncomingEvent {
         let event_id = EventId::try_from(self.event_id)?;
         let mut change_source = None;
         let mut property_change = None;
+        let mut inbox = None;
+        let mut labels_gained = Vec::new();
         let (event_name, entity_id, message_id) = match &self.payload {
             EventPayload::Document(event) => {
                 let (name, id) = match event {
@@ -1060,11 +1334,27 @@ impl IncomingEvent {
                 if data.is_spam_or_trash {
                     return Err(EventRejection::UnsupportedEvent);
                 }
+                inbox = Some(data.link_id);
+                labels_gained = data.labels_gained.clone();
                 (
                     EventName::EmailMessageReceived,
                     data.thread_id,
                     Some(data.message_id),
                 )
+            }
+            EventPayload::Email(EmailTopicEvent::ThreadLabelsUpdated(data)) => {
+                // Only labels the thread didn't have. Labels an agent or a
+                // routine put on never start routines, so two can't set each
+                // other off.
+                if data.labels_gained.is_empty() {
+                    return Err(EventRejection::UnsupportedEvent);
+                }
+                if data.automated {
+                    return Err(EventRejection::UnsafeAttribution);
+                }
+                inbox = Some(data.link_id);
+                labels_gained = data.labels_gained.clone();
+                (EventName::EmailLabeled, data.thread_id, data.message_id)
             }
             EventPayload::Email(_) => return Err(EventRejection::UnsupportedEvent),
             EventPayload::Call(CallTopicEvent::Started(data)) => {
@@ -1101,6 +1391,8 @@ impl IncomingEvent {
                 message_id,
                 change_source,
                 property_change,
+                inbox,
+                labels_gained,
             },
         })
     }

@@ -5,11 +5,11 @@ import {
   loadResult,
 } from '@core/block';
 import { enableAiEditor, isFeatureEnabled } from '@core/constant/featureFlags';
+import { lazy } from '@core/util/lazy';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { err, ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 
 /** The type `.ai` documents are stored as. */
 export const AI_MIME: string = FileTypeMap.ai.mime;

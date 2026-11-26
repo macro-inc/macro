@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.id AS \"id!\"\n        FROM unnest($1::uuid[]) AS links(link_id)\n        CROSS JOIN LATERAL (\n            SELECT t.id\n            FROM email_threads t\n            WHERE t.link_id = links.link_id\n              AND t.has_calendar_attachment\n            ORDER BY COALESCE(t.latest_non_spam_message_ts, t.updated_at) DESC, t.id DESC\n            LIMIT $2\n        ) c\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6de7539312a87a0002371ed729752533dede90da9f378146d317ec4578d2e839"
+}

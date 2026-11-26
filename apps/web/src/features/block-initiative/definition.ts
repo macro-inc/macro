@@ -1,6 +1,6 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
+import { lazy } from '@core/util/lazy';
 import { ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 
 /** A task project (initiative); `project` is a folder block. */
 export const definition = defineBlock({

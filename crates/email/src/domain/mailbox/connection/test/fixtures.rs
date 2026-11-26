@@ -37,6 +37,8 @@ pub(super) struct Data {
     pub scopes: Vec<String>,
     pub update_failures: usize,
     pub watched: Option<Link>,
+    pub departing: bool,
+    pub departing_at_promotion: bool,
 }
 
 impl Default for Data {
@@ -62,6 +64,8 @@ impl Default for Data {
             scopes: Vec::new(),
             update_failures: 0,
             watched: None,
+            departing: false,
+            departing_at_promotion: false,
         }
     }
 }
@@ -164,9 +168,9 @@ impl ConnectionLinks for Fake {
         self.record("child_fusion")?;
         Ok(self.0.lock().unwrap().child_fusion)
     }
-    async fn organization(&self, _: &str) -> Result<Option<i32>, FakeError> {
-        self.record("organization")?;
-        Ok(Some(7))
+    async fn link_departing(&self, _: Uuid) -> Result<bool, FakeError> {
+        self.record("link_departing")?;
+        Ok(self.0.lock().unwrap().departing)
     }
     async fn set_credential_owner(&self, _: Uuid, _: &str) -> Result<(), FakeError> {
         self.record("update_owner")?;
@@ -215,10 +219,13 @@ impl ConnectionTransactions for Fake {
         _: &str,
         _: &str,
         _: &Link,
-        organization: Option<i32>,
     ) -> Result<SharedInboxPromotion, ConnectionError> {
-        assert_eq!(organization, Some(7));
         self.connection_call("promote")?;
+        if self.0.lock().unwrap().departing_at_promotion {
+            return Err(ConnectionError::MailboxInitialization(
+                InitializationError::InboxBeingRemoved,
+            ));
+        }
         Ok(SharedInboxPromotion {
             link_id: LINK,
             mailbox_fusion_id: OWNER,

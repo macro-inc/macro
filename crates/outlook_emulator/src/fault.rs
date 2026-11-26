@@ -237,6 +237,10 @@ pub enum FaultError {
     Unauthorized,
     /// 403 `ErrorAccessDenied`.
     Forbidden,
+    /// 403 `ExtensionError`, as Graph refuses a subscription it will not
+    /// create for a mailbox whose mail it still serves. The code and status
+    /// are Graph's; the message is the emulator's.
+    ExtensionForbidden,
     /// 404 `ErrorItemNotFound`.
     NotFound,
     /// 404 `MailboxNotEnabledForRESTAPI`: the mailbox is not in Exchange Online.
@@ -270,6 +274,11 @@ impl FaultError {
                 GraphError::unauthenticated("Lifetime validation failed, the token is expired.")
             }
             Self::Forbidden => GraphError::access_denied(),
+            Self::ExtensionForbidden => GraphError::server(
+                403,
+                "ExtensionError",
+                "Operation: Create; Exception: [Status Code: Forbidden; Reason: Forbidden]",
+            ),
             Self::NotFound => GraphError::item_not_found(),
             Self::MailboxNotEnabled => GraphError::server(
                 404,
@@ -286,8 +295,8 @@ impl FaultError {
     }
 }
 
-/// A failure to inject. A request matches when both `mailbox` and `route`
-/// match; the first matching fault applies.
+/// A failure to inject. A request matches when `mailbox`, `route`,
+/// `folder` and `continuation` all match; the first matching fault applies.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Fault {
@@ -297,6 +306,15 @@ pub struct Fault {
     /// Only this route. All routes when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route: Option<Route>,
+    /// Only requests for this folder's messages (`…/mailFolders/{id}/messages`
+    /// and its delta), by id or by a well-known name such as `inbox`.
+    /// Requests for any folder, and those naming none, when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
+    /// Only requests that carry a `$skiptoken`: a delta round's later pages,
+    /// not a round's first request or the one a delta token starts.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub continuation: bool,
     /// The error to answer. Without one the request succeeds, after `delay_ms`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<FaultError>,

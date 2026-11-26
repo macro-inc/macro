@@ -247,7 +247,7 @@ async fn a_secondary_calendar_is_read_as_a_view_of_its_occurrences() {
 
     assert_eq!((page.next, page.delta), (None, None));
     assert_eq!(page.members.len(), 1);
-    let (_, master) = &page.members[0];
+    let master = &page.members[0].master_id;
     let upsert = refreshed(&api, &token, &target, master).await;
     assert_eq!(upsert.event.title, "Grace's birthday");
     assert!(upsert.event.is_read_only);

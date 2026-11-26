@@ -302,6 +302,7 @@ export function ReviewStack(props: {
                     initialData={item.draft}
                     sink={sink(item.id, toDraft)}
                     previewKey={item.id}
+                    createdEventId={createdEventId(record(), item.id)}
                     registerDraftReader={(reader) => {
                       readDraft = () => mapDraft(reader(), toDraft);
                     }}
@@ -361,6 +362,10 @@ function startedByAgent(review: Review, item: ReviewItem | undefined) {
     review.decision?.via === 'chat' &&
     (item?.status === 'submitting' || item?.status === 'completed')
   );
+}
+function createdEventId(review: Review, id: string): string | undefined {
+  if (review.kind !== 'calendar') return undefined;
+  return review.items.find((item) => item.id === id)?.result?.eventId;
 }
 function mapDraft<T>(
   draft: T | undefined,

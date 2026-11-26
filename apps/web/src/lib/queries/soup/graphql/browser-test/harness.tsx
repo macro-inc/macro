@@ -118,7 +118,10 @@ function App() {
 }
 
 if (new URLSearchParams(location.search).get('seed') !== 'false') {
+  if (!host.authority) throw new Error('Fixture cache owner is unavailable');
+  const generation = (await host.authority.current()).generation;
   await host.writeQuery({
+    generation,
     query: stringifyDocument(SoupMailBackfillDocument),
     operationName: 'SoupMailBackfill',
     variables: { input: { initial: { ...input('noise'), expand: true } } },

@@ -3,6 +3,7 @@
 //! as Graph does for an option it does not support, so a new query never
 //! silently reads unfiltered data.
 
+use chrono::{DateTime, Utc};
 use nom::branch::alt;
 use nom::bytes::complete::{tag, tag_no_case, take_while1};
 use nom::character::complete::{char, multispace0, multispace1};
@@ -10,6 +11,7 @@ use nom::combinator::{all_consuming, map, value};
 use nom::multi::{many0, separated_list1};
 use nom::sequence::{delimited, preceded, separated_pair, terminated};
 use nom::{IResult, Parser};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::error::GraphError;
@@ -32,6 +34,26 @@ pub(crate) enum Filter {
     Property { id: String, value: String },
     /// `field eq literal`
     Field { name: String, value: Literal },
+    /// `field ge time` or `field gt time`
+    Since { name: String, since: Since },
+}
+
+/// What `ge` or `gt` a date and time admits, as in
+/// `receivedDateTime ge 2026-11-18T09:00:00Z`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub(crate) struct Since {
+    pub(crate) time: DateTime<Utc>,
+    /// `ge`, which admits the time itself, as `gt` does not.
+    pub(crate) inclusive: bool,
+}
+
+impl Since {
+    pub(crate) fn admits(&self, at: DateTime<Utc>) -> bool {
+        match self.inclusive {
+            true => at >= self.time,
+            false => at > self.time,
+        }
+    }
 }
 
 /// The query options of one request.
@@ -162,6 +184,19 @@ fn any(input: &str) -> IResult<&str, (&str, &str, Vec<Comparison<'_>>)> {
     Ok((rest, (collection, variable, terms)))
 }
 
+/// `name ge time` or `name gt time`: whether the bound is inclusive, and the
+/// time as written, a bare `DateTimeOffset` as OData writes one.
+fn bound(input: &str) -> IResult<&str, (&str, bool, &str)> {
+    let operator = alt((
+        value(true, tag_no_case("ge")),
+        value(false, tag_no_case("gt")),
+    ));
+    let (rest, name) = identifier(input)?;
+    let (rest, inclusive) = delimited(multispace1, operator, multispace1).parse(rest)?;
+    let (rest, time) = take_while1(|c: char| !c.is_whitespace()).parse(rest)?;
+    Ok((rest, (name, inclusive, time)))
+}
+
 fn invalid_filter() -> GraphError {
     GraphError::bad_request("Invalid filter clause: the emulator does not support this $filter.")
 }
@@ -200,6 +235,18 @@ fn filter(input: &str) -> Result<Filter, GraphError> {
             }),
             _ => Err(invalid_filter()),
         };
+    }
+
+    if let Ok((_, (name, inclusive, time))) = all_consuming(bound).parse(input) {
+        let time = DateTime::parse_from_rfc3339(time).map_err(|_| invalid_filter())?;
+        let since = Since {
+            time: time.with_timezone(&Utc),
+            inclusive,
+        };
+        return Ok(Filter::Since {
+            name: name.to_string(),
+            since,
+        });
     }
 
     match all_consuming(comparison).parse(input) {

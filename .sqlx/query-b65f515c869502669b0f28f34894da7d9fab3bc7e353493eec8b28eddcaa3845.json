@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT host_id, vcpus, memory_gib, disk_gib, hibernated_at\n            FROM hosted_runtime WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "host_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "vcpus",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "memory_gib",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "disk_gib",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "hibernated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "b65f515c869502669b0f28f34894da7d9fab3bc7e353493eec8b28eddcaa3845"
+}

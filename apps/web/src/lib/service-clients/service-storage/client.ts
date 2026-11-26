@@ -18,6 +18,7 @@ import type { FetchError } from '@core/service';
 import { cache } from '@core/util/cache';
 import {
   type FetchWithTokenErrorCode,
+  type FetchWithTokenInit,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
@@ -29,19 +30,17 @@ import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
 import { createChannelLabelsClient } from './channel-labels';
-import type { ApiChannelListPage } from './channel-list-types';
+import { crmValidationError } from './crm-errors';
 import { fetchDatabaseOps } from './databases';
 import type { AccessiblePipeline as PipelineResponse } from './generated/schemas/accessiblePipeline';
 import type { AccessLevel } from './generated/schemas/accessLevel';
 import type { AccountManagerDecision } from './generated/schemas/accountManagerDecision';
 import type { AccountManagerGrant } from './generated/schemas/accountManagerGrant';
 import type { AccountManagersList } from './generated/schemas/accountManagersList';
-import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest';
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
 import type { Agent } from './generated/schemas/agent';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
-import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
 import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
 import type { Bot } from './generated/schemas/bot';
@@ -68,6 +67,8 @@ import {
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
 import type { CompanyContactsPageResponse } from './generated/schemas/companyContactsPageResponse';
+import type { CompanyDomainRequest } from './generated/schemas/companyDomainRequest';
+import type { CompanyDomainTakenResponse } from './generated/schemas/companyDomainTakenResponse';
 import type { ContactEmailRequest } from './generated/schemas/contactEmailRequest';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
@@ -113,8 +114,6 @@ import type { EmailFollowup } from './generated/schemas/emailFollowup';
 import type { EmailFollowupCommand } from './generated/schemas/emailFollowupCommand';
 import type { EmailReminderPage } from './generated/schemas/emailReminderPage';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
-import type { Favorite } from './generated/schemas/favorite';
-import type { FavoritesList } from './generated/schemas/favoritesList';
 import type { ForeignEntity } from './generated/schemas/foreignEntity';
 import type { GetAttachmentReferencesResponse } from './generated/schemas/getAttachmentReferencesResponse';
 import type { GetBatchChannelPreviewRequest } from './generated/schemas/getBatchChannelPreviewRequest';
@@ -129,7 +128,6 @@ import type { GetDocumentSearchResponse } from './generated/schemas/getDocumentS
 import type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
 import type { GetOrCreateDmRequest } from './generated/schemas/getOrCreateDmRequest';
 import type { GetOrCreatePrivateRequest } from './generated/schemas/getOrCreatePrivateRequest';
-import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendingProjectsHandler200';
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
 import type { GetSystemSkillsHandler200 } from './generated/schemas/getSystemSkillsHandler200';
@@ -150,11 +148,16 @@ import type { Item } from './generated/schemas/item';
 import type { JobId } from './generated/schemas/jobId';
 import type { ListCompanyContactsPageParams } from './generated/schemas/listCompanyContactsPageParams';
 import type { ListEmailRemindersParams } from './generated/schemas/listEmailRemindersParams';
-import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
 import type { ListSlackImportsParams } from './generated/schemas/listSlackImportsParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
+import type { MergeBlock } from './generated/schemas/mergeBlock';
+import type { MergeCommitRequest } from './generated/schemas/mergeCommitRequest';
+import type { MergeErrorResponse } from './generated/schemas/mergeErrorResponse';
+import type { MergeOutcome } from './generated/schemas/mergeOutcome';
+import type { MergePreview } from './generated/schemas/mergePreview';
+import type { MergePreviewRequest } from './generated/schemas/mergePreviewRequest';
 import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchHarnessRequest } from './generated/schemas/patchHarnessRequest';
@@ -164,9 +167,7 @@ import type { PostGroupedSoupAstInitialRequest } from './generated/schemas/postG
 import type { PostGroupedSoupAstRequest } from './generated/schemas/postGroupedSoupAstRequest';
 import type { PostSoupAstRequest } from './generated/schemas/postSoupAstRequest';
 import type { PostSoupRequest } from './generated/schemas/postSoupRequest';
-import type { Project } from './generated/schemas/project';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
-import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
 import type { RequestAccountManagerBody } from './generated/schemas/requestAccountManagerBody';
@@ -190,6 +191,8 @@ import type { StorageRowsQuery } from './generated/schemas/storageRowsQuery';
 import type { StoredGithubPullRequest } from './generated/schemas/storedGithubPullRequest';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { TableDetail } from './generated/schemas/tableDetail';
+import type { TeamAvailability } from './generated/schemas/teamAvailability';
+import type { TeamAvailabilityRequest } from './generated/schemas/teamAvailabilityRequest';
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
 import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest';
@@ -245,19 +248,72 @@ const syncOrigin =
 
 export function dssFetch(
   url: string,
-  init?: SafeFetchInit
+  init?: FetchWithTokenInit
 ): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
-export function dssFetch<T extends Record<string, any>>(
+export function dssFetch<T extends Record<string, any> | null>(
   url: string,
-  init?: SafeFetchInit
+  init?: FetchWithTokenInit
 ): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
-export function dssFetch<T extends Record<string, any> = never>(
+export function dssFetch<T extends Record<string, any> | null = never>(
   url: string,
-  init?: SafeFetchInit
+  init?: FetchWithTokenInit
 ):
   | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${dssHost}${url}`, init);
+}
+
+/** Why the storage service refused to review or commit a merge. */
+export type CrmMergeErrorCode =
+  | 'merge_permission_required'
+  | 'merge_unavailable'
+  | 'record_unavailable'
+  | 'record_hidden'
+  | 'record_already_merged'
+  | 'merge_preview_stale'
+  | 'merge_request_reused'
+  | 'merge_conflict'
+  | 'merge_sharing_rules_too_large'
+  | 'invalid_request';
+
+export const CRM_MERGE_ERROR_CODES: readonly string[] = [
+  'merge_permission_required',
+  'merge_unavailable',
+  'record_unavailable',
+  'record_hidden',
+  'record_already_merged',
+  'merge_preview_stale',
+  'merge_request_reused',
+  'merge_conflict',
+  'merge_sharing_rules_too_large',
+  'invalid_request',
+] satisfies CrmMergeErrorCode[];
+
+/** A merge refusal: its code, and what a conflict or an earlier merge names. */
+export type CrmMergeError = ResultError<
+  CrmMergeErrorCode | FetchWithTokenErrorCode
+> & {
+  blocked?: MergeBlock | null;
+  currentId?: string | null;
+};
+
+async function crmMergeErrorHandler(response: Response) {
+  const body = (await response
+    .json()
+    .catch(() => null)) as MergeErrorResponse | null;
+  if (body?.code && CRM_MERGE_ERROR_CODES.includes(body.code)) {
+    const error: CrmMergeError = {
+      code: body.code as CrmMergeErrorCode,
+      message: body.message,
+      blocked: body.blocked ?? null,
+      currentId: body.currentId ?? null,
+    };
+    return error;
+  }
+  return {
+    code: 'HTTP_ERROR' as const,
+    message: `HTTP error! status: ${response.status}`,
+  };
 }
 
 /**
@@ -280,6 +336,24 @@ async function calendarJoinRequestErrorHandler(response: Response) {
     code: 'HTTP_ERROR' as const,
     message: `HTTP error! status: ${response.status}`,
   };
+}
+
+/**
+ * A refused company domain edit. A 409 carries, as its message, the name of
+ * the company that already has the domain, empty when the caller cannot see
+ * it (an archived company, for a member).
+ */
+async function companyDomainErrorHandler(response: Response) {
+  if (response.status === 400) {
+    return { code: 'BAD_REQUEST' as const, message: 'Domain change refused' };
+  }
+  if (response.status === 409) {
+    const body = (await response
+      .json()
+      .catch(() => null)) as CompanyDomainTakenResponse | null;
+    return { code: 'CONFLICT' as const, message: body?.companyName ?? '' };
+  }
+  return statusError(response.status);
 }
 
 async function contactEditErrorHandler(response: Response) {
@@ -659,6 +733,20 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async getTeamAvailability(
+    body: TeamAvailabilityRequest,
+    signal?: AbortSignal
+  ) {
+    return await dssFetch<TeamAvailability>(
+      '/calendar-events/team/availability',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        signal,
+      }
+    );
+  },
+
   async listTeamOutOfOffice(
     args: ListTeamOutOfOfficeParams & { signal?: AbortSignal }
   ) {
@@ -737,11 +825,13 @@ export const storageServiceClient = {
       ? `?cursor=${args.params.cursor}`
       : '';
 
-    return await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
+    const body = JSON.stringify(args.body);
+    const result = await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
       method: 'POST',
-      body: JSON.stringify(args.body),
+      body,
       signal: args.signal,
     });
+    return result;
   },
 
   async getGroupedSoupAstItems(args: {
@@ -818,30 +908,6 @@ export const storageServiceClient = {
         method: 'POST',
         body: JSON.stringify(args),
       })
-    ).map((result) => result);
-  },
-
-  // The channel list is still served by the comms hex, mounted at
-  // `/comms/channels` on the same DSS host. Repoint to `/channels` once the
-  // list moves into the channels hex (alongside the comms teardown).
-  async getChannels(args: {
-    cursor?: string;
-    limit?: number;
-    signal?: AbortSignal;
-  }) {
-    const params = new URLSearchParams();
-    if (args.cursor) params.set('cursor', args.cursor);
-    if (args.limit != null) params.set('limit', String(args.limit));
-    const query = params.toString();
-
-    return (
-      await dssFetch<ApiChannelListPage>(
-        `/comms/channels${query ? `?${query}` : ''}`,
-        {
-          method: 'GET',
-          signal: args.signal,
-        }
-      )
     ).map((result) => result);
   },
 
@@ -1187,15 +1253,6 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
-  async deleteChannel(args: WithChannelId) {
-    const { channel_id } = args;
-    return (
-      await dssFetch<MessageResponse>(`/channels/${channel_id}`, {
-        method: 'DELETE',
-      })
-    ).map((result) => result);
-  },
-
   async addParticipantsToChanenl(args: AddParticipantsRequest & WithChannelId) {
     const { channel_id, participants } = args;
     return (
@@ -1369,14 +1426,6 @@ export const storageServiceClient = {
         `/channels/attachments/${entity_type}/${entity_id}/references`,
         { method: 'GET' }
       )
-    ).map((result) => result);
-  },
-
-  async getActivity() {
-    return (
-      await dssFetch<Array<ApiActivity>>(`/channels/activity`, {
-        method: 'GET',
-      })
     ).map((result) => result);
   },
 
@@ -1949,25 +1998,6 @@ export const storageServiceClient = {
       return err(result.error);
     }
     return result;
-  },
-
-  async permanentlyDeleteDocument({ documentId }) {
-    return (
-      await dssFetch<SuccessResponse>(`/documents/${documentId}/permanent`, {
-        method: 'DELETE',
-      })
-    ).map((result) => result.data);
-  },
-
-  async revertDocumentDelete({ documentId }) {
-    return (
-      await dssFetch<SuccessResponse>(
-        `/documents/${documentId}/revert_delete`,
-        {
-          method: 'PUT',
-        }
-      )
-    ).map((result) => result.data);
   },
 
   async fetchCachedSnapshot(
@@ -2667,22 +2697,10 @@ export const storageServiceClient = {
   },
 
   projects: {
-    async getAll() {
-      return (await dssFetch<{ data: Project[] }>('/projects')).map(
-        (result) => ({ data: result.data })
-      );
-    },
-
     async getProject({ id }) {
       return (await dssFetch<GetProjectResponse>(`/projects/${id}`)).map(
         (result) => result.data
       );
-    },
-
-    async getPending() {
-      return (
-        await dssFetch<GetPendingProjectsHandler200>('/projects/pending')
-      ).map((result) => ({ data: result.data }));
     },
 
     async create(params: {
@@ -2694,24 +2712,6 @@ export const storageServiceClient = {
         await dssFetch<CreateProjectResponse>('/projects', {
           method: 'POST',
           body: JSON.stringify(params),
-        })
-      ).map((result) => result.data);
-    },
-
-    async delete({ id }: { id: string }) {
-      return (
-        await dssFetch<SuccessResponse>(`/projects/${id}`, {
-          method: 'DELETE',
-        })
-      ).map((result) => result.data);
-    },
-
-    async edit(args) {
-      const { id, ...body } = args;
-      return (
-        await dssFetch<SuccessResponse>(`/projects/${id}`, {
-          method: 'PATCH',
-          body: JSON.stringify(body),
         })
       ).map((result) => result.data);
     },
@@ -2761,21 +2761,6 @@ export const storageServiceClient = {
         )
       ).map((result) => result.data);
     },
-    async permanentlyDelete({ id }) {
-      return (
-        await dssFetch<SuccessResponse>(`/projects/${id}/permanent`, {
-          method: 'DELETE',
-        })
-      ).map((result) => result.data);
-    },
-
-    async revertDelete({ id }) {
-      return (
-        await dssFetch<SuccessResponse>(`/projects/${id}/revert_delete`, {
-          method: 'PUT',
-        })
-      ).map((result) => result.data);
-    },
   },
   async getDeletedItems() {
     return (
@@ -2821,41 +2806,6 @@ export const storageServiceClient = {
 
   channelLabels: createChannelLabelsClient(dssFetch, '/channel-labels'),
   channelSections: createChannelLabelsClient(dssFetch, '/channel-sections'),
-  favorites: {
-    async getFavorites(params?: ListFavoritesParams) {
-      const query = new URLSearchParams();
-      // Each dimension repeats its key once per value; the two combine with AND.
-      params?.entityType?.forEach((entityType) =>
-        query.append('entityType', entityType)
-      );
-      params?.entityId?.forEach((entityId) =>
-        query.append('entityId', entityId)
-      );
-      const qs = query.toString();
-      return await dssFetch<FavoritesList>(`/favorites${qs ? `?${qs}` : ''}`);
-    },
-    async addFavorite(params: AddFavoriteRequest) {
-      return await dssFetch<Favorite>('/favorites', {
-        method: 'POST',
-        body: JSON.stringify(params),
-      });
-    },
-    async removeFavoriteByEntity(params: {
-      entityType: AddFavoriteRequest['entityType'];
-      entityId: string;
-    }) {
-      return await dssFetch(
-        `/favorites/${params.entityType}/${encodeURIComponent(params.entityId)}`,
-        { method: 'DELETE' }
-      );
-    },
-    async reorderFavorites(params: ReorderFavoritesRequest) {
-      return await dssFetch('/favorites/reorder', {
-        method: 'PATCH',
-        body: JSON.stringify(params),
-      });
-    },
-  },
   reminders: {
     async listEmailReminders(params: ListEmailRemindersParams) {
       const query = new URLSearchParams();
@@ -2885,16 +2835,6 @@ export const storageServiceClient = {
         body: JSON.stringify(command),
       });
     },
-  },
-  async editThread(params) {
-    const { threadId, ...body } = params;
-
-    return (
-      await dssFetch<SuccessResponse>(`/threads/${threadId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      })
-    ).map((result) => result.data);
   },
   async createCompany(body: CreateCrmCompanyRequest) {
     return await dssFetch<CrmCompanyResponse>('/crm/companies', {
@@ -2928,6 +2868,28 @@ export const storageServiceClient = {
     return await dssFetch<CompanyContactsPageResponse>(
       `/crm/companies/${companyId}/contacts/page?${search}`,
       { method: 'GET' }
+    );
+  },
+  /** Review merging CRM records into the one that stays; changes nothing. */
+  async previewCrmMerge(body: MergePreviewRequest) {
+    return await fetchWithToken<MergePreview, CrmMergeErrorCode>(
+      `${dssHost}/crm/merges/preview`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: crmMergeErrorHandler,
+      }
+    );
+  },
+  /** Commit a reviewed merge; a retry with the same request key returns its result. */
+  async commitCrmMerge(body: MergeCommitRequest) {
+    return await fetchWithToken<MergeOutcome, CrmMergeErrorCode>(
+      `${dssHost}/crm/merges`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: crmMergeErrorHandler,
+      }
     );
   },
   /** Titles of many company and contact chips; records the caller can't open are left out. */
@@ -2969,7 +2931,7 @@ export const storageServiceClient = {
   async blockCrmDomain({ domain }: { domain: string }) {
     return await dssFetch(
       `/crm/blocked-domains/${encodeURIComponent(domain)}`,
-      { method: 'PUT' }
+      { method: 'PUT', errorResponseHandler: crmValidationError }
     );
   },
   async unblockCrmDomain({ domain }: { domain: string }) {
@@ -3100,6 +3062,32 @@ export const storageServiceClient = {
       body: JSON.stringify(body),
     });
   },
+  async addCompanyDomain({
+    companyId,
+    ...body
+  }: { companyId: string } & CompanyDomainRequest) {
+    return await fetchWithToken<CrmCompanyResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/companies/${companyId}/domains`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: companyDomainErrorHandler,
+      }
+    );
+  },
+  async removeCompanyDomain({
+    companyId,
+    ...body
+  }: { companyId: string } & CompanyDomainRequest) {
+    return await fetchWithToken<CrmCompanyResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/companies/${companyId}/domains`,
+      {
+        method: 'DELETE',
+        body: JSON.stringify(body),
+        errorResponseHandler: companyDomainErrorHandler,
+      }
+    );
+  },
   async setCompanyHidden({
     companyId,
     hidden,
@@ -3110,6 +3098,7 @@ export const storageServiceClient = {
     return await dssFetch(`/crm/companies/${companyId}/hidden`, {
       method: 'PUT',
       body: JSON.stringify({ hidden }),
+      errorResponseHandler: crmValidationError,
     });
   },
   async setEmailSync({
@@ -3122,11 +3111,13 @@ export const storageServiceClient = {
     return await dssFetch(`/crm/companies/${companyId}/email-sync`, {
       method: 'PUT',
       body: JSON.stringify({ email_sync: emailSync }),
+      errorResponseHandler: crmValidationError,
     });
   },
   async getCrmTeamSettings() {
     return await dssFetch<CrmTeamSettingsResponse>('/crm/settings', {
       method: 'GET',
+      cache: 'no-store',
     });
   },
   async updateCrmTeamSettings(body: UpdateCrmTeamSettingsRequest) {

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET system_calendar=$2 WHERE id=$1 AND system_calendar<>$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bd7731491b3b691aaba837fbaad345a0640b5b952fa350c7616ac30b750f50fd"
+}

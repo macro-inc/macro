@@ -153,6 +153,7 @@ describe('safeFetch', () => {
         Promise.resolve({
           ok: false,
           status: 404,
+          headers: new Headers(),
         } as Response)
       );
 
@@ -172,6 +173,7 @@ describe('safeFetch', () => {
         Promise.resolve({
           ok: false,
           status: 404,
+          headers: new Headers(),
         } as Response)
       );
 
@@ -191,6 +193,7 @@ describe('safeFetch', () => {
         Promise.resolve({
           ok: false,
           status: 401,
+          headers: new Headers(),
         } as Response)
       );
 
@@ -210,6 +213,7 @@ describe('safeFetch', () => {
         Promise.resolve({
           ok: false,
           status: 500,
+          headers: new Headers(),
         } as Response)
       );
 
@@ -229,6 +233,7 @@ describe('safeFetch', () => {
         Promise.resolve({
           ok: false,
           status: 418,
+          headers: new Headers(),
         } as Response)
       );
 
@@ -250,6 +255,7 @@ describe('safeFetch', () => {
         Promise.resolve({
           ok: false,
           status: 429,
+          headers: new Headers(),
           json: () => Promise.resolve({ error: 'Too many requests' }),
         } as Response)
       );

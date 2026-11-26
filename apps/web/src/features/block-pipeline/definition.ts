@@ -1,6 +1,6 @@
 import { defineBlock, LoadErrors } from '@core/block';
+import { lazy } from '@core/util/lazy';
 import { ok } from 'neverthrow';
-import { lazy } from 'solid-js';
 
 /** A CRM pipeline, which opens in the Customers view. */
 export const definition = defineBlock({

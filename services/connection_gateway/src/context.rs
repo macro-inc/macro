@@ -31,6 +31,9 @@ pub struct ApiContext {
     pub redis_connection: MultiplexedConnection,
     pub stream_manager: Arc<dyn StreamManager + Send + Sync>,
     pub last_online_worker: Arc<LastOnlineWorker>,
+    /// Records that people with a signed-in client connected are around,
+    /// for the activity check.
+    pub seen_recorder: crate::service::seen::SeenRecorder,
 }
 
 impl ApiContext {

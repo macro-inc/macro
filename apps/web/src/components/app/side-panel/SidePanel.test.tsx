@@ -119,9 +119,10 @@ function setup(persistentFloating = false, unseenCount = 0) {
 
 it('keeps an opted-in wide floating panel open on outside click and remembers it', () => {
   setup(true, 3);
-  expect(screen.getByLabelText('3 unseen items')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
-  expect(screen.queryByLabelText('3 unseen items')).toBeNull();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Show details, 3 unseen items' })
+  );
+  expect(screen.getByRole('button', { name: 'Hide details' })).toBeTruthy();
   expect(
     screen.queryByRole('complementary', { name: 'Block details' })
   ).toBeTruthy();

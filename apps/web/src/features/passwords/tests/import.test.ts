@@ -344,6 +344,105 @@ describe('sendImport', () => {
     expect(requests).toHaveLength(2);
   });
 
+  it("fails items for a team whose vault isn't set up without resending them", async () => {
+    const requests: ImportBatchBody[] = [];
+    const waits: number[] = [];
+    const source = createFakePasswordSource([], {
+      requests,
+      notProvisioned: true,
+    });
+    const outcome = await sendImport(
+      source,
+      {
+        importId: IMPORT_ID,
+        format: 'bitwarden_csv',
+        target: { kind: 'root' },
+        private: false,
+        items: [item('row:1'), item('row:2')],
+        folders: [],
+      },
+      {
+        span: NOOP_SPAN,
+        onProgress: () => {},
+        wait: async (ms) => {
+          waits.push(ms);
+        },
+      }
+    );
+    expect(outcome).toMatchObject({
+      created: 0,
+      failed: 2,
+      failures: { not_provisioned: 2 },
+    });
+    expect(requests).toHaveLength(1);
+    expect(waits).toEqual([]);
+  });
+
+  it("stops sending batches once the vault says the team's vault isn't set up", async () => {
+    const requests: ImportBatchBody[] = [];
+    const source = createFakePasswordSource([], {
+      requests,
+      notProvisioned: true,
+    });
+    const items = Array.from({ length: 60 }, (_, index) =>
+      item(`row:${index + 1}`)
+    );
+    const progress: number[] = [];
+    const outcome = await sendImport(
+      source,
+      {
+        importId: IMPORT_ID,
+        format: 'one_password_csv',
+        target: { kind: 'root' },
+        private: false,
+        items,
+        folders: [],
+      },
+      {
+        span: NOOP_SPAN,
+        onProgress: (done) => progress.push(done),
+        wait: noWait,
+      }
+    );
+    expect(requests).toHaveLength(1);
+    expect(outcome).toMatchObject({
+      created: 0,
+      failed: 60,
+      failures: { not_provisioned: 60 },
+    });
+    expect(progress.at(-1)).toBe(60);
+  });
+
+  it("stops after a batch request refused because the team's vault isn't set up", async () => {
+    const requests: ImportBatchBody[] = [];
+    const source = createFakePasswordSource([], {
+      requests,
+      failRequests: 1,
+      failWith: { retryable: false, reason: 'not_provisioned' },
+    });
+    const items = Array.from({ length: 30 }, (_, index) =>
+      item(`row:${index + 1}`)
+    );
+    const outcome = await sendImport(
+      source,
+      {
+        importId: IMPORT_ID,
+        format: 'one_password_csv',
+        target: { kind: 'root' },
+        private: false,
+        items,
+        folders: [],
+      },
+      { span: NOOP_SPAN, onProgress: () => {}, wait: noWait }
+    );
+    expect(requests).toHaveLength(1);
+    expect(outcome).toMatchObject({
+      created: 0,
+      failed: 30,
+      failures: { not_provisioned: 30 },
+    });
+  });
+
   it('gives up on an item that stays busy and counts it failed', async () => {
     const source = createFakePasswordSource([], {
       busy: new Map([['row:1', 10]]),

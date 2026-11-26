@@ -6,11 +6,13 @@ WITH matching_messages AS (
     JOIN email_message_recipients r ON r.message_id = m.id
     JOIN email_contacts ec ON ec.id = r.contact_id
     WHERE m.link_id = $2 AND ec.link_id = $2 AND m.is_sent AND NOT m.is_draft AND lower(ec.email_address) = $3
+      AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
     UNION
     SELECT m.id, m.thread_id, m.is_sent, COALESCE(m.internal_date_ts, m.created_at)
     FROM email_messages m
     JOIN email_contacts ec ON ec.id = m.from_contact_id
     WHERE m.link_id = $2 AND ec.link_id = $2 AND NOT m.is_sent AND NOT m.is_draft AND lower(ec.email_address) = $3
+      AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
 ), thread_interactions AS MATERIALIZED (
     SELECT thread_id,
            min(occurred_at) FILTER (WHERE is_sent) AS first_sent_at,

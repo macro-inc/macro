@@ -1,13 +1,14 @@
-//! Outbound port for enqueueing contact connections created through team membership.
+//! Outbound port for the contacts changes team membership causes.
 //!
 //! The teams service uses this port to publish explicit connections between a
-//! joining user and their teammates without depending on a particular queue or
-//! contacts service implementation.
+//! joining user and their teammates, and to tell members whose teammates
+//! changed which contacts to re-read, without depending on a particular queue
+//! or contacts service implementation.
 
 use macro_user_id::user_id::MacroUserIdStr;
 use std::convert::Infallible;
 
-/// Enqueues contact connections created when a user joins a team.
+/// Enqueues the contacts changes a team membership change causes.
 pub trait ContactsEnqueuer: Clone + Send + Sync + 'static {
     /// Error type returned by enqueue operations.
     type Err: std::fmt::Display + std::fmt::Debug + Send;
@@ -16,6 +17,15 @@ pub trait ContactsEnqueuer: Clone + Send + Sync + 'static {
     fn enqueue_contact_connections(
         &self,
         connections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Tells each user's clients to re-read `changed`. Teammates are computed
+    /// from the roster, so nothing is written. Empty means unknown: the
+    /// clients fall back to their periodic scan.
+    fn directory_changed(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        changed: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
@@ -29,6 +39,14 @@ impl ContactsEnqueuer for NoOpContactsEnqueuer {
     async fn enqueue_contact_connections(
         &self,
         _connections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn directory_changed(
+        &self,
+        _users: Vec<MacroUserIdStr<'static>>,
+        _changed: Vec<MacroUserIdStr<'static>>,
     ) -> Result<(), Self::Err> {
         Ok(())
     }

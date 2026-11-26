@@ -13,6 +13,16 @@ async fn remote(
     rmcp::service::RunningService<rmcp::RoleServer, StubServer>,
     RemoteMcpToolSet,
 ) {
+    remote_named("macro_internal", names).await
+}
+
+async fn remote_named(
+    server_name: &str,
+    names: &[&str],
+) -> (
+    rmcp::service::RunningService<rmcp::RoleServer, StubServer>,
+    RemoteMcpToolSet,
+) {
     let (server_io, client_io) = tokio::io::duplex(4096);
     let (server, client) = tokio::join!(
         StubServer.serve(server_io),
@@ -35,9 +45,10 @@ async fn remote(
         .collect();
     let remote = RemoteMcpToolSet::from_listed(
         vec![ListedServer {
-            name: "macro_internal".into(),
+            name: server_name.into(),
             client: Arc::new(client.unwrap()),
             tools,
+            trace_context: mcp_toolset::TraceContext::Withhold,
         }],
         None,
     );
@@ -110,7 +121,7 @@ async fn unseen_turns_get_only_code_mode() {
         "link_task",
     ])
     .await;
-    let set = mcp_select::CombinedToolSet::new(
+    let set = mcp_toolset::CombinedToolSet::new(
         Arc::new(AsyncToolCollection::<()>::new()),
         unseen::CodeModeOnly::new(tools),
     )
@@ -153,4 +164,17 @@ async fn unseen_turns_get_only_code_mode() {
         Err(ai_toolset::ToolSetError::NotFound(_))
     ));
     server.cancel().await.unwrap();
+}
+
+/// Code tools served by a custom server named to mangle like the internal
+/// one are not the code runner.
+#[tokio::test]
+async fn code_tools_from_a_lookalike_server_are_not_listed() {
+    let (server, tools) = remote_named(
+        "macro_internal_",
+        &["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"],
+    )
+    .await;
+    assert!(code_tools_listed(&request(Some(tools))).is_err());
+    drop(server);
 }

@@ -14,7 +14,6 @@ import type {
   NotificationInboxRow,
 } from '../context/notifications-inbox-context';
 import type { InboxClearState, InboxClearStatus } from '../core/inbox-clear';
-import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
 import type {
   InboxActor,
   InboxRowAction,
@@ -25,7 +24,7 @@ import type { NotificationInboxGroup } from './notification-inbox-groups';
 type WireRow = NotificationInboxEntryFieldsFragment['rows'][number];
 
 /** The server's row types only grow; a newer one shows as a generic row. */
-const toRowType = (
+export const toRowType = (
   type: NotificationInboxRowType
 ): NotificationInboxRow['type'] =>
   match<NotificationInboxRowType, NotificationInboxRow['type']>(type)
@@ -49,6 +48,15 @@ const toRowType = (
     .with('ACCESS_GRANTED', () => 'access_granted' as const)
     .with('ACCESS_REMOVED', () => 'access_removed' as const)
     .exhaustive(() => 'other' as const);
+
+/** The row types this build knows among `types`; newer ones are dropped. */
+const toKnownRowTypes = (
+  types: readonly NotificationInboxRowType[]
+): InboxRowType[] =>
+  types.flatMap((type) => {
+    const known = toRowType(type);
+    return known === 'other' ? [] : [known];
+  });
 
 /** An actor kind this build doesn't know names no author. */
 const toActor = (actor: WireRow['actor']): InboxActor | undefined => {
@@ -110,16 +118,13 @@ const toGraphqlRowTypes = (type: InboxRowType): NotificationInboxRowType[] => {
 };
 
 /**
- * Encode an inbox scope for the server. Every known type reads every row,
- * including row types a newer server adds.
+ * Encode the explicit selection unless no categories are selected. Only that
+ * unfiltered scope includes kinds introduced by a newer server.
  */
 export function encodeInboxScope(
   scope: InboxScope
 ): NotificationInboxScopeInput {
-  const everyType = ALL_INBOX_ROW_TYPES.every((type) =>
-    scope.rowTypes.includes(type)
-  );
-  const rowTypes = everyType
+  const rowTypes = scope.allKinds
     ? []
     : [...new Set(scope.rowTypes.flatMap(toGraphqlRowTypes))];
   return scope.unreadOnly ? { rowTypes, unreadOnly: true } : { rowTypes };
@@ -127,7 +132,7 @@ export function encodeInboxScope(
 
 /**
  * Encode what a clear takes. A clear always names its kinds: the server has
- * no "every kind" for one, so an inbox with every kind hidden clears nothing.
+ * no "every kind" for one, so an empty scope clears nothing.
  */
 export function encodeClearScope(
   scope: InboxScope
@@ -159,10 +164,7 @@ export function toInboxClear(
     id: clear.clearId,
     status: toClearStatus(clear.status),
     takes: {
-      rowTypes: clear.rowTypes.flatMap((type) => {
-        const known = toRowType(type);
-        return known === 'other' ? [] : [known];
-      }),
+      rowTypes: toKnownRowTypes(clear.rowTypes),
       unreadOnly: clear.unreadOnly,
       ...(clear.since ? { since: Date.parse(clear.since) } : {}),
     },
@@ -193,6 +195,7 @@ export function toInboxGroup(
       const decoded: NotificationInboxRow = {
         id: row.id,
         type: toRowType(row.rowType),
+        alsoListedAs: toKnownRowTypes(row.alsoListedAs),
         threadId: row.threadId ?? undefined,
         revision: row.revision,
         latestAt,

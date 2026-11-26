@@ -88,7 +88,7 @@ impl<G: PlanGateway> PlanService<G> {
 fn action(current: SeatPlan, target: SeatPlan, trialing: bool) -> PlanAction {
     if current == target {
         PlanAction::KeepCurrent
-    } else if target == SeatPlan::Max {
+    } else if target > current {
         PlanAction::Upgrade {
             end_trial: trialing,
         }
@@ -149,6 +149,26 @@ mod test {
         assert_eq!(
             action(SeatPlan::Premium, SeatPlan::Max, false),
             PlanAction::Upgrade { end_trial: false }
+        );
+    }
+
+    #[test]
+    fn business_upgrades_from_pro_and_downgrades_from_max() {
+        assert_eq!(
+            action(SeatPlan::Premium, SeatPlan::Business, true),
+            PlanAction::Upgrade { end_trial: true }
+        );
+        assert_eq!(
+            action(SeatPlan::Business, SeatPlan::Max, false),
+            PlanAction::Upgrade { end_trial: false }
+        );
+        assert_eq!(
+            action(SeatPlan::Max, SeatPlan::Business, false),
+            PlanAction::ScheduleDowngrade
+        );
+        assert_eq!(
+            action(SeatPlan::Business, SeatPlan::Premium, false),
+            PlanAction::ScheduleDowngrade
         );
     }
 

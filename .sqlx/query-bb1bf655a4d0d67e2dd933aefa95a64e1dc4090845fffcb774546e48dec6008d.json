@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_blocked_domains (team_id, domain)\n                       SELECT $1, domain FROM UNNEST($2::text[]) AS d(domain)\n                       ON CONFLICT (team_id, domain) DO NOTHING\n                       RETURNING domain",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "domain",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bb1bf655a4d0d67e2dd933aefa95a64e1dc4090845fffcb774546e48dec6008d"
+}

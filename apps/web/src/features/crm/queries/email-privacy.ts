@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
-import { throwOnErr } from '@core/util/result';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import {
   assertQueryAccount,
@@ -9,28 +10,50 @@ import {
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import type {
+  CrmEmailConsentResponse,
   CrmEmailPrivacyResponse,
   crmEmailPrivacyClient,
 } from '@service-storage/crm-email-privacy';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createEffect } from 'solid-js';
 import type {
+  EmailConsent,
   EmailPrivacy,
   EmailPrivacyChange,
   ExcludedThreads,
 } from '../core/email-privacy';
 import type { CrmQueryDependencies } from './dependencies';
 import { crmKeys } from './keys';
+import { listReadsCrmEmail } from './list-refresh';
 
-function fromResponse(data: CrmEmailPrivacyResponse): EmailPrivacy {
+function consentFromResponse(data: CrmEmailConsentResponse): EmailConsent {
   return {
     enabled: data.enabled,
     mailboxEmail: data.mailbox_email ?? null,
     mailboxLinkId: data.mailbox_link_id ?? null,
+  };
+}
+
+function fromResponse(data: CrmEmailPrivacyResponse): EmailPrivacy {
+  return {
+    ...consentFromResponse(data),
     teamDomains: data.team_domains,
     personalDomains: data.personal_domains,
+    teamDomainWarnings: data.team_domain_warnings ?? {},
+    personalDomainWarnings: data.personal_domain_warnings ?? {},
+    archivedTeamDomains: data.archived_team_domains ?? {},
     canRemoveTeamDomains: data.can_remove_team_domains,
   };
+}
+
+/** The server refuses a team domain while its company is archived (409). */
+function isArchivedCompanyRemoval(error: Error, change: EmailPrivacyChange) {
+  return (
+    change.action === 'remove_domain' &&
+    change.scope === 'team' &&
+    error instanceof ThrownResultError &&
+    error.errors.some((e) => e.code === 'CONFLICT')
+  );
 }
 
 type EmailPrivacyDependencies = Pick<
@@ -57,21 +80,23 @@ function excludedThreadsOptions(
   deps: EmailPrivacyDependencies,
   teamId: string | undefined,
   account: QueryAccount | undefined,
-  after: string | undefined
+  after: string | undefined,
+  threadId?: string
 ) {
   return queryOptions({
     queryKey: crmKeys.excludedEmailThreads(
       teamId,
       account?.userId,
       account?.session,
-      after
+      after,
+      threadId
     ).queryKey,
     enabled: !!teamId && !!account,
     queryFn: async ({ signal }): Promise<ExcludedThreads> => {
       signal.throwIfAborted();
       assertQueryAccount(account);
       const data = await throwOnErr(() =>
-        deps.privacy.excludedThreads(after, signal)
+        deps.privacy.excludedThreads(after, signal, threadId)
       );
       signal.throwIfAborted();
       assertQueryAccount(account);
@@ -83,6 +108,26 @@ function excludedThreadsOptions(
         })),
         nextCursor: data.next_cursor ?? null,
       };
+    },
+  });
+}
+
+function emailConsentOptions(
+  deps: EmailPrivacyDependencies,
+  teamId: string | undefined,
+  account: QueryAccount | undefined
+) {
+  return queryOptions({
+    queryKey: crmKeys.emailConsent(teamId, account?.userId, account?.session)
+      .queryKey,
+    enabled: !!teamId && !!account,
+    queryFn: async ({ signal }) => {
+      signal.throwIfAborted();
+      assertQueryAccount(account);
+      const data = await throwOnErr(() => deps.privacy.getConsent(signal));
+      signal.throwIfAborted();
+      assertQueryAccount(account);
+      return consentFromResponse(data);
     },
   });
 }
@@ -107,6 +152,12 @@ export function createEmailPrivacyMutation(
       mutationFn: (change: EmailPrivacyChange) =>
         Telemetry.span('crm.email_privacy.change', async (span) => {
           const queryKey = key();
+          const account = captureQueryAccount(userId());
+          const consentKey = crmKeys.emailConsent(
+            teamId(),
+            userId(),
+            account?.session
+          ).queryKey;
           const threadChange = change.action === 'set_thread_exclusion';
           const excludedThreadsKey = [
             ...crmKeys.excludedEmailThreads._def,
@@ -132,6 +183,24 @@ export function createEmailPrivacyMutation(
           // The response belongs to the identity that started this request.
           // Never replace another account's settings after an account switch.
           deps.client.setQueryData(queryKey, data);
+          if (account) {
+            // A consent read started before the write must not replace its
+            // confirmed projection after the mutation has completed.
+            await deps.client.cancelQueries({
+              queryKey: consentKey,
+              exact: true,
+            });
+            deps.client.setQueryData<EmailConsent>(consentKey, {
+              enabled: data.enabled,
+              mailboxEmail: data.mailboxEmail,
+              mailboxLinkId: data.mailboxLinkId,
+            });
+          }
+          if (threadChange) {
+            // Invalidation can reuse a pending initial read with no cached data.
+            // Abort pre-write reads so every owner page refreshes after the write.
+            await deps.client.cancelQueries({ queryKey: excludedThreadsKey });
+          }
           await span.span('crm.email_privacy.refresh', async (refresh) => {
             let graphqlFailed = false;
             try {
@@ -140,10 +209,7 @@ export function createEmailPrivacyMutation(
               await refreshActiveGraphqlSoupQueries({
                 where: threadChange
                   ? isContributionEmailRead
-                  : (body) =>
-                      typeof body === 'object' &&
-                      body !== null &&
-                      ('ecd' in body || 'eca' in body || 'crma' in body),
+                  : listReadsCrmEmail,
                 throwOnError: true,
               });
             } catch {
@@ -179,9 +245,30 @@ export function createEmailPrivacyMutation(
           });
           return data;
         }),
-      onError: (error: Error) =>
-        deps.feedback.failure(error.message || t('crm.privacyUpdateFailed')),
+      onError: (error: Error, change: EmailPrivacyChange) => {
+        const archived = isArchivedCompanyRemoval(error, change);
+        deps.feedback.failure(
+          archived
+            ? t('crm.privacyArchivedCompanyConflict')
+            : error.message || t('crm.privacyUpdateFailed')
+        );
+        // The list was read before the company was archived: reread it so the
+        // row points at the company instead of offering Remove again.
+        if (archived) deps.client.invalidateQueries({ queryKey: key() });
+      },
     }),
+    () => deps.client
+  );
+}
+
+/** Thread controls read only mailbox consent, without loading domain lists. */
+export function createEmailConsentQuery(
+  deps: EmailPrivacyDependencies,
+  teamId: Accessor<string | undefined>,
+  userId: Accessor<string | undefined>
+) {
+  return useQuery(
+    () => emailConsentOptions(deps, teamId(), captureQueryAccount(userId())),
     () => deps.client
   );
 }
@@ -189,12 +276,35 @@ export function createEmailPrivacyMutation(
 export function createEmailPrivacySource(
   deps: EmailPrivacyDependencies,
   teamId: Accessor<string | undefined>,
-  userId: Accessor<string | undefined>
+  userId: Accessor<string | undefined>,
+  /** The app's primary email link, which changes when a mailbox is linked. */
+  primaryLinkId: Accessor<string | undefined>
 ) {
   const query = useQuery(
     () => emailPrivacyOptions(deps, teamId(), userId()),
     () => deps.client
   );
+
+  // A mailbox linked in place (native OAuth, no page reload) leaves these
+  // settings and the policy view cached without it. Reread both once per new
+  // primary link the settings don't report yet. This never changes consent.
+  let reread: string | undefined;
+  createEffect(() => {
+    const linkId = primaryLinkId();
+    const reported = query.isSuccess ? query.data.mailboxLinkId : linkId;
+    if (!linkId || reported === linkId || reread === linkId) return;
+
+    reread = linkId;
+    fireAndForget(
+      deps.client.invalidateQueries({ queryKey: crmKeys.emailPrivacy._def }),
+      'crm'
+    );
+    fireAndForget(
+      deps.client.invalidateQueries({ queryKey: crmKeys.emailPolicy._def }),
+      'crm'
+    );
+  });
+
   const update = createEmailPrivacyMutation(deps, teamId, userId);
   const createExcludedThreads = (after: Accessor<string | undefined>) =>
     useQuery(
@@ -208,4 +318,26 @@ export function createEmailPrivacySource(
       () => deps.client
     );
   return { query, update, createExcludedThreads };
+}
+
+/** The header reads one owner-scoped exclusion, sharing list invalidation. */
+export function createThreadExclusionQuery(
+  deps: EmailPrivacyDependencies,
+  teamId: Accessor<string | undefined>,
+  userId: Accessor<string | undefined>,
+  threadId: Accessor<string | undefined>
+) {
+  return useQuery(
+    () => ({
+      ...excludedThreadsOptions(
+        deps,
+        teamId(),
+        captureQueryAccount(userId()),
+        undefined,
+        threadId()
+      ),
+      enabled: !!teamId() && !!captureQueryAccount(userId()) && !!threadId(),
+    }),
+    () => deps.client
+  );
 }

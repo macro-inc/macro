@@ -108,6 +108,10 @@ pub struct ChannelNameSearch<'a> {
     /// matches its stored name or the display name of some participant other
     /// than the viewer.
     pub patterns: &'a [String],
+    /// Patterns no channel's name may match: a channel is left out when one
+    /// matches its stored name or the display name of some participant other
+    /// than the viewer. Read like `patterns`.
+    pub excluded_patterns: &'a [String],
     /// Patterns are case-insensitive POSIX regexes when set, `ILIKE` patterns
     /// otherwise.
     pub regex_patterns: bool,
@@ -122,15 +126,16 @@ pub struct ChannelNameSearch<'a> {
 }
 
 /// Channels, newest `updated_at` first, whose name as the viewer sees it
-/// matches every pattern of `search`: each pattern must match the stored name
-/// or the display name of some participant other than the viewer, so a
-/// two-term search finds an unnamed group by two of its members. Only the
+/// matches every pattern of `search` and none of its excluded patterns: each
+/// pattern must match the stored name or the display name of some
+/// participant other than the viewer, so a two-term search finds an unnamed
+/// group by two of its members, and one excluded pattern matching either
+/// leaves the channel out. Only the
 /// viewer's active participations are considered, which also scopes the
 /// search to channels the viewer may see.
 #[tracing::instrument(
     skip_all,
     fields(
-        user_id = %search.viewer_user_id.as_ref(),
         pattern_count = search.patterns.len(),
         channel_types = ?search.channel_types,
         channel_id_count = search.channel_ids.len(),
@@ -161,83 +166,8 @@ pub async fn match_channel_names(
         .map(|bot| (bot.id.as_uuid(), bot.name.to_string()))
         .unzip();
 
-    let rows = sqlx::query!(
-        r#"
-        WITH viewer_channels AS (
-            SELECT c.id, c.name, c.channel_type, c.updated_at
-            FROM comms_channel_participants me
-            JOIN comms_channels c ON c.id = me.channel_id
-            WHERE me.user_id = $1
-                AND me.left_at IS NULL
-                AND (cardinality($2::uuid[]) = 0 OR c.id = ANY($2::uuid[]))
-                AND (cardinality($3::text[]) = 0 OR c.channel_type::text = ANY($3::text[]))
-                AND (
-                    $4::timestamptz IS NULL
-                    OR (c.updated_at, c.id) < ($4::timestamptz, $5::uuid)
-                )
-        ),
-        patterns AS (
-            SELECT pattern, ordinality AS term
-            FROM unnest($6::text[]) WITH ORDINALITY AS p(pattern, ordinality)
-        ),
-        other_participant_names AS (
-            SELECT
-                vc.id AS channel_id,
-                CASE
-                    WHEN other.user_id LIKE 'bot|%' THEN COALESCE(system_bot.name, bot.name, 'Bot')
-                    ELSE COALESCE(
-                        NULLIF(
-                            concat_ws(
-                                ' ',
-                                NULLIF(mui.first_name, 'N/A'),
-                                NULLIF(mui.last_name, 'N/A')
-                            ),
-                            ''
-                        ),
-                        split_part(split_part(other.user_id, '|', 2), '@', 1)
-                    )
-                END AS name
-            FROM viewer_channels vc
-            JOIN comms_channel_participants other
-                ON other.channel_id = vc.id
-                AND other.left_at IS NULL
-                AND other.user_id <> $1
-            LEFT JOIN "User" u ON u.id = other.user_id
-            LEFT JOIN macro_user_info mui ON mui.macro_user_id = u.macro_user_id
-            LEFT JOIN unnest($8::uuid[], $9::text[]) AS system_bot(id, name)
-                ON other.user_id = 'bot|' || system_bot.id::text
-            LEFT JOIN bots bot
-                ON other.user_id = 'bot|' || bot.id::text
-                AND bot.deleted_at IS NULL
-            WHERE vc.channel_type = 'direct_message'
-                OR (vc.channel_type = 'private' AND NULLIF(BTRIM(vc.name), '') IS NULL)
-        ),
-        matched_terms AS (
-            SELECT vc.id AS channel_id, p.term
-            FROM viewer_channels vc
-            CROSS JOIN patterns p
-            WHERE NULLIF(BTRIM(vc.name), '') IS NOT NULL
-                AND CASE
-                    WHEN $7::bool THEN vc.name ~* p.pattern
-                    ELSE vc.name ILIKE p.pattern
-                END
-            UNION
-            SELECT o.channel_id, p.term
-            FROM other_participant_names o
-            CROSS JOIN patterns p
-            WHERE CASE
-                WHEN $7::bool THEN o.name ~* p.pattern
-                ELSE o.name ILIKE p.pattern
-            END
-        )
-        SELECT vc.id AS "id!", vc.updated_at AS "updated_at!"
-        FROM viewer_channels vc
-        JOIN matched_terms m ON m.channel_id = vc.id
-        GROUP BY vc.id, vc.updated_at
-        HAVING count(DISTINCT m.term) = cardinality($6::text[])
-        ORDER BY vc.updated_at DESC, vc.id DESC
-        LIMIT $10
-        "#,
+    let rows = sqlx::query_file!(
+        "src/outbound/channel_name/match_channel_names.sql",
         search.viewer_user_id.as_ref(),
         search.channel_ids,
         &channel_types,
@@ -248,6 +178,7 @@ pub async fn match_channel_names(
         &system_bot_ids,
         &system_bot_names,
         search.limit,
+        search.excluded_patterns,
     )
     .fetch_all(pool)
     .await?;

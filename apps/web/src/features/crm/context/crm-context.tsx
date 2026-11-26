@@ -8,6 +8,7 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
 import type { CrmActivityViewState } from '../core/activity-view';
+import type { CompanyDomainChange } from '../core/company';
 import type { ContactEmailChange, CrmContact } from '../core/contact';
 
 export type ActivityFilters = {
@@ -28,8 +29,10 @@ import type {
   EmailPrivacyChange,
   ExcludedThreads,
 } from '../core/email-privacy';
+import type { MergeCommands, MergeRecordType } from '../core/merge';
 import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
+import type { PipelineEntryRecord } from '../core/pipeline-entry';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
   BlockedDomainsSource,
@@ -55,7 +58,9 @@ import type {
   TeamSource,
   TeamViewsSource,
 } from './crm-sources';
+import type { EmailPolicySource } from './email-policy';
 import type {
+  AddToPipelineSource,
   PipelineEditor,
   PipelineEntriesView,
   PipelineSharing,
@@ -64,6 +69,19 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  /** Admitted record data; pending/error stay gated. Pipeline grants are separate. */
+  canAccess: Accessor<boolean>;
+  accessState: Accessor<'pending' | 'allowed' | 'denied' | 'error'>;
+  retryAccess(): Promise<unknown>;
+  createEmailPolicy(): EmailPolicySource;
+  /** Opens the app's add-inbox flow; never changes CRM email consent. */
+  connectMailbox(): void;
+  /** Owner-scoped email reference, available independently of CRM viewing access. */
+  EmailThreadMention: Component<{
+    threadId: string;
+    subject: string;
+    onOpened?: () => void;
+  }>;
   createEmailPrivacy(): {
     createExcludedThreads(
       after: Accessor<string | undefined>
@@ -74,7 +92,13 @@ export type CrmContext = {
   createPipelines(teamId: Accessor<string | undefined>): PipelinesSource;
   PipelineEditor: PipelineEditor;
   PipelineEntries: PipelineEntriesView;
+  /** Call when the record page's Add to pipeline menu first opens. */
+  createAddToPipeline(
+    record: Accessor<PipelineEntryRecord>
+  ): AddToPipelineSource;
   PipelineSharing: PipelineSharing;
+  /** CRM settings' Who can use CRM; renders nothing for viewers who can't change it. */
+  MemberAccess: Component;
   createPipelineTransfer(pipeline: Pipeline): PipelineTransfer;
   downloadCsv(content: string, filename: string): Promise<{ saved: boolean }>;
   /** Profile picture lookup for a contact; presentation owns the fallback. */
@@ -93,15 +117,17 @@ export type CrmContext = {
   createNavigation(): {
     splitId: string | undefined;
     openWithSplit(
-      target: { type: 'company' | 'contact'; id: string },
+      target: { type: 'company' | 'contact' | 'email'; id: string },
       options?: { activate?: boolean; preferNewSplit?: boolean }
     ): void;
     showCompanies(): void;
     /** Open any soup row (email, file, call, ...) in a split. */
-    openEntity(entity: import('@entity').EntityData): void;
+    openEntity(
+      entity: import('@entity').EntityData,
+      options?: { newSplit?: boolean }
+    ): void;
   };
   listsEnabled(): Accessor<boolean>;
-  pipelinesEnabled(): Accessor<boolean>;
 
   feedback: { success(message: string): void; failure(message: string): void };
   createCompanyEmails(
@@ -154,7 +180,19 @@ export type CrmContext = {
   ): ItemListSource;
   /** The record's Tasks tab, scoped to tasks associated with it. */
   RecordTasks: Component<{ scope: CrmRecordScope }>;
+  /** The record's Activity section in its side panel. */
+  RecordActivity: Component<{
+    record: { type: 'company' | 'contact'; id: string };
+    order: number;
+  }>;
   createPropertyCommands(): PropertyCommands;
+  /** Review and commit merges of one record type; admins and owners only. */
+  createMergeCommands(recordType: MergeRecordType): MergeCommands;
+  /** A stored property value as text, by its property, for a merge review. */
+  createPropertyValueLabel(): (
+    propertyId: string,
+    value: unknown
+  ) => string | undefined;
   hydrateCompany(company: CrmCompanyEntity): CrmCompanyEntity;
   createSettingsCommands(): CrmMutation<
     { enabled: boolean; backfill?: boolean },
@@ -165,13 +203,67 @@ export type CrmContext = {
   createExportDefinitions(enabled: Accessor<boolean>): ExportDefinitionsSource;
   createCompanySuggestions(): {
     companies: Accessor<
-      { id: string; name: string; domains: { domain: string }[] }[]
+      {
+        id: string;
+        name: string;
+        domains: { domain: string }[];
+        teamId?: string | null;
+      }[]
     >;
     query: { readonly isLoading: boolean };
   };
+  /**
+   * Every company the search service matches for a typed query, page by
+   * page: Quick Access keeps only the most recently updated ones.
+   */
+  createCompanySearch(search: Accessor<string>): {
+    companies: Accessor<
+      readonly {
+        id: string;
+        name: string;
+        domains: { domain: string }[];
+        teamId?: string | null;
+      }[]
+    >;
+    isLoading: () => boolean;
+    hasMore: () => boolean;
+    isLoadingMore: () => boolean;
+    loadMore: () => Promise<void>;
+    error: () => unknown;
+    retry: () => Promise<void>;
+  };
   createContactSuggestions(): {
-    contacts: Accessor<{ id: string; name: string; email?: string | null }[]>;
+    contacts: Accessor<
+      {
+        id: string;
+        name: string;
+        email?: string | null;
+        companyName?: string | null;
+        teamId?: string | null;
+      }[]
+    >;
     query: { readonly isLoading: boolean };
+  };
+  /**
+   * Every person the server matches for a typed query, across the viewer's
+   * CRM teams, page by page; two people holding one address stay two.
+   */
+  createContactSearch(search: Accessor<string>): {
+    contacts: Accessor<
+      readonly {
+        id: string;
+        name: string;
+        email?: string | null;
+        companyName?: string | null;
+        teamId?: string | null;
+      }[]
+    >;
+    isLoading: () => boolean;
+    hasMore: () => boolean;
+    isLoadingMore: () => boolean;
+    loadMore: () => Promise<void>;
+    error: () => unknown;
+    retry: () => Promise<void>;
   };
   exportCompanies(
     signal: AbortSignal,
@@ -224,6 +316,11 @@ export type CrmContext = {
     { contact: CrmContact; companyId: string | null },
     CrmContact
   >;
+  editCompanyDomain(): CrmMutation<{
+    companyId: string;
+    domain: string;
+    change: CompanyDomainChange;
+  }>;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;
   hideContact(): CrmMutation<{ contactId: string; hidden: boolean }>;
   setEmailSync(): CrmMutation<{ companyId: string; emailSync: boolean }>;

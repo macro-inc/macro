@@ -44,10 +44,14 @@ vi.mock('@service-connection/websocket', () => ({
 afterEach(cleanup);
 
 let route: CrmRoute;
+/** Each pane's route, in pane order. */
+let mounted: CrmRoute[] = [];
 let capture = vi.fn();
+let activate = vi.fn();
 
 function Customers() {
-  route = createCrmRoute(capture);
+  route = createCrmRoute({ captureEntryState: capture, activate });
+  mounted.push(route);
   return (
     <>
       <p data-testid="customers">
@@ -94,14 +98,17 @@ const routes: SplitRoutes = {
 
 function renderCustomers(url: string) {
   capture = vi.fn();
+  activate = vi.fn();
+  mounted = [];
   const history = createMemoryHistory(url);
+  const testPolicy = createTestPolicy();
   let router: SplitRouterInstance | undefined;
   render(() => {
     const created = createSplitRouter({
       routes,
       history,
       paneStore: createMemoryPaneStore(),
-      policy: createTestPolicy().policy,
+      policy: testPolicy.policy,
     });
     router = created;
     onCleanup(() => created.dispose());
@@ -124,6 +131,11 @@ function renderCustomers(url: string) {
         expect(screen.getByTestId('customers').textContent).toBe(text)
       ),
     canGo: (delta: number) => router!.canGo(pane(), delta),
+    activated: testPolicy.activated,
+    paneAt: (index: number) => router!.panes()[index]!,
+    settled: () => router!.settled(),
+    activatePane: (index: number) =>
+      router!.activatePane(router!.panes()[index]!),
     go: (delta: number) => router!.navigatePane(pane(), delta),
     navigate: (path: string) => router!.navigatePane(pane(), path),
   };
@@ -170,6 +182,193 @@ it('keeps the trail with each record and its tab in the path', async () => {
     'tab:active section:- records:company:acme:Acme,contact:maya:Maya'
   );
   expect(url()).toBe('/companies/contact/maya');
+});
+
+it('follows a link to a record into the split already showing it', async () => {
+  const { activated, paneAt, settled } = renderCustomers(
+    '/companies/company/acme/~/companies/contact/maya'
+  );
+  const panes = () =>
+    screen.getAllByTestId('customers').map((pane) => pane.textContent);
+  await vi.waitFor(() =>
+    expect(panes()).toEqual([
+      'tab:active section:- records:company:acme:',
+      'tab:active section:- records:contact:maya:',
+    ])
+  );
+
+  // The contact's company link goes to the split showing the company.
+  mounted[1]!.open([maya, acme], { followLink: true });
+  await settled();
+
+  expect(activated).toEqual([paneAt(0)]);
+  expect(panes()).toEqual([
+    'tab:active section:- records:company:acme:',
+    'tab:active section:- records:contact:maya:',
+  ]);
+});
+
+it('follows a link to a record in place when no other split shows it', async () => {
+  const { url, shows, canGo } = renderCustomers('/companies/contact/maya');
+  await shows('tab:active section:- records:contact:maya:');
+
+  route.open([maya, acme], { followLink: true });
+  await shows(
+    'tab:active section:- records:contact:maya:Maya,company:acme:Acme'
+  );
+  expect(url()).toBe('/companies/company/acme');
+  expect(canGo(-1)).toBe(true);
+});
+
+it("shows the company a merged one went into in the merged one's place", async () => {
+  const { url, shows, canGo } = renderCustomers('/companies/company/merged');
+  await shows('tab:active section:- records:company:merged:');
+
+  route.openMerged({ type: 'company', id: 'acme' });
+  await shows('tab:active section:- records:company:acme:');
+  expect(url()).toBe('/companies/company/acme');
+  expect(canGo(-1)).toBe(false);
+});
+
+it('goes back to the company that stays when the trail already passed it', async () => {
+  const { url, shows } = renderCustomers('/companies');
+  route.open([acme, maya, { type: 'company', id: 'merged', name: '' }]);
+  await shows(
+    'tab:active section:- records:company:acme:Acme,contact:maya:Maya,company:merged:'
+  );
+
+  route.openMerged({ type: 'company', id: 'acme' });
+  await shows('tab:active section:- records:company:acme:Acme');
+  expect(url()).toBe('/companies/company/acme');
+});
+
+it('steps back to where a merged company was opened from when another split shows the one it went into', async () => {
+  const { activated, paneAt, settled } = renderCustomers(
+    '/companies/company/acme/~/companies/contact/maya'
+  );
+  const panes = () =>
+    screen.getAllByTestId('customers').map((pane) => pane.textContent);
+  await vi.waitFor(() => expect(panes()).toHaveLength(2));
+  mounted[1]!.open([{ type: 'company', id: 'merged', name: '' }]);
+  await vi.waitFor(() =>
+    expect(panes()[1]).toBe('tab:active section:- records:company:merged:')
+  );
+
+  mounted.at(-1)!.openMerged({ type: 'company', id: 'acme' });
+  await settled();
+
+  await vi.waitFor(() =>
+    expect(panes()).toEqual([
+      'tab:active section:- records:company:acme:',
+      'tab:active section:- records:contact:maya:',
+    ])
+  );
+  expect(activated.at(-1)).toBe(paneAt(0));
+});
+
+it('closes a split opened only for a merged company when another shows the one it went into', async () => {
+  const { activated, paneAt, settled } = renderCustomers(
+    '/companies/company/acme/~/companies/company/merged'
+  );
+  const panes = () =>
+    screen.getAllByTestId('customers').map((pane) => pane.textContent);
+  await vi.waitFor(() => expect(panes()).toHaveLength(2));
+
+  mounted[1]!.openMerged({ type: 'company', id: 'acme' });
+  await settled();
+
+  await vi.waitFor(() =>
+    expect(panes()).toEqual(['tab:active section:- records:company:acme:'])
+  );
+  expect(activated.at(-1)).toBe(paneAt(0));
+});
+
+it("shows the contact a merged one went into in the merged one's place", async () => {
+  const { url, shows, canGo } = renderCustomers('/companies/contact/merged');
+  await shows('tab:active section:- records:contact:merged:');
+
+  route.openMerged({ type: 'contact', id: 'maya' });
+  await shows('tab:active section:- records:contact:maya:');
+  expect(url()).toBe('/companies/contact/maya');
+  expect(canGo(-1)).toBe(false);
+});
+
+it('opens the record a merged one went into on the tab its link asked for', async () => {
+  const contact = renderCustomers('/companies/contact/merged/tasks');
+  await contact.shows('tab:active section:tasks records:contact:merged:');
+  route.openMerged({ type: 'contact', id: 'maya' });
+  await contact.shows('tab:active section:tasks records:contact:maya:');
+  expect(contact.url()).toBe('/companies/contact/maya/tasks');
+  cleanup();
+
+  const company = renderCustomers('/companies/company/merged/team');
+  await company.shows('tab:active section:team records:company:merged:');
+  route.openMerged({ type: 'company', id: 'acme' });
+  await company.shows('tab:active section:team records:company:acme:');
+  expect(company.url()).toBe('/companies/company/acme/team');
+});
+
+it('shows the Discussion message a merged record was linked to on the one it went into', async () => {
+  const { url, shows } = renderCustomers(
+    '/companies/contact/merged?s0.crm-record.commentId=m1&s0.crm-record.seek=s1'
+  );
+  await shows('tab:active section:- records:contact:merged:');
+
+  route.openMerged({ type: 'contact', id: 'maya' });
+  await shows('tab:active section:- records:contact:maya:');
+  expect(screen.getByTestId('comment').textContent).toBe('m1');
+  const search = new URLSearchParams(url().split('?')[1]);
+  expect(url().split('?')[0]).toBe('/companies/contact/maya');
+  expect(search.get('s0.crm-record.commentId')).toBe('m1');
+  // A new seek scrolls the Discussion of the record that stays to it.
+  expect(search.get('s0.crm-record.seek')).not.toBe('s1');
+});
+
+it('goes back to the contact that stays when the trail already passed it', async () => {
+  const { url, shows } = renderCustomers('/companies');
+  route.open([acme, maya, { type: 'contact', id: 'merged', name: '' }]);
+  await shows(
+    'tab:active section:- records:company:acme:Acme,contact:maya:Maya,contact:merged:'
+  );
+
+  route.openMerged({ type: 'contact', id: 'maya' });
+  await shows(
+    'tab:active section:- records:company:acme:Acme,contact:maya:Maya'
+  );
+  expect(url()).toBe('/companies/contact/maya');
+});
+
+it('keeps a company of the same id as the contact a merged one went into in the trail', async () => {
+  const { shows } = renderCustomers('/companies');
+  route.open([
+    { type: 'company', id: 'maya', name: 'Maya Co' },
+    { type: 'contact', id: 'merged', name: '' },
+  ]);
+  await shows(
+    'tab:active section:- records:company:maya:Maya Co,contact:merged:'
+  );
+
+  route.openMerged({ type: 'contact', id: 'maya' });
+  await shows(
+    'tab:active section:- records:company:maya:Maya Co,contact:maya:'
+  );
+});
+
+it('closes a split opened only for a merged contact when another shows the one it went into', async () => {
+  const { activated, paneAt, settled } = renderCustomers(
+    '/companies/contact/maya/~/companies/contact/merged'
+  );
+  const panes = () =>
+    screen.getAllByTestId('customers').map((pane) => pane.textContent);
+  await vi.waitFor(() => expect(panes()).toHaveLength(2));
+
+  mounted[1]!.openMerged({ type: 'contact', id: 'maya' });
+  await settled();
+
+  await vi.waitFor(() =>
+    expect(panes()).toEqual(['tab:active section:- records:contact:maya:'])
+  );
+  expect(activated.at(-1)).toBe(paneAt(0));
 });
 
 it('shows a record link on its own, without a trail', async () => {
@@ -433,6 +632,67 @@ it('keeps document metadata in Files and Notes URLs', async () => {
   });
   await vi.waitFor(() => expect(route.item()?.name).toBe('Note'));
   expect(url()).toBe('/companies/company/acme/document/note-1/md');
+});
+
+it('opens a file with no file type as an unknown file, not a note', async () => {
+  const { url, shows } = renderCustomers('/companies');
+  route.open([acme]);
+  await shows('tab:active section:- records:company:acme:Acme');
+  route.setSection('files');
+  await shows('tab:active section:files records:company:acme:Acme');
+  route.openItem({ type: 'document', id: 'file-2', name: 'Attachment' });
+  await vi.waitFor(() => expect(route.item()?.name).toBe('Attachment'));
+  expect(url()).toBe('/companies/company/acme/files/document/file-2/unknown');
+});
+
+it.each([
+  { active: 'the file', index: 1 },
+  { active: 'Customers', index: 0 },
+])(
+  'brings up the split already showing a file when $active was active',
+  async ({ index }) => {
+    const { activated, activatePane, paneAt, settled, url } = renderCustomers(
+      '/companies/company/acme/files/~/companies/document/file-1/pdf'
+    );
+    await vi.waitFor(() => expect(mounted).toHaveLength(2));
+    activatePane(index);
+    const before = activated.length;
+    let activatedWhenCustomersActivated: number | undefined;
+    activate.mockImplementation(() => {
+      activatedWhenCustomersActivated = activated.length;
+    });
+
+    mounted[0]!.openItem({
+      type: 'document',
+      id: 'file-1',
+      name: 'Contract',
+      fileType: 'pdf',
+    });
+    await settled();
+
+    // Customers takes activation first, so the click's own focus cannot take
+    // it back after the router brings up the split showing the file.
+    expect(activate).toHaveBeenCalledTimes(1);
+    expect(activatedWhenCustomersActivated).toBe(before);
+    expect(activated.slice(before)).toEqual([paneAt(1)]);
+    expect(url()).toBe(
+      '/companies/company/acme/files/~/companies/document/file-1/pdf'
+    );
+  }
+);
+
+it('activates Customers when it opens an item in its own split', async () => {
+  const { url, shows } = renderCustomers('/companies/company/acme/files');
+  await shows('tab:active section:files records:company:acme:');
+  route.openItem({
+    type: 'document',
+    id: 'file-1',
+    name: 'Contract',
+    fileType: 'pdf',
+  });
+  await vi.waitFor(() => expect(route.item()?.name).toBe('Contract'));
+  expect(activate).toHaveBeenCalledTimes(1);
+  expect(url()).toBe('/companies/company/acme/files/document/file-1/pdf');
 });
 
 it('skips consecutive items when restoring the captured record section', async () => {

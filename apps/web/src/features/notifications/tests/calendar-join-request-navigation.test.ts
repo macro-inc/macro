@@ -20,7 +20,6 @@ import type { UnifiedNotification } from '../types';
 
 const mocks = vi.hoisted(() => ({
   openCalendarView: vi.fn(),
-  calendarEnabled: true,
 }));
 
 vi.mock('@app/features/calendar-view/calendar-range', () => ({
@@ -41,9 +40,8 @@ vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: (type: string) => type,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  enableCalendarUi: true,
   enableReminders: false,
-  isFeatureEnabled: () => mocks.calendarEnabled,
+  isFeatureEnabled: () => true,
   USE_MACRO_PR_SUMMARY_BLOCK: true,
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
@@ -75,7 +73,6 @@ const layout = {} as SplitManager;
 
 beforeEach(() => {
   mocks.openCalendarView.mockClear();
-  mocks.calendarEnabled = true;
 });
 
 it('opens the calendar on the shared event, in a new split when asked', async () => {
@@ -92,12 +89,4 @@ it('opens the calendar on the shared event, in a new split when asked', async ()
     { eventId: 'shared-event' },
     expect.objectContaining({ openInNewSplit: true })
   );
-});
-
-it('opens nothing once the calendar is turned off', async () => {
-  mocks.calendarEnabled = false;
-
-  await openNotification(notification, layout);
-
-  expect(mocks.openCalendarView).not.toHaveBeenCalled();
 });

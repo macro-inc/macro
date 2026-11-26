@@ -41,6 +41,8 @@ const ACCESS_TOKEN_COOKIE: &str = "macro-access-token";
 const API_KEY_USER_ID: &str = "macro|api-key@example.com";
 const VALID_USER_API_KEY: &str = "mak_valid";
 const MANAGER_API_KEY: &str = "mak_manager";
+const AGENT_API_KEY: &str = "mak_agent";
+const AGENT_USER_ID: &str = "macro|proof-1a2b3c@agents.macro.invalid";
 /// A Macro API token that signs an agent session's scope.
 const SCOPED_JWT: &str = "scoped";
 
@@ -128,6 +130,10 @@ impl MacroAuthorizationService for FakeAuthorizationService {
                         .expect("valid Macro user id")
                         .into_owned(),
                 }),
+            }),
+            AGENT_API_KEY => Ok(AuthorizedUserApiKey {
+                user_context: user_context(AGENT_USER_ID, Some(42)),
+                account_manager: None,
             }),
             "mak_unavailable" => Err(Report::new(MacroAuthorizationError::Unavailable)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
@@ -693,29 +699,6 @@ async fn internal_rejects_invalid_api_key() {
     );
 }
 
-#[allow(deprecated)]
-#[tokio::test]
-async fn internal_standard_key_takes_precedence_over_legacy_key() {
-    let (router, service) = test_router();
-    let request = empty_body(
-        request("/internal")
-            .header(INTERNAL_API_KEY_HEADER, "invalid-standard-key")
-            .header(LEGACY_DSS_INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY),
-    );
-
-    let (status, body) = send(&router, request).await;
-
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert_eq!(body, json!({ "message": "unauthorized" }));
-    assert_eq!(
-        service.calls(),
-        [AuthorizationCall::Internal {
-            provided_key: "invalid-standard-key".to_string(),
-            claims: InternalIdentityClaims::default(),
-        }]
-    );
-}
-
 #[tokio::test]
 async fn user_accepts_query_bearer_and_cookie_credentials() {
     let (router, service) = test_router();
@@ -876,77 +859,6 @@ async fn required_extracts_valid_cookie() {
     assert_eq!(
         service.calls(),
         [AuthorizationCall::Jwt("cookie".to_string())]
-    );
-}
-
-#[tokio::test]
-async fn query_token_takes_precedence_over_bearer_and_cookie() {
-    let (router, service) = test_router();
-    let request = empty_body(
-        request("/required?macro-api-token=query")
-            .header("authorization", "Bearer invalid")
-            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=invalid")),
-    );
-
-    let (status, body) = send(&router, request).await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["macro_user_id"], QUERY_USER_ID);
-    assert_eq!(
-        service.calls(),
-        [AuthorizationCall::Jwt("query".to_string())]
-    );
-}
-
-#[tokio::test]
-async fn bearer_token_takes_precedence_over_cookie() {
-    let (router, service) = test_router();
-    let request = empty_body(
-        request("/required")
-            .header("authorization", "Bearer bearer")
-            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=invalid")),
-    );
-
-    let (status, body) = send(&router, request).await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["macro_user_id"], BEARER_USER_ID);
-    assert_eq!(
-        service.calls(),
-        [AuthorizationCall::Jwt("bearer".to_string())]
-    );
-}
-
-#[tokio::test]
-async fn malformed_query_remains_an_explicit_user_credential() {
-    let (router, service) = test_router();
-    let malformed_query = "macro-api-token=query&macro-api-token=invalid";
-
-    let bearer_request = empty_body(
-        request(&format!("/required?{malformed_query}")).header("authorization", "Bearer bearer"),
-    );
-    let (status, body) = send(&router, bearer_request).await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["macro_user_id"], BEARER_USER_ID);
-
-    let cookie_request = empty_body(
-        request(&format!("/required?{malformed_query}"))
-            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
-    );
-    let (status, body) = send(&router, cookie_request).await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert_eq!(body, json!({ "message": "unauthorized" }));
-
-    let (status, body) = send(
-        &router,
-        empty_body(request(&format!("/optional?{malformed_query}"))),
-    )
-    .await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert_eq!(body, json!({ "message": "unauthorized" }));
-    assert_eq!(
-        service.calls(),
-        [AuthorizationCall::Jwt("bearer".to_string())]
     );
 }
 
@@ -1195,76 +1107,6 @@ async fn internal_identity_headers_are_not_mixed_between_conventions() {
             },
         ]
     );
-}
-
-#[allow(deprecated)]
-#[tokio::test]
-async fn standard_convention_takes_precedence_when_both_keys_are_present() {
-    let (router, service) = test_router();
-    let request = empty_body(
-        request("/required")
-            .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
-            .header(LEGACY_DSS_INTERNAL_API_KEY_HEADER, "invalid-legacy-key")
-            .header(INTERNAL_MACRO_USER_ID_HEADER, STANDARD_INTERNAL_USER_ID)
-            .header(
-                LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER,
-                LEGACY_INTERNAL_USER_ID,
-            ),
-    );
-
-    let (status, body) = send(&router, request).await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["macro_user_id"], STANDARD_INTERNAL_USER_ID);
-    assert_eq!(
-        service.calls(),
-        [AuthorizationCall::Internal {
-            provided_key: VALID_INTERNAL_KEY.to_string(),
-            claims: InternalIdentityClaims {
-                user_id: Some(STANDARD_INTERNAL_USER_ID.to_string()),
-                ..InternalIdentityClaims::default()
-            },
-        }]
-    );
-}
-
-#[tokio::test]
-async fn invalid_internal_key_rejects_without_cookie_fallback() {
-    let (router, service) = test_router();
-    let request = empty_body(
-        request("/required")
-            .header(INTERNAL_API_KEY_HEADER, "invalid-internal-key")
-            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
-    );
-
-    let (status, body) = send(&router, request).await;
-
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert_eq!(body, json!({ "message": "unauthorized" }));
-    assert_eq!(
-        service.calls(),
-        [AuthorizationCall::Internal {
-            provided_key: "invalid-internal-key".to_string(),
-            claims: InternalIdentityClaims::default(),
-        }]
-    );
-}
-
-#[tokio::test]
-async fn malformed_internal_key_rejects_without_cookie_fallback() {
-    let (router, service) = test_router();
-    let malformed_key = HeaderValue::from_bytes(b"\xff").unwrap();
-    let request = empty_body(
-        request("/required")
-            .header(INTERNAL_API_KEY_HEADER, malformed_key)
-            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
-    );
-
-    let (status, body) = send(&router, request).await;
-
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert_eq!(body, json!({ "message": "unauthorized" }));
-    assert!(service.calls().is_empty());
 }
 
 #[tokio::test]
@@ -1543,32 +1385,10 @@ async fn user_api_key_combined_with_other_explicit_credentials_is_ambiguous() {
     for request in requests {
         let (status, body) = send(&router, request).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body, json!({ "message": "ambiguous credentials" }));
+        assert_eq!(body, json!({ "message": "conflicting_credentials" }));
     }
 
     assert!(service.calls().is_empty());
-}
-
-#[tokio::test]
-async fn user_api_key_wins_over_ambient_cookies() {
-    let (router, service) = test_router();
-    let (status, body) = send(
-        &router,
-        empty_body(
-            user_api_key_request("/user", VALID_USER_API_KEY)
-                .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
-        ),
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["macro_user_id"], API_KEY_USER_ID);
-    assert_eq!(
-        service.calls(),
-        [AuthorizationCall::UserApiKey(
-            VALID_USER_API_KEY.to_string()
-        )]
-    );
 }
 
 #[tokio::test]
@@ -1915,57 +1735,11 @@ async fn every_combination_of_multiple_explicit_credential_types_is_ambiguous() 
         for request in requests {
             let (status, body) = send(&router, request).await;
             assert_eq!(status, StatusCode::BAD_REQUEST);
-            assert_eq!(body, json!({ "message": "ambiguous credentials" }));
+            assert_eq!(body, json!({ "message": "conflicting_credentials" }));
         }
 
         assert!(service.calls().is_empty());
     }
-}
-
-#[tokio::test]
-async fn explicit_credentials_win_over_ambient_cookies_without_fallback() {
-    let (router, service) = test_router();
-
-    let valid_bot_request = empty_body(
-        bot_request("/required", "bot-acting")
-            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
-    );
-    let (status, body) = send(&router, valid_bot_request).await;
-    assert_eq!(status, StatusCode::FORBIDDEN);
-    assert_eq!(body, json!({ "message": "forbidden" }));
-
-    let invalid_bot_request = empty_body(
-        bot_request("/required", "bot-invalid")
-            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
-    );
-    let (status, body) = send(&router, invalid_bot_request).await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert_eq!(body, json!({ "message": "unauthorized" }));
-
-    let malformed_user_request = empty_body(
-        request("/required")
-            .header("authorization", "Basic deliberate-but-malformed")
-            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
-    );
-    let (status, body) = send(&router, malformed_user_request).await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert_eq!(body, json!({ "message": "unauthorized" }));
-
-    assert_eq!(
-        service.calls(),
-        [
-            AuthorizationCall::Bot {
-                token: "bot-acting".to_owned(),
-                bot_scope: BotScope::User,
-                claims: None,
-            },
-            AuthorizationCall::Bot {
-                token: "bot-invalid".to_owned(),
-                bot_scope: BotScope::User,
-                claims: None,
-            },
-        ]
-    );
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2312,4 +2086,345 @@ fn assert_display_parity<Policy: AuthorizationPolicy>(authorization: MacroAuthor
     let output = Policy::narrow(authorization).expect("principal should satisfy policy");
 
     assert_eq!(Policy::acting_entity(&output).to_string(), expected);
+}
+
+#[tokio::test]
+async fn bearer_token_takes_precedence_over_cookie() {
+    let (router, service) = test_router();
+    let request = empty_body(
+        request("/required")
+            .header("authorization", "Bearer bearer")
+            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=invalid")),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["macro_user_id"], BEARER_USER_ID);
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::Jwt("bearer".to_string())]
+    );
+}
+
+#[tokio::test]
+async fn explicit_credentials_win_over_ambient_cookies_without_fallback() {
+    let (router, service) = test_router();
+
+    let valid_bot_request = empty_body(
+        bot_request("/required", "bot-acting")
+            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
+    );
+    let (status, body) = send(&router, valid_bot_request).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, json!({ "message": "forbidden" }));
+
+    let invalid_bot_request = empty_body(
+        bot_request("/required", "bot-invalid")
+            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
+    );
+    let (status, body) = send(&router, invalid_bot_request).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "unauthorized" }));
+
+    let malformed_user_request = empty_body(
+        request("/required")
+            .header("authorization", "Basic deliberate-but-malformed")
+            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
+    );
+    let (status, body) = send(&router, malformed_user_request).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "unauthorized" }));
+
+    assert_eq!(
+        service.calls(),
+        [
+            AuthorizationCall::Bot {
+                token: "bot-acting".to_owned(),
+                bot_scope: BotScope::User,
+                claims: None,
+            },
+            AuthorizationCall::Bot {
+                token: "bot-invalid".to_owned(),
+                bot_scope: BotScope::User,
+                claims: None,
+            },
+        ]
+    );
+}
+
+#[tokio::test]
+async fn invalid_internal_key_rejects_without_cookie_fallback() {
+    let (router, service) = test_router();
+    let request = empty_body(
+        request("/required")
+            .header(INTERNAL_API_KEY_HEADER, "invalid-internal-key")
+            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "unauthorized" }));
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::Internal {
+            provided_key: "invalid-internal-key".to_string(),
+            claims: InternalIdentityClaims::default(),
+        }]
+    );
+}
+
+#[allow(deprecated)]
+#[tokio::test]
+async fn differing_internal_keys_under_both_headers_conflict() {
+    let (router, service) = test_router();
+    let request = empty_body(
+        request("/internal")
+            .header(INTERNAL_API_KEY_HEADER, "invalid-standard-key")
+            .header(LEGACY_DSS_INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body, json!({ "message": "conflicting_credentials" }));
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn malformed_internal_key_rejects_without_cookie_fallback() {
+    let (router, service) = test_router();
+    let malformed_key = HeaderValue::from_bytes(b"\xff").unwrap();
+    let request = empty_body(
+        request("/required")
+            .header(INTERNAL_API_KEY_HEADER, malformed_key)
+            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "unauthorized" }));
+    assert!(service.calls().is_empty());
+}
+
+/// Repeated query tokens authenticate with the first, as with every other
+/// source; the agent scope check reads every one of them.
+#[tokio::test]
+async fn repeated_query_tokens_authenticate_with_the_first() {
+    let (router, service) = test_router();
+    let repeated = "macro-api-token=query&macro-api-token=invalid";
+    for request in [
+        request(&format!("/required?{repeated}")).header("authorization", "Bearer bearer"),
+        request(&format!("/required?{repeated}"))
+            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
+        request(&format!("/optional?{repeated}")),
+    ] {
+        let (status, body) = send(&router, empty_body(request)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["macro_user_id"], QUERY_USER_ID);
+    }
+    assert_eq!(
+        service.calls(),
+        [
+            AuthorizationCall::Jwt("query".to_string()),
+            AuthorizationCall::Jwt("query".to_string()),
+            AuthorizationCall::Jwt("query".to_string()),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn query_token_takes_precedence_over_bearer_and_cookie() {
+    let (router, service) = test_router();
+    let request = empty_body(
+        request("/required?macro-api-token=query")
+            .header("authorization", "Bearer invalid")
+            .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=invalid")),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["macro_user_id"], QUERY_USER_ID);
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::Jwt("query".to_string())]
+    );
+}
+
+#[allow(deprecated)]
+#[tokio::test]
+async fn a_differing_legacy_key_beside_the_standard_one_conflicts() {
+    let (router, service) = test_router();
+    let request = empty_body(
+        request("/required")
+            .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
+            .header(LEGACY_DSS_INTERNAL_API_KEY_HEADER, "invalid-legacy-key"),
+    );
+
+    let (status, body) = send(&router, request).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body, json!({ "message": "conflicting_credentials" }));
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn user_api_key_wins_over_ambient_cookies() {
+    let (router, service) = test_router();
+    let (status, body) = send(
+        &router,
+        empty_body(
+            user_api_key_request("/user", VALID_USER_API_KEY)
+                .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["macro_user_id"], API_KEY_USER_ID);
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::UserApiKey(
+            VALID_USER_API_KEY.to_string()
+        )]
+    );
+}
+
+/// The attributes of the one span named `name` that `exporter` received.
+fn exported_attributes(
+    exporter: &opentelemetry_sdk::trace::InMemorySpanExporter,
+    name: &str,
+) -> std::collections::BTreeMap<String, String> {
+    let spans = exporter.get_finished_spans().expect("finished spans");
+    let span = spans
+        .iter()
+        .find(|span| span.name == name)
+        .unwrap_or_else(|| panic!("no {name} span"));
+    span.attributes
+        .iter()
+        .map(|kv| (kv.key.to_string(), kv.value.to_string()))
+        .collect()
+}
+
+/// Runs `request` through the test router inside an `http.request` span and
+/// returns that span's exported attributes.
+async fn request_span_attributes(
+    request: Request<Body>,
+) -> (StatusCode, std::collections::BTreeMap<String, String>) {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing::Instrument as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+    let _guard = tracing::subscriber::set_default(subscriber);
+    let (router, _) = test_router();
+    let (status, _) = send(&router, request)
+        .instrument(tracing::info_span!("http.request"))
+        .await;
+    provider.force_flush().expect("flush");
+    (status, exported_attributes(&exporter, "http.request"))
+}
+
+#[tokio::test]
+async fn the_request_span_records_the_verified_credential_and_the_opaque_fusion_id() {
+    for (key, kind) in [
+        (VALID_USER_API_KEY, "user_api_key"),
+        (MANAGER_API_KEY, "account_manager"),
+    ] {
+        let (status, attributes) =
+            request_span_attributes(empty_body(user_api_key_request("/user", key))).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(attributes[CREDENTIAL_ATTRIBUTE], kind, "{key}");
+        assert_eq!(attributes[PRINCIPAL_ATTRIBUTE], "fusion-user-id");
+        assert!(
+            !attributes.contains_key(AGENT_ATTRIBUTE),
+            "a person's account gets no agent id: {attributes:?}"
+        );
+        assert!(
+            attributes.values().all(|value| !value.contains('@')
+                && *value != agent_credentials::telemetry_id(API_KEY_USER_ID)),
+            "nothing derived from the account's email: {attributes:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn an_agent_teammates_request_also_records_its_agent_id() {
+    let (status, attributes) =
+        request_span_attributes(empty_body(user_api_key_request("/user", AGENT_API_KEY))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(attributes[CREDENTIAL_ATTRIBUTE], "user_api_key");
+    assert_eq!(
+        attributes[AGENT_ATTRIBUTE],
+        agent_credentials::telemetry_id(AGENT_USER_ID)[..16],
+        "the agent runtime's macro.agent.id"
+    );
+}
+
+#[tokio::test]
+async fn bot_credentials_record_the_bot_and_any_verified_acting_user() {
+    let (status, bare) = request_span_attributes(empty_body(bot_request("/bot", "bot-bare"))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(bare[CREDENTIAL_ATTRIBUTE], "bot");
+    assert_eq!(bare[BOT_ATTRIBUTE], BOT_ID.to_string());
+    assert!(!bare.contains_key(PRINCIPAL_ATTRIBUTE));
+
+    let (status, acting) =
+        request_span_attributes(empty_body(bot_request("/bot", "bot-acting"))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(acting[CREDENTIAL_ATTRIBUTE], "bot");
+    assert_eq!(acting[BOT_ATTRIBUTE], BOT_ID.to_string());
+    assert_eq!(acting[PRINCIPAL_ATTRIBUTE], "fusion-user-id");
+}
+
+#[tokio::test]
+async fn a_refused_credential_records_no_principal() {
+    let (status, attributes) =
+        request_span_attributes(empty_body(user_api_key_request("/user", "mak_invalid"))).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(!attributes.contains_key(CREDENTIAL_ATTRIBUTE));
+    assert!(!attributes.contains_key(PRINCIPAL_ATTRIBUTE));
+}
+
+#[test]
+fn every_credential_origin_has_a_stable_kind() {
+    let manager = AccountManagerCredential {
+        grant_id: Uuid::nil(),
+        manager_user_id: MacroUserIdStr::parse_from_str("macro|agent@example.com")
+            .expect("valid Macro user id")
+            .into_owned(),
+    };
+    assert_eq!(
+        [
+            crate::CredentialOrigin::Session,
+            crate::CredentialOrigin::MacroApiJwt,
+            crate::CredentialOrigin::ScopedMacroApiJwt,
+            crate::CredentialOrigin::UserApiKey,
+            crate::CredentialOrigin::AccountManager(manager),
+            crate::CredentialOrigin::Bot,
+            crate::CredentialOrigin::Harness,
+            crate::CredentialOrigin::Internal,
+        ]
+        .iter()
+        .map(credential_kind)
+        .collect::<Vec<_>>(),
+        [
+            "session",
+            "macro_api_jwt",
+            "scoped_macro_api_jwt",
+            "user_api_key",
+            "account_manager",
+            "bot",
+            "harness",
+            "internal",
+        ]
+    );
 }

@@ -133,9 +133,12 @@ export function createSyncDocumentStorage(
   const endpoint = `${base.toString().replace(/\/$/, '')}/document/${encodeURIComponent(documentId)}`;
   const headers = { Authorization: `Bearer ${documentToken}` };
   return {
+    // The shallow state is the current content at the same editable revision,
+    // without past changes, so a long-lived document's history never counts
+    // toward the size limit. Updates built on it apply like any other.
     async load(signal) {
       const data = await responseJson(
-        await fetcher(`${endpoint}/state`, { headers, signal }),
+        await fetcher(`${endpoint}/state?shallow=true`, { headers, signal }),
         'read'
       );
       if (typeof data.revision !== 'string' || !data.revision)

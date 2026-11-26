@@ -4,6 +4,7 @@ use crate::SQS;
 use models_email::email::service::backfill::BackfillPubsubMessage;
 use models_email::email::service::crm_cleanup::CrmCleanupPubsubMessage;
 pub use models_email::email::service::pubsub::LinkManagerMessage;
+use models_email::email::service::pubsub::{LinkManagerLane, LinkManagerSender};
 #[cfg(feature = "sfs_uploader")]
 use models_email::service::pubsub::SFSUploaderMessage;
 use models_email::service::pubsub::ScheduledPubsubMessage;
@@ -43,8 +44,17 @@ impl SQS {
         Ok(())
     }
 
+    /// The link-manager queue of the interactive lane
+    /// ([`LinkManagerMessage::lane`]).
     pub fn email_link_manager_queue(mut self, link_manager_queue: &str) -> Self {
         self.link_manager_queue = Some(link_manager_queue.to_string());
+        self
+    }
+
+    /// The link-manager queue of the maintenance lane
+    /// ([`LinkManagerMessage::lane`]).
+    pub fn email_link_maintenance_queue(mut self, link_maintenance_queue: &str) -> Self {
+        self.link_maintenance_queue = Some(link_maintenance_queue.to_string());
         self
     }
 
@@ -116,17 +126,22 @@ impl SQS {
         self
     }
 
-    /// Sends a notification message to the email refresh queue
-    #[tracing::instrument(skip(self))]
+    /// Sends `sender`'s link-manager message to the queue of its lane.
+    #[tracing::instrument(skip(self), fields(lane = %message.lane(sender)), err)]
     pub async fn enqueue_link_manager_notification(
         &self,
         message: LinkManagerMessage,
+        sender: LinkManagerSender,
     ) -> anyhow::Result<()> {
-        if let Some(link_manager_queue) = &self.link_manager_queue {
-            return enqueue_link_manager_notification(&self.inner, link_manager_queue, message)
-                .await;
-        }
-        anyhow::bail!("link_manager_queue is not configured")
+        let lane = message.lane(sender);
+        let queue = match lane {
+            LinkManagerLane::Interactive => &self.link_manager_queue,
+            LinkManagerLane::Maintenance => &self.link_maintenance_queue,
+        };
+        let Some(queue) = queue else {
+            anyhow::bail!("the {lane} link manager queue is not configured");
+        };
+        enqueue_link_manager_notification(&self.inner, queue, message).await
     }
 
     /// Sends a message to the email backfill queue
