@@ -68,6 +68,79 @@ const CONTACT_ROWS = Array.from({ length: 180 }, (_, index) => {
   };
 });
 
+type FixtureModes = {
+  references: boolean;
+  links: boolean;
+  multiline: boolean;
+  contacts: boolean;
+};
+
+function initialColumns(modes: FixtureModes & { rapid: boolean }) {
+  const { references, links, multiline, contacts, rapid } = modes;
+  const columns: DatabaseViewColumn[] = [
+    {
+      id: 'name',
+      name: 'Name',
+      dataType: 'STRING',
+      writable: true,
+      isMultiSelect: false,
+      options: [],
+    },
+  ];
+  if (references)
+    columns.push({
+      ...columns[0],
+      id: 'file',
+      name: 'File',
+      dataType: 'ENTITY',
+      specificEntityType: 'DOCUMENT',
+    });
+  if (links)
+    columns.push(
+      { ...columns[0], id: 'notes', name: 'Notes' },
+      { ...columns[0], id: 'website', name: 'Website', dataType: 'LINK' }
+    );
+  if (multiline) columns.push({ ...columns[0], id: 'notes', name: 'Notes' });
+  if (contacts)
+    columns.push(
+      { ...columns[0], id: 'count', name: 'Count', dataType: 'NUMBER' },
+      { ...columns[0], id: 'email', name: 'Email' },
+      { ...columns[0], id: 'company', name: 'Company' }
+    );
+  if (rapid)
+    columns.push(
+      ...['notes', 'detail'].map((id) => ({
+        ...columns[0],
+        id,
+        name: id,
+      }))
+    );
+  return columns;
+}
+
+function initialRows(modes: FixtureModes) {
+  const { references, links, multiline, contacts } = modes;
+  return contacts
+    ? CONTACT_ROWS
+    : [
+        {
+          rowId: 'one',
+          cells: {
+            name: 'First record',
+            ...(references ? { file: 'project-plan' } : {}),
+            ...(links
+              ? {
+                  notes: 'Spec at https://example.com/spec',
+                  website: 'example.com',
+                }
+              : {}),
+            ...(multiline ? { notes: 'Follow up' } : {}),
+          },
+        },
+        ...(multiline ? MULTILINE_ROWS : []),
+      ];
+}
+
 // A host owns the records and writes. No database entity, saved view, or app provider.
 function RecordsFixture() {
   const references = new URLSearchParams(location.search).has('references');
@@ -85,66 +158,11 @@ function RecordsFixture() {
         releaseWrites = resolve;
       })
     : Promise.resolve();
-  const initialColumns: DatabaseViewColumn[] = [
-    {
-      id: 'name',
-      name: 'Name',
-      dataType: 'STRING',
-      writable: true,
-      isMultiSelect: false,
-      options: [],
-    },
-  ];
-  if (references)
-    initialColumns.push({
-      ...initialColumns[0],
-      id: 'file',
-      name: 'File',
-      dataType: 'ENTITY',
-      specificEntityType: 'DOCUMENT',
-    });
-  if (links)
-    initialColumns.push(
-      { ...initialColumns[0], id: 'notes', name: 'Notes' },
-      { ...initialColumns[0], id: 'website', name: 'Website', dataType: 'LINK' }
-    );
-  if (multiline)
-    initialColumns.push({ ...initialColumns[0], id: 'notes', name: 'Notes' });
-  if (contacts)
-    initialColumns.push(
-      { ...initialColumns[0], id: 'count', name: 'Count', dataType: 'NUMBER' },
-      { ...initialColumns[0], id: 'email', name: 'Email' },
-      { ...initialColumns[0], id: 'company', name: 'Company' }
-    );
-  if (rapid)
-    initialColumns.push(
-      ...['notes', 'detail'].map((id) => ({
-        ...initialColumns[0],
-        id,
-        name: id,
-      }))
-    );
-  const [columns, setColumns] = createSignal(initialColumns);
+  const [columns, setColumns] = createSignal(
+    initialColumns({ references, links, multiline, contacts, rapid })
+  );
   const [snapshot, setSnapshot] = createSignal<DatabaseRowsSnapshot>({
-    rows: contacts
-      ? CONTACT_ROWS
-      : [
-          {
-            rowId: 'one',
-            cells: {
-              name: 'First record',
-              ...(references ? { file: 'project-plan' } : {}),
-              ...(links
-                ? {
-                    notes: 'Spec at https://example.com/spec',
-                    website: 'example.com',
-                  }
-                : {}),
-              ...(multiline ? { notes: 'Follow up' } : {}),
-            },
-          },
-          ...(multiline ? MULTILINE_ROWS : []),
-        ],
+    rows: initialRows({ references, links, multiline, contacts }),
     retained: [],
     version: 1,
   });
