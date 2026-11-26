@@ -17,6 +17,8 @@ const BATCH_SIZE: usize = 500;
 const NIL: &str = "00000000-0000-0000-0000-000000000000";
 const CHANNEL_LIST: &str = "fragment:ChannelListItemFields";
 
+// glibc only: the test binary must still link on macOS and Windows.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
 unsafe extern "C" {
     fn malloc_trim(pad: usize) -> i32;
 }
@@ -24,7 +26,10 @@ unsafe extern "C" {
 /// Resident memory once glibc has returned its free pages: what is still held.
 fn live_kb() -> u64 {
     // SAFETY: glibc's malloc_trim only releases free memory.
-    unsafe { malloc_trim(0) };
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    unsafe {
+        malloc_trim(0)
+    };
     memory_kb("VmRSS")
 }
 
