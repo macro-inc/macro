@@ -13,7 +13,7 @@ composition root.
 - `src/domain/service.rs`: admission, the type check before a run, and
   cancellation.
 - `src/domain/context.rs`: `CodeContext`, the type of an attended `main`'s
-  argument.
+  argument; ambient, and also importable as a type from `@macro-inc/sdk`.
 - `src/outbound/deno.rs`: process lifecycle, restricted permissions and the
   import map (`NODE_ALLOWED`, `NODE_BUILTINS`; blocked built-ins resolve to
   `deno/unavailable.mjs`).
