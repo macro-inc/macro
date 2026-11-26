@@ -119,10 +119,10 @@ fn hide_people(value: &serde_json::Value, subscriber_email: &str) -> serde_json:
             fields
                 .iter()
                 .map(|(key, field)| {
-                    let hidden = match person_named_by(fields, key) {
-                        Some(placeholder) if field.is_string() => serde_json::Value::String(
-                            hide_identifiers(placeholder, subscriber_email),
-                        ),
+                    let hidden = match name_placeholder(fields, key, subscriber_email) {
+                        Some(placeholder) if field.is_string() => {
+                            serde_json::Value::String(placeholder.to_owned())
+                        }
                         _ => hide_people(field, subscriber_email),
                     };
                     (hide_identifiers(key, subscriber_email), hidden)
@@ -135,15 +135,23 @@ fn hide_people(value: &serde_json::Value, subscriber_email: &str) -> serde_json:
     }
 }
 
-/// The user id whose name `key` holds in `fields`: `<who>_name` beside a
-/// `<who>_id` that is a user id or an email address.
-fn person_named_by<'a>(
-    fields: &'a serde_json::Map<String, serde_json::Value>,
+/// The placeholder for the name `key` holds in `fields`, when it is
+/// `<who>_name` beside a `<who>_id` that is a user id or an email address.
+fn name_placeholder(
+    fields: &serde_json::Map<String, serde_json::Value>,
     key: &str,
-) -> Option<&'a str> {
+    subscriber_email: &str,
+) -> Option<&'static str> {
     let who = key.strip_suffix("_name")?;
     let id = fields.get(&format!("{who}_id"))?.as_str()?;
-    lazy_regex::regex_is_match!(r"^(macro\|)?[^@\s]+@[^@\s]+$", id).then_some(id)
+    let email = id.strip_prefix("macro|").unwrap_or(id);
+    lazy_regex::regex_is_match!(r"^[^@\s]+@[^@\s]+$", email).then(|| {
+        if email.eq_ignore_ascii_case(subscriber_email) {
+            SUBSCRIBER_PLACEHOLDER
+        } else {
+            PERSON_PLACEHOLDER
+        }
+    })
 }
 
 /// `text` with each `macro|<email>` or bare email address replaced. Both
