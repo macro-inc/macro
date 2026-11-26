@@ -17,6 +17,7 @@ check	android-release-drift.yml	drift	Android Release Drift
 check	android-release-watch.yml	watch	Re-run the Android Native Check once the Play release is live
 check	assign-author.yml	assign_author	Assign author to PR
 check	assign-labels.yml	label	label
+check	bots-check.yml	check-package	Bots Package Check
 check	build-rust-ci-image.yml	build-rust-ci-image	build-rust-ci-image
 check	build_agent_daemon_on_tag.yml	resolve-ref	Resolve build ref
 check	build_agent_daemon_on_tag.yml	build-daemon-linux-x86-64	Build daemon (linux-x86_64)
@@ -167,6 +168,7 @@ check	pr-ci.yml	web-app/browser	Web App / Browser Tests
 check	pr-ci.yml	web-app/cycles	Web App / Cycles Import Check
 check	pr-ci.yml	web-app/build	Web App / Build
 check	pr-ci.yml	web-app/ios-native-check	Web App / iOS Native Check
+check	pr-ci.yml	bots/check-package	Bots / Bots Package Check
 check	pr-ci.yml	infra/biome-check	Infra / Biome Check
 check	pr-ci.yml	infra/check	Infra / check
 check	pr-ci.yml	conventions/ast-grep	Conventions / ast-grep Conventions

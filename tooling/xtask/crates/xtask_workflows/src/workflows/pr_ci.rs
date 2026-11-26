@@ -32,17 +32,17 @@ use gh_workflow::{
 use xtask_paths::RepoGlob;
 
 use crate::workflows::actions::{
-    CallCargoDeny, CallCargoWorkspaceDependencyCheck, CallCheckGenerated, CallCheckNodeModulesNix,
-    CallCheckTauriLockfiles, CallCodeCheckCloudStorage, CallCodeCheckConventions,
-    CallCodeCheckInfra, CallDesktopCheck, CallDesktopWindows, CallObservabilityAws,
-    CallObservabilityCluster, CallObservabilityImage, CallSdkCheck, CallTestMacrodUpdate,
-    CallWebAppCheckMain, DornyPathsFilter,
+    CallBotsCheck, CallCargoDeny, CallCargoWorkspaceDependencyCheck, CallCheckGenerated,
+    CallCheckNodeModulesNix, CallCheckTauriLockfiles, CallCodeCheckCloudStorage,
+    CallCodeCheckConventions, CallCodeCheckInfra, CallDesktopCheck, CallDesktopWindows,
+    CallObservabilityAws, CallObservabilityCluster, CallObservabilityImage, CallSdkCheck,
+    CallTestMacrodUpdate, CallWebAppCheckMain, DornyPathsFilter,
 };
 use crate::workflows::{
-    cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
-    check_tauri_lockfiles, code_check_conventions, code_check_infra, desktop_check,
-    desktop_windows, observability_aws, observability_cluster, observability_image, runners,
-    sdk_check, steps, test_macrod_update,
+    bots_check, cargo_deny, cargo_workspace_dependency_check, check_generated,
+    check_node_modules_nix, check_tauri_lockfiles, code_check_conventions, code_check_infra,
+    desktop_check, desktop_windows, observability_aws, observability_cluster, observability_image,
+    runners, sdk_check, steps, test_macrod_update,
 };
 
 #[cfg(test)]
@@ -103,6 +103,13 @@ const CALLS: &[Call] = &[
         name: "Web App",
         workflow: || CallWebAppCheckMain::new().job(),
         paths: None,
+        gating: true,
+    },
+    Call {
+        id: "bots",
+        name: "Bots",
+        workflow: || CallBotsCheck::new().job(),
+        paths: Some(bots_check::PATHS),
         gating: true,
     },
     Call {
