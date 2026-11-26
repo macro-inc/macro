@@ -119,6 +119,8 @@ settles after 15 minutes.
 - `src/domain/ports.rs`: what the service needs from other crates.
 - `src/domain/admission.rs`: agent admission for the vault.
 - `src/domain/inbox.rs`: the agent's email inbox lifecycle.
+- `src/domain/mailbox_read.rs`: human-only address, list and thread projection
+  over read ports, tested in process with synthetic data.
 
 ## Scope
 

@@ -160,10 +160,26 @@ only `macro.agentMailbox`, never a connected inbox, and the agent's
 `no-email` guard refuses the SDK's mailbox and its routes outside it, by
 matching text.
 
+## Human mailbox reads
+
+The `team_agents` domain fixture requires the viewer's personal session, a
+current owner or admin role in the selected agent's team, and both inbox
+rollout flags. The address appears only when the active inbox mirror and
+canonical mailbox agree on the exact agent, team, mailbox ID and provisioned
+address. Provisioning and unavailable states carry no address.
+
+The reader scopes inbox pages to inbound mail. It applies sender and subject
+filters before pagination, counts the returned rows and ties the continuation
+to the viewer, mailbox generation and filters. Opening a thread reauthorizes
+the viewer and verifies each message against the selected mailbox and thread.
+The proof uses in-process ports. A full thread fetch requires a provider read
+adapter because the existing `MailboxClient` implements message list and
+single-message reads.
+
 ## Follow-ups
 
 - Waking the agent on new mail (no provider webhook is consumed in v1).
-- A Macro inbox view of an agent's mailbox and human access to it.
+- Wire the human mailbox reader to reviewed read adapters and UI.
 - Attaching the mailbox through IMAP/SMTP once that provider lands, and
   bring-your-own-domain hosting.
 - Attachments, and native AI tools for direct-tool hosts.
