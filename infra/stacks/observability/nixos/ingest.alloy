@@ -85,78 +85,71 @@ otelcol.processor.transform "ai_content" {
 // again; a list or map body that holds one becomes its JSON text.
 //
 // The pattern scan tripled ingest's CPU on spans with long attributes, so a
-// log's, span's or event's attributes are scanned only when their JSON holds
-// an "@" or a "%40", and checked for a nested address only when the JSON shows
-// a list or map value. The macro.ingest.* keys carry these marks between
-// blocks and are removed after. JSON can't hold a NaN or an infinity, so the
-// checks ignore errors, and attributes they couldn't check are scanned and
-// flattened anyway. A flattened map is cut to fit Loki's and Mimir's limits.
-// Addresses in map keys and byte values stay.
+// map is scanned only when its JSON holds an "@" or a "%40", and checked for a
+// nested address only when the JSON also shows a list or map value. The
+// macro.ingest.* keys mark what to scan between blocks; senders' are removed
+// first, and all after. JSON can't hold a NaN or an infinity, so the checks
+// ignore errors, and a map they couldn't check is scanned and flattened.
+// Addresses in map keys and byte values stay, and a flattened map can pass
+// Loki's 128 metadata entries or Mimir's 30 labels and be refused.
 otelcol.processor.transform "emails" {
   error_mode = "propagate"
   log_statements {
     context = "resource"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
       `set(cache["json"], String(attributes))`,
-      `set(attributes["macro.ingest.no_email"], true) where cache["json"] != nil and not (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
-      `set(attributes["macro.ingest.nested_email"], true) where cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{")`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
     ]
   }
   log_statements {
     context = "resource"
-    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.no_email"] != true`]
+    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
   }
   log_statements {
     context = "resource"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.nested_email") where attributes["macro.ingest.nested_email"] == true and (attributes["macro.ingest.no_email"] == true or not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)"))`,
-      `flatten(attributes) where attributes["macro.ingest.nested_email"] == true`,
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
     ]
   }
   log_statements {
     context = "resource"
     statements = [
-      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested_email"] == true`,
-      // Loki takes at most 128 structured metadata entries a line, these and the log's together.
-      `limit(attributes, 20, ["service.name", "deployment.environment", "deployment.environment.name"]) where attributes["macro.ingest.nested_email"] == true`,
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
     ]
   }
   log_statements {
     context = "scope"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
       `set(cache["json"], String(attributes))`,
-      `set(attributes["macro.ingest.no_email"], true) where cache["json"] != nil and not (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
-      `set(attributes["macro.ingest.nested_email"], true) where cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{")`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
     ]
   }
   log_statements {
     context = "scope"
-    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.no_email"] != true`]
+    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
   }
   log_statements {
     context = "scope"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.nested_email") where attributes["macro.ingest.nested_email"] == true and (attributes["macro.ingest.no_email"] == true or not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)"))`,
-      `flatten(attributes) where attributes["macro.ingest.nested_email"] == true`,
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
     ]
   }
   log_statements {
     context = "scope"
     statements = [
-      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested_email"] == true`,
-      `limit(attributes, 10, []) where attributes["macro.ingest.nested_email"] == true`,
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
       `replace_pattern(name, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256)`,
     ]
   }
@@ -164,32 +157,31 @@ otelcol.processor.transform "emails" {
     context = "log"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      // A list of user IDs the web app sends stays one value.
+      `set(attributes["presence.user_ids"], String(attributes["presence.user_ids"])) where IsList(attributes["presence.user_ids"])`,
       `set(cache["json"], String(attributes))`,
-      `set(attributes["macro.ingest.no_email"], true) where cache["json"] != nil and not (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
-      `set(attributes["macro.ingest.nested_email"], true) where cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{")`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
     ]
   }
   log_statements {
     context = "log"
-    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.no_email"] != true`]
+    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
   }
   log_statements {
     context = "log"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.nested_email") where attributes["macro.ingest.nested_email"] == true and (attributes["macro.ingest.no_email"] == true or not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)"))`,
-      `flatten(attributes) where attributes["macro.ingest.nested_email"] == true`,
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
     ]
   }
   log_statements {
     context = "log"
     statements = [
-      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested_email"] == true`,
-      `limit(attributes, 80, ["event", "level"]) where attributes["macro.ingest.nested_email"] == true`,
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
     ]
   }
   log_statements {
@@ -205,62 +197,58 @@ otelcol.processor.transform "emails" {
     context = "resource"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
       `set(cache["json"], String(attributes))`,
-      `set(attributes["macro.ingest.no_email"], true) where cache["json"] != nil and not (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
-      `set(attributes["macro.ingest.nested_email"], true) where cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{")`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
     ]
   }
   trace_statements {
     context = "resource"
-    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.no_email"] != true`]
+    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
   }
   trace_statements {
     context = "resource"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.nested_email") where attributes["macro.ingest.nested_email"] == true and (attributes["macro.ingest.no_email"] == true or not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)"))`,
-      `flatten(attributes) where attributes["macro.ingest.nested_email"] == true`,
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
     ]
   }
   trace_statements {
     context = "resource"
     statements = [
-      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested_email"] == true`,
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
     ]
   }
   trace_statements {
     context = "scope"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
       `set(cache["json"], String(attributes))`,
-      `set(attributes["macro.ingest.no_email"], true) where cache["json"] != nil and not (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
-      `set(attributes["macro.ingest.nested_email"], true) where cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{")`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
     ]
   }
   trace_statements {
     context = "scope"
-    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.no_email"] != true`]
+    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
   }
   trace_statements {
     context = "scope"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.nested_email") where attributes["macro.ingest.nested_email"] == true and (attributes["macro.ingest.no_email"] == true or not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)"))`,
-      `flatten(attributes) where attributes["macro.ingest.nested_email"] == true`,
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
     ]
   }
   trace_statements {
     context = "scope"
     statements = [
-      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested_email"] == true`,
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
       `replace_pattern(name, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256)`,
     ]
   }
@@ -268,31 +256,31 @@ otelcol.processor.transform "emails" {
     context = "span"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+      // A list of user IDs the web app sends stays one value.
+      `set(attributes["presence.user_ids"], String(attributes["presence.user_ids"])) where IsList(attributes["presence.user_ids"])`,
       `set(cache["json"], String(attributes))`,
-      `set(attributes["macro.ingest.no_email"], true) where cache["json"] != nil and not (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
-      `set(attributes["macro.ingest.nested_email"], true) where cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{")`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
     ]
   }
   trace_statements {
     context = "span"
-    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.no_email"] != true`]
+    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
   }
   trace_statements {
     context = "span"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.nested_email") where attributes["macro.ingest.nested_email"] == true and (attributes["macro.ingest.no_email"] == true or not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)"))`,
-      `flatten(attributes) where attributes["macro.ingest.nested_email"] == true`,
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
     ]
   }
   trace_statements {
     context = "span"
     statements = [
-      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested_email"] == true`,
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
       `replace_pattern(name, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where (IsMatch(name, "@") or IsMatch(name, "%40"))`,
       `replace_pattern(status.message, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where (IsMatch(status.message, "@") or IsMatch(status.message, "%40"))`,
     ]
@@ -301,31 +289,29 @@ otelcol.processor.transform "emails" {
     context = "spanevent"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
       `set(cache["json"], String(attributes))`,
-      `set(attributes["macro.ingest.no_email"], true) where cache["json"] != nil and not (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
-      `set(attributes["macro.ingest.nested_email"], true) where cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{")`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
     ]
   }
   trace_statements {
     context = "spanevent"
-    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.no_email"] != true`]
+    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
   }
   trace_statements {
     context = "spanevent"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.nested_email") where attributes["macro.ingest.nested_email"] == true and (attributes["macro.ingest.no_email"] == true or not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)"))`,
-      `flatten(attributes) where attributes["macro.ingest.nested_email"] == true`,
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
     ]
   }
   trace_statements {
     context = "spanevent"
     statements = [
-      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested_email"] == true`,
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
       `replace_pattern(name, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where (IsMatch(name, "@") or IsMatch(name, "%40"))`,
     ]
   }
@@ -333,64 +319,58 @@ otelcol.processor.transform "emails" {
     context = "resource"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
       `set(cache["json"], String(attributes))`,
-      `set(attributes["macro.ingest.no_email"], true) where cache["json"] != nil and not (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
-      `set(attributes["macro.ingest.nested_email"], true) where cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{")`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
     ]
   }
   metric_statements {
     context = "resource"
-    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.no_email"] != true`]
+    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
   }
   metric_statements {
     context = "resource"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.nested_email") where attributes["macro.ingest.nested_email"] == true and (attributes["macro.ingest.no_email"] == true or not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)"))`,
-      `flatten(attributes) where attributes["macro.ingest.nested_email"] == true`,
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
     ]
   }
   metric_statements {
     context = "resource"
     statements = [
-      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested_email"] == true`,
-      // Each becomes a label; Mimir takes at most 30 a series.
-      `limit(attributes, 10, ["service.name", "deployment.environment", "deployment.environment.name"]) where attributes["macro.ingest.nested_email"] == true`,
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
     ]
   }
   metric_statements {
     context = "scope"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
       `set(cache["json"], String(attributes))`,
-      `set(attributes["macro.ingest.no_email"], true) where cache["json"] != nil and not (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
-      `set(attributes["macro.ingest.nested_email"], true) where cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{")`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
     ]
   }
   metric_statements {
     context = "scope"
-    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.no_email"] != true`]
+    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
   }
   metric_statements {
     context = "scope"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.nested_email") where attributes["macro.ingest.nested_email"] == true and (attributes["macro.ingest.no_email"] == true or not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)"))`,
-      `flatten(attributes) where attributes["macro.ingest.nested_email"] == true`,
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
     ]
   }
   metric_statements {
     context = "scope"
     statements = [
-      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested_email"] == true`,
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
       `replace_pattern(name, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256)`,
     ]
   }
@@ -398,32 +378,29 @@ otelcol.processor.transform "emails" {
     context = "datapoint"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
       `set(cache["json"], String(attributes))`,
-      `set(attributes["macro.ingest.no_email"], true) where cache["json"] != nil and not (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
-      `set(attributes["macro.ingest.nested_email"], true) where cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{")`,
+      `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+      `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
     ]
   }
   metric_statements {
     context = "datapoint"
-    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.no_email"] != true`]
+    statements = [`replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
   }
   metric_statements {
     context = "datapoint"
     error_mode = "ignore"
     statements = [
-      `delete_key(attributes, "macro.ingest.nested_email") where attributes["macro.ingest.nested_email"] == true and (attributes["macro.ingest.no_email"] == true or not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)"))`,
-      `flatten(attributes) where attributes["macro.ingest.nested_email"] == true`,
+      `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+      `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
     ]
   }
   metric_statements {
     context = "datapoint"
     statements = [
-      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested_email"] == true`,
-      `limit(attributes, 15, []) where attributes["macro.ingest.nested_email"] == true`,
-      `delete_key(attributes, "macro.ingest.no_email")`,
-      `delete_key(attributes, "macro.ingest.nested_email")`,
+      `replace_all_patterns(attributes, "value", "([\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+      `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
     ]
   }
   output {
