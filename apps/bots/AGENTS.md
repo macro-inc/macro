@@ -37,6 +37,11 @@ generated SDK storage schemas.
   team-scoped reader. The default reader is unavailable. The local fixture
   supplies the sample cycle and can exercise pending, denied, empty, and zero
   observations without contacting any service.
+- `src/motion.css` owns the shell's motion and the fixed terrain scene from
+  `src/assets/terrain.svg`. Animate only opacity and the transform family
+  (`transform`, `translate`, `scale`), and give every new rule a
+  `prefers-reduced-motion` final frame. Passwords and Billing get the faint
+  terrain and no motion.
 - `scripts/verify-bots-boundary.ts` and `scripts/botsBoundary.ts` enforce isolation.
   Keep imports inside this app or an explicitly allowed workspace package.
 

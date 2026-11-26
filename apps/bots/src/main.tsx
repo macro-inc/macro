@@ -8,11 +8,13 @@ import {
 } from 'solid-js';
 import { render } from 'solid-js/web';
 import mark from './assets/mark.svg';
+import terrain from './assets/terrain.svg?raw';
 import wordmark from './assets/wordmark.svg';
 import { buildSignInUrl, editIntent, fleetIntent } from './return-intent';
 import { towerViews } from './routes';
 import { session } from './session';
 import './style.css';
+import './motion.css';
 
 const Creator = lazy(() => import('./creator'));
 const Brain = lazy(() => import('./brain'));
@@ -29,6 +31,7 @@ function Shell(props: ParentProps) {
 
   return (
     <>
+      <div class="terrain" aria-hidden="true" innerHTML={terrain} />
       <header class="top">
         <A href="/" class="brand" aria-label="Macro Bots Creator">
           <img src={mark} alt="" />
