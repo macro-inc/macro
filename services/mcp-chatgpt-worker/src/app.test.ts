@@ -690,6 +690,44 @@ describe('MCP Events', () => {
     expect(forwarded).toHaveLength(2);
   });
 
+  test('a bearer Macro refuses while opening a person token is answered with a 401', async () => {
+    const asked: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      async (input: Request | string, init?: RequestInit) => {
+        const request = new Request(input, init);
+        asked.push(new URL(request.url).pathname);
+        return new Response(JSON.stringify({ error: 'invalid_token' }), {
+          status: 401,
+        });
+      }
+    );
+    const handle = createHandler(parseConfig(BINDINGS));
+
+    const response = await handle(
+      rpc(
+        'events/subscribe',
+        {
+          name: 'message.mentioned',
+          arguments: { ids: [`person_u_${'A'.repeat(40)}`] },
+          delivery: {
+            mode: 'webhook',
+            url: 'https://chatgpt.test/hook',
+            secret: 'whsec_secret',
+          },
+        },
+        'expired-token'
+      )
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('www-authenticate')).toBe(
+      'Bearer resource_metadata="https://mcp-chatgpt.test/.well-known/oauth-protected-resource/mcp"'
+    );
+    // Refused while looking up the viewer, before anything reached /mcp.
+    expect(asked).toEqual(['/user/me']);
+  });
+
   test('an answer that is not JSON-RPC is an internal error', async () => {
     stubPublicMcp(() => new Response('bad gateway', { status: 502 }));
     const handle = createHandler(parseConfig(BINDINGS));

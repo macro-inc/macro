@@ -25,6 +25,7 @@ import { match } from 'ts-pattern';
 import { z } from 'zod';
 import { HOSTS, type ServiceName } from '../../../packages/sdk/src/config';
 import { Macro } from '../../../packages/sdk/src/macro';
+import { MacroApiError } from '../../../packages/sdk/src/utils/unwrap';
 import type { Config } from './config';
 import {
   keyBytes,
@@ -207,6 +208,24 @@ function protectedResourceMetadata(config: Config) {
 
 /** Whether the public MCP server refused this request's bearer. */
 type Upstream = { unauthorized: boolean };
+
+/**
+ * Marks `upstream` for a bearer Macro refused, so the HTTP request is answered
+ * with a 401: only that sends the client back to sign in, a JSON-RPC error
+ * would not. Returns the error to throw.
+ */
+function signIn(
+  span: { setAttr(key: string, value: string): void },
+  upstream: Upstream
+): RelayedError {
+  upstream.unauthorized = true;
+  span.setAttr('mcp.outcome', 'unauthorized');
+  return new RelayedError(
+    ErrorCode.InternalError,
+    'Sign in to Macro.',
+    undefined
+  );
+}
 
 /** The 401 that sends an MCP client to the authorization server (RFC 9728). */
 function unauthorized(config: Config) {
@@ -429,6 +448,10 @@ export function createHandler(config: Config) {
           _meta: EVENTS_REQUEST_META,
         };
       } catch (error) {
+        // Opening a person token asks Macro who the viewer is, and a refused
+        // bearer is refused there first.
+        if (error instanceof MacroApiError && error.status === 401)
+          throw signIn(span, upstream);
         span.setAttr('mcp.outcome', 'invalid');
         if (error instanceof PersonTokenError)
           throw new RelayedError(
@@ -465,16 +488,10 @@ export function createHandler(config: Config) {
       });
       span.setAttr('http.response.status_code', response.status);
       if (response.status === 401) {
-        // The bearer expired or was revoked. Only an HTTP 401 sends the
-        // client back to sign in; a JSON-RPC error would not.
-        await response.body?.cancel();
-        upstream.unauthorized = true;
-        span.setAttr('mcp.outcome', 'unauthorized');
-        throw new RelayedError(
-          ErrorCode.InternalError,
-          'Sign in to Macro.',
-          undefined
-        );
+        // The bearer expired or was revoked.
+        const refused = signIn(span, upstream);
+        await response.body?.cancel().catch(() => undefined);
+        throw refused;
       }
       const relayed = RELAYED.safeParse(
         await response.json().catch(() => undefined)
@@ -489,13 +506,12 @@ export function createHandler(config: Config) {
       }
       if ('error' in relayed.data) {
         const { code, message, data } = relayed.data.error;
-        const concealed = await concealAnswer(span, people, { message, data });
+        const concealed = await concealAnswer(span, upstream, people, {
+          message,
+          data,
+        });
         span.setAttr('mcp.outcome', String(code));
-        throw new RelayedError(
-          code,
-          String(concealed.message),
-          concealed.data
-        );
+        throw new RelayedError(code, String(concealed.message), concealed.data);
       }
       const { _meta: meta, ...result } = relayed.data.result;
       if (
@@ -510,7 +526,7 @@ export function createHandler(config: Config) {
           undefined
         );
       }
-      const concealed = await concealAnswer(span, people, result);
+      const concealed = await concealAnswer(span, upstream, people, result);
       span.setAttr('mcp.outcome', 'ok');
       return concealed as Record<string, unknown>;
     });
@@ -519,12 +535,15 @@ export function createHandler(config: Config) {
   /** `answer` with its people sealed, or an internal error if they can't be. */
   async function concealAnswer<T>(
     span: { setAttr(key: string, value: string): void },
+    upstream: Upstream,
     people: ReturnType<typeof personTokens>,
     answer: T
   ): Promise<T> {
     try {
       return (await people.conceal(answer)) as T;
-    } catch {
+    } catch (error) {
+      if (error instanceof MacroApiError && error.status === 401)
+        throw signIn(span, upstream);
       span.setAttr('mcp.outcome', 'internal');
       throw new RelayedError(
         ErrorCode.InternalError,

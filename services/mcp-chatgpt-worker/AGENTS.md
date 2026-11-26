@@ -33,8 +33,9 @@ own permission checks and agent attribution apply.
   methods and answers method-not-found, so it never stores a subscription
   that would deliver unredacted. A result must also name the profile in
   `_meta["com.macro/eventsProfile"]`, which is removed; one without it is
-  refused with an internal error. A 401 from the public MCP server (an
-  expired or revoked bearer) is answered with this server's own 401 and
+  refused with an internal error. A 401 from the public MCP server or from
+  the viewer lookup that opens a person token (an expired or revoked
+  bearer) is answered with this server's own 401 and
   `WWW-Authenticate`, so the client signs in again. Otherwise the answer, or
   its error with code, message and data, is relayed as is, its people
   sealed. Span: `mcp_chatgpt.events` (method, outcome).
