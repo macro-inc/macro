@@ -1,0 +1,25 @@
+apps/web/src/components/ui/components/SnapPager/SnapPager.test.ts
+  s_d4d343a5430ac0::t_20d36da8f37ed4 1-45
+apps/web/src/components/ui/components/SnapPager/SnapPager.tsx
+  s_d4d343a5430ac0::t_7c892350e333ab 27-31,156,164,197,204,221,415,469,493,551,553-554
+apps/web/src/features/calendar/components/CalendarPagerContext.test.tsx
+  s_d4d343a5430ac0::t_9ccf0fbd4677a3 47,452,540,560
+apps/web/src/features/calendar-view/calendar-view.test.tsx
+  s_d4d343a5430ac0::t_9ccf0fbd4677a3 618
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ed01d77ecf0ff68bb55fc63b558fb1a872a0b5c6",
+  "prompts": {},
+  "sessions": {
+    "s_d4d343a5430ac0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0cf7975f-6934-4d95-8cc0-552ee919097a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
