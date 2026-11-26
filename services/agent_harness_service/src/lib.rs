@@ -861,6 +861,7 @@ pub async fn run() -> anyhow::Result<()> {
             admission: admission.clone(),
             recorder: recorder.clone(),
         },
+        redis.clone(),
     )
     .await
     .context("failed to compose public MCP")?;

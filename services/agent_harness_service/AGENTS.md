@@ -432,7 +432,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Results carry the filter and its reading in `_meta` (`com.macro/filter`,
   `com.macro/interpretation`). Subscriptions live in document storage
   (`dss.rs`: internal routes, secret sealed with the MCP OAuth KMS key under
-  purpose `mcp-event-subscription-secret`); the same words compile once per
+  purpose `mcp-event-subscription-secret`). Before the seal, a subscribe's
+  URL must be an absolute `http`/`https` URL and the user must be within 200
+  subscribes per hour (`MAX_SUBSCRIBES_PER_WINDOW`, the shared Redis rate
+  limiter); document storage then checks the rest. The same words compile once per
   user per process. Streams (`stream.rs`) read
   document storage's live event stream as the user (`POST`, the filter in
   the body, so its ids stay out of URLs), one connection per distinct `ids`,

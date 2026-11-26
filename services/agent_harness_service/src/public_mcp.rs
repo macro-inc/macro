@@ -68,9 +68,10 @@ pub async fn router(
     code_mode: Option<PublicCodeMode>,
     rollout: crate::anthropic_gateway::brain::BrainRollout,
     models: EventFilterModels,
+    redis: redis::Client,
 ) -> anyhow::Result<axum::Router> {
     let public_url = macro_service_urls::McpPublicUrl::new()?;
-    let events = Arc::new(build_events(config, kms.clone(), models)?);
+    let events = Arc::new(build_events(config, kms.clone(), models, redis)?);
     let (auth_proxy, backfill) = build_auth_proxy(
         config,
         secrets,
@@ -296,11 +297,12 @@ pub struct EventFilterModels {
 /// MCP Events: filters compiled on the router's fast model, subscriptions
 /// and event streams through the document storage service, and signing
 /// secrets encrypted with the MCP OAuth KMS key, which the document storage
-/// service may decrypt.
+/// service may decrypt, after a per-user subscribe allowance kept in Redis.
 fn build_events(
     config: &Config,
     kms: aws_sdk_kms::Client,
     models: EventFilterModels,
+    redis: redis::Client,
 ) -> anyhow::Result<events::McpEvents> {
     let dss = Arc::new(events::DssEvents::new(
         url::Url::parse(macro_service_urls::DocumentStorageServiceUrl::new()?.as_ref())?,
@@ -315,6 +317,11 @@ fn build_events(
         dss,
         Arc::new(webhook::outbound::KmsMcpSecretCipher::new(
             AwsKmsCiphertexts::new(kms, config.mcp_oauth_kms_key_id.as_ref().to_owned()),
+        )),
+        Arc::new(events::RateLimitedSubscribes(
+            rate_limit::RateLimitServiceImpl {
+                repo: rate_limit::RedisRateLimitAdapter { redis },
+            },
         )),
     ))
 }

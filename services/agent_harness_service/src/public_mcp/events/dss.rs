@@ -31,7 +31,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// A subscribe verifies the callback endpoint before answering, so it waits
 /// on the subscriber's endpoint as well as the service.
 const UNARY_TIMEOUT: Duration = Duration::from_secs(30);
-/// The stream sends a heartbeat every 15 s and a keep-alive every 20 s; a
+/// The stream sends a heartbeat event and an SSE keep-alive every 20 s; a
 /// read idle this long is a dead connection.
 const STREAM_READ_TIMEOUT: Duration = Duration::from_secs(60);
 /// Largest event the stream may send.

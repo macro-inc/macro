@@ -109,7 +109,7 @@ pub(crate) fn selection(name: &str, arguments: &Value) -> Result<Selection, Even
             || ids.len() > MAX_VALUES
             || ids
                 .iter()
-                .any(|id| id.is_empty() || id.len() > MAX_VALUE_LEN || id.contains('\0')))
+                .any(|id| id.trim().is_empty() || id.len() > MAX_VALUE_LEN || id.contains('\0')))
     {
         return Err(EventsError::InvalidParams(format!(
             "arguments.ids holds 1 to {MAX_VALUES} ids of 1 to {MAX_VALUE_LEN} bytes, with no NUL character"
