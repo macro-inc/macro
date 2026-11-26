@@ -167,16 +167,14 @@ export const MagicChipView: Component<{
     >
       <Card
         depth={2}
-        variant={props.inDocument ? 'filled' : 'ghost'}
+        variant="raised"
         contentEditable={false}
         data-magic-chip-card
         aria-label={`${props.header?.agent ?? 'Agent'} session`}
         aria-busy={props.loading}
         class={cn(
-          '@container h-22 min-h-22 w-full min-w-0 shrink-0 overflow-hidden rounded-2xl border border-edge p-3 text-ink',
-          props.inDocument &&
-            props.selected &&
-            'border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] ring-2 ring-edge-muted'
+          '@container h-22 min-h-22 w-full min-w-0 shrink-0 overflow-hidden p-3',
+          props.inDocument && props.selected && 'outline-4 outline-edge'
         )}
       >
         <div class="flex h-6 min-w-0 items-center gap-2">

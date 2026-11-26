@@ -128,8 +128,25 @@ impl EngineHandle {
         Ok(state)
     }
 
-    pub(super) async fn snapshot_hydration(&self) -> Result<AccessGuard<'_, EngineState>, String> {
-        let mut state = self.inner.hydrate().await?;
+    /// [`Self::snapshot_write`] for a background command, which waits for
+    /// waiting commands (see `access`).
+    pub(super) async fn snapshot_background_write(
+        &self,
+    ) -> Result<AccessGuard<'_, EngineState>, String> {
+        let mut state = self.inner.background_write().await;
+        self.resume_retirement(&mut state).await?;
+        self.check_generation(&mut state).await?;
+        Ok(state)
+    }
+
+    /// Takes the engine for a hydrate that began at write `epoch`
+    /// ([`EngineAccess::hydrate_since`]).
+    pub(super) async fn snapshot_hydration(
+        &self,
+        epoch: u64,
+        resumed: bool,
+    ) -> Result<AccessGuard<'_, EngineState>, String> {
+        let mut state = self.inner.hydrate_since(epoch, resumed).await?;
         self.resume_retirement(&mut state).await?;
         self.check_generation(&mut state).await?;
         Ok(state)
@@ -170,6 +187,10 @@ impl EngineHandle {
         )
         .await
         .map_err(|error| error.to_string())?;
+        if result.changed {
+            // Retired snapshots: every record counts.
+            self.commits.settle(&mut state.commits, || None);
+        }
         if result.changed
             && let Some((_, listener)) = &self.authority_listener
         {

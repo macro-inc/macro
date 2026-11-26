@@ -302,7 +302,7 @@ async function activate(
     // WASM holds the owner lock but has not touched OPFS yet. The coordinator
     // records that this epoch may change storage before granting the open.
     onOwnerLockAcquired: async () => {
-      if (failed || ownerLockAcquired) {
+      if (failed || draining || ownerLockAcquired) {
         throw new Error('cache engine was not waiting for a storage grant');
       }
       ownerLockAcquired = true;
@@ -314,8 +314,8 @@ async function activate(
         })
       );
       await openPermission;
-      if (failed)
-        throw new Error('cache engine failed before its storage grant');
+      if (failed || !openGranted)
+        throw new Error('cache engine ended before its storage grant');
     },
     // Never queue for the lock. The coordinator decides from these reports
     // whether another build holds it and may end this activation early.
@@ -335,7 +335,8 @@ async function activate(
         throw new Error('cache database owner lock stayed unavailable');
       }
       await (options.sleep ?? sleep)(delayMs);
-      if (failed) throw new Error('cache engine failed while waiting to open');
+      if (failed || draining)
+        throw new Error('cache engine ended while waiting to open');
     },
     onStorageResetRequired: () => {
       fatal('cache storage requested physical reset', 'storage-reset-required');
@@ -417,6 +418,7 @@ async function activate(
       }
       match(message)
         .with({ kind: 'open-engine' }, () => {
+          if (draining) return;
           if (!ownerLockAcquired || openGranted) {
             fatal('unexpected database-open grant');
             return;
@@ -438,6 +440,8 @@ async function activate(
         .with({ kind: 'drain-engine' }, () => {
           if (draining) return;
           draining = true;
+          // A coordinator that ended grants nothing any more.
+          resolveOpen();
           const drainFiber = runLifecycle(
             Effect.gen(function* () {
               yield* FiberSet.awaitEmpty(admissions);
@@ -553,6 +557,8 @@ async function activate(
       durationMs: now() - activationStartedAt,
     });
     telemetry.flush();
+    // The drain ends this worker once the open has unwound.
+    if (!failed && draining && !openGranted) return;
     // A fatal report already ended this activation; the open only unwound.
     if (!failed) {
       post(

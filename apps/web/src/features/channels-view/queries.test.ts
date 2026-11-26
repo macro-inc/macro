@@ -1,5 +1,11 @@
 import type { ChannelEntity } from '@entity/types/entity';
-import { createMemo, createRoot, createSignal, onCleanup } from 'solid-js';
+import {
+  batch,
+  createMemo,
+  createRoot,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 const useSoupAstItemsQuery = vi.hoisted(() =>
@@ -33,6 +39,10 @@ const createChannelDetailQuery = vi.hoisted(() =>
   }))
 );
 
+const userIdMock = vi.hoisted(() => ({
+  get: (): string => 'user-1',
+}));
+
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery }));
 vi.mock('@queries/channel/detail', () => ({ createChannelDetailQuery }));
 vi.mock('@entity', () => ({
@@ -41,7 +51,7 @@ vi.mock('@entity', () => ({
     entity.type === 'channel_thread',
 }));
 vi.mock('@core/context/user', () => ({
-  useUserId: () => () => 'user-1',
+  useUserId: () => () => userIdMock.get(),
   useIsAuthenticated: () => () => true,
 }));
 vi.mock('@queries/client', async () => {
@@ -333,6 +343,459 @@ describe('channels resolved by id', () => {
   });
   it('keeps the previous answer when a settled lookup has no data', () => {
     expect(resolveReferencedChannels(resolved, settled)).toBe(resolved);
+  });
+
+  it('keeps untouched 500-ID batches mounted when individual channel references churn', () => {
+    const disposedBatches: number[] = [];
+    const batchArgGetters: Array<() => unknown> = [];
+    useSoupAstItemsQuery.mockImplementation((args) => {
+      const batchIndex = batchArgGetters.length;
+      batchArgGetters.push(args);
+      onCleanup(() => disposedBatches.push(batchIndex));
+      return {
+        isEnabled: true,
+        isPending: false,
+        isLoading: false,
+        isFetching: false,
+        hasPageData: true,
+        hasNextPage: false,
+        get data() {
+          const body = args().body;
+          const matches = JSON.stringify(body).match(/ch-\d{4}/g) ?? [];
+          return { entities: matches.map((id) => channelEntity(id)) };
+        },
+      };
+    });
+    const initialIds = Array.from(
+      { length: 1002 },
+      (_, index) => `ch-${String(index).padStart(4, '0')}`
+    );
+    const { dispose, result, setIds } = createRoot((dispose) => {
+      const [ids, setIds] = createSignal(initialIds);
+      const result = useCachedChannelsByIds(ids, () => true);
+      return { dispose, result, setIds };
+    });
+    try {
+      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(3);
+      expect(result.channels()).toHaveLength(1002);
+      const middleBatchArgsBefore = batchArgGetters[1]();
+
+      // Remove 1 ID from batch 0 and add 1 new ID into the non-full tail batch.
+      setIds([...initialIds.slice(1), 'ch-9999']);
+      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(3);
+      expect(disposedBatches).toEqual([]);
+      expect(batchArgGetters[1]()).toBe(middleBatchArgsBefore);
+      expect(result.channels()).toHaveLength(1002);
+      expect(result.channels().some((ch) => ch.id === 'ch-0000')).toBe(false);
+      expect(result.channels().some((ch) => ch.id === 'ch-9999')).toBe(true);
+
+      // Repeated partial-bucket replacements must reuse freed slots instead of
+      // growing active batch roots unboundedly.
+      for (let round = 1; round <= 20; round += 1) {
+        const prefix = `r${round}`;
+        const rotated = [
+          'ch-0001',
+          ...Array.from(
+            { length: 999 },
+            (_, idx) => `${prefix}-${String(idx).padStart(4, '0')}`
+          ),
+        ];
+        setIds(rotated);
+      }
+      const activeCount =
+        useSoupAstItemsQuery.mock.calls.length - disposedBatches.length;
+      expect(activeCount).toBeLessThanOrEqual(3);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+
+  it('keeps newly added IDs pending while the bucket cache predicate is loading', () => {
+    const { dispose, result, setCacheStatus } = createRoot((dispose) => {
+      const [cacheStatus, setCacheStatus] = createSignal<'loading' | 'ready'>(
+        'loading'
+      );
+      useSoupAstItemsQuery.mockImplementation(() => ({
+        isEnabled: true,
+        isPending: false,
+        isLoading: false,
+        isFetching: false,
+        hasPageData: false,
+        hasNextPage: false,
+        get cacheStatus() {
+          return cacheStatus();
+        },
+        data: { entities: [channelEntity('existing')] },
+      }));
+      return {
+        dispose,
+        setCacheStatus,
+        result: useCachedChannelsByIds(
+          () => ['existing', 'newly-added'],
+          () => true
+        ),
+      };
+    });
+    try {
+      expect(result.isLoading()).toBe(true);
+      expect([...result.pendingIds()]).toEqual(['newly-added']);
+      setCacheStatus('ready');
+      expect(result.isLoading()).toBe(false);
+      expect([...result.pendingIds()]).toEqual([]);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+
+  it('clears previously resolved channels on account switch even when the new account has zero IDs', () => {
+    const [userId, setUserId] = createSignal('user-1');
+    userIdMock.get = userId;
+    useSoupAstItemsQuery.mockImplementation(() => ({
+      isEnabled: true,
+      isPending: false,
+      isLoading: false,
+      isFetching: false,
+      hasPageData: true,
+      hasNextPage: false,
+      data: { entities: [channelEntity('old-account-channel')] },
+    }));
+    const { dispose, result, setIds } = createRoot((dispose) => {
+      const [ids, setIds] = createSignal(['old-account-channel']);
+      const result = useCachedChannelsByIds(ids, () => true);
+      return { dispose, result, setIds };
+    });
+    try {
+      expect(result.channels().map((ch) => ch.id)).toEqual([
+        'old-account-channel',
+      ]);
+      // Switch account and clear IDs in the same reactive flush so the reset
+      // path executes with nextBatches = [] while nextAccount is still truthy.
+      batch(() => {
+        setUserId('user-2');
+        setIds([]);
+      });
+      expect(result.channels()).toEqual([]);
+    } finally {
+      dispose();
+      userIdMock.get = () => 'user-1';
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+
+  it('keeps rows visible while compaction is pending, then drops omitted moved rows and exposes error and retry on failure', async () => {
+    const batchStates: Array<{
+      pending: ReturnType<typeof createSignal<boolean>>;
+      hasPageData: ReturnType<typeof createSignal<boolean>>;
+      error: ReturnType<typeof createSignal<Error | undefined>>;
+      entities: ReturnType<typeof createSignal<ChannelEntity[]>>;
+      refresh: ReturnType<typeof vi.fn<() => Promise<void>>>;
+      disposed: boolean;
+    }> = [];
+    useSoupAstItemsQuery.mockImplementation((args) => {
+      const initialMatches =
+        JSON.stringify(args().body).match(/ch-\d{4}/g) ?? [];
+      const pending = createSignal(false);
+      const hasPageData = createSignal(true);
+      const error = createSignal<Error | undefined>(undefined);
+      const entities = createSignal(
+        initialMatches.map((id) => channelEntity(id))
+      );
+      const refresh = vi.fn(async () => {});
+      const state = {
+        pending,
+        hasPageData,
+        error,
+        entities,
+        refresh,
+        disposed: false,
+      };
+      batchStates.push(state);
+      onCleanup(() => {
+        state.disposed = true;
+      });
+      return {
+        isEnabled: true,
+        get isPending() {
+          return pending[0]();
+        },
+        get isLoading() {
+          return pending[0]();
+        },
+        get isFetching() {
+          return pending[0]();
+        },
+        get fetchError() {
+          return error[0]();
+        },
+        get hasPageData() {
+          return hasPageData[0]();
+        },
+        hasNextPage: false,
+        refresh,
+        get data() {
+          if (pending[0]())
+            throw new Error('A pending query resource was read');
+          return { entities: entities[0]() };
+        },
+      };
+    });
+    const initialIds = Array.from(
+      { length: 1501 },
+      (_, index) => `ch-${String(index).padStart(4, '0')}`
+    );
+    const { dispose, result, setIds } = createRoot((dispose) => {
+      const [ids, setIds] = createSignal(initialIds);
+      const result = useCachedChannelsByIds(ids, () => true);
+      return { dispose, result, setIds };
+    });
+    try {
+      expect(batchStates).toHaveLength(4);
+      expect(result.channels()).toHaveLength(1501);
+
+      // Put all receiving batches into a pending state (simulating a cache miss
+      // for moved IDs) and shrink to 1 surviving ID per bucket so compaction
+      // merges 2 buckets into the remaining 2.
+      for (const state of batchStates) {
+        state.pending[1](true);
+        state.hasPageData[1](false);
+      }
+      const surviving = ['ch-0000', 'ch-0500', 'ch-1000', 'ch-1500'];
+      setIds(surviving);
+
+      expect(batchStates.filter((s) => s.disposed)).toHaveLength(2);
+      // While the receiving queries are loading, moved rows stay visible.
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
+      // Between the local predicate settling on a cache miss (`pending = false`,
+      // `hasPageData = false`) and the network fetch starting, moved rows must
+      // stay visible rather than flashing away.
+      const liveBatches = batchStates.filter((s) => !s.disposed);
+      batch(() => {
+        for (const state of liveBatches) {
+          state.pending[1](false);
+          state.hasPageData[1](false);
+        }
+      });
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
+      // Now simulate a deleted moved channel: the receiving predicate omits the
+      // moved IDs (returning only its own pre-existing channel) and the network
+      // lookup fails. Handoff rows must NOT stay visible or suppress error/retry.
+      const offline = new Error('offline');
+      batch(() => {
+        for (const state of liveBatches) {
+          state.pending[1](false);
+          state.hasPageData[1](false);
+          state.error[1](offline);
+        }
+      });
+      const visibleAfterFailure = result
+        .channels()
+        .map((ch) => ch.id)
+        .sort();
+      const failedAfterFailure = [...result.failedIds()].sort();
+      expect(visibleAfterFailure).toHaveLength(2);
+      expect(failedAfterFailure).toHaveLength(2);
+      expect([...visibleAfterFailure, ...failedAfterFailure].sort()).toEqual(
+        surviving
+      );
+      expect(result.error()).toBe(offline);
+
+      await result.retry();
+      const refreshed = liveBatches.filter(
+        (state) => state.refresh.mock.calls.length === 1
+      );
+      expect(refreshed.length).toBeGreaterThanOrEqual(1);
+
+      // Once the receiving queries settle authoritatively without error,
+      // returned rows stay visible and omitted rows move to unavailableIds.
+      batch(() => {
+        for (const state of liveBatches) {
+          state.error[1](undefined);
+          state.hasPageData[1](true);
+          state.entities[1](
+            surviving.filter((id) => id !== 'ch-0000').map(channelEntity)
+          );
+        }
+      });
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(['ch-0500', 'ch-1000', 'ch-1500']);
+      expect([...result.failedIds()]).toEqual([]);
+      expect([...result.unavailableIds()]).toEqual(['ch-0000']);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+
+  it('keeps handoff rows across a pre-existing error, an active retry, a disabled receiving query, and a notification refetch until a post-handoff failure settles', async () => {
+    const batchStates: Array<{
+      enabled: ReturnType<typeof createSignal<boolean>>;
+      fetching: ReturnType<typeof createSignal<boolean>>;
+      hasPageData: ReturnType<typeof createSignal<boolean>>;
+      error: ReturnType<typeof createSignal<Error | undefined>>;
+      entities: ReturnType<typeof createSignal<ChannelEntity[]>>;
+      refresh: ReturnType<typeof vi.fn<() => Promise<void>>>;
+      disposed: boolean;
+    }> = [];
+    useSoupAstItemsQuery.mockImplementation((args) => {
+      const initialMatches =
+        JSON.stringify(args().body).match(/ch-\d{4}/g) ?? [];
+      const enabled = createSignal(true);
+      const fetching = createSignal(false);
+      const hasPageData = createSignal(true);
+      const error = createSignal<Error | undefined>(undefined);
+      const entities = createSignal(
+        initialMatches.map((id) => channelEntity(id))
+      );
+      const refresh = vi.fn(async () => {});
+      const state = {
+        enabled,
+        fetching,
+        hasPageData,
+        error,
+        entities,
+        refresh,
+        disposed: false,
+      };
+      batchStates.push(state);
+      onCleanup(() => {
+        state.disposed = true;
+      });
+      return {
+        get isEnabled() {
+          return enabled[0]();
+        },
+        isPending: false,
+        isLoading: false,
+        get isFetching() {
+          return fetching[0]();
+        },
+        get fetchError() {
+          return error[0]();
+        },
+        get hasPageData() {
+          return hasPageData[0]();
+        },
+        hasNextPage: false,
+        refresh,
+        get data() {
+          return { entities: entities[0]() };
+        },
+      };
+    });
+    const initialIds = Array.from(
+      { length: 1501 },
+      (_, index) => `ch-${String(index).padStart(4, '0')}`
+    );
+    const { dispose, result, setIds } = createRoot((dispose) => {
+      const [ids, setIds] = createSignal(initialIds);
+      const result = useCachedChannelsByIds(ids, () => true);
+      return { dispose, result, setIds };
+    });
+    try {
+      expect(batchStates).toHaveLength(4);
+      const receiving = batchStates[1];
+      const staleError = new Error('stale ch-0501 failure');
+
+      // Receiving batch 1 already holds a stale error for ch-0501 at handoff.
+      batch(() => {
+        receiving.hasPageData[1](false);
+        receiving.error[1](staleError);
+      });
+
+      // Drop bucket 3, remove ch-0501, and leave bucket 0 (1 ID), bucket 1
+      // (2 IDs), and bucket 2 (3 IDs) so bucket 0 merges into bucket 1.
+      const surviving = [
+        'ch-0000',
+        'ch-0500',
+        'ch-0502',
+        'ch-1000',
+        'ch-1001',
+        'ch-1002',
+      ];
+      setIds(surviving);
+      expect(batchStates[0].disposed).toBe(true);
+      expect(receiving.disposed).toBe(false);
+
+      // 1. Pre-existing stale error on the receiving batch must NOT clear ch-0000.
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
+      // 2. Active retry carrying the stale error must NOT clear ch-0000.
+      receiving.fetching[1](true);
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
+      // 3. Temporarily disabled receiving query with stale page data must NOT clear ch-0000.
+      batch(() => {
+        receiving.fetching[1](false);
+        receiving.enabled[1](false);
+        receiving.hasPageData[1](true);
+      });
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
+      // 4. Re-enabled and refetching after a notification (`fetching: true,
+      // hasPageData: true, error: undefined`) must NOT clear ch-0000.
+      batch(() => {
+        receiving.enabled[1](true);
+        receiving.error[1](undefined);
+        receiving.fetching[1](true);
+        receiving.hasPageData[1](true);
+      });
+      expect(
+        result
+          .channels()
+          .map((ch) => ch.id)
+          .sort()
+      ).toEqual(surviving);
+
+      // 5. A fresh post-handoff lookup failing MUST retire ch-0000 and surface
+      // failedIds, error, and retry.
+      const postHandoffError = new Error('ch-0000 lookup failed');
+      batch(() => {
+        receiving.fetching[1](false);
+        receiving.hasPageData[1](false);
+        receiving.error[1](postHandoffError);
+      });
+      expect(result.channels().some((ch) => ch.id === 'ch-0000')).toBe(false);
+      expect([...result.failedIds()]).toEqual(['ch-0000']);
+      expect(result.error()).toBe(postHandoffError);
+      await result.retry();
+      expect(receiving.refresh).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
   });
 });
 

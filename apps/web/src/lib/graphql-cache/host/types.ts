@@ -85,14 +85,22 @@ export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   registerDependencies?: boolean;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
+  /**
+   * A query result nobody waits for. The native host refuses it with
+   * `CacheWriteSupersededError` when a mutation that committed after it was
+   * sent changed one of its records; other hosts ignore it.
+   */
+  background?: boolean;
 }
 
-export interface CacheHydrateArgs extends Omit<CacheWriteArgs, 'opKey'> {
+export interface CacheHydrateArgs
+  extends Omit<CacheWriteArgs, 'opKey' | 'background'> {
   /** Reject a response from another account or cleared database before writing. */
   hydrationScope?: HydrationScope;
 }
 
-export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
+export interface EnqueueOptimisticMutationArgs
+  extends Omit<CacheWriteArgs, 'background'> {
   /** Caller-supplied RFC UUID used for explicit safe coalescing. */
   uuid: string;
   /** Opaque durable client correlation; never included in GraphQL variables. */

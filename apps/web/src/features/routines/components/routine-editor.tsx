@@ -1,7 +1,7 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
-import { ComposerSurface, cn, TabSelector } from '@ui';
+import { Card, cn, TabSelector } from '@ui';
 import { For, type JSX, type ParentProps, Show } from 'solid-js';
 import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 import type { ScheduleDraft } from '../core/draft';
@@ -10,21 +10,14 @@ import { RoutineDescription } from './routine-description';
 import { RoutineIcon } from './routine-icon';
 
 /**
- * The raised card a page section or step sits on: the composer surface
- * settings use (menu fill, glass edge) with a tighter radius, framed on touch
- * as settings are.
+ * The raised card a page section or step sits on, above the tray under it.
+ * Callers lay out their own contents, so it drops the Card column.
  */
 export function RoutineSurface(props: ParentProps<{ class?: string }>) {
   return (
-    <ComposerSurface
-      as="div"
-      class={cn(
-        'relative z-[1] min-w-0 rounded-xl touch:rounded-xl touch:border touch:border-edge-muted touch:bg-composer touch:text-composer-ink',
-        props.class
-      )}
-    >
+    <Card variant="raised" class={cn('z-[1] block flex-row', props.class)}>
       {props.children}
-    </ComposerSurface>
+    </Card>
   );
 }
 

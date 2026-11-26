@@ -100,6 +100,38 @@ export const formatDate = (
 };
 
 /**
+ * When a message was sent: '2:33 PM' today, 'Yesterday at 11:47 PM' the day
+ * before and '11/6/26, 2:33 PM' earlier, so a time alone always means today.
+ * The date order and the 12- or 24-hour clock follow the browser's locale.
+ * @param date - Date object or RFC3339 string
+ * @param today - Any moment of the local day the message is read on
+ */
+export const formatMessageTime = (
+  date: DateValue,
+  today: Date = new Date()
+): string => {
+  const d = toDate(date);
+  const daysAgo = differenceInCalendarDays(today, d);
+  const time = d.toLocaleTimeString(undefined, { timeStyle: 'short' });
+
+  // A message from just after midnight can arrive before our clock gets there.
+  if (daysAgo <= 0) return time;
+  if (daysAgo === 1) return `Yesterday at ${time}`;
+
+  return d.toLocaleString(undefined, {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+};
+
+/** The whole date, e.g. 'Friday, November 6, 2026 at 2:33 PM'. */
+export const formatFullDateTime = (date: DateValue): string =>
+  toDate(date).toLocaleString(undefined, {
+    dateStyle: 'full',
+    timeStyle: 'short',
+  });
+
+/**
  * Formats a date in the format "Fri, Jul 4, 2025 at 12:20 AM"
  * @param date - Date object or Unix timestamp in seconds
  * @returns Formatted date string

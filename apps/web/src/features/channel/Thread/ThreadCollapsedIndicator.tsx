@@ -1,5 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
-import { formatRelativeDate } from '@core/util/time';
+import { useCurrentDay } from '@core/signal/currentDay';
+import { formatConversationDay } from '@core/util/time';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import { cn } from '@ui';
 import { For, type JSX, Show, splitProps } from 'solid-js';
@@ -28,6 +29,7 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
     'hasUnreadNotifications',
     'withoutPreview',
   ]);
+  const currentDay = useCurrentDay();
   const visibleParticipants = () =>
     local.participants.slice(0, MAX_VISIBLE_PARTICIPANTS);
   const hiddenParticipants = () =>
@@ -90,7 +92,7 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
       <Show when={local.latestReplyAt}>
         {(latestReplyAt) => (
           <span class="text-ink-muted whitespace-nowrap @max-[40rem]:hidden">
-            Last reply {formatRelativeDate(latestReplyAt())}
+            Last reply {formatConversationDay(latestReplyAt(), currentDay())}
           </span>
         )}
       </Show>
