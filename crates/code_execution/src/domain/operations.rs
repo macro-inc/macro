@@ -113,11 +113,21 @@ pub fn sdk_members(name: &str) -> Option<Vec<&'static str>> {
 /// The SDK root's declarations, what `import … from '@macro-inc/sdk'` reads.
 const SDK_ROOT: &str = "src/macro.d.ts";
 
+/// What a name the SDK root exports is, which decides how a program imports it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RootExport {
+    /// Only a type (`export type { … }`, an interface or a type alias):
+    /// `import type`.
+    Type,
+    /// A value, or a class, which is also a type: a plain `import`.
+    Value,
+}
+
 /// The names the SDK's root exports: its `export { … }` and
 /// `export type { … }` lists, under the names it exports them as, and the
 /// classes, interfaces and types it declares itself (`export declare class
 /// Macro`).
-static ROOT_EXPORTS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+static ROOT_EXPORTS: LazyLock<Vec<(&'static str, RootExport)>> = LazyLock::new(|| {
     use nom::Parser as _;
     use nom::branch::alt;
     use nom::bytes::complete::{tag, take_until, take_while1};
@@ -137,19 +147,30 @@ static ROOT_EXPORTS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
         )
             .parse(after);
         rest = match (list, declared) {
-            (Ok((after_list, (_, _, inner))), _) => {
-                names.extend(
-                    inner
-                        .split(',')
-                        .map(|item| item.trim().trim_start_matches("type "))
-                        .filter_map(|item| item.rsplit(" as ").next())
-                        .map(str::trim)
-                        .filter(|name| !name.is_empty()),
-                );
+            (Ok((after_list, (type_only, _, inner))), _) => {
+                names.extend(inner.split(',').filter_map(|item| {
+                    let item = item.trim();
+                    let (item, inline_type) = match item.strip_prefix("type ") {
+                        Some(item) => (item, true),
+                        None => (item, false),
+                    };
+                    let name = item.rsplit(" as ").next()?.trim();
+                    let kind = if type_only.is_some() || inline_type {
+                        RootExport::Type
+                    } else {
+                        RootExport::Value
+                    };
+                    (!name.is_empty()).then_some((name, kind))
+                }));
                 after_list
             }
-            (_, Ok((after_name, (_, _, name)))) => {
-                names.push(name);
+            (_, Ok((after_name, (_, keyword, name)))) => {
+                let kind = if keyword == "class " {
+                    RootExport::Value
+                } else {
+                    RootExport::Type
+                };
+                names.push((name, kind));
                 after_name
             }
             _ => after,
@@ -158,10 +179,13 @@ static ROOT_EXPORTS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
     names
 });
 
-/// Whether the SDK's root exports `name`, so a program can import it from
-/// `@macro-inc/sdk`.
-pub fn sdk_root_exports(name: &str) -> bool {
-    ROOT_EXPORTS.contains(&name)
+/// How the SDK's root exports `name`, or `None` when it doesn't, so a
+/// program knows how to import it from `@macro-inc/sdk`.
+pub fn sdk_root_export(name: &str) -> Option<RootExport> {
+    ROOT_EXPORTS
+        .iter()
+        .find(|(exported, _)| *exported == name)
+        .map(|(_, kind)| *kind)
 }
 
 /// The values of the SDK's string-literal union type `name`, such as

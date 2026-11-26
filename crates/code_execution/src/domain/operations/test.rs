@@ -48,12 +48,13 @@ fn sdk_string_literals_lists_a_string_union_aliases_values() {
 }
 
 #[test]
-fn sdk_root_exports_names_what_the_root_exports() {
+fn sdk_root_export_says_how_the_root_exports_a_name() {
     // `export type { Channel }`, a multi-line `export { ConnectedApp, … }`,
-    // and `export declare class Macro`.
-    assert!(sdk_root_exports("Channel"));
-    assert!(sdk_root_exports("ConnectedTool"));
-    assert!(sdk_root_exports("Macro"));
-    assert!(!sdk_root_exports("NoSuchType"));
-    assert!(!sdk_root_exports("type"));
+    // `export declare class Macro` and a function in `export { msg, … }`.
+    assert_eq!(sdk_root_export("Channel"), Some(RootExport::Type));
+    assert_eq!(sdk_root_export("ConnectedTool"), Some(RootExport::Value));
+    assert_eq!(sdk_root_export("Macro"), Some(RootExport::Value));
+    assert_eq!(sdk_root_export("msg"), Some(RootExport::Value));
+    assert_eq!(sdk_root_export("NoSuchType"), None);
+    assert_eq!(sdk_root_export("type"), None);
 }

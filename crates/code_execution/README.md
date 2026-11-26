@@ -51,10 +51,12 @@ can't infer need types.
   included (`sdk_members`). A string literal an SDK string union doesn't
   take (TS2322, or TS2345 for an argument) is followed by the union's values
   (`sdk_string_literals`), since the checker names only the alias. A name the
-  program never declares (TS2304) is followed by where it comes from: a
-  `CodeContext` field (`macro`, `execution`, …) by the `main` signature that
-  takes it, since a program written as a script has none, and a name the SDK
-  root exports (`sdk_root_exports`) by its `import type` line.
+  program never declares (TS2304) is followed by where it comes from. A
+  `CodeContext` field (`macro`, `execution`, …) gets the `main` signature that
+  takes it, since a program written as a script has none; a session field in
+  a run outside a session's code executions is said to be missing there. A
+  name the SDK root exports (`sdk_root_export`) gets its import: `import type`
+  for a type, `import` for a value or class.
 - The checker is busy (every slot and queue place taken) or fails: the run
   fails (`Limit` or `Internal`) and doesn't run unchecked.
 - A check inside the run counts against the run's deadline and is cancelled

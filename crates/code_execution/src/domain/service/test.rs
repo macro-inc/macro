@@ -408,7 +408,7 @@ fn a_missing_sdk_member_lists_what_the_type_has() {
     let failure = type_errors(&[Diagnostic {
         file: Some("main.ts".into()),
         message: "TS2339 [ERROR]: Property 'documents' does not exist on type 'SearchNamespace'.\n  const [doc] = await macro.search.documents('Q4 plan');\n                                   ~~~~~~~~~\n    at main.ts:3:36".into(),
-    }]);
+    }], IN_SESSION);
     assert_eq!(failure.code, FailureCode::Compile);
     assert!(
         failure
@@ -421,7 +421,7 @@ fn a_missing_sdk_member_lists_what_the_type_has() {
     let suggested = type_errors(&[Diagnostic {
         file: Some("main.ts".into()),
         message: "TS2551 [ERROR]: Property 'pag' does not exist on type 'SearchNamespace'. Did you mean 'page'?\n    at main.ts:3:36".into(),
-    }]);
+    }], IN_SESSION);
     assert!(!suggested.message.contains("has:"), "{}", suggested.message);
 }
 
@@ -432,7 +432,7 @@ fn a_string_outside_an_sdk_union_lists_the_values_it_takes() {
     let failure = type_errors(&[Diagnostic {
         file: Some("main.ts".into()),
         message: "TS2322 [ERROR]: Type '\"channelMessage\"' is not assignable to type 'SearchType'.\n    const p = await macro.search.page(q, {types: ['channelMessage']});\n                                                  ~~~~~~~~~~~~~~~~\n    at main.ts:5:51".into(),
-    }]);
+    }], IN_SESSION);
     assert!(
         failure.message.ends_with(
             "    at main.ts:5:51\n  SearchType is one of: 'document', 'email', 'channel', 'project', 'call', 'calendar_event', 'agent_session', 'chat', 'company'.\n"
@@ -443,7 +443,7 @@ fn a_string_outside_an_sdk_union_lists_the_values_it_takes() {
     let argument = type_errors(&[Diagnostic {
         file: Some("main.ts".into()),
         message: "TS2345 [ERROR]: Argument of type '\"up\"' is not assignable to parameter of type 'SortDirection'.\n    at main.ts:2:9".into(),
-    }]);
+    }], IN_SESSION);
     assert!(
         argument.message.contains(
             "    at main.ts:2:9\n  SortDirection is one of: 'ascending', 'descending'.\n"
@@ -455,9 +455,15 @@ fn a_string_outside_an_sdk_union_lists_the_values_it_takes() {
     let object = type_errors(&[Diagnostic {
         file: Some("main.ts".into()),
         message: "TS2322 [ERROR]: Type '\"page\"' is not assignable to type 'SearchNamespace'.\n    at main.ts:2:9".into(),
-    }]);
+    }], IN_SESSION);
     assert!(!object.message.contains("is one of"), "{}", object.message);
 }
+
+/// A run inside an agent session's code execution, whose `main` gets every field.
+const IN_SESSION: ContextShape = ContextShape {
+    session: true,
+    execution: true,
+};
 
 /// A program written as a script names `macro` (or another field of
 /// `main`'s argument) with no `main` to take it from; one that names an SDK
@@ -467,7 +473,7 @@ fn a_missing_context_field_or_sdk_type_says_where_it_comes_from() {
     let script = type_errors(&[Diagnostic {
         file: Some("main.ts".into()),
         message: "TS2304 [ERROR]: Cannot find name 'macro'.\nconst task = macro.tasks.byId(id);\n             ~~~~~\n    at main.ts:2:14".into(),
-    }]);
+    }], IN_SESSION);
     assert!(
         script.message.ends_with(
             "    at main.ts:2:14\n  `macro` is a field of main's argument: export async function main({ macro }: CodeContext) { ... }\n"
@@ -475,10 +481,13 @@ fn a_missing_context_field_or_sdk_type_says_where_it_comes_from() {
         "{}",
         script.message
     );
-    let execution = type_errors(&[Diagnostic {
-        file: Some("main.ts".into()),
-        message: "TS2304 [ERROR]: Cannot find name 'execution'.\n    at main.ts:3:40".into(),
-    }]);
+    let execution = type_errors(
+        &[Diagnostic {
+            file: Some("main.ts".into()),
+            message: "TS2304 [ERROR]: Cannot find name 'execution'.\n    at main.ts:3:40".into(),
+        }],
+        IN_SESSION,
+    );
     assert!(
         execution.message.ends_with(
             "    at main.ts:3:40\n  `execution` is a field of main's argument: export async function main({ macro, execution }: CodeContext) { ... }\n"
@@ -489,19 +498,52 @@ fn a_missing_context_field_or_sdk_type_says_where_it_comes_from() {
     let sdk_type = type_errors(&[Diagnostic {
         file: Some("main.ts".into()),
         message: "TS2304 [ERROR]: Cannot find name 'Channel'.\n  const channels: Channel[] = [];\n                  ~~~~~~~\n    at main.ts:9:19".into(),
-    }]);
+    }], IN_SESSION);
     assert!(
         sdk_type.message.ends_with(
-            "    at main.ts:9:19\n  Channel is an SDK type: import type { Channel } from '@macro-inc/sdk';\n"
+            "    at main.ts:9:19\n  Channel comes from the SDK: import type { Channel } from '@macro-inc/sdk';\n"
         ),
         "{}",
         sdk_type.message
     );
+    // A class is a value too, so it takes a plain import.
+    let class = type_errors(
+        &[Diagnostic {
+            file: Some("main.ts".into()),
+            message: "TS2304 [ERROR]: Cannot find name 'Macro'.\n    at main.ts:2:15".into(),
+        }],
+        IN_SESSION,
+    );
+    assert!(
+        class.message.ends_with(
+            "    at main.ts:2:15\n  Macro comes from the SDK: import { Macro } from '@macro-inc/sdk';\n"
+        ),
+        "{}",
+        class.message
+    );
+    // Outside a session's code executions, `main` gets no `execution`.
+    let outside = type_errors(
+        &[Diagnostic {
+            file: Some("main.ts".into()),
+            message: "TS2304 [ERROR]: Cannot find name 'execution'.\n    at main.ts:3:40".into(),
+        }],
+        ContextShape::default(),
+    );
+    assert!(
+        outside.message.ends_with(
+            "    at main.ts:3:40\n  `execution` is passed to main only in an agent session's code executions, and this run isn't one.\n"
+        ),
+        "{}",
+        outside.message
+    );
     // A name that is neither gets no hint.
-    let other = type_errors(&[Diagnostic {
-        file: Some("main.ts".into()),
-        message: "TS2304 [ERROR]: Cannot find name 'nope'.\n    at main.ts:1:1".into(),
-    }]);
+    let other = type_errors(
+        &[Diagnostic {
+            file: Some("main.ts".into()),
+            message: "TS2304 [ERROR]: Cannot find name 'nope'.\n    at main.ts:1:1".into(),
+        }],
+        IN_SESSION,
+    );
     assert!(
         other.message.ends_with("    at main.ts:1:1\n"),
         "{}",
