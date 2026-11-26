@@ -114,8 +114,9 @@ export function KnobSettings(props: {
   unusable?: readonly UnusableItem[];
 }) {
   return (
-    // A long value takes at most 60% of the row, so its label keeps the rest.
-    <dl class="grid min-w-0 grid-cols-[minmax(0,1fr)_fit-content(60%)] items-center gap-x-4 gap-y-2 text-sm">
+    // A long value takes at most 60% of the row, so its label keeps the rest;
+    // text with no spaces, such as a link, breaks to fit its column.
+    <dl class="grid min-w-0 grid-cols-[minmax(0,1fr)_fit-content(60%)] items-center gap-x-4 gap-y-2 text-sm wrap-anywhere">
       <For each={props.knobs}>
         {(knob) => (
           <>
