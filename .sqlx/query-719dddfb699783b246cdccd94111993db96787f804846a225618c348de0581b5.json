@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, computer_id, started_at, ended_at AS \"ended_at!\", thaw_failures, thaw_first_failed_at\n            FROM computer_screen_drives\n            WHERE ended_at IS NOT NULL AND thaw_settled_at IS NULL\n            ORDER BY thaw_tried_at NULLS FIRST, ended_at\n            LIMIT 500\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "ended_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "thaw_failures",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "thaw_first_failed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "719dddfb699783b246cdccd94111993db96787f804846a225618c348de0581b5"
+}

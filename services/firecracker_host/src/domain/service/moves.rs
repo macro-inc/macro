@@ -9,11 +9,6 @@ use crate::domain::moves::MoveHost;
 use crate::domain::ports::{Disks, Goldens, Machines, Store};
 use crate::domain::power::plan;
 
-const BYTES_PER_GIB: u64 = 1024 * 1024 * 1024;
-/// Headroom of a computer's dataset quota beyond its two disks, as
-/// `outbound::disks` sets it at create.
-const QUOTA_HEADROOM_GIB: u64 = 1;
-
 impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D, G, M, P> {
     pub(super) fn is_staged(&self, computer_id: ComputerId) -> bool {
         self.staged
@@ -109,10 +104,9 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> MoveHost
         {
             return Err(HostError::GenerationMismatch(computer_id));
         }
-        let quota_bytes = (u64::from(staged.resources.root_disk_gib)
-            + u64::from(staged.resources.home_disk_gib)
-            + QUOTA_HEADROOM_GIB)
-            * BYTES_PER_GIB;
+        // The same quota a create gives: a moved computer may hold its
+        // previous system disk too.
+        let quota_bytes = self.disks.quota_bytes(&staged.resources);
         unstage(quota_bytes).await?;
         let mut record = staged;
         // It ran on another host: whatever process it recorded is not ours,

@@ -21,6 +21,7 @@ code_mode_assets = { path = "../code_mode_assets" }
 email = { path = "../email", features = ["ai_tools", "inbound"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports", "inbound"] }
 futures = { workspace = true }
+genai_telemetry = { path = "../genai_telemetry" }
 import = { path = "../import" }
 lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }

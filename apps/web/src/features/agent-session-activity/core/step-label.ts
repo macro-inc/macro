@@ -54,6 +54,7 @@ const STEP_LABELS: Record<string, TranslationKey> = {
   submitted: 'agentWork.stepSubmitted',
   task_added: 'agentWork.stepTaskAdded',
   task_removed: 'agentWork.stepTaskRemoved',
+  time_logged: 'agentWork.stepTimeLogged',
   unblocked: 'agentWork.stepUnblocked',
   unlinked: 'agentWork.stepUnlinked',
   unshared: 'agentWork.stepUnshared',

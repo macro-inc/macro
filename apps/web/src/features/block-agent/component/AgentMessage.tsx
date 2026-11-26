@@ -220,19 +220,10 @@ function ToolGroupPart(props: {
     );
   const programSteps = (program: ReturnType<typeof programs>[number]) =>
     program.steps() || receiptRows(program.id).length;
-  const programFailures = (program: ReturnType<typeof programs>[number]) =>
-    program.steps() > 0
-      ? program.failures()
-      : receiptRows(program.id).filter((row) => row.status === 'failed').length;
   const count = () =>
     programs().reduce(
       (total, program) => total + programSteps(program),
       shownCalls().length
-    );
-  const failed = () =>
-    programs().reduce(
-      (total, program) => total + programFailures(program),
-      shownCalls().filter((part) => part.status === 'failed').length
     );
   const activity = useSessionActivity(() => props.message.agentSessionId);
   const steps = () =>
@@ -280,7 +271,6 @@ function ToolGroupPart(props: {
     <Show when={props.live || count() > 0} fallback={renderParts()}>
       <ToolGroup
         count={count()}
-        failed={failed()}
         live={props.live}
         steps={props.live ? steps() : undefined}
         summary={props.live ? activity() : undefined}

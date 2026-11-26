@@ -107,6 +107,7 @@ async fn main() -> anyhow::Result<()> {
     let link_maintenance_queue = macro_queues::LinkMaintenanceQueue::new();
     let contacts_queue = macro_queues::ContactsQueue::new();
     let notification_queue = macro_queues::NotificationIngressQueue::new();
+    let search_event_queue = macro_queues::SearchEventQueue::new();
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&gmail_queue_aws_config))
         .gmail_inbox_sync_queue(&gmail_inbox_sync_queue)
@@ -119,7 +120,8 @@ async fn main() -> anyhow::Result<()> {
         .sfs_uploader_queue(&sfs_uploader_queue)
         .sfs_delete_queue(&sfs_delete_queue)
         .email_link_manager_queue(&link_manager_queue)
-        .email_link_maintenance_queue(&link_maintenance_queue);
+        .email_link_maintenance_queue(&link_maintenance_queue)
+        .search_event_queue(&search_event_queue);
 
     let worker_cancellation_token = CancellationToken::new();
     let worker_tracker = TaskTracker::new();

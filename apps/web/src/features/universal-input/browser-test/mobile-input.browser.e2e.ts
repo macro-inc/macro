@@ -77,7 +77,7 @@ test('keeps the mobile editor focused as forms appear above it and Enter adds a 
   expect(await original?.evaluate((element) => element.isConnected)).toBe(true);
 });
 
-test('replaces the normal results and filter tabs with the card until the input is cleared', async ({
+test('replaces the normal results and search starters with the card until the input is cleared', async ({
   page,
 }) => {
   const failures: string[] = [];
@@ -90,29 +90,29 @@ test('replaces the normal results and filter tabs with the card until the input 
     name: 'Search or create',
     exact: true,
   });
-  const filters = page.locator('header[aria-label="Search filters"]');
+  const starters = page.locator('header[aria-label="Search with"]');
   const results = page.getByRole('region', {
     name: 'Search results',
     exact: true,
   });
   await input.fill('John');
-  await expect(filters).toBeVisible();
+  await expect(starters).toBeVisible();
   await expect(results).toBeVisible();
   const original = await input.elementHandle();
   await input.fill('notification clicks are broken on iOS');
   await expect(
     page.getByRole('button', { name: 'Create task', exact: true })
   ).toBeEnabled();
-  await expect(filters).not.toBeVisible();
+  await expect(starters).not.toBeVisible();
   await expect(results).not.toBeVisible();
   await input.fill('short');
-  await expect(filters).not.toBeVisible();
+  await expect(starters).not.toBeVisible();
   await expect(results).not.toBeVisible();
   expect(
     await original?.evaluate((element) => element === document.activeElement)
   ).toBe(true);
   await input.fill('');
-  await expect(filters).toBeVisible();
+  await expect(starters).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Create task', exact: true })
   ).not.toBeVisible();

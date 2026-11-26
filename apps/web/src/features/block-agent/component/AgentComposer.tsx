@@ -25,6 +25,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
+import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { isNoRuntimeAccessError } from '@service-agent-harness/no-runtime-access';
 import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
@@ -43,6 +44,7 @@ import {
   effortConfigOption,
   selectConfigOption,
 } from '../state/session-config';
+import { shownSessionModel, shownSessionModels } from '../state/session-model';
 import {
   AgentInput,
   type AgentInputProps,
@@ -106,22 +108,44 @@ export function AgentComposer(props: {
 
   const [configuring, setConfiguring] = createSignal(false);
   const chooseModel = async (model: string, selection?: EffortSelection) => {
-    if (readOnly() || configuring()) return;
+    if (readOnly() || configuring()) return false;
     setConfiguring(true);
     try {
       await selectModel(model, selection);
+      if (!selection) setPreferredSpeed('standard');
+      return true;
     } catch (error) {
       toast.failure(
         error instanceof Error
           ? error.message
           : 'The model settings could not be changed'
       );
+      return false;
     } finally {
       setConfiguring(false);
     }
   };
 
   const effort = () => effortConfigOption(metadata()?.configOptions ?? []);
+  // Session currentValue changes after confirmation; discovery retains the model default.
+  const defaultCapabilities = useAgentCapabilitiesQuery(() => {
+    const source = session()?.harness;
+    const harness = isMacroHarness(source) ? 'in-memory' : source;
+    const model = metadata()?.model;
+    if (
+      !model ||
+      !effort() ||
+      (harness !== 'in-memory' && harness !== 'cursor')
+    )
+      return;
+    return { harness, model };
+  });
+  const defaultEffortValue = () =>
+    effortConfigOption(
+      defaultCapabilities.isSuccess
+        ? defaultCapabilities.data.configOptions
+        : []
+    )?.currentValue;
   /** Macro's tier option, when the current model offers more than standard.
    * Other harnesses' speed values are theirs to interpret, so they are left alone. */
   const speedOption = () => {
@@ -145,8 +169,17 @@ export function AgentComposer(props: {
     return option ? changingConfig(messages(), option.id) : undefined;
   };
 
+  const sessionModel = (): string | undefined => {
+    const model = metadata()?.model ?? undefined;
+    return model && shownSessionModel(model, session()?.harness);
+  };
+
+  const runtimeModels = createMemo(() =>
+    shownSessionModels(metadata()?.supportedModels ?? [], session()?.harness)
+  );
+
   const catalog = createMemo(() =>
-    (metadata()?.supportedModels ?? []).map((option) => ({
+    runtimeModels().map((option) => ({
       id: option.id,
       label: modelLabel(option.id, option.name, option.description),
       group: option.group ?? undefined,
@@ -301,7 +334,7 @@ export function AgentComposer(props: {
         <ComposerNotice
           text={
             interactions.canAnswer()
-              ? 'The agent is waiting for your answer above. Messages sent now are queued.'
+              ? 'The agent is waiting for your answer above; Skip lets it continue without one. Messages sent now are queued.'
               : 'The agent is waiting for an editor to answer above. Messages sent now are queued.'
           }
         />
@@ -346,14 +379,10 @@ export function AgentComposer(props: {
             'agent-composer'
           )
         }
-        modelName={catalogModelLabel(
-          metadata()?.model ?? undefined,
-          metadata()?.supportedModels ?? []
-        )}
+        modelName={catalogModelLabel(sessionModel(), runtimeModels())}
         supportsImages={
-          metadata()?.supportedModels.find(
-            (model) => model.id === metadata()?.model
-          )?.supportsImages
+          runtimeModels().find((model) => model.id === sessionModel())
+            ?.supportsImages
         }
         attachments={attachmentTracker.attachments()}
         onAttachFiles={attachFiles}
@@ -376,12 +405,12 @@ export function AgentComposer(props: {
             state={{
               model:
                 changingModel(messages(), metadata()?.model ?? null) ??
-                metadata()?.model ??
-                undefined,
+                sessionModel(),
               models: catalog(),
               suggestedModels: catalog(),
               effort: effort(),
               effortValue: changingEffort(),
+              defaultEffortValue: defaultEffortValue(),
               effortDisabled:
                 changingModel(messages(), metadata()?.model ?? null) !==
                 undefined,
@@ -395,17 +424,15 @@ export function AgentComposer(props: {
                 pending() ||
                 configuring() ||
                 changingEffort() !== undefined,
-              onModel: (model) =>
-                fireAndForget(chooseModel(model), 'agent-composer'),
+              onModel: chooseModel,
               onEffort: (choice) => {
                 if (
                   changingModel(messages(), metadata()?.model ?? null) !==
                   undefined
                 )
                   return;
-                const model = metadata()?.model;
-                if (model)
-                  fireAndForget(chooseModel(model, choice), 'agent-composer');
+                const model = sessionModel();
+                if (model) return chooseModel(model, choice);
               },
               onSpeed: setPreferredSpeed,
               onCloseAutoFocus: restoreInputFocus,

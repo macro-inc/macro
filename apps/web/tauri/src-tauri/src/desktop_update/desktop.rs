@@ -1,19 +1,28 @@
-use super::state::{State, Status};
+use super::report::{
+    BundleLocation, Failure, FailureKind, Outcome, PendingInstall, Report, Reports, Trigger,
+};
+use super::state::{Snapshot, State, Status};
+use download::Store;
 use macro_bundle_updater_plugin::inbound::plugin::PluginService;
 use serde::Deserialize;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{App, AppHandle, Emitter, ExitRequestApi, Listener, Manager, Runtime};
 use tauri_plugin_updater::UpdaterExt;
 use tokio::sync::Notify;
 
 const EVENT: &str = "native-update-status";
+/// Tells the frontend that reports are waiting; it drains them with
+/// `take_native_update_reports`.
+const REPORT_EVENT: &str = "native-update-report";
 const CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 const RETRY_INTERVAL: Duration = Duration::from_secs(60);
 const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
+mod download;
 #[cfg(test)]
 mod test;
 
@@ -22,15 +31,137 @@ struct Config {
     enabled: bool,
 }
 
+/// A verified update saved in app data, read back and verified again to install.
 struct Download {
     update: tauri_plugin_updater::Update,
-    bytes: Vec<u8>,
+    store: Store,
 }
 
 struct Coordinator {
     state: Mutex<State<Download>>,
     check: Notify,
     restart: Mutex<bool>,
+    reports: Mutex<Reports>,
+    current_version: String,
+    bundle_location: Option<BundleLocation>,
+}
+
+impl Coordinator {
+    fn new(enabled: bool, current_version: String) -> Self {
+        Self {
+            state: Mutex::new(State::new(enabled)),
+            check: Notify::new(),
+            restart: Mutex::new(false),
+            reports: Mutex::new(Reports::default()),
+            current_version,
+            bundle_location: BundleLocation::current(),
+        }
+    }
+
+    /// Takes the record of the install the previous launch started. A failed
+    /// install stays in the state for this launch, so the webview can say so
+    /// and offer to try again.
+    fn take_pending_install(&self, path: &Path) -> Option<Report> {
+        let report = PendingInstall::take(path, &self.current_version, self.bundle_location)?;
+        if let Outcome::InstallFailed { target_version, .. } = &report.outcome {
+            self.state
+                .lock()
+                .expect("native update state poisoned")
+                .failed_install_version = Some(target_version.clone());
+        }
+        Some(report)
+    }
+}
+
+/// A failed check, and how far it got.
+#[derive(Debug)]
+enum CheckError {
+    Check(tauri_plugin_updater::Error),
+    Download {
+        version: String,
+        download_ms: u32,
+        error: tauri_plugin_updater::Error,
+    },
+}
+
+impl CheckError {
+    fn outcome(&self, consecutive_failures: u32) -> Outcome {
+        match self {
+            Self::Check(error) => Outcome::CheckFailed {
+                failure: error.into(),
+                consecutive_failures,
+            },
+            Self::Download {
+                version,
+                download_ms,
+                error,
+            } => Outcome::DownloadFailed {
+                target_version: version.clone(),
+                download_ms: *download_ms,
+                failure: error.into(),
+                consecutive_failures,
+            },
+        }
+    }
+}
+
+/// When and how long a check ran, for its reports.
+struct Timing {
+    started_at_ms: u64,
+    started: Instant,
+}
+
+impl Timing {
+    fn start() -> Self {
+        Self {
+            started_at_ms: now_ms(),
+            started: Instant::now(),
+        }
+    }
+
+    fn elapsed_ms(&self) -> u32 {
+        duration_ms(self.started.elapsed())
+    }
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(u64::MAX)
+}
+
+fn duration_ms(duration: Duration) -> u32 {
+    duration.as_millis().try_into().unwrap_or(u32::MAX)
+}
+
+/// Holds the install record and the saved download. App data, not a cache
+/// directory the system may purge.
+fn update_directory<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
+    app.path()
+        .app_local_data_dir()
+        .inspect_err(
+            |error| tracing::warn!(error=?error, "no app data directory for native update records"),
+        )
+        .ok()
+        .map(|directory| directory.join("native-update"))
+}
+
+fn pending_install_path<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
+    update_directory(app).map(|directory| directory.join("pending-install.json"))
+}
+
+/// The updater's public key, which also verifies the saved download.
+fn updater_pubkey<R: Runtime>(app: &App<R>) -> Option<String> {
+    app.config()
+        .plugins
+        .0
+        .get("updater")?
+        .get("pubkey")?
+        .as_str()
+        .map(str::to_owned)
 }
 
 pub fn setup<R: Runtime>(
@@ -51,15 +182,38 @@ pub fn setup<R: Runtime>(
         && !cfg!(debug_assertions)
         && cfg!(feature = "auto_apply_update")
         && !recording;
-    let coordinator = Arc::new(Coordinator {
-        state: Mutex::new(State::new(enabled)),
-        check: Notify::new(),
-        restart: Mutex::new(false),
-    });
+    // Downloads are kept in app data; without it, updates stay disabled and
+    // the status says so. The updater plugin can't start without its key.
+    let store = match update_directory(app.handle()) {
+        Some(directory) if enabled => {
+            let pubkey = updater_pubkey(app).ok_or("the updater config has no pubkey")?;
+            Some(Store::new(directory, pubkey))
+        }
+        _ => None,
+    };
+    let coordinator = Arc::new(Coordinator::new(
+        store.is_some(),
+        app.package_info().version.to_string(),
+    ));
     app.manage(coordinator.clone());
-    if !enabled {
-        return Ok(());
+    // Report the install the previous launch started, whether or not this
+    // launch checks for updates.
+    if let Some(report) =
+        pending_install_path(app.handle()).and_then(|path| coordinator.take_pending_install(&path))
+    {
+        report_outcome(app.handle(), &coordinator, report);
     }
+    let Some(store) = store else {
+        return Ok(());
+    };
+    // A newer update the last launch was still downloading beside a ready
+    // one; nothing is ready yet in this launch, so its check downloads into
+    // the store itself.
+    store
+        .staging()
+        .remove()
+        .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not remove a staged native update download"))
+        .ok();
     app.handle()
         .plugin(tauri_plugin_updater::Builder::new().build())?;
     let notify = coordinator.clone();
@@ -74,23 +228,24 @@ pub fn setup<R: Runtime>(
     let handle = app.handle().clone();
     tauri::async_runtime::spawn(async move {
         let mut retry = RETRY_INTERVAL;
+        let mut failures = 0u32;
         loop {
-            let result = check(&handle, &coordinator).await;
+            let timing = Timing::start();
+            let result = check(&handle, &coordinator, &store, &timing).await;
             let delay = match result {
-                Ok(()) => {
+                Ok(checked) => {
                     retry = RETRY_INTERVAL;
+                    // A refused check proves nothing about the feed.
+                    if checked {
+                        failures = 0;
+                    }
                     CHECK_INTERVAL
                 }
                 Err(error) => {
                     tracing::warn!(error=?error, "native update check failed");
-                    publish(
-                        &handle,
-                        &coordinator,
-                        Status::Error {
-                            message: "Could not download the app update. Will retry automatically."
-                                .into(),
-                        },
-                    );
+                    failures = failures.saturating_add(1);
+                    report(&handle, &coordinator, &timing, error.outcome(failures));
+                    fail(&handle, &coordinator);
                     let delay = retry;
                     retry = (retry * 2).min(MAX_RETRY_INTERVAL);
                     delay
@@ -107,80 +262,316 @@ pub fn setup<R: Runtime>(
     Ok(())
 }
 
-pub fn status<R: Runtime>(app: &AppHandle<R>) -> Status {
+pub fn status<R: Runtime>(app: &AppHandle<R>) -> Snapshot {
     app.try_state::<Arc<Coordinator>>()
-        .map_or(Status::Disabled, |coordinator| {
+        .map_or_else(Snapshot::disabled, |coordinator| {
             coordinator
                 .state
                 .lock()
                 .expect("native update state poisoned")
-                .status
-                .clone()
+                .snapshot()
+        })
+}
+
+/// Hands the waiting reports to the frontend, each once.
+pub fn take_reports<R: Runtime>(app: &AppHandle<R>) -> Vec<Report> {
+    app.try_state::<Arc<Coordinator>>()
+        .map_or_else(Vec::new, |coordinator| {
+            coordinator
+                .reports
+                .lock()
+                .expect("native update reports poisoned")
+                .take()
         })
 }
 
 fn publish<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator, status: Status) {
-    coordinator
-        .state
-        .lock()
-        .expect("native update state poisoned")
-        .status = status.clone();
-    app.emit(EVENT, &status)
+    let snapshot = {
+        let mut state = coordinator
+            .state
+            .lock()
+            .expect("native update state poisoned");
+        state.status = status;
+        state.snapshot()
+    };
+    emit(app, &snapshot);
+}
+
+/// Shows a failed check, unless a ready update or an install owns the status.
+fn fail<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator) {
+    let snapshot = {
+        let mut state = coordinator
+            .state
+            .lock()
+            .expect("native update state poisoned");
+        if !state.fail("Could not download the app update. Will retry automatically.".into()) {
+            return;
+        }
+        state.snapshot()
+    };
+    emit(app, &snapshot);
+}
+
+fn emit<R: Runtime>(app: &AppHandle<R>, snapshot: &Snapshot) {
+    app.emit(EVENT, snapshot)
         .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update status"))
         .ok();
 }
 
+fn report<R: Runtime>(
+    app: &AppHandle<R>,
+    coordinator: &Coordinator,
+    timing: &Timing,
+    outcome: Outcome,
+) {
+    report_outcome(
+        app,
+        coordinator,
+        Report {
+            started_at_ms: timing.started_at_ms,
+            duration_ms: timing.elapsed_ms(),
+            current_version: coordinator.current_version.clone(),
+            bundle_location: coordinator.bundle_location,
+            outcome,
+        },
+    );
+}
+
+fn report_outcome<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator, report: Report) {
+    tracing::info!(outcome = ?report.outcome, "native update outcome");
+    coordinator
+        .reports
+        .lock()
+        .expect("native update reports poisoned")
+        .push(report);
+    app.emit(REPORT_EVENT, ())
+        .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update report"))
+        .ok();
+}
+
+/// Checks the feed and downloads a newer version, resuming a download an
+/// earlier launch or attempt saved. `Ok(false)` when the state refused to
+/// start a check, so no request was made.
+///
+/// A ready update stays ready while the feed is checked again. A newer
+/// release downloads to the store's staging directory and replaces it only
+/// once verified, so a restart or quit meanwhile still installs the ready one.
 async fn check<R: Runtime>(
     app: &AppHandle<R>,
     coordinator: &Coordinator,
-) -> tauri_plugin_updater::Result<()> {
-    if !coordinator
-        .state
-        .lock()
-        .expect("native update state poisoned")
-        .begin_check()
-    {
-        return Ok(());
+    store: &Store,
+    timing: &Timing,
+) -> Result<bool, CheckError> {
+    let ready = {
+        let mut state = coordinator
+            .state
+            .lock()
+            .expect("native update state poisoned");
+        if !state.begin_check() {
+            return Ok(false);
+        }
+        state.ready_version().map(str::to_owned)
+    };
+    if ready.is_none() {
+        publish(app, coordinator, Status::Checking);
     }
-    publish(app, coordinator, Status::Checking);
     let Some(mut update) = app
         .updater_builder()
         .timeout(REQUEST_TIMEOUT)
-        .build()?
+        .build()
+        .map_err(CheckError::Check)?
         .check()
-        .await?
+        .await
+        .map_err(CheckError::Check)?
     else {
+        // A ready update installs as before the feed was checked again.
+        if ready.is_some() {
+            return Ok(true);
+        }
+        // A saved download is for a version this app already runs, or one
+        // the feed withdrew.
+        remove_saved(store);
+        report(app, coordinator, timing, Outcome::UpToDate);
         publish(app, coordinator, Status::Idle);
-        return Ok(());
+        return Ok(true);
     };
+    // Installing a release built for a newer macOS would leave an app that
+    // macOS refuses to open, so stay on this one.
+    if let Some(minimum) = unsupported_minimum(&update.raw_json, os_version()) {
+        tracing::info!(version = %update.version, minimum, "native update needs a newer OS");
+        report(
+            app,
+            coordinator,
+            timing,
+            Outcome::NeedsNewerOs {
+                target_version: update.version.clone(),
+                minimum_system_version: minimum,
+            },
+        );
+        // A ready update was checked against this Mac when it downloaded.
+        if ready.is_some() {
+            return Ok(true);
+        }
+        // A saved download is for this release or an older one, which this
+        // release supersedes; it would otherwise stay on disk until the OS is
+        // upgraded.
+        remove_saved(store);
+        publish(app, coordinator, Status::Idle);
+        return Ok(true);
+    }
     let version = update.version.clone();
-    publish(
+    // Only a newer release replaces a ready update, so a feed rolled back to
+    // an older one never trades it for that.
+    if ready
+        .as_deref()
+        .is_some_and(|ready| !is_newer(&version, ready))
+    {
+        return Ok(true);
+    }
+    report(
         app,
         coordinator,
-        Status::Downloading {
-            version: version.clone(),
+        timing,
+        Outcome::UpdateFound {
+            target_version: version.clone(),
         },
     );
+    let destination = if ready.is_none() {
+        publish(
+            app,
+            coordinator,
+            Status::Downloading {
+                version: version.clone(),
+            },
+        );
+        store.clone()
+    } else {
+        store.staging()
+    };
     update.timeout = Some(DOWNLOAD_TIMEOUT);
-    // download() verifies the signature before returning. Never install partial
-    // bytes or bytes restored from an unverified disk cache.
-    let bytes = update.download(|_, _| {}, || {}).await?;
-    coordinator
-        .state
-        .lock()
-        .expect("native update state poisoned")
-        .downloaded(version.clone(), Download { update, bytes });
-    app.emit(EVENT, Status::Ready { version })
-        .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update ready"))
+    let download_started = Instant::now();
+    // The store verifies the whole file before returning; partial or
+    // unverified bytes never become ready.
+    let downloaded = destination
+        .download(&update)
+        .await
+        .map_err(|error| CheckError::Download {
+            version: version.clone(),
+            download_ms: duration_ms(download_started.elapsed()),
+            error,
+        })?;
+    let snapshot = {
+        let mut state = coordinator
+            .state
+            .lock()
+            .expect("native update state poisoned");
+        if ready.is_some() {
+            // An install that took the ready update meanwhile reads the
+            // store, so the newer bytes wait for the next launch's check.
+            if state.ready_version().is_none() {
+                return Ok(true);
+            }
+            store
+                .adopt(&destination)
+                .map_err(|error| CheckError::Download {
+                    version: version.clone(),
+                    download_ms: duration_ms(download_started.elapsed()),
+                    error: error.into(),
+                })?;
+            // The newer release is a new update, not another try at the one
+            // the previous launch failed to install.
+            if state.failed_install_version.as_deref() != Some(version.as_str()) {
+                state.failed_install_version = None;
+            }
+        }
+        state.downloaded(
+            version.clone(),
+            Download {
+                update,
+                store: store.clone(),
+            },
+        );
+        state.snapshot()
+    };
+    report(
+        app,
+        coordinator,
+        timing,
+        Outcome::Downloaded {
+            target_version: version.clone(),
+            download_ms: duration_ms(download_started.elapsed()),
+            download_bytes: downloaded.bytes,
+            resumed_bytes: downloaded.resumed_bytes,
+        },
+    );
+    emit(app, &snapshot);
+    Ok(true)
+}
+
+/// Whether `offered` is a later version than `ready`. A version that doesn't
+/// parse never replaces a ready update.
+fn is_newer(offered: &str, ready: &str) -> bool {
+    match (
+        semver::Version::parse(offered),
+        semver::Version::parse(ready),
+    ) {
+        (Ok(offered), Ok(ready)) => offered > ready,
+        _ => false,
+    }
+}
+
+fn remove_saved(store: &Store) {
+    store
+        .remove()
+        .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not remove an obsolete native update download"))
         .ok();
-    Ok(())
+}
+
+/// This platform's minimum OS version in the feed (`minimumSystemVersion`,
+/// written by `desktop-release.mjs`) when this computer's `current` version is
+/// older. A minimum that doesn't parse counts as unsupported.
+///
+/// The feed keys platforms by `target()` ("darwin-aarch64"), not by
+/// `Update::target`, which is only the OS ("darwin").
+fn unsupported_minimum(raw_json: &serde_json::Value, current: Option<[u64; 3]>) -> Option<String> {
+    let current = current?;
+    let target = tauri_plugin_updater::target()?;
+    let minimum = raw_json["platforms"][target.as_str()]["minimumSystemVersion"].as_str()?;
+    let mut required = [0; 3];
+    let mut parts = minimum.split('.');
+    for (index, part) in parts.by_ref().take(3).enumerate() {
+        match part.parse() {
+            Ok(number) => required[index] = number,
+            Err(_) => return Some(minimum.to_owned()),
+        }
+    }
+    if parts.next().is_some() {
+        return Some(minimum.to_owned());
+    }
+    (current < required).then(|| minimum.to_owned())
+}
+
+#[cfg(target_os = "macos")]
+fn os_version() -> Option<[u64; 3]> {
+    let version = objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion();
+    Some([
+        u64::try_from(version.majorVersion).ok()?,
+        u64::try_from(version.minorVersion).ok()?,
+        u64::try_from(version.patchVersion).ok()?,
+    ])
+}
+
+/// Only the macOS feed entry carries a minimum.
+#[cfg(not(target_os = "macos"))]
+fn os_version() -> Option<[u64; 3]> {
+    None
 }
 
 pub fn restart<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let coordinator = app
         .try_state::<Arc<Coordinator>>()
         .ok_or("Native updater is unavailable")?;
-    if !matches!(status(app), Status::Ready { .. }) {
+    if !matches!(status(app).status, Status::Ready { .. }) {
         return Err("No verified app update is ready".into());
     }
     *coordinator
@@ -223,27 +614,35 @@ pub fn on_exit_requested<R: Runtime>(app: &AppHandle<R>, api: &ExitRequestApi) {
             .restart
             .lock()
             .expect("native update restart state poisoned");
-        let result = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-            // Close the native database before handing control to an installer.
-            if let Some(cache) = install_app.try_state::<graphql_cache_plugin::CacheState>() {
-                cache.shutdown()?;
-            }
-            download
-                .update
-                .install(download.bytes)
-                .map_err(|error| error.to_string())
+        let pending = PendingInstall {
+            from_version: coordinator.current_version.clone(),
+            target_version: download.update.version.clone(),
+            trigger: if restart {
+                Trigger::Restart
+            } else {
+                Trigger::Quit
+            },
+            started_at_ms: now_ms(),
+            failure: None,
+        };
+        let record = pending_install_path(&app);
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            install(&install_app, download, pending, record.as_deref())
         })
         .await;
-        let installed = matches!(&result, Ok(Ok(())));
-        if !installed {
-            tracing::error!(error=?result, "native update installation failed; leaving app for manual recovery");
+        if !matches!(&result, Ok(Ok(()))) {
+            tracing::error!(error=?result, restart, "native update installation failed");
         }
         coordinator
             .state
             .lock()
             .expect("native update state poisoned")
             .finish_exit();
-        if installed && restart {
+        // Restart to update relaunches whichever version is installed now: the
+        // update, or after a failure the version the person had, whose launch
+        // reads the install record, reports the failure and offers to try
+        // again. A quit stays quit either way; the person asked to quit.
+        if restart {
             app.restart();
         } else {
             app.exit(0);
@@ -251,4 +650,56 @@ pub fn on_exit_requested<R: Runtime>(app: &AppHandle<R>, api: &ExitRequestApi) {
             std::future::pending::<()>().await;
         }
     });
+}
+
+/// Installs a verified download, leaving a record of the attempt for the
+/// next launch to report. The app exits before anything here could reach
+/// telemetry.
+fn install<R: Runtime>(
+    app: &AppHandle<R>,
+    download: Download,
+    mut pending: PendingInstall,
+    record: Option<&std::path::Path>,
+) -> Result<(), Failure> {
+    if let Some(path) = record {
+        pending
+            .write(path)
+            .inspect_err(|error| tracing::warn!(error=?error.kind(), "could not record the native update install"))
+            .ok();
+    }
+    let result: Result<(), Failure> = (|| {
+        // The saved file could have changed on disk since it was verified.
+        let bytes = download
+            .store
+            .read_verified(&download.update.signature)
+            .map_err(|error| {
+                tracing::error!(error=?error, "saved native update did not verify before install");
+                Failure::from(&error)
+            })?;
+        // Close the native database before handing control to an installer.
+        if let Some(cache) = app.try_state::<graphql_cache_plugin::CacheState>() {
+            cache.shutdown().map_err(|error| {
+                tracing::error!(error=%error, "native cache shutdown failed before update install");
+                Failure::new(FailureKind::CacheShutdown)
+            })?;
+        }
+        download.update.install(bytes).map_err(|error| {
+            tracing::error!(error=?error, "native update install failed");
+            Failure::from(&error)
+        })?;
+        download
+            .store
+            .remove()
+            .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not remove the installed native update download"))
+            .ok();
+        Ok(())
+    })();
+    if let (Err(failure), Some(path)) = (&result, record) {
+        pending.failure = Some(failure.clone());
+        pending
+            .write(path)
+            .inspect_err(|error| tracing::warn!(error=?error.kind(), "could not record the native update failure"))
+            .ok();
+    }
+    result
 }

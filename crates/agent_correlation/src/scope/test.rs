@@ -13,6 +13,7 @@ fn a_generation_session_reads_and_writes_only_its_own_tools() {
         ("POST", "/dss/search"),
         ("POST", "/suggestions/01a1/retire"),
         ("PUT", "/suggestions/01a1/draft"),
+        ("PUT", "/scheduled-action/suggestions/topics"),
         ("POST", "/scheduled-actions/suggestions"),
         ("POST", "/scheduled-actions/suggestions/01a1/retire"),
         ("POST", "/email/drafts"),
@@ -35,6 +36,8 @@ fn a_generation_session_reads_and_writes_only_its_own_tools() {
         ("POST", "/channels/01a1/messages"),
         ("PATCH", "/documents/01a1"),
         ("PUT", "/suggestions/01a1"),
+        ("DELETE", "/suggestions/topics"),
+        ("PUT", "/suggestions/topics/01a1"),
         ("POST", "/notes/search-and-delete"),
         ("POST", "/suggestionsx"),
         ("POST", "/web/search"),
@@ -346,4 +349,20 @@ fn a_dry_run_reads_and_writes_nothing() {
         assert!(!scope.allows(method, path), "{method} {path}");
     }
     assert!(!scope.allows_sharing());
+}
+
+/// A screen ticket lets a person watch or drive a computer in their
+/// browser; no scoped run gets one.
+#[test]
+fn no_scope_gets_a_screen_ticket() {
+    for scope in [
+        SessionScope::NoSend,
+        SessionScope::DryRun,
+        SessionScope::Generation,
+    ] {
+        assert!(!scope.allows(
+            "POST",
+            "/agent-harness/computers/0193a3c2-0000-7000-8000-000000000001/screen/tickets"
+        ));
+    }
 }

@@ -146,3 +146,66 @@ it('decodes tracker tasks and projects while isolating review ids', () => {
     { id: 'e', kind: 'project' },
   ]);
 });
+
+it('labels dependencies from current-review objects without reviving older titles', () => {
+  const entries = decodePlanEntries(
+    [
+      {
+        ...row,
+        id: 'page',
+        kind: 'page',
+        foreign_id: 'notion-page',
+        metadata: { title: 'Project', plan: { decision: 'copy' } },
+      },
+      {
+        ...row,
+        id: 'dependency',
+        metadata: {
+          title: 'Work',
+          plan: { decision: 'copy', dependencyOf: ['notion-page'] },
+        },
+      },
+      {
+        ...row,
+        id: 'inline-source',
+        metadata: {
+          title: 'Selected database',
+          plan: { decision: 'copy', inlineOn: ['notion-page'] },
+        },
+      },
+      {
+        ...row,
+        id: 'old-page',
+        kind: 'page',
+        foreign_id: 'notion-page',
+        review_id: 'older',
+        metadata: { title: 'Old project', plan: { decision: 'copy' } },
+      },
+    ],
+    'review'
+  );
+  expect(
+    entries.find((entry) => entry.id === 'dependency')?.linkedFrom
+  ).toEqual(['Project']);
+  expect(
+    entries.find((entry) => entry.id === 'inline-source')?.inlineOn
+  ).toEqual(['Project']);
+});
+
+it('decodes HubSpot pipelines, companies, contacts and deals', () => {
+  const kinds = decodePlanEntries(
+    [
+      { ...row, id: 'p', source: 'hubspot', kind: 'hubspot_pipeline' },
+      { ...row, id: 'c', source: 'hubspot', kind: 'hubspot_company' },
+      { ...row, id: 'n', source: 'hubspot', kind: 'hubspot_contact' },
+      { ...row, id: 'd', source: 'hubspot', kind: 'hubspot_deal' },
+    ],
+    'review'
+  ).map((entry) => [entry.id, entry.kind]);
+  expect(kinds).toEqual([
+    ['p', 'pipeline'],
+    ['c', 'company'],
+    ['n', 'contact'],
+    ['d', 'deal'],
+  ]);
+});

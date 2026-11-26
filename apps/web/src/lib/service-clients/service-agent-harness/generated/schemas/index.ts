@@ -411,6 +411,8 @@ export * from './routineCauseOneOfThreeType';
 export * from './routineCauseOneOfType';
 export * from './sandboxSize';
 export * from './sandboxSizeBody';
+export * from './screenTicket';
+export * from './screenTicketRequest';
 export * from './searchConnectedAppToolsParams';
 export * from './searchSuggestions';
 export * from './searchSuggestionsOneOf';

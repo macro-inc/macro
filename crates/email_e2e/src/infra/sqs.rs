@@ -109,17 +109,17 @@ const QUEUES: &[QueueSpec] = &[
         visibility_timeout_seconds: 30,
         max_receive_count: 5,
     },
-];
-
-/// The queues `document_storage_service` reads or writes besides the email
-/// ones, made only for a stack that starts it.
-const DOCUMENT_STORAGE_QUEUES: &[QueueSpec] = &[
     QueueSpec {
         override_env: "OVERRIDE_SEARCH_EVENT_QUEUE",
         name: "search-event",
         visibility_timeout_seconds: 30,
         max_receive_count: 5,
     },
+];
+
+/// The queues `document_storage_service` reads or writes besides the email
+/// ones, made only for a stack that starts it.
+const DOCUMENT_STORAGE_QUEUES: &[QueueSpec] = &[
     QueueSpec {
         override_env: "OVERRIDE_DOCUMENT_DELETE_QUEUE",
         name: "document-delete",

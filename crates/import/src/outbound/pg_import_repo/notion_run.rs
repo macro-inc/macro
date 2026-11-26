@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::notifications::PendingNotification;
-use import_notion::domain::model::ImportScope;
+use import_notion::domain::model::{ImportScope, NotionId};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -17,6 +17,8 @@ use crate::domain::models::{
     RunStatus, WrittenKind, WrittenObject,
 };
 use crate::domain::ports::{ImportError, NotionRunRepo, Result, WrittenObjects};
+
+mod outage;
 
 #[cfg(test)]
 mod test;
@@ -38,8 +40,7 @@ impl TryFrom<WrittenDbRow> for WrittenObject {
     fn try_from(row: WrittenDbRow) -> Result<Self> {
         Ok(Self {
             import_id: row.import_id,
-            kind: WrittenKind::from_str(&row.kind)
-                .map_err(|_| anyhow::anyhow!("unknown written kind: {}", row.kind))?,
+            kind: WrittenKind::from_str(&row.kind).unwrap_or(WrittenKind::Unsupported),
             object: row.object,
             macro_id: row.macro_id,
         })
@@ -523,6 +524,209 @@ impl NotionRunRepo for PgImportRepo {
 }
 
 impl WrittenObjects for PgImportRepo {
+    #[tracing::instrument(skip_all, fields(items = import_ids.len()), err)]
+    async fn confirmed_notion_writes(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_ids: &[Uuid],
+    ) -> Result<crate::domain::models::ConfirmedNotionWrites> {
+        use crate::domain::models::ConfirmedNotionWrites;
+
+        if import_ids.is_empty() {
+            return Ok(ConfirmedNotionWrites::default());
+        }
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await?;
+        // Keep the owned PK lookup driven by the passed IDs even when the
+        // custom plan knows the complete array is large.
+        let counts = sqlx::query!(
+            r#"
+            SELECT COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'document' AND owned.finished), 0)::bigint AS "documents!",
+                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'database' AND owned.finished), 0)::bigint AS "databases!",
+                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'row'), 0)::bigint AS "database_rows!",
+                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'row' AND NOT owned.finished), 0)::bigint AS "partial_database_rows!",
+                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'tasks_folder' AND owned.finished), 0)::bigint AS "task_lists!",
+                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'task'), 0)::bigint AS "tasks!",
+                COALESCE(sum(output.writes) FILTER (WHERE kinds.kind = 'task' AND NOT owned.finished), 0)::bigint AS "partial_tasks!"
+            FROM unnest($2::uuid[]) AS wanted(id)
+            CROSS JOIN LATERAL (
+                SELECT entity.id, entity.status = 'imported' AS finished
+                FROM import_entity AS entity
+                WHERE entity.id = wanted.id AND entity.user_id = $1
+                  AND entity.source = 'notion' AND entity.status <> 'discarded'
+                OFFSET 0
+            ) AS owned
+            CROSS JOIN (
+                VALUES ('document', $3::text), ('database', $4::text), ('row', $5::text),
+                    ('tasks_folder', $6::text), ('task', $7::text)
+            ) AS kinds(kind, marker)
+            CROSS JOIN LATERAL (
+                SELECT count(*) AS writes
+                FROM import_entity_written AS written
+                WHERE written.import_id = owned.id AND written.kind = kinds.marker
+            ) AS output
+            "#,
+            user.as_ref(),
+            import_ids,
+            WrittenKind::Document.as_ref(),
+            WrittenKind::Database.as_ref(),
+            WrittenKind::Row.as_ref(),
+            WrittenKind::TasksFolder.as_ref(),
+            WrittenKind::Task.as_ref(),
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        let count = |value| u32::try_from(value).map_err(anyhow::Error::from);
+        Ok(ConfirmedNotionWrites {
+            documents: count(counts.documents)?,
+            databases: count(counts.databases)?,
+            database_rows: count(counts.database_rows)?,
+            partial_database_rows: count(counts.partial_database_rows)?,
+            task_lists: count(counts.task_lists)?,
+            tasks: count(counts.tasks)?,
+            partial_tasks: count(counts.partial_tasks)?,
+        })
+    }
+    #[tracing::instrument(skip_all, fields(import_id = %import_id, review_id = %review_id, facts = facts.len()), err)]
+    async fn replace_database_outage(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        review_id: Uuid,
+        expected: Option<&str>,
+        facts: &[WrittenObject],
+    ) -> Result<()> {
+        self.replace_outage_snapshot(user, import_id, review_id, expected, facts)
+            .await
+    }
+
+    #[tracing::instrument(skip_all, fields(import_id = %import_id), err)]
+    async fn clear_database_reservation_failures(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+    ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await?;
+        // Share the outage CAS lock, then obtain a fresh snapshot for deletion.
+        sqlx::query_scalar!(
+            r#"SELECT entity.id
+               FROM import_entity AS entity
+               WHERE entity.id = $2
+                 AND (SELECT entity.user_id = $1 AND entity.source = 'notion'
+                      AND entity.kind = 'data_source' OFFSET 0)
+               FOR UPDATE OF entity"#,
+            user.as_ref(),
+            import_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("import item is missing or not owned by the caller"))?;
+        let owned = sqlx::query_scalar!(
+            r#"
+WITH owned AS MATERIALIZED (
+    SELECT entity.id FROM import_entity AS entity
+    WHERE entity.id = $2 AND (SELECT entity.user_id OFFSET 0) = $1
+      AND entity.source = 'notion' AND entity.kind = 'data_source'
+), removed AS (
+    DELETE FROM import_entity_written AS written USING owned
+    WHERE written.import_id = owned.id AND written.kind = 'database_reservation_failure'
+    RETURNING written.import_id
+)
+SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
+        "#,
+            user.as_ref(),
+            import_id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        if !owned {
+            return Err(
+                anyhow::anyhow!("import item is missing or not owned by the caller").into(),
+            );
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(review_id = %review, sources = import_ids.len(), included = included.len()), err)]
+    async fn replace_dependency_inclusions(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        review: Uuid,
+        import_ids: &[Uuid],
+        included: &[Uuid],
+    ) -> Result<()> {
+        let mut ids = import_ids.to_vec();
+        ids.sort_unstable();
+        ids.dedup();
+        let mut selected = included.to_vec();
+        selected.sort_unstable();
+        selected.dedup();
+        if !selected.iter().all(|id| ids.binary_search(id).is_ok()) {
+            return Err(crate::domain::ports::ImportError::NotReady(
+                "The approved dependency selection does not match this review.",
+            ));
+        }
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await?;
+        // The lateral fence keeps each ownership check behind its requested PK.
+        // Lock in id order so concurrent approvals replace one another atomically.
+        let locked = sqlx::query_scalar!(
+            r#"SELECT owned.id AS "id!"
+               FROM (SELECT id FROM UNNEST($3::uuid[]) AS wanted(id) ORDER BY id) AS wanted
+               JOIN LATERAL (
+                   SELECT entity.id FROM import_entity AS entity
+                   WHERE entity.id = wanted.id AND (SELECT entity.user_id OFFSET 0) = $1
+                     AND entity.review_id = $2 AND entity.source = 'notion'
+                     AND entity.kind = 'data_source' AND entity.status = 'staged'
+                   OFFSET 0 FOR UPDATE OF entity
+               ) AS owned ON true"#,
+            user.as_ref(),
+            review,
+            &ids,
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+        if locked.len() != ids.len() {
+            return Err(crate::domain::ports::ImportError::NotReady(
+                "This import review changed; reload it before approving.",
+            ));
+        }
+        let scope = review.to_string();
+        sqlx::query!(
+            r#"DELETE FROM import_entity_written
+               WHERE import_id = ANY($1::uuid[]) AND kind = 'dependency_included' AND object = $2"#,
+            &locked,
+            &scope,
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query!(
+            r#"INSERT INTO import_entity_written (import_id, kind, object, macro_id)
+               SELECT selected.import_id, 'dependency_included', $1, $3
+               FROM UNNEST($2::uuid[]) AS selected(import_id)
+               ON CONFLICT (import_id, kind, object) DO NOTHING"#,
+            &scope,
+            &selected,
+            review,
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self, user), err)]
     async fn record_task_notice(
         &self,
@@ -637,6 +841,71 @@ SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
             return Err(
                 anyhow::anyhow!("import item is missing or not owned by the caller").into(),
             );
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(source_id = %source, database_id = %database), err)]
+    async fn database_mapping(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: &import_notion::domain::model::NotionId,
+        database: Uuid,
+        view: Option<&NotionId>,
+    ) -> Result<Option<crate::domain::ports::RecordedDatabaseMapping>> {
+        let table = sqlx::query!(
+            r#"
+            SELECT table_marker.macro_id, view_marker.macro_id AS "view_id?", COALESCE(holder.metadata->'warnings', '[]'::jsonb) AS "warnings!"
+            FROM import_entity AS holder
+            JOIN import_entity_written AS database_marker ON database_marker.import_id = holder.id
+                AND database_marker.kind = 'database' AND database_marker.object = ''
+            JOIN import_entity_written AS table_marker ON table_marker.import_id = holder.id
+                AND table_marker.kind = 'table' AND table_marker.object = ''
+            LEFT JOIN import_entity_written AS view_marker ON view_marker.import_id = holder.id
+                AND view_marker.kind = 'view' AND view_marker.object = $4
+            WHERE holder.source = 'notion' AND holder.kind = 'data_source'
+                AND holder.foreign_id = $2 AND holder.status = 'imported'
+                AND holder.entity_type = 'database' AND holder.entity_id = $3::uuid::text
+                AND database_marker.macro_id = $3
+                AND (holder.user_id = $1 OR holder.team_id = (SELECT team_id FROM team_user WHERE user_id = $1))
+            "#,
+            user.as_ref(), source.as_str(), database, view.map(NotionId::as_str),
+        ).fetch_optional(&self.pool).await?;
+        Ok(
+            table.map(|row| crate::domain::ports::RecordedDatabaseMapping {
+                table: models_databases::TableId::from_uuid(row.macro_id),
+                view: row.view_id.map(models_databases::views::ViewId::from_uuid),
+                warnings: crate::domain::models::FidelityWarning::decode_entries(&row.warnings),
+            }),
+        )
+    }
+
+    #[tracing::instrument(skip_all, fields(import_id = %import_id, warnings = warnings.len() as i64), err)]
+    async fn record_warnings(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        warnings: &[crate::domain::models::FidelityWarning],
+    ) -> Result<()> {
+        if warnings.is_empty() {
+            return Ok(());
+        }
+        let warnings = serde_json::json!(warnings);
+        let changed = sqlx::query!(
+            r#"
+            UPDATE import_entity
+            SET metadata = jsonb_set(metadata, '{warnings}', (
+                SELECT COALESCE(jsonb_agg(DISTINCT loss), '[]'::jsonb)
+                FROM jsonb_array_elements(COALESCE(metadata->'warnings', '[]'::jsonb) || $3::jsonb) AS loss
+            )), updated_at = NOW()
+            WHERE id = $2 AND user_id = $1 AND metadata->'plan' IS NOT NULL
+            "#,
+            user.as_ref(), import_id, warnings,
+        ).execute(&self.pool).await?;
+        if changed.rows_affected() != 1 {
+            return Err(ImportError::Other(anyhow::anyhow!(
+                "warning ledger row unavailable"
+            )));
         }
         Ok(())
     }

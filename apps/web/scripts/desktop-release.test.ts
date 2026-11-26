@@ -35,10 +35,43 @@ describe('desktop releases', () => {
       writeFileSync(join(dir, `${name}.sig`), 'signature');
       writeFileSync(join(dir, `${target}.release.json`), JSON.stringify({ ...identity, enabled: true }));
     }
-    const manifest = createManifest(dir, tag, 'macro-inc/macro');
+    const manifest = createManifest(dir, tag, 'macro-inc/macro', '14.0');
     expect(Object.keys(manifest.platforms)).toEqual(['darwin-aarch64', 'linux-x86_64']);
     expect(manifest.platforms['darwin-aarch64'].url).toContain('/v2026.10.6.1/Macro-2026.1006.1-');
+    expect(manifest.platforms['darwin-aarch64'].minimumSystemVersion).toBe('14.0');
+    expect(manifest.platforms['linux-x86_64']).not.toHaveProperty('minimumSystemVersion');
+    for (const minimum of [undefined, '', '13', '13.x']) {
+      expect(() => createManifest(dir, tag, 'macro-inc/macro', minimum)).toThrow();
+    }
     rmSync(join(dir, 'Macro-2026.1006.1-x86_64-linux.AppImage.sig'));
-    expect(() => createManifest(dir, tag, 'macro-inc/macro')).toThrow();
+    expect(() => createManifest(dir, tag, 'macro-inc/macro', '14.0')).toThrow();
+  });
+
+  test('adds Intel Macs only when their build arrived, and then requires it whole', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'macro-desktop-release-'));
+    directories.push(dir);
+    const tag = 'v2026.10.6.1';
+    const identity = releaseIdentity(tag);
+    const write = (target: string, suffix: string) => {
+      const name = `Macro-${identity.version}-${suffix}`;
+      writeFileSync(join(dir, name), 'artifact');
+      writeFileSync(join(dir, `${name}.sig`), 'signature');
+      writeFileSync(join(dir, `${target}.release.json`), JSON.stringify({ ...identity, enabled: true }));
+    };
+    write('darwin-aarch64', 'aarch64-darwin.app.tar.gz');
+    write('linux-x86_64', 'x86_64-linux.AppImage');
+    expect(Object.keys(createManifest(dir, tag, 'macro-inc/macro', '14.0').platforms)).toEqual(['darwin-aarch64', 'linux-x86_64']);
+
+    write('darwin-x86_64', 'x86_64-darwin.app.tar.gz');
+    const manifest = createManifest(dir, tag, 'macro-inc/macro', '14.0');
+    expect(Object.keys(manifest.platforms)).toEqual(['darwin-aarch64', 'darwin-x86_64', 'linux-x86_64']);
+    expect(manifest.platforms['darwin-x86_64'].minimumSystemVersion).toBe('14.0');
+    expect(manifest.platforms['darwin-x86_64'].url).toBe(
+      'https://github.com/macro-inc/macro/releases/download/v2026.10.6.1/Macro-2026.1006.1-x86_64-darwin.app.tar.gz',
+    );
+
+    // An Intel build that reported in but lost its package is an error, not a skip.
+    rmSync(join(dir, 'Macro-2026.1006.1-x86_64-darwin.app.tar.gz.sig'));
+    expect(() => createManifest(dir, tag, 'macro-inc/macro', '14.0')).toThrow();
   });
 });

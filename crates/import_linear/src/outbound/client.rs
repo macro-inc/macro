@@ -248,7 +248,7 @@ impl<S: ApiConnectionsService> TrackerConnections for LinearConnections<S> {
 }
 
 fn optional_unavailable(error: &TrackerError) -> bool {
-    matches!(error, TrackerError::Forbidden(_))
+    matches!(error, TrackerError::Forbidden { .. })
         || matches!(error, TrackerError::Upstream { message, .. } if message.contains("Cannot query field") || message.contains("not enabled") || message.contains("permission"))
 }
 

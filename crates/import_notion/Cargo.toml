@@ -10,6 +10,7 @@ futures = { workspace = true }
 http = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 lazy-regex = { workspace = true }
+nom = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 models_databases = { path = "../models_databases" }
 connectors = { path = "../connectors" }
@@ -20,6 +21,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 tracing = { workspace = true }
+urlencoding = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

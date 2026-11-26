@@ -16,6 +16,8 @@
 //! `AGENTS.md` says how to start one; CI starts one for every change to this
 //! crate.
 
+mod channel_links;
+mod email_operators;
 mod fixtures;
 mod oracle;
 
@@ -203,8 +205,9 @@ async fn a_multi_word_or_short_name_prefix_finds_words_past_the_first_256() -> a
 /// Seed the fixtures and a crowd for each of `crowded_prefixes`, run every
 /// case, remove what was seeded, and fail listing each search that returned
 /// other entities than its rules match.
-async fn run_cases(cases: &[Case], crowded_prefixes: &[&str]) -> anyhow::Result<()> {
-    let _one_at_a_time = SEARCH_INDICES.lock().await;
+/// The client under test and a raw client for seeding and counting, both on
+/// the test cluster, and its URL.
+fn test_clients() -> anyhow::Result<(OpensearchClient, OpenSearch, String)> {
     #[expect(
         clippy::disallowed_methods,
         reason = "test support: where the test cluster answers comes from the process environment"
@@ -217,6 +220,12 @@ async fn run_cases(cases: &[Case], crowded_prefixes: &[&str]) -> anyhow::Result<
             .disable_proxy()
             .build()?,
     );
+    Ok((client, raw, url))
+}
+
+async fn run_cases(cases: &[Case], crowded_prefixes: &[&str]) -> anyhow::Result<()> {
+    let _one_at_a_time = SEARCH_INDICES.lock().await;
+    let (client, raw, url) = test_clients()?;
     let entities = seeded_entities(crowded_prefixes);
 
     // Nothing is written or deleted on a cluster that holds anything but this
@@ -421,6 +430,7 @@ async fn search(
         match_type: case.match_type.to_string(),
         cursor: SearchCursorOption::default(),
         search_indices: searched.iter().map(|kind| kind.index()).collect(),
+        excluded_terms: case.left_out.iter().map(|word| word.to_string()).collect(),
         document_search_args: UnifiedDocumentSearchArgs {
             terms: terms.clone(),
             document_ids: ids_with(Kind::Document, &[Access::Shared]),
@@ -481,8 +491,8 @@ fn compare(case: &Case, entities: &[Seeded], expected: &Expected, found: &Found)
             .map_or_else(|| format!("unknown {id}"), |entity| entity.name.clone())
     };
     let label = format!(
-        "{:?} ({:?}, {}, {:?})",
-        case.terms, case.mode, case.match_type, case.matching
+        "{:?} leaving out {:?} ({:?}, {}, {:?})",
+        case.terms, case.left_out, case.mode, case.match_type, case.matching
     );
 
     let mut failures = Vec::new();

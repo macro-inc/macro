@@ -13,26 +13,43 @@ inbound = [
   "dep:serde_with",
   "dep:utoipa",
 ]
-outbound = ["dep:feature_flags", "dep:sqlx", "dep:system_properties"]
+outbound = [
+  "dep:connection_gateway_client",
+  "dep:feature_flags",
+  "dep:model-entity",
+  "dep:serde_json",
+  "dep:sqlx",
+  "dep:system_properties",
+  "dep:tokio-util",
+]
+toolset = ["inbound", "dep:ai_toolset", "dep:schemars"]
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
+ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 chrono-tz = { workspace = true }
+connection_gateway_client = { path = "../connection_gateway_client", optional = true }
+csv = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 feature_flags = { path = "../feature_flags", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 rootcause = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
 serde_with = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 system_properties = { path = "../system_properties", optional = true }
 thiserror = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true, features = ["serde", "v7"] }
@@ -46,3 +63,4 @@ model_user = { path = "../model_user" }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
 tower = { workspace = true }
+wiremock = { workspace = true }

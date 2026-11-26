@@ -7,11 +7,13 @@ self-hosted-runner:
     - namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     - namespace-profile-linux-mid
     - namespace-profile-linux-mid;overrides.cache-tag=desktop-linux
+    - namespace-profile-linux-mid;overrides.cache-tag=firecracker-image
     - namespace-profile-linux-mid;overrides.cache-tag=observability-image
     - namespace-profile-linux-mid;overrides.cache-tag=sync-service-deploy
     - namespace-profile-linux-mid;overrides.cache-tag=web-ci
     - namespace-profile-linux-mid;overrides.cache-tag=web-codegen
     - namespace-profile-linux-rust-ci
+    - namespace-profile-linux-rust-ci;overrides.cache-tag=desktop-ci
     - namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     - namespace-profile-linux-small
     - namespace-profile-linux-small;overrides.cache-tag=nix-checks
@@ -20,6 +22,7 @@ self-hosted-runner:
     - namespace-profile-linux-tiny-no-cache
     - nscloud-cache-size-100gb
     - nscloud-cache-tag-macro-desktop-macos
+    - nscloud-cache-tag-macro-desktop-macos-x86_64
     - nscloud-macos-sequoia-arm64-12x28
     - nscloud-macos-sequoia-arm64-12x28-with-cache
     - nscloud-macos-sequoia-arm64-6x14

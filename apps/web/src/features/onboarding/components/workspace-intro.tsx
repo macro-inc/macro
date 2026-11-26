@@ -57,6 +57,10 @@ export function WorkspaceIntro(props: {
     );
   };
   onCleanup(() => burstAnimation?.cancel());
+
+  // The accent swaps in one frame and the burst is the only motion. Easing
+  // `--intro-accent` restyles the slide and repaints the glow, dot grid, icon
+  // and burst on every frame, which made picking a color lag on phones.
   const changeAccent = (color: string) => {
     if (color === accent().name) return;
     props.onSelectAccent(color);
@@ -79,7 +83,7 @@ export function WorkspaceIntro(props: {
         teammates next.
       </p>
       <div
-        class="relative mt-8 flex h-40 w-full max-w-[400px] items-center justify-center sm:h-44"
+        class="relative mt-6 flex h-32 w-full max-w-[400px] items-center justify-center sm:mt-8 sm:h-44"
         aria-label={`${accent().name} workspace preview`}
       >
         <div

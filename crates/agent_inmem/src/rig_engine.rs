@@ -428,7 +428,10 @@ impl TurnEngine for RigTurnEngine {
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
         let metering = agent::MeteringContext::current();
-        tokio::spawn(
+        // A turn whose content is withheld keeps it withheld in its task.
+        let withheld = genai_telemetry::content_withheld();
+        tokio::spawn(genai_telemetry::withhold_content_if(
+            withheld,
             agent::MeteringContext::carry(metering, async move {
                 let mut request = request;
                 let Some(model) = select_auto_model(auto_model.as_ref(), &request).await else {
@@ -464,7 +467,7 @@ impl TurnEngine for RigTurnEngine {
                 forward_turn_result(turn, &parts).await;
             })
             .in_current_span(),
-        );
+        ));
         receiver
     }
 }

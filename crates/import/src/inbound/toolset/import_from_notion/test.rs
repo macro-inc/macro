@@ -179,10 +179,10 @@ fn a_failed_plan_never_hands_the_agent_the_providers_text() {
         error_kind: Some(RunErrorKind::Unreachable),
         ..NotionImportReport::default()
     };
-    let response = ImportFromNotionResponse {
-        message: message(NotionImportAction::Status, &report),
-        report,
-    };
+    let response = ImportFromNotionResponse::for_agent(
+        report.clone(),
+        message(NotionImportAction::Status, &report),
+    );
 
     let payload = serde_json::to_string(&response).unwrap();
     assert!(!payload.contains("provider-secret-body"), "{payload}");

@@ -59,8 +59,17 @@ impl RoutineSuggestionApi for Suggestions {
         _: &[Surface],
         _: suggestions::domain::model::GenerationTrigger,
         _: chrono_tz::Tz,
+        _: crate::domain::suggestions::ports::BriefPart<'_>,
     ) -> Result<String> {
         unreachable!("routes never brief")
+    }
+
+    async fn find_work(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+    ) -> Result<crate::domain::suggestions::work::WorkList> {
+        unreachable!("routes never find work")
     }
 
     async fn texts(

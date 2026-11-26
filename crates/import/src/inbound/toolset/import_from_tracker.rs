@@ -122,6 +122,12 @@ async fn call<T: WorkspaceImporter>(
         other => import_error(&format!("{} import failed", source.label()), other),
     })?;
     let message = message(source, action, &report);
+    // The agent reads why from `error_kind` and the message; the run's
+    // report text is for the owner's card.
+    let report = NotionImportReport {
+        error: None,
+        ..report
+    };
     Ok(TrackerImportResponse { report, message })
 }
 

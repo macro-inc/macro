@@ -9,11 +9,20 @@ import {
   ImportJobsRailButton,
 } from '../components/import-jobs-tray';
 import { useImportJobs } from '../context/import-jobs-context';
-import { type ImportJob, isWorkspaceSource } from '../core/import-job';
+import {
+  type ImportJob,
+  isWorkspaceSource,
+  type WorkspaceSource,
+} from '../core/import-job';
 import { createImportJobs } from '../primitives/import-jobs';
 
 // Product names, not translated.
-const SOURCE_NAMES = { notion: 'Notion', linear: 'Linear', jira: 'Jira' };
+const SOURCE_NAMES: Record<WorkspaceSource, string> = {
+  notion: 'Notion',
+  linear: 'Linear',
+  jira: 'Jira',
+  hubspot: 'HubSpot',
+};
 
 /** The jobs over the provided sources, and the actions both layouts share. */
 function useImportJobsActions(onOpened: () => void) {

@@ -19,6 +19,9 @@ export const mobileAgentRequest = {
     // iOS opens the keyboard only when focus happens inside the bubble tap.
     if (composerFocus?.userId === userId) composerFocus.focus();
   },
+  focus: (userId: string | undefined) => {
+    if (userId && composerFocus?.userId === userId) composerFocus.focus();
+  },
   registerFocus: (userId: string, focus: () => void) => {
     const registration = { userId, focus };
     composerFocus = registration;

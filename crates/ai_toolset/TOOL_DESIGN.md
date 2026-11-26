@@ -147,5 +147,6 @@ status when the call fails. Two rules follow:
   `#[tracing::instrument]` spans for its own work are fine and nest under it.
 - **Arguments and results are content**, recorded under the content policy
   (`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`, on unless set to
-  `false`) and cut to a size budget. Do not record them as span fields or log
+  `false`, and off inside `genai_telemetry::withhold_content`) and cut to a
+  size budget. Do not record them as span fields or log
   them in tools: that bypasses the policy and repeats them on every log line.

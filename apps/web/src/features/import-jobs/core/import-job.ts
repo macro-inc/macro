@@ -8,7 +8,7 @@ import {
 import { match } from 'ts-pattern';
 
 /** Sources reviewed as a whole workspace, each with its own report. */
-export type WorkspaceSource = 'notion' | 'linear' | 'jira';
+export type WorkspaceSource = 'notion' | 'linear' | 'jira' | 'hubspot';
 
 /** Where one import job stands, as the tray shows it. */
 export type ImportJobPhase =
@@ -56,7 +56,12 @@ function listedFor(run: ImportRun): number {
 export function isWorkspaceSource(
   source: ImportSource
 ): source is WorkspaceSource {
-  return source === 'notion' || source === 'linear' || source === 'jira';
+  return (
+    source === 'notion' ||
+    source === 'linear' ||
+    source === 'jira' ||
+    source === 'hubspot'
+  );
 }
 
 /** Identifies one state of a run, so dismissing it hides only that state. */

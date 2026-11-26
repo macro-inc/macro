@@ -9,15 +9,29 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+mod notion_loss;
+mod notion_report;
 mod notion_run;
+pub use notion_loss::{
+    FidelityWarning, ImportNotice, ImportNoticeKind, PropertySnapshotKind, ReferenceLossReason,
+    SourceLossDetail, SourceLossFact, SourceStopReason, ViewWarning,
+};
 mod notion_sharing;
+pub use notion_report::{
+    ConfirmedNotionWrites, NotionChangedView, NotionDatabaseViewChanges, NotionReportDetails,
+    NotionReportNote, NotionReportNoteCount, NotionReportNoteKind, NotionReviewOmission,
+    NotionReviewOmissionCount, NotionReviewOmissionKind, NotionTabChoice, NotionViewChange,
+    NotionViewChangeKind,
+};
 pub use notion_run::{
-    AdoptedRun, NotionJob, ReviewedRun, RunReview, TEAMMATE_STOPPED, TaskImportNotice,
-    TaskImportNoticeCount, TaskImportNoticeReason, TeamClaim, WrittenKind, WrittenObject,
+    AdoptedRun, NOTION_OUTAGE_PREFIX, NotionJob, ReviewedRun, RunReview, TEAMMATE_STOPPED,
+    TaskImportNotice, TaskImportNoticeCount, TaskImportNoticeReason, TeamClaim, WrittenKind,
+    WrittenObject,
 };
 
 pub use notion_sharing::{
-    NotionAlreadyImported, NotionImporter, NotionSharing, NotionWriteChoices,
+    NotionAlreadyImported, NotionDependencyReview, NotionImporter, NotionSharing,
+    NotionWriteChoices,
 };
 
 #[cfg(test)]
@@ -50,6 +64,8 @@ pub enum ImportSource {
     Notion,
     /// Slack channels, recreated as Macro channels.
     Slack,
+    /// HubSpot CRM companies, contacts, deals and deal pipelines.
+    Hubspot,
 }
 
 impl ImportSource {
@@ -60,16 +76,18 @@ impl ImportSource {
             Self::Jira => "Jira",
             Self::Notion => "Notion",
             Self::Slack => "Slack",
+            Self::Hubspot => "HubSpot",
         }
     }
 
     /// All import sources.
-    pub fn all() -> [ImportSource; 4] {
+    pub fn all() -> [ImportSource; 5] {
         [
             ImportSource::Linear,
             ImportSource::Jira,
             ImportSource::Notion,
             ImportSource::Slack,
+            ImportSource::Hubspot,
         ]
     }
 
@@ -82,6 +100,7 @@ impl ImportSource {
             ImportSource::Jira => "jira",
             ImportSource::Notion => "notion",
             ImportSource::Slack => "slack",
+            ImportSource::Hubspot => "hubspot",
         })
     }
 
@@ -93,6 +112,7 @@ impl ImportSource {
             ImportSource::Jira => ImportKind::JiraIssue,
             ImportSource::Notion => ImportKind::Page,
             ImportSource::Slack => ImportKind::Channel,
+            ImportSource::Hubspot => ImportKind::HubspotCompany,
         }
     }
 
@@ -103,6 +123,9 @@ impl ImportSource {
             ImportSource::Linear | ImportSource::Jira => "task",
             ImportSource::Notion => "md",
             ImportSource::Slack => "channel",
+            // Companies are the bulk of a CRM import; each written row records
+            // its own kind's entity type.
+            ImportSource::Hubspot => "crm_company",
         }
     }
 
@@ -116,7 +139,7 @@ impl ImportSource {
             return None;
         }
         Some(match self {
-            ImportSource::Linear | ImportSource::Jira => raw.to_string(),
+            ImportSource::Linear | ImportSource::Jira | ImportSource::Hubspot => raw.to_string(),
             // Page ids survive renames; URLs don't. Accept either and store
             // the id whenever one is present.
             ImportSource::Notion => notion_page_id(raw).unwrap_or_else(|| raw.to_string()),
@@ -178,6 +201,14 @@ pub enum ImportKind {
     JiraEpic,
     /// A Slack channel.
     Channel,
+    /// A HubSpot deal pipeline.
+    HubspotPipeline,
+    /// A HubSpot company.
+    HubspotCompany,
+    /// A HubSpot contact.
+    HubspotContact,
+    /// A HubSpot deal.
+    HubspotDeal,
 }
 
 impl ImportKind {
@@ -192,6 +223,10 @@ impl ImportKind {
                 ImportSource::Jira
             }
             ImportKind::Channel => ImportSource::Slack,
+            ImportKind::HubspotPipeline
+            | ImportKind::HubspotCompany
+            | ImportKind::HubspotContact
+            | ImportKind::HubspotDeal => ImportSource::Hubspot,
         }
     }
 }
@@ -669,6 +704,12 @@ pub struct NotionTaskFields {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NotionPlanItem {
+    /// Notion objects whose bodies require this external data source.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dependency_of: Vec<String>,
+    /// Planned objects whose bodies display this source inline.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inline_on: Vec<String>,
     /// What the import does with it; absent while planning has staged the
     /// object but the decision model has not answered for it yet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -806,6 +847,11 @@ pub fn validate_metadata(
         ImportSource::Slack => {
             serde_json::to_value(serde_json::from_value::<SlackChannelMeta>(metadata)?.capped())
         }
+        // Only the reviewed workspace importer stages HubSpot rows; nothing
+        // stages them through the generic ledger tools.
+        ImportSource::Hubspot => Err(serde::de::Error::custom(
+            "HubSpot rows are staged only by the HubSpot importer",
+        )),
     }
 }
 
@@ -813,7 +859,10 @@ pub fn validate_metadata(
 /// prompts, and tool responses).
 pub fn metadata_label(source: ImportSource, metadata: &serde_json::Value) -> String {
     let field = match source {
-        ImportSource::Linear | ImportSource::Jira | ImportSource::Notion => "title",
+        ImportSource::Linear
+        | ImportSource::Jira
+        | ImportSource::Notion
+        | ImportSource::Hubspot => "title",
         ImportSource::Slack => "name",
     };
     metadata
@@ -978,6 +1027,100 @@ pub struct NotionReportItem {
     pub reason: Option<String>,
 }
 
+/// Something a HubSpot import cannot carry into Macro CRM, counted on the
+/// review card and in the final report.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    specta::Type,
+    ToSchema,
+    strum::EnumIter,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum HubspotLoss {
+    /// A record's HubSpot owner is not a member of the team; it stays unassigned.
+    OwnerNotMember,
+    /// A deal with no company; Macro pipelines track companies, so it is not imported.
+    DealWithoutCompany,
+    /// A deal in a pipeline that is archived or missing; it is not imported.
+    DealWithoutPipeline,
+    /// A contact or deal linked to more than one company; only its primary is kept.
+    ExtraCompanyLinks,
+    /// A company domain Macro does not key companies by (a personal email
+    /// provider, or not a domain); the company is created by name only.
+    DomainRejected,
+    /// A deal currency Macro does not support; the amount is left empty rather
+    /// than shown in another currency.
+    UnsupportedCurrency,
+    /// A company's further domains; only its primary domain is kept.
+    AdditionalDomains,
+    /// A company's HubSpot owner; Macro companies have no owner.
+    CompanyOwner,
+    /// A company sharing its domain with another planned company; both become
+    /// one CRM company.
+    MergedCompany,
+    /// A contact sharing its primary address with another planned contact;
+    /// both become one CRM contact.
+    MergedContact,
+    /// A contact whose company was left out of the import; it is created
+    /// without one.
+    ContactWithoutCompany,
+}
+
+/// How many records lost one thing.
+#[derive(
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
+)]
+#[serde(rename_all = "camelCase")]
+pub struct HubspotLossCount {
+    /// What was lost.
+    pub loss: HubspotLoss,
+    /// Records affected.
+    pub count: u32,
+}
+
+/// What a HubSpot plan holds, for the review card.
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
+)]
+#[serde(rename_all = "camelCase")]
+pub struct HubspotReport {
+    /// Deal pipelines, each becoming a Macro pipeline.
+    pub pipelines: u32,
+    /// Companies.
+    pub companies: u32,
+    /// Contacts.
+    pub contacts: u32,
+    /// Deals, each becoming an entry in its pipeline.
+    pub deals: u32,
+    /// HubSpot owners named by the planned records.
+    pub owners: u32,
+    /// Of those, owners matched to a team member by email.
+    pub owners_matched: u32,
+    /// Records already in Macro from an earlier import, left as they are.
+    pub already_imported: u32,
+    /// Records this import created in the CRM.
+    #[serde(default)]
+    pub created: u32,
+    /// Records this import matched to ones already in the CRM (same domain,
+    /// address or deal) or to a teammate's import, instead of creating them.
+    #[serde(default)]
+    pub linked: u32,
+    /// What cannot be carried over, by kind.
+    pub losses: Vec<HubspotLossCount>,
+    /// Portal-defined property names whose values stay in HubSpot.
+    pub custom_properties: Vec<String>,
+}
+
 /// Where a Notion workspace import stands.
 #[derive(
     Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, specta::Type, ToSchema,
@@ -987,6 +1130,12 @@ pub struct NotionImportReport {
     /// Provider items skipped because they were unreadable, or optional features unavailable.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
+    /// Grouped report details for a Notion workspace review.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub details: Option<NotionReportDetails>,
+    /// Actual writes from the completed Notion ledger, excluding reused copies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmed: Option<ConfirmedNotionWrites>,
     /// Tracker issues in the plan.
     #[serde(default)]
     pub issues: u32,
@@ -998,10 +1147,12 @@ pub struct NotionImportReport {
     /// `dismissed` when cancelled. Absent before the first run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<RunStatus>,
-    /// Why the run failed, when it did, as the importer wrote it. Never
-    /// serialized: it can carry provider detail, so the agent, the SDK and
-    /// the web read `error_kind` instead.
-    #[serde(skip)]
+    /// Why the run failed or what it could not finish, in text Macro wrote
+    /// (a canned reason, a reviewed object's title, or the sentence for its
+    /// kind; never a provider's text): the report keeps it only when the run
+    /// recorded a kind. The agent's tool answers drop it and read
+    /// `error_kind`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     /// The kind of failure, when the run failed and it was recorded. Show
     /// the user copy for this, not `error`.
@@ -1034,11 +1185,11 @@ pub struct NotionImportReport {
     pub documents: u32,
     /// Data sources written as databases.
     pub databases: u32,
-    /// Rows those databases hold, every one counted while planning.
+    /// Estimated database rows while planning, confirmed rows once completed.
     pub database_rows: u32,
     /// Tasks the task lists become, one per row.
     pub task_rows: u32,
-    /// Plan objects already imported.
+    /// Plan objects finished so far, or confirmed new copies once completed.
     pub imported: u32,
     /// Plan objects still waiting to be written.
     pub waiting: u32,
@@ -1067,4 +1218,16 @@ pub struct NotionImportReport {
     /// Objects that failed to import, with the failure.
     #[serde(default)]
     pub failures: Vec<NotionReportItem>,
+    /// Total objects that failed, including those outside the sample.
+    #[serde(default)]
+    pub failure_count: u32,
+    /// Whether the warning or by-hand list was bounded before settlement.
+    #[serde(skip)]
+    #[schemars(skip)]
+    #[specta(skip)]
+    #[schema(ignore)]
+    pub settlement_lists_truncated: bool,
+    /// A HubSpot plan's counts, owners and losses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hubspot: Option<HubspotReport>,
 }

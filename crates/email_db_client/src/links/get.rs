@@ -169,14 +169,13 @@ pub async fn fetch_inboxes_for_macro_id(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchInbox {
     pub id: Uuid,
-    pub macro_id: String,
     /// `deleting_at` is set: the mailbox is being disconnected and its rows
     /// purged, and its documents stay in the search index until that ends.
     pub deleting: bool,
 }
 
-/// The inboxes [`fetch_inboxes_for_macro_id`] returns, with only what email
-/// search scopes by and whether each is being disconnected.
+/// The inboxes [`fetch_inboxes_for_macro_id`] returns, with only the link id
+/// email search scopes by and whether each is being disconnected.
 pub async fn fetch_search_inboxes_for_macro_id(
     pool: &PgPool,
     macro_id: &str,
@@ -188,12 +187,11 @@ pub async fn fetch_search_inboxes_for_macro_id(
     let inboxes = sqlx::query_as!(
         SearchInbox,
         r#"
-        SELECT el.id AS "id!", el.macro_id AS "macro_id!",
-               el.deleting_at IS NOT NULL AS "deleting!"
+        SELECT el.id AS "id!", el.deleting_at IS NOT NULL AS "deleting!"
         FROM email_links el
         WHERE el.macro_id = $1
         UNION
-        SELECT el.id, el.macro_id, el.deleting_at IS NOT NULL
+        SELECT el.id, el.deleting_at IS NOT NULL
         FROM email_links el
         JOIN macro_user_links mul ON el.id = mul.link_id
         WHERE mul.primary_macro_id = $1

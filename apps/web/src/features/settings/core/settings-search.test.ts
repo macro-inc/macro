@@ -77,6 +77,14 @@ describe('individual settings search', () => {
     expect(rowStyle()).toBe(true);
     expect(rowStyle({ emailRowStyle: false })).toBe(false);
   });
+  it('finds the desktop download only where Downloads offers it', () => {
+    const desktopDownload = (options?: { desktopDownload: boolean }) =>
+      searchSettings(SETTINGS_TAB_GROUPS, 'download mac', options).some(
+        (result) => result.title === 'Download the desktop app'
+      );
+    expect(desktopDownload()).toBe(true);
+    expect(desktopDownload({ desktopDownload: false })).toBe(false);
+  });
   it('lists the Agent pings setting only while agent notifications are on', () => {
     const agentPings = (agentNotifications?: boolean) =>
       searchSettings(SETTINGS_TAB_GROUPS, 'agent pings', {

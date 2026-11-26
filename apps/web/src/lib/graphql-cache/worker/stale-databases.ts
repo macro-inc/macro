@@ -1,14 +1,15 @@
 import { isStaleCacheDatabaseIdentity } from './coordinator-protocol';
 
-const WAL_SUFFIX = '-wal';
+/** What the names of a database's WAL and side file add to its own. */
+const FILE_SUFFIXES = ['-wal', '-salvage'];
 
 /**
- * A database's WAL file is its name plus `-wal`, so the database of a scope
- * ending in `-wal` would read as another scope's WAL file and could be
- * removed with it. App scopes are UUIDs; a host refuses any other such scope.
+ * The database of a scope ending in one of those would read as a file of
+ * another scope's and could be removed with it. App scopes are UUIDs; a host
+ * refuses any other such scope.
  */
 export const isUnambiguousCacheScope = (scope: string): boolean =>
-  !scope.endsWith(WAL_SUFFIX);
+  !FILE_SUFFIXES.some((suffix) => scope.endsWith(suffix));
 
 /** This scope's databases this build does not open, from OPFS entry names. */
 export function staleCacheDatabaseIdentities(
@@ -17,9 +18,8 @@ export function staleCacheDatabaseIdentities(
 ): string[] {
   const identities = new Set<string>();
   for (const name of entryNames) {
-    const identity = name.endsWith(WAL_SUFFIX)
-      ? name.slice(0, -WAL_SUFFIX.length)
-      : name;
+    const suffix = FILE_SUFFIXES.find((suffix) => name.endsWith(suffix)) ?? '';
+    const identity = name.slice(0, name.length - suffix.length);
     if (isStaleCacheDatabaseIdentity(scope, identity)) identities.add(identity);
   }
   return [...identities];

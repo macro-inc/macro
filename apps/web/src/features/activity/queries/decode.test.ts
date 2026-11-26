@@ -12,7 +12,9 @@ import {
   participantAddedEvent,
   participantRemovedEvent,
   propertyChangedEvent,
+  recordMergedEvent,
   sentEvent,
+  timeLoggedEvent,
   unknownActionEvent,
   unsupportedEntityEvent,
 } from './fixtures';
@@ -48,6 +50,15 @@ describe('decodeActivityEvent', () => {
       {
         kind: 'participant-removed' as const,
         participant: 'macro|sarah@example.com',
+      },
+    ],
+    [
+      timeLoggedEvent,
+      {
+        kind: 'time-logged' as const,
+        minutes: 90,
+        entryDate: '2026-11-20',
+        source: 'timer' as const,
       },
     ],
   ] as const)('decodes $0.id', (fragment, action) => {
@@ -103,4 +114,23 @@ describe('decodeActivityEvent', () => {
 
 it('decodes a form as its own entity type', () => {
   expect(decodeActivityEvent(formRespondedEvent).entityType).toBe('form');
+});
+
+describe('decodeActivityEvent merges', () => {
+  it('keeps what a merge merged and the values it dropped', () => {
+    expect(decodeActivityEvent(recordMergedEvent)?.action).toEqual({
+      kind: 'record-merged',
+      merged: [
+        { id: 'company-old', name: 'Old Co' },
+        { id: 'company-other', name: null },
+      ],
+      dropped: [
+        {
+          property: 'tier',
+          record: 'company-old',
+          value: { type: 'String', value: 'Silver' },
+        },
+      ],
+    });
+  });
 });

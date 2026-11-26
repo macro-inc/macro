@@ -223,9 +223,18 @@ async fn reconnect_stages_exact_attempt_and_fences_rotation_only_after_adoption(
             .await
             .unwrap()
     );
-    repo.release_refresh(&refreshed, stale_lease, true)
-        .await
-        .unwrap();
+    assert!(
+        repo.release_refresh(&refreshed, stale_lease, true)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !repo
+            .release_refresh(&refreshed, stale_lease, true)
+            .await
+            .unwrap(),
+        "a lease already released changes nothing"
+    );
     assert!(
         !repo
             .acquire_refresh(&refreshed, Uuid::new_v4())
@@ -396,4 +405,60 @@ async fn grant_expiry_cannot_race_an_in_progress_mailbox_adoption(db: PgPool) {
             .unwrap(),
         0
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_refused_refresh_keeps_the_grant_until_a_refresh_works(db: PgPool) {
+    let repo = PgMicrosoftGrants::new(db.clone());
+    let owner = owner(&db).await;
+    let attempt = pending(owner);
+    repo.begin_link(&attempt).await.unwrap();
+    let attempt = repo.claim_link(attempt.id).await.unwrap();
+    let grant = macro_uuid::generate_uuid_v7();
+    repo.complete_link(&attempt, &identity(), &envelope(1), grant)
+        .await
+        .unwrap();
+    let link = macro_uuid::generate_uuid_v7();
+    sqlx::query!("INSERT INTO email_links(id,macro_id,fusionauth_user_id,email_address,provider,grant_id,grant_generation) VALUES ($1,'macro|outlook-test@example.com',$2,'outlook-test@example.com','OUTLOOK',$3,1)",link,owner.to_string(),grant).execute(&db).await.unwrap();
+
+    let stored = repo.active_grant(link, 1, 1).await.unwrap();
+    assert_eq!(stored.refresh_refused_at, None);
+    let lease = macro_uuid::generate_uuid_v7();
+    assert!(repo.acquire_refresh(&stored, lease).await.unwrap());
+    repo.release_refresh(&stored, lease, true).await.unwrap();
+
+    let refused = repo.active_grant(link, 1, 1).await.unwrap();
+    assert!(refused.refresh_refused_at.is_some());
+    // A request that read the grant before the refusal, or after it, asks
+    // Microsoft again only once the hour is over.
+    for snapshot in [&stored, &refused] {
+        assert!(
+            !repo
+                .acquire_refresh(snapshot, macro_uuid::generate_uuid_v7())
+                .await
+                .unwrap()
+        );
+    }
+    sqlx::query!(
+        "UPDATE microsoft_oauth_grant_versions SET refresh_refused_at = now() - interval '61 minutes' WHERE grant_id = $1",
+        grant
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let refused = repo.active_grant(link, 1, 1).await.unwrap();
+    let lease = macro_uuid::generate_uuid_v7();
+    assert!(
+        repo.acquire_refresh(&refused, lease).await.unwrap(),
+        "a grant refused over an hour ago is refreshed again"
+    );
+    assert!(
+        repo.finish_refresh(&refused, lease, &envelope(2), &["Mail.ReadWrite".into()])
+            .await
+            .unwrap()
+    );
+
+    let working = repo.active_grant(link, 1, 1).await.unwrap();
+    assert_eq!(working.refresh_refused_at, None);
+    assert_eq!(working.revision, 1);
 }

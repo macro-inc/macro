@@ -37,18 +37,20 @@ use soup_filter_cache_adapter::{
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use turso_opfs::{OpenResult, OpfsError, OpfsErrorKind, OpfsOwner};
+use turso_opfs::{OpenResult, OpfsError, OpfsErrorKind, OpfsOwner, Sidecar};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 mod authority;
 mod calendar;
 mod people;
+mod salvage;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
 mod test_storage;
 
+use salvage::{Crossing, QueueReport, wipe_keeping_queue};
 #[cfg(test)]
 use test_storage::{BrowserStorage, TestStorageFault};
 
@@ -215,7 +217,7 @@ impl HydrateRequest {
             query,
             operation_name,
             variables: parse_variables(variables)?,
-            data: serde_wasm_bindgen::from_value(data).map_err(err_js)?,
+            data: json_value_from_js(data)?,
             identity,
             scope: None,
         })
@@ -555,6 +557,9 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
 struct CacheState {
     selections: RecordSelectionCache,
     engine: Option<BrowserEngine>,
+    sidecar: Sidecar,
+    /// Whether the side file holds the loss this open reported.
+    loss_to_tell: bool,
     mail_generation: String,
     scope: String,
     hot_capacity: Option<u32>,
@@ -600,7 +605,12 @@ impl CacheState {
         };
         let result = self.engine_mut()?.current_identity().await;
         let bound = self.engine_result(result)?;
-        Ok(bound.as_deref().is_none_or(|bound| bound == observed))
+        let reuse = bound.as_deref().is_none_or(|bound| bound == observed);
+        if !reuse {
+            // The reset takes the queue of the account before this one.
+            salvage::forget(&self.sidecar).await?;
+        }
+        Ok(reuse)
     }
 
     /// Storage may have changed in a way this connection's WAL position
@@ -1059,59 +1069,83 @@ async fn open_owner(owner: OpfsOwner) -> Result<OpenResult, JsValue> {
 
 struct OpenedStorage {
     storage: TursoStorage,
+    sidecar: Sidecar,
     outcome: CacheOpenOutcome,
+    queue: QueueReport,
 }
 
-async fn open_storage(scope: &str, owner: OpfsOwner) -> Result<OpenedStorage, JsValue> {
-    let (owner, reset_outcome) = match open_owner(owner).await? {
+/// Opens `owner`'s database, then queues in it what `crossing` carries.
+async fn open_storage(
+    scope: &str,
+    owner: OpfsOwner,
+    crossing: Crossing,
+) -> Result<OpenedStorage, JsValue> {
+    let sidecar = owner.sidecar();
+    let (mut storage, outcome, crossing) = open_or_wipe(scope, owner, &sidecar, crossing).await?;
+    match crossing.finish(&sidecar, &mut storage).await {
+        Ok(queue) => Ok(OpenedStorage {
+            storage,
+            sidecar,
+            outcome,
+            queue,
+        }),
+        Err(error) => {
+            release_storage(storage).await?;
+            Err(error)
+        }
+    }
+}
+
+/// Closes a database nothing was served from and lets its lock go.
+async fn release_storage(storage: TursoStorage) -> Result<(), JsValue> {
+    let owner = match storage.try_close().map_err(err_js)? {
+        TursoStorageCloseOutcome::Healthy(closed) => closed.preserve(),
+        TursoStorageCloseOutcome::ResetRequired(closed) => closed.preserve_for_wipe(),
+    };
+    owner.map_err(err_js)?.release().await.map_err(err_js)
+}
+
+async fn open_or_wipe(
+    scope: &str,
+    owner: OpfsOwner,
+    sidecar: &Sidecar,
+    crossing: Crossing,
+) -> Result<(TursoStorage, CacheOpenOutcome, Crossing), JsValue> {
+    let owner = salvage::doubt_torn(owner, sidecar).await?;
+    let (owner, reset_outcome, crossing) = match open_owner(owner).await? {
         OpenResult::Ready(session) => {
             let connected = session.connect().map_err(err_js)?;
             match TursoStorage::from_opfs_session_with_outcome(connected, scope) {
-                Ok((storage, outcome)) => {
-                    return Ok(OpenedStorage {
-                        storage,
-                        outcome: outcome.into(),
-                    });
-                }
+                Ok((storage, outcome)) => return Ok((storage, outcome.into(), crossing)),
                 Err(failure) => {
                     let error = failure.error();
-                    if !error.requires_physical_reset() {
-                        let owner = failure.preserve().map_err(err_js)?;
+                    let owner = failure.preserve().map_err(err_js)?;
+                    let Some(reason) = error.physical_reset_reason() else {
                         owner.release().await.map_err(err_js)?;
                         return Err(err_js(error));
-                    }
-                    let outcome = recovery_outcome(
-                        error
-                            .physical_reset_reason()
-                            .expect("reset-required error has a reset reason"),
-                    );
-                    (
-                        failure
-                            .reset()
-                            .await
-                            .map_err(|failure| storage_err_js(failure.error()))?,
-                        outcome,
-                    )
+                    };
+                    // Reading the queue opens the files again, so the recovered
+                    // queue never depends on what this open already did.
+                    let (owner, read) = wipe_keeping_queue(scope, owner).await?;
+                    (owner, recovery_outcome(reason), crossing.then(read))
                 }
             }
         }
-        OpenResult::ResetRequired(session) => (
-            session
+        OpenResult::ResetRequired(session) => {
+            let owner = session
                 .reset()
                 .await
-                .map_err(|failure| storage_err_js(failure.error()))?,
-            CacheOpenOutcome::ResetStorageUncertain,
-        ),
+                .map_err(|failure| storage_err_js(failure.error()))?;
+            let outcome = CacheOpenOutcome::ResetStorageUncertain;
+            (owner, outcome, crossing.torn())
+        }
     };
 
     match open_owner(owner).await? {
         OpenResult::Ready(session) => {
             let connected = session.connect().map_err(err_js)?;
             match TursoStorage::from_opfs_session(connected, scope) {
-                Ok(storage) => Ok(OpenedStorage {
-                    storage,
-                    outcome: reset_outcome,
-                }),
+                Ok(storage) => Ok((storage, reset_outcome, crossing)),
                 Err(failure) => {
                     let reset_required = failure.error().requires_physical_reset();
                     let owner = failure
@@ -1177,15 +1211,12 @@ async fn acquire_storage(
         Some(grant) => await_storage_grant(owner, grant).await?,
         None => owner,
     };
-    let owner = if recovery_wipe {
-        owner
-            .recovery_wipe()
-            .await
-            .map_err(|failure| storage_err_js(failure.error()))?
+    let (owner, crossing) = if recovery_wipe {
+        wipe_keeping_queue(scope, owner).await?
     } else {
-        owner
+        (owner, Crossing::default())
     };
-    let mut opened = open_storage(scope, owner).await?;
+    let mut opened = open_storage(scope, owner, crossing).await?;
     if recovery_wipe {
         opened.outcome = CacheOpenOutcome::ResetStorageUncertain;
     }
@@ -1198,16 +1229,22 @@ async fn open_cache_inner(
     recovery_wipe: bool,
     storage_grant: Option<js_sys::Function>,
     if_available: bool,
-) -> Result<(CacheEngine, CacheOpenOutcome), JsValue> {
+) -> Result<(CacheEngine, CacheOpenOutcome, QueueReport), JsValue> {
     validate_hot_capacity(hot_capacity)?;
     let schema = runtime_schema()?;
-    let OpenedStorage { storage, outcome } =
-        acquire_storage(&scope, recovery_wipe, storage_grant.as_ref(), if_available).await?;
+    let OpenedStorage {
+        storage,
+        sidecar,
+        outcome,
+        queue,
+    } = acquire_storage(&scope, recovery_wipe, storage_grant.as_ref(), if_available).await?;
     Ok((
         CacheEngine {
             state: Rc::new(Mutex::new(CacheState {
                 selections: RecordSelectionCache::default(),
                 engine: Some(build_engine(storage, hot_capacity, schema)),
+                sidecar,
+                loss_to_tell: queue.lost(),
                 mail_generation: soup_filter_cache_adapter::mail::new_generation(),
                 scope,
                 hot_capacity,
@@ -1223,10 +1260,29 @@ async fn open_cache_inner(
             ops: Rc::new(RefCell::new(OpInterner::default())),
         },
         outcome,
+        queue,
     ))
 }
 
-fn cache_open_result(engine: CacheEngine, outcome: CacheOpenOutcome) -> Result<JsValue, JsValue> {
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsQueueReport {
+    outcome: &'static str,
+    kept: u64,
+    dropped: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    read_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    wipe_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    import_ms: Option<f64>,
+}
+
+fn cache_open_result(
+    engine: CacheEngine,
+    outcome: CacheOpenOutcome,
+    queue: QueueReport,
+) -> Result<JsValue, JsValue> {
     let result = js_sys::Object::new();
     js_sys::Reflect::set(
         &result,
@@ -1238,6 +1294,18 @@ fn cache_open_result(engine: CacheEngine, outcome: CacheOpenOutcome) -> Result<J
         &JsValue::from_str("outcome"),
         &JsValue::from_str(outcome.as_str()),
     )?;
+    js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("queue"),
+        &to_js(&JsQueueReport {
+            outcome: queue.outcome.as_str(),
+            kept: queue.kept,
+            dropped: queue.dropped,
+            read_ms: queue.times.read_ms,
+            wipe_ms: queue.times.wipe_ms,
+            import_ms: queue.times.import_ms,
+        })?,
+    )?;
     Ok(result.into())
 }
 
@@ -1248,7 +1316,7 @@ fn cache_open_result(engine: CacheEngine, outcome: CacheOpenOutcome) -> Result<J
 pub async fn open_cache(scope: String, hot_capacity: Option<u32>) -> Result<CacheEngine, JsValue> {
     open_cache_inner(scope, hot_capacity, false, None, false)
         .await
-        .map(|(engine, _)| engine)
+        .map(|(engine, _, _)| engine)
 }
 
 /// Additive open API returning the engine and payload-free recovery outcome.
@@ -1272,7 +1340,7 @@ pub async fn open_cache_with_outcome(
     on_owner_lock_acquired: Option<js_sys::Function>,
     if_available: Option<bool>,
 ) -> Result<JsValue, JsValue> {
-    let (engine, outcome) = open_cache_inner(
+    let (engine, outcome, queue) = open_cache_inner(
         scope,
         hot_capacity,
         false,
@@ -1280,10 +1348,10 @@ pub async fn open_cache_with_outcome(
         if_available.unwrap_or(false),
     )
     .await?;
-    cache_open_result(engine, outcome)
+    cache_open_result(engine, outcome, queue)
 }
 
-/// Acquires the canonical owner once, recovery-wipes before any Turso open,
+/// Acquires the canonical owner once, recovery-wipes all but the mutation queue,
 /// then opens a fresh cache while continuously retaining that same owner lock.
 #[wasm_bindgen(js_name = openCacheForRecovery)]
 pub async fn open_cache_for_recovery(
@@ -1292,7 +1360,7 @@ pub async fn open_cache_for_recovery(
 ) -> Result<CacheEngine, JsValue> {
     open_cache_inner(scope, hot_capacity, true, None, false)
         .await
-        .map(|(engine, _)| engine)
+        .map(|(engine, _, _)| engine)
 }
 
 /// Additive recovery-open API returning the engine and coarse wipe outcome.
@@ -1305,7 +1373,7 @@ pub async fn open_cache_for_recovery_with_outcome(
     on_owner_lock_acquired: Option<js_sys::Function>,
     if_available: Option<bool>,
 ) -> Result<JsValue, JsValue> {
-    let (engine, outcome) = open_cache_inner(
+    let (engine, outcome, queue) = open_cache_inner(
         scope,
         hot_capacity,
         true,
@@ -1313,7 +1381,7 @@ pub async fn open_cache_for_recovery_with_outcome(
         if_available.unwrap_or(false),
     )
     .await?;
-    cache_open_result(engine, outcome)
+    cache_open_result(engine, outcome, queue)
 }
 
 /// Physical database identity this build opens for `scope`; it also names the
@@ -1352,6 +1420,21 @@ pub async fn remove_stale_cache_database(
             queued_mutations: None,
         });
     };
+    // Opening creates files where only the side file is left.
+    match salvage::pending(&owner).await {
+        Ok(0) => {}
+        Ok(queued) => {
+            owner.release().await.map_err(err_js)?;
+            return to_js(&StaleDatabaseCleanup {
+                outcome: "queued-mutations",
+                queued_mutations: Some(queued),
+            });
+        }
+        Err(error) => {
+            owner.release().await.map_err(err_js)?;
+            return Err(err_js(error));
+        }
+    }
     let owner = match open_owner(owner).await? {
         OpenResult::Ready(session) => {
             let connected = session.connect().map_err(err_js)?;
@@ -1393,15 +1476,17 @@ pub async fn remove_stale_cache_database(
 /// the same exclusive OPFS owner lock used by [`openCache`](open_cache).
 #[wasm_bindgen(js_name = destroyCache)]
 pub async fn destroy_cache(scope: String) -> Result<(), JsValue> {
-    OpfsOwner::acquire(&database_identity(&scope))
+    let owner = OpfsOwner::acquire(&database_identity(&scope))
         .await
-        .map_err(err_js)?
-        .recovery_wipe()
-        .await
-        .map_err(err_js)?
-        .release()
-        .await
-        .map_err(err_js)
+        .map_err(err_js)?;
+    // First, and only then: the copy of a queue that settled is inert beside
+    // the database that held it, and would come back without it.
+    if let Err(error) = salvage::forget(&owner.sidecar()).await {
+        owner.release().await.map_err(err_js)?;
+        return Err(error);
+    }
+    let owner = owner.recovery_wipe().await.map_err(err_js)?;
+    owner.release().await.map_err(err_js)
 }
 
 #[cfg(feature = "browser-test-hooks")]
@@ -1539,17 +1624,55 @@ fn query_update_values(
 }
 
 fn has_unsafe_json_integer(value: &serde_json::Value) -> bool {
-    const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
     match value {
-        serde_json::Value::Number(number) => {
-            !number.is_f64()
-                && number
-                    .as_i64()
-                    .is_none_or(|n| !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&n))
-        }
+        serde_json::Value::Number(number) => is_unsafe_integer(number),
         serde_json::Value::Array(values) => values.iter().any(has_unsafe_json_integer),
         serde_json::Value::Object(values) => values.values().any(has_unsafe_json_integer),
         _ => false,
+    }
+}
+
+/// An integer outside JS's safe range.
+fn is_unsafe_integer(number: &serde_json::Number) -> bool {
+    const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
+    !number.is_f64()
+        && number
+            .as_i64()
+            .is_none_or(|n| !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&n))
+}
+
+/// A JSON value from JS, as `serde_wasm_bindgen` reads it: written by the
+/// host's `JSON.stringify` and parsed here once, which avoids a Wasm/JS
+/// crossing for every nested field and array element. A value that
+/// `JSON.stringify` cannot write, or whose text does not parse back (a lone
+/// surrogate), is read the old way. Both read numbers as the JS value they
+/// are, so an integer past the safe range becomes a float here too. A
+/// property whose value is `undefined`, which `JSON.parse` never produces,
+/// is left out where the old way read it as null.
+fn json_value_from_js(value: JsValue) -> Result<serde_json::Value, JsValue> {
+    if let Some(text) = js_sys::JSON::stringify(&value)
+        .ok()
+        .and_then(|text| text.as_string())
+        && let Ok(mut parsed) = serde_json::from_str(&text)
+    {
+        unsafe_integers_to_floats(&mut parsed);
+        return Ok(parsed);
+    }
+    serde_wasm_bindgen::from_value(value).map_err(err_js)
+}
+
+fn unsafe_integers_to_floats(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Number(number) if is_unsafe_integer(number) => {
+            if let Some(float) = number.as_f64().and_then(serde_json::Number::from_f64) {
+                *number = float;
+            }
+        }
+        serde_json::Value::Array(values) => values.iter_mut().for_each(unsafe_integers_to_floats),
+        serde_json::Value::Object(values) => {
+            values.values_mut().for_each(unsafe_integers_to_floats)
+        }
+        _ => {}
     }
 }
 
@@ -1671,14 +1794,38 @@ fn parse_query_inspection(
     })
 }
 
-async fn close_storage(storage: BrowserStorage, force_reset: bool) -> Result<OpfsOwner, JsValue> {
-    match unwrap_storage(storage).try_close().map_err(err_js)? {
-        TursoStorageCloseOutcome::Healthy(closed) if force_reset => {
-            closed.reset().await.map_err(err_js)
-        }
-        TursoStorageCloseOutcome::Healthy(closed) => closed.preserve().map_err(err_js),
-        TursoStorageCloseOutcome::ResetRequired(closed) => closed.reset().await.map_err(err_js),
+/// Closes `storage`, then wipes it but for its queue if its health is uncertain.
+async fn close_storage(
+    scope: &str,
+    storage: BrowserStorage,
+    reset_required: bool,
+) -> Result<OpfsOwner, JsValue> {
+    let (owner, healthy) = match unwrap_storage(storage).try_close().map_err(err_js)? {
+        TursoStorageCloseOutcome::Healthy(closed) => (closed.preserve(), !reset_required),
+        TursoStorageCloseOutcome::ResetRequired(closed) => (closed.preserve_for_wipe(), false),
+    };
+    let owner = owner.map_err(err_js)?;
+    if healthy {
+        return Ok(owner);
     }
+    wipe_keeping_queue(scope, owner)
+        .await
+        .map(|(owner, _)| owner)
+}
+
+/// Closes `storage`, then wipes it and everything it queued.
+async fn discard_storage(storage: BrowserStorage, sidecar: &Sidecar) -> Result<OpfsOwner, JsValue> {
+    let storage = unwrap_storage(storage);
+    // As in `destroy_cache`.
+    if let Err(error) = salvage::forget(sidecar).await {
+        release_storage(storage).await?;
+        return Err(error);
+    }
+    match storage.try_close().map_err(err_js)? {
+        TursoStorageCloseOutcome::Healthy(closed) => closed.reset().await,
+        TursoStorageCloseOutcome::ResetRequired(closed) => closed.reset().await,
+    }
+    .map_err(err_js)
 }
 
 #[wasm_bindgen]
@@ -2896,14 +3043,34 @@ impl CacheEngine {
         })
     }
 
-    /// Drops all cached state, including the durable mutation queue.
+    /// Says that whoever may have queued writes was told what the open reported
+    /// lost. Until then every later open reports it again.
+    #[wasm_bindgen(js_name = queueLossTold)]
+    pub fn queue_loss_told(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            // Once closed, the side file is the next open's.
+            state.ensure_callable()?;
+            if state.loss_to_tell {
+                salvage::told(&state.sidecar).await?;
+                state.loss_to_tell = false;
+            }
+            Ok(JsValue::UNDEFINED)
+        })
+    }
+
+    /// Drops all cached state, including the durable mutation queue and any
+    /// copy of it kept beside the database. Rejects when that copy stays.
     pub fn clear(&self) -> js_sys::Promise {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.forget_prepared_projections();
+            let forgotten = salvage::forget(&state.sidecar).await;
             let result = state.engine_mut()?.clear().await;
             let revision = state.engine_result(result)?;
+            forgotten?;
             to_js(&JsRevisionResult {
                 revision: revision.to_string(),
             })
@@ -2930,21 +3097,23 @@ impl CacheEngine {
             })?;
             let scope = state.scope.clone();
             let hot_capacity = state.hot_capacity;
-            let owner = match close_storage(engine.into_storage(), true).await {
+            let owner = match discard_storage(engine.into_storage(), &state.sidecar).await {
                 Ok(owner) => owner,
                 Err(error) => {
                     state.reset_required = true;
                     return Err(error);
                 }
             };
-            let storage = match open_storage(&scope, owner).await {
-                Ok(opened) => opened.storage,
+            let opened = match open_storage(&scope, owner, Crossing::default()).await {
+                Ok(opened) => opened,
                 Err(error) => {
                     state.reset_required = true;
                     return Err(error);
                 }
             };
-            state.engine = Some(build_engine(storage, hot_capacity, schema));
+            state.sidecar = opened.sidecar;
+            state.loss_to_tell = opened.queue.lost();
+            state.engine = Some(build_engine(opened.storage, hot_capacity, schema));
             state.mail_generation = soup_filter_cache_adapter::mail::new_generation();
             state.reset_required = false;
             Ok(JsValue::UNDEFINED)
@@ -2966,7 +3135,9 @@ impl CacheEngine {
                     closed_js_error()
                 }
             })?;
-            let owner = match close_storage(engine.into_storage(), state.reset_required).await {
+            let closed =
+                close_storage(&state.scope, engine.into_storage(), state.reset_required).await;
+            let owner = match closed {
                 Ok(owner) => owner,
                 Err(error) => {
                     state.reset_required = true;

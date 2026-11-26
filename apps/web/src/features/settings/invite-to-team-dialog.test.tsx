@@ -248,7 +248,7 @@ function AgentInviteDialog(props: { admin: boolean; onClose: () => void }) {
   );
 }
 
-const agentForm = () => screen.queryByRole('textbox', { name: 'Name' });
+const agentForm = () => screen.queryByRole('textbox', { name: 'Name it' });
 
 describe('InviteToTeamDialog agent teammates', () => {
   function openAsAdmin(onClose: () => void = () => {}) {
@@ -294,13 +294,13 @@ describe('InviteToTeamDialog agent teammates', () => {
     new ThrownResultError([{ code, message: code }]);
 
   function startAdding(name = 'Ada') {
-    fireEvent.input(screen.getByRole('textbox', { name: 'Name' }), {
+    fireEvent.input(screen.getByRole('textbox', { name: 'Name it' }), {
       target: { value: name },
     });
   }
   const addButton = () =>
     screen.getByRole('button', {
-      name: /^(Add|Try again|Retry)/,
+      name: /^Add agent(?: ·|$)/,
     }) as HTMLButtonElement;
 
   it('adds an agent by name and size, waits until it is online, and lands in its DM', async () => {
@@ -313,18 +313,25 @@ describe('InviteToTeamDialog agent teammates', () => {
       .mockResolvedValue({ agents: [{ ...ada, status: 'running' }] });
     openAsAdmin(onClose);
 
-    expect(addButton().disabled).toBe(true);
-    expect(
-      screen.getByText('Give your agent a name to continue.')
-    ).toBeTruthy();
-    // A suggestion fills the name.
-    fireEvent.click(screen.getByRole('button', { name: 'Ada' }));
+    // It starts named Macronaught; cleared, Add marks the field and sends
+    // nothing.
+    const field = screen.getByRole('textbox', {
+      name: 'Name it',
+    });
+    expect((field as HTMLInputElement).value).toBe('Macronaught');
+    fireEvent.input(field, { target: { value: '' } });
+    fireEvent.click(addButton());
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(field);
+    expect(mocks.createAgent).not.toHaveBeenCalled();
+    fireEvent.input(field, { target: { value: 'Ada' } });
+    expect(field.getAttribute('aria-invalid')).toBeNull();
     fireEvent.click(screen.getByRole('radio', { name: 'Large' }));
-    expect(addButton().textContent).toContain('Add Ada');
-    expect(addButton().textContent).toContain('$80');
+    expect(addButton().textContent).toBe('Add agent · $80.00/month');
 
     fireEvent.click(addButton());
-    expect(screen.getByRole('button', { name: /Adding Ada/ })).toBeTruthy();
+    expect(addButton().textContent).toBe('Add agent');
+    expect(addButton().getAttribute('aria-busy')).toBe('true');
 
     await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(mocks.openDm).toHaveBeenCalledWith(ada.userId);
@@ -376,14 +383,18 @@ describe('InviteToTeamDialog agent teammates', () => {
     );
     expect(screen.getByRole('button', { name: 'Update card' })).toBeTruthy();
     expect(
-      (screen.getByRole('textbox', { name: 'Name' }) as HTMLInputElement).value
+      (
+        screen.getByRole('textbox', {
+          name: 'Name it',
+        }) as HTMLInputElement
+      ).value
     ).toBe('Ada');
 
     mocks.createAgent.mockResolvedValue(ada);
     mocks.fetchAgents.mockResolvedValue({
       agents: [{ ...ada, status: 'running' }],
     });
-    expect(addButton().textContent).toContain('Try again');
+    expect(addButton().textContent).toBe('Add agent · $40.00/month');
     fireEvent.click(addButton());
     await vi.waitFor(() => expect(mocks.openDm).toHaveBeenCalled());
     const [declined, again] = mocks.createAgent.mock.calls.map(
@@ -430,12 +441,14 @@ describe('InviteToTeamDialog agent teammates', () => {
         "Ada didn't start on its computer"
       )
     );
+    expect(addButton().textContent).toBe('Add agent');
     fireEvent.click(addButton());
     await vi.waitFor(() =>
       expect(screen.getByRole('alert').textContent).toContain(
         'The charge was undone'
       )
     );
+    expect(addButton().textContent).toBe('Add agent · $40.00/month');
     expect(mocks.retryComputer).toHaveBeenCalledWith('computer-1');
     expect(mocks.createAgent).toHaveBeenCalledTimes(1);
   });
@@ -444,10 +457,10 @@ describe('InviteToTeamDialog agent teammates', () => {
     setFlag({ enabled: true, loading: false });
     setComputersFlag({ enabled: true, loading: false });
     openAsAdmin();
-    expect(screen.getByRole('textbox', { name: 'Name' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Name it' })).toBeTruthy();
 
     setFlag({ enabled: false, loading: false });
-    expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Name it' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Send invite' })).toBeTruthy();
   });
 });

@@ -34,13 +34,13 @@ export function createTaskSavedViewDraft(options: {
   creating: Accessor<boolean>;
   state: Pick<
     TasksViewState,
-    'tab' | 'facets' | 'layout' | 'groupBy' | 'sort' | 'dueDate'
+    'tab' | 'facets' | 'layout' | 'groupBy' | 'sort' | 'dueDate' | 'startDate'
   >;
   facetContext: Accessor<TaskFacetContext>;
   apply: (
     settings: Pick<
       TasksViewState,
-      'facets' | 'layout' | 'groupBy' | 'sort' | 'dueDate'
+      'facets' | 'layout' | 'groupBy' | 'sort' | 'dueDate' | 'startDate'
     >
   ) => void;
 }) {
@@ -57,6 +57,7 @@ export function createTaskSavedViewDraft(options: {
         facets: DEFAULT_TASK_FACET_SELECTION,
         groupBy: TASK_DEFAULT_GROUP_BY[options.state.tab],
         dueDate: undefined,
+        startDate: undefined,
         context: options.facetContext(),
       }),
     read: readTaskSavedView,
@@ -70,6 +71,7 @@ export function createTaskSavedViewDraft(options: {
         groupBy: TASK_DEFAULT_GROUP_BY['team-tasks'],
         sort: [{ id: 'updated_at' }],
         dueDate: undefined,
+        startDate: undefined,
       }),
   });
   const tagBindings = createMemo<ReadonlyMap<string, string>>(

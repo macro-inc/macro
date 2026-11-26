@@ -107,5 +107,27 @@ WHERE cardinality($6::text[]) > 0
             false
         )
     )
+    AND NOT EXISTS (
+        SELECT 1
+        FROM unnest($11::text[]) AS e(pattern)
+        WHERE COALESCE(
+            (
+                NULLIF(BTRIM(c.name), '') IS NOT NULL
+                AND CASE
+                    WHEN $7::bool THEN c.name ~* e.pattern
+                    ELSE c.name ILIKE e.pattern
+                END
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM unnest(people.names) AS person(name)
+                WHERE CASE
+                    WHEN $7::bool THEN person.name ~* e.pattern
+                    ELSE person.name ILIKE e.pattern
+                END
+            ),
+            false
+        )
+    )
 ORDER BY c.updated_at DESC, c.id DESC
 LIMIT $10
