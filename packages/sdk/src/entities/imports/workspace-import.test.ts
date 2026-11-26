@@ -4,6 +4,7 @@ import type { PlanWorkspaceImportRequest } from '../../../generated/cognition/ty
 import '../../macro';
 import type { MacroClient } from '../../utils/client';
 import { ImportNamespace } from './namespace';
+import { TrackerWorkspaceImport } from './workspace-import';
 
 describe('workspace imports', () => {
   test('plan sends the Notion roots and sharing choice to the Notion plan route', async () => {
@@ -96,5 +97,15 @@ describe('workspace imports', () => {
       imported: 3,
     });
     expect(calls).toEqual(['status jira', 'cancel notion']);
+  });
+
+  test('a tracker import takes Linear or Jira only', () => {
+    const client = {} as MacroClient;
+    expect(new TrackerWorkspaceImport(client, 'linear')).toBeDefined();
+    expect(new TrackerWorkspaceImport(client, 'jira')).toBeDefined();
+    // @ts-expect-error HubSpot is planned with ImportFromHubspot, not here.
+    new TrackerWorkspaceImport(client, 'hubspot');
+    // @ts-expect-error Notion has its own NotionWorkspaceImport.
+    new TrackerWorkspaceImport(client, 'notion');
   });
 });

@@ -333,6 +333,20 @@ fn code_mode_imports_through_the_sdk_instead_of_the_import_tools() {
 }
 
 #[test]
+fn code_mode_keeps_import_from_hubspot_until_the_sdk_plans_hubspot() {
+    // macro.imports plans Notion, Linear and Jira only; HubSpot still needs its
+    // tool in code mode.
+    let tools = tools_for_agent_code_mode();
+    assert!(
+        tools.toolset.tools.contains_key("ImportFromHubspot")
+            || tools
+                .deferred
+                .iter()
+                .any(|tool| tool.name == "ImportFromHubspot")
+    );
+}
+
+#[test]
 fn code_mode_manages_bots_and_presents_credential_cards_through_the_sdk() {
     let tools = tools_for_agent_code_mode();
     for name in [

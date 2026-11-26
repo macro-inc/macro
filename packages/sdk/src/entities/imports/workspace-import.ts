@@ -105,8 +105,15 @@ export abstract class WorkspaceImport {
   }
 }
 
-/** An issue tracker workspace this SDK imports. */
-export type TrackerImportSource = Exclude<WorkspaceImportSource, 'notion'>;
+/**
+ * An issue tracker workspace this SDK imports. Named, not "all but Notion",
+ * so a new review source (HubSpot plans with `ImportFromHubspot`) does not
+ * widen it.
+ */
+export type TrackerImportSource = Extract<
+  WorkspaceImportSource,
+  'linear' | 'jira'
+>;
 
 /** A Linear or Jira workspace import: issues become tasks, groups projects. */
 export class TrackerWorkspaceImport extends WorkspaceImport {

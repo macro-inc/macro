@@ -28,9 +28,9 @@ presents it as an import review (`execution.reviews.create` in code mode,
 off?"; the owner approves on the card or by saying yes, which has the agent
 submit it with `DecideReview` (the review route refuses every program run, so
 code mode has no start). The plan route refuses Slack and HubSpot; HubSpot
-plans with `ImportFromHubspot`, which stays visible in code mode. `plan` returns after a short wait
-(`PLAN_WAIT`), usually while the run is still `running`, and the agent
-presents the review at once: the harness ties the staged rows and the
+plans with `ImportFromHubspot`, which stays visible in code mode. `plan`
+returns after a short wait (`PLAN_WAIT`), usually while the run is still
+`running`, and the agent presents the review at once: the harness ties the staged rows and the
 `running` run (`import_run.review_id`) to the review, so rows staged later
 take it too. Only a `running` or `ready` run takes a review: the harness checks
 the report before saving one, and `attach_review` refuses a run that is
