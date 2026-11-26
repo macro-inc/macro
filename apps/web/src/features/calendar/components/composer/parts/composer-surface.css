@@ -1,0 +1,13 @@
+@reference "../../../../../index.css";
+
+/* The outline paints after descendants and bypasses glass's zero-width border
+   and masked rim. Keep it inside the real host without changing card geometry. */
+[data-calendar-composer-surface],
+.elevated-surface:has(.calendar-composer),
+.mobile-sheet:has(.calendar-composer),
+[data-calendar-tool-composer] {
+  @variant dark-mode {
+    outline: 1px solid var(--border-secondary);
+    outline-offset: -1px;
+  }
+}

@@ -1,5 +1,19 @@
 # AI Chat (Agents)
 
+## Add existing items by dragging
+
+Drag an email thread, document, task, channel, Drive item, or project onto the
+Home, Agents, or AI chat composer to add it as mention context, just like the
+library/mention picker. Context is appended to the draft, regardless of the old
+caret position. The source item stays in place and the draft is retained.
+Dragging a selected row adds its selected items. Only the composer under the
+pointer receives them; loading, read-only, disabled and dictation surfaces reject drops.
+Native files still use the upload/attachment path.
+
+Release outside a target or cancel with Escape to add nothing. Pointer cancel
+and window blur also cancel; the preview and drop indication clear on every
+termination path.
+
 ## Recently shared in an agent session
 
 With agent session activity enabled, the first side panel section lists items
@@ -2827,7 +2841,18 @@ until the agent starts its reply. This behaves the same on mobile. Approving an
 import plan only starts its write, so no **Responding** shows until the write
 ends; the card shows its final state and the agent's reply follows. Verify that
 sibling pages keep their review order while writing and after completion, even
-for a large plan staged together. A plan still being made when it was presented also wakes the agent once it is ready.
+for a large plan staged together. A plan
+still being made when it was presented also wakes the agent once it is ready.
+An import review cannot be presented for a plan that failed, finished, or was
+never made: the agent is told why (for example, the source lost access), and
+nothing is saved or shown. If the plan fails while the review is being saved,
+the review stays saved, dismissed with the reason, and is never shown. A card
+whose plan fails after it was presented shows **Couldn't plan this import.**
+with what happened (from the failure's kind, never the raw error) and
+**Dismiss**, plus **Reconnect <source>** when the connection was revoked,
+expired or unusable. Dismissing it keeps that line and shows no plan rows.
+Approving a plan that is no longer ready (it failed, or a newer plan replaced
+it) is refused on the card and in chat, and nothing is written.
 These events create no user bubble; events without an existing card use a
 quiet timeline row.
 The agent can read final drafts and confirmed outcomes through **GetReview**.

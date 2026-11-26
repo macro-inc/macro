@@ -36,10 +36,15 @@ pub trait FocusStore: Send + Sync + 'static {
     /// Threads of inbox `link_id` that may belong in Focus with mail since
     /// `since` and no classification of their latest message under the current
     /// rule, newest first. `after` is the last thread of the previous page.
+    ///
+    /// With `mail_since`, the read leaves out threads whose latest mail in and
+    /// out is older than `mail_since`, except signal threads: a caller that
+    /// read the whole window lately has seen them, and their mail is the same.
     fn stale_threads(
         &self,
         link_id: Uuid,
         since: DateTime<Utc>,
+        mail_since: Option<DateTime<Utc>>,
         after: Option<StaleThread>,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<StaleThread>, Report>> + Send;

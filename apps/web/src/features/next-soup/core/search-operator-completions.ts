@@ -2,6 +2,7 @@ import { foldName } from '@core/util/name-match-score';
 import { match } from 'ts-pattern';
 import {
   isPhraseQuote,
+  nameAsTyped,
   SEARCH_OPERATOR_CALL_STATUSES,
   SEARCH_OPERATOR_NAMES,
   SEARCH_OPERATOR_PRIORITIES,
@@ -223,12 +224,12 @@ export function searchOperatorCompletions(
       .with('assignee', 'author', 'from', people)
       .with('tag', () =>
         values.tags
-          .filter((tag) => startsWith(tag, value))
+          .filter((tag) => startsWith(nameAsTyped(tag), value))
           .map(
             (tag): SearchOperatorCompletion => ({
               kind: 'tag',
               text: tag,
-              insert: `tag:${asValue(tag)}`,
+              insert: `tag:${asValue(nameAsTyped(tag))}`,
             })
           )
       )
@@ -247,12 +248,12 @@ export function searchOperatorCompletions(
         if (value !== '' && !value.startsWith('#')) return [];
         const typedName = value.slice(1);
         return values.channels
-          .filter((channel) => startsWith(channel, typedName))
+          .filter((channel) => startsWith(nameAsTyped(channel), typedName))
           .map(
             (channel): SearchOperatorCompletion => ({
               kind: 'channel',
               text: channel,
-              insert: `in:#${asValue(channel)}`,
+              insert: `in:#${asValue(nameAsTyped(channel))}`,
             })
           );
       })

@@ -14,7 +14,7 @@ import {
   type SearchIndexId,
 } from './search-filters';
 import {
-  isPhraseQuote,
+  nameAsTyped,
   SEARCH_OPERATOR_TYPES,
   type SearchOperatorBinding,
   type SearchOperatorCallStatus,
@@ -26,7 +26,11 @@ import {
   type SearchOperatorTaskStatus,
   searchOperatorIndexes,
 } from './search-operators';
-import { compileSearchQuery, TAG_SEARCH_TYPES } from './search-query';
+import {
+  compileSearchQuery,
+  searchIndexesFilters,
+  TAG_SEARCH_TYPES,
+} from './search-query';
 
 /**
  * Turns the operators read out of a Search query into the filters the
@@ -276,13 +280,20 @@ export function searchOperatorTagAst({
  */
 export function searchOperatorQuery({
   state,
+  indexes,
   matchesNothing,
 }: SearchOperatorFilters): Query {
   // Nothing can match, so the feed is asked for nothing rather than paged
   // through for rows that would all be dropped.
   if (matchesNothing) return defineQueryFilters({});
   const query = compileSearchQuery(state);
-  const include = { ...query.include };
+  // One type's compile keeps the feed to it. Several (`in:#` reads channels
+  // and calls) are kept to their targets together, or the feed pages through
+  // every other kind for rows the view then drops.
+  const include = {
+    ...(indexes && indexes.length > 1 ? searchIndexesFilters(indexes) : {}),
+    ...query.include,
+  };
   // A tag narrows every kind that carries tags, as on the service, while a
   // type's own compile keeps tags to the types whose facets offer them.
   if (state.tags.length) {
@@ -362,8 +373,7 @@ const INDEX_TYPES: Record<SearchIndexId, string> = {
  * A name as the value of a token the field shows: without quotes, which no
  * value can hold, and quoted when it holds whitespace.
  */
-const shownValue = (name: string) =>
-  asValue([...name].filter((char) => !isPhraseQuote(char)).join(''));
+const shownValue = (name: string) => asValue(nameAsTyped(name));
 
 /** Operator text an opener writes, with the ids its bound tokens stand for. */
 export type SearchOperatorText = {
@@ -438,7 +448,8 @@ export function searchFiltersOperatorText(
   const person = (id: string) => {
     if (names.userId && id.toLowerCase() === names.userId.toLowerCase())
       return 'me';
-    return id.startsWith('macro|') ? id.slice('macro|'.length) : id;
+    // A name no one was matched to is written as typed, quoted if spaced.
+    return id.startsWith('macro|') ? id.slice('macro|'.length) : shownValue(id);
   };
   const bindings: SearchOperatorBinding[] = [];
   const written = new Set<string>();

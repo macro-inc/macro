@@ -132,6 +132,14 @@ struct Actions {
     action_started: tokio::sync::Notify,
     approvable: AtomicBool,
     fail_import: AtomicBool,
+    /// The import's write fence refuses the approved plan.
+    refuse_import: AtomicBool,
+    /// Reviews let go of when dismissed.
+    released: Mutex<Vec<ReviewId>>,
+    /// Why a new review cannot be presented, when it cannot.
+    refuse_presentation: Mutex<Option<String>>,
+    /// Why a saved review can never be presented, found while presenting it.
+    unpresentable: Mutex<Option<String>>,
     dependency: Mutex<Option<Uuid>>,
 }
 impl Actions {
@@ -174,6 +182,26 @@ impl ReviewActions for Actions {
         assert_eq!(account_holder, &record.acting_user);
         Ok(self.approvable.load(Ordering::SeqCst))
     }
+    async fn released(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        record: &ReviewRecord,
+    ) -> Result<(), CodeModeError> {
+        assert_eq!(owner, &self.owner);
+        self.released.lock().unwrap().push(record.id);
+        Ok(())
+    }
+    async fn presentable(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        _: &ReviewRecord,
+    ) -> Result<(), CodeModeError> {
+        assert_eq!(owner, &self.owner);
+        match self.refuse_presentation.lock().unwrap().clone() {
+            Some(reason) => Err(CodeModeError::Invalid(reason)),
+            None => Ok(()),
+        }
+    }
     async fn send_email(
         &self,
         account_holder: &MacroUserIdStr<'static>,
@@ -202,6 +230,11 @@ impl ReviewActions for Actions {
         _: &ImportDraft,
     ) -> Result<ImportResult, CodeModeError> {
         self.act(account_holder, "import".into()).await;
+        if self.refuse_import.load(Ordering::SeqCst) {
+            return Err(CodeModeError::NotApprovable(
+                "The import was not started: the import plan failed.".into(),
+            ));
+        }
         if self.fail_import.load(Ordering::SeqCst) {
             return Err(invalid());
         }
@@ -214,6 +247,9 @@ impl ReviewActions for Actions {
     ) -> Result<(), CodeModeError> {
         assert_eq!(owner, &self.owner);
         self.presentations.lock().unwrap().push(record.id);
+        if let Some(reason) = self.unpresentable.lock().unwrap().clone() {
+            return Err(CodeModeError::Unpresentable(reason));
+        }
         if self.fail_presentation.load(Ordering::SeqCst) {
             return Err(invalid());
         }
@@ -269,6 +305,10 @@ impl Fixture {
             action_started: tokio::sync::Notify::new(),
             approvable: AtomicBool::new(true),
             fail_import: AtomicBool::new(false),
+            refuse_import: AtomicBool::new(false),
+            released: Mutex::new(Vec::new()),
+            refuse_presentation: Mutex::new(None),
+            unpresentable: Mutex::new(None),
             dependency: Mutex::new(None),
         });
         let service = ReviewService::new(
@@ -1236,7 +1276,7 @@ async fn a_chat_submit_waits_until_the_review_is_approvable() {
         f.service
             .decide_for_session(f.session, &f.actions.owner, row.id, submit.clone())
             .await,
-        Err(CodeModeError::Invalid(_))
+        Err(CodeModeError::NotApprovable(_))
     ));
     let unsaved = f.store.get(f.session, row.id).await.unwrap();
     assert_eq!(unsaved.revision, row.revision);
@@ -1365,6 +1405,245 @@ async fn a_view_is_presented_only_by_its_session_and_execution() {
         Err(CodeModeError::NotFound)
     ));
     assert!(f.actions.views.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_review_that_cannot_be_presented_is_never_saved() {
+    let f = Fixture::new();
+    *f.actions.refuse_presentation.lock().unwrap() = Some("the import plan failed".into());
+    let refused = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await;
+    match refused {
+        Err(CodeModeError::Invalid(reason)) => assert_eq!(reason, "the import plan failed"),
+        Err(error) => panic!("expected the refusal, got {error:?}"),
+        Ok(_) => panic!("a refused review was created"),
+    }
+    assert!(f.store.0.lock().unwrap().is_empty(), "nothing is saved");
+    assert!(f.actions.presentations.lock().unwrap().is_empty());
+
+    // Listing the execution's reviews is unaffected, and a later review
+    // presents as usual.
+    *f.actions.refuse_presentation.lock().unwrap() = None;
+    let row = f
+        .create(vec![
+            json!({"subject":"x", "body":"Hello", "to":[{"email":"ada@example.com"}]}),
+        ])
+        .await;
+    let listed = f.service.list(&f.view(), f.execution).await.unwrap();
+    assert_eq!(
+        listed.iter().map(|row| row.id).collect::<Vec<_>>(),
+        vec![row.id]
+    );
+}
+
+#[tokio::test]
+async fn a_saved_review_that_can_never_be_presented_is_dismissed_and_not_retried() {
+    let f = Fixture::new();
+    // The plan failed after the pre-check, while the review was being saved.
+    *f.actions.unpresentable.lock().unwrap() = Some("the import plan failed".into());
+    let refused = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await;
+    match refused {
+        Err(CodeModeError::Unpresentable(reason)) => assert_eq!(reason, "the import plan failed"),
+        Err(error) => panic!("expected the refusal, got {error:?}"),
+        Ok(_) => panic!("an unpresentable review was presented"),
+    }
+
+    // Reads and lists return it settled instead of presenting it again.
+    *f.actions.unpresentable.lock().unwrap() = None;
+    let listed = f.service.list(&f.view(), f.execution).await.unwrap();
+    let [saved] = listed.as_slice() else {
+        panic!("expected the one saved review");
+    };
+    assert_eq!(saved.presented_at, None);
+    let state = &saved.items.states()[0];
+    assert_eq!(state.status, ReviewItemStatus::Dismissed);
+    assert_eq!(state.error.as_deref(), Some("the import plan failed"));
+    let read = f.service.read(&f.view(), saved.id).await.unwrap();
+    assert_eq!(read.presented_at, None);
+    assert_eq!(
+        f.actions.presentations.lock().unwrap().len(),
+        1,
+        "presented once"
+    );
+}
+
+#[tokio::test]
+async fn the_card_cannot_approve_a_review_that_is_not_approvable() {
+    let f = Fixture::new();
+    let row = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await
+        .unwrap();
+    // The plan failed or was replaced after the card was shown.
+    f.actions.approvable.store(false, Ordering::SeqCst);
+
+    let refused = f
+        .service
+        .decide(
+            &f.edit(),
+            &f.actions.owner,
+            row.id,
+            ReviewDecision::Submit {
+                revision: row.revision,
+                items: vec![],
+            },
+        )
+        .await;
+    match refused {
+        Err(CodeModeError::NotApprovable(_)) => {}
+        Err(error) => panic!("expected a typed refusal, got {error:?}"),
+        Ok(_) => panic!("the card approved a plan that cannot be written"),
+    }
+    let unsaved = f.store.get(f.session, row.id).await.unwrap();
+    assert_eq!(unsaved.revision, row.revision);
+    assert_eq!(unsaved.items.states()[0].status, ReviewItemStatus::Pending);
+    assert!(
+        f.actions.calls.lock().unwrap().is_empty(),
+        "no import started"
+    );
+}
+
+#[tokio::test]
+async fn a_read_that_finds_a_review_can_never_be_presented_returns_it_settled() {
+    let f = Fixture::new();
+    // Presentation fails once for a passing reason, so the review is saved
+    // unpresented; by the next read it can never be presented.
+    f.actions.fail_presentation.store(true, Ordering::SeqCst);
+    let saved = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await;
+    assert!(saved.is_err());
+    f.actions.fail_presentation.store(false, Ordering::SeqCst);
+    *f.actions.unpresentable.lock().unwrap() = Some("the import plan failed".into());
+
+    let listed = f.service.list(&f.view(), f.execution).await.unwrap();
+    let [record] = listed.as_slice() else {
+        panic!("expected the one saved review");
+    };
+    assert_eq!(record.presented_at, None);
+    assert_eq!(record.items.states()[0].status, ReviewItemStatus::Dismissed);
+    assert_eq!(
+        record.items.states()[0].error.as_deref(),
+        Some("the import plan failed")
+    );
+    let read = f.service.read(&f.view(), record.id).await.unwrap();
+    assert_eq!(read.items.states()[0].status, ReviewItemStatus::Dismissed);
+}
+
+#[tokio::test]
+async fn an_import_the_fence_refuses_goes_back_to_pending_with_why() {
+    let f = Fixture::new();
+    // Approvable when submitted; the plan failed before the write started.
+    f.actions.refuse_import.store(true, Ordering::SeqCst);
+    let row = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await
+        .unwrap();
+    f.service
+        .decide(
+            &f.edit(),
+            &f.actions.owner,
+            row.id,
+            ReviewDecision::Submit {
+                revision: row.revision,
+                items: vec![],
+            },
+        )
+        .await
+        .unwrap();
+
+    let settled = f.settled(row.id).await;
+    let state = &settled.items.states()[0];
+    assert_eq!(state.status, ReviewItemStatus::Pending, "nothing started");
+    {
+        let events = f.store.2.lock().unwrap();
+        let last = events.last().expect("a settlement");
+        assert!(
+            matches!(&last.notification.event, NotificationEvent::ReviewSettled(ReviewSettlement::Actions(outcome)) if outcome.outcome == DecisionOutcome::Refused),
+            "{:?}",
+            last.notification.event
+        );
+    }
+    assert_eq!(
+        state.error.as_deref(),
+        Some("The import was not started: the import plan failed.")
+    );
+
+    // Approved again once the plan is ready: the old reason is gone.
+    f.actions.refuse_import.store(false, Ordering::SeqCst);
+    f.service
+        .decide(
+            &f.edit(),
+            &f.actions.owner,
+            row.id,
+            ReviewDecision::Submit {
+                revision: settled.revision,
+                items: vec![],
+            },
+        )
+        .await
+        .unwrap();
+    let approved = f.settled(row.id).await;
+    assert_eq!(
+        approved.items.states()[0].status,
+        ReviewItemStatus::Completed
+    );
+    assert_eq!(approved.items.states()[0].error, None);
+}
+
+#[tokio::test]
+async fn dismissing_a_review_lets_go_of_what_it_held() {
+    let f = Fixture::new();
+    let row = f
+        .service
+        .create(
+            &f.edit(),
+            &f.actions.owner,
+            f.input("import", vec![json!({"source":"notion"})]),
+        )
+        .await
+        .unwrap();
+    f.service
+        .decide(
+            &f.edit(),
+            &f.actions.owner,
+            row.id,
+            ReviewDecision::Dismiss {
+                revision: row.revision,
+                items: vec![],
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(*f.actions.released.lock().unwrap(), vec![row.id]);
 }
 
 #[tokio::test]

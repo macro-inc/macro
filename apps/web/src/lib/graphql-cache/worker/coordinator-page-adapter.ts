@@ -21,7 +21,9 @@ import {
   type CacheQueueState,
   type CacheReadState,
   type CleanupToPageEnvelope,
+  type CoordinatorIdentity,
   type CoordinatorToTabEnvelope,
+  coordinatorWorkerName,
   ENGINE_STARTUP_PHASES,
   type EngineOpenOutcome,
   isCacheRequest,
@@ -62,7 +64,9 @@ export interface CacheCoordinatorPageAdapterOptions {
   visibility?: Pick<Document, 'visibilityState'> &
     Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
   onCacheReadAvailabilityChanged?: (state: CacheReadState) => void;
-  createSharedWorker?: (scope: string) => SharedWorkerLike;
+  createSharedWorker?: (scope: string, generation: number) => SharedWorkerLike;
+  /** The generation of the coordinator to connect to. Defaults to 0. */
+  coordinatorGeneration?: () => Promise<number>;
   createDedicatedWorker?: (
     scope: string,
     ownerEpoch: number
@@ -133,12 +137,11 @@ const withVersion = <
   }) as unknown as T;
 
 const defaultSharedWorkerFactory = (
-  scope: string,
-  buildTime: number
+  identity: CoordinatorIdentity
 ): SharedWorkerLike =>
   new SharedWorker(
     new URL('./cache.coordinator.shared-worker.ts', import.meta.url),
-    { type: 'module', name: `graphql-cache-coordinator:${scope}:${buildTime}` }
+    { type: 'module', name: coordinatorWorkerName(identity) }
   );
 
 const defaultDedicatedWorkerFactory = (
@@ -194,7 +197,10 @@ export class CacheCoordinatorPageAdapter {
   readonly tabId: string;
   onmessage: ((event: MessageEvent<WorkerMessage>) => void) | null = null;
 
-  private readonly createSharedWorker: (scope: string) => SharedWorkerLike;
+  private readonly createSharedWorker: (
+    scope: string,
+    generation: number
+  ) => SharedWorkerLike;
   private readonly createDedicatedWorker: (
     scope: string,
     ownerEpoch: number
@@ -261,8 +267,12 @@ export class CacheCoordinatorPageAdapter {
       (typeof document === 'undefined' ? undefined : document);
     this.createSharedWorker =
       options.createSharedWorker ??
-      ((scope) =>
-        defaultSharedWorkerFactory(scope, options.buildTime ?? APP_BUILD_TIME));
+      ((scope, generation) =>
+        defaultSharedWorkerFactory({
+          scope,
+          buildTime: options.buildTime ?? APP_BUILD_TIME,
+          generation,
+        }));
     this.createDedicatedWorker =
       options.createDedicatedWorker ?? defaultDedicatedWorkerFactory;
     this.lockManager = options.lockManager;
@@ -521,7 +531,13 @@ export class CacheCoordinatorPageAdapter {
     });
     if (this.closed) return;
 
-    const worker = this.createSharedWorker(this.options.scope);
+    const { coordinatorGeneration } = this.options;
+    const generation = coordinatorGeneration
+      ? await coordinatorGeneration()
+      : 0;
+    if (this.closed) return;
+
+    const worker = this.createSharedWorker(this.options.scope, generation);
     const closeUnpublishedWorker = (): void => {
       try {
         worker.onerror = null;
@@ -588,6 +604,7 @@ export class CacheCoordinatorPageAdapter {
         visible: this.lastVisibility,
         hotCapacity: this.options.hotCapacity,
         buildTime: this.options.buildTime ?? APP_BUILD_TIME,
+        generation,
       })
     );
   }

@@ -3604,12 +3604,11 @@ impl SqlPredicateCompiler {
         profile: &Profile,
         partition: &Token,
     ) -> String {
+        if values.len() > 1 {
+            return self.exact_alternatives(attribute, values, profile, partition);
+        }
         let name = self.next_name();
-        let condition = if values.len() == 1 {
-            "= ?".to_owned()
-        } else {
-            format!("IN ({})", vec!["?"; values.len()].join(", "))
-        };
+        let condition = "= ?";
         for _ in 0..2 {
             self.parameters.push(text(profile.token().as_str()));
             self.parameters.push(text(partition.as_str()));
@@ -3622,6 +3621,46 @@ impl SqlPredicateCompiler {
         }
         self.ctes.push(format!(
             "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition} UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition})"
+        ));
+        name
+    }
+
+    /// Documents holding any of several values of one exact attribute, read
+    /// from the values through the lookup index: one seek each. `f.value IN
+    /// (...)` instead makes Turso read every fact of the attribute and test it
+    /// against the whole list (500 channel ids: 110 ms instead of 5).
+    fn exact_alternatives(
+        &mut self,
+        attribute: &Token,
+        values: &[&predicate_index::ExactValue],
+        profile: &Profile,
+        partition: &Token,
+    ) -> String {
+        // Each value once: a repeated one would seek and read its facts again.
+        let mut values = values.to_vec();
+        values.sort_by(|left, right| left.as_bytes().cmp(right.as_bytes()));
+        values.dedup_by(|left, right| left.as_bytes() == right.as_bytes());
+        let wanted = self.next_name();
+        self.parameters.extend(
+            values
+                .iter()
+                .map(|value| Value::from_blob(value.as_bytes().to_vec())),
+        );
+        self.ctes.push(format!(
+            "{wanted}(value) AS MATERIALIZED (VALUES {})",
+            vec!["(?)"; values.len()].join(", ")
+        ));
+        let name = self.next_name();
+        self.parameters.extend([
+            text(attribute.as_str()),
+            text(profile.token().as_str()),
+            text(partition.as_str()),
+            text(profile.token().as_str()),
+            text(partition.as_str()),
+            text(attribute.as_str()),
+        ]);
+        self.ctes.push(format!(
+            "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM {wanted} AS w CROSS JOIN exact_facts AS f INDEXED BY exact_facts_lookup_idx ON f.attribute = ? AND f.value = w.value CROSS JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value IN (SELECT value FROM {wanted}))"
         ));
         name
     }

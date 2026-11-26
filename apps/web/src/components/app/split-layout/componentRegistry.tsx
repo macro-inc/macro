@@ -1,7 +1,11 @@
 import { AGENT_SCREEN_ROUTE_ID } from '@app/features/agent-screen/core/route';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
-import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
+import {
+  DayDraftRangeContext,
+  isDayDraftRangeBinding,
+} from '@app/features/calendar/context/day-draft-range-context';
+import type { CreatedCalendarEvent } from '@app/features/calendar/core/composer';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import {
   composePropsFromParams,
@@ -51,6 +55,14 @@ const AgentsRouteView = lazyNamed(
 const CalendarRouteView = lazyNamed(
   () => import('@app/features/calendar-view/route-views'),
   'CalendarRouteView'
+);
+const CalendarSearchRouteView = lazyNamed(
+  () => import('@app/features/calendar-view/calendar-search-route'),
+  'CalendarSearchRouteView'
+);
+const CalendarSettingsRouteView = lazyNamed(
+  () => import('@app/features/calendar-view/calendar-settings-route'),
+  'CalendarSettingsRouteView'
 );
 const BookingLinksRouteView = lazyNamed(
   () => import('@app/features/scheduling/route-views'),
@@ -354,6 +366,16 @@ registerComponent(
   () => composableLayout(true)
 );
 registerComponent(
+  'calendar-search',
+  () => <CalendarSearchRouteView />,
+  () => composableLayout(true)
+);
+registerComponent(
+  'calendar-settings',
+  () => <CalendarSettingsRouteView />,
+  () => composableLayout(true)
+);
+registerComponent(
   'channels',
   () => <ChannelsRouteView />,
   () => composableLayout(true)
@@ -419,7 +441,7 @@ registerComponent('agent-session-compose', () => (
 ));
 registerComponent('calendar-event-compose', (params) => {
   usePageViewTracking('calendar-event-compose');
-  return (
+  const composer = () => (
     <EventComposerSplit
       event={params?.event as CalendarEvent | undefined}
       initialValues={
@@ -429,6 +451,11 @@ registerComponent('calendar-event-compose', (params) => {
         params?.suggestedValues as
           | Promise<Partial<EventEditorInitialValues>>
           | undefined
+      }
+      initialDrawerHeight={
+        typeof params?.initialDrawerHeight === 'number'
+          ? params.initialDrawerHeight
+          : undefined
       }
       onCalendarChange={
         params?.onCalendarChange as
@@ -445,6 +472,16 @@ registerComponent('calendar-event-compose', (params) => {
           | undefined
       }
     />
+  );
+  const dayDraftRange = isDayDraftRangeBinding(params?.dayDraftRange)
+    ? params.dayDraftRange
+    : undefined;
+  return dayDraftRange ? (
+    <DayDraftRangeContext.Provider value={dayDraftRange}>
+      {composer()}
+    </DayDraftRangeContext.Provider>
+  ) : (
+    composer()
   );
 });
 registerComponent('skill-compose', (params) => {

@@ -2,7 +2,8 @@
 //! Mail generations, observation instances, and SHA-256 digests of them) become
 //! `#1`, `#2`, … in order of first appearance, ids that appear in the case's
 //! inputs stay as they are, and the run's directory becomes `<dir>`. Response
-//! `sourceHash` values are compared as [`SourceHashes`] says.
+//! `sourceHash` values are compared as [`SourceHashes`] says. The lock timings
+//! a queued mutation's answer reports (`engine`, at its top level) are dropped.
 
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
@@ -56,6 +57,18 @@ impl Normalizer {
 
     pub fn freeze(&mut self) {
         self.frozen = true;
+    }
+
+    /// One op's answer, as [`Self::value`] makes it comparable, without the lock
+    /// timings a queued mutation's enqueue and commit report (`engine`): they differ
+    /// from run to run, and hosts that predate them leave the field out.
+    pub fn answer(&mut self, mut answer: Value) -> Value {
+        if let Some(fields) = answer.as_object_mut()
+            && fields.get("engine").is_some_and(is_lock_timing)
+        {
+            fields.remove("engine");
+        }
+        self.value(answer)
     }
 
     pub fn value(&mut self, value: Value) -> Value {
@@ -121,6 +134,16 @@ impl Normalizer {
     }
 }
 
+/// Whether an answer's `engine` holds only the lock wait and hold the host measured.
+fn is_lock_timing(value: &Value) -> bool {
+    value.as_object().is_some_and(|timing| {
+        !timing.is_empty()
+            && timing.iter().all(|(field, ms)| {
+                matches!(field.as_str(), "lockWaitMs" | "lockHoldMs") && ms.is_number()
+            })
+    })
+}
+
 /// The UUIDs and 64-digit hex runs (SHA-256 digests, such as people cursors) in
 /// `text`, as `(start, width)`, each bounded by non-hex characters.
 fn id_spans(text: &str) -> impl Iterator<Item = (usize, usize)> + '_ {
@@ -160,3 +183,6 @@ fn is_uuid(bytes: &[u8]) -> bool {
         _ => byte.is_ascii_hexdigit(),
     })
 }
+
+#[cfg(test)]
+mod test;

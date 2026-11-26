@@ -3,9 +3,10 @@
 # the others keep theirs. Services not named share `other`.
 #
 # A trace is charged to the service of its root span, so a noisy service never
-# spends the budget of one it calls. One whose root never arrived is charged to
-# every named service in it. A trace can match two groups (an error that is also
-# in the tenth) and is then kept by either.
+# spends the budget of one it calls; with two roots, to both. One whose root
+# never arrived is charged to every named service in it, from a budget of half
+# the size that only such traces use. A trace can match two policies (an error
+# that is also in the tenth) and is then kept by either.
 { lib }:
 { replicas }:
 let
@@ -68,11 +69,14 @@ let
     "connection_gateway_service"
     "contacts_service"
     "document_storage_service"
+    "document_upload_finalizer_local_worker"
     "email_service"
+    "image_proxy_service"
     "notification_service"
     "pubsub_workers"
     "search_processing_service"
     "static_file_service"
+    "unfurl_service"
     "whatsapp_session_service"
   ];
   named = services ++ localServices;
@@ -108,15 +112,33 @@ let
     }'';
   # Some span of the trace.
   any = name: text: sub name "ottl_condition" (ottl text);
-  # Some span (or, inverted, no span) with one of these values. `and` takes no
-  # `not` policy, so "none" is an inverted string match.
-  values =
-    key: wanted: invert:
-    sub (if invert then "none" else "some") "string_attribute" ''
+  # Some span with one of these values.
+  some =
+    key: wanted:
+    sub "some" "string_attribute" ''
       string_attribute {
         key = "${key}"
         values = ${builtins.toJSON wanted}
-        invert_match = ${lib.boolToString invert}
+      }'';
+  # No span with one. `and` takes no `not` policy, so it is an inverted match.
+  none =
+    key: wanted:
+    sub "none" "string_attribute" ''
+      string_attribute {
+        key = "${key}"
+        values = ${builtins.toJSON wanted}
+        invert_match = true
+      }'';
+  # No span with a value at all.
+  absent =
+    key:
+    sub "absent" "string_attribute" ''
+      string_attribute {
+        key = "${key}"
+        values = [".+"]
+        enabled_regex_matching = true
+        cache_max_size = 100
+        invert_match = true
       }'';
   probabilistic = sub "tenth" "probabilistic" "  probabilistic { sampling_percentage = 10 }";
   # Last, so only a trace the others keep is charged. The burst admits a whole
@@ -147,36 +169,31 @@ let
     }:
     parts:
     let
-      unowned = lib.subtractLists own named ++ [ "other" ];
       budget =
         s:
         budgets.${group}.${s}
           or (if lib.elem s localServices then budgets.${group}.local else budgets.${group}.other);
+      rooted =
+        s: roots: policy "${group}-${s}" ([ (some rootKey roots) ] ++ parts ++ [ (limit (budget s)) ]);
+      rootless =
+        s: which:
+        policy "${group}-${s}-rootless" (
+          [
+            which
+            (absent rootKey)
+          ]
+          ++ parts
+          ++ [ (limit (budget s / 2)) ]
+        );
     in
-    map (
-      s:
-      policy "${group}-${s}" (
-        [
-          (any "has" ''${service} == "${s}"'')
-          (values rootKey (lib.filter (o: o != s) named ++ [ "other" ]) true)
-        ]
-        ++ parts
-        ++ [ (limit (budget s)) ]
-      )
+    map (s: rooted s [ s ]) own
+    ++ map (
+      s: rootless s (any "has" ''(${service} == "${s}" or attributes["service.name"] == "${s}")'')
     ) own
     ++ [
-      (policy "${group}-other" (
-        [ (values rootKey unowned false) ] ++ parts ++ [ (limit budgets.${group}.other) ]
-      ))
+      (rooted "other" (lib.subtractLists own named ++ [ "other" ]))
       # No root and no named service.
-      (policy "${group}-rootless" (
-        [
-          (values rootKey (named ++ [ "other" ]) true)
-          (values "service.name" own true)
-        ]
-        ++ parts
-        ++ [ (limit budgets.${group}.other) ]
-      ))
+      (rootless "other" (none "service.name" own))
     ];
 in
 {

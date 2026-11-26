@@ -20,6 +20,11 @@ export interface CalendarFocusTarget {
   requestedAt: number;
 }
 
+/** A known destination can be shown before its occurrence is available. */
+export type CalendarDateTarget = Pick<
+  CalendarFocusTarget,
+  'date' | 'requestId' | 'requestedAt'
+>;
 /** An occurrence to focus from inside the calendar, such as a sidebar row. */
 export type CalendarFocusOccurrence = Pick<
   CalendarFocusTarget,
@@ -33,6 +38,7 @@ export function calendarFocusTargetId(target: CalendarFocusTarget): string {
 
 interface CalendarFocusContextProps extends ParentProps {
   target?: Accessor<CalendarFocusTarget | undefined>;
+  navigationTarget?: Accessor<CalendarDateTarget | undefined>;
 }
 
 /** Instance-scoped focus state for one mounted calendar workspace. */
@@ -60,7 +66,7 @@ export const [CalendarFocusContextProvider, useCalendarFocus] =
         return target;
       };
       const supersededByNavigation = (occurrence: CalendarFocusTarget) => {
-        const navigation = props.target?.();
+        const navigation = props.navigationTarget?.() ?? props.target?.();
         return (
           navigation !== undefined &&
           navigation.requestedAt > occurrence.requestedAt
@@ -80,6 +86,19 @@ export const [CalendarFocusContextProvider, useCalendarFocus] =
       };
 
       return {
+        pendingNavigationTarget: (): CalendarDateTarget | undefined => {
+          const occurrence = occurrenceTarget();
+          if (occurrence && !supersededByNavigation(occurrence))
+            return occurrence;
+          const target = props.navigationTarget?.() ?? props.target?.();
+          if (
+            !target ||
+            target.requestId === consumedRequestId() ||
+            Date.now() - target.requestedAt > FOCUS_TARGET_TTL_MS
+          )
+            return undefined;
+          return target;
+        },
         pendingTarget: () => {
           const occurrence = occurrenceTarget();
           if (occurrence && !supersededByNavigation(occurrence)) {
@@ -103,7 +122,7 @@ export const [CalendarFocusContextProvider, useCalendarFocus] =
           onTimeout: () => void
         ) => {
           // The newer request wins over a navigation that has not landed yet.
-          const navigation = props.target?.();
+          const navigation = props.navigationTarget?.() ?? props.target?.();
           if (navigation) setConsumedRequestId(navigation.requestId);
           fallback = onTimeout;
           setOccurrenceTarget({

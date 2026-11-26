@@ -776,6 +776,52 @@ async fn rejects_sleeping_and_points_at_routines() {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn reports_a_rejection_nothing_handled_yet() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (host, _) = counting_server("{}").await;
+    let hanging = hanging_server().await;
+    // Started first and awaited last: it rejects while the program waits on a
+    // request, which ends Deno before the program reaches its `await`.
+    let source = "export async function main({ hosts }) {
+        const early = Promise.reject(new Error('Macro API error 422: The page could not be read'));
+        await fetch(hosts.cognition);
+        return await early;
+    }";
+    let outcome = run_in_session(&service, source, &host, Some(&hanging), 5000).await;
+    assert!(
+        matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Runtime
+            && error.message.contains("Macro API error 422: The page could not be read")
+            && error.message.contains("Promise.allSettled")
+            && error.message.contains("may have taken effect")),
+        "{outcome:?}"
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn reports_a_rejection_whose_reason_cannot_become_a_string() {
+    let (_root, service) = setup(Limits::default()).await;
+    let (host, _) = counting_server("{}").await;
+    let hanging = hanging_server().await;
+    // `String()` throws on a null-prototype object, so the reason is inspected.
+    let source = "export async function main({ hosts }) {
+        const early = Promise.reject(Object.assign(Object.create(null), { status: 'page unreadable' }));
+        await fetch(hosts.cognition);
+        return await early;
+    }";
+    let outcome = run_in_session(&service, source, &host, Some(&hanging), 5000).await;
+    assert!(
+        matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Runtime
+            && error.message.contains("[Object: null prototype] { status: \"page unreadable\" }")
+            && error.message.contains("may have taken effect")),
+        "{outcome:?}"
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn denies_unlisted_destinations_including_redirects() {
     let (_root, service) = setup(Limits::default()).await;
     let forbidden = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1264,6 +1310,32 @@ async fn the_cpu_limit_stops_a_busy_program() {
     service.shutdown().await;
 }
 
+/// Programs import the handle types their helpers take, as they would from
+/// any package; the type check must know them.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn entity_handle_types_can_be_imported_from_the_sdk() {
+    let (_root, service) = checked_service().await;
+    let body = "export async function main({ macro }: CodeContext) {\n  const channel: Channel = macro.channels.byId('c');\n  const message: Message = channel.message('m');\n  const project: Project = macro.projects.byId('p');\n  const document: Document = macro.documents.byId('d');\n  const task: Task = macro.tasks.byId('t');\n  const thread: EmailThread = macro.email.byId('e');\n  const email: EmailMessage = macro.email.message('em');\n  const chat: Chat = macro.chats.byId('ch');\n  const user: User = macro.users.byId('u');\n  const session: AgentSession = macro.agentSessions.byId('s');\n  return { data: [channel, message, project, document, task, thread, email, chat, user, session].map((handle) => handle.id) };\n}\n";
+    let names = "AgentSession, Channel, Chat, Document, EmailMessage, EmailThread, Message, Project, Task, User";
+    for import in ["import type", "import"] {
+        let source = format!("{import} {{ {names} }} from '@macro-inc/sdk';\n{body}");
+        let (_, outcome) = run(&service, &source, 10_000).await;
+        assert!(
+            matches!(&outcome, Outcome::Succeeded { value } if value["data"] == serde_json::json!(["c", "m", "p", "d", "t", "e", "em", "ch", "u", "s"])),
+            "{import}: {outcome:?}"
+        );
+    }
+    // The import is the handle's class, not `any`.
+    let source = "import type { Channel } from '@macro-inc/sdk';\nexport async function main({ macro }: CodeContext) {\n  const channel: Channel = macro.channels.byId('c');\n  const count: number = channel;\n  return { data: count };\n}\n";
+    let (_, outcome) = run(&service, source, 10_000).await;
+    assert!(
+        matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Compile && error.message.contains("TS2322")),
+        "{outcome:?}"
+    );
+    service.shutdown().await;
+}
+
 async fn checked_service() -> (tempfile::TempDir, ExecutionService) {
     let root = tempfile::tempdir().unwrap();
     let binary = Command::new("which").arg("deno").output().await.unwrap();
@@ -1278,6 +1350,52 @@ async fn checked_service() -> (tempfile::TempDir, ExecutionService) {
     let service =
         ExecutionService::new(Arc::new(runner), Arc::new(checker), Limits::default()).unwrap();
     (root, service)
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn code_context_can_be_imported_from_the_sdk() {
+    let (_root, service) = checked_service().await;
+    for import in ["import type { CodeContext }", "import { CodeContext }"] {
+        let source = format!(
+            "{import} from '@macro-inc/sdk';\nexport async function main({{ webAppUrl }}: CodeContext) {{\n  return {{ data: typeof webAppUrl }};\n}}\n"
+        );
+        let (_, outcome) = run(&service, &source, 10_000).await;
+        assert!(
+            matches!(&outcome, Outcome::Succeeded { value } if value["data"] == "string"),
+            "{import}: {outcome:?}"
+        );
+    }
+    // The import is the ambient type, not `any`.
+    let source = "import type { CodeContext } from '@macro-inc/sdk';\nexport async function main({ webAppUrl }: CodeContext) {\n  const count: number = webAppUrl;\n  return { data: count };\n}\n";
+    let (_, outcome) = run(&service, source, 10_000).await;
+    assert!(
+        matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Compile && error.message.contains("TS2322")),
+        "{outcome:?}"
+    );
+    // In a session's execution the import carries its handles too.
+    let source = "import type { CodeContext } from '@macro-inc/sdk';\nexport async function main({ sessionId, session, executionId, execution }: CodeContext) {\n  return { data: sessionId === session.id && executionId === execution.id };\n}\n";
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source: source.into(),
+                    timeout_ms: 10_000,
+                },
+                RunEnvironment {
+                    session_id: Some(uuid::Uuid::from_u128(1)),
+                    execution_id: Some(uuid::Uuid::from_u128(2)),
+                    ..RunEnvironment::default()
+                },
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        matches!(&outcome, Outcome::Succeeded { value } if value["data"] == true),
+        "{outcome:?}"
+    );
+    service.shutdown().await;
 }
 
 /// A server answering every request with `body`, counting them.

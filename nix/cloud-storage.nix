@@ -1272,30 +1272,26 @@
         # Deploy builds compile [patch.crates-io] crates from the pruned
         # source, and deps-only builds from their dummy source, so their real
         # code (not mkDummySrc's stubs) must be in both. Each vendored crate
-        # is compared whole, in every deps-only source, so a new one or a new
-        # buildDepsOnly without depsDummySrc fails here, not in a deploy.
+        # is compared whole, in a pruned source and every deps-only source, so
+        # a new one or a new buildDepsOnly without depsDummySrc fails here,
+        # not in a deploy.
         pruned-deploy-src-vendored-patches =
           pkgs.runCommand "cloud-storage-pruned-vendored-patches"
             { nativeBuildInputs = [ pkgs.diffutils ]; }
             ''
-              grep -q "fn write_embed_code" \
-                ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
-              grep -q "IANA_TZDB_VERSION" \
-                ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/chrono-tz/src/prebuilt/directory.rs
-              grep -q "Claim the depth before the round trip" \
-                ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/sqlx-postgres/src/transaction.rs
               ${pkgs.lib.concatMapStrings
                 (
                   built:
                   pkgs.lib.concatMapStrings (dir: ''
-                    diff -r ${vendoredPatchesSrc}/${dir} ${built.src}/${dir}
+                    diff -r ${vendoredPatchesSrc}/${dir} ${built}/${dir}
                   '') vendoredPatchDirs
                 )
                 [
-                  cargoArtifacts
-                  deployCargoArtifacts
-                  lambdaDeployCargoArtifacts
-                  guestCargoArtifacts
+                  (prunedDeploySrc "service-agent-harness-service" "agent_harness_service")
+                  cargoArtifacts.src
+                  deployCargoArtifacts.src
+                  lambdaDeployCargoArtifacts.src
+                  guestCargoArtifacts.src
                 ]
               }
               touch $out

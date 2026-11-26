@@ -80,6 +80,11 @@ export class Telemetry {
     );
   }
 
+  /** Record a detached point sample with no runtime identity enrichment. */
+  static recordAnonymousSample(name: string, attributes: Attributes): void {
+    Telemetry.#tracing.recordAnonymousSample(name, attributes);
+  }
+
   /**
    * Capture at synchronous transport/queue admission, before its first await.
    * Prefer a known Span directly; a captured context creates/ends no span.

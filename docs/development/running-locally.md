@@ -105,7 +105,8 @@ fetch maps while DevTools is open. On a slow link this is the difference between
 ~100 MB and ~13 MB per load. Trust the CA rather than clicking through the
 certificate warning: Chrome caches nothing from a site with a certificate error.
 `MACRO_DEV_COMPRESSION=false` and `MACRO_DEV_INLINE_SOURCEMAPS=true` restore
-Vite's defaults.
+Vite's defaults. Source-map extraction inspects only the final map trailer,
+so multi-megabyte generated modules and dependency maps remain safe to serve.
 
 ## Run the local stack
 

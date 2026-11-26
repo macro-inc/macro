@@ -2785,10 +2785,10 @@ async fn an_unconnected_repository_reaches_the_client_as_an_instruction() {
     );
 }
 
-/// A Cursor account out of budget is the person's to fix on Cursor's
-/// dashboard, so it reaches the client as a refusal with a notice - title,
-/// plain body, the dashboard link - and never as the report, whose source
-/// locations and span dump are for the logs.
+/// A Cursor account out of credit or near its limit is the person's to fix in
+/// Cursor's billing settings, so it reaches the client as a refusal with a notice -
+/// title, plain body, the link to what to change - and never as the report,
+/// whose source locations and span dump are for the logs.
 #[tokio::test]
 async fn an_exhausted_cursor_budget_reaches_the_client_as_a_notice() {
     let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("an https remote");
@@ -2808,14 +2808,14 @@ async fn an_exhausted_cursor_budget_reaches_the_client_as_a_notice() {
         .notice
         .as_ref()
         .expect("a spent budget carries a notice");
-    assert_eq!(notice.title, "Cursor usage limit reached");
+    assert_eq!(notice.title, "Cursor billing stopped this message");
     assert_eq!(
         notice.link.as_ref().map(|link| link.url.as_str()),
-        Some("https://www.cursor.com/dashboard?tab=settings")
+        Some("https://macro.com/docs/AI/cursor#cursor-usage-and-billing")
     );
     for text in [&refusal.message, &notice.body] {
         assert!(
-            !text.contains("usage_limit_exceeded") && !text.contains("$2"),
+            !text.contains("usage_limit_exceeded") && !text.contains("prepaid balance"),
             "cursor's own body stays in the logs: {text}"
         );
         assert!(

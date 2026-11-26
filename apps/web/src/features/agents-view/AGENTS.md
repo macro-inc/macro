@@ -84,6 +84,16 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Keep the phone list composer's unfocused 46px pill vertically centered with no Send control; hide controls without unmounting their file or overlay owners.
 - Keep phone composer layout measurable while collapsed; animate the clipped shape and editor insets together, reveal inert controls during the final part of the 200ms expansion, and disable transitions for reduced motion.
 
+## Composer boundaries
+
+`ChatComposer` serves new conversations, Home and active sessions. Session state
+and sending belong to the host; the composer edits a draft and inserts mentions.
+
+Use `@core/component/AI/primitives/create-composer-item-drop` on the desktop and
+phone composer surfaces for app-item drops. Do not treat item rows as native files.
+Keep disabled, read-only and dictation states ineligible; preserve source selection.
+Keep the drop primitive's readiness hook inside the existing `MarkdownShell.onConnect` callback, alongside draft initialization.
+
 ## Checks
 
 From `apps/web`:

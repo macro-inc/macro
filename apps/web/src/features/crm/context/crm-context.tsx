@@ -203,9 +203,34 @@ export type CrmContext = {
   createExportDefinitions(enabled: Accessor<boolean>): ExportDefinitionsSource;
   createCompanySuggestions(): {
     companies: Accessor<
-      { id: string; name: string; domains: { domain: string }[] }[]
+      {
+        id: string;
+        name: string;
+        domains: { domain: string }[];
+        teamId?: string | null;
+      }[]
     >;
     query: { readonly isLoading: boolean };
+  };
+  /**
+   * Every company the search service matches for a typed query, page by
+   * page: Quick Access keeps only the most recently updated ones.
+   */
+  createCompanySearch(search: Accessor<string>): {
+    companies: Accessor<
+      readonly {
+        id: string;
+        name: string;
+        domains: { domain: string }[];
+        teamId?: string | null;
+      }[]
+    >;
+    isLoading: () => boolean;
+    hasMore: () => boolean;
+    isLoadingMore: () => boolean;
+    loadMore: () => Promise<void>;
+    error: () => unknown;
+    retry: () => Promise<void>;
   };
   createContactSuggestions(): {
     contacts: Accessor<
@@ -214,6 +239,7 @@ export type CrmContext = {
         name: string;
         email?: string | null;
         companyName?: string | null;
+        teamId?: string | null;
       }[]
     >;
     query: { readonly isLoading: boolean };
@@ -229,6 +255,7 @@ export type CrmContext = {
         name: string;
         email?: string | null;
         companyName?: string | null;
+        teamId?: string | null;
       }[]
     >;
     isLoading: () => boolean;

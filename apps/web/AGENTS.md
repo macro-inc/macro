@@ -257,8 +257,9 @@ and distinct icons, keyboard focus staying on a status as the tabs switch, and
 list/board switches:
 `bunx playwright test --config src/features/reviews-view/browser-test/playwright.config.ts`.
 
-Search facet chip sizing, text alignment, and filter interactions have a backend-free
-regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
+The universal input's search (operators written into **Search for**, unresolved
+people holding the search, typing in place) has a backend-free regression:
+`bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
 
 Agent image attachments preserve external and inline image URLs; only configured
 static-file endpoints receive thumbnail sizing. The backend-free regression is
@@ -992,6 +993,13 @@ A composer renders paragraphs with the spacing its sent message renders with,
 so a draft reads as what it will send; drop only the draft's first and last
 margins, which the compact single-row layout measures.
 
+AI composers register their whole surface with
+`lib/core/component/AI/primitives/create-composer-item-drop.ts` for app-item
+drags. Item drops add mention context without moving the source; native file
+uploads remain separate. `components/app/item-drag-sensor.ts` owns item-drag
+termination, including cancellation and errors; do not restore the default
+mouseup-only sensor.
+
 - Reuse `src/components/WorkspaceTexture.tsx` for the onboarding and Create
   detail panel grain; pass the surface accent and a unique SVG filter ID.
 - Keep shared database card rendering in `features/database`; CRM supplies
@@ -1032,6 +1040,9 @@ not to account-wide paired machine count; a user can pair several computers.
 - Keep selection controls on shared `Checkbox`, `ToggleSwitch`, and `RadioGroup`;
   preserve their native input semantics and use root sizing instead of internal
   control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
+
+- Reuse `components/timezone-select/` for searchable time-zone fields; retain an
+  unlisted current zone, scope nested popups locally, and close on permission loss.
 
 - Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
 
@@ -1209,7 +1220,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   uncertain enqueues. Space failed coordinator registrations with bounded,
   cancelable waits; a missing startup frame is not proof of untouched storage.
   A coordinator that ends without a word is noticed through the Web Lock it
-  holds, or an unanswered `ping`, and handled the same way.
+  holds, or an unanswered `ping`, and handled the same way. One that never
+  answers is replaced under a new name (`CoordinatorGenerations`).
 - Nothing but a newer build ends a browser cache for the page: bound retries in
   rate, never in number, and never quarantine a scope over a handoff, drain,
   timeout or transport failure. While nothing can open the database the host is
@@ -1551,7 +1563,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Animate section reorder with the shared layout animation engine; preserve unanimated measurement wrappers, reduced-motion preferences, and cancellation on scrolling. Show a card preview and subdued source while dragging.
   Name the team-channel section after the current team, falling back to Team channels while its name is unavailable.
   Keep every joined team channel in the team section regardless of custom-section assignments; use the same complete membership for bulk notification actions.
-  Keep available channel rows visible on desktop and phone during section hydration and refetches; retain each by-ID batch's resolved rows while pending, discard snapshots when its account or membership changes, and key virtualized rows by stable IDs so updates cannot interrupt a click. Pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
+  Keep available channel rows visible on desktop and phone during section hydration and refetches; retain each by-ID batch's resolved rows while pending, discard batch snapshots on account resets, drop removed IDs immediately while keeping untouched 500-ID batches mounted on membership churn, and key virtualized rows by stable IDs so updates cannot interrupt a click. Pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
   Compile each by-ID batch's filter once per membership change and reuse it through loading and notification updates.
   Keep legacy `/channel-labels` and flagged `/channel-sections` queries in separate account-scoped caches; invalidate both after shared-storage writes and refetch authoritative memberships rather than patching explicit picks as effective membership.
   Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.

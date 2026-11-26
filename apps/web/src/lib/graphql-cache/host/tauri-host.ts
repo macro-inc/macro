@@ -58,6 +58,7 @@ import {
   validateRecordSelectionKeys,
 } from '../protocol';
 import { emitNativeSchemaInit, type NativeSchemaInit } from '../telemetry-otel';
+import { CacheWriteSupersededError, isNativeWriteSuperseded } from './errors';
 import type {
   AffectedOperationsListener,
   CacheChangeListener,
@@ -320,10 +321,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       span.setAttr('graphql_cache.ipc.outcome', 'ok');
       return value;
     } catch (error) {
+      const superseded = isNativeWriteSuperseded(error);
       span.setAttr(
         'graphql_cache.ipc.outcome',
-        deadline.timedOut ? 'timeout' : 'error'
+        deadline.timedOut ? 'timeout' : superseded ? 'superseded' : 'error'
       );
+      // Refused before writing anything; the caller fetches the query again.
+      if (superseded) throw new CacheWriteSupersededError();
       // A marked read skips reading natively unless it had already started;
       // a native read span, where the command has one, records the skip;
       // this one records only the mark. Older binaries lack the command,
@@ -978,6 +982,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           data: args.data,
           generation: args.generation,
           identity: args.identity,
+          // An older binary drops the key and keeps today's order.
+          background: args.background,
         })
       );
     },

@@ -184,6 +184,8 @@ export const CACHE_OWNER_EVENTS = [
   'navigation-departure',
   'coordinator-restarted',
   'startup-unanswered',
+  'coordinator-renamed',
+  'coordinator-replaced',
   'abrupt-loss',
   'replacement',
   'multiple-owner-detected',

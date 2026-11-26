@@ -150,6 +150,11 @@ optimistic enqueues must not be sent twice. A `graphql_cache.owner` event with
 `ownerEvent: coordinator-restarted` distinguishes this from engine replacement
 or a BFCache restore.
 
+Firefox can stop starting the SharedWorker under its name after the process of the
+page that started it crashes. Open three tabs and crash the first
+(`about:crashcontent`): the others must get their cache back without a reload, at
+times through a coordinator under a new name (`ownerEvent: coordinator-renamed`).
+
 Separately, leaving the creating page while its SharedWorker is still downloading
 can fail the survivor before its first ready frame. In an isolated Safari fixture,
 hold that download, connect a second page, and navigate the creator through a
@@ -946,33 +951,36 @@ opens the sent thread. While the menu stays open on a failed save or send, a
 retry uses the same draft rather than a second one; a retried send sends the
 saved draft without saving it again. Choosing another inbox after a failed
 send deletes that draft and saves a new one in the chosen inbox.
-Search mode embeds Global Search's editor, Type/In/From filter chips, and
-result rows with highlighted message snippets. Extraction first selects the search
-type, then uses its schema: Channels has In/From; Tasks has status, priority,
-assignees and creators; Calls has In/From/attendance; Email has importance and
-connected inboxes. Other types extract keywords. Task assignees and creators are
-distinct, and unsupported filter wording (including tags) remains in the keyword
-query. A manually chosen search Type fixes the schema for later predictions.
-Results wait for extraction; no local language parser strips commands or filter clauses. For example, “search messages from Julia in #sales about budget”
-selects **Type: Channels**, resolves Julia through the people directory, selects
-**In: sales**, and searches for “budget”. Names must resolve uniquely; unresolved
-people or channels pause search until corrected in the filter pickers. Use
-**Only** to replace an unresolved name with a specific person or channel. The
-pickers include the full channel and DM directory. The model distinguishes
-explicit filters from ordinary “from”/“in” phrases within search keywords.
-Filter-only requests such as “search channels for messages from user@example.com”
-leave **Search for** empty; category and sender wording is consumed by the filters.
-Adding “about budget” searches for only “budget”.
+Search mode embeds Global Search's editor and result rows with highlighted
+message snippets; there is no filter row. **Search for** holds the whole search,
+as the Search view's field does: the extracted filters are written into it as
+operators before the keywords, and it reads, draws and suggests operators the
+same way. Extraction first selects the search type, then uses its schema:
+Channels has In/From; Tasks has status, priority, assignees and creators; Calls
+has In/From/attendance; Email has importance (written as `in:signal` or
+`in:noise`) and connected inboxes. Other types extract keywords. Task assignees
+and creators are distinct, and unsupported filter wording (including tags)
+remains in the keyword query. Results wait for extraction; no local language
+parser strips commands or filter clauses. For example, “search messages from
+Julia in #sales about budget” fills **Search for** with `type:channel in:#sales
+from:julia@… budget`, resolving Julia through the people directory, with the
+channel bound to its id as Search openers bind it. Names must resolve uniquely:
+an unresolved one is written as typed (`from:Pat`) and holds the search, with
+“Choose a specific person or channel for Pat”, until **Search for** names
+someone (pick from its people suggestions or type an address). Editing **Search
+for** makes its text the search, operators included, and later predictions
+leave it as typed. A sender with no keyword (“search channels for messages from
+user@example.com”) waits for a word, since channel lists can't check senders;
+adding “about budget” searches for “budget” from them. Submitting opens Search
+on the same text.
 
-Editing **Search for** or changing the filter chips overrides subsequent
-predictions for those values. Sender-only message scopes and speaker-only call
-scopes keep their filters visible and request search text:
-channel/call browsing cannot enforce those message-level filters. No unfiltered
-browse results appear while keywords are required. **Search Macro** or
-**Cmd/Ctrl+Enter** opens Global Search with the same query and complete filters,
-including when the Search view is already open. If extraction fails, results and
-submission pause until both **Search for** and the filter selection are explicitly
-edited, so a provider failure cannot silently broaden the search.
+Sender-only message scopes and speaker-only call scopes keep their operators
+in **Search for** and request search text: channel/call browsing cannot enforce
+those message-level filters. No unfiltered browse results appear while keywords
+are required. **Search Macro** or **Cmd/Ctrl+Enter** opens Global Search on the
+same text, including when the Search view is already open. If extraction fails,
+results and submission pause until **Search for** is edited, so a provider
+failure cannot silently broaden the search.
 
 Click a result or message snippet to open its actual location, or use **Up/Down**
 and then **Enter**. Keyboard selection scrolls into view while the editor keeps

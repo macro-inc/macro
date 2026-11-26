@@ -39,6 +39,7 @@ import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/externa
 import { createUrqlQuery } from '../../urql-solid/create-urql-query';
 import { TRACE_PARENT_CONTEXT_KEY } from '../../urql-solid/trace-parent-exchange';
 import { StaleCacheAuthorityError } from '../authority';
+import { CacheWriteSupersededError } from '../host/errors';
 import { CacheNavigationError } from '../host/navigation-error';
 import { createRetirableCacheHost } from '../host/retirable-host';
 import type {
@@ -4317,6 +4318,28 @@ describe('normalizedCacheExchange', () => {
         expect.objectContaining({ data: { from: 'obsolete' } })
       );
       expect(forwarded.filter(({ kind }) => kind === 'query')).toHaveLength(2);
+    });
+
+    it('fetches a query again when the native host refuses its write as overtaken', async () => {
+      const onCacheError = vi.fn();
+      const writeQuery = vi
+        .spyOn(host, 'writeQuery')
+        .mockRejectedValueOnce(new CacheWriteSupersededError());
+      const { ops, network, forwarded } = controlledQueryHarness(host, {
+        onCacheError,
+      });
+      ops.next(makeOp(1, 'network-only'));
+      await tick();
+      network.next(queryResult(forwarded[0], { from: 'overtaken' }));
+      await tick();
+      expect(writeQuery).toHaveBeenCalledWith(
+        expect.objectContaining({ background: true })
+      );
+      expect(onCacheError).not.toHaveBeenCalled();
+      expect(forwarded).toHaveLength(2);
+      network.next(queryResult(forwarded[1], { from: 'fresh' }));
+      await tick();
+      expect(host.writes.map((args) => args.data)).toEqual([{ from: 'fresh' }]);
     });
 
     it('does not discard an in-flight query after a rejected mutation', async () => {

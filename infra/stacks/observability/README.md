@@ -207,6 +207,20 @@ those. Token counts, models, operations, outcomes, `error.type` and the
 `macro.genai.*` sizes stay. A new attribute that carries content belongs in its
 `ai_content` statements.
 
+It also replaces every email address with its SHA-256 (`emails`): in resource,
+scope, log, span, span event and metric datapoint attributes, log bodies, and
+scope, span and event names and status messages. User IDs are
+`macro|<address>`, so they become `macro|<hash>`; a user's logs and traces are
+found by hashing their address as written (`%40` for `@` hashes differently).
+The web app's `presence.user_ids` list becomes its JSON text. Any other map
+with an address in a nested list or map is flattened into `key.0`, `key.1.x`
+keys, every nested value of it; past Loki's 128 metadata entries a line or
+Mimir's 30 labels a series, that record is refused. A list or map body holding
+an address becomes its JSON text. What stays: addresses in map keys and byte
+values, a repeated key's earlier values (malformed OTLP), and logs and metrics
+pushed straight to Loki and Mimir through the edge (pod logs, the database
+collector), which skip ingest.
+
 ### Pinned exporter limits
 
 A small metadata preflight rejects runs that the upstream action cannot export
@@ -833,6 +847,11 @@ CloudWatch database/Lambda dashboard. CloudWatch reads native metrics in Virgini
 it does not replicate their history to Ohio, so these panels depend on Virginia
 remaining available. These are not a replacement for Datadog database query monitoring, RUM, or anomaly
 models.
+
+`nixos/grafana-provisioning/agents-dashboard.nix` ("AI and agents") shows model
+calls, agent turns, the prompt cache and tools from the cluster's derived
+metrics (its `modules/derived-metrics/MAPPING.md`), in place of Datadog's LLM
+Observability view.
 
 `nixos/grafana-provisioning/prod-alerts.nix` lists the prod CloudWatch alerts:
 macrodb memory, swap, load, CPU, connections, replica lag, read latency and

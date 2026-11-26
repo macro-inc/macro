@@ -49,6 +49,17 @@ maps a data source onto Macro database columns and cells
 
 ## Gotchas
 
+- Each request is one `notion.request` span with typed fields only:
+  `endpoint` (`NotionEndpoint`), `method`, `attempts`, the final `status`,
+  `outcome` (`RequestOutcome`), and on failure `error_class` and
+  `transport_class`. A final failure is recorded through `err`, an ERROR
+  event with the content-free `Display` that marks the exported span as
+  failed, and one `warn!` with those fields except `method`. The body is decoded
+  inside the span: a 200 that does not decode is `not_retryable` with
+  `error_class` `decode`. Never record a request's path, query, body, or Notion's response.
+  `NotionError`'s `Display` and `Debug` show only its class, status and
+  transport class, so `?error` stays safe. Planning stage spans
+  (`notion.plan.*`) carry a typed `stage` (`PlanStage`).
 - Read-only by construction: the REST client can only send a `NotionRead`
   (GETs, plus the read POSTs `/v1/search` and `/v1/data_sources/{id}/query`);
   never add a variant that writes to the user's Notion.
@@ -63,6 +74,13 @@ maps a data source onto Macro database columns and cells
 - `inventory` counts rows and samples titles from the search results (rows are
   pages there) and queries a data source only when search showed none of its
   rows; the ~3 requests/second pacing makes every extra request count.
+- Errors follow Notion's documented status codes
+  (developers.notion.com/reference/status-codes): `401 unauthorized` is
+  `AccessLost` (token revoked or expired), `403` is `Forbidden`, and a `404`
+  in Notion's error shape (`{"object":"error", ...}`) is `NotFound`. A `404`
+  without that shape never came from Notion: the Pipedream proxy could not
+  use the account, so it is `ConnectionUnavailable`. Both connection errors
+  fail the whole plan with a "reconnect Notion" reason.
 - Decoding skips (and warns on) a single unreadable search/query item rather
   than failing the page; fixtures in `fixtures/` cover every property type.
 - Unknown property and value types map to `Unsupported` / `Empty`, never an

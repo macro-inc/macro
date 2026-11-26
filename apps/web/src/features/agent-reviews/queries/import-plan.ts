@@ -1,4 +1,5 @@
 import type { ImportEntity, NotionImportReport } from '@queries/import';
+import { parseRunErrorKind } from '@service-cognition/import';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 import type {
@@ -123,6 +124,7 @@ export function decodeImportProgress(
     failureCount: report.failureCount,
     reviewId: report.reviewId ?? null,
     status: report.status ?? null,
+    errorKind: parseRunErrorKind(report.errorKind),
     error: report.error ?? null,
     scanned: report.scanned
       ? {

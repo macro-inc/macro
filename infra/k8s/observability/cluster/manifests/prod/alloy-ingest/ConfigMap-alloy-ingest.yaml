@@ -30,7 +30,7 @@ data:
       output {
         logs = [otelcol.processor.filter.local_logs.input]
         traces = [otelcol.processor.transform.ai_content.input]
-        metrics = [otelcol.processor.batch.ingest.input]
+        metrics = [otelcol.processor.transform.emails.input]
       }
     }
 
@@ -45,7 +45,7 @@ data:
           `(resource.attributes["deployment.environment"] == "local" or resource.attributes["deployment.environment.name"] == "local") and resource.attributes["service.name"] != "local-telemetry"`,
         ]
       }
-      output { logs = [otelcol.processor.batch.ingest.input] }
+      output { logs = [otelcol.processor.transform.emails.input] }
     }
 
     // What people and models wrote never reaches storage. Token counts, models,
@@ -78,7 +78,339 @@ data:
           `keep_keys(attributes, ["level", "target"]) where IsMatch(attributes["target"], "^rig")`,
         ]
       }
-      output { traces = [otelcol.processor.batch.ingest.input] }
+      output { traces = [otelcol.processor.transform.emails.input] }
+    }
+
+    // User IDs are email addresses, and logs and errors quote them. Each address,
+    // wherever it appears, becomes its SHA-256 ("macro|<hash>"), so one user's
+    // telemetry can still be found by hashing their address as written. A map or
+    // list attribute that holds one is flattened (`ids.0`, `m.inner`) and scanned
+    // again; a list or map body that holds one becomes its JSON text.
+    //
+    // The pattern scan tripled ingest's CPU on spans with long attributes, so a
+    // map is scanned only when its JSON holds an "@" or a "%40", and checked for a
+    // nested address only when the JSON also shows a list or map value. The
+    // macro.ingest.* keys mark what to scan between blocks; senders' are removed
+    // first, and all after. JSON can't hold a NaN or an infinity, so the checks
+    // ignore errors, and a map they couldn't check is scanned and flattened.
+    // Addresses in map keys and byte values stay, and a flattened map can pass
+    // Loki's 128 metadata entries or Mimir's 30 labels and be refused.
+    otelcol.processor.transform "emails" {
+      error_mode = "propagate"
+      log_statements {
+        context = "resource"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      log_statements {
+        context = "resource"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      log_statements {
+        context = "resource"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      log_statements {
+        context = "resource"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+        ]
+      }
+      log_statements {
+        context = "scope"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      log_statements {
+        context = "scope"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      log_statements {
+        context = "scope"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      log_statements {
+        context = "scope"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256)`,
+        ]
+      }
+      log_statements {
+        context = "log"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          // A list of user IDs the web app sends stays one value.
+          `set(attributes["presence.user_ids"], String(attributes["presence.user_ids"])) where IsList(attributes["presence.user_ids"])`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      log_statements {
+        context = "log"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      log_statements {
+        context = "log"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      log_statements {
+        context = "log"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+        ]
+      }
+      log_statements {
+        context = "log"
+        error_mode = "ignore"
+        statements = [`set(body, String(body)) where (IsMap(body) or IsList(body)) and IsMatch(body, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`]
+      }
+      log_statements {
+        context = "log"
+        statements = [`replace_pattern(body, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where IsString(body) and (IsMatch(body, "@") or IsMatch(body, "%40"))`]
+      }
+      trace_statements {
+        context = "resource"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      trace_statements {
+        context = "resource"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      trace_statements {
+        context = "resource"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      trace_statements {
+        context = "resource"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+        ]
+      }
+      trace_statements {
+        context = "scope"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      trace_statements {
+        context = "scope"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      trace_statements {
+        context = "scope"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      trace_statements {
+        context = "scope"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256)`,
+        ]
+      }
+      trace_statements {
+        context = "span"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          // A list of user IDs the web app sends stays one value.
+          `set(attributes["presence.user_ids"], String(attributes["presence.user_ids"])) where IsList(attributes["presence.user_ids"])`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      trace_statements {
+        context = "span"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      trace_statements {
+        context = "span"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      trace_statements {
+        context = "span"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where (IsMatch(name, "@") or IsMatch(name, "%40"))`,
+          `replace_pattern(status.message, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where (IsMatch(status.message, "@") or IsMatch(status.message, "%40"))`,
+        ]
+      }
+      trace_statements {
+        context = "spanevent"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      trace_statements {
+        context = "spanevent"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      trace_statements {
+        context = "spanevent"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      trace_statements {
+        context = "spanevent"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where (IsMatch(name, "@") or IsMatch(name, "%40"))`,
+        ]
+      }
+      metric_statements {
+        context = "resource"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      metric_statements {
+        context = "resource"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      metric_statements {
+        context = "resource"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      metric_statements {
+        context = "resource"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+        ]
+      }
+      metric_statements {
+        context = "scope"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      metric_statements {
+        context = "scope"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      metric_statements {
+        context = "scope"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      metric_statements {
+        context = "scope"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `replace_pattern(name, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256)`,
+        ]
+      }
+      metric_statements {
+        context = "datapoint"
+        error_mode = "ignore"
+        statements = [
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+          `set(cache["json"], String(attributes))`,
+          `set(attributes["macro.ingest.scan"], true) where cache["json"] == nil or (IsMatch(cache["json"], "@") or IsMatch(cache["json"], "%40"))`,
+          `set(attributes["macro.ingest.nested"], true) where attributes["macro.ingest.scan"] == true and (cache["json"] == nil or IsMatch(cache["json"], "\":\\[") or IsMatch(cache["json"], "\":\\{"))`,
+        ]
+      }
+      metric_statements {
+        context = "datapoint"
+        statements = [`replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.scan"] == true`]
+      }
+      metric_statements {
+        context = "datapoint"
+        error_mode = "ignore"
+        statements = [
+          `delete_key(attributes, "macro.ingest.nested") where attributes["macro.ingest.nested"] == true and not IsMatch(attributes, "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)")`,
+          `flatten(attributes) where attributes["macro.ingest.nested"] == true`,
+        ]
+      }
+      metric_statements {
+        context = "datapoint"
+        statements = [
+          `replace_all_patterns(attributes, "value", "((?:[\\p{L}\\p{M}\\p{N}._%+'!#$&*^~{}-]|\\\\u[0-9a-fA-F]{4})+(?:@|%40)(?:[\\p{L}\\p{M}\\p{N}-]+\\.)+\\p{L}[\\p{L}\\p{M}\\p{N}-]*)", "$1", SHA256) where attributes["macro.ingest.nested"] == true`,
+          `delete_matching_keys(attributes, "^macro\\.ingest\\.")`,
+        ]
+      }
+      output {
+        logs = [otelcol.processor.batch.ingest.input]
+        metrics = [otelcol.processor.batch.ingest.input]
+        traces = [otelcol.processor.batch.ingest.input]
+      }
     }
 
     otelcol.processor.batch "ingest" {
@@ -138,7 +470,7 @@ data:
     otelcol.processor.filter "derived" {
       error_mode = "ignore"
       traces {
-        span      = [`not ((name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service") or (name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service") or (attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service") or (name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service") or (name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host") or (attributes["outlook.throttle_origin"] != nil) or (IsMatch(name, "^outlook[.]sync[.]")) or (attributes["outlook.token_cache"] != nil) or (name == "ai.provider_account_unavailable") or (name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service") or (attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"))`]
+        span      = [`not ((name == "chat_streaming" and resource.attributes["service.name"] == "agent-harness-service") or (name == "agent.acp.prompt" and resource.attributes["service.name"] == "agent-harness-service") or (attributes["gen_ai.operation.name"] == "execute_tool" and attributes["gen_ai.conversation.id"] != nil and resource.attributes["service.name"] == "agent-harness-service") or (name == "agent.turn" and resource.attributes["service.name"] == "agent-harness-service") or (name == "firecracker_host.launch" and resource.attributes["service.name"] == "firecracker-host") or (attributes["gen_ai.operation.name"] == "chat") or (attributes["outlook.throttle_origin"] != nil) or (IsMatch(name, "^outlook[.]sync[.]")) or (attributes["outlook.token_cache"] != nil) or (name == "ai.provider_account_unavailable") or (name == "agent.runtime.reattach" and resource.attributes["service.name"] == "agent-harness-service") or (attributes["macro.sampling.class"] == "perf" and resource.attributes["service.name"] == "web-app"))`]
         spanevent = [`true`]
       }
       logs {
@@ -155,7 +487,7 @@ data:
       trace_statements {
         context    = "resource"
         statements = [
-        `keep_keys(attributes, ["gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.cache_creation.input_tokens", "gen_ai.usage.input_tokens", "macro.genai.prompt.connected_integrations.bytes", "macro.genai.prompt.history.bytes", "macro.genai.prompt.identity.bytes", "macro.genai.prompt.macro_prompt.bytes", "macro.genai.prompt.memory.bytes", "macro.genai.prompt.model_id.bytes", "macro.genai.prompt.opener_note.bytes", "macro.genai.prompt.preamble.bytes", "macro.genai.prompt.sdk_docs.bytes", "macro.genai.prompt.session_instructions.bytes", "macro.genai.prompt.session_note.bytes", "macro.genai.prompt.tool_results.bytes", "macro.genai.prompt.tools.eager.bytes", "macro.genai.prompt.tools.loaded.bytes", "macro.genai.tool.result_bytes", "agent.turn.code_executions", "agent.turn.code_failures", "agent.turn.compaction_wait_ms", "agent.stream.model_calls", "agent.runtime.reattach_eager", "agent.runtime.reattach_failures", "agent.runtime.reattach_lazy", "agent.runtime.reattach_sessions", "agent.runtime.reattach_skipped", "outlook.notification_lag_ms", "ui.long_animation_frame_blocking_ms", "ui.elapsed_ms", "graphql.body_ms", "http.body_ms", "runtime.long_animation_frame.blocking_ms", "macro.memory.js_heap.used_bytes", "typing.event_duration_p95_ms", "deployment.environment", "deployment.environment.name", "gen_ai.provider.name", "gen_ai.tool.name", "agent.model", "harness", "ai.provider", "ai.account_unavailable", "host.name", "source", "http.response.status_code", "http.status_code", "outlook.throttle_origin", "outlook.outcome", "outlook.defer_reason", "http.request.method", "outlook.token_cache", "app.platform", "flow.kind", "os.type", "route.id", "ui.outcome", "flow.root", "app.runtime", "typing.surface", "service.name", "gen_ai.operation.name", "gen_ai.conversation.id", "macro.sampling.class", "macro.genai.tool.result_cut", "graphql.body_outcome", "http.body_outcome", "flow.outcome"])`,
+        `keep_keys(attributes, ["gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.cache_creation.input_tokens", "gen_ai.usage.input_tokens", "macro.genai.prompt.connected_integrations.bytes", "macro.genai.prompt.history.bytes", "macro.genai.prompt.identity.bytes", "macro.genai.prompt.macro_prompt.bytes", "macro.genai.prompt.memory.bytes", "macro.genai.prompt.model_id.bytes", "macro.genai.prompt.opener_note.bytes", "macro.genai.prompt.preamble.bytes", "macro.genai.prompt.sdk_docs.bytes", "macro.genai.prompt.session_instructions.bytes", "macro.genai.prompt.session_note.bytes", "macro.genai.prompt.tool_results.bytes", "macro.genai.prompt.tools.eager.bytes", "macro.genai.prompt.tools.loaded.bytes", "macro.genai.tool.result_bytes", "agent.turn.code_executions", "agent.turn.code_failures", "agent.turn.compaction_wait_ms", "agent.stream.model_calls", "agent.runtime.reattach_eager", "agent.runtime.reattach_failures", "agent.runtime.reattach_lazy", "agent.runtime.reattach_sessions", "agent.runtime.reattach_skipped", "macro.genai.chat.time_to_first_chunk_ms", "outlook.notification_lag_ms", "ui.long_animation_frame_blocking_ms", "ui.elapsed_ms", "graphql.body_ms", "http.body_ms", "runtime.long_animation_frame.blocking_ms", "macro.memory.js_heap.used_bytes", "typing.event_duration_p95_ms", "gen_ai.usage.output_tokens", "deployment.environment", "deployment.environment.name", "gen_ai.provider.name", "gen_ai.tool.name", "agent.model", "harness", "ai.provider", "ai.account_unavailable", "host.name", "source", "gen_ai.response.model", "gen_ai.request.model", "service.name", "http.response.status_code", "http.status_code", "outlook.throttle_origin", "outlook.outcome", "outlook.defer_reason", "http.request.method", "outlook.token_cache", "app.platform", "flow.kind", "os.type", "route.id", "ui.outcome", "flow.root", "app.runtime", "typing.surface", "gen_ai.operation.name", "gen_ai.conversation.id", "macro.sampling.class", "macro.genai.tool.result_cut", "graphql.body_outcome", "http.body_outcome", "flow.outcome"])`,
         `delete_key(attributes, "gen_ai.usage.cache_read.input_tokens") where attributes["gen_ai.usage.cache_read.input_tokens"] != nil and not (IsString(attributes["gen_ai.usage.cache_read.input_tokens"]) or IsBool(attributes["gen_ai.usage.cache_read.input_tokens"]) or IsInt(attributes["gen_ai.usage.cache_read.input_tokens"]) or IsDouble(attributes["gen_ai.usage.cache_read.input_tokens"]))`,
         `delete_key(attributes, "gen_ai.usage.cache_creation.input_tokens") where attributes["gen_ai.usage.cache_creation.input_tokens"] != nil and not (IsString(attributes["gen_ai.usage.cache_creation.input_tokens"]) or IsBool(attributes["gen_ai.usage.cache_creation.input_tokens"]) or IsInt(attributes["gen_ai.usage.cache_creation.input_tokens"]) or IsDouble(attributes["gen_ai.usage.cache_creation.input_tokens"]))`,
         `delete_key(attributes, "gen_ai.usage.input_tokens") where attributes["gen_ai.usage.input_tokens"] != nil and not (IsString(attributes["gen_ai.usage.input_tokens"]) or IsBool(attributes["gen_ai.usage.input_tokens"]) or IsInt(attributes["gen_ai.usage.input_tokens"]) or IsDouble(attributes["gen_ai.usage.input_tokens"]))`,
@@ -183,6 +515,7 @@ data:
         `delete_key(attributes, "agent.runtime.reattach_lazy") where attributes["agent.runtime.reattach_lazy"] != nil and not (IsString(attributes["agent.runtime.reattach_lazy"]) or IsBool(attributes["agent.runtime.reattach_lazy"]) or IsInt(attributes["agent.runtime.reattach_lazy"]) or IsDouble(attributes["agent.runtime.reattach_lazy"]))`,
         `delete_key(attributes, "agent.runtime.reattach_sessions") where attributes["agent.runtime.reattach_sessions"] != nil and not (IsString(attributes["agent.runtime.reattach_sessions"]) or IsBool(attributes["agent.runtime.reattach_sessions"]) or IsInt(attributes["agent.runtime.reattach_sessions"]) or IsDouble(attributes["agent.runtime.reattach_sessions"]))`,
         `delete_key(attributes, "agent.runtime.reattach_skipped") where attributes["agent.runtime.reattach_skipped"] != nil and not (IsString(attributes["agent.runtime.reattach_skipped"]) or IsBool(attributes["agent.runtime.reattach_skipped"]) or IsInt(attributes["agent.runtime.reattach_skipped"]) or IsDouble(attributes["agent.runtime.reattach_skipped"]))`,
+        `delete_key(attributes, "macro.genai.chat.time_to_first_chunk_ms") where attributes["macro.genai.chat.time_to_first_chunk_ms"] != nil and not (IsString(attributes["macro.genai.chat.time_to_first_chunk_ms"]) or IsBool(attributes["macro.genai.chat.time_to_first_chunk_ms"]) or IsInt(attributes["macro.genai.chat.time_to_first_chunk_ms"]) or IsDouble(attributes["macro.genai.chat.time_to_first_chunk_ms"]))`,
         `delete_key(attributes, "outlook.notification_lag_ms") where attributes["outlook.notification_lag_ms"] != nil and not (IsString(attributes["outlook.notification_lag_ms"]) or IsBool(attributes["outlook.notification_lag_ms"]) or IsInt(attributes["outlook.notification_lag_ms"]) or IsDouble(attributes["outlook.notification_lag_ms"]))`,
         `delete_key(attributes, "ui.long_animation_frame_blocking_ms") where attributes["ui.long_animation_frame_blocking_ms"] != nil and not (IsString(attributes["ui.long_animation_frame_blocking_ms"]) or IsBool(attributes["ui.long_animation_frame_blocking_ms"]) or IsInt(attributes["ui.long_animation_frame_blocking_ms"]) or IsDouble(attributes["ui.long_animation_frame_blocking_ms"]))`,
         `delete_key(attributes, "ui.elapsed_ms") where attributes["ui.elapsed_ms"] != nil and not (IsString(attributes["ui.elapsed_ms"]) or IsBool(attributes["ui.elapsed_ms"]) or IsInt(attributes["ui.elapsed_ms"]) or IsDouble(attributes["ui.elapsed_ms"]))`,
@@ -191,6 +524,7 @@ data:
         `delete_key(attributes, "runtime.long_animation_frame.blocking_ms") where attributes["runtime.long_animation_frame.blocking_ms"] != nil and not (IsString(attributes["runtime.long_animation_frame.blocking_ms"]) or IsBool(attributes["runtime.long_animation_frame.blocking_ms"]) or IsInt(attributes["runtime.long_animation_frame.blocking_ms"]) or IsDouble(attributes["runtime.long_animation_frame.blocking_ms"]))`,
         `delete_key(attributes, "macro.memory.js_heap.used_bytes") where attributes["macro.memory.js_heap.used_bytes"] != nil and not (IsString(attributes["macro.memory.js_heap.used_bytes"]) or IsBool(attributes["macro.memory.js_heap.used_bytes"]) or IsInt(attributes["macro.memory.js_heap.used_bytes"]) or IsDouble(attributes["macro.memory.js_heap.used_bytes"]))`,
         `delete_key(attributes, "typing.event_duration_p95_ms") where attributes["typing.event_duration_p95_ms"] != nil and not (IsString(attributes["typing.event_duration_p95_ms"]) or IsBool(attributes["typing.event_duration_p95_ms"]) or IsInt(attributes["typing.event_duration_p95_ms"]) or IsDouble(attributes["typing.event_duration_p95_ms"]))`,
+        `delete_key(attributes, "gen_ai.usage.output_tokens") where attributes["gen_ai.usage.output_tokens"] != nil and not (IsString(attributes["gen_ai.usage.output_tokens"]) or IsBool(attributes["gen_ai.usage.output_tokens"]) or IsInt(attributes["gen_ai.usage.output_tokens"]) or IsDouble(attributes["gen_ai.usage.output_tokens"]))`,
         `delete_key(attributes, "deployment.environment") where attributes["deployment.environment"] != nil and not (IsString(attributes["deployment.environment"]) or IsBool(attributes["deployment.environment"]) or IsInt(attributes["deployment.environment"]) or IsDouble(attributes["deployment.environment"]))`,
         `delete_key(attributes, "deployment.environment.name") where attributes["deployment.environment.name"] != nil and not (IsString(attributes["deployment.environment.name"]) or IsBool(attributes["deployment.environment.name"]) or IsInt(attributes["deployment.environment.name"]) or IsDouble(attributes["deployment.environment.name"]))`,
         `delete_key(attributes, "gen_ai.provider.name") where attributes["gen_ai.provider.name"] != nil and not (IsString(attributes["gen_ai.provider.name"]) or IsBool(attributes["gen_ai.provider.name"]) or IsInt(attributes["gen_ai.provider.name"]) or IsDouble(attributes["gen_ai.provider.name"]))`,
@@ -201,6 +535,9 @@ data:
         `delete_key(attributes, "ai.account_unavailable") where attributes["ai.account_unavailable"] != nil and not (IsString(attributes["ai.account_unavailable"]) or IsBool(attributes["ai.account_unavailable"]) or IsInt(attributes["ai.account_unavailable"]) or IsDouble(attributes["ai.account_unavailable"]))`,
         `delete_key(attributes, "host.name") where attributes["host.name"] != nil and not (IsString(attributes["host.name"]) or IsBool(attributes["host.name"]) or IsInt(attributes["host.name"]) or IsDouble(attributes["host.name"]))`,
         `delete_key(attributes, "source") where attributes["source"] != nil and not (IsString(attributes["source"]) or IsBool(attributes["source"]) or IsInt(attributes["source"]) or IsDouble(attributes["source"]))`,
+        `delete_key(attributes, "gen_ai.response.model") where attributes["gen_ai.response.model"] != nil and not (IsString(attributes["gen_ai.response.model"]) or IsBool(attributes["gen_ai.response.model"]) or IsInt(attributes["gen_ai.response.model"]) or IsDouble(attributes["gen_ai.response.model"]))`,
+        `delete_key(attributes, "gen_ai.request.model") where attributes["gen_ai.request.model"] != nil and not (IsString(attributes["gen_ai.request.model"]) or IsBool(attributes["gen_ai.request.model"]) or IsInt(attributes["gen_ai.request.model"]) or IsDouble(attributes["gen_ai.request.model"]))`,
+        `delete_key(attributes, "service.name") where attributes["service.name"] != nil and not (IsString(attributes["service.name"]) or IsBool(attributes["service.name"]) or IsInt(attributes["service.name"]) or IsDouble(attributes["service.name"]))`,
         `delete_key(attributes, "http.response.status_code") where attributes["http.response.status_code"] != nil and not (IsString(attributes["http.response.status_code"]) or IsBool(attributes["http.response.status_code"]) or IsInt(attributes["http.response.status_code"]) or IsDouble(attributes["http.response.status_code"]))`,
         `delete_key(attributes, "http.status_code") where attributes["http.status_code"] != nil and not (IsString(attributes["http.status_code"]) or IsBool(attributes["http.status_code"]) or IsInt(attributes["http.status_code"]) or IsDouble(attributes["http.status_code"]))`,
         `delete_key(attributes, "outlook.throttle_origin") where attributes["outlook.throttle_origin"] != nil and not (IsString(attributes["outlook.throttle_origin"]) or IsBool(attributes["outlook.throttle_origin"]) or IsInt(attributes["outlook.throttle_origin"]) or IsDouble(attributes["outlook.throttle_origin"]))`,
@@ -216,7 +553,6 @@ data:
         `delete_key(attributes, "flow.root") where attributes["flow.root"] != nil and not (IsString(attributes["flow.root"]) or IsBool(attributes["flow.root"]) or IsInt(attributes["flow.root"]) or IsDouble(attributes["flow.root"]))`,
         `delete_key(attributes, "app.runtime") where attributes["app.runtime"] != nil and not (IsString(attributes["app.runtime"]) or IsBool(attributes["app.runtime"]) or IsInt(attributes["app.runtime"]) or IsDouble(attributes["app.runtime"]))`,
         `delete_key(attributes, "typing.surface") where attributes["typing.surface"] != nil and not (IsString(attributes["typing.surface"]) or IsBool(attributes["typing.surface"]) or IsInt(attributes["typing.surface"]) or IsDouble(attributes["typing.surface"]))`,
-        `delete_key(attributes, "service.name") where attributes["service.name"] != nil and not (IsString(attributes["service.name"]) or IsBool(attributes["service.name"]) or IsInt(attributes["service.name"]) or IsDouble(attributes["service.name"]))`,
         `delete_key(attributes, "gen_ai.operation.name") where attributes["gen_ai.operation.name"] != nil and not (IsString(attributes["gen_ai.operation.name"]) or IsBool(attributes["gen_ai.operation.name"]) or IsInt(attributes["gen_ai.operation.name"]) or IsDouble(attributes["gen_ai.operation.name"]))`,
         `delete_key(attributes, "gen_ai.conversation.id") where attributes["gen_ai.conversation.id"] != nil and not (IsString(attributes["gen_ai.conversation.id"]) or IsBool(attributes["gen_ai.conversation.id"]) or IsInt(attributes["gen_ai.conversation.id"]) or IsDouble(attributes["gen_ai.conversation.id"]))`,
         `delete_key(attributes, "macro.sampling.class") where attributes["macro.sampling.class"] != nil and not (IsString(attributes["macro.sampling.class"]) or IsBool(attributes["macro.sampling.class"]) or IsInt(attributes["macro.sampling.class"]) or IsDouble(attributes["macro.sampling.class"]))`,
@@ -234,7 +570,7 @@ data:
       trace_statements {
         context    = "span"
         statements = [
-        `keep_keys(attributes, ["gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.cache_creation.input_tokens", "gen_ai.usage.input_tokens", "macro.genai.prompt.connected_integrations.bytes", "macro.genai.prompt.history.bytes", "macro.genai.prompt.identity.bytes", "macro.genai.prompt.macro_prompt.bytes", "macro.genai.prompt.memory.bytes", "macro.genai.prompt.model_id.bytes", "macro.genai.prompt.opener_note.bytes", "macro.genai.prompt.preamble.bytes", "macro.genai.prompt.sdk_docs.bytes", "macro.genai.prompt.session_instructions.bytes", "macro.genai.prompt.session_note.bytes", "macro.genai.prompt.tool_results.bytes", "macro.genai.prompt.tools.eager.bytes", "macro.genai.prompt.tools.loaded.bytes", "macro.genai.tool.result_bytes", "agent.turn.code_executions", "agent.turn.code_failures", "agent.turn.compaction_wait_ms", "agent.stream.model_calls", "agent.runtime.reattach_eager", "agent.runtime.reattach_failures", "agent.runtime.reattach_lazy", "agent.runtime.reattach_sessions", "agent.runtime.reattach_skipped", "outlook.notification_lag_ms", "ui.long_animation_frame_blocking_ms", "ui.elapsed_ms", "graphql.body_ms", "http.body_ms", "runtime.long_animation_frame.blocking_ms", "macro.memory.js_heap.used_bytes", "typing.event_duration_p95_ms", "deployment.environment", "deployment.environment.name", "gen_ai.provider.name", "gen_ai.tool.name", "agent.model", "harness", "ai.provider", "ai.account_unavailable", "host.name", "source", "http.response.status_code", "http.status_code", "outlook.throttle_origin", "outlook.outcome", "outlook.defer_reason", "http.request.method", "outlook.token_cache", "app.platform", "flow.kind", "os.type", "route.id", "ui.outcome", "flow.root", "app.runtime", "typing.surface", "service.name", "gen_ai.operation.name", "gen_ai.conversation.id", "macro.sampling.class", "macro.genai.tool.result_cut", "graphql.body_outcome", "http.body_outcome", "flow.outcome"])`,
+        `keep_keys(attributes, ["gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.cache_creation.input_tokens", "gen_ai.usage.input_tokens", "macro.genai.prompt.connected_integrations.bytes", "macro.genai.prompt.history.bytes", "macro.genai.prompt.identity.bytes", "macro.genai.prompt.macro_prompt.bytes", "macro.genai.prompt.memory.bytes", "macro.genai.prompt.model_id.bytes", "macro.genai.prompt.opener_note.bytes", "macro.genai.prompt.preamble.bytes", "macro.genai.prompt.sdk_docs.bytes", "macro.genai.prompt.session_instructions.bytes", "macro.genai.prompt.session_note.bytes", "macro.genai.prompt.tool_results.bytes", "macro.genai.prompt.tools.eager.bytes", "macro.genai.prompt.tools.loaded.bytes", "macro.genai.tool.result_bytes", "agent.turn.code_executions", "agent.turn.code_failures", "agent.turn.compaction_wait_ms", "agent.stream.model_calls", "agent.runtime.reattach_eager", "agent.runtime.reattach_failures", "agent.runtime.reattach_lazy", "agent.runtime.reattach_sessions", "agent.runtime.reattach_skipped", "macro.genai.chat.time_to_first_chunk_ms", "outlook.notification_lag_ms", "ui.long_animation_frame_blocking_ms", "ui.elapsed_ms", "graphql.body_ms", "http.body_ms", "runtime.long_animation_frame.blocking_ms", "macro.memory.js_heap.used_bytes", "typing.event_duration_p95_ms", "gen_ai.usage.output_tokens", "deployment.environment", "deployment.environment.name", "gen_ai.provider.name", "gen_ai.tool.name", "agent.model", "harness", "ai.provider", "ai.account_unavailable", "host.name", "source", "gen_ai.response.model", "gen_ai.request.model", "service.name", "http.response.status_code", "http.status_code", "outlook.throttle_origin", "outlook.outcome", "outlook.defer_reason", "http.request.method", "outlook.token_cache", "app.platform", "flow.kind", "os.type", "route.id", "ui.outcome", "flow.root", "app.runtime", "typing.surface", "gen_ai.operation.name", "gen_ai.conversation.id", "macro.sampling.class", "macro.genai.tool.result_cut", "graphql.body_outcome", "http.body_outcome", "flow.outcome"])`,
         `delete_key(attributes, "gen_ai.usage.cache_read.input_tokens") where attributes["gen_ai.usage.cache_read.input_tokens"] != nil and not (IsString(attributes["gen_ai.usage.cache_read.input_tokens"]) or IsBool(attributes["gen_ai.usage.cache_read.input_tokens"]) or IsInt(attributes["gen_ai.usage.cache_read.input_tokens"]) or IsDouble(attributes["gen_ai.usage.cache_read.input_tokens"]))`,
         `delete_key(attributes, "gen_ai.usage.cache_creation.input_tokens") where attributes["gen_ai.usage.cache_creation.input_tokens"] != nil and not (IsString(attributes["gen_ai.usage.cache_creation.input_tokens"]) or IsBool(attributes["gen_ai.usage.cache_creation.input_tokens"]) or IsInt(attributes["gen_ai.usage.cache_creation.input_tokens"]) or IsDouble(attributes["gen_ai.usage.cache_creation.input_tokens"]))`,
         `delete_key(attributes, "gen_ai.usage.input_tokens") where attributes["gen_ai.usage.input_tokens"] != nil and not (IsString(attributes["gen_ai.usage.input_tokens"]) or IsBool(attributes["gen_ai.usage.input_tokens"]) or IsInt(attributes["gen_ai.usage.input_tokens"]) or IsDouble(attributes["gen_ai.usage.input_tokens"]))`,
@@ -262,6 +598,7 @@ data:
         `delete_key(attributes, "agent.runtime.reattach_lazy") where attributes["agent.runtime.reattach_lazy"] != nil and not (IsString(attributes["agent.runtime.reattach_lazy"]) or IsBool(attributes["agent.runtime.reattach_lazy"]) or IsInt(attributes["agent.runtime.reattach_lazy"]) or IsDouble(attributes["agent.runtime.reattach_lazy"]))`,
         `delete_key(attributes, "agent.runtime.reattach_sessions") where attributes["agent.runtime.reattach_sessions"] != nil and not (IsString(attributes["agent.runtime.reattach_sessions"]) or IsBool(attributes["agent.runtime.reattach_sessions"]) or IsInt(attributes["agent.runtime.reattach_sessions"]) or IsDouble(attributes["agent.runtime.reattach_sessions"]))`,
         `delete_key(attributes, "agent.runtime.reattach_skipped") where attributes["agent.runtime.reattach_skipped"] != nil and not (IsString(attributes["agent.runtime.reattach_skipped"]) or IsBool(attributes["agent.runtime.reattach_skipped"]) or IsInt(attributes["agent.runtime.reattach_skipped"]) or IsDouble(attributes["agent.runtime.reattach_skipped"]))`,
+        `delete_key(attributes, "macro.genai.chat.time_to_first_chunk_ms") where attributes["macro.genai.chat.time_to_first_chunk_ms"] != nil and not (IsString(attributes["macro.genai.chat.time_to_first_chunk_ms"]) or IsBool(attributes["macro.genai.chat.time_to_first_chunk_ms"]) or IsInt(attributes["macro.genai.chat.time_to_first_chunk_ms"]) or IsDouble(attributes["macro.genai.chat.time_to_first_chunk_ms"]))`,
         `delete_key(attributes, "outlook.notification_lag_ms") where attributes["outlook.notification_lag_ms"] != nil and not (IsString(attributes["outlook.notification_lag_ms"]) or IsBool(attributes["outlook.notification_lag_ms"]) or IsInt(attributes["outlook.notification_lag_ms"]) or IsDouble(attributes["outlook.notification_lag_ms"]))`,
         `delete_key(attributes, "ui.long_animation_frame_blocking_ms") where attributes["ui.long_animation_frame_blocking_ms"] != nil and not (IsString(attributes["ui.long_animation_frame_blocking_ms"]) or IsBool(attributes["ui.long_animation_frame_blocking_ms"]) or IsInt(attributes["ui.long_animation_frame_blocking_ms"]) or IsDouble(attributes["ui.long_animation_frame_blocking_ms"]))`,
         `delete_key(attributes, "ui.elapsed_ms") where attributes["ui.elapsed_ms"] != nil and not (IsString(attributes["ui.elapsed_ms"]) or IsBool(attributes["ui.elapsed_ms"]) or IsInt(attributes["ui.elapsed_ms"]) or IsDouble(attributes["ui.elapsed_ms"]))`,
@@ -270,6 +607,7 @@ data:
         `delete_key(attributes, "runtime.long_animation_frame.blocking_ms") where attributes["runtime.long_animation_frame.blocking_ms"] != nil and not (IsString(attributes["runtime.long_animation_frame.blocking_ms"]) or IsBool(attributes["runtime.long_animation_frame.blocking_ms"]) or IsInt(attributes["runtime.long_animation_frame.blocking_ms"]) or IsDouble(attributes["runtime.long_animation_frame.blocking_ms"]))`,
         `delete_key(attributes, "macro.memory.js_heap.used_bytes") where attributes["macro.memory.js_heap.used_bytes"] != nil and not (IsString(attributes["macro.memory.js_heap.used_bytes"]) or IsBool(attributes["macro.memory.js_heap.used_bytes"]) or IsInt(attributes["macro.memory.js_heap.used_bytes"]) or IsDouble(attributes["macro.memory.js_heap.used_bytes"]))`,
         `delete_key(attributes, "typing.event_duration_p95_ms") where attributes["typing.event_duration_p95_ms"] != nil and not (IsString(attributes["typing.event_duration_p95_ms"]) or IsBool(attributes["typing.event_duration_p95_ms"]) or IsInt(attributes["typing.event_duration_p95_ms"]) or IsDouble(attributes["typing.event_duration_p95_ms"]))`,
+        `delete_key(attributes, "gen_ai.usage.output_tokens") where attributes["gen_ai.usage.output_tokens"] != nil and not (IsString(attributes["gen_ai.usage.output_tokens"]) or IsBool(attributes["gen_ai.usage.output_tokens"]) or IsInt(attributes["gen_ai.usage.output_tokens"]) or IsDouble(attributes["gen_ai.usage.output_tokens"]))`,
         `delete_key(attributes, "deployment.environment") where attributes["deployment.environment"] != nil and not (IsString(attributes["deployment.environment"]) or IsBool(attributes["deployment.environment"]) or IsInt(attributes["deployment.environment"]) or IsDouble(attributes["deployment.environment"]))`,
         `delete_key(attributes, "deployment.environment.name") where attributes["deployment.environment.name"] != nil and not (IsString(attributes["deployment.environment.name"]) or IsBool(attributes["deployment.environment.name"]) or IsInt(attributes["deployment.environment.name"]) or IsDouble(attributes["deployment.environment.name"]))`,
         `delete_key(attributes, "gen_ai.provider.name") where attributes["gen_ai.provider.name"] != nil and not (IsString(attributes["gen_ai.provider.name"]) or IsBool(attributes["gen_ai.provider.name"]) or IsInt(attributes["gen_ai.provider.name"]) or IsDouble(attributes["gen_ai.provider.name"]))`,
@@ -280,6 +618,9 @@ data:
         `delete_key(attributes, "ai.account_unavailable") where attributes["ai.account_unavailable"] != nil and not (IsString(attributes["ai.account_unavailable"]) or IsBool(attributes["ai.account_unavailable"]) or IsInt(attributes["ai.account_unavailable"]) or IsDouble(attributes["ai.account_unavailable"]))`,
         `delete_key(attributes, "host.name") where attributes["host.name"] != nil and not (IsString(attributes["host.name"]) or IsBool(attributes["host.name"]) or IsInt(attributes["host.name"]) or IsDouble(attributes["host.name"]))`,
         `delete_key(attributes, "source") where attributes["source"] != nil and not (IsString(attributes["source"]) or IsBool(attributes["source"]) or IsInt(attributes["source"]) or IsDouble(attributes["source"]))`,
+        `delete_key(attributes, "gen_ai.response.model") where attributes["gen_ai.response.model"] != nil and not (IsString(attributes["gen_ai.response.model"]) or IsBool(attributes["gen_ai.response.model"]) or IsInt(attributes["gen_ai.response.model"]) or IsDouble(attributes["gen_ai.response.model"]))`,
+        `delete_key(attributes, "gen_ai.request.model") where attributes["gen_ai.request.model"] != nil and not (IsString(attributes["gen_ai.request.model"]) or IsBool(attributes["gen_ai.request.model"]) or IsInt(attributes["gen_ai.request.model"]) or IsDouble(attributes["gen_ai.request.model"]))`,
+        `delete_key(attributes, "service.name") where attributes["service.name"] != nil and not (IsString(attributes["service.name"]) or IsBool(attributes["service.name"]) or IsInt(attributes["service.name"]) or IsDouble(attributes["service.name"]))`,
         `delete_key(attributes, "http.response.status_code") where attributes["http.response.status_code"] != nil and not (IsString(attributes["http.response.status_code"]) or IsBool(attributes["http.response.status_code"]) or IsInt(attributes["http.response.status_code"]) or IsDouble(attributes["http.response.status_code"]))`,
         `delete_key(attributes, "http.status_code") where attributes["http.status_code"] != nil and not (IsString(attributes["http.status_code"]) or IsBool(attributes["http.status_code"]) or IsInt(attributes["http.status_code"]) or IsDouble(attributes["http.status_code"]))`,
         `delete_key(attributes, "outlook.throttle_origin") where attributes["outlook.throttle_origin"] != nil and not (IsString(attributes["outlook.throttle_origin"]) or IsBool(attributes["outlook.throttle_origin"]) or IsInt(attributes["outlook.throttle_origin"]) or IsDouble(attributes["outlook.throttle_origin"]))`,
@@ -295,7 +636,6 @@ data:
         `delete_key(attributes, "flow.root") where attributes["flow.root"] != nil and not (IsString(attributes["flow.root"]) or IsBool(attributes["flow.root"]) or IsInt(attributes["flow.root"]) or IsDouble(attributes["flow.root"]))`,
         `delete_key(attributes, "app.runtime") where attributes["app.runtime"] != nil and not (IsString(attributes["app.runtime"]) or IsBool(attributes["app.runtime"]) or IsInt(attributes["app.runtime"]) or IsDouble(attributes["app.runtime"]))`,
         `delete_key(attributes, "typing.surface") where attributes["typing.surface"] != nil and not (IsString(attributes["typing.surface"]) or IsBool(attributes["typing.surface"]) or IsInt(attributes["typing.surface"]) or IsDouble(attributes["typing.surface"]))`,
-        `delete_key(attributes, "service.name") where attributes["service.name"] != nil and not (IsString(attributes["service.name"]) or IsBool(attributes["service.name"]) or IsInt(attributes["service.name"]) or IsDouble(attributes["service.name"]))`,
         `delete_key(attributes, "gen_ai.operation.name") where attributes["gen_ai.operation.name"] != nil and not (IsString(attributes["gen_ai.operation.name"]) or IsBool(attributes["gen_ai.operation.name"]) or IsInt(attributes["gen_ai.operation.name"]) or IsDouble(attributes["gen_ai.operation.name"]))`,
         `delete_key(attributes, "gen_ai.conversation.id") where attributes["gen_ai.conversation.id"] != nil and not (IsString(attributes["gen_ai.conversation.id"]) or IsBool(attributes["gen_ai.conversation.id"]) or IsInt(attributes["gen_ai.conversation.id"]) or IsDouble(attributes["gen_ai.conversation.id"]))`,
         `delete_key(attributes, "macro.sampling.class") where attributes["macro.sampling.class"] != nil and not (IsString(attributes["macro.sampling.class"]) or IsBool(attributes["macro.sampling.class"]) or IsInt(attributes["macro.sampling.class"]) or IsDouble(attributes["macro.sampling.class"]))`,

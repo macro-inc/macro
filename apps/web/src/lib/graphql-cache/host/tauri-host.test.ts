@@ -28,6 +28,7 @@ import {
   type EntityFilterCacheResult,
   INITIAL_CACHE_REVISION,
 } from '../protocol';
+import { CacheWriteSupersededError } from './errors';
 import {
   createTauriCacheHost,
   NativeCacheUpgradeRequiredError,
@@ -957,6 +958,30 @@ describe('createTauriCacheHost', () => {
       data: { x: 1 },
       identity: 'user-1',
     });
+  });
+
+  it('marks background writes and maps a native refusal', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    invokeMock.mockImplementation((command: string) =>
+      command === 'graphql_cache_write'
+        ? Promise.reject(
+            'graphql cache write superseded by a committed mutation; fetch the query again'
+          )
+        : Promise.resolve(null)
+    );
+
+    await expect(
+      host.writeQuery({
+        generation: TEST_AUTHORITY_GENERATION,
+        query: '{ x }',
+        data: { x: 1 },
+        background: true,
+      })
+    ).rejects.toBeInstanceOf(CacheWriteSupersededError);
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_write',
+      expect.objectContaining({ background: true })
+    );
   });
 
   it('returns only the native hydration projection', async () => {
