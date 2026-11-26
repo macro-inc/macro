@@ -69,6 +69,7 @@ export function useCalendarFirstSync(enabled: Accessor<boolean>) {
         (link) =>
           link.is_sync_active &&
           !link.needs_reauth &&
+          link.provider !== 'IMAP' &&
           !link.needs_calendar_permission &&
           !discoveredLinks.has(link.id)
       )

@@ -1,16 +1,22 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
-import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
+import { t } from '@app/lib/i18n';
+import { type useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
+import { mailboxSizeGuidance } from '@core/email-link/mailbox-health';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
 import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { FOCUS_WINDOW_DAYS } from '@queries/email/focus';
-import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
+import { useEmailLinksQuery, useInboxSuggestion } from '@queries/email/link';
+import { queryReadyGate } from '@queries/gate';
+import { SyncStatus } from '@service-email/generated/schemas/syncStatus';
+import { EmptyStatePanel, FilteredHiddenBanner, Spinner } from '@ui';
 import { Match, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { canSearchEmailTab } from '../constants';
 import { useEmailView } from '../email-view-context';
+import { linkInView } from '../queries/link-in-view';
 import { emailSearchScopeLabel } from '../search/email-search-scope';
 import type { EmailTab } from '../types';
 
@@ -81,7 +87,9 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
     .exhaustive();
 }
 
-export function EmailEmptyState() {
+export function EmailEmptyState(props: {
+  onConnect: ReturnType<typeof useAddInboxFlow>;
+}) {
   const {
     state,
     parsedSearch,
@@ -91,7 +99,51 @@ export function EmailEmptyState() {
     clearFilters,
   } = useEmailView();
   const emailActive = useEmailLinksStatus();
-  const startAddInbox = useAddInboxFlow();
+  const links = useEmailLinksQuery();
+  const syncing = () =>
+    queryReadyGate(links) &&
+    links.data.links.some(
+      (link) =>
+        link.is_sync_active &&
+        !link.needs_reauth &&
+        link.sync_status === SyncStatus.SYNCING &&
+        linkInView(state, link.id)
+    );
+  const blockedInbox = () => {
+    if (!queryReadyGate(links)) return;
+    return links.data.links.find(
+      (link) =>
+        link.is_sync_active &&
+        (!link.needs_reauth ||
+          link.mailbox_issue === 'credentials_unreadable') &&
+        link.mailbox_issue &&
+        linkInView(state, link.id)
+    );
+  };
+  const suggestion = useInboxSuggestion(() => !emailActive());
+  const offer = () => {
+    if (!queryReadyGate(suggestion)) return;
+    return match(suggestion.data.offer)
+      .with('gmail', 'outlook', 'imap', () => suggestion.data)
+      .with('none', () => undefined)
+      .exhaustive(() => undefined);
+  };
+  const connectSuggested = () => {
+    const suggested = offer();
+    if (!suggested) return props.onConnect();
+    return match(suggested.offer)
+      .with('gmail', () =>
+        props.onConnect({ provider: 'GMAIL', emailAddress: suggested.email })
+      )
+      .with('outlook', () =>
+        props.onConnect({ provider: 'OUTLOOK', emailAddress: suggested.email })
+      )
+      .with('imap', () =>
+        props.onConnect({ provider: 'IMAP', emailAddress: suggested.email })
+      )
+      .with('none', () => props.onConnect())
+      .exhaustive(() => props.onConnect());
+  };
   // Spam and Trash have no search; text typed on another tab stays behind.
   const searchText = () =>
     canSearchEmailTab(state.tab) ? parsedSearch().query : '';
@@ -109,12 +161,30 @@ export function EmailEmptyState() {
         <EmptyStatePanel
           centered
           graphic={EmptyStateEmailGraphic}
-          title="Connect your email"
-          description="Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail."
+          title={
+            offer()
+              ? t('imap.connectSuggestedAddress', {
+                  email: offer()?.email ?? '',
+                })
+              : t('imap.connectYourEmail')
+          }
+          description={
+            offer()
+              ? t('imap.suggestedInboxDescription')
+              : t('imap.connectInboxDescription')
+          }
           primaryAction={{
-            label: 'Connect email',
-            onClick: () => fireAndForget(startAddInbox(), 'add-inbox'),
+            label: t('imap.connectEmail'),
+            onClick: () => fireAndForget(connectSuggested(), 'add-inbox'),
           }}
+          secondaryAction={
+            offer()
+              ? {
+                  label: t('imap.differentAccount'),
+                  onClick: () => fireAndForget(props.onConnect(), 'add-inbox'),
+                }
+              : undefined
+          }
           documentationUrl={EMAIL_DOCS_URL}
         />
       </Match>
@@ -164,6 +234,48 @@ export function EmailEmptyState() {
             onClearFilters={clearFilters}
           />
         </EmptyStatePanel>
+      </Match>
+
+      <Match when={blockedInbox()}>
+        {(inbox) => (
+          <div class="h-full w-full" role="status" aria-live="polite">
+            <EmptyStatePanel
+              centered
+              graphic={EmptyStateInboxTrayGraphic}
+              title={match(inbox().mailbox_issue)
+                .with('credentials_unreadable', () =>
+                  t('imap.credentialsUnreadableTitle')
+                )
+                .with('snapshot_too_large', () =>
+                  t('imap.mailboxTooLargeTitle')
+                )
+                .otherwise(() => t('imap.mailboxIssue'))}
+              description={match(inbox().mailbox_issue)
+                .with('credentials_unreadable', () =>
+                  t('imap.credentialsUnreadableDetails')
+                )
+                .with('snapshot_too_large', () =>
+                  mailboxSizeGuidance(inbox().mailbox_retry_at)
+                )
+                .otherwise(() => t('imap.mailboxIssueDetails'))}
+            />
+          </div>
+        )}
+      </Match>
+
+      <Match when={syncing()}>
+        <div class="h-full w-full" role="status" aria-live="polite">
+          <EmptyStatePanel
+            centered
+            graphic={EmptyStateInboxTrayGraphic}
+            title={t('imap.syncingInbox')}
+            description={t('imap.syncingInboxDescription')}
+          >
+            <div class="mt-3 flex justify-center">
+              <Spinner decorative />
+            </div>
+          </EmptyStatePanel>
+        </div>
       </Match>
 
       <Match when={tabCopy(state.tab)}>

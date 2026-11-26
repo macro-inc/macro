@@ -2,6 +2,7 @@ import {
   TurnOffCalendarDialog,
   type TurnOffCalendarTarget,
 } from '@app/features/calendar/components/TurnOffCalendarDialog';
+import { formatLocale, t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_INBOX_RESYNC,
@@ -17,15 +18,18 @@ import {
   calendarConsentScopes,
   reconnectScopes,
 } from '@core/email-link/consent';
+import { mailboxSizeGuidance } from '@core/email-link/mailbox-health';
 import { OutlookBetaBadge } from '@core/email-link/OutlookBetaBadge';
 import { fireAndForget } from '@core/util/fireAndForget';
 import GmailIcon from '@icon/gmail-color.svg';
 import OutlookIcon from '@icon/outlook-color.svg';
 import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg?component-solid';
 import CalendarSlashIcon from '@icon/system/regular/calendar-slash.svg?component-solid';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
 import {
   fetchEmailConnectionProviders,
+  useImapAvailable,
   useOutlookAvailable,
 } from '@queries/auth/outlook-link';
 import {
@@ -42,6 +46,7 @@ import {
 import { cn, Dialog, Panel, Tooltip } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
+import { ImapMailboxSettings } from './ImapMailboxSettings';
 import { InboxSettingsOperations } from './InboxSettingsOperations';
 import { ConnectAction } from './integration-ui';
 import {
@@ -127,12 +132,23 @@ export function EmailCard(props: { class?: string } = {}) {
 
   const onConnectEmail = useConnectInbox();
   const outlookOffered = useOutlookAvailable();
+  const imapOffered = useImapAvailable();
   const hasInbox = () =>
     Boolean(inboxes().primary) || inboxes().others.length > 0;
   const handleResyncInbox = async (linkId: string) => {
     setResyncingIds((prev) => new Set(prev).add(linkId));
     await resyncInbox(linkId).match(
       (res) => {
+        if (res.provider_retry_at) {
+          toast.alert(
+            t('imap.providerPausedUntil', {
+              time: new Date(res.provider_retry_at).toLocaleString(
+                formatLocale()
+              ),
+            })
+          );
+          return;
+        }
         toast.success(
           res.already_in_progress
             ? 'Sync already in progress'
@@ -287,6 +303,21 @@ export function EmailCard(props: { class?: string } = {}) {
                 label="Connect"
                 ariaLabel="Connect an Outlook account"
                 onClick={() => onConnectEmail('OUTLOOK')}
+              />
+            </IntegrationRow>
+          </SettingsSurface>
+        </Show>
+        <Show when={imapOffered()}>
+          <SettingsSurface>
+            <IntegrationRow
+              icon={<EnvelopeIcon />}
+              title={t('imap.connectImapInbox')}
+              description={t('imap.connectImapInboxDescription')}
+            >
+              <ConnectAction
+                label={t('imap.connectAction')}
+                ariaLabel={t('imap.connectImapInbox')}
+                onClick={() => onConnectEmail('IMAP')}
               />
             </IntegrationRow>
           </SettingsSurface>
@@ -465,9 +496,14 @@ function ProviderIcon(props: { provider: EmailLink['provider'] }) {
       aria-hidden="true"
       class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-6"
     >
-      <Show when={props.provider === 'OUTLOOK'} fallback={<GmailIcon />}>
-        <OutlookIcon />
-      </Show>
+      <Switch fallback={<EnvelopeIcon />}>
+        <Match when={props.provider === 'OUTLOOK'}>
+          <OutlookIcon />
+        </Match>
+        <Match when={props.provider === 'GMAIL'}>
+          <GmailIcon />
+        </Match>
+      </Switch>
     </span>
   );
 }
@@ -501,42 +537,84 @@ function InboxRow(props: {
           </div>
           <Show
             when={props.link.provider === 'OUTLOOK'}
-            fallback={<span class="text-xs text-ink-muted">Gmail</span>}
+            fallback={
+              <span class="text-xs text-ink-muted">
+                {props.link.provider === 'IMAP' ? t('imap.imapSmtp') : 'Gmail'}
+              </span>
+            }
           >
             <span class="flex items-center gap-2 text-xs text-ink-muted">
               Outlook / Microsoft 365
               <OutlookBetaBadge />
             </span>
           </Show>
-          <Show when={ENABLE_INBOX_SYNC_STATUS}>
-            <Switch
-              fallback={
-                <Show when={props.link.sync_status !== SyncStatus.UP_TO_DATE}>
-                  <span
-                    class="flex items-center gap-1 text-xs"
-                    classList={{
-                      'text-failure': isSyncFailure(props.link.sync_status),
-                      'text-ink-muted': !isSyncFailure(props.link.sync_status),
-                    }}
-                  >
-                    <Show when={props.link.sync_status === SyncStatus.SYNCING}>
-                      <ArrowsClockwiseIcon class="size-3 animate-spin" />
-                    </Show>
-                    {syncStatusLabel(props.link.sync_status)}
-                  </span>
-                </Show>
-              }
-            >
-              {/* Live backfill progress (connection gateway) wins over the coarse
+          <Show
+            when={
+              (!props.link.needs_reauth ||
+                props.link.mailbox_issue === 'credentials_unreadable') &&
+              props.link.mailbox_issue
+            }
+          >
+            {(issue) => (
+              <span class="text-xs text-failure">
+                {match(issue())
+                  .with('credentials_unreadable', () =>
+                    t('imap.credentialsUnreadableDetails')
+                  )
+                  .with('snapshot_too_large', () => (
+                    <>
+                      <span class="block">
+                        {t('imap.mailboxTooLargeTitle')}
+                      </span>
+                      <span class="block">
+                        {mailboxSizeGuidance(props.link.mailbox_retry_at)}
+                      </span>
+                    </>
+                  ))
+                  .otherwise(() => t('imap.mailboxIssue'))}
+              </span>
+            )}
+          </Show>
+          <Show when={ENABLE_INBOX_SYNC_STATUS && !props.link.mailbox_issue}>
+            <div class="min-h-5 min-w-24">
+              <Switch
+                fallback={
+                  <Show when={props.link.sync_status !== SyncStatus.UP_TO_DATE}>
+                    <span
+                      class="flex items-center gap-1 text-xs"
+                      classList={{
+                        'text-failure': isSyncFailure(props.link.sync_status),
+                        'text-ink-muted': !isSyncFailure(
+                          props.link.sync_status
+                        ),
+                      }}
+                    >
+                      <Show
+                        when={props.link.sync_status === SyncStatus.SYNCING}
+                      >
+                        <ArrowsClockwiseIcon class="size-3 animate-spin" />
+                      </Show>
+                      {syncStatusLabel(props.link.sync_status)}
+                    </span>
+                  </Show>
+                }
+              >
+                {/* Live backfill progress (connection gateway) wins over the coarse
                   sync_status while a backfill is actively running. */}
-              <Match when={getBackfillProgress(props.link.id)}>
-                {(progress) => <BackfillProgressBar progress={progress()} />}
-              </Match>
-            </Switch>
+                <Match when={getBackfillProgress(props.link.id)}>
+                  {(progress) => <BackfillProgressBar progress={progress()} />}
+                </Match>
+              </Switch>
+            </div>
           </Show>
         </div>
         <div class="flex max-w-full flex-wrap items-center gap-2 shrink-0">
-          <Show when={props.link.needs_reauth}>
+          <Show
+            when={
+              props.link.needs_reauth &&
+              (props.link.provider !== 'IMAP' || props.isOwn)
+            }
+          >
             <Button
               variant="primary"
               size="md"
@@ -548,7 +626,12 @@ function InboxRow(props: {
           </Show>
           {/* Explicitly enabling calendar also restores mailbox access when
               the Google grant has expired. */}
-          <Show when={props.link.needs_calendar_permission}>
+          <Show
+            when={
+              props.link.provider !== 'IMAP' &&
+              props.link.needs_calendar_permission
+            }
+          >
             <Button
               variant="secondary"
               size="md"
@@ -566,6 +649,7 @@ function InboxRow(props: {
           <Show
             when={
               props.isOwn &&
+              props.link.provider !== 'IMAP' &&
               (!props.link.needs_calendar_permission ||
                 props.link.has_calendar_data)
             }
@@ -580,6 +664,13 @@ function InboxRow(props: {
                 <CalendarSlashIcon class="size-4" />
               </Button>
             </Tooltip>
+          </Show>
+          <Show when={props.isOwn && props.link.provider === 'IMAP'}>
+            <ImapMailboxSettings
+              linkId={props.link.id}
+              emailAddress={props.link.email_address}
+              onReconnect={props.onReconnect}
+            />
           </Show>
           <Show when={ENABLE_INBOX_RESYNC}>
             <Tooltip label="Force sync">

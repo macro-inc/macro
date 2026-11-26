@@ -61,6 +61,12 @@ export type UrqlQueryRefetchOptions = {
   throwOnError?: boolean;
 };
 
+/** Revalidate the head without replacing already-loaded continuation readers. */
+export type UrqlInfiniteQueryRefetchOptions = UrqlQueryRefetchOptions & {
+  /** Full cursor-chain reload by default; head callers reconcile retained rows. */
+  pages?: 'head' | 'all';
+};
+
 /** TanStack-style high-level status for an urql query. */
 export type UrqlQueryStatus = 'pending' | 'success' | 'error';
 
@@ -192,7 +198,7 @@ export type UrqlInfiniteQueryResult<
     UrqlInfiniteQueryResult<PageData, Variables, PageParam, SelectedData>
   >;
   refetch(
-    options?: UrqlQueryRefetchOptions
+    options?: UrqlInfiniteQueryRefetchOptions
   ): Promise<
     UrqlInfiniteQueryResult<PageData, Variables, PageParam, SelectedData>
   >;

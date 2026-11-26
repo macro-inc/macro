@@ -15,6 +15,7 @@ import {
 import type {
   UrqlInfiniteData,
   UrqlInfiniteQueryOptions,
+  UrqlInfiniteQueryRefetchOptions,
   UrqlInfiniteQueryResult,
   UrqlQueryOptions,
   UrqlQueryRefetchOptions,
@@ -160,7 +161,12 @@ export class InfiniteQueryObserver<
     | Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>>
     | undefined;
   private refetchPromise:
-    | Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>>
+    | {
+        result: Promise<
+          InfiniteResult<PageData, Variables, PageParam, SelectedData>
+        >;
+        pages: 'head' | 'all';
+      }
     | undefined;
 
   constructor(
@@ -355,7 +361,7 @@ export class InfiniteQueryObserver<
     if (this.fetchNextPromise) return this.fetchNextPromise;
 
     const signal = this.actionController.signal;
-    const pendingRefetch = this.refetchPromise;
+    const pendingRefetch = this.refetchPromise?.result;
     const action = pendingRefetch
       ? pendingRefetch.then(() => this.runFetchNextPage(refetchOptions, signal))
       : this.runFetchNextPage(refetchOptions, signal);
@@ -371,9 +377,17 @@ export class InfiniteQueryObserver<
   };
 
   readonly refetch = (
-    refetchOptions: UrqlQueryRefetchOptions = {}
+    refetchOptions: UrqlInfiniteQueryRefetchOptions = {}
   ): Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>> => {
-    if (this.refetchPromise) return this.refetchPromise;
+    const pages = refetchOptions.pages ?? 'all';
+    const pending = this.refetchPromise;
+    if (pending) {
+      // A user-requested full refresh cannot silently share a head-only read.
+      if (pages === 'all' && pending.pages === 'head') {
+        return this.refetchAfter(pending.result, refetchOptions);
+      }
+      return pending.result;
+    }
 
     const signal = this.actionController.signal;
     const pendingFetchNext = this.fetchNextPromise;
@@ -381,15 +395,29 @@ export class InfiniteQueryObserver<
       ? pendingFetchNext.then(() => this.runRefetch(refetchOptions, signal))
       : this.runRefetch(refetchOptions, signal);
     const trackedAction = action.finally(() => {
-      if (this.refetchPromise === trackedAction) {
+      if (this.refetchPromise?.result === trackedAction) {
         this.refetchPromise = undefined;
       }
     });
 
-    this.refetchPromise = trackedAction;
+    this.refetchPromise = { result: trackedAction, pages };
 
     return trackedAction;
   };
+
+  private async refetchAfter(
+    pending: Promise<
+      InfiniteResult<PageData, Variables, PageParam, SelectedData>
+    >,
+    options: UrqlInfiniteQueryRefetchOptions
+  ): Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>> {
+    try {
+      await pending;
+    } catch {
+      // The explicit full refresh still runs after a failed background head read.
+    }
+    return this.refetch(options);
+  }
 
   private applyOptions(
     options: InfiniteOptions<PageData, Variables, PageParam, SelectedData>,
@@ -674,20 +702,20 @@ export class InfiniteQueryObserver<
   }
 
   private async runRefetch(
-    refetchOptions: UrqlQueryRefetchOptions,
+    refetchOptions: UrqlInfiniteQueryRefetchOptions,
     signal: AbortSignal
   ): Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>> {
     if (signal.aborted || this.destroyed || !this.state.enabled) {
       return this.actionResult();
     }
 
-    const targetPageCount = Math.max(1, this.pages.length);
+    const headOnly = refetchOptions.pages === 'head';
+    const targetPageCount = headOnly ? 1 : Math.max(1, this.pages.length);
 
-    this.failedNextPage = undefined;
+    if (!headOnly) this.failedNextPage = undefined;
     this.setState({
       refetching: true,
-      paginationError: undefined,
-      refetchError: undefined,
+      ...(!headOnly && { paginationError: undefined, refetchError: undefined }),
     });
     this.emit();
 

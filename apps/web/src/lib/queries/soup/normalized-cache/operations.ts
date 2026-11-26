@@ -14,7 +14,7 @@ import {
   type QueryKey,
 } from '@tanstack/solid-query';
 import { isAfter } from 'date-fns';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import { queryClient } from '../../client';
 import { soupQueryExcludesDone } from '../excludes-done';
 import { refreshActiveGraphqlSoupQueries } from '../graphql/active-queries';
@@ -276,18 +276,32 @@ export function invalidateSoupQueriesReferencing(ids: string[]): void {
 }
 
 /** Mark every soup list query stale. Use `invalidateSoupEntity` when the entity ID is known. */
-export function invalidateAllSoup(): void {
+export function invalidateAllSoup(
+  refetchType: 'active' | 'none' = 'active'
+): void {
+  // Gateway hints mark REST caches stale without bypassing mounted readers'
+  // paging gates. GraphQL readers maintain their records through the live cache.
+  const options = {
+    refetchType,
+    predicate:
+      refetchType === 'none'
+        ? (query: Query) => !query.queryKey.includes('graphql')
+        : undefined,
+  };
   queryClient.invalidateQueries({
     queryKey: soupKeys.items._def,
+    ...options,
   });
   queryClient.invalidateQueries({
     queryKey: soupKeys.astItems._def,
+    ...options,
   });
   // Expanded single-group caches back grouped views' rows (mail/inbox group
   // by date); leaving them stale keeps removed rows hidden even after their
   // parent queries refetch.
   queryClient.invalidateQueries({
     queryKey: soupKeys.groupedGroup._def,
+    ...options,
   });
 }
 
@@ -297,16 +311,11 @@ export function hasSoupEntity(entityId: string): boolean {
 
 /** Channels nest the id under `data.channel.id`; call records under `data.callId`. */
 export function getSoupItemId(item: SoupApiItem): string {
-  switch (item.tag) {
-    case 'channel':
-      return item.data.channel.id;
-    case 'call':
-      return item.data.callId;
-    case 'channelThread':
-      return item.data.id;
-    default:
-      return item.data.id;
-  }
+  return match(item)
+    .with({ tag: 'channel' }, ({ data }) => data.channel.id)
+    .with({ tag: 'call' }, ({ data }) => data.callId)
+    .with({ data: { id: P.string } }, ({ data }) => data.id)
+    .exhaustive(() => '');
 }
 
 /**

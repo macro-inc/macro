@@ -117,6 +117,7 @@ function mount(draftId?: string, text = '', context = createComposeContext()) {
     : undefined;
   const parent = message('parent', { subject: '' });
   const onClose = vi.fn();
+  const onEngaged = vi.fn();
   const onDraftRemoved = vi.fn();
   const exitToThread = vi.fn(() => true);
   const setShowReply = vi.fn();
@@ -136,6 +137,7 @@ function mount(draftId?: string, text = '', context = createComposeContext()) {
         draft={draft}
         sourceEntityId="thread"
         replyingTo={() => parent}
+        onEngaged={onEngaged}
         setShowReply={setShowReply}
         session={{
           thread: () => ({
@@ -158,8 +160,24 @@ function mount(draftId?: string, text = '', context = createComposeContext()) {
       />
     </EmailFormContextProvider>
   ));
-  return { context, onClose, onDraftRemoved, exitToThread, setShowReply };
+  return {
+    context,
+    onClose,
+    onEngaged,
+    onDraftRemoved,
+    exitToThread,
+    setShowReply,
+  };
 }
+
+it('engages a restored mobile reply when Back opens its draft options', () => {
+  const state = mount('draft', 'Unsent reply');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Go Back' }));
+
+  expect(state.onEngaged).toHaveBeenCalledOnce();
+  expect(screen.getByRole('button', { name: 'Save Draft' })).toBeTruthy();
+});
 
 it('routes the composer Escape hotkey through the mobile draft choices', () => {
   const state = mount('draft', 'Unsent reply');

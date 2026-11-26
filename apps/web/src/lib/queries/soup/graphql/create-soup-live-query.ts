@@ -48,10 +48,14 @@ import {
   getGraphqlSoupClient,
   graphqlSoupProjectionSupported,
   hasGraphqlCacheHost,
+  mapGraphqlSoupItem,
 } from '../../../service-clients/service-storage/graphql-soup';
 import { createUrqlInfiniteQuery } from '../../../urql-solid/create-urql-infinite-query';
 import type { UrqlInfiniteData } from '../../../urql-solid/types';
 import { createHiddenDeferral } from '../../visible-refresh';
+import { mergeHeadRows } from '../head-page';
+import { soupEntityTimestamp } from '../page-timestamp';
+import { mapApiSoupItemToEntity } from '../transform-utils';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { soupCacheTelemetry } from './cache-activity-telemetry';
 import { createPredicateQuery } from './create-predicate-query';
@@ -168,7 +172,33 @@ export function createSoupLiveQuery(
     pageParams: readonly (string | null)[];
     records: Accessor<GraphqlSoupItem[]>;
     baseline: Accessor<GraphqlSoupItem[]>;
+    head: Accessor<GraphqlSoupItem[]>;
+    headBaseline: Accessor<GraphqlSoupItem[]>;
+    headHasNextPage: Accessor<boolean>;
   };
+  const [headRetention, setHeadRetention] = createSignal<{
+    input: GraphqlSoupInput;
+    generation: number;
+    records: GraphqlSoupItem[];
+    baseline: GraphqlSoupItem[];
+  }>();
+  const headTimestamp = (record: GraphqlSoupItem): number => {
+    const initial = firstPageInput()?.initial;
+    const item = mapGraphqlSoupItem(record, { emailView: initial?.emailView });
+    if (!item) return NaN;
+    const entity = mapApiSoupItemToEntity(item);
+    if (initial?.sortMethod === 'CREATED_AT')
+      return new Date(entity.createdAt ?? NaN).getTime();
+    return soupEntityTimestamp(entity, 'updated_at') ?? NaN;
+  };
+  const mergeHead = (current: GraphqlSoupItem[], retained: GraphqlSoupItem[]) =>
+    mergeHeadRows(
+      current,
+      retained,
+      soupItemKey,
+      headTimestamp,
+      request()?.sortDirection ?? 'DESC'
+    );
   type LocalProjection = {
     input: GraphqlSoupInput;
     generation: number;
@@ -308,6 +338,7 @@ export function createSoupLiveQuery(
       setBaselineGeneration(undefined);
       setUnpersistedPages(new Map());
       setLocalMailCurrent(false);
+      setHeadRetention(undefined);
     };
     const observeCurrentRevision = async () => {
       const observedGeneration = cacheGeneration;
@@ -372,16 +403,55 @@ export function createSoupLiveQuery(
     string | null
   >): ServerProjection => {
     const soupPages = pages.filter(hasSoupPage);
+    const input = firstPageInput();
+    const retained = () => {
+      const value = headRetention();
+      if (
+        !value ||
+        value.input !== input ||
+        value.generation !== cacheGeneration
+      )
+        return undefined;
+      return value;
+    };
+    const head = () => soupPages[0]?.user.soup.items ?? [];
+    const headBaseline = () =>
+      soupPages[0] ? querySnapshot(soupPages[0]).user.soup.items : [];
+    const records = createMemo(() => {
+      const known = retained();
+      if (!known || !cacheMaintained())
+        return soupPages.flatMap<GraphqlSoupItem>(
+          (page) => page.user.soup.items
+        );
+      return mergeHead(head(), [
+        ...known.records,
+        ...soupPages
+          .slice(1)
+          .flatMap<GraphqlSoupItem>((page) => page.user.soup.items),
+      ]);
+    });
+    const baseline = createMemo(() => {
+      const known = retained();
+      if (!known)
+        return soupPages.flatMap<GraphqlSoupItem>(
+          (page) => querySnapshot(page).user.soup.items
+        );
+      return mergeHead(headBaseline(), [
+        ...known.baseline,
+        ...soupPages
+          .slice(1)
+          .flatMap<GraphqlSoupItem>(
+            (page) => querySnapshot(page).user.soup.items
+          ),
+      ]);
+    });
     return {
       pageParams,
-      // Accessors keep raw payloads outside deep store reconciliation. Rows from
-      // live urql pages retain their field subscriptions; baselines are snapshots.
-      records: () =>
-        soupPages.flatMap<GraphqlSoupItem>((page) => page.user.soup.items),
-      baseline: () =>
-        soupPages.flatMap<GraphqlSoupItem>(
-          (page) => querySnapshot(page).user.soup.items
-        ),
+      head,
+      headBaseline,
+      headHasNextPage: () => soupPages[0]?.user.soup.nextCursor != null,
+      records,
+      baseline,
     };
   };
 
@@ -732,6 +802,7 @@ export function createSoupLiveQuery(
     const requestGeneration = cacheGeneration;
     if (input !== previousInitialInput) {
       previousInitialInput = input;
+      setHeadRetention(undefined);
       pagingGeneration += 1;
       setLocalProjection(undefined);
       setLocalMailEdge(null);
@@ -1110,6 +1181,47 @@ export function createSoupLiveQuery(
     return local.records.length === 0 && !offline() && !options().networkPaused;
   };
   usePending('soup.network', isLoading);
+  const resetToInitialPage = () => {
+    // Resetting server pages can invalidate the displayed projection's
+    // baseline. Capture ownership before that happens, then clear its edge.
+    const mail = localProjection()?.mail;
+    pagingGeneration += 1;
+    batch(() => {
+      query.resetToInitialPage();
+      setHeadRetention(undefined);
+      setLocalMailEdge(null);
+      setLocalMailCurrent(false);
+      if (mail) {
+        setLocalProjection(undefined);
+        setLocalEvaluationTrigger((value) => value + 1);
+      }
+    });
+  };
+  const refresh = async () => {
+    const input = firstPageInput();
+    if (input === undefined) return;
+    // A fully cached lookup still participates in explicit refreshes.
+    if (cacheFirstEntities() && !networkInput()) {
+      setEntityHydration({
+        scope: input,
+        generation: cacheGeneration,
+        entities: options().cacheFirstEntities ?? [],
+        input,
+      });
+      await runWithOwner(owner, () =>
+        until(() => !query.isFetching && (query.isSuccess || query.error))
+      );
+      if (query.error) throw query.error;
+      return;
+    }
+    // An explicit list refresh rebuilds the cursor chain in order. The
+    // notification queue observes isFetching and waits for this to finish.
+    await query.refetch({
+      requestPolicy: 'network-only',
+      throwOnError: true,
+    });
+    if (input === firstPageInput()) setHeadRetention(undefined);
+  };
   return {
     cacheMaintained,
     revalidationQueries,
@@ -1269,44 +1381,63 @@ export function createSoupLiveQuery(
         setFetchingMailPage(false);
       }
     },
-    resetToInitialPage: () => {
-      // Resetting server pages can invalidate the displayed projection's
-      // baseline. Capture ownership before that happens, then clear its edge.
-      const mail = localProjection()?.mail;
-      pagingGeneration += 1;
-      batch(() => {
-        query.resetToInitialPage();
-        setLocalMailEdge(null);
-        setLocalMailCurrent(false);
-        if (mail) {
-          setLocalProjection(undefined);
-          setLocalEvaluationTrigger((value) => value + 1);
-        }
-      });
-    },
-    refresh: async () => {
+    resetToInitialPage,
+    refreshHead: async () => {
       const input = firstPageInput();
-      if (input === undefined) return;
-      // A fully cached lookup still participates in explicit refreshes.
-      if (cacheFirstEntities() && !networkInput()) {
-        setEntityHydration({
-          scope: input,
-          generation: cacheGeneration,
-          entities: options().cacheFirstEntities ?? [],
-          input,
-        });
-        await runWithOwner(owner, () =>
-          until(() => !query.isFetching && (query.isSuccess || query.error))
-        );
-        if (query.error) throw query.error;
+      if (!input || !isEnabled()) return;
+      if (
+        input.initial.sortMethod !== 'CREATED_AT' &&
+        input.initial.sortMethod !== 'UPDATED_AT'
+      )
+        throw new Error('Head refresh requires a chronological sort');
+      // Only maintained caches can keep rows below the response current.
+      if (!cacheMaintained()) {
+        await refresh();
         return;
       }
-      // An explicit list refresh rebuilds the cursor chain in order. The
-      // notification queue observes isFetching and waits for this to finish.
+      const generation = cacheGeneration;
+      const records = query.data?.records() ?? [];
+      const baseline = query.data?.baseline() ?? [];
+      const timestamps = new Map(
+        baseline.map((row) => [soupItemKey(row), headTimestamp(row)])
+      );
+      setHeadRetention({
+        input,
+        generation,
+        records,
+        baseline,
+      });
       await query.refetch({
+        pages: 'head',
         requestPolicy: 'network-only',
         throwOnError: true,
       });
+      if (
+        input !== firstPageInput() ||
+        generation !== cacheGeneration ||
+        !isEnabled()
+      )
+        return;
+      const head = query.data?.headBaseline() ?? [];
+      if (records.length === 0) return;
+      // A complete head proves that there are no older pages. Otherwise an
+      // unanchored head must rebuild the loaded depth without clearing rows
+      // or a deep selection while its replacement cursor chain is pending.
+      if (!query.data?.headHasNextPage()) {
+        if (query.data?.pageParams.length === 1) setHeadRetention(undefined);
+        else resetToInitialPage();
+      } else if (
+        !head.some((row) => {
+          const timestamp = headTimestamp(row);
+          return (
+            Number.isFinite(timestamp) &&
+            timestamps.get(soupItemKey(row)) === timestamp
+          );
+        })
+      ) {
+        await refresh();
+      }
     },
+    refresh,
   };
 }

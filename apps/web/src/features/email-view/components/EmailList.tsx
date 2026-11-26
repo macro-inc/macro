@@ -34,6 +34,7 @@ import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
 import { toast } from '@core/component/Toast/Toast';
+import { useAddInboxFlow } from '@core/email-link';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
@@ -151,6 +152,8 @@ export function EmailList(props: EmailListProps) {
     searchHasText,
     parsedSearch,
   } = useEmailView();
+  // Query loading can replace the empty state without ending the connect flow.
+  const connectInbox = useAddInboxFlow();
   const emailRowLabels = createEmailRowLabels();
   const rowLabelsFor = (entity: EntityData) =>
     isEmailEntity(entity) ? emailRowLabels(entity) : undefined;
@@ -839,7 +842,7 @@ export function EmailList(props: EmailListProps) {
                   <Show when={showsTutorial()}>
                     <TutorialRow tutorial="mail" />
                   </Show>
-                  <EmailEmptyState />
+                  <EmailEmptyState onConnect={connectInbox} />
                 </div>
               </Match>
 

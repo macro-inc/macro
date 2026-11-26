@@ -49,7 +49,7 @@ export function announceQueuedSend(options: {
   ) => {
     const persistent = noticeOptions?.persistent ?? false;
     try {
-      const shown = notices.feedback[tone](message, {
+      const shown: number | undefined = notices.feedback[tone](message, {
         ...noticeOptions,
         // Another send's notice with the same text is a different notice.
         stack: true,
@@ -76,7 +76,7 @@ export function announceQueuedSend(options: {
     notice = undefined;
     if (withdrawn != null) notices.feedback.dismiss(withdrawn);
   };
-  // The outcome stays until it is read; later progress never takes it back.
+  // Later progress cannot replace a terminal notice.
   const finish = (
     tone: 'success' | 'failure' | 'alert',
     message: string,
@@ -111,8 +111,12 @@ export function announceQueuedSend(options: {
     clearTimeout(stall);
     if (!inMotion) return;
     stall = setTimeout(() => {
+      // Server acceptance only means the durable queue accepted the intent,
+      // not that SMTP has begun or accepted anything. A local timer cannot
+      // infer delivery uncertainty; only the server's typed outcome can.
       inMotion = false;
-      if (notice != null) sending(sendingMessage, offeringUndo);
+      if (notice != null)
+        sending(accepted ? 'Still sending…' : sendingMessage, offeringUndo);
     }, STALLED_SEND_MS);
   };
   // Delivery has begun: Undo goes, and the notice waits for the outcome.
@@ -126,7 +130,7 @@ export function announceQueuedSend(options: {
   sending(options.queuedOffline ? 'Email queued to send' : 'Sending…', true);
   if (!options.sendAttemptId) return;
   watchForStall();
-  options.delivery.watchSend?.(options.sendAttemptId, (progress) =>
+  options.delivery.watchSend?.(options.sendAttemptId, (progress) => {
     match(progress)
       .with({ state: 'pending' }, () => {
         // After acceptance, pending means delivery or cancellation has begun.
@@ -154,8 +158,8 @@ export function announceQueuedSend(options: {
       .with({ state: 'sent' }, () => finish('success', 'Email sent'))
       .with({ state: 'failed' }, () => {
         finish('failure', 'Email failed to send', {
-          subtext:
-            'Open its conversation or Drafts and choose Cancel to recover the draft.',
+          // Keep the failure visible until the reader can act on it.
+          subtext: 'Open its conversation or Drafts to recover the draft.',
           persistent: true,
         });
         options.onUndelivered?.();
@@ -170,6 +174,6 @@ export function announceQueuedSend(options: {
         })
       )
       .with({ state: 'untracked' }, withdraw)
-      .exhaustive()
-  );
+      .exhaustive();
+  });
 }

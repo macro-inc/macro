@@ -2,6 +2,7 @@ import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
+import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateCalendarViews } from '@queries/calendar/sync';
 import { queryClient } from '@queries/client';
@@ -92,6 +93,43 @@ export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {
     select: copyLinksForReconcile,
     reconcile: 'id' as const,
   }));
+}
+
+export function inboxSuggestionQueryOptions(
+  viewer: QueryAccount | undefined,
+  enabled: boolean
+) {
+  return {
+    queryKey: emailKeys.inboxSuggestion(viewer?.userId, viewer?.session)
+      .queryKey,
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
+      assertQueryAccount(viewer);
+      const suggestion = await throwOnErr(() =>
+        emailClient.imapSuggestion(signal)
+      );
+      assertQueryAccount(viewer);
+      // An MX hint identifies hosting, not permission to enroll with OAuth.
+      // Use the same capability policy as the generic provider chooser.
+      if (suggestion.offer === 'gmail' || suggestion.offer === 'outlook') {
+        const providers = await fetchEmailConnectionProviders();
+        assertQueryAccount(viewer);
+        const available =
+          suggestion.offer === 'gmail'
+            ? providers.gmail !== false
+            : providers.outlook;
+        if (!available) return { ...suggestion, offer: 'none' as const };
+      }
+      return suggestion;
+    },
+    enabled: !!viewer && enabled,
+    staleTime: LINK_STALE_TIME,
+  };
+}
+
+/** Offer the signed-in address only after the caller has established that it needs an inbox. */
+export function useInboxSuggestion(enabled: Accessor<boolean>) {
+  const account = useQueryAccount();
+  return useQuery(() => inboxSuggestionQueryOptions(account(), enabled()));
 }
 
 /**

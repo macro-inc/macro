@@ -29,6 +29,18 @@ An email snooze returns its original conversation to the inbox and adds a
 notification to that email row in Home. It has no separate reminder toast or
 detail view. See [Email reminders](reminders.md#delivery-and-undo).
 
+## Connecting an inbox
+
+After **Connect email** in Email or Home, the provider chooser and the IMAP
+credential form stay open while the list reloads, including when its capabilities are still loading. Choose a provider or
+Cancel; closing the owning view ends the dialog. The provider chooser remains
+visible until the IMAP form is ready. Check this on desktop and phone.
+
+In **Settings → Email → Server settings**, server Drafts are labelled as not
+synced to Macro. They do not count towards the notice for included folders
+outside the latest sync. Other included folders omitted from that sync still
+show the notice. Drafts keep their role picker but have no message-sync checkbox.
+
 ## Account changes
 
 Channel and connected-inbox metadata belongs to the signed-in viewer. During a
@@ -48,16 +60,24 @@ trigger a background cache refresh: rows should not disappear and return. A
 confirmed archive still removes its row. Cached pagination preserves its position
 while those server-confirmed rows load their canonical previews.
 
+An IMAP original-source or attachment download above the supported size returns
+**This message is too large to open in Macro (over 25 MB).** It is a permanent
+content limit, not a temporary server failure. A busy ordinary email mutation
+waits for the suggested delay (at most five seconds) and retries once, then
+reports **Mailbox is busy, try again.** Sending is excluded from this retry;
+follow the existing accepted/failed/unconfirmed delivery state instead.
+
 Email has no Tags section in its inner sidebar. Filter by tag through
 **Filters → Tags** on desktop or the mobile filter drawer; this keeps the current
 mailbox tab. On All, selected tag names appear in the header and breadcrumb.
 A narrow pane keeps its short `Email` or `Inbox` breadcrumb label. A tag filter
 on any other tab keeps that tab's title.
 
-Gmail labels and Outlook categories that people made show read-only, after a
-row's tags under the same limit of three, with a label icon where a tag has its
-color dot. A nested Gmail label shows its own name on the row and its whole
-name (`Customers / Larkspur`) on hover. Gmail's system labels and labels it hides
+Gmail and IMAP labels and Outlook categories that people made show read-only,
+after a row's tags under the same limit of three, with a label icon where a tag
+has its color dot. A nested Gmail label shows its own name on the row and its whole
+name (`Customers / Larkspur`) on hover. Outlook and IMAP names stay whole.
+Gmail's system labels and labels it hides
 from the message list never show, and phone rows show neither tags nor labels.
 An open thread shows them as one pill after its tags (`3 Labels`, or a sole
 label's name) listing their whole names, and in a Labels section of the side
@@ -113,9 +133,86 @@ starts it and brings up the native controls. When it ends, the last frame dims u
 focus) hides it on that device for good (`localStorage`
 `email-tutorial-row-dismissed`). It is outside the virtualized rows, so list
 keyboard focus skips it.
-Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
-shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
-use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` within the surface: it focuses the list header's search field, and when a thread or a new email has replaced the list it is left to the browser's find. Outside a text field, `/` opens the app's Search view from Email in every state, as in every other view. The Email sidebar has no search field. The search field takes Gmail-style operators as typed text (`subject:lunch`, `from:ana`, `is:unread`, `has:attachment`, `after:2025/01/31`, `newer_than:1m`, `-in:inbox`), which the search service reads; the list in `crates/search_service/AGENTS.md` is the reference.
+Compose via the `Email` button (or `Create` → `Email E`). A fresh account
+shows **Connect your email** or offers the verified sign-in address. Gmail,
+Google Workspace and enabled Outlook connections offer provider consent.
+When availability succeeds with just one consent provider and no IMAP choice,
+consent starts directly. A failed availability read keeps the retry action and
+never starts a provider automatically.
+When IMAP is available, open the incoming/outgoing server form, confirm both
+servers, enter the password or app password, then choose **Connect inbox**.
+Phones show the same fields in the standard drawer with actions outside the scroll body.
+Incoming and outgoing passwords use the shared masked secret input. Reconnect
+starts with empty secret fields; revealing a field shows only newly typed text.
+Turning off a separate outgoing password forgets that typed value. App-password
+fields disable browser autocomplete, and the credential form excludes analytics capture.
+Retry an interrupted connection with its original request id: an in-progress
+promotion remains retryable, and a completed promotion returns the same inbox
+without probing credentials again. Check that an unrelated healthy attempt can
+complete while an older attempt is deferred.
+During verification, **Connect inbox** stays in place with a loading indicator.
+Check idle, checking, refusal and retry on desktop and phone: the action keeps
+its width and position, and error copy wraps without being clipped.
+A verified sign-in refusal shows **Sign-in was rejected. Check your username
+and app password.** The provider's **Create an app password** link stays
+available. Server settings and confirmation remain; re-enter the cleared
+password and retry. DNS, TCP, TLS and timeout failures show their own guidance
+instead of guessing that a password was wrong.
+**Connect new** and **Add another inbox** open the provider chooser immediately.
+Selecting **Other email (IMAP / SMTP)** replaces the chooser with the server
+form. Cancel or close the form to return to the settings surface.
+If providers cannot load, **Try again** retries the read without starting an
+OAuth flow. Check that retry restores the offered providers and that calendar
+connections never offer IMAP.
+Keep the inbox open after connecting a test account with existing mail: it
+shows **Syncing your inbox**, then imported rows without a reload. After the
+import finishes, deliver another test message and verify it appears in the
+unchanged open inbox without navigating or reloading. Repeat with signal
+notifications disabled. Also exercise mail delivered between a completed scan
+and IDLE setup; it must appear without waiting for the periodic walk.
+
+Open **Settings → Email** to check import progress, reconnect or disconnect.
+When **Force sync** encounters provider pacing, it shows **Paused by your provider
+until** with the localized deadline. It does not say a resync started. Reconnecting
+with a new password preserves that provider wait.
+**Change login details** opens the bound IMAP link; its primary action says
+**Reconnect** and starts with empty password fields.
+Known custom Google Workspace and Microsoft 365 domains use domain-only MX
+hints. Unknown hosts keep the provider chooser; provider hints never bypass
+the user's enrollment availability policy.
+
+The form shows the signed-in address and discovers its settings automatically.
+For Google- and Microsoft-hosted mailboxes it offers consent first when
+available, passing that address as the sign-in hint. **Use an app password
+instead** remains available.
+Without provider consent availability, the app-password form opens directly
+for that verified address. Reconnecting an existing IMAP link opens its
+saved server settings and password workflow. If a recoverable error prevents
+loading the saved endpoints, enter them manually and confirm the servers
+before entering a password.
+Fastmail opens the direct password flow. Onboarding retains its Google and
+Microsoft actions; a suggested IMAP inbox is an additional secondary choice.
+Connection and server-settings dialogs use Macro selects and checkboxes.
+Desktop actions stay outside the scroll body. Phones use the standard drawer
+with pinned actions above the home indicator.
+
+The IMAP connection and server settings dialogs use the interface language,
+including connection errors, folder roles and accessible labels. Password fields
+clear after a verification attempt; confirmed non-secret settings remain.
+
+On an owned IMAP inbox, **Server settings** shows the hosts, ports, encryption
+and usernames for both servers. Recent verifications also show the negotiated
+features, the verification time and any outgoing size limit the server supplied.
+**Change login details** verifies replacement credentials for the same inbox.
+It remains available if the saved password or server settings cannot be read;
+reconnect the existing inbox instead of creating another link.
+
+Under **Folders**, choose a role, include or exclude a folder, or watch one
+additional folder for new mail. Inbox is always included. **Outside the latest
+sync** identifies an included folder absent from the most recent pass. Choose
+**Save settings** to apply changes.
+
+Most functionality needs a connected account. Search is `Ctrl+F` within the surface: it focuses the list header's search field, and when a thread or a new email has replaced the list it is left to the browser's find. Outside a text field, `/` opens the app's Search view from Email in every state, as in every other view. The Email sidebar has no search field. The search field takes Gmail-style operators as typed text (`subject:lunch`, `from:ana`, `is:unread`, `has:attachment`, `after:2025/01/31`, `newer_than:1m`, `-in:inbox`), which the search service reads; the list in `crates/search_service/AGENTS.md` is the reference.
 
 Email search covers all mail from every tab ("Search all mail"), as the All
 tab lists it, except Spam and Trash, which the search index leaves out (they
@@ -299,7 +396,8 @@ sharing an inbox or thread inside Macro remains available.
 
 A Microsoft 365 tenant that lets only administrators consent sends the user
 back to an `Admin approval required` dialog with `Copy admin approval link`
-(a tenant-wide approval link for IT) and `Connect a different account`.
+(a tenant-wide approval link for IT) and `Connect a different account`. The
+copy action becomes available once the signed-in session and its approval link load.
 Cancelling on the provider's consent screen returns to the previous view
 silently. An administrator who opens the approval link returns to
 `Approved. Try connecting again.` with the connect dialog open. On native
@@ -512,6 +610,22 @@ as it was loaded, and Load More keeps working while they land. Verify by
 scrolling past the first 100 threads, then marking a thread done and letting new
 mail arrive (locally: insert a thread and publish `email.message_received` on
 `macro.email`).
+
+Automatic mailbox hints wait for an in-flight Load More to finish and coalesce
+into one settled batch. Cache-maintained lists re-read their head, prefer its
+fresh records and use its time range to remove missing known rows; timestamp
+boundary ties are retained. Only a row with an unchanged sort timestamp anchors
+the previous chain: a reply lifting an old thread is not enough. An unanchored
+full head rebuilds the loaded chain while keeping visible rows. A complete
+head removes obsolete continuation pages without resetting a one-page list. Shared caches keep known rows below the head current.
+REST fallback and non-maintained GraphQL lists reload the full chain once per
+batch. Spam and Trash also require that full read because their previews bypass
+both shared caches. These reads are limited to mounted views and wait for paging.
+Returning to a clean tab performs no list read; debounced reconnect catch-up and
+the user's explicit refresh reload the full chain. Mailbox hints do not rerun
+submitted service searches or alias/admission lookups. Historical imports create
+neither new-message notifications nor the viewer's own touches, so they do not
+refetch Home's activity feeds. Inactive REST lists are marked stale without IO.
 
 When switching email tabs or inboxes, the list shows current-query cached results
 or a scoped `Loading email` spinner until they arrive—not the previous tab's rows
@@ -1075,9 +1189,10 @@ Attach's touch icon size. The Back control returns to the thread; when a reply
 has content, choose Save Draft or Delete Draft. Escape
 and Android Back follow the same close flow, including Escape with a header
 button focused. Closing an empty reply discards its local/server draft and
-removes its Draft preview from the thread. Saving must finish before leaving;
-a failed local save keeps the composer and draft options open. The message list
-stays mounted underneath so closing a reply preserves its scroll position.
+removes its Draft preview from the thread. A background thread refresh keeps
+the draft options open. Saving must finish before leaving, and a failed local
+save keeps the composer and draft options open. The message list stays mounted
+underneath so closing a reply preserves its scroll position.
 On touch, a saved reply shows as a **Draft** row with its opening words under the
 message it answers (which stays expanded); tapping it reopens the draft.
 Opening a thread whose last message has a reply draft opens the composer once;
@@ -1476,12 +1591,19 @@ notice that stays on screen until the send ends and changes in place: **Undo**
 leaves at the deadline, and **Sending…** then becomes **Email sent** only after
 delivery; it never closes and reopens while the send is in motion. A send
 that makes no progress for 30 seconds (retrying, or waiting on sign-in) lets
-its notice expire, and a new one follows it once the server accepts it. This holds
+its notice expire, and a new one follows it once the server accepts it. After
+the undo deadline, a send with no progress for 30 seconds shows **Delivery
+unconfirmed** while confirmation continues. Repeated unchanged status polls
+must not restart that deadline; a later confirmed delivery becomes **Email sent**.
+This holds
 when another Mail tab delivers or cancels the send first, and a cancelled reply
 still returns its thread to Inbox. When the server cannot say how such a send
 ended, the notice closes. A send that fails after it was queued turns the
 notice into a persistent **Email failed to send**, and **Delivery unconfirmed**
-reports a send the provider did not confirm. An offline send shows **Email
+reports a send the provider did not confirm. For IMAP, a typed connection failure before any message-body byte after one fresh retry ends as **Email failed to send** and
+releases the next draft on that link. A generic service outage or a lost reply
+after DATA stays unconfirmed and must never automatically resend.
+An offline send shows **Email
 queued to send**, which expires as usual, and returns to the email list; once
 the send goes out a **Sending…** notice follows it the same way. The status panel shows a send only while it waits on this
 device (**Queued on this device**), needs attention, or is scheduled
@@ -2045,3 +2167,38 @@ the view and confirm results stay within it.
 Opening a row clears its unread state immediately; direct details mark read when
 ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
 mobile, and email inbox checks.
+
+IMAP size limits: an oversized monitored folder pauses the whole account snapshot, including new Inbox mail. The inbox list and selected empty-inbox view show "Mailbox too large to sync yet" while previously indexed mail stays readable; the empty view must not claim Inbox zero while sync is blocked. Automatic retries grow from one hour to twenty-four hours; a successful round or manual reconnect resets that delay. Changing folder settings allows one immediate attempt; the warning suggests unselecting large folders and shows the next retry time when available. This is separate from sign-in rejection; do not reconnect automatically or promise older mail has imported.
+
+If Macro can't read the saved password, the inbox shows **Reconnect your inbox**.
+**Change login details** remains available when reading saved server settings
+fails. Reconnecting with verified settings repairs the existing link and clears
+the warning. Test with synthetic credentials only.
+
+Queue independence: a delayed autosave or send on one draft must not block a
+different draft in the same inbox. Read/star/archive and similar commands retain
+their accepted order only when they touch the same message; a delayed command
+still blocks its later overlapping command until it finishes. Verify independent
+drafts, edits/reschedules/cancels of a quiet synced draft, and terminal command
+release without treating a queued or uncertain send as delivered.
+For a long conversation, one organization action keeps one result and remains
+pending until its message updates finish. A successful tail must not hide an
+earlier failure, including after reconnect.
+
+IMAP send refusals identify sender, recipient or message refusal when the server
+provides that evidence. A recipient refusal names the address from the already
+loaded message; no accepted recipient receives the body after another RCPT is
+refused. The send is marked failed, with details in the conversation or Drafts,
+and requires a deliberate recovery. The failure toast has no automatic timeout.
+Select **Maybe later**, close it or swipe it away on a phone to dismiss it for that send attempt.
+The conversation and Drafts keep the failure details and recovery actions when
+the toast is out of view, including on a phone with one visible toast slot.
+If the provider supplies no reason, the status tells the reader to select
+**Cancel** to recover the draft.
+A local queued-send timer must never say
+Delivery unconfirmed before a provider outcome. Reconnect opens the existing
+mailbox's saved endpoints and asks for passwords again. Server fields stack
+at full dialog width and port choices name SSL/TLS
+or STARTTLS in both the selected value and menu.
+
+Routine suggestions currently use newest inbox context for IMAP. Month and Sent context are omitted until IMAP folder/date-window support lands; internal recent-mail responses identify unsupported mailboxes, and the harness records typed partial-context counts.

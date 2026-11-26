@@ -7,5 +7,5 @@ export type ContactListPriority = readonly (readonly string[])[];
 export const MENTION_LIST_PRIORITY: ContactListPriority = [
   ['teammates'],
   ['interacted', 'invited'],
-  ['gmail', 'outlook'],
+  ['gmail', 'outlook', 'imap'],
 ];

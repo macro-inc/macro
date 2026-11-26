@@ -60,6 +60,7 @@ import {
   bumpSoupEntityTouchedAt,
   getSoupItemId,
   insertSoupEntity,
+  invalidateAllSoup,
   optimisticUpdateSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
   refetchSoupEntity,
@@ -210,6 +211,13 @@ afterEach(() => {
 // -- Tests --
 
 describe('getSoupItemId', () => {
+  it('preserves distinct ids carried by unknown wire variants', () => {
+    const first = JSON.parse('{"tag":"future-kind","data":{"id":"future-a"}}');
+    const second = JSON.parse('{"tag":"future-kind","data":{"id":"future-b"}}');
+    expect(getSoupItemId(first)).toBe('future-a');
+    expect(getSoupItemId(second)).toBe('future-b');
+  });
+
   it('returns data.id for standard tags', () => {
     expect(getSoupItemId(mockDocumentItem('abc-123'))).toBe('abc-123');
   });
@@ -2099,4 +2107,41 @@ it('notification-only Team skips generic refetch and timestamp cache mutation', 
   mockNormalizer.getObjectById.mockReturnValueOnce(team);
   optimisticUpdateSoupItemUpdatedAt('team-1', 'team', '2026-11-13T00:00:00Z');
   expect(mockNormalizer.setNormalizedData).not.toHaveBeenCalled();
+});
+
+it('marks only REST lists stale without reading active page chains for mailbox hints', () => {
+  const keys = ['rest', 'graphql'].map(
+    (transport) =>
+      soupKeys.astItems({
+        params: {},
+        body: {},
+        transport: transport === 'rest' ? 'rest' : 'graphql',
+      }).queryKey
+  );
+  const read = vi.fn(async () => ({ pages: [] }));
+  const observers = keys.map((queryKey) => {
+    testQueryClient.setQueryData(queryKey, { pages: [] });
+    const observer = new QueryObserver(testQueryClient, {
+      queryKey,
+      queryFn: read,
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    return { observer, unsubscribe };
+  });
+  try {
+    invalidateAllSoup('none');
+    expect(
+      keys.map(
+        (queryKey) => testQueryClient.getQueryState(queryKey)?.isInvalidated
+      )
+    ).toEqual([true, false]);
+    expect(read).not.toHaveBeenCalled();
+    expect(refreshActiveGraphqlSoupQueriesMock).not.toHaveBeenCalled();
+  } finally {
+    for (const { observer, unsubscribe } of observers) {
+      unsubscribe();
+      observer.destroy();
+    }
+  }
 });
