@@ -23,6 +23,7 @@ mod android_release_drift;
 mod android_release_watch;
 mod assign_author;
 mod assign_labels;
+mod bots_check;
 mod build_agent_daemon_on_tag;
 mod build_appimage_on_tag;
 mod build_cef_codecs;
@@ -483,6 +484,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "reusable_preview_service",
         file_name: "reusable_preview_service.yml",
         render_yaml: || render_gh_workflow(reusable_preview_service::reusable_preview_service)(),
+    },
+    WorkflowFile {
+        slug: "bots_check",
+        file_name: "bots-check.yml",
+        render_yaml: || render_gh_workflow(bots_check::bots_check)(),
     },
     WorkflowFile {
         slug: "check_node_modules_nix",
