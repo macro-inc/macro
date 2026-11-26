@@ -318,6 +318,10 @@ Links in database text and URL cells open without editing the cell, on desktop
 and touch, while the rest of the cell still edits:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts links.browser.e2e.ts`.
 
+Database rows of differing heights keep their own measured heights and
+offsets, live or as scroll previews, with no overlap or gap between rows:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts row-heights.browser.e2e.ts`.
+
 Wrapped and multi-line text cells have backend-free regressions in a plain
 database and a CRM pipeline: Shift+Enter and Alt+Enter add lines without leaving
 the row, a trailing new line takes the caret, arrows move through wrapped lines

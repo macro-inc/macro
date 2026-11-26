@@ -53,6 +53,21 @@ const MULTILINE_ROWS = [
   },
 ];
 
+// Synthetic contacts: some names are email addresses (links), some plain names.
+const CONTACT_ROWS = Array.from({ length: 180 }, (_, index) => {
+  const plain = index % 3 === 1;
+  const email = `person.${index}.with.a.long.address@example.com`;
+  return {
+    rowId: `contact-${index}`,
+    cells: {
+      name: plain ? `Person ${index}` : email,
+      count: index,
+      email: index % 4 === 0 ? `Person ${index}` : email,
+      company: index % 5 === 0 ? null : `Example ${index} Ltd`,
+    },
+  };
+});
+
 // A host owns the records and writes. No database entity, saved view, or app provider.
 function RecordsFixture() {
   const references = new URLSearchParams(location.search).has('references');
@@ -62,6 +77,7 @@ function RecordsFixture() {
   const holdWrites = new URLSearchParams(location.search).has('holdWrites');
   // The app's text editor and value renderers over wrapped and multi-line notes.
   const multiline = new URLSearchParams(location.search).has('multiline');
+  const contacts = new URLSearchParams(location.search).has('contacts');
   const multilineEditor = multiline ? DatabaseTextEditor : undefined;
   let releaseWrites!: () => void;
   const writeGate = holdWrites
@@ -94,6 +110,12 @@ function RecordsFixture() {
     );
   if (multiline)
     initialColumns.push({ ...initialColumns[0], id: 'notes', name: 'Notes' });
+  if (contacts)
+    initialColumns.push(
+      { ...initialColumns[0], id: 'count', name: 'Count', dataType: 'NUMBER' },
+      { ...initialColumns[0], id: 'email', name: 'Email' },
+      { ...initialColumns[0], id: 'company', name: 'Company' }
+    );
   if (rapid)
     initialColumns.push(
       ...['notes', 'detail'].map((id) => ({
@@ -104,23 +126,25 @@ function RecordsFixture() {
     );
   const [columns, setColumns] = createSignal(initialColumns);
   const [snapshot, setSnapshot] = createSignal<DatabaseRowsSnapshot>({
-    rows: [
-      {
-        rowId: 'one',
-        cells: {
-          name: 'First record',
-          ...(references ? { file: 'project-plan' } : {}),
-          ...(links
-            ? {
-                notes: 'Spec at https://example.com/spec',
-                website: 'example.com',
-              }
-            : {}),
-          ...(multiline ? { notes: 'Follow up' } : {}),
-        },
-      },
-      ...(multiline ? MULTILINE_ROWS : []),
-    ],
+    rows: contacts
+      ? CONTACT_ROWS
+      : [
+          {
+            rowId: 'one',
+            cells: {
+              name: 'First record',
+              ...(references ? { file: 'project-plan' } : {}),
+              ...(links
+                ? {
+                    notes: 'Spec at https://example.com/spec',
+                    website: 'example.com',
+                  }
+                : {}),
+              ...(multiline ? { notes: 'Follow up' } : {}),
+            },
+          },
+          ...(multiline ? MULTILINE_ROWS : []),
+        ],
     retained: [],
     version: 1,
   });
@@ -213,7 +237,7 @@ function RecordsFixture() {
             )}
             renderMentionPicker={(picker) => <ReferencePicker {...picker} />}
             renderTextValue={
-              links || multiline
+              links || multiline || contacts
                 ? (value) => <DatabaseTextValue value={value} />
                 : undefined
             }
