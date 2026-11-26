@@ -518,16 +518,9 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasService<D, W> {
             !code.trim().is_empty() && code.len() <= 50000,
             "Canvas code must contain 1–50000 bytes.",
         )?;
-        ensure(
-            snippets.as_ref().is_none_or(|values| {
-                values.len() <= 100
-                    && values
-                        .iter()
-                        .all(|(key, value)| key.len() <= 200 && value.len() <= 20000)
-                    && values.values().map(String::len).sum::<usize>() <= 50000
-            }),
-            "Canvas snippets exceed the bounded text budget.",
-        )?;
+        if let Some(snippets) = snippets {
+            check_snippets(snippets)?;
+        }
         self.ensure_canvas(&receipt.entity().entity_id).await?;
         let result = self
             .run(
@@ -584,6 +577,57 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasService<D, W> {
             .canvas(document_id, &token, &request, true)
             .await
     }
+}
+
+/// Most snippets one batch carries.
+const MAX_SNIPPETS: usize = 100;
+/// Longest snippet key, in bytes.
+const MAX_SNIPPET_KEY_BYTES: usize = 200;
+/// Longest snippet, in bytes.
+const MAX_SNIPPET_BYTES: usize = 20_000;
+/// Most snippet bytes one batch carries.
+const MAX_SNIPPETS_BYTES: usize = 50_000;
+
+/// A batch's snippets within their budget, or which limit they pass and by
+/// how much, so the caller can split the batch instead of guessing.
+fn check_snippets(
+    snippets: &std::collections::BTreeMap<String, String>,
+) -> Result<(), CanvasError> {
+    let invalid = |message: String| Err(CanvasError::Invalid(message));
+    if snippets.len() > MAX_SNIPPETS {
+        return invalid(format!(
+            "Canvas batch has {} snippets; one batch takes at most {MAX_SNIPPETS}. \
+             Split the edits across batches.",
+            snippets.len()
+        ));
+    }
+    if let Some(key) = snippets
+        .keys()
+        .find(|key| key.len() > MAX_SNIPPET_KEY_BYTES)
+    {
+        return invalid(format!(
+            "A canvas snippet key is {} bytes; keys take at most {MAX_SNIPPET_KEY_BYTES}.",
+            key.len()
+        ));
+    }
+    if let Some((key, value)) = snippets
+        .iter()
+        .find(|(_, value)| value.len() > MAX_SNIPPET_BYTES)
+    {
+        return invalid(format!(
+            "Canvas snippet `{key}` is {} bytes; one snippet takes at most {MAX_SNIPPET_BYTES}. \
+             Split long text across snippets or batches.",
+            value.len()
+        ));
+    }
+    let total: usize = snippets.values().map(String::len).sum();
+    if total > MAX_SNIPPETS_BYTES {
+        return invalid(format!(
+            "Canvas snippets total {total} bytes; one batch takes at most {MAX_SNIPPETS_BYTES}. \
+             Split the edits across batches."
+        ));
+    }
+    Ok(())
 }
 
 fn ensure(condition: bool, message: &str) -> Result<(), CanvasError> {

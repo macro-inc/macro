@@ -68,7 +68,11 @@ export interface CanvasSceneOptions {
 export interface CanvasApplyOptions {
   /** The revision the code was planned against, from a fresh {@link Canvas.scene}. */
   expectedRevision: string;
-  /** Plain text the code reads as `snippets.<key>`; keep long prose here, not in code. */
+  /**
+   * Plain text the code reads as `snippets.<key>`; keep long prose here, not
+   * in code. One batch takes at most 100 snippets, 20,000 bytes each and
+   * 50,000 in all, with keys of at most 200 bytes.
+   */
   snippets?: Record<string, string>;
   /**
    * Cancels the request. Before the batch reaches the worker nothing applies;
