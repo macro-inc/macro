@@ -1,4 +1,4 @@
-//! The HubSpot import's CRM writes, through the CRM's own record and
+//! CRM imports' writes, through the CRM's own record and
 //! pipeline services as Macro AI acting for the importing user.
 
 use std::sync::Arc;
@@ -18,7 +18,7 @@ use crate::tool_context::{
 };
 
 /// [`CrmImportWriter`] over the team CRM.
-pub struct HubspotCrmWriter {
+pub struct CrmRecordWriter {
     records: CrmRecordImports<
         crate::tool_context::ToolCrmService,
         ToolEntityAccessService,
@@ -29,7 +29,7 @@ pub struct HubspotCrmWriter {
     actor: BotId,
 }
 
-impl HubspotCrmWriter {
+impl CrmRecordWriter {
     /// Writes through the CRM tools' records and the pipeline tools' workflows.
     pub fn new(
         crm: &ToolCrmToolContext,
@@ -56,7 +56,7 @@ impl HubspotCrmWriter {
 }
 
 #[async_trait::async_trait]
-impl CrmImportWriter for HubspotCrmWriter {
+impl CrmImportWriter for CrmRecordWriter {
     async fn crm_team(&self, user: &MacroUserIdStr<'static>) -> anyhow::Result<Option<CrmTeam>> {
         let Some(team_id) = self.records.crm_team(&self.viewer(user)).await? else {
             return Ok(None);

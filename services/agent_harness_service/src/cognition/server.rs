@@ -719,16 +719,14 @@ pub async fn build(
         .with_notion_connections(Arc::new(
             import_notion::outbound::connected::ConnectedNotion::new(Arc::clone(&connections)),
         ))
-        .with_hubspot(
-            Arc::new(import_hubspot::outbound::client::HubspotApi::new(
-                Arc::clone(&connections),
-            )),
-            Arc::new(ai_tools::HubspotCrmWriter::new(
-                &crm_tool_context,
-                &pipeline_tool_context,
-                entity_creator,
-            )),
-        )
+        .with_hubspot(Arc::new(import_hubspot::outbound::client::HubspotApi::new(
+            Arc::clone(&connections),
+        )))
+        .with_crm_writer(Arc::new(ai_tools::CrmRecordWriter::new(
+            &crm_tool_context,
+            &pipeline_tool_context,
+            entity_creator,
+        )))
         .with_admission(admission.clone())
         .with_notifier(import_notify)
         .with_job_shutdown(import_jobs.shutdown.clone(), import_jobs.tracker.clone()),

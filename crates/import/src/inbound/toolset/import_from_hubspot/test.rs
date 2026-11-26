@@ -5,14 +5,14 @@ fn a_ready_plan_is_presented_with_its_counts() {
     let report = NotionImportReport {
         status: Some(RunStatus::Ready),
         skip: 1,
-        hubspot: Some(HubspotReport {
+        hubspot: Some(CrmReport {
             pipelines: 2,
             companies: 196,
             contacts: 792,
             deals: 98,
             owners: 2,
             owners_matched: 1,
-            ..HubspotReport::default()
+            ..CrmReport::default()
         }),
         ..NotionImportReport::default()
     };

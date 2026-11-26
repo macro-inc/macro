@@ -519,28 +519,33 @@ review predicates aligned with `import_entity_notion_review_sources_idx`.
 Reconcile only the exact owned review; never scan an owner's import history for
 review defaults on each edit.
 
-## HubSpot CRM imports
+## CRM imports
 
-`ImportFromHubspot` uses the same reviewed lifecycle with no decision model
-(`domain/service/hubspot_workspace.rs` + `plan`). The host registers an
-`import_hubspot::domain::HubspotConnections` reader and a `CrmImportWriter`
-(`ai_tools::HubspotCrmWriter`, over `crm::domain::record_import`) with
-`with_hubspot`; hosts without them answer "not available". A plan needs a team
-whose CRM the user may use (`ImportError::CrmAccessRequired`) and a HubSpot
-connection (`HubspotError::NotConnected`, which the tool turns into a connect
-prompt), both checked before the run starts, so neither leaves a failed import; every row is shared with the team and not shareable, so the card
+`ImportFromHubspot` uses the same reviewed lifecycle with no decision model.
+A CRM source reads its own inventory and converts it into the neutral
+`CrmInventory` (`hubspot_workspace/plan.rs`: ledger keys, record URLs,
+source-only losses); planning, writing and the report are shared in
+`domain/service/crm_workspace.rs` + `plan`, parameterized by the source's
+`CrmKinds`. The host registers an `import_hubspot::domain::HubspotConnections`
+reader with `with_hubspot` and the one `CrmImportWriter`
+(`ai_tools::CrmRecordWriter`, over `crm::domain::record_import`) with
+`with_crm_writer`; hosts without them answer "not available". A plan needs a
+team whose CRM the user may use (`ImportError::CrmAccessRequired`) and a
+source connection (`HubspotError::NotConnected`, which the tool turns into a
+connect prompt), both checked before the run starts, so neither leaves a failed import; every row is shared with the team and not shareable, so the card
 offers no sharing choice. Rows are keyed `{portal}:{type}:{id}` (pipeline ids
 are words, record ids numbers), so re-runs and teammates dedupe through the
 ledger and the `import_entity_hubspot_team_object_key` index.
 
 Plans are fully decided when staged: deals with no company or no live pipeline
 are `skip` with a reason; everything Macro CRM cannot hold is a typed
-`HubspotLoss` on the row, counted into the report's `hubspot` section with the
+`CrmLoss` on the row (its serialized names are stored: never rename one),
+counted into the report's source section (`hubspot`, a `CrmReport`) with the
 owner match summary kept on the first row (`hubspotSummary`, not `summary`,
 which the shared report reads as text). Writes go pipelines, companies,
 contacts, deals. Each object is claimed for the team, then reuses a
 `WrittenKind::CrmRecord` marker from a stopped write, then a natural key
-(company domain, the contact's primary address, the deal's HubSpot URL in
+(company domain, the contact's primary address, the deal's source URL in
 the `Source link` of its company's entries in that pipeline, matched by its
 path since the host follows the portal's region, read once per company and
 pipeline per write), and only then

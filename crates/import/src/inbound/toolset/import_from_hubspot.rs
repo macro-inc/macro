@@ -1,7 +1,7 @@
 //! The HubSpot CRM import tool.
 use super::{ImportToolContext, NotionImportAction, import_error, tool_error};
 use crate::domain::{
-    models::{HubspotReport, ImportSource, NotionImportReport, RunStatus},
+    models::{CrmReport, ImportSource, NotionImportReport, RunStatus},
     ports::ImportError,
     service::WorkspaceImporter,
 };
@@ -82,7 +82,7 @@ impl<T: WorkspaceImporter> AsyncTool<ImportToolContext<T>> for ImportFromHubspot
     }
 }
 
-fn counts(hubspot: Option<&HubspotReport>) -> String {
+fn counts(hubspot: Option<&CrmReport>) -> String {
     let Some(hubspot) = hubspot else {
         return "no records".into();
     };

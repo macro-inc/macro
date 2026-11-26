@@ -1585,16 +1585,16 @@ pub trait WrittenObjects: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<WrittenObject>>> + Send;
 }
 
-/// A team's CRM as a HubSpot import writes it.
+/// A team's CRM as a CRM import writes it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrmTeam {
     /// The team whose CRM receives the records.
     pub team_id: Uuid,
-    /// Its members, for matching HubSpot owners.
+    /// Its members, for matching source owners.
     pub members: Vec<CrmMember>,
 }
 
-/// A team member HubSpot owners are matched against.
+/// A team member source owners are matched against.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrmMember {
     /// Login email, lowercased; matched against the owner's email.
@@ -1610,7 +1610,7 @@ pub struct NewCrmContact {
     pub name: String,
     /// Email addresses, primary first; may be empty.
     pub emails: Vec<String>,
-    /// The CRM company to file it under, when its HubSpot company was imported.
+    /// The CRM company to file it under, when its source company was imported.
     pub company: Option<Uuid>,
 }
 
@@ -1645,12 +1645,12 @@ pub struct NewDealEntry {
     pub close_date: Option<String>,
     /// The owning team member's Macro user id.
     pub owner: Option<String>,
-    /// The deal's HubSpot URL; unique per deal, so it is the entry's
+    /// The deal's URL in its source; unique per deal, so it is the entry's
     /// identity on resume.
     pub link: String,
 }
 
-/// Writes a HubSpot import into the team's CRM through the CRM services,
+/// Writes a CRM import into the team's CRM through the CRM services,
 /// with the importing user's permissions. Object-safe so the import service
 /// holds it without a type parameter.
 #[async_trait::async_trait]
