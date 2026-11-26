@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_links (id, macro_id, provider)\n        SELECT\n            md5('capacity-' || n)::uuid,\n            'macro|owner@example.net',\n            'IMAP'\n        FROM\n            generate_series(1, 2101) n\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "f398b39b0689978a6e55364b3c45ac4030e2c7985a3bc37d24b5c2360d5a0e2c"
+}

@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                                WITH requested AS MATERIALIZED (\n                                    SELECT DISTINCT message_id\n                                    FROM unnest($2::text[]) AS ids(message_id)\n                                )\n                                SELECT\n                                    locations.kind,\n                                    locations.key,\n                                    locations.folder_id,\n                                    locations.message_id,\n                                    locations.sequence,\n                                    locations.received_at,\n                                    locations.fingerprint,\n                                    locations.document,\n                                    locations.body\n                                FROM requested\n                                CROSS JOIN LATERAL (\n                                    SELECT\n                                        kind,\n                                        key,\n                                        folder_id,\n                                        message_id,\n                                        sequence,\n                                        received_at,\n                                        fingerprint,\n                                        document,\n                                        body\n                                    FROM imap_state_entries\n                                    WHERE link_id = $1\n                                        AND kind = 'location'\n                                        AND message_id = requested.message_id\n                                    OFFSET 0\n                                ) locations\n                                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "folder_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "message_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sequence",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "fingerprint",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 7,
+        "name": "document",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "body",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "956b9144a2f5c37290068f05d86d39a8f5c3ce61d6813e6ede402c986c858a6e"
+}

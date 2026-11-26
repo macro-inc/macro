@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT e.document FROM imap_state_entries e\n            JOIN imap_accounts a ON a.link_id=e.link_id\n            WHERE e.link_id=$1 AND e.kind='frozen_submission' AND e.key=$2\n                AND a.sync_generation=$3 AND a.grant_generation=$4\n                AND a.lease_id=$5 AND a.lease_until>now()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "27eca05ac6436c695e638ba1e5492f05c5cdfcfd27f295ed4c5a1a2b61275332"
+}

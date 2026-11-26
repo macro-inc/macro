@@ -1,0 +1,212 @@
+# Mail endpoint defaults and EmailEngine autodetect-imap-settings.js MX mappings.
+# Ports are validated when the built-in catalog is first loaded.
+
+[[provider]]
+name = "Google"
+domains = ["gmail.com", "googlemail.com"]
+mx = "(?:^|\\.)(?:l\\.google\\.com|smtp\\.google\\.com)$"
+imap = "imap.gmail.com"
+smtp = "smtp.gmail.com"
+smtp_port = 465
+steer = "gmail"
+help_url = "https://support.google.com/accounts/answer/185833"
+
+[[provider]]
+name = "Microsoft"
+domains = ["outlook.com", "hotmail.com", "live.com", "msn.com"]
+mx = "(?:^|\\.)(?:protection\\.outlook\\.com|olc\\.protection\\.outlook\\.com)$"
+steer = "outlook"
+
+# https://support.apple.com/en-us/102525
+[[provider]]
+name = "iCloud"
+domains = ["icloud.com", "me.com", "mac.com"]
+mx = "\\.icloud\\.com$"
+imap = "imap.mail.me.com"
+smtp = "smtp.mail.me.com"
+smtp_port = 587
+imap_local_part = true
+help_url = "https://support.apple.com/102654"
+
+[[provider]]
+name = "Fastmail"
+domains = ["fastmail.com", "fastmail.fm", "sent.com"]
+mx = "\\.messagingengine\\.com$"
+imap = "imap.fastmail.com"
+smtp = "smtp.fastmail.com"
+smtp_port = 465
+help_url = "https://www.fastmail.help/hc/en-us/articles/360058752854"
+
+[[provider]]
+name = "Yahoo"
+domains = ["yahoo.com", "ymail.com", "rocketmail.com"]
+mx = "\\.yahoodns\\.net$"
+imap = "imap.mail.yahoo.com"
+smtp = "smtp.mail.yahoo.com"
+smtp_port = 465
+help_url = "https://help.yahoo.com/kb/SLN15241.html"
+
+[[provider]]
+name = "AOL"
+domains = ["aol.com"]
+imap = "imap.aol.com"
+smtp = "smtp.aol.com"
+smtp_port = 465
+help_url = "https://help.aol.com/articles/Create-and-manage-app-password"
+
+[[provider]]
+name = "Zoho"
+domains = ["zoho.com", "zohomail.com"]
+imap = "imap.zoho.com"
+smtp = "smtp.zoho.com"
+smtp_port = 465
+help_url = "https://www.zoho.com/mail/help/imap-access.html"
+
+[[provider]]
+name = "Zoho"
+domains = ["zoho.eu"]
+imap = "imap.zoho.eu"
+smtp = "smtp.zoho.eu"
+smtp_port = 465
+
+[[provider]]
+name = "Zoho"
+mx = "^mx[0-9]*\\.zoho\\.com$"
+imap = "imappro.zoho.com"
+smtp = "smtppro.zoho.com"
+smtp_port = 465
+
+[[provider]]
+name = "Zoho"
+mx = "^mx[0-9]*\\.zoho\\.eu$"
+imap = "imappro.zoho.eu"
+smtp = "smtppro.zoho.eu"
+smtp_port = 465
+
+[[provider]]
+name = "T-Online"
+domains = ["t-online.de"]
+mx = "\\.t-online\\.de$"
+imap = "secureimap.t-online.de"
+smtp = "securesmtp.t-online.de"
+smtp_port = 465
+
+[[provider]]
+name = "Yandex"
+domains = ["yandex.com", "yandex.ru"]
+mx = "(?:^|\\.)mx\\.yandex\\.net$"
+imap = "imap.yandex.com"
+smtp = "smtp.yandex.com"
+smtp_port = 465
+
+[[provider]]
+name = "Zone"
+domains = ["zone.eu", "zone.ee"]
+mx = "^(?:mx[0-9]*\\.zone\\.eu|.*\\.zonemx\\.eu|zonemx\\.eu)$"
+imap = "mail.zone.ee"
+smtp = "smtp.zone.ee"
+smtp_port = 465
+
+[[provider]]
+name = "Lark"
+mx = "(?:^|\\.)larksuite\\.com$"
+imap = "imap.larksuite.com"
+smtp = "smtp.larksuite.com"
+smtp_port = 465
+
+[[provider]]
+name = "Inbox.com"
+mx = "^mx\\.dka\\.mailcore\\.net$"
+imap = "imap.dka.mailcore.net"
+smtp = "smtp.dka.mailcore.net"
+smtp_port = 587
+
+[[provider]]
+name = "Ekiri"
+domains = ["ekiri.ee"]
+mx = "^ekiri\\.ee$"
+imap = "turvaline.ekiri.ee"
+smtp = "turvaline.ekiri.ee"
+smtp_port = 465
+
+[[provider]]
+name = "Alibaba"
+mx = "^mx[0-9]*\\.sg\\.aliyun\\.com$"
+imap = "imap.sg.aliyun.com"
+smtp = "smtp.sg.aliyun.com"
+smtp_port = 465
+
+[[provider]]
+name = "AT&T"
+domains = ["att.net"]
+mx = "(?:^|\\.)mx-vip[0-9]*\\.prodigy\\.net$"
+imap = "imap.mail.att.net"
+smtp = "smtp.mail.att.net"
+smtp_port = 465
+
+[[provider]]
+name = "Naver"
+domains = ["naver.com"]
+mx = "^mx[0-9]*\\.naver\\.com$"
+imap = "imap.naver.com"
+smtp = "smtp.naver.com"
+smtp_port = 587
+
+[[provider]]
+name = "QQ Enterprise"
+mx = "^mxbiz[0-9]*\\.qq\\.com$"
+imap = "imap.exmail.qq.com"
+smtp = "smtp.exmail.qq.com"
+smtp_port = 465
+
+[[provider]]
+name = "Rambler"
+domains = ["rambler.ru"]
+imap = "imap.rambler.ru"
+smtp = "smtp.rambler.ru"
+smtp_port = 465
+
+[[provider]]
+name = "163 Mail"
+domains = ["163.com"]
+imap = "imap.163.com"
+smtp = "smtp.163.com"
+smtp_port = 465
+
+# https://support.gmx.com/pop-imap/imap/server.html
+[[provider]]
+name = "GMX"
+domains = ["gmx.com"]
+imap = "imap.gmx.com"
+smtp = "mail.gmx.com"
+smtp_port = 465
+
+# https://hilfe.web.de/pop-imap/imap/imap-serverdaten.html
+[[provider]]
+name = "WEB.DE"
+domains = ["web.de"]
+imap = "imap.web.de"
+smtp = "smtp.web.de"
+smtp_port = 465
+imap_local_part = true
+smtp_local_part = true
+
+# https://kb.mailbox.org/en/business/e-mail/e-mail-configuration/
+[[provider]]
+name = "mailbox.org"
+domains = ["mailbox.org"]
+imap = "imap.mailbox.org"
+smtp = "smtp.mailbox.org"
+smtp_port = 465
+
+[[provider]]
+name = "Apple private relay"
+domains = ["privaterelay.appleid.com"]
+steer = "none"
+
+# https://proton.me/support/why-you-need-bridge
+[[provider]]
+name = "Proton Mail"
+domains = ["proton.me", "protonmail.com", "protonmail.ch", "pm.me"]
+steer = "none"
+help_url = "https://proton.me/mail/bridge"

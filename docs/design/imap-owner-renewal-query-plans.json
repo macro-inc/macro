@@ -1,0 +1,1451 @@
+{
+  "version": "18.6 (Debian 18.6-1.pgdg12+2)",
+  "rowsPerTable": 1100000,
+  "largestSyntheticOwnerLinks": 100000,
+  "scope": "one exact binding per request; integration table assumption is deliberately conservative",
+  "addedHeartbeatRateUpperBoundPerReplica": 33.333333333333336,
+  "runs": [
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": false,
+      "mode": "force_custom_plan",
+      "case": "renew",
+      "repeat": 1,
+      "executionMs": 0.913,
+      "sharedHits": 12,
+      "sharedReads": 14,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": false,
+      "mode": "force_custom_plan",
+      "case": "renew",
+      "repeat": 2,
+      "executionMs": 0.072,
+      "sharedHits": 21,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 1,
+      "stale": false,
+      "mode": "force_custom_plan",
+      "case": "other_owner",
+      "repeat": 1,
+      "executionMs": 0.11,
+      "sharedHits": 13,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 1
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 1,
+      "stale": false,
+      "mode": "force_custom_plan",
+      "case": "other_owner",
+      "repeat": 2,
+      "executionMs": 0.064,
+      "sharedHits": 13,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 1
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": false,
+      "mode": "force_custom_plan",
+      "case": "expired_takeover",
+      "repeat": 1,
+      "executionMs": 0.071,
+      "sharedHits": 20,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": false,
+      "mode": "force_custom_plan",
+      "case": "expired_takeover",
+      "repeat": 2,
+      "executionMs": 0.041,
+      "sharedHits": 21,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 0,
+      "stale": false,
+      "mode": "force_custom_plan",
+      "case": "missing",
+      "repeat": 1,
+      "executionMs": 0.076,
+      "sharedHits": 1,
+      "sharedReads": 2,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 0,
+      "stale": false,
+      "mode": "force_custom_plan",
+      "case": "missing",
+      "repeat": 2,
+      "executionMs": 0.027,
+      "sharedHits": 3,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": false,
+      "mode": "force_generic_plan",
+      "case": "renew",
+      "repeat": 1,
+      "executionMs": 0.074,
+      "sharedHits": 21,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": false,
+      "mode": "force_generic_plan",
+      "case": "renew",
+      "repeat": 2,
+      "executionMs": 0.041,
+      "sharedHits": 21,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 1,
+      "stale": false,
+      "mode": "force_generic_plan",
+      "case": "other_owner",
+      "repeat": 1,
+      "executionMs": 0.037,
+      "sharedHits": 13,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 1
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 1,
+      "stale": false,
+      "mode": "force_generic_plan",
+      "case": "other_owner",
+      "repeat": 2,
+      "executionMs": 0.019,
+      "sharedHits": 13,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 1
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": false,
+      "mode": "force_generic_plan",
+      "case": "expired_takeover",
+      "repeat": 1,
+      "executionMs": 0.025,
+      "sharedHits": 21,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": false,
+      "mode": "force_generic_plan",
+      "case": "expired_takeover",
+      "repeat": 2,
+      "executionMs": 0.02,
+      "sharedHits": 21,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 0,
+      "stale": false,
+      "mode": "force_generic_plan",
+      "case": "missing",
+      "repeat": 1,
+      "executionMs": 0.013,
+      "sharedHits": 3,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 0,
+      "stale": false,
+      "mode": "force_generic_plan",
+      "case": "missing",
+      "repeat": 2,
+      "executionMs": 0.008,
+      "sharedHits": 3,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": true,
+      "mode": "force_custom_plan",
+      "case": "renew",
+      "repeat": 1,
+      "executionMs": 1.019,
+      "sharedHits": 11,
+      "sharedReads": 15,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": true,
+      "mode": "force_custom_plan",
+      "case": "renew",
+      "repeat": 2,
+      "executionMs": 0.067,
+      "sharedHits": 21,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 1,
+      "stale": true,
+      "mode": "force_custom_plan",
+      "case": "other_owner",
+      "repeat": 1,
+      "executionMs": 0.037,
+      "sharedHits": 13,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 1
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 1,
+      "stale": true,
+      "mode": "force_custom_plan",
+      "case": "other_owner",
+      "repeat": 2,
+      "executionMs": 0.03,
+      "sharedHits": 13,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 1
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": true,
+      "mode": "force_custom_plan",
+      "case": "expired_takeover",
+      "repeat": 1,
+      "executionMs": 0.038,
+      "sharedHits": 20,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": true,
+      "mode": "force_custom_plan",
+      "case": "expired_takeover",
+      "repeat": 2,
+      "executionMs": 0.083,
+      "sharedHits": 21,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 0,
+      "stale": true,
+      "mode": "force_custom_plan",
+      "case": "missing",
+      "repeat": 1,
+      "executionMs": 0.09,
+      "sharedHits": 1,
+      "sharedReads": 2,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 0,
+      "stale": true,
+      "mode": "force_custom_plan",
+      "case": "missing",
+      "repeat": 2,
+      "executionMs": 0.02,
+      "sharedHits": 3,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": true,
+      "mode": "force_generic_plan",
+      "case": "renew",
+      "repeat": 1,
+      "executionMs": 0.122,
+      "sharedHits": 21,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": true,
+      "mode": "force_generic_plan",
+      "case": "renew",
+      "repeat": 2,
+      "executionMs": 0.05,
+      "sharedHits": 21,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 1,
+      "stale": true,
+      "mode": "force_generic_plan",
+      "case": "other_owner",
+      "repeat": 1,
+      "executionMs": 0.04,
+      "sharedHits": 13,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 1
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 1,
+      "stale": true,
+      "mode": "force_generic_plan",
+      "case": "other_owner",
+      "repeat": 2,
+      "executionMs": 0.023,
+      "sharedHits": 13,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 1
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": true,
+      "mode": "force_generic_plan",
+      "case": "expired_takeover",
+      "repeat": 1,
+      "executionMs": 0.06,
+      "sharedHits": 21,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 1.0,
+      "conflictingRows": 1,
+      "stale": true,
+      "mode": "force_generic_plan",
+      "case": "expired_takeover",
+      "repeat": 2,
+      "executionMs": 0.036,
+      "sharedHits": 21,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 1.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 0,
+      "stale": true,
+      "mode": "force_generic_plan",
+      "case": "missing",
+      "repeat": 1,
+      "executionMs": 0.016,
+      "sharedHits": 3,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    },
+    {
+      "returnedRows": 0.0,
+      "conflictingRows": 0,
+      "stale": true,
+      "mode": "force_generic_plan",
+      "case": "missing",
+      "repeat": 2,
+      "executionMs": 0.034,
+      "sharedHits": 3,
+      "sharedReads": 0,
+      "nodes": [
+        {
+          "Node Type": "ModifyTable",
+          "Relation Name": "imap_account_owners",
+          "Index Name": null,
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": null,
+          "Conflict Arbiter Indexes": [
+            "imap_account_owners_pkey"
+          ],
+          "Rows Removed by Conflict Filter": 0
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "imap_accounts",
+          "Index Name": "imap_accounts_pkey",
+          "Actual Rows": 0.0,
+          "Actual Loops": 1,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        },
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "email_links",
+          "Index Name": "email_links_pkey",
+          "Actual Rows": 0,
+          "Actual Loops": 0,
+          "Rows Removed by Filter": 0,
+          "Conflict Arbiter Indexes": null,
+          "Rows Removed by Conflict Filter": null
+        }
+      ]
+    }
+  ],
+  "limitations": "Synthetic PostgreSQL18 local measurements, not production throughput or latency. Schema-only scratch databases; all mutations rolled back. Positive renew/takeover cases assert one returned row and one conflicting tuple; held/missing cases assert zero returned rows.",
+  "query": "PgRepository::claim_owner; SQL unchanged; new heartbeat caller runs at most once per 60 seconds per actor."
+}

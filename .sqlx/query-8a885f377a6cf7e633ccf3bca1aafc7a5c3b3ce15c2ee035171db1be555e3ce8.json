@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE\n            imap_accounts\n        SET\n            updated_at = now() + interval '1 hour'\n        WHERE\n            link_id = ANY ($1)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8a885f377a6cf7e633ccf3bca1aafc7a5c3b3ce15c2ee035171db1be555e3ce8"
+}

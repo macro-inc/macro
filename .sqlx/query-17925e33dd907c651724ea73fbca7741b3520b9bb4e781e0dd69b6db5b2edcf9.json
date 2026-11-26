@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            count(*)\n        FROM\n            imap_state_entries\n        WHERE\n            link_id = $1\n            AND kind = 'message'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "17925e33dd907c651724ea73fbca7741b3520b9bb4e781e0dd69b6db5b2edcf9"
+}

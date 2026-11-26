@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                a.user_id,\n                a.credential_ciphertext\n            FROM\n                imap_accounts a\n                JOIN imap_current_links l ON l.id = a.link_id\n            WHERE\n                a.link_id = $1\n                AND a.sync_generation = $2\n                AND a.grant_generation = $3\n                AND l.macro_id = a.user_id\n                AND l.sync_generation = a.sync_generation\n                AND l.grant_generation = a.grant_generation\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "credential_ciphertext",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "2f81fdf229099d778f3305ac51932c567485fadcd9149895a7f55a238cf56306"
+}

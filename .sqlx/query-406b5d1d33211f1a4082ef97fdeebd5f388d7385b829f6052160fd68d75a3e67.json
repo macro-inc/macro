@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM imap_verification_limits\n            WHERE (scope_hash, window_start) IN (\n                    SELECT\n                        scope_hash,\n                        window_start\n                    FROM\n                        imap_verification_limits\n                    WHERE\n                        window_start < now() - interval '1 day'\n                    ORDER BY\n                        window_start\n                    LIMIT 500)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "406b5d1d33211f1a4082ef97fdeebd5f388d7385b829f6052160fd68d75a3e67"
+}

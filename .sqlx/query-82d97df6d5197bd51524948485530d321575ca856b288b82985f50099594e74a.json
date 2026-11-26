@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                consumed_by\n            FROM\n                imap_verifications\n            WHERE\n                id = $1\n                AND user_id = $2\n                AND (expires_at > now()\n                    OR consumed_by = $3)\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "consumed_by",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "82d97df6d5197bd51524948485530d321575ca856b288b82985f50099594e74a"
+}

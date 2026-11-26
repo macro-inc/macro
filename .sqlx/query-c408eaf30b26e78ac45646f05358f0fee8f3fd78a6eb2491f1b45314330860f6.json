@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE\n                imap_verifications\n            SET\n                consumed_by = $2,\n                credential_ciphertext = decode('', 'hex')\n            WHERE\n                id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c408eaf30b26e78ac45646f05358f0fee8f3fd78a6eb2491f1b45314330860f6"
+}
