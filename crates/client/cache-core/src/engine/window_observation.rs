@@ -257,6 +257,12 @@ impl<S: PredicateIndexStorage> Engine<S> {
         membership: &PredicateReconciliation,
         dependencies: &live_query::RowDependencies,
     ) -> Result<String, EngineError<S::Error>> {
+        // A window composed with optimism reports `optimistic`, which a rollback
+        // or commit outside the window changes without touching its rows. Its
+        // token is never installed, so no proof covers it.
+        if membership.optimistic {
+            return Ok(self.next_window_id());
+        }
         let mut boundary = None;
         if membership.retained_keys.is_empty()
             && membership.keys.len() >= usize::from(spec.query.as_query().limit)
