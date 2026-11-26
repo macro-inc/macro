@@ -411,6 +411,22 @@ async function channelPass(viewCount: number, writeCount: number) {
   const count = (name: string, value: number) => {
     counts[name] = [...(counts[name] ?? []), value];
   };
+  // The engine's wasm memory in MiB, from the worker's next sample (-1 if none
+  // comes). Linear memory never shrinks, so it is also the high water.
+  const linearMemory = async (name: string) => {
+    const since = performance.now();
+    for (let waited = 0; waited < 5_000; waited += 100) {
+      const sample = observations.find(
+        (each) => each.name === 'graphql_cache.linear_memory' && each.at > since
+      );
+      if (sample?.bytes !== undefined) {
+        count(name, Math.round(sample.bytes / 2 ** 20));
+        return;
+      }
+      await new Promise((wake) => setTimeout(wake, 100));
+    }
+    count(name, -1);
+  };
   let inFlight = 0;
   let reads = 0;
   let rows = 0;
@@ -474,6 +490,7 @@ async function channelPass(viewCount: number, writeCount: number) {
       const op = await fetchOp(`/bench-data/channels-by-ids/${index}`);
       steps.push({ name: 'channels.byIds.write', ms: await apply(op) });
     }
+    await linearMemory('memory.linear_mib.before_views');
     const requests = (await (
       await fetch('/bench-data/channels-requests/0')
     ).json()) as EntityFilterCacheArgs[];
@@ -502,6 +519,7 @@ async function channelPass(viewCount: number, writeCount: number) {
     if (notReady.length > 0)
       throw new Error(`${notReady.length} channel readers are not ready`);
     count('channels.live.first.rows', rows);
+    await linearMemory('memory.linear_mib.with_views');
     for (let index = 0; index < writeCount; index++) {
       const op = await fetchOp(`/bench-data/channels-writes/${index}`);
       pushes.length = 0;
@@ -526,6 +544,7 @@ async function channelPass(viewCount: number, writeCount: number) {
       count(`views.read.${op.lane}`, reads - readsBefore);
       count(`rows.${op.lane}`, rows - rowsBefore);
     }
+    await linearMemory('memory.linear_mib.after_writes');
   } finally {
     unsubscribe();
     for (const dispose of disposers) dispose();
