@@ -66,6 +66,13 @@ import type { DatabaseTableModel } from '../primitives/table-model';
 import type { DatabaseColumnHeaderProps } from './database-column-header';
 import { DatabaseColumnHeader } from './database-column-header';
 import { DatabaseTableSummary } from './database-table-summary';
+import {
+  canReportRowHeightMismatch,
+  ROW_HEIGHT_CHECK_INTERVAL_MS,
+  type RowHeightSample,
+  reportRowHeightMismatch,
+  sampleRow,
+} from './row-height-telemetry';
 
 /** The cell this client has focused, as shared with the table's other viewers. */
 export type DatabaseCellFocus = {
@@ -121,6 +128,8 @@ const UPGRADE_BUDGET_MS = 50;
 /** Rows turn live only once scrolling has paused this long. */
 const UPGRADE_DELAY_MS = 400;
 const PENDING_ROW_COUNT = 100;
+/** Settle time before row heights are compared, after previews turn live. */
+const ROW_HEIGHT_CHECK_DELAY_MS = 2000;
 
 export type DatabaseTableProps = {
   model: DatabaseTableModel;
@@ -466,10 +475,43 @@ export function DatabaseTable(props: DatabaseTableProps) {
     if (!scrolling() && upgradeFrame === undefined)
       upgradeFrame = requestAnimationFrame(upgradePreviews);
   }, UPGRADE_DELAY_MS);
+  // Diagnostics: once scrolling settles and previews have turned live, compare
+  // the mounted rows' heights with the slots the virtualizer laid them out in.
+  let lastRowHeightCheck = Number.NEGATIVE_INFINITY;
+  const checkRowHeights = debounce(() => {
+    const now = performance.now();
+    if (
+      scrolling() ||
+      !scrollContainer.clientHeight ||
+      now - lastRowHeightCheck < ROW_HEIGHT_CHECK_INTERVAL_MS ||
+      !canReportRowHeightMismatch(now)
+    )
+      return;
+    lastRowHeightCheck = now;
+    const samples: RowHeightSample[] = [];
+    for (const element of virtualizer.elementsCache.values()) {
+      const index = Number(element.dataset.index);
+      const slot = virtualizer.measurementsCache[index]?.size;
+      if (element.isConnected && slot !== undefined)
+        samples.push(sampleRow(element, index, slot));
+    }
+    reportRowHeightMismatch({
+      samples,
+      estimate: rowHeight(),
+      columnKinds: columns().map((column) => column.dataType),
+      fontsLoaded: document.fonts?.status === 'loaded',
+      viewportWidth: window.innerWidth,
+    });
+  }, ROW_HEIGHT_CHECK_DELAY_MS);
   const changeScrolling = (isScrolling: boolean) => {
     setScrolling(isScrolling);
-    if (isScrolling) scheduleUpgrades.clear();
-    else scheduleUpgrades();
+    if (isScrolling) {
+      scheduleUpgrades.clear();
+      checkRowHeights.clear();
+    } else {
+      scheduleUpgrades();
+      checkRowHeights();
+    }
   };
   /** Rows in view while idle, and rows a focus or edit is waiting for. */
   const mountsLive = (rowId: string, index: number) =>
@@ -478,6 +520,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
     pendingEdit?.rowId === rowId;
   onCleanup(() => {
     if (upgradeFrame !== undefined) cancelAnimationFrame(upgradeFrame);
+    checkRowHeights.clear();
   });
   let rowHeightMeasured = false;
   const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
@@ -1071,6 +1114,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
                           role="row"
                           data-index={index()}
                           data-grid-row-id={row().rowId}
+                          data-grid-preview={live() ? undefined : ''}
                           data-highlighted={highlighted() ? '' : undefined}
                           aria-rowindex={index() + 2}
                           // Opaque, with its tints layered on top: a row taller

@@ -729,3 +729,17 @@ per surface and check that the text reached the intended editor. Keep short
 Command-K queries below universal-compose promotion. For large documents use
 the collaborative editor fixture described in
 [documents](documents.md) and also type in a real app document.
+
+## Database row-height mismatches
+
+`database.row_height_mismatch` is an anonymous span (no user id) that the
+database table sends when, 2 s after scrolling settles, a mounted row's
+rendered height differs from the slot the virtualizer laid it out in, or a
+cell overflows its row. Each table checks at most every 10 s, skips a hidden
+pane, and a page session sends at most three reports, a minute apart
+(`row-height-telemetry.ts`). Attributes are numbers and enums only:
+`row_height.{mounted_rows,mismatched_rows,mismatched_preview,mismatched_link,mismatched_plain,clipped_rows}`;
+the first mismatched row's `slot`, `rendered`, `content` and `rendering`
+(`preview`, `link`, `plain`); its `index_bucket`; the row-height `estimate`;
+`column_kinds` (sorted data types); `fonts_loaded`; and `viewport_bucket`. Cell
+values, URLs, titles, and database, row or user ids are never sent.
