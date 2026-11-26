@@ -22,6 +22,8 @@ export function IosPushNotificationModal() {
     <Show when={shouldShow()}>
       <Dialog
         open
+        // Dismissing records "not now"; only the user decides that.
+        keepOpenOnNavigation
         onOpenChange={(open) => {
           if (!open) settings.dismissPrompt();
         }}

@@ -4,7 +4,6 @@ import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { GraphicsEditor } from '@macro-inc/graphics';
-import { debounce } from '@solid-primitives/scheduled';
 import {
   createEffect,
   createResource,
@@ -63,10 +62,6 @@ function CanvasDocumentSession(
   const ancestors = useContext(CanvasAncestry);
   const documentId = props.documentId;
   const initial = props.initial;
-  const activePointers = new Set<number>();
-  // Fingers are counted by their touch events too: once two are down, touch
-  // navigation withholds their pointer events from the rest of the page.
-  const activeTouches = new Set<number>();
   const userId = useUserId();
   const openedBy = userId();
   const flow = useFlow();
@@ -130,14 +125,7 @@ function CanvasDocumentSession(
     };
   };
   const renderEditor = (doc?: import('loro-crdt').LoroDoc) => (
-    <div
-      class="relative flex size-full min-h-0 flex-col"
-      on:pointerdown={(event) => activePointers.add(event.pointerId)}
-      on:touchstart={(event) => {
-        for (const touch of event.changedTouches)
-          activeTouches.add(touch.identifier);
-      }}
-    >
+    <div class="relative flex size-full min-h-0 flex-col">
       <Show when={!savedLocation.loading}>
         <CanvasAncestry.Provider value={[...ancestors, documentId]}>
           <CanvasNextEditor
@@ -183,50 +171,17 @@ function CanvasDocumentSession(
                   applyLocation(parseLocation(params)),
               });
               let viewTimer: ReturnType<typeof setTimeout> | undefined;
-              let notifiedCamera = current.getCamera();
-              // Updating the host's saved view can replace its decorator DOM.
-              // Wait until navigation settles, and never interrupt a pointer gesture.
-              const notifyLocation = debounce(() => {
-                if (activePointers.size || activeTouches.size) return;
-                const camera = current.getCamera();
-                if (
-                  camera.x === notifiedCamera.x &&
-                  camera.y === notifiedCamera.y &&
-                  camera.scale === notifiedCamera.scale
-                )
-                  return;
-                notifiedCamera = camera;
-                props.onLocationChange?.({
-                  x: camera.x,
-                  y: camera.y,
-                  scale: camera.scale * 100,
-                });
-              }, 100);
-              const pointerEnd = (event: PointerEvent) => {
-                if (!activePointers.delete(event.pointerId)) return;
-                notifyLocation();
-              };
-              const touchEnd = (event: TouchEvent) => {
-                let lifted = false;
-                for (const touch of event.changedTouches)
-                  lifted = activeTouches.delete(touch.identifier) || lifted;
-                if (lifted) notifyLocation();
-              };
-              window.addEventListener('pointerup', pointerEnd, true);
-              window.addEventListener('pointercancel', pointerEnd, true);
-              window.addEventListener('touchend', touchEnd, true);
-              window.addEventListener('touchcancel', touchEnd, true);
-              const unsubscribe = current.subscribeCamera((camera) => {
-                notifyLocation();
-                if (props.isNested) return;
-                clearTimeout(viewTimer);
-                viewTimer = setTimeout(() => {
-                  fireAndForget(
-                    saveCanvasViewLocation(documentId, camera),
-                    'canvas-persistence'
-                  );
-                }, 500);
-              });
+              const unsubscribe = props.isNested
+                ? undefined
+                : current.subscribeCamera((camera) => {
+                    clearTimeout(viewTimer);
+                    viewTimer = setTimeout(() => {
+                      fireAndForget(
+                        saveCanvasViewLocation(documentId, camera),
+                        'canvas-persistence'
+                      );
+                    }, 500);
+                  });
               const flush = () => {
                 if (canEdit()) finishText();
                 if (doc) fireAndForget(session.flush(), 'canvas-session');
@@ -243,12 +198,7 @@ function CanvasDocumentSession(
               onCleanup(() => {
                 flush();
                 detachDocument();
-                unsubscribe();
-                notifyLocation.clear();
-                window.removeEventListener('pointerup', pointerEnd, true);
-                window.removeEventListener('pointercancel', pointerEnd, true);
-                window.removeEventListener('touchend', touchEnd, true);
-                window.removeEventListener('touchcancel', touchEnd, true);
+                unsubscribe?.();
                 clearTimeout(viewTimer);
                 window.removeEventListener('pagehide', flush);
                 window.removeEventListener('beforeunload', beforeUnload);

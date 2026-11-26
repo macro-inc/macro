@@ -1,0 +1,75 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE saved_view SET name = COALESCE($4, name), config = COALESCE($5, config),\n                shared_team_id = $6,\n                revision = revision + 1, updated_at = NOW()\n             WHERE id = $1 AND user_id = $2 AND revision = $3\n             RETURNING id, user_id, name, config, created_at, updated_at, revision, shared_team_id, appearance AS \"appearance: sqlx::types::Json<model_entity::EntityAppearance>\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "config",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "shared_team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "appearance: sqlx::types::Json<model_entity::EntityAppearance>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Text",
+        "Jsonb",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "18414eab6c30d8b65073517cbc94e89bd43e4634f978ee8dd8f87b0f6460c572"
+}

@@ -20,6 +20,7 @@ import type {
   CodexLoginStart,
   ComputerRollout,
   ComputerStatus,
+  ComputerUsage,
   CreateAccountMergeRequest,
   CreateCheckoutSessionV2Request,
   CreatedTeamInviteLinkResponse,
@@ -91,6 +92,7 @@ import type {
   PublicGtmInviteLink,
   PurchaseBody,
   Purchased,
+  PurchaseOffers,
   PutAgentApiKeyRequest,
   PutCursorApiKeyRequest,
   PutCursorDefaultModelRequest,
@@ -4995,6 +4997,83 @@ export const listTeamComputerOffers = async (
 };
 
 /**
+ * @summary Every size with its price and availability, what buying it charges
+today, the renewal date and the card charged: what the buy dialog shows.
+For the team's owner and admins, who may buy: it names the team's card.
+ */
+export type listTeamComputerPurchaseOffersResponse200 = {
+  data: PurchaseOffers;
+  status: 200;
+};
+
+export type listTeamComputerPurchaseOffersResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listTeamComputerPurchaseOffersResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listTeamComputerPurchaseOffersResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type listTeamComputerPurchaseOffersResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type listTeamComputerPurchaseOffersResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type listTeamComputerPurchaseOffersResponseSuccess =
+  listTeamComputerPurchaseOffersResponse200 & {
+    headers: Headers;
+  };
+export type listTeamComputerPurchaseOffersResponseError = (
+  | listTeamComputerPurchaseOffersResponse401
+  | listTeamComputerPurchaseOffersResponse403
+  | listTeamComputerPurchaseOffersResponse422
+  | listTeamComputerPurchaseOffersResponse502
+  | listTeamComputerPurchaseOffersResponse503
+) & {
+  headers: Headers;
+};
+
+export type listTeamComputerPurchaseOffersResponse =
+  | listTeamComputerPurchaseOffersResponseSuccess
+  | listTeamComputerPurchaseOffersResponseError;
+
+export const getListTeamComputerPurchaseOffersUrl = () => {
+  return `/team/computers/purchase-offers`;
+};
+
+export const listTeamComputerPurchaseOffers = async (
+  options?: RequestInit
+): Promise<listTeamComputerPurchaseOffersResponse> => {
+  const res = await fetch(getListTeamComputerPurchaseOffersUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamComputerPurchaseOffersResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamComputerPurchaseOffersResponse;
+};
+
+/**
  * @summary Whether the caller sees computers: the same rollout check purchases and
 offers make, so the web never shows computers the backend would refuse.
  */
@@ -5033,6 +5112,64 @@ export const getTeamComputerRollout = async (
     status: res.status,
     headers: res.headers,
   } as getTeamComputerRolloutResponse;
+};
+
+/**
+ * @summary Each of the team's computers' CPU and memory over the last day, in the
+list's order.
+ */
+export type listTeamComputerUsageResponse200 = {
+  data: ComputerUsage[];
+  status: 200;
+};
+
+export type listTeamComputerUsageResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listTeamComputerUsageResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listTeamComputerUsageResponseSuccess =
+  listTeamComputerUsageResponse200 & {
+    headers: Headers;
+  };
+export type listTeamComputerUsageResponseError = (
+  | listTeamComputerUsageResponse401
+  | listTeamComputerUsageResponse403
+) & {
+  headers: Headers;
+};
+
+export type listTeamComputerUsageResponse =
+  | listTeamComputerUsageResponseSuccess
+  | listTeamComputerUsageResponseError;
+
+export const getListTeamComputerUsageUrl = () => {
+  return `/team/computers/usage`;
+};
+
+export const listTeamComputerUsage = async (
+  options?: RequestInit
+): Promise<listTeamComputerUsageResponse> => {
+  const res = await fetch(getListTeamComputerUsageUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamComputerUsageResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamComputerUsageResponse;
 };
 
 /**

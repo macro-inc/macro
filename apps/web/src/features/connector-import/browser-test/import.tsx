@@ -13,25 +13,29 @@ import { IMPORT_CATEGORIES } from '../core/catalog';
 import type { ImportCategory } from '../core/providers';
 import { ConnectorImportDialog } from '../views/import-dialog';
 
-// The real card and dialog over in-memory connections: Pipedream connects at
-// once, GitHub's native authorization finishes a moment later as if in
-// another tab, and every import hands off to the agent.
+// The real card and dialog over in-memory connections: most apps connect at
+// once, GitHub's finishes a moment later as if in another tab, and every
+// import hands off to the agent.
 const [connected, setConnected] = createSignal<ReadonlySet<string>>(
   new Set(['dropbox'])
 );
 const [handoff, setHandoff] = createSignal('');
 
 const context: ConnectorImportContext = {
-  createConnections: () => ({ connected, ready: () => true }),
+  createConnections: () => ({
+    connected,
+    importable: connected,
+    ready: () => true,
+  }),
   connect: async (app) => {
     const add = () =>
       setConnected((previous) => new Set([...previous, app.appSlug]));
-    if (!app.mcpUrl) {
+    if (app.appSlug !== 'github') {
       add();
       return 'connected';
     }
     setTimeout(add, 400);
-    return 'started';
+    return 'closed';
   },
   startAgentImport: async (value) => {
     setHandoff(value.input);

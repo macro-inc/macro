@@ -1,0 +1,35 @@
+{
+  "filter": [
+    {
+      "id": "template-reply",
+      "criteria": { "from": "newsletter@example.com" }
+    },
+    {
+      "id": "action-only",
+      "action": { "addLabelIds": ["STARRED"] }
+    },
+    {
+      "id": "large-attachments",
+      "criteria": {
+        "to": "team@example.com",
+        "subject": "report",
+        "query": "has:attachment",
+        "negatedQuery": "label:archived",
+        "hasAttachment": true,
+        "excludeChats": true,
+        "size": 10485760,
+        "sizeComparison": "larger"
+      },
+      "action": {
+        "addLabelIds": ["Label_1"],
+        "removeLabelIds": ["INBOX", "UNREAD"],
+        "forward": "archive@example.com"
+      }
+    },
+    {
+      "id": "blocked-1",
+      "criteria": { "from": "blocked@example.com" },
+      "action": { "addLabelIds": ["TRASH"] }
+    }
+  ]
+}

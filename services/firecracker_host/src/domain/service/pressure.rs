@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 use firecracker_host_api::{ComputerId, PowerState};
 use strum::IntoEnumIterator;
 
-use super::{HostProbe, HostService};
+use super::{HostProbe, HostService, SwapPlacement};
 use crate::domain::activity::{Activity, ActivitySettings, ActivityTracker};
 use crate::domain::ports::{Disks, Goldens, Machines, Store};
 
@@ -168,6 +168,11 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
     /// nothing to do now.
     pub async fn squeeze_once(&self, window: SqueezeWindow, now: Instant) -> Option<Squeezed> {
         let measurement = self.probe.measure();
+        if measurement.swap_placement != SwapPlacement::RamOnly {
+            // Reclaim would push guest pages to the disk; the swap health
+            // check says why.
+            return None;
+        }
         let used_bytes = measurement
             .memory_total_bytes
             .saturating_sub(measurement.memory_available_bytes);

@@ -1,5 +1,7 @@
 //! Fail-closed ordering for the durable part of account deletion.
 
+use std::collections::HashSet;
+
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use uuid::Uuid;
@@ -37,6 +39,13 @@ pub trait UserDeletionGateway: Send + Sync {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// Drop the user's contact lists and remove them from everyone else's.
+    /// Queued before the profile is deleted, because a retry after that no
+    /// longer lists the profile.
+    fn delete_contacts(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
     /// Delete the profile only after all owning services have succeeded.
     fn delete_profile(
         &self,
@@ -67,7 +76,13 @@ pub async fn delete_user_data(
     account: &Uuid,
     users: &[MacroUserIdStr<'static>],
 ) -> Result<(), Report> {
+    // Two stored profiles whose ids differ only in case share one canonical
+    // id, and deleting it removes both rows, so each canonical id runs once.
+    let mut deleted = HashSet::new();
     for user in users {
+        if !deleted.insert(user.as_ref()) {
+            continue;
+        }
         gateway.delete_scheduled_actions(user).await?;
         tracing::info!(%user, "deleted scheduled actions");
         gateway.delete_agent_sessions(user).await?;
@@ -78,6 +93,8 @@ pub async fn delete_user_data(
         tracing::info!(%user, "deleted documents, chats, and projects");
         gateway.delete_onboarding(user).await?;
         tracing::info!(%user, "deleted onboarding state");
+        gateway.delete_contacts(user).await?;
+        tracing::info!(%user, "queued contacts deletion");
         gateway.delete_profile(user, account).await?;
         tracing::info!(%user, "deleted user profile");
     }

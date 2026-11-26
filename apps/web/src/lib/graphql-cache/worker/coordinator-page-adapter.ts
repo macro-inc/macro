@@ -3,16 +3,27 @@ import * as Effect from 'effect/Effect';
 import { APP_BUILD_TIME } from '../app-build';
 import type { CacheRequest, WorkerMessage } from '../protocol';
 import {
+  type CacheTelemetryEventName,
+  type CacheTelemetryObservation,
   type CacheTelemetryRecorderLike,
+  type CacheUnavailableReason,
   describeCacheError,
   isolateCacheTelemetry,
 } from '../telemetry';
-import { offerCompiledEngine } from './compiled-engine';
+import {
+  type CompiledEngine,
+  dropPrefetchedCompiledEngine,
+  offerCompiledEngine,
+  prefetchCompiledEngine,
+} from './compiled-engine';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
+  type CacheQueueState,
   type CacheReadState,
   type CleanupToPageEnvelope,
+  type CoordinatorIdentity,
   type CoordinatorToTabEnvelope,
+  coordinatorWorkerName,
   ENGINE_STARTUP_PHASES,
   type EngineOpenOutcome,
   isCacheRequest,
@@ -32,7 +43,7 @@ import {
   listOpfsRootNames,
   staleCacheDatabaseIdentities,
 } from './stale-databases';
-import { CacheBootstrapExhaustedError } from './startup';
+import { compileCacheWasm } from './wasm-compile';
 
 export interface SharedWorkerLike {
   readonly port: MessagePort;
@@ -53,7 +64,9 @@ export interface CacheCoordinatorPageAdapterOptions {
   visibility?: Pick<Document, 'visibilityState'> &
     Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
   onCacheReadAvailabilityChanged?: (state: CacheReadState) => void;
-  createSharedWorker?: (scope: string) => SharedWorkerLike;
+  createSharedWorker?: (scope: string, generation: number) => SharedWorkerLike;
+  /** The generation of the coordinator to connect to. Defaults to 0. */
+  coordinatorGeneration?: () => Promise<number>;
   createDedicatedWorker?: (
     scope: string,
     ownerEpoch: number
@@ -61,16 +74,20 @@ export interface CacheCoordinatorPageAdapterOptions {
   lockManager?: Pick<LockManager, 'request'>;
   onEngineReplaced?: (
     ownerEpoch: number,
-    openOutcome: EngineOpenOutcome
+    openOutcome: EngineOpenOutcome,
+    queue: CacheQueueState
   ) => void;
   onStartupProgress?: (
     progress: Extract<CoordinatorToTabEnvelope, { kind: 'engine-startup' }>
   ) => void;
+  /** The coordinator answered a `ping`. */
+  onPong?: () => void;
   onOwnerChanged?: (ownerEpoch: number | undefined) => void;
-  /** Another context holds the database, so the cache stays off until reload. */
-  /** `superseded`: a newer build took the database over, so this build never
-   * gets it back. */
-  onCacheUnavailable?: (reason: string, superseded: boolean) => void;
+  /** Nothing can open the database for now. A later engine ends that. */
+  onCacheUnavailable?: (
+    reason: string,
+    unavailableReason: CacheUnavailableReason
+  ) => void;
   /** A newer app build took the database over; this page should reload. */
   onCacheSuperseded?: (reason: string) => void;
   /** When this page's app build was made, in ms since the epoch. Defaults to
@@ -86,6 +103,10 @@ export interface CacheCoordinatorPageAdapterOptions {
   onProtocolError?: (error: Error) => void;
   /** Fatal SharedWorker/MessagePort/envelope failure after resources close. */
   onTerminalError?: (error: Error) => void;
+  /** Compiles the engine for the first engine worker before this page knows
+   * it owns the cache; `null` leaves the compile to the worker. Defaults to
+   * the production asset outside the dev server. */
+  compileEngine?: (() => Promise<CompiledEngine>) | null;
   gracefulTimeoutMs?: number;
   /** Privacy-safe lifecycle recorder supplied by the browser host. */
   telemetry?: CacheTelemetryRecorderLike;
@@ -116,12 +137,11 @@ const withVersion = <
   }) as unknown as T;
 
 const defaultSharedWorkerFactory = (
-  scope: string,
-  buildTime: number
+  identity: CoordinatorIdentity
 ): SharedWorkerLike =>
   new SharedWorker(
     new URL('./cache.coordinator.shared-worker.ts', import.meta.url),
-    { type: 'module', name: `graphql-cache-coordinator:${scope}:${buildTime}` }
+    { type: 'module', name: coordinatorWorkerName(identity) }
   );
 
 const defaultDedicatedWorkerFactory = (
@@ -132,6 +152,35 @@ const defaultDedicatedWorkerFactory = (
     type: 'module',
     name: `graphql-cache-engine:${scope}:${ownerEpoch}`,
   });
+
+const PREFETCH_EVENT_NAMES: Partial<
+  Record<CacheTelemetryEventName, CacheTelemetryEventName>
+> = {
+  'graphql_cache.wasm_download': 'graphql_cache.wasm_prefetch_download',
+  'graphql_cache.wasm_compile': 'graphql_cache.wasm_prefetch_compile',
+};
+
+const compileProductionEngine =
+  (telemetry: CacheTelemetryRecorderLike) =>
+  async (): Promise<CompiledEngine> => {
+    // The same asset the engine worker would load: the worker only takes a
+    // module compiled from it.
+    const url = new URL('../wasm/cache_wasm_bg.wasm', import.meta.url);
+    const now = (): number => performance.now();
+    // Recorded apart from the worker's own download and compile: a follower
+    // tab compiles ahead too, and no engine starts from it.
+    const prefetchTelemetry = {
+      record: (event: CacheTelemetryObservation) =>
+        telemetry.record({
+          ...event,
+          name: PREFETCH_EVENT_NAMES[event.name] ?? event.name,
+        }),
+    };
+    return {
+      assetUrl: url.href,
+      module: await compileCacheWasm(url, prefetchTelemetry, now),
+    };
+  };
 
 const defaultCleanupWorkerFactory = (scope: string): DedicatedWorkerLike =>
   new Worker(new URL('./cache.engine-worker.ts', import.meta.url), {
@@ -148,7 +197,10 @@ export class CacheCoordinatorPageAdapter {
   readonly tabId: string;
   onmessage: ((event: MessageEvent<WorkerMessage>) => void) | null = null;
 
-  private readonly createSharedWorker: (scope: string) => SharedWorkerLike;
+  private readonly createSharedWorker: (
+    scope: string,
+    generation: number
+  ) => SharedWorkerLike;
   private readonly createDedicatedWorker: (
     scope: string,
     ownerEpoch: number
@@ -180,6 +232,7 @@ export class CacheCoordinatorPageAdapter {
   private rejectRegistration: ((error: Error) => void) | undefined;
   private readonly queuedRequests: CacheRequest[] = [];
   private releaseLivenessLock: (() => void) | undefined;
+  private coordinatorWatch: AbortController | undefined;
   private disposePromise: Promise<void> | undefined;
   private resolveDispose: (() => void) | undefined;
   private gracefulTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -214,8 +267,12 @@ export class CacheCoordinatorPageAdapter {
       (typeof document === 'undefined' ? undefined : document);
     this.createSharedWorker =
       options.createSharedWorker ??
-      ((scope) =>
-        defaultSharedWorkerFactory(scope, options.buildTime ?? APP_BUILD_TIME));
+      ((scope, generation) =>
+        defaultSharedWorkerFactory({
+          scope,
+          buildTime: options.buildTime ?? APP_BUILD_TIME,
+          generation,
+        }));
     this.createDedicatedWorker =
       options.createDedicatedWorker ?? defaultDedicatedWorkerFactory;
     this.lockManager = options.lockManager;
@@ -278,6 +335,14 @@ export class CacheCoordinatorPageAdapter {
     );
   }
 
+  /** Asks the coordinator to answer, through `onPong`; whether it was asked. */
+  ping(): boolean {
+    if (this.closed || !this.registered) return false;
+    return this.postCoordinator(
+      withVersion<TabToCoordinatorEnvelope>({ kind: 'ping', tabId: this.tabId })
+    );
+  }
+
   /** Drains gracefully, preserves storage for navigation, or drops abruptly. */
   dispose(options: PageAdapterDisposeOptions = {}): Promise<void> {
     const graceful = options.graceful === true;
@@ -299,6 +364,7 @@ export class CacheCoordinatorPageAdapter {
     this.disposePromise = new Promise<void>((resolve) => {
       this.resolveDispose = resolve;
     });
+    dropPrefetchedCompiledEngine();
     if (this.closed) {
       this.settleDispose();
       return this.disposePromise;
@@ -333,19 +399,7 @@ export class CacheCoordinatorPageAdapter {
       }
       this.gracefulTimeout = setTimeout(() => {
         this.gracefulTimeout = undefined;
-        if (this.closed) return;
-        this.terminateEngine(ownerEpoch, 'graceful drain timed out', false);
-        if (this.closed) return;
-        this.postCoordinator(
-          withVersion<TabToCoordinatorEnvelope>({
-            kind: 'disconnect-tab',
-            tabId: this.tabId,
-            reason: 'graceful page disposal timed out',
-          })
-        );
-        if (!this.closed) {
-          this.failTerminal(new Error('graceful engine drain timed out'));
-        }
+        if (!this.closed) this.departForNavigation('graceful drain timed out');
       }, this.gracefulTimeoutMs);
     } else {
       this.disposeMode = 'abrupt';
@@ -417,6 +471,17 @@ export class CacheCoordinatorPageAdapter {
     }
     if (!lockManager) throw new Error('Web Locks are unavailable');
 
+    // Most pages become the owner, and their engine worker starts only after
+    // the liveness lock, the coordinator and the election. The engine's
+    // download and compile run meanwhile, off the main thread.
+    const compileEngine =
+      this.options.compileEngine === undefined
+        ? import.meta.env.DEV || typeof WebAssembly !== 'object'
+          ? null
+          : compileProductionEngine(this.telemetry)
+        : this.options.compileEngine;
+    if (compileEngine) prefetchCompiledEngine(compileEngine);
+
     const livenessLockName = tabLivenessLockName(
       this.options.scope,
       this.tabId
@@ -466,7 +531,13 @@ export class CacheCoordinatorPageAdapter {
     });
     if (this.closed) return;
 
-    const worker = this.createSharedWorker(this.options.scope);
+    const { coordinatorGeneration } = this.options;
+    const generation = coordinatorGeneration
+      ? await coordinatorGeneration()
+      : 0;
+    if (this.closed) return;
+
+    const worker = this.createSharedWorker(this.options.scope, generation);
     const closeUnpublishedWorker = (): void => {
       try {
         worker.onerror = null;
@@ -533,6 +604,7 @@ export class CacheCoordinatorPageAdapter {
         visible: this.lastVisibility,
         hotCapacity: this.options.hotCapacity,
         buildTime: this.options.buildTime ?? APP_BUILD_TIME,
+        generation,
       })
     );
   }
@@ -552,6 +624,14 @@ export class CacheCoordinatorPageAdapter {
         Math.max(this.latestEngineReplacedEpoch, this.latestReadStateEpoch)
       ) {
         this.latestReadStateEpoch = message.ownerEpoch;
+        // Another page runs the engine: a compile kept for this one is only
+        // memory until this page is elected, which then compiles again.
+        if (
+          message.state === 'ready' &&
+          message.ownerEpoch !== this.ownerEpoch
+        ) {
+          dropPrefetchedCompiledEngine();
+        }
         this.options.onCacheReadAvailabilityChanged?.(message.state);
       }
       return;
@@ -565,6 +645,19 @@ export class CacheCoordinatorPageAdapter {
           return;
         }
         this.registered = true;
+        if (message.coordinatorLockName) {
+          this.coordinatorWatch = new AbortController();
+          fireAndForget(
+            this.watchCoordinator(
+              message.coordinatorLockName,
+              this.coordinatorWatch.signal
+            ),
+            'graphql-cache-coordinator'
+          );
+        }
+        // Another visible tab runs the engine: this one compiled ahead for a
+        // worker it will not start. Elected later, its worker compiles.
+        if (message.ownerElsewhere) dropPrefetchedCompiledEngine();
         this.resolveRegistration?.();
         this.resolveRegistration = undefined;
         this.rejectRegistration = undefined;
@@ -618,6 +711,9 @@ export class CacheCoordinatorPageAdapter {
             new Error('coordinator terminated an unknown owner epoch')
           );
         }
+        // The epoch this page was draining is over: nothing is left to drain.
+        if (this.disposeMode === 'graceful' && !this.closed)
+          this.departForNavigation(message.reason);
         break;
       case 'retire-complete':
         if (
@@ -667,13 +763,18 @@ export class CacheCoordinatorPageAdapter {
         )
           return;
         this.latestEngineReplacedEpoch = message.ownerEpoch;
+        // Another page's engine replaced the last one, as when this page
+        // registered during a drain: its compile ahead is only memory.
+        if (message.ownerEpoch !== this.ownerEpoch)
+          dropPrefetchedCompiledEngine();
         this.highestOwnerEpochSeen = Math.max(
           this.highestOwnerEpochSeen,
           message.ownerEpoch
         );
         this.options.onEngineReplaced?.(
           message.ownerEpoch,
-          message.openOutcome
+          message.openOutcome,
+          message.queue
         );
         break;
       case 'protocol-error': {
@@ -682,17 +783,16 @@ export class CacheCoordinatorPageAdapter {
         else this.options.onProtocolError?.(error);
         break;
       }
-      case 'terminal-error':
-        this.failTerminal(
-          message.storageUntouched
-            ? new CacheBootstrapExhaustedError(message.error)
-            : new Error(message.error)
-        );
+      case 'pong':
+        this.options.onPong?.();
+        break;
+      case 'connection-closed':
+        this.failTerminal(new WorkerRestartedError(message.reason));
         break;
       case 'cache-unavailable':
         this.options.onCacheUnavailable?.(
           message.reason,
-          message.superseded === true
+          message.unavailableReason
         );
         break;
       case 'cache-superseded':
@@ -837,20 +937,16 @@ export class CacheCoordinatorPageAdapter {
 
     worker.onerror = (event) => {
       event.preventDefault();
-      const reason = event.message || 'dedicated engine worker error';
-      const failedDuringDrain = this.disposeMode === 'graceful';
-      this.terminateEngine(election.ownerEpoch, reason, !failedDuringDrain);
-      if (failedDuringDrain && !this.closed) {
-        this.failTerminal(new Error(reason));
-      }
+      this.engineFailed(
+        election.ownerEpoch,
+        event.message || 'dedicated engine worker error'
+      );
     };
     worker.onmessageerror = () => {
-      const reason = 'dedicated engine worker messageerror';
-      const failedDuringDrain = this.disposeMode === 'graceful';
-      this.terminateEngine(election.ownerEpoch, reason, !failedDuringDrain);
-      if (failedDuringDrain && !this.closed) {
-        this.failTerminal(new Error(reason));
-      }
+      this.engineFailed(
+        election.ownerEpoch,
+        'dedicated engine worker messageerror'
+      );
     };
 
     const directChannel = new MessageChannel();
@@ -893,6 +989,13 @@ export class CacheCoordinatorPageAdapter {
         error instanceof Error ? error : new Error(String(error))
       );
     }
+  }
+
+  private engineFailed(ownerEpoch: number, reason: string): void {
+    this.terminateEngine(ownerEpoch, reason, true);
+    // A page that is leaving takes its engine with it either way.
+    if (this.disposeMode === 'graceful' && !this.closed)
+      this.departForNavigation(reason);
   }
 
   private terminateEngine(
@@ -985,21 +1088,26 @@ export class CacheCoordinatorPageAdapter {
       return;
     }
     this.pagehideRegistered = true;
-    addEventListener(
-      'pagehide',
-      () => {
-        fireAndForget(
-          this.dispose({ graceful: false, preserveDatabase: true }),
-          'graphql-cache-coordinator'
-        );
-      },
-      { once: true }
-    );
+    addEventListener('pagehide', this.onPagehide);
   }
+
+  private unregisterPagehide(): void {
+    if (!this.pagehideRegistered) return;
+    this.pagehideRegistered = false;
+    removeEventListener('pagehide', this.onPagehide);
+  }
+
+  private readonly onPagehide = (): void => {
+    fireAndForget(
+      this.dispose({ graceful: false, preserveDatabase: true }),
+      'graphql-cache-coordinator'
+    );
+  };
 
   private failTerminal(error: Error): void {
     if (this.terminalErrorReported) return;
     this.terminalErrorReported = true;
+    dropPrefetchedCompiledEngine();
     this.closed = true;
     this.registered = false;
     this.terminateCleanupWorker();
@@ -1030,6 +1138,8 @@ export class CacheCoordinatorPageAdapter {
   }
 
   private rejectStartAndQueued(error: Error): void {
+    // A page that leaves before owning the cache keeps no compile ahead.
+    dropPrefetchedCompiledEngine();
     this.rejectRegistration?.(error);
     this.rejectRegistration = undefined;
     this.resolveRegistration = undefined;
@@ -1042,7 +1152,33 @@ export class CacheCoordinatorPageAdapter {
     }
   }
 
+  /**
+   * A crashed coordinator closes no port and sends nothing: the browser only
+   * frees its lock. Shared, so that a frozen page given the lock keeps no other
+   * page from noticing.
+   */
+  private async watchCoordinator(
+    lockName: string,
+    signal: AbortSignal
+  ): Promise<void> {
+    try {
+      await (this.lockManager ?? navigator.locks).request(
+        lockName,
+        { mode: 'shared', signal },
+        () => undefined
+      );
+    } catch (error) {
+      if (signal.aborted) return;
+      throw error;
+    }
+    if (signal.aborted) return;
+    this.failTerminal(new WorkerRestartedError('cache coordinator ended'));
+  }
+
   private closeCoordinatorPort(): void {
+    this.unregisterPagehide();
+    this.coordinatorWatch?.abort();
+    this.coordinatorWatch = undefined;
     this.visibility?.removeEventListener(
       'visibilitychange',
       this.onVisibilityChange

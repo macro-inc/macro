@@ -14,6 +14,8 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 - `src/lib.rs`: the GraphQL `Document`/`Selection` → `ValidatedIndexQuery`
   compile path (`compile_soup_flat_v4`) and crate-level docs.
 - `src/live_query.rs`: reactive query registration/re-evaluation.
+- `src/permissions.rs`: CRM snapshot retirement shared by native and browser owners. Retire on proven denial or loss/change of the prior team scope; first allowed/team-less proofs and same-team regrants preserve snapshots, while account changes use the engine reset. Trace retirement phases and scanned/retired counts. Derive property-owner sidecars from already-normalized responses through `response_property_owners` and commit them in the response transaction; skip traversal when no properties are selected. Track property ownership from each field's own arguments; keep independently owned properties and received notification history. Retire copied optimism and persist rebased link updates without deleting authored commands, fresh query revalidations, identity bindings, unrelated projection shadows, or legacy draft attachment recovery. Classify optimism before removing retired CRM owner sidecars, and retain independent owner associations. The ignored full-retirement measurement covers large normalized/projection/property sets with pending commands.
+- Return a resumed retirement's transition to the host so every client can discard the old generation, including when recovery was triggered by an ordinary cache read.
 - `src/direct_patch.rs`, `src/notifications.rs`: optimistic local mutation
   and notification projection updates applied without a server round-trip.
 - `src/channels.rs`, `src/database_rows.rs`, `src/mail.rs`, `src/properties.rs`:
@@ -73,6 +75,16 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   `Document::parse`: one cache write passes the same text through the
   projection, notification, mail and property passes, and parsing a 20 KB Soup
   operation for each cost more than the write.
+- Hosts pass one `WriteResponse` to the notification, Mail and property passes
+  (`*_for`, `*_for_response`, `augment_authoritative_response`) so a write
+  normalizes its response once; normalizing a Soup page costs milliseconds.
+  Build it with `WriteResponse::with_updates` from the engine's
+  `Engine::normalize_network` and write with `write_normalized_query`, so the
+  passes and the write share that one normalization.
+- Hosts run those passes through `write_passes` (or `WritePasses::step` to
+  yield between them), never one by one: it reads each stored key once
+  through `Engine::pass_reads` and keeps what it read for the write that
+  follows, which reuses it only while `Storage::write_position` holds still.
 
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under

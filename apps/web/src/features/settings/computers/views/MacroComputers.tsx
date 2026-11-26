@@ -1,5 +1,11 @@
+import {
+  useOpenAgentScreen,
+  useOpenAgentScreenInPlace,
+} from '@app/features/agent-screen/screen-user-action';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
+import { useSettingsState } from '@core/constant/SettingsState';
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
@@ -9,6 +15,7 @@ import {
 } from '@queries/computers/claude';
 import {
   useCancelComputerMutation,
+  useComputerUsageQuery,
   useMacroComputersRollout,
   useReleaseComputerMutation,
   useRestoreComputerMutation,
@@ -17,7 +24,11 @@ import {
   useUndoCancelComputerMutation,
 } from '@queries/computers/computers';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
+import type {
+  ComputerStatus,
+  ComputerUsage,
+  SizeOffer,
+} from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, confirmDialog } from '@ui';
 import { createEffect, createSignal, For, on, Show } from 'solid-js';
@@ -40,6 +51,7 @@ import {
   type OffersFailure,
   offersFailure,
 } from '../core/computer-display';
+import { hasReadings } from '../core/computer-usage';
 import {
   computerSetupRequest,
   consumeComputerSetupRequest,
@@ -124,6 +136,7 @@ export function GetComputerRow(props: {
 /** One computer's row, with its Claude state and the actions the viewer has. */
 function ManagedComputerRow(props: {
   computer: ComputerStatus;
+  usage?: ComputerUsage;
   harness?: RegisteredHarness;
   canManage: boolean;
   canManageClaude: boolean;
@@ -140,6 +153,9 @@ function ManagedComputerRow(props: {
       : undefined
   );
   const power = useSetComputerPowerMutation();
+  const openScreen = useOpenAgentScreen();
+  const openScreenInPlace = useOpenAgentScreenInPlace();
+  const { closeSettings } = useSettingsState();
   const cancel = useCancelComputerMutation();
   const undoCancel = useUndoCancelComputerMutation();
   const restore = useRestoreComputerMutation();
@@ -327,6 +343,25 @@ function ManagedComputerRow(props: {
     const canPower =
       canTogglePower(computer) &&
       (computer.poweredOn || computer.billing !== 'ended');
+    // Any team member may watch a running computer's screen.
+    const harnessId = computer.harnessId;
+    if (harnessId && computer.poweredOn) {
+      items.push({
+        label: t('agentScreen.viewScreen'),
+        icon: 'screen',
+        onSelect: () => {
+          // Phones show Settings as a sheet over the page: close it and open
+          // the screen there. Elsewhere the screen takes Settings' split, so
+          // it is in front and Back returns to Machines.
+          if (isMobile()) {
+            closeSettings();
+            openScreen(harnessId);
+            return;
+          }
+          openScreenInPlace(harnessId);
+        },
+      });
+    }
     // Retry setup is the row's action; the menu keeps the rest.
     if (props.canManage && computer.status === 'failed' && !primary()) {
       items.push({
@@ -387,6 +422,11 @@ function ManagedComputerRow(props: {
       claude={claude()}
       primary={primary()}
       menu={menu()}
+      usage={
+        props.computer.poweredOn && props.usage && hasReadings(props.usage)
+          ? props.usage
+          : undefined
+      }
       harness={props.harness?.access === 'owner' ? props.harness : undefined}
     />
   );
@@ -409,6 +449,14 @@ export function MacroComputers(props: {
   const { enabled, computers, failed } = useTeamComputers();
   const release = useReleaseComputerMutation();
   const agents = useAgentsQuery();
+  const usage = useComputerUsageQuery(
+    () => enabled() && computers().length > 0
+  );
+  // The rows never wait on usage: a pending or failed read shows none.
+  const usageOf = (computer: ComputerStatus) =>
+    usage.isPending
+      ? undefined
+      : usage.data?.find((entry) => entry.computerId === computer.id);
   const buying = () => props.buying;
   const setBuying = (value: boolean) => props.onBuyingChange(value);
   const [settingUp, setSettingUp] = createSignal<string>();
@@ -482,6 +530,7 @@ export function MacroComputers(props: {
               {(computer) => (
                 <ManagedComputerRow
                   computer={computer}
+                  usage={usageOf(computer)}
                   harness={harnessFor(computer)}
                   canManage={isAdmin()}
                   canManageClaude={canManageClaude(computer)}

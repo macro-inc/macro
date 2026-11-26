@@ -37,6 +37,8 @@ use crate::domain::ports::{
 use crate::domain::size::ComputerResources;
 use crate::outbound::stderr_tail::{STDERR_TAIL_BYTES, log_failure};
 
+mod images;
+pub use images::ConfiguredImageError;
 mod moves;
 #[cfg(test)]
 mod test;
@@ -101,6 +103,9 @@ pub enum FirecrackerFleetError {
     /// The program in the guest could not run to its end.
     #[error("guest program: {0}")]
     Exec(#[from] ExecFailure),
+    /// The host answered an image the contract does not allow.
+    #[error("host image answer: {0}")]
+    Image(String),
 }
 
 /// Why a guest program ended without the exit it needed.
@@ -143,7 +148,8 @@ impl FleetError for FirecrackerFleetError {
             Self::Enrollment(_)
             | Self::EnrollmentMismatch { .. }
             | Self::Missing { .. }
-            | Self::Exec(_) => false,
+            | Self::Exec(_)
+            | Self::Image(_) => false,
         }
     }
 }
@@ -380,6 +386,8 @@ fn exec_request(argv: &[&str], user: u32) -> ExecRequest {
             ("PATH".to_owned(), GUEST_USER.path.to_owned()),
         ]),
         cwd: GUEST_USER.home.to_owned(),
+        // The host agent stamps its own; the trace joins by `traceparent`.
+        trace_id: None,
     }
 }
 
@@ -635,6 +643,7 @@ impl Fleet for FirecrackerFleet {
                 computer_id: guest.computer_id,
                 hibernated: guest.state == PowerState::Hibernated,
                 private_memory_bytes: guest.usage.map(|usage| usage.private_memory_bytes),
+                swap_bytes: guest.usage.and_then(|usage| usage.swap_bytes),
                 cpu_usage_microseconds: guest.usage.map(|usage| usage.cpu_usage_microseconds),
             })
             .collect();

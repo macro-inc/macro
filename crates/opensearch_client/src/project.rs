@@ -1,7 +1,11 @@
 use crate::{
     OpensearchClient, Result, delete,
     retry::resend_on_lost_connection,
-    upsert::{self, project::UpsertProjectArgs, properties::IndexedProperty},
+    upsert::{
+        self,
+        project::UpsertProjectArgs,
+        properties::{IndexedProperty, PropertyUpdate},
+    },
 };
 
 impl OpensearchClient {
@@ -36,7 +40,7 @@ impl OpensearchClient {
         &self,
         project_id: &str,
         properties: &[IndexedProperty],
-    ) -> Result<()> {
+    ) -> Result<PropertyUpdate> {
         resend_on_lost_connection(|| {
             upsert::project::update_project_properties(&self.inner, project_id, properties, None)
         })

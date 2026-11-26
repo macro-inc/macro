@@ -130,6 +130,7 @@ pub struct DetachedProgress {
     pub updated: usize,
     pub missing: usize,
     pub failed: usize,
+    pub not_queued: usize,
 }
 
 /// Moves a job's cursor and adds one page's counts in a single write.
@@ -171,24 +172,43 @@ impl JobProgress {
     /// DynamoDB: a failed write logs and continues so a transient blip
     /// doesn't kill the whole drain (the next page's `ADD` reconciles).
     pub async fn add(&self, n: usize) {
-        match &self.backend {
+        #[cfg(test)]
+        if let ProgressBackend::Detached(progress) = &self.backend {
+            progress.lock().unwrap().enqueued += n;
+            return;
+        }
+        self.add_to_counter("enqueued", n).await;
+    }
+
+    /// Add `n` to the messages the search event queue would not take. Best
+    /// effort like [`Self::add`]; the job's terminal status does not depend
+    /// on it.
+    pub async fn add_not_queued(&self, n: usize) {
+        #[cfg(test)]
+        if let ProgressBackend::Detached(progress) = &self.backend {
+            progress.lock().unwrap().not_queued += n;
+            return;
+        }
+        self.add_to_counter("not_queued", n).await;
+    }
+
+    async fn add_to_counter(&self, counter: &'static str, n: usize) {
+        let (client, table, id) = match &self.backend {
             #[cfg(test)]
-            ProgressBackend::Detached(progress) => {
-                progress.lock().unwrap().enqueued += n;
-            }
-            ProgressBackend::Dynamo { client, table, id } => {
-                let result = client
-                    .update_item()
-                    .table_name(table.as_ref())
-                    .key("id", AttributeValue::S(id.0.clone()))
-                    .update_expression("ADD enqueued :n")
-                    .expression_attribute_values(":n", AttributeValue::N(n.to_string()))
-                    .send()
-                    .await;
-                if let Err(e) = result {
-                    tracing::warn!(error=?e, id=%id, "failed to update backfill progress in dynamodb");
-                }
-            }
+            ProgressBackend::Detached(_) => return,
+            ProgressBackend::Dynamo { client, table, id } => (client, table, id),
+        };
+        let result = client
+            .update_item()
+            .table_name(table.as_ref())
+            .key("id", AttributeValue::S(id.0.clone()))
+            .update_expression("ADD #counter :n")
+            .expression_attribute_names("#counter", counter)
+            .expression_attribute_values(":n", AttributeValue::N(n.to_string()))
+            .send()
+            .await;
+        if let Err(e) = result {
+            tracing::warn!(error=?e, id=%id, counter, "failed to update backfill progress in dynamodb");
         }
     }
 
@@ -319,6 +339,10 @@ pub struct JobSnapshot {
     /// Index documents the backfill failed to change.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub failed: Option<usize>,
+    /// Messages the search event queue would not take after resends; a job
+    /// with any is `failed`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub not_queued: Option<usize>,
 }
 
 /// Bag of state the spawning code needs after [`BackfillJobs::start`]: the
@@ -414,7 +438,8 @@ impl BackfillJobs {
     /// Record the orchestrator's terminal result. Treats an `Ok` after the
     /// token fired as `Cancelled` so a clean `select!` exit still surfaces
     /// to the status endpoint, and a [`BackfillError::Stopped`] as `Stopped`
-    /// with its cursor. Drops the local cancellation entry — a finished job
+    /// with its cursor, and an `Ok` that left messages off the queue as
+    /// `Failed`, cancelled or not. Drops the local cancellation entry — a finished job
     /// can no longer be cancelled.
     pub async fn finish(
         &self,
@@ -428,17 +453,7 @@ impl BackfillJobs {
             .remove(id)
             .is_some_and(|t| t.is_cancelled());
 
-        let (status, error, cursor) = match result {
-            Ok(_) if was_cancelled => (JobStatus::Cancelled, None, None),
-            Ok(_) => (JobStatus::Completed, None, None),
-            Err(e) => {
-                let (status, cursor) = match &e {
-                    BackfillError::Stopped { cursor, .. } => (JobStatus::Stopped, cursor.clone()),
-                    _ => (JobStatus::Failed, None),
-                };
-                (status, Some(format!("{e}")), cursor)
-            }
-        };
+        let (status, error, cursor) = terminal_state(result, was_cancelled);
 
         let mut update = self
             .client
@@ -532,6 +547,7 @@ impl BackfillJobs {
             updated: count("updated"),
             missing: count("missing"),
             failed: count("failed"),
+            not_queued: count("not_queued"),
         }))
     }
 
@@ -543,6 +559,32 @@ impl BackfillJobs {
         let guard = self.local_cancels.lock().unwrap();
         for cancel in guard.values() {
             cancel.cancel();
+        }
+    }
+}
+
+/// The status, error and cursor a finished job records.
+fn terminal_state(
+    result: Result<BackfillReceipt, BackfillError>,
+    was_cancelled: bool,
+) -> (JobStatus, Option<String>, Option<String>) {
+    match result {
+        Ok(receipt) if receipt.not_queued > 0 => (
+            JobStatus::Failed,
+            Some(format!(
+                "the search event queue refused {} of the backfill's messages",
+                receipt.not_queued
+            )),
+            None,
+        ),
+        Ok(_) if was_cancelled => (JobStatus::Cancelled, None, None),
+        Ok(_) => (JobStatus::Completed, None, None),
+        Err(e) => {
+            let (status, cursor) = match &e {
+                BackfillError::Stopped { cursor, .. } => (JobStatus::Stopped, cursor.clone()),
+                _ => (JobStatus::Failed, None),
+            };
+            (status, Some(format!("{e}")), cursor)
         }
     }
 }

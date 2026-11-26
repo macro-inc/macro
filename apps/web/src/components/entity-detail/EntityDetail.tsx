@@ -147,6 +147,17 @@ export function entityDetailBlockType(
   }
 }
 
+/** Whether the target's detail is {@link MarkdownDetail}; files have their own. */
+export function entityDetailOpensMarkdown(target: EntityDetailTarget) {
+  const blockType = entityDetailBlockType(target);
+  return (
+    blockType === 'md' ||
+    blockType === 'task' ||
+    blockType === 'snippet' ||
+    blockType === 'skill'
+  );
+}
+
 /**
  * Whether the target's detail contributes a split header, so a touch host
  * shows it in a `SplitHeaderScope` like the standalone view does. Add a type
@@ -156,10 +167,7 @@ export function entityDetailHostsSplitHeader(target: EntityDetailTarget) {
   const blockType = entityDetailBlockType(target);
   if (!blockType) return false;
   return (
-    blockType === 'md' ||
-    blockType === 'task' ||
-    blockType === 'snippet' ||
-    blockType === 'skill' ||
+    entityDetailOpensMarkdown(target) ||
     FILE_DETAIL_BLOCK_TYPES.includes(blockType)
   );
 }
@@ -251,12 +259,7 @@ export function EntityDetail(props: EntityDetailProps) {
     <Switch>
       <Match
         when={
-          blockType() === 'md' ||
-          blockType() === 'task' ||
-          blockType() === 'snippet' ||
-          blockType() === 'skill'
-            ? documentTarget()
-            : undefined
+          entityDetailOpensMarkdown(props.target) ? documentTarget() : undefined
         }
       >
         {(target) => (

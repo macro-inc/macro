@@ -14,7 +14,7 @@ pub struct NotionAlreadyImported {
     pub by: String,
     /// The Macro entity it became.
     pub entity_id: String,
-    /// That entity's type (`md`, `project`).
+    /// That entity's type (`md`, `project`, `database`).
     pub entity_type: String,
 }
 
@@ -65,4 +65,14 @@ pub struct NotionImporter {
     pub by: String,
     /// How many of the plan's objects they imported.
     pub count: u32,
+}
+
+/// Internal reconciliation of a saved review with its external dependencies.
+pub struct NotionDependencyReview {
+    /// Exclusions including dependencies not yet offered in this review.
+    pub excluded: Vec<Uuid>,
+    /// Explicitly included dependencies with a matching saved-review receipt.
+    pub included: Vec<Uuid>,
+    /// The saved exclusions still need their review receipt recorded.
+    pub needs_receipt: bool,
 }

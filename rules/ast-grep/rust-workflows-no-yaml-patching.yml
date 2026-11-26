@@ -1,0 +1,18 @@
+id: rust-workflows-no-yaml-patching
+language: rust
+severity: error
+message: Don't patch rendered workflow YAML; model the missing key in `gh_workflow` instead.
+note: |-
+  Workflows render only through `gh_workflow`, which checks expressions,
+  references and scripts. Re-parsing and rewriting the YAML skips those
+  checks. Parsing YAML to read it (diffs, locks, linters) is fine.
+files:
+  - tooling/xtask/crates/xtask_workflows/src/workflows.rs
+  - tooling/xtask/crates/xtask_workflows/src/workflows/**
+ignores:
+  - '**/test.rs'
+rule:
+  any:
+    - pattern: serde_yaml::to_string($$$)
+    - pattern: $VALUE.as_mapping_mut()
+    - pattern: $VALUE.get_mut($$$).and_then(serde_yaml::Value::as_mapping_mut)

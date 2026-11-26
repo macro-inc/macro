@@ -6,7 +6,7 @@
 use super::*;
 use crate::domain::lifecycle::{Charger, Event, Failure, LandedCharge, Rejected, SetupOutcome};
 use crate::domain::service::Clock as _;
-use crate::domain::service::billing::MAX_BILLING_ATTEMPTS;
+use crate::domain::service::billing::{CHANGE_IN_FLIGHT_RETRY, MAX_BILLING_ATTEMPTS};
 use crate::domain::setup::SetupTimeline;
 
 const COMPUTER: ComputerId = ComputerId::new_from_uuid(Uuid::from_u128(1));
@@ -370,4 +370,59 @@ fn declined_id(service: &Service) -> ComputerId {
         .keys()
         .next()
         .unwrap()
+}
+
+/// A purchase right after a release on the same subscription: the release's
+/// item removal is still in flight, so the charge is refused for now. It is
+/// tried again within seconds, not after the billing backoff, and spends no
+/// attempt.
+#[tokio::test]
+async fn a_charge_behind_another_subscription_change_is_retried_within_seconds() {
+    let (service, clock) = moving_service(
+        repo_with_charging(Charger::Request),
+        FakeBilling {
+            change_in_flight: AtomicBool::new(true),
+            ..FakeBilling::default()
+        },
+    );
+    service
+        .repo
+        .apply(
+            COMPUTER,
+            crate::domain::lifecycle::TimerKind::ChargeUnsettled.event(None),
+            clock.now(),
+        )
+        .await
+        .unwrap();
+
+    service.run_billing_effects().await.unwrap();
+
+    let charge = service
+        .repo
+        .effects
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|pending| pending.effect == Effect::Charge)
+        .map(|pending| (pending.id, pending.attempts))
+        .unwrap();
+    assert_eq!(charge.1, 0, "waiting on another change spends no attempt");
+    assert_eq!(
+        service.repo.effect_run_after.lock().unwrap()[&charge.0],
+        clock.now() + CHANGE_IN_FLIGHT_RETRY
+    );
+
+    service
+        .billing
+        .change_in_flight
+        .store(false, Ordering::SeqCst);
+    clock.advance(CHANGE_IN_FLIGHT_RETRY);
+    service.run_billing_effects().await.unwrap();
+
+    assert_eq!(
+        billing_of(&service, COMPUTER),
+        BillingState::Active {
+            subscription_item: item("si_1"),
+        }
+    );
 }

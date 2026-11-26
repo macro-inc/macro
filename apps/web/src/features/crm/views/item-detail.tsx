@@ -1,7 +1,7 @@
 import {
   EntityDetail,
   entityDetailBlockType,
-  entityDetailHostsSplitHeader,
+  entityDetailOpensMarkdown,
 } from '@app/components/entity-detail/EntityDetail';
 import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
 import { EntityDetailFrame } from '@app/components/entity-detail/EntityDetailFrame';
@@ -27,10 +27,11 @@ type DocumentTarget = Extract<EntityDetailTarget, { type: 'document' }>;
  * Its headers are top bars, which carry the shell's navigation controls.
  */
 export function CrmItemDetail(props: { sourceName: string }) {
+  const crm = useCrmContext();
   const route = useCrmWorkspace().host.record;
   const panel = useSplitPanelOrThrow();
   const item = () => route.item()!;
-  const records = route.records;
+  const records = () => (crm.canAccess() ? route.records() : []);
   const value = () => `item:${item().itemType}:${item().itemId}`;
   const target = (): EntityDetailTarget => {
     const current = item();
@@ -38,7 +39,7 @@ export function CrmItemDetail(props: { sourceName: string }) {
       return {
         type: 'document',
         id: current.itemId,
-        fileType: current.itemFileType ?? 'md',
+        fileType: current.itemFileType,
         ...(current.itemSubType
           ? { subType: { type: current.itemSubType } }
           : {}),
@@ -67,7 +68,7 @@ export function CrmItemDetail(props: { sourceName: string }) {
     if (!current) return;
     return { documentId: current.target.id, blockAlias: current.blockType };
   });
-  onCleanup(useCrmContext().registerTaskComposerRecord(() => records().at(-1)));
+  onCleanup(crm.registerTaskComposerRecord(() => records().at(-1)));
 
   return (
     <ViewBreadcrumbs.Root
@@ -192,7 +193,7 @@ function CrmDocumentDetail(props: {
 }) {
   const route = useCrmWorkspace().host.record;
   const markdown = () =>
-    entityDetailHostsSplitHeader(props.target) ? props.target : undefined;
+    entityDetailOpensMarkdown(props.target) ? props.target : undefined;
   const duplicate = (id: string, name: string) =>
     route.openItem({ ...props.target, name, id });
   return (

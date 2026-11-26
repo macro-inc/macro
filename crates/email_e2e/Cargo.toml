@@ -6,6 +6,7 @@ version = "0.1.0"
 description = "Test support: runs the real email_service and pubsub_workers binaries against the Gmail and Outlook emulators, and the end-to-end email scenarios written on top."
 
 [dependencies]
+activity = { path = "../activity", default-features = false, features = ["outbound"] }
 ai_toolset = { path = "../ai_toolset" }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }

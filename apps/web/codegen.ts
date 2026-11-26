@@ -18,6 +18,7 @@ const config: CodegenConfig = {
             cacheOnlyResultOperations: [
               'SoupBackfill',
               'ContactDirectoryBackfill',
+              'ContactDirectoryBackfillWithLists',
             ],
           } satisfies CacheOnlyProjectionConfig,
         },

@@ -255,6 +255,8 @@ struct AdaAgent {
             hosted_runtimes::domain::enrollment::EnrollmentGeneration,
         )>,
     >,
+    /// How long the authentication service takes to answer.
+    answers_after: std::time::Duration,
 }
 
 impl hosted_runtimes::domain::agent::AgentEnrollmentSource for AdaAgent {
@@ -264,7 +266,9 @@ impl hosted_runtimes::domain::agent::AgentEnrollmentSource for AdaAgent {
         generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
     ) -> hosted_runtimes::domain::agent::AgentEnrollmentFuture<'_> {
         self.issued.lock().unwrap().push((computer, generation));
-        Box::pin(async {
+        let answers_after = self.answers_after;
+        Box::pin(async move {
+            tokio::time::sleep(answers_after).await;
             let mut values = std::collections::BTreeMap::new();
             values.insert(
                 hosted_runtimes::domain::agent::AgentEnvKey::new("MACRO_API_KEY").unwrap(),
@@ -284,10 +288,17 @@ impl hosted_runtimes::domain::agent::AgentEnrollmentSource for AdaAgent {
 type Sent = Arc<std::sync::Mutex<Vec<(HarnessId, std::collections::BTreeMap<String, String>)>>>;
 
 fn recording_send(sent: Sent) -> SendAgent {
-    Arc::new(move |harness, environment| {
-        sent.lock().unwrap().push((harness, environment.0));
+    Arc::new(move |harness, environment, _traceparent| {
+        sent.lock().unwrap().push((harness, environment.0.clone()));
         Box::pin(async { true })
     })
+}
+
+/// The dial macrod holds open on this replica throughout a test.
+fn dial() -> agent_harness::domain::ports::RuntimeConnectionId {
+    static DIAL: std::sync::LazyLock<agent_harness::domain::ports::RuntimeConnectionId> =
+        std::sync::LazyLock::new(agent_harness::domain::ports::RuntimeConnectionId::generate);
+    *DIAL
 }
 
 fn hand_off() -> DeliverAgent {
@@ -306,7 +317,8 @@ async fn the_replica_holding_the_socket_issues_the_agent_and_sends_it_down() {
     deliver_agent_to_runtime(
         hand_off(),
         agents.clone(),
-        Arc::new(|harness| harness == AGENT_HARNESS),
+        Arc::default(),
+        Arc::new(|harness| (harness == AGENT_HARNESS).then_some(dial())),
         recording_send(Arc::clone(&sent)),
     )
     .await;
@@ -329,6 +341,53 @@ async fn the_replica_holding_the_socket_issues_the_agent_and_sends_it_down() {
     );
 }
 
+#[tokio::test]
+async fn the_agent_is_handed_the_setup_trace_its_hand_off_carried() {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+    let traceparents = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let send: SendAgent = {
+        let traceparents = Arc::clone(&traceparents);
+        Arc::new(move |_harness, _environment, traceparent| {
+            traceparents.lock().unwrap().push(traceparent);
+            Box::pin(async { true })
+        })
+    };
+    let mut request = hand_off();
+    request.trace_context = [(
+        "traceparent".to_owned(),
+        "00-11111111111111111111111111111111-2222222222222222-01".to_owned(),
+    )]
+    .into_iter()
+    .collect();
+
+    let _guard = tracing::subscriber::set_default(subscriber);
+    deliver_agent_to_runtime(
+        request,
+        Arc::new(AdaAgent::default()),
+        Arc::default(),
+        Arc::new(|harness| (harness == AGENT_HARNESS).then_some(dial())),
+        send,
+    )
+    .await;
+
+    let traceparents = traceparents.lock().unwrap();
+    let [Some(traceparent)] = traceparents.as_slice() else {
+        panic!("expected one hand-off with a traceparent, got {traceparents:?}");
+    };
+    assert!(
+        traceparent.starts_with("00-11111111111111111111111111111111-"),
+        "{traceparent}"
+    );
+}
+
 /// Each issue retires the agent's previous key, so a replica without the
 /// socket must not issue.
 #[tokio::test]
@@ -339,7 +398,8 @@ async fn a_replica_without_the_socket_issues_nothing() {
     deliver_agent_to_runtime(
         hand_off(),
         agents.clone(),
-        Arc::new(|_| false),
+        Arc::default(),
+        Arc::new(|_| None),
         recording_send(Arc::clone(&sent)),
     )
     .await;
@@ -372,4 +432,82 @@ fn a_hand_off_on_the_bus_carries_no_credential_and_reads_back_as_one() {
 
     let read: RuntimeBusEvent = serde_json::from_value(wire).unwrap();
     assert!(matches!(read, RuntimeBusEvent::DeliverAgent(request) if request == hand_off()));
+}
+
+/// A hand-off sent again (the lifecycle repeats it until the agent reports
+/// online) re-sends what this replica issued: issuing again would rotate the
+/// key the starting agent already holds.
+#[tokio::test]
+async fn a_repeated_hand_off_sends_the_same_environment_without_issuing_again() {
+    let agents = Arc::new(AdaAgent::default());
+    let issued = Arc::new(IssuedAgents::default());
+    let sent = Sent::default();
+
+    for _ in 0..2 {
+        deliver_agent_to_runtime(
+            hand_off(),
+            agents.clone(),
+            Arc::clone(&issued),
+            Arc::new(|harness| (harness == AGENT_HARNESS).then_some(dial())),
+            recording_send(Arc::clone(&sent)),
+        )
+        .await;
+    }
+
+    assert_eq!(agents.issued.lock().unwrap().len(), 1);
+    let sent = sent.lock().unwrap();
+    assert_eq!(sent.len(), 2);
+    assert_eq!(sent[0], sent[1]);
+}
+
+/// Two hand-offs for one enrollment in flight at once (the first and its
+/// redelivery) issue once: a second issue would rotate the key the first sent.
+#[tokio::test(start_paused = true)]
+async fn hand_offs_racing_for_one_enrollment_issue_it_once() {
+    let agents = Arc::new(AdaAgent {
+        answers_after: std::time::Duration::from_secs(1),
+        ..AdaAgent::default()
+    });
+    let issued = Arc::new(IssuedAgents::default());
+    let sent = Sent::default();
+    let deliver = || {
+        deliver_agent_to_runtime(
+            hand_off(),
+            agents.clone(),
+            Arc::clone(&issued),
+            Arc::new(|harness| (harness == AGENT_HARNESS).then_some(dial())),
+            recording_send(Arc::clone(&sent)),
+        )
+    };
+
+    tokio::join!(deliver(), deliver());
+
+    assert_eq!(agents.issued.lock().unwrap().len(), 1);
+    let sent = sent.lock().unwrap();
+    assert_eq!(sent.len(), 2);
+    assert_eq!(sent[0], sent[1]);
+}
+
+/// macrod redialing while its agent starts may have met another replica,
+/// which issued and so revoked the key kept here: a new dial issues again.
+#[tokio::test]
+async fn a_hand_off_on_a_new_dial_issues_again() {
+    let agents = Arc::new(AdaAgent::default());
+    let issued = Arc::new(IssuedAgents::default());
+    let sent = Sent::default();
+    let redial = agent_harness::domain::ports::RuntimeConnectionId::generate();
+
+    for connection in [dial(), redial] {
+        deliver_agent_to_runtime(
+            hand_off(),
+            agents.clone(),
+            Arc::clone(&issued),
+            Arc::new(move |harness| (harness == AGENT_HARNESS).then_some(connection)),
+            recording_send(Arc::clone(&sent)),
+        )
+        .await;
+    }
+
+    assert_eq!(agents.issued.lock().unwrap().len(), 2);
+    assert_eq!(sent.lock().unwrap().len(), 2);
 }

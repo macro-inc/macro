@@ -10,6 +10,7 @@
 : "${VETH_BASE:=10.208.0.0}"                # /16, must not overlap another agent's
 : "${UPLINK:=ens5}"
 : "${IMAGE:=macro-box/2026-11-17k}"         # installed under $IMAGES_DIR
+: "${NEXT_IMAGE:=$IMAGE-next}"              # same files, for system disk replacement
 : "${IMAGES_DIR:=$ROOT/images}"
 : "${VCPUS:=2}"
 : "${MEMORY_MIB:=2048}"

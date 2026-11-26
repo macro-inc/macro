@@ -26,6 +26,15 @@ The pinned OTLP exporter-base patch adds explicit fetch injection to its browser
 transport. It preserves the upstream serializers, retry, timeout, batching and
 keepalive rules. The injected fetch takes precedence over global fetch discovery.
 
+`Telemetry.recordAnonymousSample` records a detached browser point observation.
+Its resource allowlist is service name, environment, release version, and app
+runtime. It skips runtime span enrichment and uses a separate OTLP request
+with credentials and the page referrer omitted. It uses the configured
+collector transport, which still sees network metadata such as source IP.
+Callers provide identity-free attributes and bound their sampling.
+Observations before the browser exporter is ready or without provider support
+are dropped.
+
 Node and Bun processes, such as agent teammates, use `createNodeTracingProvider`
 from `@macro-inc/observability/node` as their `tracingProvider`. It registers an
 async context manager, so a span's context follows its awaits, and exports to

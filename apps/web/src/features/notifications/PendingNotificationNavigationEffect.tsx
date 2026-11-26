@@ -1,4 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { closeSheetsForNavigation } from '@components/app/mobile/close-on-navigation';
 import type {
   SplitEventWithType,
   SplitManager,
@@ -126,7 +127,9 @@ export function usePendingNotificationNavigationEffect(
         }
       );
     const span = notificationOpenSpan(notificationId);
-    fireAndForget(
+    // The tap may land on the page already shown (its channel is open), which
+    // closes no sheet by itself, so close them as it starts.
+    const navigate = () =>
       (span ? span.run(open) : open()).match(
         () => {
           if (!isCurrentAttempt() || attempt.applied) return;
@@ -155,7 +158,9 @@ export function usePendingNotificationNavigationEffect(
           finishNotificationNavigation(intent, 'failed');
           toast.failure('Failed to open notification.');
         }
-      ),
+      );
+    fireAndForget(
+      closeSheetsForNavigation(navigate),
       'notification-navigation'
     );
   });

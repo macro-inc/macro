@@ -15,6 +15,7 @@ use firecracker_host::outbound::cgroup;
 use firecracker_host::outbound::disks::{Containers, FileDisks};
 use firecracker_host::outbound::goldens::GoldenBuilds;
 use firecracker_host::outbound::host_checks::HostChecks;
+use firecracker_host::outbound::image_staging::ImageStaging;
 use firecracker_host::outbound::jails::{JailSettings, Jails};
 use firecracker_host::outbound::layout::Layout;
 use firecracker_host::outbound::network::Network;
@@ -169,7 +170,19 @@ async fn serve(config: Config, cgroup_parent: String) -> Result<(), Report> {
         containers,
         config.storage.golden_root_disk_gib,
     );
-    let goldens = GoldenBuilds::new(layout.clone(), jails.clone(), disks.clone(), tasks.clone());
+    let downloads = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(30))
+        .read_timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|error| rootcause::report!("building the image download client: {error}"))?;
+    let staging = ImageStaging::new(layout.clone(), downloads, tasks.clone());
+    let goldens = GoldenBuilds::new(
+        layout.clone(),
+        jails.clone(),
+        disks.clone(),
+        staging,
+        tasks.clone(),
+    );
     let service = HostService::start(
         FileStore::new(layout.clone()),
         disks,
@@ -189,6 +202,8 @@ async fn serve(config: Config, cgroup_parent: String) -> Result<(), Report> {
     )
     .await
     .map_err(|error| rootcause::report!("starting the host service: {error}"))?;
+    // Before any VM runs long enough to swap.
+    service.guard_guest_swap().await;
     let service = Arc::new(service);
     // Tracked by `tasks`: each finishes on its own, under its computer's lock.
     drop(service.resume_pending_restores());

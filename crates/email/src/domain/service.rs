@@ -627,7 +627,6 @@ where
         self.email_repo
             .commit_sender_policy(actor, link.id, &sender, blocked, important)
             .await
-            .map_err(|e| EmailErr::RepoErr(e.into()))
     }
 
     async fn delete_email_filter(&self, link: &Link, filter_id: Uuid) -> Result<bool, EmailErr> {

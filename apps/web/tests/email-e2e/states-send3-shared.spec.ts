@@ -10,15 +10,19 @@
 // through channel membership is not tested here.
 
 import type { Page } from '@playwright/test';
-import { graphqlOperation, loadAppSteadily } from './harness/drafts';
+import {
+  draftThreads,
+  graphqlOperation,
+  loadAppSteadily,
+} from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
 import { anInbox, PROVIDERS } from './harness/providers';
-import { notice, replyEditor } from './harness/send';
+import { notice, replyEditor, threadMessages } from './harness/send';
 import { readStatus, threadOf } from './harness/sharing';
 import type { Provider } from './harness/stack';
 import { hold, operation } from './harness/states-send1';
 import { disconnectInbox } from './harness/ways-elsewhere';
-import { saw } from './ledger/record';
+import { confirmed, saw } from './ledger/record';
 
 test.beforeEach(({ page }) => loadAppSteadily(page));
 
@@ -47,8 +51,8 @@ async function sharedAtEdit(
   return thread;
 }
 
-/** Opens the shared thread and writes a reply to it. */
-async function writeReply(
+/** Opens the inline composer in the shared thread. */
+async function openReply(
   page: Page,
   mailbox: Mailbox,
   thread: string
@@ -56,6 +60,15 @@ async function writeReply(
   await mailbox.open(`/app/mail/${thread}`);
   await expect(page.getByText('Which week suits you?')).toBeVisible();
   await page.getByText('Reply...').click();
+}
+
+/** Opens the shared thread and writes a reply to it. */
+async function writeReply(
+  page: Page,
+  mailbox: Mailbox,
+  thread: string
+): Promise<void> {
+  await openReply(page, mailbox, thread);
   await replyEditor(page).pressSequentially('The second week.');
 }
 
@@ -63,8 +76,8 @@ async function writeReply(
  * The bodies of the drafts this browser keeps on this device, joined. A
  * kept body is HTML in base64, as the composer saves it.
  */
-async function keptOnThisDevice(page: Page): Promise<string> {
-  const bodies = await page.evaluate(async () => {
+async function keptOnThisDevice(page: Page, status?: string): Promise<string> {
+  const bodies = await page.evaluate(async (status) => {
     const name = 'macro-email-working-copies-v1';
     // Never create the store: the app does, once it has something to keep.
     const databases = await indexedDB.databases();
@@ -87,14 +100,21 @@ async function keptOnThisDevice(page: Page): Promise<string> {
         all.onsuccess = () => {
           db.close();
           resolve(
-            (all.result as { content?: { body_html?: string | null } }[]).map(
-              (draft) => draft.content?.body_html ?? ''
+            (
+              all.result as {
+                content?: { body_html?: string | null };
+                status: string;
+              }[]
             )
+              .filter(
+                (draft) => status === undefined || draft.status === status
+              )
+              .map((draft) => draft.content?.body_html ?? '')
           );
         };
       };
     });
-  });
+  }, status);
   return bodies
     .map((body) => Buffer.from(body, 'base64').toString('utf8'))
     .join('\n');
@@ -108,6 +128,63 @@ function sendButton(page: Page) {
 for (const provider of PROVIDERS) {
   test.describe(`a reply to a thread shared at Edit, the owner's being ${anInbox(provider)}`, () => {
     test.use({ provider });
+
+    for (const accountsLoading of [true, false]) {
+      test(`restores the shared reply after the service saves it with inboxes ${accountsLoading ? 'loading' : 'loaded'}`, async ({
+        page,
+        mailbox,
+      }) => {
+        const thread = await sharedAtEdit(mailbox, provider);
+        const accounts = accountsLoading
+          ? await hold(page, operation('MailAccounts'))
+          : undefined;
+        const accountsResponse = accounts
+          ? undefined
+          : page.waitForResponse(
+              (response) =>
+                operation('MailAccounts')(response.request()) && response.ok()
+            );
+
+        await openReply(page, mailbox, thread);
+        await (accounts?.arrived ?? accountsResponse);
+        const save = page.waitForRequest(operation('SaveEmailDraft'));
+        await replyEditor(page).pressSequentially('The second week.');
+        const { variables } = (await save).postDataJSON() as {
+          variables: { input: { linkId?: string } };
+        };
+        expect(variables.input.linkId ?? null).toBe(
+          accountsLoading ? null : mailbox.inbox.linkId
+        );
+        await expect
+          .poll(() => keptOnThisDevice(page, 'synced'))
+          .toContain('The second week.');
+        const drafts = await draftThreads(mailbox);
+        expect(drafts).toHaveLength(1);
+        const [draft] = drafts;
+        expect(draft.id).not.toBe(thread);
+        const savedDraft = expect.objectContaining({
+          is_draft: true,
+          body_html_sanitized: expect.stringContaining('The second week.'),
+          provider_id: provider === 'OUTLOOK' ? expect.any(String) : null,
+        });
+        // Outlook sync binds its draft to a provider ID after the Macro save.
+        await expect
+          .poll(() => threadMessages(mailbox, draft.id))
+          .toEqual([savedDraft]);
+        confirmed('F-117');
+        await accounts?.release();
+
+        await page.reload();
+        await expect(page.getByText('Which week suits you?')).toBeVisible();
+        await expect(replyEditor(page)).toContainText('The second week.');
+        expect(
+          (await threadMessages(mailbox, thread)).filter(
+            (message) => message.is_draft
+          )
+        ).toEqual([savedDraft]);
+        saw('STL-996');
+      });
+    }
 
     // When this fails, a reader of a shared thread with no inbox of their
     // own presses Send and is not told why nothing goes out, or the reply

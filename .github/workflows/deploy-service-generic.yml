@@ -1,11 +1,13 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_service_generic.rs
 name: Deploy Service (Generic)
 on:
   workflow_dispatch:
     inputs:
       service:
-        type: choice
-        required: true
         description: Select the service to deploy
+        required: true
+        type: choice
         options:
           - agent-harness-service
           - agent-schedule-service
@@ -31,6 +33,7 @@ on:
           - mcp-server
           - notification-service
           - organization-retention
+          - search-freshness-probe
           - search-processing-service
           - search-upload
           - static-file-service
@@ -41,18 +44,13 @@ on:
           - search-text-extractor-queue
           - kafka-cluster
       environment:
-        type: choice
+        description: The environment to deploy to
         required: true
-        default: 'dev'
+        type: choice
         options:
           - dev
           - prod
-        description: The environment to deploy to
-
-concurrency:
-  group: deploy-${{ inputs.service }}-${{ inputs.environment }}
-  cancel-in-progress: false
-
+        default: dev
 jobs:
   deploy:
     name: Deploy ${{ inputs.service }}
@@ -61,3 +59,6 @@ jobs:
       environment: ${{ inputs.environment }}
       service-name: ${{ inputs.service }}
     secrets: inherit
+concurrency:
+  group: deploy-${{ inputs.service }}-${{ inputs.environment }}
+  cancel-in-progress: false

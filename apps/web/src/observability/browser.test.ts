@@ -40,12 +40,14 @@ vi.mock('./runtime-resources', () => ({
   startRuntimeResourceSampling: vi.fn(() => vi.fn()),
 }));
 vi.mock('./boot', () => ({ startBootTrace: vi.fn() }));
+vi.mock('./native-crashes', () => ({ reportNativeCrashes: vi.fn() }));
 vi.mock('./os-type', () => ({ osType: () => 'linux' }));
 vi.mock('./ui-operation', () => ({
   initializeUiOperationTelemetry: vi.fn(() => vi.fn()),
 }));
 vi.mock('./desktop', () => ({
   readDesktopDiagnostics: vi.fn(),
+  readNativeBuildAttribute: () => Promise.resolve(27),
   desktopResourceAttributes: () => ({
     'service.instance.id': 'launch-1',
     'macro.recording.id': 'recording-1',
@@ -99,6 +101,7 @@ it('explicit native recording overrides the normal enablement gate and exporter 
     'service.instance.id': 'launch-1',
     'macro.recording.id': 'recording-1',
   });
+  expect(await config.resourceAttributes?.['macro.native.build']).toBe(27);
   expect(config.spanAttributes?.()).toMatchObject({
     frontend_instance_id: frontendInstanceId,
     native_instance_id: 'launch-1',

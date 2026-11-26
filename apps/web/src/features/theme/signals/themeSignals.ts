@@ -1,5 +1,5 @@
 import { makePersisted } from '@solid-primitives/storage';
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo, createRoot, createSignal } from 'solid-js';
 import {
   DEFAULT_DARK_THEME,
   DEFAULT_LIGHT_THEME,
@@ -69,10 +69,9 @@ export const [currentThemeId, setCurrentThemeId] = makePersisted(
   { name: 'macro-selected-theme' }
 );
 
-export const themes = createMemo<ThemeV3[]>(() => [
-  ...DEFAULT_THEMES,
-  ...userThemes(),
-]);
+export const themes = createRoot(() =>
+  createMemo<ThemeV3[]>(() => [...DEFAULT_THEMES, ...userThemes()])
+);
 
 /** VNext colors currently rendered and edited in the document. */
 export const [themeColorTokens, setThemeColorTokens] =
@@ -84,8 +83,8 @@ export const [liveThemeMode, setLiveThemeMode] = createSignal<'light' | 'dark'>(
 );
 
 /** Shared concrete colors for integrations which cannot inherit CSS tokens. */
-export const resolvedThemeColors = createMemo(() =>
-  resolveThemeColors(themeColorTokens(), liveThemeMode())
+export const resolvedThemeColors = createRoot(() =>
+  createMemo(() => resolveThemeColors(themeColorTokens(), liveThemeMode()))
 );
 
 /** Icons outside the app follow committed colors, not transient previews. */

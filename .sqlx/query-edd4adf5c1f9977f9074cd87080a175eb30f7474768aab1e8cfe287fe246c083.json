@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_message_reconciliation (link_id,generation,provider_id,is_import,notified_at,notified_traceparent)\n            SELECT $1,$2,provider_id,$4,$5,$6 FROM unnest($3::text[]) provider_id\n            ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET\n                revision = email_message_reconciliation.revision + 1,\n                is_import = email_message_reconciliation.is_import AND EXCLUDED.is_import,\n                -- A folder page lists the message, so it is read as a folder\n                -- page's message, wherever it has moved since.\n                from_notification = false,\n                notified_at = COALESCE(EXCLUDED.notified_at, email_message_reconciliation.notified_at),\n                notified_traceparent = CASE WHEN EXCLUDED.notified_at IS NULL\n                    THEN email_message_reconciliation.notified_traceparent ELSE EXCLUDED.notified_traceparent END,\n                available_at = now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "TextArray",
+        "Bool",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "edd4adf5c1f9977f9074cd87080a175eb30f7474768aab1e8cfe287fe246c083"
+}

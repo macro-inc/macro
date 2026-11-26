@@ -13,6 +13,7 @@ fn request(argv: &[&str]) -> ExecRequest {
         gid: metadata.gid(),
         env: BTreeMap::from([("PATH".to_owned(), "/bin".to_owned())]),
         cwd: "/".to_owned(),
+        trace_id: None,
     }
 }
 

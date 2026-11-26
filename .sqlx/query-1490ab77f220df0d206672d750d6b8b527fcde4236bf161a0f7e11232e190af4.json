@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_projection_outbox SET lease_id = NULL,lease_until = NULL,\n                    available_at = now() + make_interval(secs => $3),\n                    attempts = attempts - CASE WHEN $4 THEN 0 ELSE 1 END\n                    WHERE id = $1 AND lease_id = $2 AND lease_until > now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Float8",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1490ab77f220df0d206672d750d6b8b527fcde4236bf161a0f7e11232e190af4"
+}

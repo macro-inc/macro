@@ -163,6 +163,8 @@ pub enum AgentFailureCode {
     RateLimited,
     /// A dependency is unavailable or the deadline elapsed.
     VaultUnavailable,
+    /// The team's vault has not been set up; retrying cannot help.
+    VaultNotProvisioned,
 }
 
 /// Sanitized agent vault failure.
@@ -235,6 +237,7 @@ impl IntoResponse for AgentApiError {
                 Code::VaultUnavailable,
                 None,
             ),
+            AgentError::NotProvisioned => (StatusCode::CONFLICT, Code::VaultNotProvisioned, None),
         };
         failure(status, code, retry)
     }
@@ -323,7 +326,7 @@ pub async fn search<A: MacroAuthorizationService>(
         .map_err(IntoResponse::into_response)
 }
 
-#[utoipa::path(operation_id = "passwords_agent_disclose", post, path = "/passwords/agent/teams/{team}/items/{item}/disclose", params(("team" = Uuid, Path), ("item" = Uuid, Path), ("X-Macro-Agent-Session-Id" = String, Header, description = "Wake UUIDv7"), ("X-Macro-Passwords" = String, Header, description = "Required CSRF header; send 1")), request_body = DiscloseRequest, responses((status = 200, body = Disclosed), (status = 400, body = AgentFailure), (status = 401, body = AgentFailure), (status = 403, body = AgentFailure), (status = 404, body = AgentFailure), (status = 409, body = AgentFailure), (status = 503, body = AgentFailure)), tag = "passwords")]
+#[utoipa::path(operation_id = "passwords_agent_disclose", post, path = "/passwords/agent/teams/{team}/items/{item}/disclose", params(("team" = Uuid, Path), ("item" = Uuid, Path), ("X-Macro-Agent-Session-Id" = String, Header, description = "Wake UUIDv7"), ("X-Macro-Passwords" = String, Header, description = "Required CSRF header; send 1")), request_body = DiscloseRequest, responses((status = 200, body = Disclosed), (status = 400, body = AgentFailure), (status = 401, body = AgentFailure), (status = 403, body = AgentFailure), (status = 404, body = AgentFailure), (status = 409, body = AgentFailure, description = "A conflict code, or `vault_not_provisioned` when the team's vault is not set up"), (status = 503, body = AgentFailure)), tag = "passwords")]
 /// Disclose one selected field to the agent's capability.
 pub async fn disclose<A: MacroAuthorizationService>(
     State(state): State<AgentRouterState<A>>,
@@ -340,7 +343,7 @@ pub async fn disclose<A: MacroAuthorizationService>(
     respond(result, StatusCode::OK).map_err(IntoResponse::into_response)
 }
 
-#[utoipa::path(operation_id = "passwords_agent_totp_code", post, path = "/passwords/agent/teams/{team}/items/{item}/totp/code", params(("team" = Uuid, Path), ("item" = Uuid, Path), ("X-Macro-Agent-Session-Id" = String, Header, description = "Wake UUIDv7"), ("X-Macro-Passwords" = String, Header, description = "Required CSRF header; send 1")), request_body = TotpCodeRequest, responses((status = 200, body = AgentTotpCode), (status = 400, body = AgentFailure), (status = 401, body = AgentFailure), (status = 403, body = AgentFailure), (status = 404, body = AgentFailure), (status = 409, body = AgentFailure), (status = 503, body = AgentFailure)), tag = "passwords")]
+#[utoipa::path(operation_id = "passwords_agent_totp_code", post, path = "/passwords/agent/teams/{team}/items/{item}/totp/code", params(("team" = Uuid, Path), ("item" = Uuid, Path), ("X-Macro-Agent-Session-Id" = String, Header, description = "Wake UUIDv7"), ("X-Macro-Passwords" = String, Header, description = "Required CSRF header; send 1")), request_body = TotpCodeRequest, responses((status = 200, body = AgentTotpCode), (status = 400, body = AgentFailure), (status = 401, body = AgentFailure), (status = 403, body = AgentFailure), (status = 404, body = AgentFailure), (status = 409, body = AgentFailure, description = "A conflict code, or `vault_not_provisioned` when the team's vault is not set up"), (status = 503, body = AgentFailure)), tag = "passwords")]
 /// The current verification code of a login or verification-code item.
 pub async fn totp_code<A: MacroAuthorizationService>(
     State(state): State<AgentRouterState<A>>,
@@ -357,7 +360,7 @@ pub async fn totp_code<A: MacroAuthorizationService>(
     respond(result, StatusCode::OK).map_err(IntoResponse::into_response)
 }
 
-#[utoipa::path(operation_id = "passwords_agent_create", post, path = "/passwords/agent/teams/{team}/items", params(("team" = Uuid, Path), ("X-Macro-Agent-Session-Id" = String, Header, description = "Wake UUIDv7"), ("X-Macro-Passwords" = String, Header, description = "Required CSRF header; send 1")), request_body = AgentCreateItem, responses((status = 201, body = AgentWriteResult), (status = 200, description = "Replay of an accepted operation", body = AgentWriteResult), (status = 400, body = AgentFailure), (status = 401, body = AgentFailure), (status = 403, body = AgentFailure), (status = 404, body = AgentFailure), (status = 409, body = AgentFailure), (status = 503, body = AgentFailure)), tag = "passwords")]
+#[utoipa::path(operation_id = "passwords_agent_create", post, path = "/passwords/agent/teams/{team}/items", params(("team" = Uuid, Path), ("X-Macro-Agent-Session-Id" = String, Header, description = "Wake UUIDv7"), ("X-Macro-Passwords" = String, Header, description = "Required CSRF header; send 1")), request_body = AgentCreateItem, responses((status = 201, body = AgentWriteResult), (status = 200, description = "Replay of an accepted operation", body = AgentWriteResult), (status = 400, body = AgentFailure), (status = 401, body = AgentFailure), (status = 403, body = AgentFailure), (status = 404, body = AgentFailure), (status = 409, body = AgentFailure, description = "A conflict code, or `vault_not_provisioned` when the team's vault is not set up"), (status = 503, body = AgentFailure)), tag = "passwords")]
 /// Create a login or API item attributed to this agent.
 pub async fn create<A: MacroAuthorizationService>(
     State(state): State<AgentRouterState<A>>,
@@ -374,7 +377,7 @@ pub async fn create<A: MacroAuthorizationService>(
     }
 }
 
-#[utoipa::path(operation_id = "passwords_agent_update", patch, path = "/passwords/agent/teams/{team}/items/{item}", params(("team" = Uuid, Path), ("item" = Uuid, Path), ("X-Macro-Agent-Session-Id" = String, Header, description = "Wake UUIDv7"), ("X-Macro-Passwords" = String, Header, description = "Required CSRF header; send 1")), request_body = AgentPatchItem, responses((status = 200, body = AgentWriteResult), (status = 400, body = AgentFailure), (status = 401, body = AgentFailure), (status = 403, body = AgentFailure), (status = 404, body = AgentFailure), (status = 409, body = AgentFailure), (status = 503, body = AgentFailure)), tag = "passwords")]
+#[utoipa::path(operation_id = "passwords_agent_update", patch, path = "/passwords/agent/teams/{team}/items/{item}", params(("team" = Uuid, Path), ("item" = Uuid, Path), ("X-Macro-Agent-Session-Id" = String, Header, description = "Wake UUIDv7"), ("X-Macro-Passwords" = String, Header, description = "Required CSRF header; send 1")), request_body = AgentPatchItem, responses((status = 200, body = AgentWriteResult), (status = 400, body = AgentFailure), (status = 401, body = AgentFailure), (status = 403, body = AgentFailure), (status = 404, body = AgentFailure), (status = 409, body = AgentFailure, description = "A conflict code, or `vault_not_provisioned` when the team's vault is not set up"), (status = 503, body = AgentFailure)), tag = "passwords")]
 /// Replace supplied fields of a login or API item.
 pub async fn update<A: MacroAuthorizationService>(
     State(state): State<AgentRouterState<A>>,
@@ -388,7 +391,7 @@ pub async fn update<A: MacroAuthorizationService>(
     respond(result, StatusCode::OK).map_err(IntoResponse::into_response)
 }
 
-#[utoipa::path(operation_id = "passwords_agent_set_totp", put, path = "/passwords/agent/teams/{team}/items/{item}/totp", params(("team" = Uuid, Path), ("item" = Uuid, Path), ("X-Macro-Agent-Session-Id" = String, Header, description = "Wake UUIDv7"), ("X-Macro-Passwords" = String, Header, description = "Required CSRF header; send 1")), request_body = AgentSetTotp, responses((status = 204), (status = 400, body = AgentFailure), (status = 401, body = AgentFailure), (status = 403, body = AgentFailure), (status = 404, body = AgentFailure), (status = 409, body = AgentFailure), (status = 503, body = AgentFailure)), tag = "passwords")]
+#[utoipa::path(operation_id = "passwords_agent_set_totp", put, path = "/passwords/agent/teams/{team}/items/{item}/totp", params(("team" = Uuid, Path), ("item" = Uuid, Path), ("X-Macro-Agent-Session-Id" = String, Header, description = "Wake UUIDv7"), ("X-Macro-Passwords" = String, Header, description = "Required CSRF header; send 1")), request_body = AgentSetTotp, responses((status = 204), (status = 400, body = AgentFailure), (status = 401, body = AgentFailure), (status = 403, body = AgentFailure), (status = 404, body = AgentFailure), (status = 409, body = AgentFailure, description = "A conflict code, or `vault_not_provisioned` when the team's vault is not set up"), (status = 503, body = AgentFailure)), tag = "passwords")]
 /// Enroll a verification-code seed on an item this agent created.
 pub async fn set_totp<A: MacroAuthorizationService>(
     State(state): State<AgentRouterState<A>>,

@@ -26,6 +26,7 @@ vi.mock('@service-storage/client', () => ({
 vi.mock('@channel/Media/media-items', () => ({
   partitionAttachments: (attachments: unknown[]) => ({
     mediaAttachments: [],
+    audioAttachments: [],
     documentAttachments: attachments,
   }),
   mapMediaItems: () => [],

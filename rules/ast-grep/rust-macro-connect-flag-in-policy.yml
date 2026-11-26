@@ -1,0 +1,22 @@
+id: rust-macro-connect-flag-in-policy
+language: rust
+severity: error
+message: Only crates/connectors/src/domain/policy.rs names the `macro-connect` flag; ask the connectors services what a user has instead.
+note: |-
+  The `macro-connect` flag decides which source counts for an app, and that
+  decision belongs to the connectors crate alone: `policy.rs` reads the flag
+  through one cache (a failed read is off) and `resolve.rs` applies it. A
+  second reader is a second answer to "is this user on Macro Connect", which
+  is how chat, routines, discovery and the egress proxy came to disagree.
+  Bind to `McpConnectionsService`, `ApiConnectionsService` or
+  `ConnectionManagementService` instead. A test that needs the flag on
+  uses the connectors crate's shared fake, never the key. The rule matches
+  string literals, so comments may still name the rollout.
+ignores:
+  - crates/connectors/src/domain/policy.rs
+rule:
+  any:
+    - kind: string_literal
+      regex: macro-connect([^A-Za-z0-9_-]|$)
+    - kind: raw_string_literal
+      regex: macro-connect([^A-Za-z0-9_-]|$)

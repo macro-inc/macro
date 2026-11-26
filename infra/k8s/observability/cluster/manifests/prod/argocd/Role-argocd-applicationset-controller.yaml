@@ -1,0 +1,99 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/component: applicationset-controller
+    app.kubernetes.io/instance: argocd
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: argocd-applicationset-controller
+    app.kubernetes.io/part-of: argocd
+    app.kubernetes.io/version: v3.6.1
+    helm.sh/chart: argo-cd-10.18.0
+  name: argocd-applicationset-controller
+  namespace: argocd
+rules:
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - applications
+      - applicationsets
+      - applicationsets/finalizers
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - applicationsets/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - appprojects
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - patch
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
+      - extensions
+    resources:
+      - deployments
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - create
+  - apiGroups:
+      - coordination.k8s.io
+    resourceNames:
+      - 58ac56fa.applicationsets.argoproj.io
+    resources:
+      - leases
+    verbs:
+      - get
+      - update
+      - create

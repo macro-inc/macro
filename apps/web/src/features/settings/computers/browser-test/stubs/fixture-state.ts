@@ -22,6 +22,16 @@ export const [settingsOpened, setSettingsOpened] = createSignal<string>();
 /** The agent whose DM Chat with opened, by bot id. */
 export const [agentDmOpened, setAgentDmOpened] = createSignal<string>();
 
+/**
+ * How the computer's runtime answers Claude sign-out: `ok`, `rollout_disabled`
+ * as the harness does for an account outside the computers rollout, or
+ * `forbidden` for a caller without manage rights.
+ */
+export const claudeAnswers = {
+  signOut: 'ok' as 'ok' | 'rollout_disabled' | 'forbidden',
+  signOutCalls: 0,
+};
+
 declare global {
   interface Window {
     computerFixture: {
@@ -29,6 +39,7 @@ declare global {
       setAgents: typeof setAgents;
       settingsOpened: typeof settingsOpened;
       setSettingsOpened: typeof setSettingsOpened;
+      claude: typeof claudeAnswers;
       /** Set by the fixture once its notice code loads. */
       notify: (content: ComputerSetupContent) => Promise<void>;
     };
@@ -40,5 +51,6 @@ window.computerFixture = {
   setAgents,
   settingsOpened,
   setSettingsOpened,
+  claude: claudeAnswers,
   notify: async () => {},
 };

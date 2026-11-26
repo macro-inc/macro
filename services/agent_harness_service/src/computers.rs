@@ -12,7 +12,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent_harness::domain::ports::{ConnectionRecorded, HarnessPresence, RuntimeConnectionId};
+use agent_harness::domain::ports::{
+    ConnectionRecorded, HarnessConnection, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
+};
 use anyhow::Context;
 use harness_id::HarnessId;
 use harnesses::domain::models::CreateHostedPairing;
@@ -45,8 +47,12 @@ pub mod harnessd;
 mod in_use;
 pub(crate) mod moves;
 mod presence;
+pub mod screen;
 pub mod sign_in_ahead;
 pub(crate) mod wake;
+
+#[cfg(test)]
+mod test;
 
 use default_agent::{DefaultAgentRequest, DefaultAgents};
 
@@ -60,6 +66,9 @@ const OVERCOMMIT_TICK: Duration = Duration::from_secs(10);
 /// Each open computer move advances one step per pass; a final copy round
 /// takes seconds, so the pass is frequent.
 const MOVE_TICK: Duration = Duration::from_secs(5);
+/// An image upgrade advances one step per pass; a step can wait on a
+/// host's system disk replacement (a shutdown and a boot).
+const IMAGE_UPGRADE_TICK: Duration = Duration::from_secs(10);
 /// How often expiry notices are checked.
 const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
 /// How often every awake computer's harnessd status is read, catching a
@@ -90,6 +99,125 @@ pub type Operator = ComputerOperator<
     SystemClock,
     team_agents::outbound::setup_notices::IngressSetupNotices<SetupNotifications, PgTeamAgentsRepo>,
 >;
+
+/// How long a screen waits for its hibernated computer to wake before it
+/// tries anyway: Xvnc is up well before macrod dials.
+const SCREEN_WAKE_TIMEOUT: Duration = Duration::from_secs(30);
+
+impl screen::tunnel::ScreenWaker for Operator {
+    fn wake(
+        &self,
+        harness: HarnessId,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<screen::tunnel::Woken, screen::tunnel::TunnelError>>
+                + Send
+                + '_,
+        >,
+    > {
+        use hosted_runtimes::domain::operator::DispatchWake;
+        use screen::tunnel::{TunnelError, Woken};
+        Box::pin(async move {
+            match self.wake_for_dispatch(harness, SCREEN_WAKE_TIMEOUT).await {
+                Ok(DispatchWake::NotAComputer) => Err(TunnelError::ComputerOff),
+                Ok(DispatchWake::Awake | DispatchWake::Connected) => Ok(Woken::Up),
+                Ok(DispatchWake::Waiting) => Ok(Woken::StillWaking),
+                Err(error) => Err(TunnelError::Unreachable(error.to_string())),
+            }
+        })
+    }
+
+    fn power(
+        &self,
+        computer: ComputerId,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<screen::tunnel::ComputerPower, screen::tunnel::TunnelError>>
+                + Send
+                + '_,
+        >,
+    > {
+        use screen::tunnel::ComputerPower;
+        // Asked when a screen stopped short, and before a hand-back's thaw.
+        Box::pin(async move {
+            Ok(
+                if screen::tunnel::ScreenWaker::awake(self)
+                    .await?
+                    .contains(&computer)
+                {
+                    ComputerPower::Running
+                } else {
+                    ComputerPower::NotRunning
+                },
+            )
+        })
+    }
+
+    fn awake(
+        &self,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        std::collections::HashSet<ComputerId>,
+                        screen::tunnel::TunnelError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        use screen::tunnel::TunnelError;
+        // The fleet's whole list: once per reaping round, not per computer.
+        Box::pin(async move {
+            Ok(self
+                .awake_computers()
+                .await
+                .map_err(|error| TunnelError::Unreachable(error.to_string()))?
+                .into_iter()
+                .map(|(_, computer)| computer)
+                .collect())
+        })
+    }
+}
+
+impl screen::tunnel::GuestExec for Operator {
+    fn exec<'a>(
+        &'a self,
+        computer: ComputerId,
+        argv: &'a [&'a str],
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<screen::tunnel::GuestProgram, screen::tunnel::TunnelError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        use hosted_runtimes::domain::ports::{Fleet as _, FleetError as _};
+        use screen::tunnel::{GuestProgram, TunnelError};
+        Box::pin(async move {
+            let (fleet, image) = self
+                .fleet_and_image_of(computer)
+                .await
+                .map_err(|error| TunnelError::Unreachable(error.to_string()))?;
+            if let Some(image) = image {
+                tracing::Span::current().record("computer.guest.image", image.as_str());
+            }
+            let process = fleet.exec(computer, argv).await.map_err(|error| {
+                if error.is_missing() {
+                    TunnelError::ComputerOff
+                } else {
+                    TunnelError::Unreachable(error.to_string())
+                }
+            })?;
+            let exit = process.exit;
+            Ok(GuestProgram {
+                stdin: process.stdin,
+                stdout: process.stdout,
+                exit: Box::pin(async move { exit.await.map_err(|error| error.to_string()) }),
+            })
+        })
+    }
+}
 
 /// Build the operator from explicit config, or `None` when this deployment
 /// has no attached computer fleet (`COMPUTERS_FLEET` is absent).
@@ -215,13 +343,39 @@ impl DeploymentSource for ServiceDeployment {
 fn resolve_deployment() -> anyhow::Result<Deployment> {
     use macro_service_urls::{
         AgentHarnessEgressUrl, AgentHarnessServiceUrl, AppServiceUrl, DocumentStorageServiceUrl,
+        TelemetryIntakeUrl,
     };
     Ok(Deployment {
         agent_harness_url: AgentHarnessServiceUrl::new()?.parse_url()?,
         document_storage_url: DocumentStorageServiceUrl::new()?.parse_url()?,
         app_url: AppServiceUrl::new()?.parse_url()?,
         egress_url: AgentHarnessEgressUrl::new()?.parse_url()?,
+        telemetry_url: computer_reachable(TelemetryIntakeUrl::new()?.parse_url()?),
     })
+}
+
+/// `url`, unless it is this machine's loopback (`localhost`, a name under it,
+/// which RFC 6761 keeps on loopback, or a loopback or unspecified address,
+/// as the authentication service's `agent_addresses` judges), which a computer
+/// can't reach (a local stack whose collector isn't wired for computers): the
+/// computer then exports no spans.
+fn computer_reachable(url: macro_service_urls::Url) -> Option<macro_service_urls::Url> {
+    let loopback = url.host_str().is_some_and(|host| {
+        let host = host.to_ascii_lowercase();
+        host == "localhost"
+            || host.ends_with(".localhost")
+            || host
+                .trim_matches(['[', ']'])
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback() || ip.is_unspecified())
+    });
+    (!loopback).then_some(url)
+}
+
+/// Whether image upgrades run in `environment`: development only, until a
+/// production rollout is approved.
+fn image_upgrades_allowed(environment: macro_env::Environment) -> bool {
+    matches!(environment, macro_env::Environment::Develop)
 }
 
 /// The operator's periodic passes.
@@ -233,6 +387,8 @@ enum Pass {
     Reconcile,
     Overcommit,
     Moves,
+    ImageUpgrade,
+    RuntimeUpdate,
     ClaudeSignIns,
     ClaudeStatus,
 }
@@ -245,6 +401,7 @@ impl Pass {
             Self::Reconcile => RECONCILE_TICK,
             Self::Overcommit => OVERCOMMIT_TICK,
             Self::Moves => MOVE_TICK,
+            Self::ImageUpgrade | Self::RuntimeUpdate => IMAGE_UPGRADE_TICK,
             Self::ClaudeSignIns => CLAUDE_SIGN_IN_TICK,
             Self::ClaudeStatus => CLAUDE_STATUS_TICK,
         }
@@ -271,11 +428,12 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
     operator: Arc<Operator>,
     claude_sign_ins: ClaudeSignInWatch<Ingress>,
     effect_signals: PgEffectSignals,
+    environment: macro_env::Environment,
     tracker: &TaskTracker,
     shutdown: CancellationToken,
 ) {
     let claude_sign_ins = Arc::new(claude_sign_ins);
-    for pass in [
+    let mut passes = vec![
         Pass::Effects,
         Pass::Timers,
         Pass::Reconcile,
@@ -283,12 +441,18 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
         Pass::Moves,
         Pass::ClaudeSignIns,
         Pass::ClaudeStatus,
-    ] {
+    ];
+    if image_upgrades_allowed(environment) {
+        passes.push(Pass::ImageUpgrade);
+        passes.push(Pass::RuntimeUpdate);
+    }
+    for pass in passes {
         tracker.spawn(run_pass(
             pass,
             Arc::clone(&operator),
             Arc::clone(&claude_sign_ins),
             effect_signals.clone(),
+            environment,
             shutdown.clone(),
         ));
     }
@@ -299,6 +463,7 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
     operator: Arc<Operator>,
     claude_sign_ins: Arc<ClaudeSignInWatch<Ingress>>,
     effect_signals: PgEffectSignals,
+    environment: macro_env::Environment,
     shutdown: CancellationToken,
 ) {
     let mut interval = tokio::time::interval(pass.tick());
@@ -315,6 +480,8 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                 | Pass::Reconcile
                 | Pass::Overcommit
                 | Pass::Moves
+                | Pass::ImageUpgrade
+                | Pass::RuntimeUpdate
                 | Pass::ClaudeSignIns
                 | Pass::ClaudeStatus => std::future::pending().await,
             }
@@ -352,6 +519,18 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                     .map_err(anyhow::Error::from),
                 Pass::Moves => shutdown
                     .run_until_cancelled(operator.advance_moves())
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::ImageUpgrade => shutdown
+                    .run_until_cancelled(operator.advance_image_upgrade())
+                    .await
+                    .transpose()
+                    .map(|_| ())
+                    .map_err(anyhow::Error::from),
+                Pass::RuntimeUpdate => shutdown
+                    .run_until_cancelled(operator.advance_runtime_update(environment))
                     .await
                     .transpose()
                     .map(|_| ())
@@ -622,6 +801,7 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
         self: Arc<Self>,
         harness: HarnessId,
         connection: RuntimeConnectionId,
+        accepts: RuntimeAccepts,
     ) -> Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>> {
         Box::pin(async move {
             let mut guard = match PresenceGuard::lock(&self.presence_pool, harness).await {
@@ -631,7 +811,9 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
                     return ConnectionRecorded::AgentsUnchanged;
                 }
             };
-            let mut recorded = Arc::clone(&self.inner).connected(harness, connection).await;
+            let mut recorded = Arc::clone(&self.inner)
+                .connected(harness, connection, accepts)
+                .await;
             match guard.is_connected().await {
                 Ok(true) => {}
                 Ok(false) => return recorded,
@@ -642,7 +824,7 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
             }
             if let Some(operator) = &self.operator
                 && let Ok(MacrodConnected::AgentBound) = operator
-                    .macrod_connected(harness)
+                    .macrod_connected(harness, accepts.apply_agent)
                     .await
                     .inspect_err(|error| tracing::error!(%harness, error = ?error, "computer connect event failed"))
             {
@@ -694,8 +876,8 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
     }
     fn renew(
         self: Arc<Self>,
-        live: Vec<(HarnessId, RuntimeConnectionId)>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        live: Vec<HarnessConnection>,
+    ) -> Pin<Box<dyn Future<Output = Vec<HarnessConnection>> + Send>> {
         Arc::clone(&self.inner).renew(live)
     }
 }

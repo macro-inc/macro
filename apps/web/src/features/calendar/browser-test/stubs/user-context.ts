@@ -6,3 +6,6 @@ export function useUserId() {
 export function useEmail() {
   return () => 'viewer@example.com';
 }
+export function useIsAuthenticated() {
+  return () => true;
+}

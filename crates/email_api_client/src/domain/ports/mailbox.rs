@@ -3,6 +3,7 @@
 use std::future::Future;
 
 use chrono::{DateTime, Utc};
+use models_email::email::service::message::RecentMailFolder;
 use uuid::Uuid;
 
 use crate::domain::models::{
@@ -60,11 +61,12 @@ pub trait MailboxContentReader: Send + Sync + 'static {
     ) -> impl Future<
         Output = Result<Option<crate::domain::models::MailboxOrganization>, EmailApiError>,
     > + Send;
-    /// Enumerate the physical folder hierarchy with resolved semantic roles.
+    /// Enumerate the physical folder hierarchy with resolved semantic roles,
+    /// or report that the account has no mailbox the provider will serve.
     fn folders(
         &self,
         token: &AccessToken,
-    ) -> impl Future<Output = Result<Vec<MailFolder>, EmailApiError>> + Send;
+    ) -> impl Future<Output = Result<crate::domain::models::MailFolderCatalog, EmailApiError>> + Send;
 
     /// Fetch a current message snapshot. Missing means absent now, not permanently deleted.
     fn message(
@@ -75,13 +77,16 @@ pub trait MailboxContentReader: Send + Sync + 'static {
         folders: &[MailFolder],
     ) -> impl Future<Output = Result<Option<MailboxMessage>, EmailApiError>> + Send;
 
-    /// The newest inbox messages, newest first, without attachment metadata,
+    /// Up to `limit` messages from `folder`, newest first, dated no
+    /// earlier than `since` when it is given, without attachment metadata,
     /// for a quick look at a mailbox before it has synchronized.
     fn recent_inbox_messages(
         &self,
         token: &AccessToken,
         link_id: Uuid,
+        folder: RecentMailFolder,
         limit: u16,
+        since: Option<DateTime<Utc>>,
         folders: &[MailFolder],
     ) -> impl Future<Output = Result<Vec<MailboxMessage>, EmailApiError>> + Send;
 

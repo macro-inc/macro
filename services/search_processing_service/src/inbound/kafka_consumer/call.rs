@@ -6,7 +6,7 @@ use opensearch_client::OpensearchClient;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::{EventOutcome, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY, retry_processing};
+use super::{Attempted, Attempts, Handled};
 use crate::process::call::{process_call_record, process_remove_call_record};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,7 +100,8 @@ pub(super) async fn process_call_event(
     event: &CallMacroEvent,
     partition: i32,
     offset: i64,
-) -> EventOutcome {
+    attempts: &Attempts,
+) -> Attempted {
     let description = describe_call_event(&event.event().event);
     if description.action == CallIndexAction::Ignore {
         tracing::trace!(
@@ -110,52 +111,20 @@ pub(super) async fn process_call_event(
             offset,
             "ignoring call event without a search-index action"
         );
-        return EventOutcome::Ignored;
+        return Ok((Handled::Ignored, 0));
     }
 
-    let result = retry_processing(|attempt| async move {
-        tracing::trace!(
-            call_id = %description.call_id,
-            event_type = description.event_type,
-            partition,
-            offset,
-            attempt,
-            "processing call search-index event"
-        );
-        process_call_index_action(db, opensearch_client, description.action)
-            .await
-            .inspect_err(|error| {
-                if attempt < MAX_PROCESSING_ATTEMPTS {
-                    let retry_delay =
-                        PROCESSING_RETRY_BASE_DELAY * 2u32.pow(attempt.saturating_sub(1));
-                    tracing::warn!(
-                        error = ?error,
-                        call_id = %description.call_id,
-                        event_type = description.event_type,
-                        partition,
-                        offset,
-                        attempt,
-                        delay_secs = retry_delay.as_secs(),
-                        "call search-index processing failed, retrying"
-                    );
-                }
-            })
-    })
-    .await;
-
-    match result {
-        Ok(()) => EventOutcome::Indexed,
-        Err(error) => {
-            tracing::error!(
-                error = ?error,
+    attempts
+        .run(|attempt| async move {
+            tracing::trace!(
                 call_id = %description.call_id,
                 event_type = description.event_type,
                 partition,
                 offset,
-                attempts = MAX_PROCESSING_ATTEMPTS,
-                "dropping call event after processing retries were exhausted"
+                attempt,
+                "processing call search-index event"
             );
-            EventOutcome::Dropped
-        }
-    }
+            process_call_index_action(db, opensearch_client, description.action).await
+        })
+        .await
 }

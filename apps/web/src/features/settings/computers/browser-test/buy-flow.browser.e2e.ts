@@ -827,6 +827,143 @@ test('Buy is one dialog with no steps: it gets the computer, sets up its agent, 
   );
 });
 
+test('a runtime outside the rollout says so, and Retry visibly tries again', async ({
+  page,
+}) => {
+  const up: ComputerStatus = {
+    ...computer,
+    status: 'ready',
+    setup: undefined,
+    poweredOn: true,
+    agentCount: 1,
+    harnessId: 'harness-1',
+    defaultAgentId: 'bot-1',
+  };
+  let computers: ComputerStatus[] = [];
+  await page.route('**/auth/team/computers', (route) => {
+    if (route.request().method() === 'GET') return json(route, 200, computers);
+    computers = [up];
+    return json(route, 200, { computerId: 'computer-1', state: 'ready' });
+  });
+  await page.route('**/auth/team/computers/offers', (route) =>
+    json(route, 200, offers)
+  );
+  await page.route('**/auth/team/computers/*/setup-complete', (route) => {
+    computers = computers.map((current) => ({
+      ...current,
+      setupCompletedAt: '2026-01-02T00:00:00Z',
+    }));
+    return json(route, 200, computers[0]);
+  });
+
+  await page.goto('/');
+  // The harness answers 403 rollout_disabled until the account is let in.
+  await page.evaluate(() => {
+    window.computerFixture.claude.signOut = 'rollout_disabled';
+  });
+  await page.getByRole('button', { name: 'Get a computer' }).click();
+  await dialog(page)
+    .getByRole('button', { name: 'Buy · $40.00/month' })
+    .click();
+  await page.evaluate(
+    ([registered]) => {
+      window.computerFixture.setHarnesses([registered]);
+      window.computerFixture.setAgents([
+        { bot: { id: 'bot-1', name: "Maya's Agent" }, harness_id: 'harness-1' },
+      ]);
+    },
+    [harness] as const
+  );
+
+  const why = dialog(page).getByText(
+    "Computers aren't available for this account yet."
+  );
+  await expect(why).toBeVisible({ timeout: 10_000 });
+  await shoot(page, 'finish-rollout-disabled');
+  const retry = dialog(page).getByRole('button', { name: 'Retry' });
+  const callsBefore = await page.evaluate(
+    () => window.computerFixture.claude.signOutCalls
+  );
+  await retry.click();
+  // The attempt shows while it runs, then the same reason again.
+  await expect(
+    dialog(page).getByRole('button', { name: 'Retrying…' })
+  ).toBeVisible();
+  await expect(why).toBeVisible();
+  await expect(retry).toBeEnabled();
+  expect(
+    await page.evaluate(() => window.computerFixture.claude.signOutCalls)
+  ).toBe(callsBefore + 1);
+
+  // Let in: Retry finishes setup.
+  await page.evaluate(() => {
+    window.computerFixture.claude.signOut = 'ok';
+  });
+  await retry.click();
+  await expect(
+    dialog(page).getByRole('heading', { name: "Maya's Agent is ready" })
+  ).toBeVisible({ timeout: 10_000 });
+});
+
+test('a caller without rights to the computer is told so, with no Retry', async ({
+  page,
+}) => {
+  const up: ComputerStatus = {
+    ...computer,
+    status: 'ready',
+    setup: undefined,
+    poweredOn: true,
+    agentCount: 1,
+    harnessId: 'harness-1',
+    defaultAgentId: 'bot-1',
+  };
+  let computers: ComputerStatus[] = [];
+  await page.route('**/auth/team/computers', (route) => {
+    if (route.request().method() === 'GET') return json(route, 200, computers);
+    computers = [up];
+    return json(route, 200, { computerId: 'computer-1', state: 'ready' });
+  });
+  await page.route('**/auth/team/computers/offers', (route) =>
+    json(route, 200, offers)
+  );
+  await page.route('**/auth/team/computers/*/setup-complete', (route) => {
+    computers = computers.map((current) => ({
+      ...current,
+      setupCompletedAt: '2026-01-02T00:00:00Z',
+    }));
+    return json(route, 200, computers[0]);
+  });
+
+  await page.goto('/');
+  // The harness answers a bare 403: the buyer may not manage the computer.
+  await page.evaluate(() => {
+    window.computerFixture.claude.signOut = 'forbidden';
+  });
+  await page.getByRole('button', { name: 'Get a computer' }).click();
+  await dialog(page)
+    .getByRole('button', { name: 'Buy · $40.00/month' })
+    .click();
+  await page.evaluate(
+    ([registered]) => {
+      window.computerFixture.setHarnesses([registered]);
+      window.computerFixture.setAgents([
+        { bot: { id: 'bot-1', name: "Maya's Agent" }, harness_id: 'harness-1' },
+      ]);
+    },
+    [harness] as const
+  );
+
+  const why = dialog(page).getByText(
+    "You can't change this computer. Ask a team owner or admin."
+  );
+  await expect(why).toBeVisible({ timeout: 10_000 });
+  await shoot(page, 'finish-forbidden');
+  // Retrying can't give the caller the right.
+  await expect(dialog(page).getByRole('button', { name: 'Retry' })).toHaveCount(
+    0
+  );
+});
+
 test('a declined card keeps Buy open with Update card, and no room marks the size', async ({
   page,
 }) => {

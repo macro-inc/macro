@@ -11,6 +11,7 @@ mod email_privacy;
 use crate::domain::{
     auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
+    company_domains::{CompanyDomainEditor, CompanyDomainUpdate},
     company_metadata_resolver::{CompanyMetadataResolver, DomainResolution},
     generic_email_domains::{is_generic_email_domain, is_personal_email_domain},
     model::{
@@ -307,6 +308,35 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         email: &str,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
+    /// Add a further domain the organization uses to the company addressed by
+    /// `access`, so mail and new contacts from it are filed under this company
+    /// instead of a company of its own. Any team member who can see the
+    /// company may add one, as anyone may create a company with a domain. It
+    /// must be a bare company domain, not a personal or generic email
+    /// provider, and must not be tracked by another company of the team:
+    /// [`CrmError::CompanyDomainTaken`] names that company when the caller can
+    /// see it. The company's name and primary domain never change. A domain
+    /// added to a company whose email sync is off is kept out of sync with the
+    /// company's other domains. Ensures a directory entry as company creation
+    /// does. An identical retry is safe.
+    fn add_company_domain(
+        &self,
+        access: &CrmCompanyReceipt<EditAccessLevel>,
+        domain: &str,
+    ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send;
+
+    /// Remove one of the company's domains. Contacts, their addresses and mail
+    /// stay; later mail from the domain is filed as it was before the domain
+    /// was added. The primary domain stays while the company is named after
+    /// it. Removing a domain from a company whose email sync is off lets its
+    /// mail back in, so it requires an admin or owner
+    /// ([`CrmError::CompanyDomainAdminRequired`]). An identical retry is safe.
+    fn remove_company_domain(
+        &self,
+        access: &CrmCompanyReceipt<EditAccessLevel>,
+        domain: &str,
+    ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send;
+
     /// Link or switch a personal-email contact's company within its owning team.
     fn set_contact_company(
         &self,
@@ -403,6 +433,16 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         email: &str,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
+    /// The caller's team's company for `domain`, read like
+    /// [`CrmService::get_company_for_team`] without its contacts. The domain
+    /// is validated and normalized like a created company's. A member gets
+    /// `None` for a hidden company; admins and owners get it.
+    fn get_company_by_domain(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        domain: &str,
+    ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
+
     /// Fetch the company addressed by `access`, hydrated with all
     /// domains, the primary domain's directory metadata, and, when
     /// `include_contacts`, the company's full contact list. The receipt's role decides whether a
@@ -449,11 +489,14 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         patch: CrmTeamSettingsPatch,
     ) -> impl Future<Output = Result<CrmTeamSettings, CrmError>> + Send;
 
-    /// Manually creates a contact for the caller's team without a
-    /// company, with a display `name` and an optional `email` of any
-    /// domain. Validates like [`CrmService::create_contact`]. Any team
-    /// member may create one. See
-    /// [`CompaniesRepository::create_contact_for_team`].
+    /// Manually creates a contact for the caller's team with a display
+    /// `name` and an optional `email` of any domain, without naming a
+    /// company. An address at a company's own domain files the contact under
+    /// the team's company for that domain, as email sync does
+    /// ([`CompaniesRepository::create_contact_for_email_domain`]); a personal
+    /// or generic provider address, or none, leaves it without a company
+    /// ([`CompaniesRepository::create_contact_for_team`]). Validates like
+    /// [`CrmService::create_contact`]. Any team member may create one.
     fn create_team_contact(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
@@ -568,6 +611,16 @@ fn normalize_contact_email(raw: &str) -> Result<String, CrmError> {
     Ok(format!("{local}@{domain}"))
 }
 
+/// Admins and owners see archived companies and may lift a company's
+/// exclusion; members do neither.
+fn company_domain_editor(access: &CrmCompanyReceipt<EditAccessLevel>) -> CompanyDomainEditor {
+    if access.has_admin_role() {
+        CompanyDomainEditor::Admin
+    } else {
+        CompanyDomainEditor::Member
+    }
+}
+
 /// Validates and normalizes a user-supplied company domain: trims
 /// whitespace and trailing dots, then lowercases. Rejects anything that
 /// isn't a bare domain like "acme.com" (schemes, paths, emails, ports).
@@ -623,7 +676,7 @@ where
     R: CompanyMetadataResolver,
 {
     /// The underlying companies repository
-    companies_repository: CR,
+    pub(super) companies_repository: CR,
     /// Resolver consulted when `crm_domain_directory` has no entry for a
     /// given domain, and for pending entries in
     /// [`CrmServiceImpl::enrich_pending_domains`]. The resolver itself is
@@ -741,7 +794,7 @@ where
     /// Ensures `crm_domain_directory` has an entry for `domain`: resolves
     /// it when the domain has none, storing a pending entry instead when
     /// the resolver is unavailable.
-    async fn ensure_domain_directory_entry(&self, domain: &str) -> Result<(), CrmError> {
+    pub(super) async fn ensure_domain_directory_entry(&self, domain: &str) -> Result<(), CrmError> {
         if self
             .companies_repository
             .lookup_domain_metadata(domain)
@@ -1156,6 +1209,58 @@ where
             .await
     }
 
+    #[tracing::instrument(
+        name = "crm.add_company_domain",
+        skip_all,
+        fields(team_id = %access.team_id()),
+        err
+    )]
+    async fn add_company_domain(
+        &self,
+        access: &CrmCompanyReceipt<EditAccessLevel>,
+        domain: &str,
+    ) -> Result<CrmCompanyWithContacts, CrmError> {
+        let domain = normalize_company_domain(domain)?;
+        if is_generic_email_domain(&domain) {
+            return Err(CrmError::InvalidRequest(
+                "generic email provider domains cannot be added to crm companies".into(),
+            ));
+        }
+        let company_id = access.company_id()?;
+        self.ensure_domain_directory_entry(&domain).await?;
+
+        self.companies_repository
+            .update_company_domains(
+                &access.team_id(),
+                &company_id,
+                &CompanyDomainUpdate::Add(domain),
+                company_domain_editor(access),
+            )
+            .await
+    }
+
+    #[tracing::instrument(
+        name = "crm.remove_company_domain",
+        skip_all,
+        fields(team_id = %access.team_id()),
+        err
+    )]
+    async fn remove_company_domain(
+        &self,
+        access: &CrmCompanyReceipt<EditAccessLevel>,
+        domain: &str,
+    ) -> Result<CrmCompanyWithContacts, CrmError> {
+        let domain = normalize_company_domain(domain)?;
+        self.companies_repository
+            .update_company_domains(
+                &access.team_id(),
+                &access.company_id()?,
+                &CompanyDomainUpdate::Remove(domain),
+                company_domain_editor(access),
+            )
+            .await
+    }
+
     #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
     async fn unlink_contact_company(
         &self,
@@ -1350,6 +1455,19 @@ where
             })
     }
 
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn get_company_by_domain(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        domain: &str,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        access.check_access(&self.companies_repository).await?;
+        let domain = normalize_company_domain(domain)?;
+        self.companies_repository
+            .get_company_by_domain_for_team(&access.team_id(), &domain, access.include_hidden())
+            .await
+    }
+
     #[tracing::instrument(skip(self, access), err)]
     async fn get_company_for_team(
         &self,
@@ -1442,8 +1560,27 @@ where
             .filter(|email| !email.is_empty())
             .map(normalize_contact_email)
             .transpose()?;
+
+        // An address at a company's own domain files the contact under that
+        // company, as email sync would. Personal and generic providers key no
+        // company, so those contacts start without one.
+        let company_address = email.as_deref().filter(|email| {
+            email
+                .split_once('@')
+                .is_some_and(|(_, domain)| !is_generic_email_domain(domain))
+        });
+        let Some(company_address) = company_address else {
+            return self
+                .companies_repository
+                .create_contact_for_team(&access.team_id(), email.as_deref(), name, Utc::now())
+                .await;
+        };
+
+        if let Some((_, domain)) = company_address.split_once('@') {
+            self.ensure_domain_directory_entry(domain).await?;
+        }
         self.companies_repository
-            .create_contact_for_team(&access.team_id(), email.as_deref(), name, Utc::now())
+            .create_contact_for_email_domain(&access.team_id(), company_address, name, Utc::now())
             .await
     }
 
@@ -1721,6 +1858,22 @@ impl CrmService for NoOpCrmService {
         Err(CrmError::CrmDisabledForTeam)
     }
 
+    async fn add_company_domain(
+        &self,
+        _access: &CrmCompanyReceipt<EditAccessLevel>,
+        _domain: &str,
+    ) -> Result<CrmCompanyWithContacts, CrmError> {
+        Err(CrmError::CrmDisabledForTeam)
+    }
+
+    async fn remove_company_domain(
+        &self,
+        _access: &CrmCompanyReceipt<EditAccessLevel>,
+        _domain: &str,
+    ) -> Result<CrmCompanyWithContacts, CrmError> {
+        Err(CrmError::CrmDisabledForTeam)
+    }
+
     async fn unlink_contact_company(
         &self,
         _access: &CrmContactReceipt<EditAccessLevel>,
@@ -1783,6 +1936,14 @@ impl CrmService for NoOpCrmService {
         _limit: u16,
     ) -> Result<Vec<CrmContact>, CrmError> {
         Ok(Vec::new())
+    }
+
+    async fn get_company_by_domain(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        Ok(None)
     }
 
     async fn get_contact_by_email(

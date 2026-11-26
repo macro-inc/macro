@@ -1,7 +1,6 @@
 //! Production HTTP service wiring.
 
 use crate::api::context::{ApiContext, AuthorizationService};
-use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use crate::calendar_request_gate::RedisCalendarRequestGate;
 use crate::calendar_tokens::CalendarTokenProviderAdapter;
 use crate::outbound::email_api::{
@@ -44,11 +43,7 @@ pub(crate) struct ApiDependencies {
     pub config: crate::config::Config,
     pub db: sqlx::PgPool,
     pub sqs_client: sqs_client::SQS,
-    pub contacts_ingress: Arc<
-        contacts::domain::service::SqsContactsIngress<
-            contacts::outbound::ingress::SqsContactsQueue,
-        >,
-    >,
+    pub contacts_ingress: Arc<crate::composition::ContactsProducer>,
     pub s3_client: s3_client::S3,
     pub gmail_client: gmail_client::GmailClient,
     pub redis_client: crate::util::redis::RedisClient,
@@ -58,6 +53,11 @@ pub(crate) struct ApiDependencies {
     pub connection_gateway_client: connection_gateway_client::client::ConnectionGatewayClient,
     pub jwt_args: JwtValidationArgs,
     pub macro_event_broker: MacroEventBrokerService<KafkaEventPublisher, TaskTracker>,
+    /// Drained at shutdown with the broker's publishes: calendar refreshes
+    /// follow a committed write, so they go out on it too.
+    pub event_broker_tracker: TaskTracker,
+    /// Set from `enable-outlook-notified-message-reads` by the server.
+    pub notified_message_reads: email::domain::mailbox::watches::NotifiedMessageReads,
 }
 
 /// Wires the services for the production listener.
@@ -77,6 +77,8 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         connection_gateway_client,
         jwt_args,
         macro_event_broker,
+        event_broker_tracker,
+        notified_message_reads,
     } = deps;
     let gmail_api_repository = GmailApiClientRepository::new(gmail_client.clone());
 
@@ -105,7 +107,9 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
     );
     let email_service = EmailRouterState::new(
         EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
+                crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+            )),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             (*sqs_client).clone(),
             crm_service,
@@ -138,21 +142,26 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         .get_multiplexed_async_connection()
         .await
         .context("failed to get multiplexed redis connection for gmail token provider")?;
-    let email_api = GmailApi::new(
-        gmail_api_repository,
-        EmailServiceTokenSource::new(
-            db.clone(),
-            redis_conn.clone(),
-            auth_service_client.as_ref().clone(),
-            sqs_client.as_ref().clone(),
-        ),
-        RedisGmailRequestGate::new(
-            redis_client.inner.get_connection_manager().await.context(
-                "failed to get reconnecting redis connection for the gmail request gate",
-            )?,
-            RateBudget::Live,
-        ),
-    );
+    let gate_connection = redis_client
+        .inner
+        .get_connection_manager()
+        .await
+        .context("failed to get reconnecting redis connection for the gmail request gate")?;
+    let gmail_api = |budget: RateBudget| {
+        GmailApi::new(
+            gmail_api_repository.clone(),
+            EmailServiceTokenSource::new(
+                db.clone(),
+                redis_conn.clone(),
+                auth_service_client.as_ref().clone(),
+                sqs_client.as_ref().clone(),
+            ),
+            RedisGmailRequestGate::new(gate_connection.clone(), budget),
+        )
+    };
+    let email_api = gmail_api(RateBudget::Live);
+    // A window of a user's mail is bulk work: it reads in the backfill share.
+    let gmail_window = gmail_api(RateBudget::Backfill);
     let redis_client = Arc::new(redis_client);
     let gmail_token_state = GmailTokenState::new(GmailTokenProviderImpl::new(
         redis_conn.clone(),
@@ -185,7 +194,12 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             },
             CalendarTokenProviderAdapter::new(redis_conn.clone(), auth_service_client.clone()),
             macro_event_broker.clone(),
-            ConnectionGatewayCalendarRefresh::new(connection_gateway_client.clone(), db.clone()),
+            calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh::new(
+                connection_gateway_client.clone(),
+                db.clone(),
+                event_broker_tracker,
+            )
+            .with_sends(cfg!(feature = "connection_gateway")),
         )
         .with_outlook_writes_enabled(config.outlook_writes_enabled),
     );
@@ -358,9 +372,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             ),
         ),
         mailbox_notifications: Arc::new(
-            email::domain::mailbox::watches::MailboxWatchNotifications(
+            email::domain::mailbox::watches::MailboxWatchNotifications::new(
                 email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
-            ),
+            )
+            .with_message_reads(notified_message_reads),
         ),
         inbox_catalog,
         inbox_health: Arc::new(crate::composition::inbox_health(
@@ -376,6 +391,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             crate::outbound::recent_inbox::PgRecentInboxes(db.clone()),
             crate::outbound::recent_inbox::ProviderRecentInbox {
                 gmail: email_api.clone(),
+                gmail_window,
                 outlook: outlook_api.clone(),
             },
         )),

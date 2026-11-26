@@ -122,8 +122,10 @@ it.each(['channel', 'call'] as const)(
     });
     const key =
       type === 'channel'
-        ? channelKeys.listChannels('viewer').queryKey
+        ? channelKeys.directory('viewer').queryKey
         : callKeys.record('entity').queryKey;
+    // A rejected channel rename rereads every viewer's in-memory directory.
+    const invalidated = type === 'channel' ? channelKeys.directory._def : key;
     const original =
       type === 'channel'
         ? [{ id: 'entity', name: 'Before' }]
@@ -162,7 +164,7 @@ it.each(['channel', 'call'] as const)(
         error: 'Denied',
       });
     expect(cache.getQueryData(key)).toEqual(original);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: key });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: invalidated });
     expect(listeners.size).toBe(0);
   }
 );
@@ -277,3 +279,69 @@ it.each([true, false])(
     vi.restoreAllMocks();
   }
 );
+
+it('sends renames with one scope one at a time, in order, after their caller closes', async () => {
+  cache = new QueryClient({
+    defaultOptions: { mutations: { retry: false } },
+  });
+  cache.setQueryData(authKeys.userInfo.queryKey, {
+    id: 'viewer',
+    authenticated: true,
+  });
+  mocks.client = createClient({ url: 'http://test.invalid', exchanges: [] });
+  const settle: Array<() => void> = [];
+  mocks.renameDatabase.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        settle.push(() => resolve(ok(undefined)));
+      })
+  );
+  const mount = () => {
+    let mutation!: ReturnType<typeof createRenameDssEntityMutation>;
+    const unmount = render(
+      () => (
+        <QueryClientProvider client={cache}>
+          {(() => {
+            mutation = createRenameDssEntityMutation(undefined, 'title:db-1');
+            return null;
+          })()}
+        </QueryClientProvider>
+      ),
+      document.createElement('div')
+    );
+    return { mutation, unmount };
+  };
+  const renameTo = (
+    mutation: ReturnType<typeof createRenameDssEntityMutation>,
+    name: string,
+    newName: string
+  ) =>
+    mutation.mutateAsync({
+      entity: { id: 'db-1', type: 'database', name, grant: 'owner' },
+      newName,
+    });
+
+  const closed = mount();
+  const first = renameTo(closed.mutation, 'Before', 'Weekly');
+  closed.unmount();
+  // A rename its caller makes as it closes, then one from a new caller.
+  const second = renameTo(closed.mutation, 'Weekly', 'Weekly sync');
+  const reopened = mount();
+  dispose = reopened.unmount;
+  const third = renameTo(reopened.mutation, 'Weekly sync', 'Weekly agenda');
+
+  await vi.waitFor(() => expect(settle).toHaveLength(1));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(settle).toHaveLength(1);
+  settle[0]();
+  await vi.waitFor(() => expect(settle).toHaveLength(2));
+  settle[1]();
+  await vi.waitFor(() => expect(settle).toHaveLength(3));
+  settle[2]();
+  await Promise.all([first, second, third]);
+  expect(mocks.renameDatabase.mock.calls.map(([, , name]) => name)).toEqual([
+    'Weekly',
+    'Weekly sync',
+    'Weekly agenda',
+  ]);
+});

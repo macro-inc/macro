@@ -1,3 +1,3 @@
 name: observability
 runtime: nodejs
-description: Single-host Grafana pilot alongside Datadog
+description: GoAlert host and the observability ALB, certificate and buckets

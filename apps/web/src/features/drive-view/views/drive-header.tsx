@@ -53,7 +53,7 @@ export function DriveHeader() {
         <Show when={state.value().location.kind === 'tab'}>
           <HeaderActionGroup label="File filters" size="md">
             <Suspense>
-              <DriveFilterMenu grouped size="icon-md" />
+              <DriveFilterMenu grouped />
             </Suspense>
           </HeaderActionGroup>
         </Show>

@@ -6,12 +6,15 @@ import { calendarTeamKeys, calendarTeamMutationKeys } from './team-keys';
 /** A missed poll may retain data briefly, but a hung request cannot retain it. */
 export const TEAM_CALENDAR_MAX_DATA_AGE_MS = 60_000;
 
-function isTeamCalendarKey(key: QueryKey) {
+function isTeamOutOfOfficeKey(key: QueryKey) {
   return (
-    key[0] === calendarTeamKeys._def[0] ||
-    (key[0] === calendarKeys.teamOutOfOffice._def[0] &&
-      key[1] === calendarKeys.teamOutOfOffice._def[1])
+    key[0] === calendarKeys.teamOutOfOffice._def[0] &&
+    key[1] === calendarKeys.teamOutOfOffice._def[1]
   );
+}
+
+function isTeamCalendarKey(key: QueryKey) {
+  return key[0] === calendarTeamKeys._def[0] || isTeamOutOfOfficeKey(key);
 }
 
 let expiryInstalled = false;
@@ -107,14 +110,15 @@ export function clearTeamCalendarQueries() {
 /** Calendar selections are detached objects, including OOO agenda selections. */
 export function subscribeToTeamCalendarReset(onReset: () => void) {
   return queryClient.getQueryCache().subscribe((event) => {
-    if (
-      isTeamCalendarKey(event.query.queryKey) &&
-      event.type === 'updated' &&
-      ((event.action.type === 'setState' &&
-        event.query.state.data === undefined) ||
-        event.action.type === 'error' ||
-        event.query.state.fetchStatus === 'paused')
-    )
-      onReset();
+    if (!isTeamCalendarKey(event.query.queryKey) || event.type !== 'updated')
+      return;
+    const { data, fetchStatus } = event.query.state;
+    const cleared = event.action.type === 'setState' && data === undefined;
+    // Overlay failures retain selection only while the existing data lease is
+    // valid. Identity failures, pauses, and explicit resets still close it.
+    const failed =
+      event.action.type === 'error' &&
+      (!isTeamOutOfOfficeKey(event.query.queryKey) || data === undefined);
+    if (cleared || failed || fetchStatus === 'paused') onReset();
   });
 }

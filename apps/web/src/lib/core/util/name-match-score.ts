@@ -50,6 +50,18 @@ export function normalizeNameText(value: string): string {
   return normalizedText(value);
 }
 
+/**
+ * Lowercase without accents, and with one apostrophe, so `jose` finds José
+ * and a phone's `o’neil` finds O'Neil.
+ */
+export function foldName(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replaceAll('’', "'")
+    .toLowerCase();
+}
+
 const WORD_BREAK = /[^\p{Alphabetic}\p{Number}]+/u;
 
 const wordsIn = (text: string): readonly string[] =>

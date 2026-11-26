@@ -1,4 +1,5 @@
 use crate::metadata::{ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
 use notification::domain::models::{NotificationExtIos, apple::PushNotificationData};
 use serde_json::json;
@@ -127,4 +128,67 @@ fn queued_legacy_push_data_does_not_require_navigation_or_recipient() {
     .unwrap();
     assert!(payload.navigation.is_none());
     assert!(payload.recipient_id.is_none());
+}
+
+/// The alert iOS shows and Android copies: a channel names itself, a direct
+/// message only the sender.
+#[test]
+fn channel_alerts_name_the_channel_and_direct_messages_only_the_sender() {
+    let ada = MacroUserIdStr::parse_from_str("macro|ada@example.com").unwrap();
+    let entity = EntityType::Channel.with_entity_str("019a0000-0000-7000-8000-000000000001");
+    let message = |channel_type: &str| -> ChannelMessageSendMetadata {
+        serde_json::from_value(json!({
+            "sender": "macro|ada@example.com",
+            "messageId": "019a0000-0000-7000-8000-000000000002",
+            "messageContent": "Ship it",
+            "channelType": channel_type,
+            "channelName": "design"
+        }))
+        .unwrap()
+    };
+    let mention = |channel_type: &str| -> ChannelMentionMetadata {
+        serde_json::from_value(json!({
+            "messageId": "019a0000-0000-7000-8000-000000000002",
+            "messageContent": "Ship it",
+            "channelType": channel_type,
+            "channelName": "design"
+        }))
+        .unwrap()
+    };
+    let reply: ChannelReplyMetadata = serde_json::from_value(json!({
+        "userId": "macro|ada@example.com",
+        "threadId": "019a0000-0000-7000-8000-000000000003",
+        "messageId": "019a0000-0000-7000-8000-000000000002",
+        "messageContent": "Ship it",
+        "channelType": "public",
+        "channelName": "design"
+    }))
+    .unwrap();
+
+    for (apns, title) in [
+        (
+            message("public").as_apns(Some(ada.copied()), &entity, Uuid::nil()),
+            "ada <design>",
+        ),
+        (
+            message("directMessage").as_apns(Some(ada.copied()), &entity, Uuid::nil()),
+            "ada",
+        ),
+        (
+            mention("private").as_apns(Some(ada.copied()), &entity, Uuid::nil()),
+            "ada mentioned you in #design",
+        ),
+        (
+            mention("directMessage").as_apns(Some(ada.copied()), &entity, Uuid::nil()),
+            "ada mentioned you",
+        ),
+        (
+            reply.as_apns(Some(ada.copied()), &entity, Uuid::nil()),
+            "Reply from ada",
+        ),
+    ] {
+        let alert = &serde_json::to_value(apns.unwrap()).unwrap()["aps"]["alert"];
+        assert_eq!(alert["title"], title);
+        assert_eq!(alert["body"], "Ship it");
+    }
 }

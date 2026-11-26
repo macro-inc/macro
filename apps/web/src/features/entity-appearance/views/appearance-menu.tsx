@@ -5,7 +5,7 @@ import { lazyNamed } from '@core/util/lazyNamed';
 import PaintBrushIcon from '@icon/system/regular/paint-brush.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { createSignal, Index, Show, Suspense } from 'solid-js';
-import type { EntityData } from '../../entity/types/entity';
+import type { AppearanceEntity } from '../types';
 
 const AppearanceMenuContent = lazyNamed(
   () => import('../appearance-dialog'),
@@ -49,7 +49,7 @@ function AppearanceMenuSkeleton() {
 }
 
 export function DesktopAppearanceMenu(props: {
-  entity: EntityData;
+  entity: AppearanceEntity;
   userId: string;
   isCurrent: () => boolean;
 }) {

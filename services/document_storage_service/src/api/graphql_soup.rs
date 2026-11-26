@@ -181,7 +181,10 @@ fn insert_graphql_context_data(
         state.properties_service.clone(),
         state.entity_access_service.clone(),
         macro_user_id.clone(),
-    );
+    )
+    .with_managed_team_definitions(properties::ManagedTeamDefinitions::new(
+        crate::api::context::managed_team_property_definitions(),
+    ));
     let email_content_reader = complete_graph::EmailServiceEmailContentReader::new(
         state.soup_router_state.email_service(),
         state.entity_access_service.clone(),
@@ -202,6 +205,9 @@ fn insert_graphql_context_data(
         state.projects_state.service.clone(),
     )));
     data.insert(state.channel_service.clone());
+    data.insert(complete_graph::ChannelQueryContext::new(
+        state.channel_service.clone(),
+    ));
     data.insert(state.graphql_initiative_context.clone());
     data.insert(state.graphql_database_rows_context.clone());
     data.insert(state.graphql_scheduled_action_context.clone());
@@ -215,12 +221,19 @@ fn insert_graphql_context_data(
     data.insert(state.graphql_initiative_entity_loader.clone());
     data.insert(state.graphql_agent_session_entity_loader.clone());
     data.insert(state.graphql_primary_soup_item_loader.clone());
+    data.insert(state.graphql_primary_channel_soup.clone());
     data.insert(graphql_initiative::initiative_loader(
         state.graphql_initiative_context.clone(),
         macro_user_id.clone(),
     ));
     data.insert(graphql_crm::pipeline_entries_loader(
         state.graphql_crm_context.clone(),
+        macro_user_id.clone(),
+    ));
+    data.insert(state.graphql_time_tracking_context.clone());
+    data.insert(state.graphql_time_report_context.clone());
+    data.insert(graphql_time_tracking::time_entries_loader(
+        state.graphql_time_tracking_context.clone(),
         macro_user_id.clone(),
     ));
     data.insert(state.graphql_notification_reader.clone());

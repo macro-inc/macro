@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            a.id as \"id!: Uuid\",\n            a.user_id as \"user_id!: String\",\n            a.channel_id as \"channel_id!: Uuid\",\n            a.viewed_at as \"viewed_at?: DateTime<Utc>\",\n            a.interacted_at as \"interacted_at?: DateTime<Utc>\",\n            a.created_at as \"created_at!: DateTime<Utc>\",\n            a.updated_at as \"updated_at!: DateTime<Utc>\"\n        FROM unnest($2::uuid[]) AS listed(channel_id)\n        CROSS JOIN LATERAL (\n            SELECT\n                a.id, a.user_id, a.channel_id, a.viewed_at, a.interacted_at,\n                a.created_at, a.updated_at\n            FROM comms_activity a\n            WHERE a.user_id = $1\n              AND a.channel_id = listed.channel_id\n            OFFSET 0\n        ) a\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_id!: Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "viewed_at?: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 4,
+        "name": "interacted_at?: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at!: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at!: DateTime<Utc>",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "a556c2844483786cbb3f61eebb44dfe19e4ceaa7073f02922a9b2913df0941fe"
+}

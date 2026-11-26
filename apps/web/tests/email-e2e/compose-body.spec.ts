@@ -214,7 +214,11 @@ for (const provider of PROVIDERS) {
       did('AC-081');
 
       await page.keyboard.type('@ada');
-      await expect(page.getByText('People', { exact: true })).toBeVisible();
+      // People shows loading rows until the directory answers; Enter before
+      // the person is listed picks nobody.
+      await expect(
+        page.locator('.menu-surface').getByTitle(mailbox.inbox.email)
+      ).toBeVisible();
       await page.keyboard.press('Enter');
       did('AC-082');
       await expect(

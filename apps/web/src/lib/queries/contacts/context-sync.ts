@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { isStaleHydrationScopeError } from '@graphql-cache/protocol';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { onlineManager } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -40,12 +41,18 @@ export function createContactContextSync(options: {
   const [state, setState] = createSignal<ContactContextSyncState>('waiting');
   createEffect(
     on(
-      [options.account, options.host, options.generation],
-      ([account, host]) => {
+      [
+        options.account,
+        options.host,
+        options.generation,
+        cacheSessionGeneration.state,
+      ],
+      ([account, host, , session]) => {
         options.onUnsupported?.(false);
         setState('waiting');
         const cache = host?.people;
-        if (!account || !host || host.disabled || !cache) return;
+        if (!account || !host || host.disabled || !cache || session.paused)
+          return;
         let disposed = false;
         let terminal = false;
         let busy = false;

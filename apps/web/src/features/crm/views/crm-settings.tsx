@@ -1,6 +1,8 @@
 import type { ItemDragOverlayData } from '@app/components/app/ItemDragAndDrop';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretUpIcon from '@icon/system/regular/caret-up.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -21,6 +23,7 @@ import { For, type JSX, Match, Show, Suspense, Switch } from 'solid-js';
 import {
   SettingsCard,
   SettingsPage,
+  SettingsRow,
   SettingsSection,
 } from '../../settings/primitives';
 import { CrmStageIcon } from '../components/stage-icon';
@@ -499,18 +502,51 @@ function NoTeamState() {
 }
 
 function CrmContent(props: { onOpenThread?: () => void }) {
+  const { accessState, retryAccess, MemberAccess } = useCrmContext();
   const teamQuery = useCurrentTeamQuery();
 
   return (
     <Show when={teamQuery.data} fallback={<NoTeamState />}>
-      <SettingsPage
-        title="CRM"
-        description="Manage email sharing and shape your team’s deal pipeline."
-      >
-        <CrmEmailPrivacySettings onOpenThread={props.onOpenThread} />
-        <StagesSection />
-        <EmailSyncSection />
-      </SettingsPage>
+      <CrmEmailPrivacySettings
+        onOpenThread={props.onOpenThread}
+        renderOverview={(content) => (
+          <SettingsPage
+            title="CRM"
+            description={t('crm.policySettingsDescription')}
+          >
+            <Suspense>
+              <MemberAccess />
+            </Suspense>
+            {content}
+            <Show when={accessState() === 'error'}>
+              <SettingsSection>
+                <SettingsCard>
+                  <SettingsRow
+                    label={
+                      <span role="alert" class="text-failure">
+                        {t('crm.accessCheckFailed')}
+                      </span>
+                    }
+                  >
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => fireAndForget(retryAccess(), 'crm')}
+                    >
+                      {t('crm.tryAgain')}
+                    </Button>
+                  </SettingsRow>
+                </SettingsCard>
+              </SettingsSection>
+            </Show>
+            {/* Only a proven denial removes them; the server decides the rest. */}
+            <Show when={accessState() !== 'denied'}>
+              <StagesSection />
+              <EmailSyncSection />
+            </Show>
+          </SettingsPage>
+        )}
+      />
     </Show>
   );
 }

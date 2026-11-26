@@ -161,7 +161,8 @@ export class CrmEmailPrivacyNamespace {
   /**
    * Validate and normalize rules without sharing mail; warnings refer to the returned canonical list.
    * Contact/company targets resolve live; a hidden or deleted target may be inactive.
-   * Validation is not a grant and activation revalidates. Server limits and field errors are preserved.
+   * Validation is not a grant or capacity reservation. Activation repeats the same live-expansion
+   * resource check; a named limit error leaves sharing unchanged. Server limits and field errors are preserved.
    *
    * @readonly
    */
@@ -188,6 +189,8 @@ export class CrmEmailPrivacyNamespace {
    * confirmation; restricted credentials and rollout gates still apply.
    * Reuse the same key, token and rules only for an exact retry. On 409 inspect and
    * decide again; never refresh the token automatically or retry the old decision.
+   * A named resource-limit error refuses this replacement without changing sharing.
+   * Later live growth can exceed the same limits and fail Team email reads; withdrawal stays available.
    * A replayed result records the original commit, not current sharing.
    *
    * @destructive

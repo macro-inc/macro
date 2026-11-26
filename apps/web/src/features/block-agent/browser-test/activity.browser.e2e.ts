@@ -86,23 +86,34 @@ test('a long run of calls and thoughts is one live line, then one settled row', 
   expect(seen.said).toContain('Thinking');
   expect(seen.said).toContain('Searching documents hosting invoice');
   expect(seen.said).toContain('Read spreadsheet');
+  // A program with no operation to name says only how far it got.
+  expect(seen.said).toContain('Working on it');
+  // A program that failed without naming a step leaves the line where it was.
+  expect(seen.said).not.toContain('A step failed');
+  expect(seen.said.filter((text) => /failed|timed out/i.test(text))).toEqual(
+    []
+  );
   expect(seen.said.length).toBeGreaterThan(5);
 
-  // Settled: each run is one row, with the long run's failures counted.
+  // Settled: each run is one row that counts its steps, failed or not.
   await expect(session.locator('.agent-working-twirl')).toHaveCount(0);
   const runs = session.getByRole('button', { name: /^Used \d+ tools?/ });
   await expect(runs).toHaveCount(2);
   await expect(runs.nth(0)).toHaveText('Used 1 tool');
-  await expect(runs.nth(1)).toHaveText('Used 74 tools · 2 failed');
+  await expect(runs.nth(1)).toHaveText('Used 74 tools');
+  await expect(runs.nth(1).locator('.text-failure')).toHaveCount(0);
   await expect(session.getByText('nothing has been sent')).toBeVisible();
 
-  // Opening the long run lists every step in full, the timed out one too.
+  // Opening the long run lists every step in full. The failed and timed out
+  // ones keep their status in the data but look like any other row.
   await runs.nth(1).click();
   const calls = session.getByRole('region', { name: 'Tool calls' });
   await expect(calls).toBeVisible();
-  await expect(calls.getByText('Timed out')).toBeVisible();
   await expect(calls.getByLabel('Update draft', { exact: true })).toBeVisible();
-  await expect(calls.getByText('Failed', { exact: true })).toHaveCount(1);
+  await expect(calls.locator('[data-tool-status="failed"]')).not.toHaveCount(0);
+  await expect(calls).not.toContainText(/failed|timed out|cancelled/i);
+  await expect(calls.locator('.text-failure')).toHaveCount(0);
+  await expect(calls.locator('[data-tool-row].opacity-75')).toHaveCount(0);
   // Once it has opened, nothing is cut off behind a scroll.
   await expect
     .poll(() =>
@@ -110,28 +121,6 @@ test('a long run of calls and thoughts is one live line, then one settled row', 
     )
     .toBeLessThanOrEqual(1);
   expect((await calls.boundingBox())?.height).toBeGreaterThan(600);
-
-  // A row too narrow for its label shortens the count, never the failures.
-  await runs.nth(1).evaluate((row) => {
-    row.style.maxWidth = '140px';
-  });
-  const failures = runs.nth(1).getByText('· 2 failed', { exact: true });
-  const caret = runs.nth(1).locator('svg').last();
-  const [suffix, end] = await Promise.all([
-    failures.boundingBox(),
-    caret.boundingBox(),
-  ]);
-  // The row really is too narrow: the count is the part cut short.
-  await expect
-    .poll(() =>
-      runs
-        .nth(1)
-        .getByText('Used 74 tools', { exact: true })
-        .evaluate((count) => count.scrollWidth > count.clientWidth)
-    )
-    .toBe(true);
-  expect(suffix && end).toBeTruthy();
-  if (suffix && end) expect(suffix.x + suffix.width).toBeLessThanOrEqual(end.x);
 });
 
 test("the live line carries the session's status line when it has one", async ({

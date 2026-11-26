@@ -29,7 +29,6 @@ pub(crate) struct DeliverAgent {
     pub(crate) computer_id: hosted_runtimes::domain::ids::ComputerId,
     pub(crate) generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
     /// W3C context of the operator's hand-off, so the delivery joins its trace.
-    #[serde(default)]
     pub(crate) trace_context: std::collections::HashMap<String, String>,
 }
 
@@ -40,22 +39,15 @@ impl DeliverAgent {
         computer_id: hosted_runtimes::domain::ids::ComputerId,
         generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
     ) -> Self {
-        use tracing_opentelemetry::OpenTelemetrySpanExt as _;
-        let context = tracing::Span::current().context();
-        let mut trace_context = std::collections::HashMap::new();
-        opentelemetry::global::get_text_map_propagator(|propagator| {
-            propagator.inject_context(&context, &mut trace_context);
-        });
         Self {
             deliver_agent_harness: harness,
             computer_id,
             generation,
-            trace_context,
+            trace_context: agent_harness::outbound::forward::current_trace_context(),
         }
     }
 
     fn span(&self) -> tracing::Span {
-        use tracing_opentelemetry::OpenTelemetrySpanExt as _;
         let span = tracing::info_span!(
             "computer.agent.deliver",
             otel.kind = "consumer",
@@ -65,10 +57,7 @@ impl DeliverAgent {
             generation = i64::from(self.generation.get()),
             delivered = tracing::field::Empty,
         );
-        let parent = opentelemetry::global::get_text_map_propagator(|propagator| {
-            propagator.extract(&self.trace_context)
-        });
-        let _ = span.set_parent(parent);
+        agent_harness::outbound::forward::adopt_trace_context(&span, &self.trace_context);
         span
     }
 }
@@ -96,12 +85,13 @@ pub(crate) async fn publish_deliver_agent(
     Ok(())
 }
 
-/// Sends an agent environment down a harness's runtime connection; whether
-/// this replica held it.
+/// Sends an agent environment, with the setup trace the agent's start
+/// joins, down a harness's runtime connection; whether this replica held it.
 pub(crate) type SendAgent = Arc<
     dyn Fn(
             HarnessId,
             agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+            Option<String>,
         ) -> futures::future::BoxFuture<'static, bool>
         + Send
         + Sync,
@@ -113,23 +103,94 @@ pub(crate) type SendAgent = Arc<
 pub(crate) async fn deliver_agent_to_runtime(
     request: DeliverAgent,
     agents: Arc<dyn hosted_runtimes::domain::agent::AgentEnrollmentSource>,
-    connected: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>,
+    issued: Arc<IssuedAgents>,
+    connection_of: Arc<
+        dyn Fn(HarnessId) -> Option<agent_harness::domain::ports::RuntimeConnectionId>
+            + Send
+            + Sync,
+    >,
     send: SendAgent,
 ) {
-    if !connected(request.deliver_agent_harness) {
+    let Some(connection) = connection_of(request.deliver_agent_harness) else {
         return;
-    }
+    };
     let span = request.span();
     async move {
-        let enrollment = match agents.issue(request.computer_id, request.generation).await {
+        let Some(environment) = issued
+            .get_or_issue(
+                request.computer_id,
+                request.generation,
+                connection,
+                &*agents,
+            )
+            .await
+        else {
+            return;
+        };
+        let delivered = send(
+            request.deliver_agent_harness,
+            environment,
+            hosted_runtimes::domain::telemetry::traceparent(),
+        )
+        .await;
+        tracing::Span::current().record("delivered", delivered);
+    }
+    .instrument(span)
+    .await;
+}
+
+/// How long this replica re-sends the environment it issued for a computer's
+/// enrollment instead of issuing again: past the agent's start deadline.
+const ISSUED_AGENT_KEPT_FOR: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
+/// The agent environments this replica issued, so a repeated hand-off sends
+/// the same credentials rather than rotating the key the starting agent
+/// already holds. Kept only for [`ISSUED_AGENT_KEPT_FOR`]; values are wiped
+/// when dropped.
+#[derive(Default)]
+pub(crate) struct IssuedAgents(tokio::sync::Mutex<std::collections::HashMap<Enrollment, Issued>>);
+
+/// One creation of a computer's guest.
+type Enrollment = (
+    hosted_runtimes::domain::ids::ComputerId,
+    hosted_runtimes::domain::enrollment::EnrollmentGeneration,
+);
+
+/// When and on which dial an environment was issued, and the environment.
+type Issued = (
+    std::time::Instant,
+    agent_harness::domain::ports::RuntimeConnectionId,
+    agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+);
+
+impl IssuedAgents {
+    /// The environment kept for the enrollment on this dial, issued first if
+    /// none is. A redial issues again: another replica may have issued, and
+    /// so revoked the kept key, while macrod was away. The lock spans
+    /// `issue`, so hand-offs racing for one enrollment issue once.
+    async fn get_or_issue(
+        &self,
+        computer_id: hosted_runtimes::domain::ids::ComputerId,
+        generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
+        connection: agent_harness::domain::ports::RuntimeConnectionId,
+        agents: &dyn hosted_runtimes::domain::agent::AgentEnrollmentSource,
+    ) -> Option<agent_runtime_protocol::domain::schema::v0::AgentEnvironment> {
+        let mut issued = self.0.lock().await;
+        issued.retain(|_, (at, _, _)| at.elapsed() < ISSUED_AGENT_KEPT_FOR);
+        if let Some((_, kept_on, environment)) = issued.get(&(computer_id, generation))
+            && *kept_on == connection
+        {
+            return Some(environment.clone());
+        }
+        let enrollment = match agents.issue(computer_id, generation).await {
             Ok(Some(enrollment)) => enrollment,
             Ok(None) => {
                 tracing::warn!("the computer runs no agent; nothing to hand over");
-                return;
+                return None;
             }
             Err(error) => {
-                tracing::warn!(%error, "could not issue the agent's environment");
-                return;
+                tracing::warn!(?error, "could not issue the agent's environment");
+                return None;
             }
         };
         let environment = agent_runtime_protocol::domain::schema::v0::AgentEnvironment(
@@ -140,11 +201,12 @@ pub(crate) async fn deliver_agent_to_runtime(
                 .map(|(key, value)| (key.as_str().to_owned(), value.clone()))
                 .collect(),
         );
-        let delivered = send(request.deliver_agent_harness, environment).await;
-        tracing::Span::current().record("delivered", delivered);
+        issued.insert(
+            (computer_id, generation),
+            (std::time::Instant::now(), connection, environment.clone()),
+        );
+        Some(environment)
     }
-    .instrument(span)
-    .await;
 }
 
 // Untagged: an agent hand-off's required fields appear in no other event,

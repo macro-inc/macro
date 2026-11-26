@@ -1,4 +1,3 @@
-import { isMobile } from '@core/mobile/isMobile';
 import type { DatesSetArg } from '@fullcalendar/core';
 import { createEffect, createMemo, For, on, onCleanup, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
@@ -107,15 +106,21 @@ function timedSkeletonTargets(element: HTMLElement): SkeletonTarget[] {
 }
 
 function dayGridSkeletonTargets(element: HTMLElement): SkeletonTarget[] {
-  const isMonthView = element.querySelector('.fc-dayGridMonth-view') !== null;
+  const phoneMonth = element.matches('.phone-month-card');
+  const isMonthView =
+    phoneMonth || element.querySelector('.fc-dayGridMonth-view') !== null;
   const cells = element.querySelectorAll<HTMLElement>(
-    '.fc-daygrid-day[data-date]:not(.fc-day-disabled)'
+    phoneMonth
+      ? '.phone-month-day[data-date]:not(:disabled)'
+      : '.fc-daygrid-day[data-date]:not(.fc-day-disabled)'
   );
 
   return Array.from(cells, (cell): SkeletonTarget => {
     const variant = skeletonVariant(cell.dataset.date);
     const bounds = cell.getBoundingClientRect();
-    const header = cell.querySelector('.fc-daygrid-day-top');
+    const header = cell.querySelector(
+      phoneMonth ? '.phone-month-date' : '.fc-daygrid-day-top'
+    );
     const headerBounds = header?.getBoundingClientRect();
 
     let top = DAY_GRID_SKELETON.topInsetPx;
@@ -139,29 +144,34 @@ function dayGridSkeletonTargets(element: HTMLElement): SkeletonTarget[] {
       requestedCount = 1;
     }
 
-    let count = requestedCount;
-
-    if (bounds.height > 0) {
-      const availableHeight = bounds.height - top;
-      const availableRows = Math.floor(
-        availableHeight / DAY_GRID_SKELETON.rowHeightPx
-      );
-      const rowCapacity = Math.max(0, availableRows);
-
-      count = Math.min(requestedCount, rowCapacity);
-    }
+    // Short phone months still need one compact loading row beneath the date.
+    const availableHeight = Math.max(0, bounds.height - top);
+    const rowHeight = phoneMonth
+      ? Math.min(DAY_GRID_SKELETON.rowHeightPx, availableHeight)
+      : DAY_GRID_SKELETON.rowHeightPx;
+    const eventHeight = Math.min(DAY_GRID_SKELETON.eventHeightPx, rowHeight);
+    const rowCapacity =
+      rowHeight > 0 ? Math.floor(availableHeight / rowHeight) : 0;
+    const count =
+      bounds.height > 0
+        ? Math.min(requestedCount, rowCapacity)
+        : requestedCount;
 
     const placements = Array.from(
       { length: count },
       (_, index): SkeletonPlacement => {
-        const isTextRow = isMonthView && (index > 0 || variant !== 0);
-        const rowOffset = index * DAY_GRID_SKELETON.rowHeightPx;
+        const isTextRow =
+          isMonthView &&
+          (index > 0 ||
+            variant !== 0 ||
+            eventHeight < DAY_GRID_SKELETON.eventHeightPx);
+        const rowOffset = index * rowHeight;
         const titleWidth = skeletonTitleWidth(index, variant);
 
         return {
           kind: isTextRow ? 'text' : 'bar',
           top: top + rowOffset,
-          height: DAY_GRID_SKELETON.eventHeightPx,
+          height: eventHeight,
           titleWidth,
         };
       }
@@ -236,14 +246,17 @@ export function CalendarLoadingSkeleton(props: {
   disabled: boolean;
   onBlockingChange?: (blocking: boolean) => void;
 }) {
-  // A phone reveals events the moment they arrive. Holding the skeleton for a
-  // minimum time only adds to a load that was already slow enough to show it.
-  const minimumVisibleMs = isMobile() ? 0 : undefined;
-  const transition = createCalendarLoadingTransition((phase) => {
-    const blocksEventRendering = phase === 'waiting' || phase === 'visible';
+  // Navigation paints the destination immediately, even with cold data. Reuse
+  // the grid-shaped skeleton without waiting or holding back arriving events.
+  const transition = createCalendarLoadingTransition(
+    (phase) => {
+      const blocksEventRendering = phase === 'waiting' || phase === 'visible';
 
-    props.onBlockingChange?.(blocksEventRendering);
-  }, minimumVisibleMs);
+      props.onBlockingChange?.(blocksEventRendering);
+    },
+    0,
+    0
+  );
 
   const [targets, setTargets] = createStore<SkeletonTarget[]>([]);
 
@@ -316,7 +329,7 @@ export function CalendarLoadingSkeleton(props: {
         }
 
         const cells = element.querySelectorAll(
-          '.fc-daygrid-day[data-date]:not(.fc-day-disabled)'
+          '.fc-daygrid-day[data-date]:not(.fc-day-disabled), .phone-month-day[data-date]:not(:disabled)'
         );
 
         for (const cell of cells) {

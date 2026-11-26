@@ -129,45 +129,7 @@ impl<D: DocumentService> DraftAttachmentSource for DocumentAttachmentSource<D> {
             other => (other, other.as_ref().map(FileType::as_str)),
         };
 
-        let mut response = self
-            .http
-            .get(&presigned_url)
-            .timeout(DOWNLOAD_TIMEOUT)
-            .send()
-            .await
-            .map_err(|e| unavailable(&name, format!("its file could not be downloaded ({e})")))?;
-        if !response.status().is_success() {
-            return Err(unavailable(
-                &name,
-                format!(
-                    "its file could not be downloaded (HTTP {})",
-                    response.status()
-                ),
-            ));
-        }
-        let header_type = response
-            .headers()
-            .get(reqwest::header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .map(|v| v.split(';').next().unwrap_or(v).trim().to_ascii_lowercase())
-            .filter(|v| {
-                !v.is_empty() && v != "application/octet-stream" && v != "binary/octet-stream"
-            });
-
-        let mut bytes = Vec::new();
-        loop {
-            let chunk = response.chunk().await.map_err(|e| {
-                unavailable(&name, format!("its file could not be downloaded ({e})"))
-            })?;
-            let Some(chunk) = chunk else { break };
-            bytes.extend_from_slice(&chunk);
-            if bytes.len() > MAX_DRAFT_ATTACHMENTS_BYTES {
-                return Err(EmailErr::AttachmentsTooLarge {
-                    total_bytes: bytes.len(),
-                    limit_bytes: MAX_DRAFT_ATTACHMENTS_BYTES,
-                });
-            }
-        }
+        let (header_type, bytes) = download(&self.http, &presigned_url, &name).await?;
 
         let content_type =
             header_type.unwrap_or_else(|| ContentType::from(attached_type).mime_type().to_owned());
@@ -179,6 +141,59 @@ impl<D: DocumentService> DraftAttachmentSource for DocumentAttachmentSource<D> {
             is_inline: false,
         })
     }
+}
+
+/// Downloads an attachment's file and the type its response names, if any.
+/// The presigned URL's query holds the signer's credentials, and a failure's
+/// reason reaches the model and the user, so it never quotes the URL.
+async fn download(
+    http: &reqwest::Client,
+    presigned_url: &str,
+    name: &str,
+) -> Result<(Option<String>, Vec<u8>), EmailErr> {
+    let failed = |error: reqwest::Error| {
+        unavailable(
+            name,
+            format!("its file could not be downloaded ({})", error.without_url()),
+        )
+    };
+
+    let mut response = http
+        .get(presigned_url)
+        .timeout(DOWNLOAD_TIMEOUT)
+        .send()
+        .await
+        .map_err(failed)?;
+    if !response.status().is_success() {
+        return Err(unavailable(
+            name,
+            format!(
+                "its file could not be downloaded (HTTP {})",
+                response.status()
+            ),
+        ));
+    }
+    let header_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.split(';').next().unwrap_or(v).trim().to_ascii_lowercase())
+        .filter(|v| !v.is_empty() && v != "application/octet-stream" && v != "binary/octet-stream");
+
+    let mut bytes = Vec::new();
+    loop {
+        let chunk = response.chunk().await.map_err(failed)?;
+        let Some(chunk) = chunk else { break };
+        bytes.extend_from_slice(&chunk);
+        if bytes.len() > MAX_DRAFT_ATTACHMENTS_BYTES {
+            return Err(EmailErr::AttachmentsTooLarge {
+                total_bytes: bytes.len(),
+                limit_bytes: MAX_DRAFT_ATTACHMENTS_BYTES,
+            });
+        }
+    }
+
+    Ok((header_type, bytes))
 }
 
 /// The sender `SendEmail` finishes through on a host with the attachment
@@ -215,7 +230,31 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::attachment_file_name;
+    use super::{attachment_file_name, download};
+
+    #[tokio::test]
+    async fn a_failed_download_quotes_no_part_of_its_presigned_url() {
+        // Nothing listens on this port, so the download never gets an answer.
+        let error = download(
+            &reqwest::Client::new(),
+            "http://127.0.0.1:9/file?X-Amz-Credential=access-key-id&X-Amz-Security-Token=session-token-value&X-Amz-Signature=signature-value",
+            "Q3 report",
+        )
+        .await
+        .unwrap_err();
+
+        let shown = format!("{error} {error:?}");
+        assert!(shown.contains("could not be downloaded"), "{shown}");
+        for secret in [
+            "127.0.0.1:9/file",
+            "X-Amz",
+            "access-key-id",
+            "session-token-value",
+            "signature-value",
+        ] {
+            assert!(!shown.contains(secret), "{secret} in {shown}");
+        }
+    }
 
     #[test]
     fn appends_the_extension_when_the_name_lacks_it() {

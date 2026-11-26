@@ -25,6 +25,9 @@ pub enum AttachmentError {
     Invalid(&'static str),
     #[error("Attachment storage is temporarily unavailable")]
     Infrastructure,
+    /// Another transaction held the inbox's rows past the lock timeout.
+    #[error("inbox is busy; retry the operation")]
+    Contended,
     #[error("Reconnect the source inbox to download this attachment")]
     Reauthorization,
     #[error("The email provider is busy; try again shortly")]

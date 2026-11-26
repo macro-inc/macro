@@ -9,6 +9,11 @@ const PINCH_WINDOW_MS = 160;
 /** How long one finger rests before it is a long press, and how far it may drift. */
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_SLOP_PX = 10;
+/**
+ * A hand shifts as it settles on the glass. Where one finger pans, it does so
+ * only once it has moved further than this from where it landed.
+ */
+const PAN_SLOP_PX = 10;
 /** How long after a long press lifts the browser's click for it may still come. */
 const LIFT_CLICK_MS = 500;
 
@@ -72,7 +77,14 @@ function swallowLiftClick() {
  * does nothing.
  *
  * A pen or a mouse pressed on the surface keeps its gesture: fingers landing
- * meanwhile (a resting palm) are ignored, as they were before fingers navigated.
+ * meanwhile do not navigate. Beside a pen they are the hand holding it (a
+ * resting palm), so no tool hears of them either. A pen also takes the
+ * surface from fingers that got there first: whatever they started is void,
+ * and they do nothing more until they have lifted.
+ *
+ * Where the host says fingers pan (`fingerPans`), one finger moves the camera
+ * the way two do, once it has moved far enough not to be a hand settling, and
+ * the tool never sees it.
  *
  * One finger held still is a long press when the host has a use for it. It
  * voids the first finger's gesture the same way, and the finger then does
@@ -88,6 +100,7 @@ export function attachTouchNavigation(
     ignoreTarget?: (target: EventTarget | null) => boolean;
     navigation?: 'free' | 'centered-image';
     longPress?: () => ((point: Point) => void) | undefined;
+    fingerPans?: () => boolean;
   } = {}
 ) {
   // Fingers on the surface in the order they landed, in client coordinates.
@@ -95,6 +108,9 @@ export function attachTouchNavigation(
   let navigating = false;
   // The two fingers driving the camera, and where they were at the last step.
   let pair: { ids: readonly [number, number]; points: FingerPair } | undefined;
+  // The one finger that pans, where fingers pan: where it landed, and whether
+  // it has moved far enough from there to be panning.
+  let alone: { id: number; landed: Point; panning: boolean } | undefined;
   let pairEndedAt = Number.NEGATIVE_INFINITY;
   // Where the pair's midpoint has been lately and how far apart its fingers
   // were, to tell a pinch from a pan.
@@ -103,8 +119,12 @@ export function attachTouchNavigation(
   let voiding = false;
   // The system took a finger away mid-gesture, which is not a flick.
   let cancelled = false;
-  // Pens and mice pressed on the surface.
-  const otherPointers = new Set<number>();
+  // Pens and mice pressed on the surface, and which of the two each is.
+  const otherPointers = new Map<number, string>();
+  const penPressed = () => [...otherPointers.values()].includes('pen');
+  // Fingers the pen took the surface from or landed beside, which are the
+  // hand holding it: nothing hears of them until they lift.
+  const ignored = new Set<number>();
   let longPress:
     | { id: number; origin: Point; timer: ReturnType<typeof setTimeout> }
     | undefined;
@@ -240,6 +260,60 @@ export function attachTouchNavigation(
     return Math.abs(last.spread - first.spread) > travel;
   };
 
+  /** Nothing the fingers now down do counts until they have landed again. */
+  const forgetFingers = () => {
+    touches.clear();
+    navigating = false;
+    pair = undefined;
+    alone = undefined;
+  };
+
+  /**
+   * A pen has landed among fingers. What one finger had started with the tool
+   * is void, as it is when a second finger lands, and navigation stops where
+   * it is.
+   */
+  const yieldToPen = () => {
+    cancelLongPress();
+    dropFrame();
+    glide.reset();
+    if (!navigating) voidSingleFingerGesture();
+    for (const id of touches.keys()) ignored.add(id);
+    forgetFingers();
+  };
+
+  /**
+   * The first finger of a gesture. Where fingers pan it navigates on its own
+   * and the tool never hears of it. Otherwise it is the tool's, and a long
+   * press if it stays still and the host has a use for one.
+   */
+  const firstFingerLanded = (event: PointerEvent, point: Point) => {
+    if (options.fingerPans?.()) {
+      swallow(event);
+      navigating = true;
+      alone = { id: event.pointerId, landed: point, panning: false };
+      glide.reset();
+      return;
+    }
+
+    const onLongPress = options.longPress?.();
+    if (!onLongPress) return;
+    const pressed = () => {
+      longPress = undefined;
+      // From here the finger is spent: it neither finishes what it started
+      // nor begins anything else before it lifts.
+      navigating = true;
+      voidSingleFingerGesture();
+      liftClick = swallowLiftClick();
+      onLongPress(point);
+    };
+    longPress = {
+      id: event.pointerId,
+      origin: point,
+      timer: setTimeout(pressed, LONG_PRESS_MS),
+    };
+  };
+
   const pointerDown = (event: PointerEvent) => {
     // Any press catches a glide in flight.
     glide.cancel();
@@ -247,22 +321,27 @@ export function attachTouchNavigation(
     const target = event.target;
     if (!(target instanceof Element) || !element.contains(target)) return;
     if (event.pointerType !== 'touch') {
-      otherPointers.add(event.pointerId);
+      otherPointers.set(event.pointerId, event.pointerType);
+      if (event.pointerType === 'pen' && touches.size) yieldToPen();
       return;
     }
-    if (
-      otherPointers.size ||
-      insideEditableText(target) ||
-      options.ignoreTarget?.(target)
-    )
+    if (insideEditableText(target) || options.ignoreTarget?.(target)) return;
+    // A pen or mouse has the surface, and fingers do not navigate under it.
+    // Beside a pen the finger is the hand holding it, so no tool hears of it
+    // either: a host's tool might not ignore a second pointer as the
+    // surface's own gestures do.
+    if (otherPointers.size) {
+      if (!penPressed()) return;
+      ignored.add(event.pointerId);
+      swallow(event);
       return;
+    }
 
     // A primary touch is the first finger down, so anything still tracked is a
     // finger whose release never arrived.
     if (event.isPrimary) {
-      touches.clear();
-      navigating = false;
-      pair = undefined;
+      ignored.clear();
+      forgetFingers();
     }
     if (!touches.size) cancelled = false;
     if (!touches.size) selectionBefore = editor.getSession().selectedIds;
@@ -271,26 +350,12 @@ export function attachTouchNavigation(
     touches.set(event.pointerId, point);
     cancelLongPress();
     if (touches.size < 2) {
-      const onLongPress = options.longPress?.();
-      if (!onLongPress) return;
-      const pressed = () => {
-        longPress = undefined;
-        // From here the finger is spent: it neither finishes what it started
-        // nor begins anything else before it lifts.
-        navigating = true;
-        voidSingleFingerGesture();
-        liftClick = swallowLiftClick();
-        onLongPress(point);
-      };
-      longPress = {
-        id: event.pointerId,
-        origin: point,
-        timer: setTimeout(pressed, LONG_PRESS_MS),
-      };
+      firstFingerLanded(event, point);
       return;
     }
 
     swallow(event);
+    alone = undefined;
     if (!navigating) {
       navigating = true;
       voidSingleFingerGesture(event.pointerId);
@@ -305,8 +370,14 @@ export function attachTouchNavigation(
     // A pen or mouse whose release never arrived shows up with no button held.
     if (otherPointers.has(event.pointerId) && !event.buttons)
       otherPointers.delete(event.pointerId);
-    if (!touches.has(event.pointerId)) return;
-    touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (ignored.has(event.pointerId)) {
+      swallow(event);
+      return;
+    }
+    const from = touches.get(event.pointerId);
+    if (!from) return;
+    const to = { x: event.clientX, y: event.clientY };
+    touches.set(event.pointerId, to);
     if (longPress?.id === event.pointerId) {
       const drift = Math.hypot(
         event.clientX - longPress.origin.x,
@@ -318,11 +389,50 @@ export function attachTouchNavigation(
 
     swallow(event);
     if (pair?.ids.includes(event.pointerId)) navigateNextFrame(event.timeStamp);
+    if (alone?.id !== event.pointerId) return;
+
+    if (alone.panning) {
+      glide.track(to, event.timeStamp);
+      editor.panBy({ x: to.x - from.x, y: to.y - from.y });
+      return;
+    }
+    // Panning starts from here, not from where the finger landed, so the
+    // canvas does not jump by the distance it took to tell.
+    const moved = Math.hypot(to.x - alone.landed.x, to.y - alone.landed.y);
+    if (moved <= PAN_SLOP_PX) return;
+    alone = { ...alone, panning: true };
+    glide.track(to, event.timeStamp);
+  };
+
+  /**
+   * The last navigating finger is up. The canvas glides on if that was a
+   * flick. One finger flicks only if it was panning, and its lift is a sample
+   * too, so a finger that stops before lifting carries less speed into the
+   * glide, and none once it has rested longer than the glide looks back. A
+   * pair has to have lifted together, and not out of a pinch.
+   */
+  const lastFingerLifted = (event: PointerEvent) => {
+    navigating = false;
+    liftClick?.lifted();
+    const lone = alone?.id === event.pointerId ? alone : undefined;
+    alone = undefined;
+    if (lone?.panning && event.type === 'pointerup')
+      glide.track({ x: event.clientX, y: event.clientY }, event.timeStamp);
+    const pairFlicked =
+      event.timeStamp - pairEndedAt <= GLIDE_RELEASE_MS && !wasPinching();
+    const flicked = !cancelled && (lone ? lone.panning : pairFlicked);
+    if (flicked && options.navigation !== 'centered-image') glide.release();
+    else glide.reset();
   };
 
   const pointerEnd = (event: PointerEvent) => {
     otherPointers.delete(event.pointerId);
-    if (voiding || !touches.has(event.pointerId)) return;
+    if (voiding) return;
+    if (ignored.delete(event.pointerId)) {
+      swallow(event);
+      return;
+    }
+    if (!touches.has(event.pointerId)) return;
     if (longPress?.id === event.pointerId) cancelLongPress();
     if (!navigating) {
       touches.delete(event.pointerId);
@@ -348,16 +458,7 @@ export function attachTouchNavigation(
     } else {
       touches.delete(event.pointerId);
     }
-    if (touches.size) return;
-
-    navigating = false;
-    liftClick?.lifted();
-    const flicked =
-      !cancelled &&
-      event.timeStamp - pairEndedAt <= GLIDE_RELEASE_MS &&
-      !wasPinching();
-    if (flicked && options.navigation !== 'centered-image') glide.release();
-    else glide.reset();
+    if (!touches.size) lastFingerLifted(event);
   };
 
   // A surface that leaves one finger to the page lets the browser pan it

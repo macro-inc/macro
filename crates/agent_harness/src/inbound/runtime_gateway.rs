@@ -28,7 +28,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use agent_runtime_protocol::domain::schema::v0::{
-    ACCEPTS_AGENTS_CHANGED, RUNTIME_ACCEPTS_HEADER, ToRuntimeMessage, ToServerMessage,
+    ACCEPTS_AGENTS_CHANGED, ACCEPTS_APPLY_AGENT, RUNTIME_ACCEPTS_HEADER, ToRuntimeMessage,
+    ToServerMessage,
 };
 use agent_runtime_protocol::outbound::websocket::connect_socket;
 use axum::Router;
@@ -45,7 +46,8 @@ use macro_authorization::{
 use tokio::time::Instant;
 use tracing::Instrument as _;
 
-use crate::outbound::runtime_registry::{RuntimeAccepts, RuntimeRegistry};
+use crate::domain::ports::RuntimeAccepts;
+use crate::outbound::runtime_registry::RuntimeRegistry;
 
 #[cfg(test)]
 mod test;
@@ -180,8 +182,10 @@ fn runtime_accepts(headers: &HeaderMap) -> RuntimeAccepts {
         .map(str::trim);
     let mut accepts = RuntimeAccepts::default();
     for message in listed {
-        if message == ACCEPTS_AGENTS_CHANGED {
-            accepts.agents_changed = true;
+        match message {
+            ACCEPTS_AGENTS_CHANGED => accepts.agents_changed = true,
+            ACCEPTS_APPLY_AGENT => accepts.apply_agent = true,
+            _ => {}
         }
     }
     accepts

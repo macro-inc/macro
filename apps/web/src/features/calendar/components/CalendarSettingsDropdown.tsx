@@ -47,7 +47,7 @@ const TIME_FORMAT_OPTIONS: Array<{
   { value: '24-hour', label: '24-hour' },
 ];
 
-function createCalendarSettingsControls() {
+export function createCalendarSettingsControls() {
   const calendarView = useCalendarView();
   const accounts = useCalendarAccounts();
   const startAddInbox = useAddInboxFlow();
@@ -365,7 +365,7 @@ function MobileCalendarVisibility(props: {
               {/* The selection fills the whole header, caret included. */}
               <div
                 class="flex min-w-0 items-center rounded-[20px]"
-                classList={{ 'bg-ink/8': shown() }}
+                classList={{ 'bg-selected': shown() }}
               >
                 <MobileDrawer.Item
                   role="checkbox"

@@ -1,11 +1,7 @@
 export default {
-  inviteKind: 'What to invite',
-  people: 'People',
-  agent: 'Agent',
-  intro:
-    'An agent is a member of your team with its own Macro computer. You talk to it in a DM or a channel, like anyone else.',
-  name: 'Name',
-  namePlaceholder: 'Ada',
+  inviteTitle: 'Invite an agent',
+  nameIt: 'Name it',
+  defaultName: 'Macronaught',
   tooLong: {
     one: 'Use at most {{count}} character',
     other: 'Use at most {{count}} characters',
@@ -28,40 +24,27 @@ export default {
   voiceInvalid: "That voice isn't available. Choose another one.",
   voiceSaveFailed:
     "Couldn't save the voice. Your choice is still selected; try again.",
-  computer: 'Computer',
-  computerHint: 'Its own computer, always on. Its seat is included.',
-  loadingSizes: 'Loading computer sizes…',
+  giveItAComputer: 'Give it a computer',
+  chargeAdded:
+    "Its own computer, always on. {{price}} is added to your team subscription, prorated for the rest of this billing period. The agent's seat costs nothing extra.",
+  chargeIncluded:
+    "Its own computer, always on. Nothing is added to your team subscription, and the agent's seat costs nothing extra.",
   sizesFailed: "Couldn't load computer sizes.",
   tryAgain: 'Try again',
   nameRequired: 'Give your agent a name to continue.',
-  nameSuggestions: 'Try',
-  comesLater:
-    "Picture, voice and role come later. {{name}} asks you what to take on once it's online.",
-  comesLaterUnnamed:
-    "Picture, voice and role come later. It asks you what to take on once it's online.",
-  add: 'Add {{name}}',
-  addPriced: 'Add {{name}} · {{price}}',
-  adding: 'Adding {{name}}…',
-  yourAgent: 'Your agent',
-  addCaption:
-    '{{name}} gets its own account and computer, and is online in a couple of seconds. It says hi first; tell it what to do from there.',
-  addingCaption: 'Starting {{name}}…',
-  tryAgainPriced: 'Try again · {{price}}',
+  add: 'Add agent',
+  addPriced: 'Add agent · {{price}}',
   declined:
     'Your card was declined. Nothing was charged and nothing was set up. Update the card, or try again if your bank has cleared it.',
-  declinedCaption:
-    'Try again charges the card on file once more. The name and size are kept.',
   updateCard: 'Update card',
+  noSizeForSale: 'Every computer size is sold out right now. Try again later.',
   noRoom:
     'No room for a {{size}} computer right now. Nothing was charged. Pick another size.',
   notStarted:
-    "{{name}} didn't start on its computer. Retry starts it again on the same computer; you aren't charged again.",
+    "{{name}} didn't start on its computer. Use Add agent to start it on the same computer at no extra charge.",
   refunded:
-    "{{name}} didn't start again. The charge was undone and the computer released. Retry starts a fresh one; you aren't charged twice.",
-  retryStart: 'Retry',
-  retryCaption: 'Retry keeps the name and size.',
+    "{{name}} didn't start again. The charge was undone and the computer released. Use Add agent to start a fresh one. You aren't charged twice.",
   inviteInProgress: 'This agent is still being added. Wait a moment.',
-  noSizeForSale: 'No computer size is for sale right now.',
   invalid: 'Check the name, job description, and personality.',
   notEnabled: "Agent teammates aren't available for this team yet.",
   computerUnavailable: "Couldn't buy a computer for this agent.",
@@ -72,6 +55,7 @@ export default {
   statusStarting: 'Starting',
   statusRunning: 'Running',
   statusPaused: 'Paused',
+  statusUnhealthy: 'Not responding',
   statusFailed: 'Needs attention',
   statusReleased: 'Released',
   statusSetupFailed: 'Setup failed',

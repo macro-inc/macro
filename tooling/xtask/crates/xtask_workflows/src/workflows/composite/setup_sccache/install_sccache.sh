@@ -1,0 +1,71 @@
+set -euo pipefail
+
+install_dir="$HOME/.local/bin"
+mkdir -p "$install_dir"
+
+sccache_bin="$install_dir/sccache"
+echo "$install_dir" >> "$GITHUB_PATH"
+
+existing_sccache="$(command -v sccache || true)"
+if [[ -n "$existing_sccache" ]] && "$existing_sccache" --version >/dev/null 2>&1; then
+  installed_version="$($existing_sccache --version | awk '{print "v" $2}')"
+  if [[ "$installed_version" == "$SCCACHE_VERSION" ]]; then
+    if [[ "$existing_sccache" != "$sccache_bin" ]]; then
+      ln -sf "$existing_sccache" "$sccache_bin"
+    fi
+    echo "sccache already available: $($sccache_bin --version)"
+    exit 0
+  fi
+fi
+
+if [[ -x "$sccache_bin" ]] && "$sccache_bin" --version >/dev/null 2>&1; then
+  installed_version="$($sccache_bin --version | awk '{print "v" $2}')"
+  if [[ "$installed_version" == "$SCCACHE_VERSION" ]]; then
+    echo "sccache already installed: $($sccache_bin --version)"
+    exit 0
+  fi
+
+  echo "Replacing $($sccache_bin --version) with sccache ${SCCACHE_VERSION}"
+  rm -f "$sccache_bin"
+fi
+
+os="$(uname -s)"
+arch="$(uname -m)"
+case "${os}-${arch}" in
+  Linux-x86_64)
+    archive="sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+    ;;
+  Linux-aarch64|Linux-arm64)
+    archive="sccache-${SCCACHE_VERSION}-aarch64-unknown-linux-musl.tar.gz"
+    ;;
+  Darwin-arm64)
+    archive="sccache-${SCCACHE_VERSION}-aarch64-apple-darwin.tar.gz"
+    ;;
+  Darwin-x86_64)
+    archive="sccache-${SCCACHE_VERSION}-x86_64-apple-darwin.tar.gz"
+    ;;
+  *)
+    echo "Unsupported platform for sccache: ${os}-${arch}" >&2
+    exit 1
+    ;;
+esac
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+
+basename="${archive%.tar.gz}"
+release_url="https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}"
+curl -fsSL "$release_url/$archive" -o "$tmp_dir/$archive"
+curl -fsSL "$release_url/$archive.sha256" -o "$tmp_dir/$archive.sha256"
+expected_sha256="$(tr -d '[:space:]' < "$tmp_dir/$archive.sha256")"
+if [[ ! "$expected_sha256" =~ ^[0-9a-fA-F]{64}$ ]]; then
+  echo "Invalid checksum file for $archive" >&2
+  exit 1
+fi
+(cd "$tmp_dir" && printf '%s  %s\n' "$expected_sha256" "$archive" | sha256sum --check -)
+tar -xzf "$tmp_dir/$archive" -C "$tmp_dir"
+rm -f "$sccache_bin"
+mv "$tmp_dir/$basename/sccache" "$sccache_bin"
+chmod +x "$sccache_bin"
+
+echo "Installed sccache: $($sccache_bin --version)"

@@ -9,10 +9,14 @@ use agent_session::domain::{
 use ai_toolset::RequestContext;
 use async_trait::async_trait;
 use import::domain::models::{NotionImportReport, NotionWriteChoices, RunStatus};
+use import::domain::ports::UnreviewableRun;
 use import::domain::service::WorkspaceImporter;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Serialize, de::DeserializeOwned};
 use std::sync::Arc;
+
+#[cfg(test)]
+mod test;
 
 /// The source of an import review's one draft, fixed at presentation.
 fn import_source(
@@ -26,6 +30,85 @@ fn import_source(
         _ => Err(CodeModeError::Invalid(
             "This is not an import review.".into(),
         )),
+    }
+}
+
+/// What the agent hears when an import plan could not be tied to its review.
+/// A run that cannot take a review is refused with its reason, so the agent
+/// tells the user instead of presenting an empty plan.
+fn attach_error(
+    review: uuid::Uuid,
+    source: import::domain::models::ImportSource,
+    error: import::domain::ports::ImportError,
+) -> CodeModeError {
+    match error {
+        import::domain::ports::ImportError::RunNotReviewable(refusal) => {
+            tracing::info!(refusal = ?refusal, %review, "saved import review refused");
+            CodeModeError::Unpresentable(format!(
+                "Review {review} was not presented: {}. Tell the user why instead of presenting it again.",
+                refusal.describe(source)
+            ))
+        }
+        error => {
+            tracing::warn!(error = ?error, %review, "could not tie the import plan to its review");
+            CodeModeError::Invalid(format!(
+                "Review {review} was saved, but its import plan could not be attached. Read this review to retry."
+            ))
+        }
+    }
+}
+
+/// The agent hears why an import review cannot be shown, and tells the user.
+/// Nothing was saved, so the message names no review.
+fn refused(
+    source: import::domain::models::ImportSource,
+    refusal: &UnreviewableRun,
+) -> CodeModeError {
+    tracing::info!(refusal = ?refusal, "import review refused before it was saved");
+    CodeModeError::Invalid(format!(
+        "The import review was not created: {}. Tell the user why instead of presenting it again.",
+        refusal.describe(source)
+    ))
+}
+
+/// What a reviewed import's failed start means for the review: a refusal
+/// or a failure that left the plan as it was is not approvable (the item
+/// goes back to pending); anything later may have started the write.
+fn start_error(
+    source: import::domain::models::ImportSource,
+    error: import::domain::ports::ImportError,
+) -> CodeModeError {
+    match error {
+        import::domain::ports::ImportError::RunNotReviewable(refusal) => {
+            CodeModeError::NotApprovable(format!(
+                "The import was not started: {}.",
+                refusal.describe(source)
+            ))
+        }
+        // Failed before anything about the plan changed: approving again is
+        // safe. Said from the failure's kind; the detail stays in the trace.
+        import::domain::ports::ImportError::NotStarted(error) => {
+            tracing::warn!(error = ?error, "the reviewed import did not start");
+            let reason = import::domain::models::explain_failure(
+                Some(import::domain::service::failure_kind(&error)),
+                source,
+            );
+            CodeModeError::NotApprovable(format!(
+                "The import did not start: {reason}. Approve it again once that is fixed."
+            ))
+        }
+        // The write was held, so it carries on by itself (or is given up on
+        // and reported); approving again would be refused.
+        error => {
+            tracing::warn!(error = ?error, "the reviewed import may not have started");
+            let reason = import::domain::models::explain_failure(
+                Some(import::domain::service::failure_kind(&error)),
+                source,
+            );
+            CodeModeError::Invalid(format!(
+                "The import may have started ({reason}). It carries on by itself or reports why it stopped; check its progress instead of approving it again."
+            ))
+        }
     }
 }
 
@@ -76,6 +159,38 @@ where
             .await?;
         Ok(report.review_id == Some(record.id.0) && report.status == Some(RunStatus::Ready))
     }
+    async fn released(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        record: &ReviewRecord,
+    ) -> Result<(), CodeModeError> {
+        if record.kind() != ReviewKind::Import {
+            return Ok(());
+        }
+        self.import_service()?
+            .release_workspace_review(owner, import_source(record)?, record.id.0)
+            .await
+            .map_err(|error| CodeModeError::Storage(rootcause::report!(error).into()))
+    }
+    async fn presentable(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        record: &ReviewRecord,
+    ) -> Result<(), CodeModeError> {
+        if record.kind() != ReviewKind::Import {
+            return Ok(());
+        }
+        let source = import_source(record)?;
+        let report = self.import_report(owner, source).await?;
+        let refusal = match report.status {
+            None => Some(UnreviewableRun::Missing),
+            Some(status) => UnreviewableRun::of(status, report.error_kind),
+        };
+        match refusal {
+            Some(refusal) => Err(refused(source, &refusal)),
+            None => Ok(()),
+        }
+    }
     async fn send_email(
         &self,
         account_holder: &MacroUserIdStr<'static>,
@@ -104,6 +219,10 @@ where
             ));
         }
         self.import_service()?
+            .approve_workspace_dependencies(account_holder, source, record.id.0, &draft.excluded)
+            .await
+            .map_err(|error| CodeModeError::Invalid(error.to_string()))?;
+        self.import_service()?
             .start_workspace_write(
                 account_holder,
                 source,
@@ -115,26 +234,42 @@ where
                 },
             )
             .await
-            .map_err(|error| CodeModeError::Invalid(error.to_string()))
+            .map_err(|error| start_error(source, error))
     }
+    async fn normalize(&self, record: &mut ReviewRecord) -> Result<bool, CodeModeError> {
+        let ReviewItems::Import(items) = &mut record.items else {
+            return Ok(false);
+        };
+        let [item] = &mut **items;
+        let dependencies = self
+            .import_service()?
+            .review_workspace_dependencies(
+                &record.acting_user,
+                item.draft.source.into(),
+                record.id.0,
+                &item.draft.excluded,
+                false,
+            )
+            .await
+            .map_err(|error| CodeModeError::Invalid(error.to_string()))?;
+        let changed = item.draft.excluded != dependencies.excluded || dependencies.needs_receipt;
+        item.draft.excluded = dependencies.excluded;
+        Ok(changed)
+    }
+
     async fn present(
         &self,
         owner: &MacroUserIdStr<'static>,
         record: &ReviewRecord,
     ) -> Result<(), CodeModeError> {
         if record.kind() == ReviewKind::Import {
+            let source = import_source(record)?;
             // The plan is tied to the review before the card appears, so the
             // card never shows a plan it cannot approve.
             self.import_service()?
-                .attach_workspace_review(owner, import_source(record)?, record.id.0, record.session_id)
+                .attach_workspace_review(owner, source, record.id.0, record.session_id)
                 .await
-                .map_err(|error| {
-                    tracing::warn!(error = ?error, review = %record.id.0, "could not tie the import plan to its review");
-                    CodeModeError::Invalid(format!(
-                        "Review {} was saved, but its import plan could not be attached. Read this review to retry.",
-                        record.id.0
-                    ))
-                })?;
+                .map_err(|error| attach_error(record.id.0, source, error))?;
         }
         self.harness.present_tool(
             record.session_id,
@@ -148,6 +283,19 @@ where
         ).await.map_err(|_| CodeModeError::Invalid(format!("Review {} was saved, but presentation is pending. Read this review to retry presentation without creating another draft.", record.id.0)))
     }
     async fn announce_update(&self, record: &ReviewRecord) -> Result<(), CodeModeError> {
+        if let ReviewItems::Import(items) = &record.items {
+            let [item] = &**items;
+            self.import_service()?
+                .review_workspace_dependencies(
+                    &record.acting_user,
+                    item.draft.source.into(),
+                    record.id.0,
+                    &item.draft.excluded,
+                    true,
+                )
+                .await
+                .map_err(|error| CodeModeError::Invalid(error.to_string()))?;
+        }
         let update = ReviewUpdatedNotification {
             review_id: record.id.0,
             revision: record.revision,

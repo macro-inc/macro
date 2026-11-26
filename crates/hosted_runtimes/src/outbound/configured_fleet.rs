@@ -2,6 +2,9 @@
 //! Docker host its control plane's environment configures. There is no
 //! fallback between them.
 
+mod runtime_update;
+pub use runtime_update::RuntimeUpdateTransportError;
+
 use crate::domain::enrollment::EnrollmentGeneration;
 use crate::domain::ids::ComputerId;
 use crate::domain::image::GuestImage;

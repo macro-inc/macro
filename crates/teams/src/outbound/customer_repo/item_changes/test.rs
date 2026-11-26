@@ -411,3 +411,87 @@ async fn a_change_whose_sender_died_is_finished_under_its_own_key(pool: sqlx::Pg
         .collect();
     assert_eq!(keys, vec!["computer-remove:2:0", "computer-add:next"]);
 }
+
+/// Stripe answers `idempotency_error` when a key it already saw comes with
+/// different parameters (another environment on the same Stripe account
+/// used it). Nothing was applied under our request, so the receipt is given
+/// up for good, and the next change on the subscription goes ahead instead
+/// of waiting on it as one in flight.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_key_stripe_refuses_as_reused_is_given_up_and_blocks_nothing(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let sub = subscription();
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    Mock::given(method("POST"))
+        .and(path("/v1/subscriptions/sub_team"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({"error": {
+            "type": "idempotency_error",
+            "message": "Keys for idempotent requests can only be used with the same parameters they were first used with."
+        }})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let repo = repo(&server, pool.clone());
+
+    let refused = repo
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(1)],
+            ItemProration::InvoiceNow,
+            "computer-remove:reused:0",
+        )
+        .await;
+
+    assert!(matches!(refused, Err(CustomerError::ItemChangeAbandoned)));
+    let outcome = sqlx::query_scalar!(r#"SELECT outcome::text AS "outcome!" FROM subscription_item_change WHERE idempotency_key = 'computer-remove:reused:0'"#).fetch_one(&pool).await.unwrap();
+    assert_eq!(outcome, "abandoned");
+
+    // Within the in-flight window, another change is not refused.
+    server.reset().await;
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
+    repo.change_item_quantities(
+        &sub.id,
+        vec![computer(1)],
+        ItemProration::InvoiceNow,
+        "computer-add:after",
+    )
+    .await
+    .unwrap();
+}
+
+/// A release's item removal that Stripe confirms is settled the moment it
+/// answers, so a purchase right after on the same subscription goes ahead
+/// at once instead of waiting on it as a change in flight.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_change_stripe_confirms_is_settled_at_once_and_blocks_nothing(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let sub = subscription();
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
+    let repo = repo(&server, pool.clone());
+
+    repo.change_item_quantities(
+        &sub.id,
+        vec![computer(1)],
+        ItemProration::NoProration,
+        "computer-remove:released:0",
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        repo.item_change_status("computer-remove:released:0")
+            .await
+            .unwrap(),
+        Some(ItemChangeStatus::Applied)
+    );
+
+    repo.change_item_quantities(
+        &sub.id,
+        vec![computer(2)],
+        ItemProration::InvoiceNow,
+        "computer-add:bought-next",
+    )
+    .await
+    .unwrap();
+}

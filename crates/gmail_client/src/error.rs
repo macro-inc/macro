@@ -1,5 +1,6 @@
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
+use serde_json::error::Category;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::time::Duration;
@@ -20,8 +21,9 @@ pub enum GmailApiHttpError {
     },
     /// The request could not be sent or the response could not be received.
     Transport(reqwest::Error),
-    /// A successful HTTP response could not be decoded.
-    Decode(reqwest::Error),
+    /// A successful HTTP response could not be decoded. Names the JSON path
+    /// and the kind of problem, never the response's values.
+    Decode(String),
     /// The response was syntactically valid but omitted required data.
     InvalidResponse(String),
 }
@@ -31,12 +33,6 @@ impl GmailApiHttpError {
     /// (e.g. People-API `syncToken`s) cannot leak into logs via `Display`.
     pub(crate) fn transport(error: reqwest::Error) -> Self {
         Self::Transport(error.without_url())
-    }
-
-    /// Wraps a decode failure, stripping the request URL so query parameters
-    /// cannot leak into logs via `Display`.
-    pub(crate) fn decode(error: reqwest::Error) -> Self {
-        Self::Decode(error.without_url())
     }
 
     /// Returns the HTTP status when the endpoint returned an unsuccessful response.
@@ -71,7 +67,9 @@ impl Display for GmailApiHttpError {
                 write!(formatter, "Gmail API returned {status}: {body}")
             }
             Self::Transport(error) => write!(formatter, "Gmail API transport error: {error}"),
-            Self::Decode(error) => write!(formatter, "Gmail API response decode error: {error}"),
+            Self::Decode(problem) => {
+                write!(formatter, "Gmail API response decode error: {problem}")
+            }
             Self::InvalidResponse(message) => {
                 write!(
                     formatter,
@@ -85,8 +83,8 @@ impl Display for GmailApiHttpError {
 impl Error for GmailApiHttpError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Transport(error) | Self::Decode(error) => Some(error),
-            Self::Http { .. } | Self::InvalidResponse(_) => None,
+            Self::Transport(error) => Some(error),
+            Self::Http { .. } | Self::Decode(_) | Self::InvalidResponse(_) => None,
         }
     }
 }
@@ -151,16 +149,54 @@ fn parse_retry_after(value: &str) -> Option<Duration> {
     )
 }
 
+/// Decodes a successful JSON response. A failure names the JSON path it
+/// happened at and, for a missing or duplicate field, the field; serde's own
+/// message is dropped because it quotes the offending value, which can be an
+/// address or mail content. The path is built from the response's own keys,
+/// so a wire type that is a map keyed by such data needs its own decoder.
 pub(crate) async fn decode_json_response<T>(
     response: reqwest::Response,
 ) -> Result<T, GmailApiHttpError>
 where
     T: DeserializeOwned,
 {
-    response
-        .json::<T>()
+    let body = response
+        .bytes()
         .await
-        .map_err(GmailApiHttpError::decode)
+        .map_err(GmailApiHttpError::transport)?;
+    decode_json(&body)
+}
+
+fn decode_json<T: DeserializeOwned>(body: &[u8]) -> Result<T, GmailApiHttpError> {
+    let mut deserializer = serde_json::Deserializer::from_slice(body);
+    let value = serde_path_to_error::deserialize(&mut deserializer).map_err(|error| {
+        let problem = match error.inner().classify() {
+            Category::Data => data_problem(&error.inner().to_string()),
+            Category::Eof => "truncated JSON".to_owned(),
+            Category::Syntax | Category::Io => "malformed JSON".to_owned(),
+        };
+        GmailApiHttpError::Decode(format!("{problem} at {}", error.path()))
+    })?;
+
+    deserializer
+        .end()
+        .map_err(|_| GmailApiHttpError::Decode("trailing data after JSON".to_owned()))?;
+    Ok(value)
+}
+
+/// Field names come from the wire types, so they are safe to report; any
+/// other data error is summarized.
+fn data_problem(message: &str) -> String {
+    for kind in ["missing field `", "duplicate field `"] {
+        if let Some((field, _)) = message
+            .strip_prefix(kind)
+            .and_then(|rest| rest.split_once('`'))
+        {
+            return format!("{kind}{field}`");
+        }
+    }
+
+    "unexpected value".to_owned()
 }
 
 #[cfg(test)]

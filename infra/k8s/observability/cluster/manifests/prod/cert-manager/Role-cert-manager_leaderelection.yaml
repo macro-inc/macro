@@ -1,0 +1,30 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app: cert-manager
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/instance: cert-manager
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: cert-manager
+    app.kubernetes.io/version: v1.21.3
+    helm.sh/chart: cert-manager-v1.21.3
+  name: cert-manager:leaderelection
+  namespace: kube-system
+rules:
+  - apiGroups:
+      - coordination.k8s.io
+    resourceNames:
+      - cert-manager-controller
+    resources:
+      - leases
+    verbs:
+      - get
+      - update
+      - patch
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - create

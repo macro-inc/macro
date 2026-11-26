@@ -9,9 +9,8 @@
 //! `pull_request_target`, which runs `main`'s copy whatever the merge commit
 //! holds, and checks out nothing.
 
-use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, PullRequestTarget, PullRequestType, Workflow,
-};
+use gh_workflow::expr::typed::{Str, github};
+use gh_workflow::{Event, Job, Level, Permissions, PullRequestTarget, PullRequestType, Workflow};
 
 use crate::workflows::pr_ci;
 
@@ -31,10 +30,16 @@ pub fn ci_gate_label() -> Workflow {
 fn check() -> Job {
     Job::default()
         .name("Check the label can start PR CI")
-        .cond(Expression::new(format!(
-            "github.event.label.name == '{}' && github.event.pull_request.head.repo.full_name == github.repository",
-            pr_ci::RUN_LABEL
-        )))
+        .cond(
+            github()
+                .event::<Str>("label.name")
+                .eq(pr_ci::RUN_LABEL)
+                .and(
+                    github()
+                        .event::<Str>("pull_request.head.repo.full_name")
+                        .eq(github().repository()),
+                ),
+        )
         .runs_on("ubuntu-latest")
         .timeout_minutes(5u32)
         .permissions(Permissions {
@@ -46,8 +51,8 @@ fn check() -> Job {
         })
         .add_step(
             pr_ci::gate_step("Check the merge commit holds PR CI", "label")
-                .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
-                .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
+                .add_env(("PR_NUMBER", github().event::<Str>("pull_request.number")))
+                .add_env(("HEAD_SHA", github().event::<Str>("pull_request.head.sha")))
                 .add_env(("CI_GATE_DOCS_URL", pr_ci::GATE_DOCS_URL)),
         )
 }

@@ -3,7 +3,13 @@ import { queryClient } from '@queries/client';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import { calendarKeys } from '../keys';
 import { createCalendarOccurrenceQueryRange } from '../occurrences';
 import { runCalendarBackfill } from './backfill';
@@ -72,7 +78,10 @@ export function useCalendarCache(active: Accessor<boolean>): void {
   createEffect(() => {
     const cacheHost = host();
     if (!cacheHost || !active()) return;
-    const controller = new CalendarSyncController(cacheHost);
+    // A reset drops the covered months the backfill lane already filled.
+    const controller = new CalendarSyncController(cacheHost, {
+      onReset: () => setGeneration((value) => value + 1),
+    });
     setActiveCalendarSyncController(controller);
     const resync = (reason: CalendarStaleReason) => {
       controller.markStale(reason);
@@ -82,7 +91,6 @@ export function useCalendarCache(active: Accessor<boolean>): void {
     const unsubscribeReconnect = subscribeGraphqlSoupReconnected(() =>
       resync('reconnect')
     );
-    const untrackCreates = trackCalendarCreateSettlements(cacheHost);
     const unsubscribeGeneration = cacheHost.onCacheGenerationChanged(() => {
       resync('generation');
       setGeneration((value) => value + 1);
@@ -109,12 +117,21 @@ export function useCalendarCache(active: Accessor<boolean>): void {
       removeOnline();
       unsubscribeGeneration();
       unsubscribeReconnect();
-      untrackCreates();
       controller.dispose();
       if (activeCalendarSyncController() === controller) {
         setActiveCalendarSyncController(undefined);
       }
     });
+  });
+
+  // A paused host is out of reach here, and settles creates before it returns.
+  const settling = createMemo<ReturnType<typeof host>>(
+    (last) => host() ?? last
+  );
+  createEffect(() => {
+    const cacheHost = settling();
+    if (!cacheHost || !active()) return;
+    onCleanup(trackCalendarCreateSettlements(cacheHost));
   });
 
   createEffect(() => {

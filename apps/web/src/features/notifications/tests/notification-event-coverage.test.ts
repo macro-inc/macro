@@ -23,7 +23,8 @@ function isNotificationType(tag: string): tag is NotificationType {
 
 // Their ts-pattern matches end in a fallback, so a new or renamed tag would
 // silently show the generic bell; only these use it on purpose.
-const BELL_ON_PURPOSE = new Set<string>(['reminder']);
+// A ping has no icon of its own: the inbox and Home show what it is about.
+const BELL_ON_PURPOSE = new Set<string>(['reminder', 'ping']);
 
 describe('notification event coverage', () => {
   it('reads every event tag from the generated schemas', () => {

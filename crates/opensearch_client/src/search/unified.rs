@@ -15,14 +15,17 @@ use crate::{
         },
         channels::{
             ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
-            ChannelMessageSearchConfig,
+            ChannelMessageSearchConfig, LINKS_KEY,
         },
         chats::{ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig},
         documents::{
             DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
             DocumentSearchMode, DocumentTermMatching, PropertyFilterArg,
         },
-        emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
+        emails::{
+            EmailIndex, EmailLabelCondition, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig,
+            EmailTextCondition, EmailTextFields,
+        },
         model::{
             DefaultSearchResponse, Hit, MacroEm, SearchGotoCallRecord, SearchGotoChannel,
             SearchGotoContent, SearchGotoEmail, SearchHit, exclude_source_content,
@@ -62,6 +65,11 @@ pub struct UnifiedSearchArgs {
     pub cursor: SearchCursorOption,
     /// The indices to search over
     pub search_indices: HashSet<OpenSearchEntityType>,
+    /// Words and phrases a minus left out of the query. Every index leaves
+    /// out each item that would match one of them as a term, where that
+    /// index matches its terms in the search's mode; email leaves out mail
+    /// holding one in any part, as a Mail search does.
+    pub excluded_terms: Vec<String>,
     /// The document search args
     pub document_search_args: UnifiedDocumentSearchArgs,
     /// The email search args. If None, we do not search emails
@@ -90,10 +98,10 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             ids_only: args.document_search_args.ids_only,
             document_ids: args.document_search_args.document_ids,
             sub_types: args.document_search_args.sub_types,
+            excluded_sub_types: args.document_search_args.excluded_sub_types,
             mode: args.document_search_args.mode,
             property_filters: args.document_search_args.property_filters,
-            tag_option_ids: args.document_search_args.tag_option_ids,
-            match_all_tags: args.document_search_args.match_all_tags,
+            tag_groups: args.document_search_args.tag_groups,
             term_matching: args.document_search_args.term_matching,
         }
     }
@@ -104,7 +112,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
         EmailSearchArgs {
             terms: args.email_search_args.terms,
             user_id: args.user_id,
-            user_ids: args.email_search_args.user_ids,
+            inbox_link_ids: args.email_search_args.inbox_link_ids,
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
@@ -118,12 +126,30 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             cc: args.email_search_args.cc,
             bcc: args.email_search_args.bcc,
             recipients: args.email_search_args.recipients,
+            label_link_ids: args.email_search_args.label_link_ids,
             include_labels: args.email_search_args.include_labels,
             exclude_labels: args.email_search_args.exclude_labels,
             importance: args.email_search_args.importance,
             subject_only: args.email_search_args.subject_only,
-            tag_option_ids: args.email_search_args.tag_option_ids,
-            match_all_tags: args.email_search_args.match_all_tags,
+            tag_groups: args.email_search_args.tag_groups,
+            text_conditions: args
+                .email_search_args
+                .text_conditions
+                .into_iter()
+                .chain(
+                    args.excluded_terms
+                        .into_iter()
+                        .map(|text| EmailTextCondition {
+                            fields: EmailTextFields::Any,
+                            text,
+                            exclude: true,
+                        }),
+                )
+                .collect(),
+            label_conditions: args.email_search_args.label_conditions,
+            exclude_thread_ids: args.email_search_args.exclude_thread_ids,
+            sent_after_millis: args.email_search_args.sent_after_millis,
+            sent_before_millis: args.email_search_args.sent_before_millis,
         }
     }
 }
@@ -158,8 +184,7 @@ impl From<UnifiedSearchArgs> for ChatSearchArgs {
             ids_only: args.chat_search_args.ids_only,
             chat_ids: args.chat_search_args.chat_ids,
             role: args.chat_search_args.role,
-            tag_option_ids: args.chat_search_args.tag_option_ids,
-            match_all_tags: args.chat_search_args.match_all_tags,
+            tag_groups: args.chat_search_args.tag_groups,
         }
     }
 }
@@ -177,8 +202,7 @@ impl From<UnifiedSearchArgs> for CallRecordSearchArgs {
             call_ids: args.call_record_search_args.call_ids,
             channel_ids: args.call_record_search_args.channel_ids,
             speaker_ids: args.call_record_search_args.speaker_ids,
-            tag_option_ids: args.call_record_search_args.tag_option_ids,
-            match_all_tags: args.call_record_search_args.match_all_tags,
+            tag_groups: args.call_record_search_args.tag_groups,
             mode: args.call_record_search_args.mode,
         }
     }
@@ -195,8 +219,7 @@ impl From<UnifiedSearchArgs> for ProjectSearchArgs {
             collapse: args.collapse,
             ids_only: args.project_search_args.ids_only,
             project_ids: args.project_search_args.project_ids,
-            tag_option_ids: args.project_search_args.tag_option_ids,
-            match_all_tags: args.project_search_args.match_all_tags,
+            tag_groups: args.project_search_args.tag_groups,
         }
     }
 }
@@ -216,8 +239,7 @@ impl From<UnifiedSearchArgs> for CalendarEventSearchArgs {
             statuses: args.calendar_event_search_args.statuses,
             organizer_emails: args.calendar_event_search_args.organizer_emails,
             attendee_emails: args.calendar_event_search_args.attendee_emails,
-            tag_option_ids: args.calendar_event_search_args.tag_option_ids,
-            match_all_tags: args.calendar_event_search_args.match_all_tags,
+            tag_groups: args.calendar_event_search_args.tag_groups,
         }
     }
 }
@@ -228,8 +250,7 @@ pub struct UnifiedChatSearchArgs {
     pub chat_ids: Vec<String>,
     pub role: Vec<String>,
     pub ids_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -238,21 +259,25 @@ pub struct UnifiedDocumentSearchArgs {
     pub document_ids: Vec<String>,
     pub ids_only: bool,
     pub sub_types: Vec<String>,
+    /// Sub types left out, such as tasks for a search of documents alone.
+    pub excluded_sub_types: Vec<String>,
     pub mode: DocumentSearchMode,
     pub property_filters: Vec<PropertyFilterArg>,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
     pub term_matching: DocumentTermMatching,
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedEmailSearchArgs {
     pub terms: Vec<String>,
-    pub user_ids: Vec<String>,
-    /// Threads reachable besides the `user_ids` mailboxes, or, with
+    /// The inboxes the caller reads, by link id: their own and those
+    /// delegated to them. Mail matches by the inbox holding it, not by its
+    /// owner, whose other inboxes may not be delegated.
+    pub inbox_link_ids: Vec<String>,
+    /// Threads reachable besides the `inbox_link_ids` inboxes, or, with
     /// `ids_only`, the only threads searched.
     pub thread_ids: Vec<String>,
-    /// Search only `thread_ids`, not the `user_ids` mailboxes.
+    /// Search only `thread_ids`, not the `inbox_link_ids` inboxes.
     pub ids_only: bool,
     /// When non-empty, every hit's thread must be one of these, on top of
     /// the access filter.
@@ -264,12 +289,22 @@ pub struct UnifiedEmailSearchArgs {
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
     pub recipients: Vec<String>,
+    /// The inboxes whose labels the caller may read: their own and the ones
+    /// they manage. Labels match, and come back on a hit, only in these.
+    pub label_link_ids: Vec<String>,
     pub include_labels: Vec<String>,
     pub exclude_labels: Vec<String>,
     pub importance: Option<bool>,
     pub subject_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
+    pub text_conditions: Vec<EmailTextCondition>,
+    pub label_conditions: Vec<EmailLabelCondition>,
+    /// Threads no hit may belong to.
+    pub exclude_thread_ids: Vec<String>,
+    /// Only messages sent at or after this time, in epoch milliseconds.
+    pub sent_after_millis: Option<i64>,
+    /// Only messages sent before this time, in epoch milliseconds.
+    pub sent_before_millis: Option<i64>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -288,8 +323,7 @@ pub struct UnifiedCallRecordSearchArgs {
     pub channel_ids: Vec<String>,
     pub speaker_ids: Vec<String>,
     pub ids_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
     pub mode: CallRecordSearchMode,
 }
 
@@ -303,8 +337,7 @@ pub struct UnifiedCalendarEventSearchArgs {
     pub organizer_emails: Vec<String>,
     pub attendee_emails: Vec<String>,
     pub ids_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -312,8 +345,7 @@ pub struct UnifiedProjectSearchArgs {
     pub terms: Vec<String>,
     pub project_ids: Vec<String>,
     pub ids_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
 }
 
 /// Possible search result indices for unified search.
@@ -641,6 +673,7 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                         email_message_id: a.message_id,
                         bcc: a.bcc,
                         cc: a.cc,
+                        link_id: a.link_id,
                         labels: a.labels,
                         sent_at: millis_to_datetime(a.sent_at_millis),
                         sender: a.sender,
@@ -761,8 +794,11 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .search_indices
         .contains(&OpenSearchEntityType::AgentSessions)
     {
-        let mut query =
-            super::agent_sessions::build_query(&args.agent_session_search_args, &args.match_type)?;
+        let mut query = super::agent_sessions::build_query(
+            &args.agent_session_search_args,
+            &args.match_type,
+            &args.excluded_terms,
+        )?;
         query.name(OpenSearchEntityType::AgentSessions.query_name());
         bool_query.should(query.build().into());
     }
@@ -772,7 +808,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .contains(&OpenSearchEntityType::Documents)
     {
         let document_search_args: DocumentSearchArgs = args.clone().into();
-        let document_query_builder: DocumentQueryBuilder = document_search_args.into();
+        let document_query_builder = DocumentQueryBuilder::from(document_search_args)
+            .excluded_terms(args.excluded_terms.clone());
         let mut document_bool_query = document_query_builder.build_bool_query()?;
         document_bool_query.name(OpenSearchEntityType::Documents.query_name());
         let query_type: QueryType = document_bool_query.build().into();
@@ -793,8 +830,9 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .contains(&OpenSearchEntityType::Channels)
     {
         let channel_message_search_args: ChannelMessageSearchArgs = args.clone().into();
-        let channel_message_query_builder: ChannelMessageQueryBuilder =
-            channel_message_search_args.into();
+        let channel_message_query_builder =
+            ChannelMessageQueryBuilder::from(channel_message_search_args)
+                .excluded_terms(args.excluded_terms.clone());
         let mut channel_message_bool_query = channel_message_query_builder.build_bool_query()?;
         channel_message_bool_query.name(OpenSearchEntityType::Channels.query_name());
         let query_type: QueryType = channel_message_bool_query.build().into();
@@ -803,7 +841,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
 
     if args.search_indices.contains(&OpenSearchEntityType::Chats) {
         let chat_search_args: ChatSearchArgs = args.clone().into();
-        let chat_query_builder: ChatQueryBuilder = chat_search_args.into();
+        let chat_query_builder =
+            ChatQueryBuilder::from(chat_search_args).excluded_terms(args.excluded_terms.clone());
         let mut chat_bool_query = chat_query_builder.build_bool_query()?;
         chat_bool_query.name(OpenSearchEntityType::Chats.query_name());
         let query_type: QueryType = chat_bool_query.build().into();
@@ -815,7 +854,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .contains(&OpenSearchEntityType::CallRecords)
     {
         let call_record_search_args: CallRecordSearchArgs = args.clone().into();
-        let call_record_query_builder: CallRecordQueryBuilder = call_record_search_args.into();
+        let call_record_query_builder = CallRecordQueryBuilder::from(call_record_search_args)
+            .excluded_terms(args.excluded_terms.clone());
         let mut call_record_bool_query = call_record_query_builder.build_bool_query()?;
         call_record_bool_query.name(OpenSearchEntityType::CallRecords.query_name());
         let query_type: QueryType = call_record_bool_query.build().into();
@@ -827,7 +867,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .contains(&OpenSearchEntityType::Projects)
     {
         let project_search_args: ProjectSearchArgs = args.clone().into();
-        let project_query_builder: ProjectQueryBuilder = project_search_args.into();
+        let project_query_builder = ProjectQueryBuilder::from(project_search_args)
+            .excluded_terms(args.excluded_terms.clone());
         let mut project_bool_query = project_query_builder.build_bool_query()?;
         project_bool_query.name(OpenSearchEntityType::Projects.query_name());
         let query_type: QueryType = project_bool_query.build().into();
@@ -839,8 +880,9 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .contains(&OpenSearchEntityType::CalendarEvents)
     {
         let calendar_event_search_args: CalendarEventSearchArgs = args.clone().into();
-        let calendar_event_query_builder: CalendarEventQueryBuilder =
-            calendar_event_search_args.into();
+        let calendar_event_query_builder =
+            CalendarEventQueryBuilder::from(calendar_event_search_args)
+                .excluded_terms(args.excluded_terms.clone());
         let mut calendar_event_bool_query = calendar_event_query_builder.build_bool_query()?;
         calendar_event_bool_query.name(OpenSearchEntityType::CalendarEvents.query_name());
         let query_type: QueryType = calendar_event_bool_query.build().into();
@@ -874,6 +916,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .require_field_match(true)
         .max_analyzer_offset(super::HIGHLIGHT_MAX_ANALYZER_OFFSET)
         .field("content", em_field().number_of_fragments(1))
+        .field(LINKS_KEY, em_field().number_of_fragments(1))
         .field("document_name", em_field().number_of_fragments(0))
         .field("name", em_field().number_of_fragments(0))
         .field("source_names", em_field().number_of_fragments(0))
@@ -896,6 +939,19 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     search_request_builder.query(built_query);
 
     Ok(search_request_builder.build())
+}
+
+/// Leaves the labels on an email hit only when the caller may read its
+/// inbox's labels: a thread shared from someone else's inbox comes back
+/// without the labels its owner made.
+fn keep_readable_labels(results: &mut [SearchHit], label_link_ids: &[String]) {
+    for hit in results {
+        if let Some(SearchGotoContent::Emails(goto)) = &mut hit.goto
+            && !label_link_ids.contains(&goto.link_id)
+        {
+            goto.labels.clear();
+        }
+    }
 }
 
 /// Trim a page of top-level OpenSearch hits and derive the next cursor.
@@ -973,7 +1029,14 @@ fn paginate_unified_hits(
     (results, cursor)
 }
 
-#[tracing::instrument(skip(client, args))]
+#[tracing::instrument(
+    skip(client, args),
+    fields(
+        opensearch_took_ms = tracing::field::Empty,
+        opensearch_query_ms = tracing::field::Empty,
+        opensearch_fetch_ms = tracing::field::Empty,
+    )
+)]
 pub(crate) async fn search_unified(
     client: &opensearch::OpenSearch,
     args: UnifiedSearchArgs,
@@ -986,17 +1049,23 @@ pub(crate) async fn search_unified(
 
     let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.index_name()).collect();
 
+    // An index that does not exist yet — a newly added entity type before
+    // its create-index run, or an alias mid-reindex — otherwise fails the
+    // whole request with `index_not_found_exception`, taking down search
+    // for every entity rather than just that one. `ignore_unavailable`
+    // degrades to the indices that are present; `warn_on_shard_failures`
+    // still reports partial results from indices that do exist.
+    // `phase_took` splits `took` into query and fetch time for the span. The
+    // typed search builder has no parameter for it, so this is a raw request.
     let response = client
-        .search(opensearch::SearchParts::Index(&search_indices))
-        // An index that does not exist yet — a newly added entity type before
-        // its create-index run, or an alias mid-reindex — otherwise fails the
-        // whole request with `index_not_found_exception`, taking down search
-        // for every entity rather than just that one. Degrade to the indices
-        // that are present; `warn_on_shard_failures` still reports partial
-        // results from indices that do exist.
-        .ignore_unavailable(true)
-        .body(search_request)
-        .send()
+        .send(
+            opensearch::http::Method::Post,
+            &format!("/{}/_search", search_indices.join(",")),
+            opensearch::http::headers::HeaderMap::new(),
+            Some(&[("ignore_unavailable", "true"), ("phase_took", "true")]),
+            Some(opensearch::http::request::JsonBody::new(search_request)),
+            None,
+        )
         .await
         .map_client_error(OpensearchOperation::SearchUnified)
         .await?;
@@ -1018,6 +1087,13 @@ pub(crate) async fn search_unified(
 
     result.warn_on_shard_failures(OpensearchOperation::SearchUnified);
 
+    let span = tracing::Span::current();
+    span.record("opensearch_took_ms", result.took);
+    if let Some(phase_took) = &result.phase_took {
+        span.record("opensearch_query_ms", phase_took.query);
+        span.record("opensearch_fetch_ms", phase_took.fetch);
+    }
+
     tracing::info!(
         response_body_bytes = bytes.len(),
         opensearch_took_ms = result.took,
@@ -1025,7 +1101,8 @@ pub(crate) async fn search_unified(
         "opensearch response"
     );
 
-    let (results, cursor) = paginate_unified_hits(result.hits.hits, args.page_size as usize);
+    let (mut results, cursor) = paginate_unified_hits(result.hits.hits, args.page_size as usize);
+    keep_readable_labels(&mut results, &args.email_search_args.label_link_ids);
 
     Ok((results, cursor))
 }

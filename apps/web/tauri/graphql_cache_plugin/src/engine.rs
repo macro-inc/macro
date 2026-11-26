@@ -14,11 +14,12 @@
 use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
-    HydrationScope, InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
-    RollbackOptimisticWriteResult, WriteResult,
+    HydrationScope, HydrationWriteResult, InitialClaimOutcome, NetworkWrite, NormalizedResponse,
+    QueryRegistration, ReadResult, RollbackOptimisticWriteResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
+use cache_core::normalize::RecordUpdates;
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant, QueryInspection};
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationUpsertKind,
@@ -26,13 +27,22 @@ use cache_core::queue::{
 use cache_core::record_selection::{SelectedRecord, cache::RecordSelectionCache};
 use cache_core::revision::CacheRevision;
 use cache_core::search::{SearchPage, SearchRequest};
+use cache_core::store::Storage;
 use cache_core::value::EntityKey;
 use cache_turso::{TursoStorage, TursoStorageCloseOutcome};
 use serde::Serialize;
-use std::collections::HashMap;
+use soup_filter_cache_adapter::WritePassStep;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
+use uuid::Uuid;
+mod abandon;
 mod access;
-use access::EngineAccess;
+pub use access::EngineTiming;
+use access::{AccessGuard, EngineAccess};
+mod authority;
+mod commits;
+mod idle;
+pub use authority::AuthorityTransitionWire;
 
 mod calendar;
 mod people;
@@ -88,6 +98,10 @@ pub struct WriteResultWire {
     /// Stable caller identity on settlement.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mutation_uuid: Option<String>,
+    /// The engine wait and hold of a queued mutation's enqueue or commit,
+    /// recorded on its `graphql.mutation_queue.*` span.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub engine: Option<EngineTiming>,
 }
 
 /// Internal hydration result used to fan out changes before returning only
@@ -395,6 +409,7 @@ struct EngineState {
     engine: Engine<TursoStorage>,
     ops: OpInterner,
     selections: RecordSelectionCache,
+    commits: commits::CommitLog,
 }
 
 /// Cheaply-clonable handle to the shared engine. Foreground methods serialize
@@ -405,9 +420,105 @@ struct EngineState {
 #[derive(Clone)]
 pub struct EngineHandle {
     inner: Arc<EngineAccess<EngineState>>,
+    authority_listener: Option<(String, Arc<authority::AuthorityListener>)>,
+    // Per-command capture, never shared mutable state between windows.
+    generation: Option<Uuid>,
     // Shared by cloned handles, changed when the native engine is reopened.
     // Revisions alone may repeat across process restarts.
     mail_generation: String,
+    // Reads now running with a request id, shared by cloned handles.
+    abandons: Arc<abandon::Abandons>,
+    // Per-command: this read's registration, when it came with a request id.
+    abandon: Option<Arc<abandon::Registration>>,
+    // Commits that background writes check against, shared by cloned handles.
+    commits: Arc<commits::Commits>,
+}
+
+#[cfg(test)]
+mod test_hooks {
+    thread_local! {
+        /// Off, hydrates run whole, for tests to compare with.
+        pub(super) static STAGING: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+        pub(super) static STAGED_COMMITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        /// Set, the next staging read fails once.
+        pub(super) static FAIL_STAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        pub(super) static YIELDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        /// Step boundaries at which a background write or a hydrate pauses
+        /// once, so a test can queue a command while it holds the engine.
+        pub(super) static PAUSE_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        /// The last background write's (stepped aside, restarts).
+        pub(super) static LAST_STEPS: std::cell::Cell<(u32, u32)> = const { std::cell::Cell::new((0, 0)) };
+    }
+}
+
+/// Whether hydrates compute their write before taking the engine back to
+/// write it. Tests switch it off to compare with whole hydrates.
+fn staging() -> bool {
+    #[cfg(test)]
+    return test_hooks::STAGING.with(std::cell::Cell::get);
+    #[cfg(not(test))]
+    true
+}
+
+/// Times a background write restarts its steps before it runs whole.
+const RESTARTS: u32 = 3;
+
+/// A background write's steps, for its span.
+#[derive(Default)]
+struct Steps {
+    count: u32,
+    stepped_aside: u32,
+    restarts: u32,
+    longest: std::time::Duration,
+    began: Option<std::time::Instant>,
+}
+
+impl Steps {
+    fn began(&mut self) {
+        self.began = Some(std::time::Instant::now());
+    }
+
+    fn ended(&mut self) {
+        if let Some(began) = self.began.take() {
+            self.count += 1;
+            self.longest = self.longest.max(began.elapsed());
+        }
+    }
+
+    fn record(&self, superseded: bool) {
+        let span = tracing::Span::current();
+        span.record("graphql_cache.write.superseded", superseded);
+        span.record("graphql_cache.write.steps", self.count);
+        span.record("graphql_cache.write.stepped_aside", self.stepped_aside);
+        span.record("graphql_cache.write.restarts", self.restarts);
+        span.record(
+            "graphql_cache.write.longest_step_ms",
+            self.longest.as_secs_f64() * 1_000.0,
+        );
+        #[cfg(test)]
+        test_hooks::LAST_STEPS.with(|last| last.set((self.stepped_aside, self.restarts)));
+    }
+}
+
+/// What a foreground write stored, for the background writes it goes ahead of
+/// ([`commits`]): each record it changed as storage now holds it, which
+/// includes fields its response did not hold, and each other record of its
+/// `response` as the response holds it. `None`, which counts as every record,
+/// when storage cannot be read.
+async fn stored_by(
+    engine: &Engine<TursoStorage>,
+    changed: &BTreeSet<EntityKey<'static>>,
+    mut response: RecordUpdates,
+) -> Option<commits::Stored> {
+    let keys: Vec<_> = changed.iter().cloned().collect();
+    let records = engine.storage().get_batch(&keys).await.ok()?;
+    response.retain(|key, _| !changed.contains(key));
+    let mut stored: commits::Stored = response
+        .into_iter()
+        .map(|(key, record)| (key, Some(record)))
+        .collect();
+    stored.extend(keys.into_iter().zip(records));
+    Some(stored)
 }
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
@@ -427,8 +538,12 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
         reset: result.reset,
         revalidations: result.revalidations,
         mutation_uuid: result.mutation_uuid,
+        engine: None,
     }
 }
+
+/// How long shutdown waits for an idle checkpoint that is copying.
+const SHUTDOWN_IDLE_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 fn parse_u64(value: &str, label: &str) -> Result<u64, String> {
     value
@@ -459,22 +574,35 @@ impl EngineHandle {
                 .filter(|c| *c > 0)
                 .map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
             schema,
-        );
+        )
+        .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners);
+        let inner = Arc::new(EngineAccess::new(EngineState {
+            engine,
+            ops: OpInterner::default(),
+            selections: RecordSelectionCache::default(),
+            commits: commits::CommitLog::default(),
+        }));
+        idle::install(&inner);
         EngineHandle {
+            generation: None,
+            authority_listener: None,
+            abandons: Arc::default(),
+            abandon: None,
+            commits: Arc::default(),
             mail_generation: soup_filter_cache_adapter::mail::new_generation(),
-            inner: Arc::new(EngineAccess::new(EngineState {
-                engine,
-                ops: OpInterner::default(),
-                selections: RecordSelectionCache::default(),
-            })),
+            inner,
         }
     }
 
     /// Consumes the sole handle and explicitly closes native Turso storage.
+    /// An idle checkpoint holding the engine is waited for, up to
+    /// [`SHUTDOWN_IDLE_WAIT`]; none starts after this.
     pub fn shutdown(self) -> Result<(), String> {
-        let mutex = Arc::try_unwrap(self.inner)
-            .map_err(|_| "graphql cache still has active command handles".to_string())?;
-        let state = mutex.into_inner();
+        let deadline = std::time::Instant::now() + SHUTDOWN_IDLE_WAIT;
+        let Ok(access) = access::unwrap_after_idle(self.inner, deadline) else {
+            return Err("graphql cache still has active command handles".to_string());
+        };
+        let state = access.into_inner();
         let outcome = state
             .engine
             .into_storage()
@@ -533,7 +661,7 @@ impl EngineHandle {
         variables: Variables,
         entity_resolvers: Vec<EntityResolver>,
     ) -> Result<ReadResultWire, String> {
-        let mut state = self.inner.lock().await;
+        let mut state = self.ready_op_read(op_id.as_deref()).await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let op = op_id.map(|name| ops.intern(&name));
         engine
@@ -567,7 +695,7 @@ impl EngineHandle {
             .map(|value| value.parse::<CacheRevision>())
             .transpose()
             .map_err(|error| error.to_string())?;
-        let mut state = self.inner.lock().await;
+        let mut state = self.ready_op_read(Some(&op_id)).await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let op = ops.intern(&op_id);
         engine
@@ -590,7 +718,7 @@ impl EngineHandle {
         fragment_name: String,
         keys: Vec<String>,
     ) -> Result<RecordSelectionResultWire, String> {
-        let mut state = self.inner.lock().await;
+        let mut state = self.ready_read().await?;
         let schema = state.engine.schema_snapshot();
         let selection = state
             .selections
@@ -610,9 +738,8 @@ impl EngineHandle {
 
     /// Searches the compact materialized projection without record scans.
     pub async fn search(&self, request: SearchRequest) -> Result<SearchPage, String> {
-        self.inner
-            .lock()
-            .await
+        self.ready_read()
+            .await?
             .engine
             .search(&request)
             .await
@@ -624,7 +751,7 @@ impl EngineHandle {
         &self,
         request: EntityFilterRequest,
     ) -> Result<EntityFilterResult, String> {
-        let mut state = self.inner.lock().await;
+        let mut state = self.ready_read().await?;
         let state = &mut *state;
         soup::filter(
             &mut state.engine,
@@ -646,9 +773,8 @@ impl EngineHandle {
             .map(|revision| revision.parse())
             .transpose()
             .map_err(|error: cache_core::revision::ParseCacheRevisionError| error.to_string())?;
-        self.inner
-            .lock()
-            .await
+        self.ready_read()
+            .await?
             .engine
             .resume_live_query(&id, registration_id, since)
             .await
@@ -663,9 +789,8 @@ impl EngineHandle {
         operation_name: Option<String>,
         path: Vec<String>,
     ) -> Result<Vec<CachedQueryVariant>, String> {
-        self.inner
-            .lock()
-            .await
+        self.ready_read()
+            .await?
             .engine
             .inspect_query_variants(&QueryInspection {
                 query,
@@ -685,9 +810,8 @@ impl EngineHandle {
         path: Vec<String>,
         variable_filters: Vec<serde_json::Map<String, serde_json::Value>>,
     ) -> Result<Vec<CachedQueryInstance>, String> {
-        self.inner
-            .lock()
-            .await
+        self.ready_read()
+            .await?
             .engine
             .inspect_query(&QueryInspection {
                 query,
@@ -700,7 +824,12 @@ impl EngineHandle {
     }
 
     /// Normalizes and stores a network response.
-    #[tracing::instrument(name = "graphql_cache.native.write", skip_all, err)]
+    #[tracing::instrument(
+        name = "graphql_cache.native.write",
+        skip_all,
+        fields(graphql_cache.write.background = false),
+        err
+    )]
     pub async fn write(&self, request: WriteRequest) -> Result<WriteResultWire, String> {
         let WriteRequest {
             origin_op_id,
@@ -711,12 +840,42 @@ impl EngineHandle {
             data,
             identity,
         } = request;
-        let mut state = self.inner.write().await;
-        let EngineState { engine, ops, .. } = &mut *state;
+        let mut state = self.snapshot_write().await?;
+        let EngineState {
+            engine,
+            ops,
+            commits,
+            ..
+        } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
         let registration = registration.map(|registration| {
             let op_id = ops.intern(&registration.op_id);
             (op_id, registration.entity_resolvers)
+        });
+        let input = NetworkWrite {
+            query: &query,
+            operation_name: operation_name.as_deref(),
+            variables: &variables,
+            data: &data,
+            identity: identity.as_deref(),
+        };
+        let registration =
+            registration
+                .as_ref()
+                .map(|(op_id, entity_resolvers)| QueryRegistration {
+                    op_id: *op_id,
+                    entity_resolvers,
+                });
+        // One normalization serves the projection passes and the write. A
+        // response that fails it takes the path that normalizes twice, which
+        // reports its error where it always has.
+        let normalized = engine.normalize_network(registration, input).ok();
+        // Kept before the write takes the normalization, for the background
+        // writes this one goes ahead of. `None` counts as every record.
+        let response = self.commits.watched().then(|| {
+            normalized
+                .as_ref()
+                .map(|normalized| normalized.updates().clone())
         });
         let projections = soup::write_projections(
             engine,
@@ -725,29 +884,236 @@ impl EngineHandle {
             &variables,
             &data,
             identity.as_deref(),
+            normalized.as_ref().map(NormalizedResponse::updates),
         )
         .await?;
-        engine
-            .write_query_with_registration_and_projections(
-                origin,
-                registration
-                    .as_ref()
-                    .map(|(op_id, entity_resolvers)| QueryRegistration {
-                        op_id: *op_id,
+        let result = match normalized {
+            Some(normalized) => {
+                engine
+                    .write_normalized_query(origin, input, normalized, projections)
+                    .await
+            }
+            None => {
+                engine
+                    .write_query_with_registration_and_projections(
+                        origin,
+                        registration,
+                        input,
+                        projections,
+                    )
+                    .await
+            }
+        }
+        .map_err(|e| e.to_string())?;
+        let stored = match response.flatten() {
+            Some(response) => stored_by(engine, &result.changed, response).await,
+            None => None,
+        };
+        self.commits.settle(commits, || stored);
+        self.publish_bound_generation(engine);
+        Ok(wire_write_result(ops, result))
+    }
+
+    /// Stores a query response nobody waits for, as a background command: in
+    /// steps, between which commands waiting for their turn run (see
+    /// `access`). A step that finds storage or the schema changed starts the
+    /// write again, and after [`RESTARTS`] it runs whole. It is refused with
+    /// [`commits::SUPERSEDED`] when a foreground write since it arrived
+    /// changed one of its records: it may predate that write. An operation
+    /// torn down since it arrived gets no registration back.
+    #[tracing::instrument(
+        name = "graphql_cache.native.write",
+        skip_all,
+        fields(
+            graphql_cache.write.background = true,
+            graphql_cache.write.superseded = tracing::field::Empty,
+            graphql_cache.write.steps = tracing::field::Empty,
+            graphql_cache.write.stepped_aside = tracing::field::Empty,
+            graphql_cache.write.restarts = tracing::field::Empty,
+            graphql_cache.write.longest_step_ms = tracing::field::Empty,
+        ),
+        err
+    )]
+    pub async fn write_in_background(
+        &self,
+        request: WriteRequest,
+    ) -> Result<WriteResultWire, String> {
+        let arrival = self.commits.arrive();
+        let WriteRequest {
+            origin_op_id,
+            registration,
+            query,
+            operation_name,
+            variables,
+            data,
+            identity,
+        } = request;
+        let input = NetworkWrite {
+            query: &query,
+            operation_name: operation_name.as_deref(),
+            variables: &variables,
+            data: &data,
+            identity: identity.as_deref(),
+        };
+        let mut steps = Steps::default();
+        let mut state = self.snapshot_background_write().await?;
+        steps.began();
+        let (normalized, projections, registered) = 'compute: loop {
+            // Computed from storage as it stands; a command that stepped in
+            // and changed it starts the write again.
+            let wal = state.engine.storage().wal_position().ok();
+            let schema = state.engine.schema_snapshot();
+            let stepping = steps.restarts < RESTARTS && wal.is_some();
+            let unmoved = |engine: &Engine<TursoStorage>| {
+                engine.storage().wal_position().ok() == wal
+                    && Arc::ptr_eq(&engine.schema_snapshot(), &schema)
+            };
+            let registered = registration
+                .as_ref()
+                .filter(|registration| !arrival.torn_down(&state.commits, &registration.op_id))
+                .map(|registration| {
+                    (
+                        state.ops.intern(&registration.op_id),
+                        &registration.entity_resolvers,
+                    )
+                });
+            let normalized = state
+                .engine
+                .normalize_network(
+                    registered.map(|(op_id, entity_resolvers)| QueryRegistration {
+                        op_id,
                         entity_resolvers,
                     }),
-                NetworkWrite {
-                    query: &query,
-                    operation_name: operation_name.as_deref(),
-                    variables: &variables,
-                    data: &data,
-                    identity: identity.as_deref(),
-                },
-                projections,
+                    input,
+                )
+                .ok();
+            let mut passes = soup::write_passes(
+                &mut state.engine,
+                &query,
+                operation_name.as_deref(),
+                &data,
+                identity.as_deref(),
             )
-            .await
-            .map(|result| wire_write_result(ops, result))
-            .map_err(|e| e.to_string())
+            .await?;
+            let response = soup::write_response(
+                &schema,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+                normalized.as_ref().map(NormalizedResponse::updates),
+            );
+            loop {
+                if stepping {
+                    state = self.let_commands_run(state, &mut steps).await;
+                    if !unmoved(&state.engine) {
+                        drop(response);
+                        self.recheck_hydration(&mut state).await?;
+                        steps.restarts += 1;
+                        continue 'compute;
+                    }
+                }
+                if let WritePassStep::Done(projections) = passes
+                    .step(&mut state.engine, &response)
+                    .await
+                    .map_err(|error| error.to_string())?
+                {
+                    drop(response);
+                    if stepping {
+                        state = self.let_commands_run(state, &mut steps).await;
+                        if !unmoved(&state.engine) {
+                            self.recheck_hydration(&mut state).await?;
+                            steps.restarts += 1;
+                            continue 'compute;
+                        }
+                    }
+                    break 'compute (normalized, projections, registered);
+                }
+            }
+        };
+        let EngineState {
+            engine,
+            ops,
+            commits,
+            ..
+        } = &mut *state;
+        if arrival.overtaken(
+            commits,
+            normalized.as_ref().map(NormalizedResponse::updates),
+        ) {
+            steps.ended();
+            steps.record(true);
+            return Err(commits::SUPERSEDED.to_owned());
+        }
+        // A teardown that ran between its steps: write without registering
+        // the operation again.
+        let (normalized, registered) = match registered {
+            Some(_)
+                if registration.as_ref().is_some_and(|registration| {
+                    arrival.torn_down(commits, &registration.op_id)
+                }) =>
+            {
+                (engine.normalize_network(None, input).ok(), None)
+            }
+            registered => (normalized, registered),
+        };
+        let origin = origin_op_id
+            .filter(|name| !arrival.torn_down(commits, name))
+            .map(|name| ops.intern(&name));
+        let result = match normalized {
+            Some(normalized) => {
+                engine
+                    .write_normalized_query(origin, input, normalized, projections)
+                    .await
+            }
+            None => {
+                engine
+                    .write_query_with_registration_and_projections(
+                        origin,
+                        registered.map(|(op_id, entity_resolvers)| QueryRegistration {
+                            op_id,
+                            entity_resolvers,
+                        }),
+                        input,
+                        projections,
+                    )
+                    .await
+            }
+        }
+        .map_err(|e| e.to_string())?;
+        self.publish_bound_generation(engine);
+        steps.ended();
+        steps.record(false);
+        Ok(wire_write_result(ops, result))
+    }
+
+    /// Ends a background command's step: it gives its turn to commands
+    /// waiting for one, or the engine to reads waiting for it, and takes
+    /// them back after.
+    async fn let_commands_run<'a>(
+        &'a self,
+        state: AccessGuard<'a, EngineState>,
+        steps: &mut Steps,
+    ) -> AccessGuard<'a, EngineState> {
+        steps.ended();
+        #[cfg(test)]
+        if test_hooks::PAUSE_STEPS.with(|pauses| pauses.replace(pauses.get().saturating_sub(1))) > 0
+        {
+            tokio::task::yield_now().await;
+        }
+        let state = if self.inner.commands_waiting() {
+            match state.step_aside(&self.inner) {
+                Ok(aside) => {
+                    steps.stepped_aside += 1;
+                    aside.resume().await
+                }
+                Err(state) => self.let_reads_run(state).await,
+            }
+        } else {
+            self.let_reads_run(state).await
+        };
+        steps.began();
+        state
     }
 
     /// Stores a query response and returns only fields not marked
@@ -762,34 +1128,147 @@ impl EngineHandle {
         identity: Option<String>,
         hydration_scope: Option<HydrationScope>,
     ) -> Result<HydrationWriteResultWire, String> {
-        let mut state = self.inner.hydrate().await?;
-        let EngineState { engine, ops, .. } = &mut *state;
-        let projections = soup::write_projections(
-            engine,
-            &query,
-            operation_name.as_deref(),
-            &variables,
-            &data,
-            identity.as_deref(),
-        )
-        .await?;
-        let result = match hydration_scope {
-            Some(scope) => {
-                engine
-                    .hydrate_query_in_scope(
-                        NetworkWrite {
-                            query: &query,
-                            operation_name: operation_name.as_deref(),
-                            variables: &variables,
-                            data: &data,
-                            identity: identity.as_deref(),
-                        },
-                        &scope,
-                        projections,
+        let write = NetworkWrite {
+            query: &query,
+            operation_name: operation_name.as_deref(),
+            variables: &variables,
+            data: &data,
+            identity: identity.as_deref(),
+        };
+        let epoch = self.inner.write_epoch();
+        let mut state = self.snapshot_hydration(epoch, false).await?;
+        // One normalization serves the projection passes and the write, as in
+        // `write`.
+        let mut normalized = state.engine.normalize_network(None, write).ok();
+        let normalized_under = state.engine.schema_snapshot();
+        // Compute the write in read-only steps (the authoritative rows, each
+        // projection pass, the merge), letting commands or reads that queued
+        // meanwhile run after each (`give_way`). If storage or the schema
+        // moved anyway, the hydrate runs whole after rechecking the session.
+        let mut reuse = None;
+        if staging()
+            && let Ok(wal) = state.engine.storage().wal_position()
+        {
+            let unmoved = |engine: &Engine<TursoStorage>| {
+                engine.storage().wal_position().ok() == Some(wal)
+                    && Arc::ptr_eq(&engine.schema_snapshot(), &normalized_under)
+            };
+            // A failed read is the hydrate's error, as it is for a whole
+            // one: retrying it whole could succeed where that failed.
+            let mut passes = soup::write_passes(
+                &mut state.engine,
+                &query,
+                operation_name.as_deref(),
+                &data,
+                identity.as_deref(),
+            )
+            .await?;
+            let schema = state.engine.schema_snapshot();
+            let response = soup::write_response(
+                &schema,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+                normalized.as_ref().map(NormalizedResponse::updates),
+            );
+            let mut projections = None;
+            loop {
+                state = self.give_way(state, epoch).await?;
+                if !unmoved(&state.engine) {
+                    break;
+                }
+                if let WritePassStep::Done(done) = passes
+                    .step(&mut state.engine, &response)
+                    .await
+                    .map_err(|error| error.to_string())?
+                {
+                    projections = Some(done);
+                    state = self.give_way(state, epoch).await?;
+                    break;
+                }
+            }
+            drop(response);
+            if let Some(projections) = projections
+                && unmoved(&state.engine)
+            {
+                let staged = state
+                    .engine
+                    .stage_normalized_hydrate(
+                        write,
+                        &mut normalized,
+                        hydration_scope.as_ref(),
+                        &projections,
                     )
                     .await
+                    .map_err(|error| error.to_string());
+                #[cfg(test)]
+                let staged = match test_hooks::FAIL_STAGE.with(|fail| fail.replace(false)) {
+                    true => Err("injected staging failure".to_string()),
+                    false => staged,
+                };
+                let staged = staged?;
+                match staged {
+                    Some(staged) => {
+                        state = self.give_way(state, epoch).await?;
+                        let EngineState { engine, ops, .. } = &mut *state;
+                        if unmoved(engine) && engine.staged_hydrate_current(&staged) {
+                            let result = engine
+                                .commit_staged_hydrate(staged, projections)
+                                .await
+                                .map_err(|error| error.to_string())?;
+                            #[cfg(test)]
+                            test_hooks::STAGED_COMMITS
+                                .with(|commits| commits.set(commits.get() + 1));
+                            return Ok(self.hydration_wire(engine, ops, result).await);
+                        }
+                    }
+                    // Not staged (it binds the account, meets optimistic
+                    // layers, or fails admission): the projections still hold.
+                    None => reuse = Some(projections),
+                }
             }
+            self.recheck_hydration(&mut state).await?;
+            // A command that took the engine while this hydrate gave way may
+            // have installed a schema, which its write must run under.
+            if !Arc::ptr_eq(&state.engine.schema_snapshot(), &normalized_under) {
+                normalized = state.engine.normalize_network(None, write).ok();
+                reuse = None;
+            }
+        }
+        let EngineState { engine, ops, .. } = &mut *state;
+        let projections = match reuse {
+            Some(projections) => projections,
             None => {
+                soup::write_projections(
+                    engine,
+                    &query,
+                    operation_name.as_deref(),
+                    &variables,
+                    &data,
+                    identity.as_deref(),
+                    normalized.as_ref().map(NormalizedResponse::updates),
+                )
+                .await?
+            }
+        };
+        let result = match (hydration_scope, normalized) {
+            (Some(scope), Some(normalized)) => {
+                engine
+                    .hydrate_normalized_query_in_scope(write, normalized, &scope, projections)
+                    .await
+            }
+            (Some(scope), None) => {
+                engine
+                    .hydrate_query_in_scope(write, &scope, projections)
+                    .await
+            }
+            (None, Some(normalized)) => {
+                engine
+                    .hydrate_normalized_query(write, normalized, projections)
+                    .await
+            }
+            (None, None) => {
                 engine
                     .hydrate_query_with_projections(
                         &query,
@@ -803,17 +1282,61 @@ impl EngineHandle {
             }
         }
         .map_err(|error| error.to_string())?;
+        Ok(self.hydration_wire(engine, ops, result).await)
+    }
+
+    /// Ends a hydrate's step. Commands waiting for a turn take the engine
+    /// first, and the hydrate fails if one of them wrote: it may hold older
+    /// data. Otherwise reads waiting for the engine run first.
+    async fn give_way<'a>(
+        &'a self,
+        state: AccessGuard<'a, EngineState>,
+        epoch: u64,
+    ) -> Result<AccessGuard<'a, EngineState>, String> {
+        #[cfg(test)]
+        if test_hooks::PAUSE_STEPS.with(|pauses| pauses.replace(pauses.get().saturating_sub(1))) > 0
+        {
+            tokio::task::yield_now().await;
+        }
+        if !self.inner.commands_waiting() {
+            return Ok(self.let_reads_run(state).await);
+        }
+        drop(state);
+        self.snapshot_hydration(epoch, true).await
+    }
+
+    /// Gives the engine to reads that queued for it, keeping this hydrate's
+    /// turn, and takes it back after them.
+    async fn let_reads_run<'a>(
+        &'a self,
+        state: AccessGuard<'a, EngineState>,
+    ) -> AccessGuard<'a, EngineState> {
+        #[cfg(test)]
+        test_hooks::YIELDS.with(|yields| yields.set(yields.get() + 1));
+        match state.yield_to_reads(&self.inner) {
+            Ok(turn) => turn.resume().await,
+            Err(state) => state,
+        }
+    }
+
+    async fn hydration_wire(
+        &self,
+        engine: &mut Engine<TursoStorage>,
+        ops: &OpInterner,
+        result: HydrationWriteResult,
+    ) -> HydrationWriteResultWire {
         // Invalidation evidence is optional: a failed proof must not reject a committed hydration.
         let unchanged_views = engine
             .unchanged_observed_windows()
             .await
             .unwrap_or_default();
-        Ok(HydrationWriteResultWire {
+        self.publish_bound_generation(engine);
+        HydrationWriteResultWire {
             unchanged_views,
             search_changed_buckets: result.search_changed_buckets,
             write_result: wire_write_result(ops, result.write_result),
             data: result.data,
-        })
+        }
     }
 
     /// Durably queues a mutation and its optimistic layer, then attempts to
@@ -838,42 +1361,62 @@ impl EngineHandle {
         uncertain_calendar_event_keys: Vec<String>,
     ) -> Result<EnqueueOptimisticMutationResultWire, String> {
         let mut state = self.inner.write().await;
+        self.resume_retirement(&mut state).await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
-        let projections = soup::optimistic_projections(
-            engine,
-            &query,
-            operation_name.as_deref(),
-            &variables,
+        let client_metadata = soup_filter_cache_adapter::permissions::legacy_draft_metadata(
+            client_metadata,
             &data,
+            operation_name.as_deref(),
+        );
+        let admitted = engine
+            .snapshot_is_current(self.generation)
+            .await
+            .map_err(|error| error.to_string())?;
+        let projections = if admitted {
+            soup::optimistic_projections(
+                engine,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+                created_at_ms,
+            )
+            .await?
+        } else {
+            Vec::new()
+        };
+        let input = BeginOptimisticWrite {
+            client_metadata: client_metadata.as_ref(),
+            uuid: &uuid,
+            query: &query,
+            operation_name: operation_name.as_deref(),
+            variables: &variables,
+            data: &data,
+            link_patches: &link_patches,
+            revalidations: &revalidations,
             created_at_ms,
-        )
-        .await?;
+            identity_bindings: &identity_bindings,
+        };
+        let claim = MutationClaimRequest {
+            owner: lease_owner,
+            now_ms,
+            lease_expires_at_ms,
+        };
+        let uncertain = uncertain_calendar_event_keys
+            .into_iter()
+            .map(|key| EntityKey(key.into()))
+            .collect();
         let result = engine
-            .enqueue_optimistic_mutation_with_calendar(
+            .enqueue_optimistic_mutation_in_generation(
                 origin,
-                BeginOptimisticWrite {
-                    client_metadata: client_metadata.as_ref(),
-                    uuid: &uuid,
-                    query: &query,
-                    operation_name: operation_name.as_deref(),
-                    variables: &variables,
-                    data: &data,
-                    link_patches: &link_patches,
-                    revalidations: &revalidations,
-                    created_at_ms,
-                    identity_bindings: &identity_bindings,
+                input,
+                claim,
+                cache_core::engine::authority::OptimisticEffects {
+                    projections,
+                    uncertain_calendar_event_keys: uncertain,
                 },
-                MutationClaimRequest {
-                    owner: lease_owner,
-                    now_ms,
-                    lease_expires_at_ms,
-                },
-                projections,
-                uncertain_calendar_event_keys
-                    .into_iter()
-                    .map(|key| EntityKey(key.into()))
-                    .collect(),
+                self.generation,
             )
             .await
             .map_err(|error| error.to_string())?;
@@ -886,10 +1429,12 @@ impl EngineHandle {
                 error: error.to_string(),
             },
         };
+        let mut write = wire_write_result(ops, result.write_result);
+        write.engine = Some(state.timing());
         Ok(EnqueueOptimisticMutationResultWire {
             transaction_id: result.transaction_id.to_string(),
             upsert_kind: result.upsert_kind.into(),
-            result: wire_write_result(ops, result.write_result),
+            result: write,
             initial_claim,
         })
     }
@@ -899,9 +1444,7 @@ impl EngineHandle {
         &self,
     ) -> Result<Vec<cache_core::queue::MutationInspection>, String> {
         let state = self.inner.lock().await;
-        state
-            .engine
-            .inspect_mutations()
+        soup_filter_cache_adapter::permissions::inspect_authored_mutations(&state.engine)
             .await
             .map_err(|error| error.to_string())
     }
@@ -982,50 +1525,108 @@ impl EngineHandle {
             generation: parse_u64(&lease_generation, "lease generation")?,
         };
         let mut state = self.inner.write().await;
-        let EngineState { engine, ops, .. } = &mut *state;
-        let projections = soup::write_projections(
+        self.resume_retirement(&mut state).await?;
+        let EngineState {
             engine,
-            &query,
-            operation_name.as_deref(),
-            &variables,
-            &data,
-            None,
-        )
-        .await?;
-        match engine
-            .commit_optimistic_write_with_projections_outcome(
-                transaction,
-                claim,
+            ops,
+            commits,
+            ..
+        } = &mut *state;
+        let admitted = engine
+            .snapshot_is_current(self.generation)
+            .await
+            .map_err(|error| error.to_string())?;
+        let projections = if admitted {
+            soup::write_projections(
+                engine,
                 &query,
                 operation_name.as_deref(),
                 &variables,
                 &data,
+                None,
+                None,
+            )
+            .await?
+        } else {
+            Vec::new()
+        };
+        let result = engine
+            .commit_optimistic_write_in_generation(
+                transaction,
+                claim,
+                NetworkWrite {
+                    query: &query,
+                    operation_name: operation_name.as_deref(),
+                    variables: &variables,
+                    data: &data,
+                    identity: None,
+                },
                 projections,
+                self.generation,
             )
             .await
-            .map_err(|e| e.to_string())?
-        {
+            .map_err(|e| e.to_string())?;
+
+        match &result {
+            CommitOptimisticWriteResult::Committed(written)
+            | CommitOptimisticWriteResult::CommittedSuperseded(
+                cache_core::engine::SupersededMutationResult {
+                    write_result: written,
+                    ..
+                },
+            ) => {
+                // Also the records its response holds where the stored value
+                // did not change: an older response must not land on those
+                // either.
+                let stored = match self.commits.watched().then(|| {
+                    engine.normalize_network(
+                        None,
+                        NetworkWrite {
+                            query: &query,
+                            operation_name: operation_name.as_deref(),
+                            variables: &variables,
+                            data: &data,
+                            identity: None,
+                        },
+                    )
+                }) {
+                    Some(Ok(response)) => {
+                        stored_by(engine, &written.changed, response.updates().clone()).await
+                    }
+                    _ => None,
+                };
+                self.commits.settle(commits, || stored);
+            }
+            // A failed commit drops its layer and changes no stored record.
+            CommitOptimisticWriteResult::Failed(_) => {}
+        }
+        let mut wire = match result {
             CommitOptimisticWriteResult::Failed(result) => {
-                Ok(CommitOptimisticWriteResultWire::Failed {
+                CommitOptimisticWriteResultWire::Failed {
                     error: result.error,
                     replacement_transaction_id: result
                         .replacement_transaction_id
                         .map(|id| id.to_string()),
                     result: wire_write_result(ops, result.write_result),
-                })
+                }
             }
             CommitOptimisticWriteResult::Committed(result) => {
-                Ok(CommitOptimisticWriteResultWire::Committed {
+                CommitOptimisticWriteResultWire::Committed {
                     result: wire_write_result(ops, result),
-                })
+                }
             }
             CommitOptimisticWriteResult::CommittedSuperseded(result) => {
-                Ok(CommitOptimisticWriteResultWire::CommittedSuperseded {
+                CommitOptimisticWriteResultWire::CommittedSuperseded {
                     replacement_transaction_id: result.replacement_transaction_id.to_string(),
                     result: wire_write_result(ops, result.write_result),
-                })
+                }
             }
-        }
+        };
+        let (CommitOptimisticWriteResultWire::Failed { result, .. }
+        | CommitOptimisticWriteResultWire::Committed { result }
+        | CommitOptimisticWriteResultWire::CommittedSuperseded { result, .. }) = &mut wire;
+        result.engine = Some(state.timing());
+        Ok(wire)
     }
 
     /// Permanently fails a claimed mutation and drops its optimistic layer.
@@ -1066,8 +1667,13 @@ impl EngineHandle {
         &self,
         keys: Vec<String>,
     ) -> Result<AffectedOperationsResultWire, String> {
-        let mut state = self.inner.write().await;
-        let EngineState { engine, ops, .. } = &mut *state;
+        let mut state = self.snapshot_write().await?;
+        let EngineState {
+            engine,
+            ops,
+            commits,
+            ..
+        } = &mut *state;
         let projections = soup::invalidation_projections(engine, &keys).await?;
         let keys: Vec<EntityKey<'static>> =
             keys.into_iter().map(|key| EntityKey(key.into())).collect();
@@ -1075,6 +1681,10 @@ impl EngineHandle {
             .invalidate_keys_with_projections(&keys, projections)
             .await
             .map_err(|error| error.to_string())?;
+        // Every field of each.
+        self.commits.settle(commits, || {
+            Some(keys.iter().map(|key| (key.clone(), None)).collect())
+        });
         Ok(AffectedOperationsResultWire {
             revision: affected.revision.to_string(),
             affected_ops: ops.names(affected.value),
@@ -1087,8 +1697,13 @@ impl EngineHandle {
         &self,
         keys: Vec<String>,
     ) -> Result<AffectedOperationsResultWire, String> {
-        let mut state = self.inner.write().await;
-        let EngineState { engine, ops, .. } = &mut *state;
+        let mut state = self.snapshot_write().await?;
+        let EngineState {
+            engine,
+            ops,
+            commits,
+            ..
+        } = &mut *state;
         let projections = soup::deletion_projections(engine, &keys).await?;
         let keys: Vec<EntityKey<'static>> =
             keys.into_iter().map(|key| EntityKey(key.into())).collect();
@@ -1096,6 +1711,10 @@ impl EngineHandle {
             .delete_keys_with_projection_changes(&keys, projections)
             .await
             .map_err(|e| e.to_string())?;
+        // Every field of each.
+        self.commits.settle(commits, || {
+            Some(keys.iter().map(|key| (key.clone(), None)).collect())
+        });
         Ok(AffectedOperationsResultWire {
             revision: affected.revision.to_string(),
             affected_ops: ops.names(affected.value),
@@ -1105,17 +1724,25 @@ impl EngineHandle {
     /// Unregisters an operation (urql teardown).
     pub async fn teardown(&self, op_id: String) -> Result<(), String> {
         let mut state = self.inner.lock().await;
-        let EngineState { engine, ops, .. } = &mut *state;
+        let EngineState {
+            engine,
+            ops,
+            commits,
+            ..
+        } = &mut *state;
         if let Some(id) = ops.remove(&op_id) {
             engine.teardown_operation(id);
         }
+        self.commits.tear_down(commits, &op_id);
         Ok(())
     }
 
     /// Drops all cached state (logout).
     pub async fn clear(&self) -> Result<CacheRevision, String> {
         let mut state = self.inner.write().await;
-        state.engine.clear().await.map_err(|e| e.to_string())
+        let revision = state.engine.clear().await.map_err(|e| e.to_string())?;
+        self.commits.settle(&mut state.commits, || None);
+        Ok(revision)
     }
 }
 

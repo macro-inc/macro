@@ -1,13 +1,16 @@
 import { PEOPLE_POLICY_VERSION } from '@graphql-cache/people/generated';
 import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
+import type {
+  DirectoryChannel,
+  DirectoryChannelType,
+} from '@queries/channel/directory-core';
 import type { ContactWindowHost } from '@queries/contacts/directory-query';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { createSignal } from 'solid-js';
 
 /**
  * Stand-ins for the Share field's recipient source at an account's real scale:
- * every channel the account is in (`useChannelsContext`) and a local contact
+ * every channel the account is in (`useChannelDirectory`) and a local contact
  * cache that answers ranked people searches after a set delay. Sizes come from
  * the page URL: `groups`, `dms`, `people`, `latency` (milliseconds). The data
  * is built on first use, so other fixtures in this bundle never pay for it.
@@ -45,7 +48,7 @@ const DOMAINS = ['example.com', 'acme.io', 'globex.com', 'initech.co'];
 type Person = { id: string; email: string; name: string; recentMs: number };
 type World = {
   people: Person[];
-  channels: ApiChannelWithLatest[];
+  channels: DirectoryChannel[];
   latencyMs: number;
 };
 
@@ -75,33 +78,40 @@ function createWorld(): World {
   const channel = (
     index: number,
     name: string,
-    channelType: ApiChannelWithLatest['channel_type'],
+    channelType: DirectoryChannelType,
     participants: string[]
-  ): ApiChannelWithLatest => {
+  ): DirectoryChannel => {
     const updated = now - Math.floor(random() * 120 * DAY_MS);
-    const id = `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
     return {
-      id,
+      id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
       name,
-      channel_type: channelType,
-      created_at: iso(updated - DAY_MS),
-      updated_at: iso(updated),
-      viewed_at: random() < 0.5 ? iso(updated) : null,
-      interacted_at: random() < 0.5 ? iso(updated) : null,
-      owner_id: VIEWER,
-      auto_join_team: false,
-      is_participant: true,
-      participants: participants.map((user_id) => ({
-        channel_id: id,
-        user_id,
+      channelType,
+      ownerId: VIEWER,
+      organizationId: null,
+      teamId: null,
+      autoJoinTeam: false,
+      createdAt: iso(updated - DAY_MS),
+      updatedAt: iso(updated),
+      viewedAt: random() < 0.5 ? iso(updated) : null,
+      interactedAt: random() < 0.5 ? iso(updated) : null,
+      isParticipant: true,
+      frecencyScore: null,
+      participants: participants.map((userId) => ({
+        userId,
         role: 'member',
-        joined_at: iso(updated - DAY_MS),
+        joinedAt: iso(updated - DAY_MS),
+        leftAt: null,
       })),
+      botParticipants: [],
+      agentDm: null,
+      latestMessage: null,
+      latestNonThreadMessage: null,
     };
   };
 
-  // Half the groups are named channels; the rest are group DMs named after
-  // their people, as the app names them. One-to-one DMs never list as groups.
+  // Half the groups are named channels; the rest are group chats (private
+  // channels) named after their people, as the app names them. One-to-one
+  // DMs never list as groups.
   const channels = [
     ...Array.from({ length: groupCount }, (_, index) => {
       const members = Array.from({ length: 3 + Math.floor(random() * 4) }, () =>
@@ -111,12 +121,10 @@ function createWorld(): World {
         index % 2 === 0
           ? `${pick(WORDS)}-${pick(WORDS)}${index % 7 === 0 ? ` ${index}` : ''}`
           : members.map((person) => person.name).join(', ');
-      return channel(
-        index,
-        name,
-        index % 2 === 0 ? 'private' : 'direct_message',
-        [VIEWER, ...members.map((person) => person.id)]
-      );
+      return channel(index, name, 'private', [
+        VIEWER,
+        ...members.map((person) => person.id),
+      ]);
     }),
     ...Array.from({ length: dmCount }, (_, index) => {
       const person = pick(people);
@@ -152,7 +160,7 @@ const world = () => {
   return current;
 };
 
-export const useChannelsContext = () => {
+export const useChannelDirectory = () => {
   const [channels] = createSignal(world().channels);
   return { channels };
 };

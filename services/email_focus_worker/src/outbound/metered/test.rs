@@ -16,6 +16,7 @@ impl FocusClassifier for Answering {
         _: Uuid,
         _: &Value,
         _: &[&'static str],
+        _: ClassifierLane,
     ) -> Result<Vec<f32>, FocusClassifierError> {
         match &self.0 {
             Some(answer) => answer.clone(),
@@ -42,7 +43,7 @@ async fn ask_while(
 ) -> Batch {
     let classifier = MeteredClassifier::new(Answering(answer), metrics.clone());
     let owner = owner();
-    let call = classifier.answer(&owner, Uuid::nil(), &Value::Null, &[]);
+    let call = classifier.answer(&owner, Uuid::nil(), &Value::Null, &[], ClassifierLane::Live);
     // A caller giving up drops the call.
     tokio::time::timeout(Duration::from_secs(1), call)
         .await

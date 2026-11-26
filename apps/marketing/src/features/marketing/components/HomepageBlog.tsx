@@ -15,7 +15,9 @@ export function HomepageBlog() {
     setAtEnd(track.scrollLeft >= track.scrollWidth - track.clientWidth - 4);
   };
   const move = (direction: number) => {
-    const cards = Array.from(track.children) as HTMLElement[];
+    const cards = Array.from(track.children).filter(
+      (child): child is HTMLElement => child instanceof HTMLElement
+    );
     const first = cards[0];
     if (!first) return;
     const positions = cards.map((card) => card.offsetLeft - first.offsetLeft);

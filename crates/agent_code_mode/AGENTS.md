@@ -17,9 +17,17 @@ stacks. Process isolation belongs to
 
 ## Start here
 
-- `SKILL.md`: the agent-facing JavaScript contract and examples.
+- `SKILL.md`: the agent-facing TypeScript contract and examples. Every
+  whole-program example here, in `src/inbound/toolset/guides/` and in SDK
+  `@agent` guides and the compose-routines skill is fenced `typescript` and
+  must type-check (`every_documented_example_type_checks`, which CI runs with
+  the Deno tests). The suggestions brief's programs are checked by the
+  harness's `suggestions_brief_programs_type_check`.
 - `src/domain/service.rs`: execution admission, identity and persistence; tool
   receipts include observed SDK activity for inline conversation snapshots.
+  Session and user runs type-check the program (`check_program`) before
+  credentials are issued, so a program with type errors never asks the owner
+  for approval or gets a token.
   A session program may return up to two SDK images (`images: [await
   canvas.render()]`); records keep only their static file ids, and every
   receipt (a saved retry too) loads their PNGs through the `ModelImages` port
@@ -28,7 +36,10 @@ stacks. Process isolation belongs to
   `agent_harness_service/src/code_mode/images.rs`.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
   session, journal or reviews; shares outcome validation with the session path.
-- `src/domain/reviews.rs`: review revisions, claims and outcomes.
+- `src/domain/reviews.rs`: review revisions, claims and outcomes. Normalize
+  pending import dependency defaults before saves and refreshed reads; only
+  successfully saved exclusions establish per-dependency review scope. Never
+  infer inclusion from an older draft's missing exclusion id.
   `src/domain/reviews/drafts.rs` holds the typed drafts and results: items
   keyed by kind, reusing `SendEmail`, `CreateCalendarEvent` and their
   responses, and the import plan selection. Decoding is the only validation
@@ -125,8 +136,20 @@ of the account that later sends the email or creates the event. Cards require
 direct user authentication; programs (`macro_authorization::is_program_run`:
 agent or routine attribution, or the execution header) cannot edit, submit, or dismiss through the HTTP decision endpoint,
 which refuses them before decoding the decision; `DecideReview` requires a real turn prompted by the
-review's acting account, and its Submit waits for `ReviewActions::approvable`
-(default: always), the hook a kind uses to refuse until it is ready. `GetReview`
+review's acting account. Every Submit, from the card or the chat, waits for
+`ReviewActions::approvable` (default: always), the hook a kind uses to refuse
+until it is ready, and is refused with `CodeModeError::NotApprovable` (400, shown on the card
+like a draft problem). A write its fence refuses after the submit puts the
+item back to pending with the reason, never `unknown`, and settles the review
+with the typed `refused` outcome: the review is open again, unchanged.
+Dismissing a review calls `ReviewActions::released`, so an import review
+lets go of the plan it held. Creating a
+review first asks `ReviewActions::presentable` (default: always), so a review
+that cannot be presented (an import whose plan failed) is refused and never
+saved. A saved, unpresented review is presented again on every read, unless
+presenting it failed with `CodeModeError::Unpresentable`: it is then dismissed
+with the reason and never presented. Creating it reports that error once;
+reads and lists return the settled review. `GetReview`
 reads final
 drafts and outcomes. Legacy notificationId/notificationAttemptAt fields are no
 longer delivery state.

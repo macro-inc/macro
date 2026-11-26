@@ -96,21 +96,28 @@ export const sandboxProgram = (): string | undefined => {
   return found;
 };
 
-// One type checker for the life of the process, made by the first script:
-// it pays for loading TypeScript and reading the agent's code, and each one
-// after costs only its own check. A start runs no script, so it pays nothing.
-// A failure to make it (a broken tsconfig) fails that script and is tried
-// again by the next, so fixing the config needs no restart.
+// One type checker per process, made when first needed: in the agent's
+// process by its first `describe` (signatures), and in each script's own
+// `cli.ts exec` process by that script's check. It pays for loading
+// TypeScript and reading the agent's code; a start needs neither. A failure
+// to make it (a broken tsconfig) fails that call and is tried again by the
+// next, so fixing the config needs no restart.
 let made: Promise<Checker> | undefined;
 const check = (): Promise<Checker> => {
-  made ??= import('typescript')
-    .then(({ default: typescript }) =>
-      checker({ typescript, config: base.config.tsconfig })
-    )
-    .catch((error: unknown) => {
-      made = undefined;
+  made ??= trace('agent.script_checker.build', async (span) => {
+    try {
+      const { default: typescript } = await import('typescript');
+      const built = checker({ typescript, config: base.config.tsconfig });
+      span.set('agent.script_checker.outcome', 'built');
+      return built;
+    } catch (error) {
+      span.set('agent.script_checker.outcome', 'failed');
       throw error;
-    });
+    }
+  }).catch((error: unknown) => {
+    made = undefined;
+    throw error;
+  });
   return made;
 };
 

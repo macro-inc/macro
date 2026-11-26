@@ -201,6 +201,7 @@ fn a_task_assignment_has_a_stable_wire_shape() {
             markdown: "The popover scrolls the page behind it.".to_owned(),
             status: Some("Todo".to_owned()),
             priority: Some("High".to_owned()),
+            start: None,
             due: Some(Utc.with_ymd_and_hms(2026, 10, 10, 0, 0, 0).unwrap()),
             assignees: vec![ContextPerson {
                 id: "bot|00000000-0000-0000-0000-00000000c5c5".to_owned(),

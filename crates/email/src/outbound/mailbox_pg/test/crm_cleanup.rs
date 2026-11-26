@@ -2,6 +2,8 @@
 //! Gmail deletion does.
 
 use super::{fixture, snapshot};
+use crate::domain::mailbox::claim::StreamClaim;
+use crate::domain::mailbox::schedule::POLL_INTERVALS;
 use crate::domain::mailbox::*;
 use email_api_client::domain::models::{
     MailboxChangePage, MailboxState, ProviderId, StreamPosition, StreamToken,
@@ -32,7 +34,11 @@ async fn candidates(db: &PgPool, link: Uuid) -> Vec<String> {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn mail_deleted_at_outlook_leaves_its_correspondents_to_the_crm_cleanup(db: PgPool) {
     let (repo, link) = fixture(&db).await;
-    let stream = repo.claim_stream(Uuid::now_v7()).await.unwrap().unwrap();
+    let stream = repo
+        .claim_stream(Uuid::now_v7(), StreamClaim::LongestDue)
+        .await
+        .unwrap()
+        .unwrap();
     repo.commit_page(
         &stream,
         &MailboxChangePage {
@@ -45,6 +51,7 @@ async fn mail_deleted_at_outlook_leaves_its_correspondents_to_the_crm_cleanup(db
             position: StreamPosition::Checkpoint(StreamToken::new("delta".into())),
             reader_revision: 1,
         },
+        POLL_INTERVALS,
     )
     .await
     .unwrap();

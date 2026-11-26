@@ -14,6 +14,7 @@ use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
     AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
 };
+use models_email::email::service::pubsub::LinkManagerLane;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use sqlx::PgPool;
@@ -25,9 +26,6 @@ use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImp
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
-const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 
 fn compose_email_api(
     db: PgPool,
@@ -106,8 +104,10 @@ async fn main() -> anyhow::Result<()> {
     let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
     let sfs_delete_queue = macro_queues::SfsDeleteQueue::new();
     let link_manager_queue = macro_queues::LinkManagerQueue::new();
+    let link_maintenance_queue = macro_queues::LinkMaintenanceQueue::new();
     let contacts_queue = macro_queues::ContactsQueue::new();
     let notification_queue = macro_queues::NotificationIngressQueue::new();
+    let search_event_queue = macro_queues::SearchEventQueue::new();
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&gmail_queue_aws_config))
         .gmail_inbox_sync_queue(&gmail_inbox_sync_queue)
@@ -119,7 +119,9 @@ async fn main() -> anyhow::Result<()> {
         .email_scheduled_queue(&email_scheduled_queue)
         .sfs_uploader_queue(&sfs_uploader_queue)
         .sfs_delete_queue(&sfs_delete_queue)
-        .email_link_manager_queue(&link_manager_queue);
+        .email_link_manager_queue(&link_manager_queue)
+        .email_link_maintenance_queue(&link_maintenance_queue)
+        .search_event_queue(&search_event_queue);
 
     let worker_cancellation_token = CancellationToken::new();
     let worker_tracker = TaskTracker::new();
@@ -136,12 +138,12 @@ async fn main() -> anyhow::Result<()> {
         event_broker_tracker.clone(),
     );
 
-    let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
-        queue: contacts::outbound::ingress::SqsContactsQueue::new(
-            aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
-            contacts_queue.to_string(),
-        ),
-    });
+    let contacts_ingress = Arc::new(email_service::composition::contacts_producer(
+        aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+        contacts_queue.to_string(),
+        config.environment,
+        email_service::outlook_flags::posthog(&config)?,
+    ));
 
     // One message per receive: messages are processed one at a time and only the one in
     // progress renews its visibility, so the rest of a batch would time out behind a long
@@ -149,6 +151,14 @@ async fn main() -> anyhow::Result<()> {
     let link_manager_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
         link_manager_queue.to_string(),
+        1,
+        config.queue_wait_time_seconds,
+    );
+    // The maintenance lane gets consumers of its own, so the daily removal sweep's
+    // purges never hold the consumer a person's removal waits for.
+    let link_maintenance_worker = sqs_worker::SQSWorker::new(
+        aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
+        link_maintenance_queue.to_string(),
         1,
         config.queue_wait_time_seconds,
     );
@@ -329,22 +339,16 @@ async fn main() -> anyhow::Result<()> {
         );
         // Newest-first imports and the live pass beside them follow
         // `enable-outlook-import-live-pass`; without a PostHog key they are off.
-        let feature_flags = config
-            .posthog_api_key()
-            .map(|key| {
-                feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                    config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
-                    key.to_owned(),
-                    Duration::from_secs(3),
-                    config.environment,
-                )
-            })
-            .transpose()
-            .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+        let feature_flags = email_service::outlook_flags::posthog(&config)?;
         let live_import_pass = email::domain::mailbox::live_pass::LiveImportPass::default();
-        worker_tracker.spawn(email_service::mailbox_sync_worker::run_live_import_pass(
+        let switch = live_import_pass.clone();
+        worker_tracker.spawn(email_service::outlook_flags::run(
             feature_flags,
-            live_import_pass.clone(),
+            email_service::outlook_flags::OutlookFlag {
+                key: email_service::outlook_flags::LIVE_IMPORT_PASS_FLAG,
+                name: "outlook import live pass",
+                set: move |on| switch.set(on),
+            },
             worker_cancellation_token.clone(),
         ));
         let mailbox_sync = email::domain::mailbox::MailboxSyncService::new(
@@ -755,35 +759,42 @@ async fn main() -> anyhow::Result<()> {
         "crm cleanup workers started"
     );
 
-    let db_link_manager = db.clone();
-    let email_api_link_manager = email_api_live.clone();
-    let auth_service_client_link_manager = auth_service_client.clone();
-    let redis_client_link_manager = redis_client.clone();
-    let sqs_client_link_manager = sqs_client.clone();
-    let crm_service_link_manager = crm_service.clone();
-    let connection_gateway_client_link_manager = connection_gateway_client.clone();
-    let notification_ingress_service_link_manager = notification_ingress_service.clone();
-    let macro_event_broker_link_manager = macro_event_broker.clone();
-    let contacts_ingress_link_manager = contacts_ingress.clone();
-    let cancellation_token = worker_cancellation_token.clone();
-    // daily link_manager operations for user contacts and inbox subscriptions
-    worker_tracker.spawn(async move {
-        email_service::pubsub::link_manager::worker::run_worker_with_cancellation(
-            link_manager_worker,
-            db_link_manager,
-            email_api_link_manager,
-            auth_service_client_link_manager,
-            redis_client_link_manager,
-            sqs_client_link_manager,
-            crm_service_link_manager,
-            connection_gateway_client_link_manager,
-            notification_ingress_service_link_manager,
-            macro_event_broker_link_manager,
-            contacts_ingress_link_manager,
-            cancellation_token,
-        )
-        .await;
-    });
+    // link_manager operations: removals, health probes, inbox subscriptions and
+    // contacts, one consumer per lane
+    for (lane, worker) in [
+        (LinkManagerLane::Interactive, link_manager_worker),
+        (LinkManagerLane::Maintenance, link_maintenance_worker),
+    ] {
+        let db_link_manager = db.clone();
+        let email_api_link_manager = email_api_live.clone();
+        let auth_service_client_link_manager = auth_service_client.clone();
+        let redis_client_link_manager = redis_client.clone();
+        let sqs_client_link_manager = sqs_client.clone();
+        let crm_service_link_manager = crm_service.clone();
+        let connection_gateway_client_link_manager = connection_gateway_client.clone();
+        let notification_ingress_service_link_manager = notification_ingress_service.clone();
+        let macro_event_broker_link_manager = macro_event_broker.clone();
+        let contacts_ingress_link_manager = contacts_ingress.clone();
+        let cancellation_token = worker_cancellation_token.clone();
+        worker_tracker.spawn(async move {
+            email_service::pubsub::link_manager::worker::run_worker_with_cancellation(
+                lane,
+                worker,
+                db_link_manager,
+                email_api_link_manager,
+                auth_service_client_link_manager,
+                redis_client_link_manager,
+                sqs_client_link_manager,
+                crm_service_link_manager,
+                connection_gateway_client_link_manager,
+                notification_ingress_service_link_manager,
+                macro_event_broker_link_manager,
+                contacts_ingress_link_manager,
+                cancellation_token,
+            )
+            .await;
+        });
+    }
 
     let db_scheduled = db.clone();
     let email_api_scheduled = email_api_live;

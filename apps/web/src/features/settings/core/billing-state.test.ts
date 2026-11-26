@@ -17,22 +17,38 @@ const baseline: BillingInput = {
 
 describe('billing presentation policy', () => {
   it('requests a confirmed first-month trial when a Free account selects Pro', () => {
-    expect(getFreePlanCheckoutRequest('premium', true)).toEqual({
+    expect(getFreePlanCheckoutRequest('premium', true, 'year')).toEqual({
       plan: 'premium',
+      interval: 'month',
       onboardingTrial: true,
     });
   });
 
   it('keeps Max checkout on paid terms', () => {
-    expect(getFreePlanCheckoutRequest('max', true)).toEqual({
+    expect(getFreePlanCheckoutRequest('max', true, 'year')).toEqual({
       plan: 'max',
+      interval: 'year',
+      onboardingTrial: false,
+    });
+  });
+
+  it('buys Business monthly or annually as chosen', () => {
+    expect(getFreePlanCheckoutRequest('business', true, 'month')).toEqual({
+      plan: 'business',
+      interval: 'month',
+      onboardingTrial: false,
+    });
+    expect(getFreePlanCheckoutRequest('business', false, 'year')).toEqual({
+      plan: 'business',
+      interval: 'year',
       onboardingTrial: false,
     });
   });
 
   it('lets a returning customer purchase Pro without requesting another trial', () => {
-    expect(getFreePlanCheckoutRequest('premium', false)).toEqual({
+    expect(getFreePlanCheckoutRequest('premium', false, 'month')).toEqual({
       plan: 'premium',
+      interval: 'month',
       onboardingTrial: false,
     });
   });
@@ -105,6 +121,9 @@ describe('billing presentation policy', () => {
   it('describes mixed seat plans without conflating Pro and Max', () => {
     expect(describeSeatPlans(['premium', 'premium', 'max'])).toBe(
       '2 Pro seats, 1 Max seat'
+    );
+    expect(describeSeatPlans(['business', 'max', 'business'])).toBe(
+      '2 Business seats, 1 Max seat'
     );
   });
 });

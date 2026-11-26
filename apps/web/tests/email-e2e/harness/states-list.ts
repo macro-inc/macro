@@ -50,7 +50,12 @@ export async function deliverToTrash(
 
 /** What the worker that reads mail for Focus decided about a thread. */
 export type FocusSeed = {
-  /** What the owner owes: a reply, or a follow up on their own message. */
+  /**
+   * What the owner owes: a reply, or a follow up on their own message. The
+   * list shows Follow up only once the owner's message has waited three days
+   * for an answer or its due day has come, so a follow-up seed on a reply
+   * just sent needs a `dueOn` of today or earlier.
+   */
   flag?: 'reply' | 'follow-up';
   /** What the mail is, as stored (`FocusCategory`, snake case). */
   category?: 'customer' | 'team' | 'known' | 'calendar' | 'other';
@@ -62,28 +67,38 @@ export type FocusSeed = {
 
 /**
  * Has the thread in Focus as the worker would leave it (no stack runs its
- * model), like `inFocus` in `ways-list-more.ts` with a category, a due day
- * and a trend too.
+ * model), classified on its latest message as the list orders mail
+ * (`focus_for_threads` in `crates/email/src/outbound/focus_pg.rs`), with the
+ * due day's start in this machine's zone as the instant it comes due. The
+ * dates count because they are stored with the verdict they belong to.
  */
 export async function seedFocus(
   mailbox: Mailbox,
   threadId: string,
   seed: FocusSeed
 ): Promise<void> {
+  const followUp = seed.flag === 'follow-up';
+  const dueAt = seed.dueOn
+    ? `'${new Date(`${seed.dueOn}T00:00:00`).toISOString()}'::timestamptz`
+    : 'NULL';
   const rows = await mailbox.stack.sql(
     `INSERT INTO email_thread_focus (
        thread_id, link_id, classified_message_id, classified_message_ts,
        is_focus, category, importance, needs_reply, needs_follow_up, scores,
-       model, classified_at, importance_rate, due_on)
+       model, classified_at, importance_rate, due_on, awaiting_reply, due_at,
+       dates_classified_at)
      SELECT t.id, t.link_id, m.id, COALESCE(m.internal_date_ts, m.created_at),
             true, '${seed.category ?? 'other'}', 50,
-            ${seed.flag === 'reply'}, ${seed.flag === 'follow-up'},
+            ${seed.flag === 'reply'}, ${followUp},
             '{}'::jsonb, 'email-e2e', now(), ${seed.rate ?? 0},
-            ${seed.dueOn ? `'${seed.dueOn}'::date` : 'NULL'}
+            ${seed.dueOn ? `'${seed.dueOn}'::date` : 'NULL'},
+            ${followUp}, ${dueAt}, now()
      FROM email_threads t
      JOIN LATERAL (
        SELECT id, internal_date_ts, created_at FROM email_messages
-       WHERE thread_id = t.id ORDER BY created_at DESC LIMIT 1
+       WHERE thread_id = t.id AND NOT is_draft
+       ORDER BY COALESCE(internal_date_ts, created_at) DESC, id DESC
+       LIMIT 1
      ) m ON true
      WHERE t.id = '${threadId}' AND t.link_id = '${mailbox.inbox.linkId}'
      RETURNING thread_id`

@@ -1,14 +1,15 @@
 //! What the agent's periodic upkeep reads from the service: a sample for
 //! the gauges and the service's own readiness checks.
 
+use std::sync::PoisonError;
 use std::sync::atomic::Ordering;
 
-use firecracker_host_api::{GoldenState, PowerState};
+use firecracker_host_api::{GoldenKey, GoldenState, PowerState};
 
-use super::{HostProbe, HostService};
+use super::{HostProbe, HostService, SwapPlacement};
 use crate::domain::health::{CheckOutcome, HealthCheck, HealthReport};
 use crate::domain::metrics::{HostSample, StorageUsage};
-use crate::domain::ports::{Disks, GoldenAvailability, Goldens, Machines, Store};
+use crate::domain::ports::{Disks, GoldenAvailability, Goldens, GuestSwap, Machines, Store};
 
 impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D, G, M, P> {
     /// Finish deferred disk deletes; failures are logged, the next pass
@@ -19,12 +20,12 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
         }
     }
 
-    /// Make every sold size's `/home` template; failures are logged and the
+    /// Make every sold size's empty `/home`; failures are logged and the
     /// readiness check stays failed.
     pub async fn prepare_home_templates(&self) {
         if let Err(error) = self
             .disks
-            .prepare_home_templates(&self.home_sizes_gib())
+            .prepare_home_templates(&self.restorable_goldens(), &self.home_sizes_gib())
             .await
         {
             tracing::error!(error = ?error, "making the /home templates failed");
@@ -34,21 +35,59 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
     /// Top up the ready disk sets of every restorable golden; failures are
     /// logged, creates clone instead.
     pub async fn refill_spares(&self) {
-        let ready: Vec<_> = self
-            .goldens
-            .list()
-            .into_iter()
-            .map(|golden| golden.key)
-            // Restorable: ready and its image still installed.
-            .filter(|key| self.goldens.availability(key) == GoldenAvailability::Ready)
-            .collect();
         if let Err(error) = self
             .disks
-            .refill_spares(&ready, &self.home_sizes_gib())
+            .refill_spares(&self.restorable_goldens(), &self.home_sizes_gib())
             .await
         {
             tracing::warn!(error = ?error, "refilling spare disk sets failed; creates clone meanwhile");
         }
+    }
+
+    /// Let VMs swap only while all swap stays in RAM: a swap device on
+    /// disk (say, one added by hand) gets none of their memory, whether the
+    /// squeeze or the kernel's own reclaim would push it. Applied on change.
+    pub async fn guard_guest_swap(&self) {
+        let placement = self.probe.measure().swap_placement;
+        let swap = match placement {
+            SwapPlacement::RamOnly => GuestSwap::Allowed,
+            SwapPlacement::Disk { .. } | SwapPlacement::Unknown => GuestSwap::Off,
+        };
+        if *self
+            .guest_swap
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            == Some(swap)
+        {
+            return;
+        }
+        match self.machines.set_guest_swap(swap).await {
+            Ok(()) => {
+                *self
+                    .guest_swap
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner) = Some(swap);
+                match swap {
+                    GuestSwap::Allowed => tracing::info!("all swap is in RAM: VMs may swap"),
+                    GuestSwap::Off => {
+                        tracing::warn!(placement = ?placement, "swap may reach a disk: VMs may not swap");
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::error!(error = ?error, swap = ?swap, "setting the VMs' swap limit failed; retrying next pass");
+            }
+        }
+    }
+
+    /// Goldens a create can use: ready and their image still installed.
+    fn restorable_goldens(&self) -> Vec<GoldenKey> {
+        self.goldens
+            .list()
+            .into_iter()
+            .map(|golden| golden.key)
+            .filter(|key| self.goldens.availability(key) == GoldenAvailability::Ready)
+            .collect()
     }
 
     /// The host now.
@@ -115,16 +154,30 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
                 "the last reconcile left problems; its log has them",
             )
         };
-        let swap = if self.squeeze_window().is_some() && self.probe.measure().swap_total_bytes == 0
-        {
-            CheckOutcome::failed(
+        let measurement = self.probe.measure();
+        let swap = match measurement.swap_placement {
+            SwapPlacement::Unknown => CheckOutcome::failed(
                 HealthCheck::Swap,
-                "the host limits ask for the zram squeeze, but the host has no swap",
-            )
-        } else {
-            CheckOutcome::passed(HealthCheck::Swap)
+                "/proc/swaps is unreadable: swap may be on disk, so VMs may not swap",
+            ),
+            SwapPlacement::Disk { .. } => CheckOutcome::failed(
+                HealthCheck::Swap,
+                "a swap device that writes to disk is active (not zram, or zram with writeback): VMs may not swap",
+            ),
+            SwapPlacement::RamOnly
+                if self.squeeze_window().is_some() && measurement.swap_total_bytes == 0 =>
+            {
+                CheckOutcome::failed(
+                    HealthCheck::Swap,
+                    "the host limits ask for the zram squeeze, but the host has no swap",
+                )
+            }
+            SwapPlacement::RamOnly => CheckOutcome::passed(HealthCheck::Swap),
         };
-        let home_templates = if self.disks.home_templates_ready(&self.home_sizes_gib()) {
+        let home_templates = if self
+            .disks
+            .home_templates_ready(&self.restorable_goldens(), &self.home_sizes_gib())
+        {
             CheckOutcome::passed(HealthCheck::HomeTemplates)
         } else {
             CheckOutcome::failed(

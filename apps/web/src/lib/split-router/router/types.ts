@@ -107,6 +107,8 @@ export type LeaveGuard = (context: LeaveGuardContext) => MaybePromise<boolean>;
 export type LeaveGuardOptions = {
   /** Also check changes to these search namespaces while the view stays mounted. */
   search?: readonly string[];
+  /** Also guard opening or replacing a child route while this view stays mounted. */
+  descendants?: boolean;
 };
 
 export type RouteMatchInfo = {

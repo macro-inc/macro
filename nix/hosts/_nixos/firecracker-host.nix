@@ -8,7 +8,8 @@
 # kernel and sysctl hardening, the host's own input firewall (the agent adds
 # its guest tables, prefix `fch`, at start), an optional WireGuard tunnel to
 # the control plane, TLS as root-only credentials, the Datadog agent the
-# agent's OTLP goes to, and a health check. Security findings it implements
+# agent's OTLP goes to, Grafana Alloy shipping host and per-computer cgroup
+# metrics to Macro's Prometheus, and a health check. Security findings it implements
 # are named S-<n> (docs/architecture/firecracker-computers-security.md).
 {
   config,
@@ -177,7 +178,7 @@ in
       goldenRootDiskGib = lib.mkOption {
         type = lib.types.ints.positive;
         example = 32;
-        description = "Size a golden's rootfs is grown to before its boot: the root disk computers are sold with (the guest grows its filesystem at boot, not at restore). Must equal ROOT_DISK_GIB in crates/hosted_runtimes/src/domain/size.rs.";
+        description = "Size a golden's rootfs is grown to before its boot: the root disk computers are sold with (the guest grows its filesystem at boot, not at restore). Must equal ROOT_DISK_GIB in crates/hosted_runtimes/src/domain/image.rs (each tier's root_disk_gib in domain/size.rs).";
       };
       arcMaxBytes = lib.mkOption {
         type = lib.types.ints.positive;
@@ -194,6 +195,19 @@ in
       type = lib.types.ints.between 1 16384;
       default = 128;
       description = "Netns slots: the most computers with a process at once.";
+    };
+    zramPercent = lib.mkOption {
+      type = lib.types.ints.between 1 100;
+      default = 25;
+      description = ''
+        Size of the zram swap device, in percent of RAM (uncompressed; zstd
+        stores guest pages at roughly a third). The squeeze pushes idle
+        computers' memory there while host memory is inside the control
+        plane's squeeze window, so it must hold what the window can push: a
+        window of 90-102 GiB on a 128 GiB host squeezes up to ~12 GiB of host
+        memory, well inside the default 32 GiB. zram is the host's only swap:
+        a swap device on disk would take guest memory to disk.
+      '';
     };
     uplink = lib.mkOption {
       type = lib.types.str;
@@ -387,6 +401,31 @@ in
         description = "Path of the Datadog API key (root 0400, outside the Nix store).";
       };
     };
+    otlpEndpoint = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = if cfg.datadog.enable then "http://127.0.0.1:4317" else null;
+      defaultText = lib.literalExpression ''if datadog.enable then "http://127.0.0.1:4317" else null'';
+      example = "http://10.0.0.5:4317";
+      description = "Where the host agent sends its spans (OTLP gRPC): the local Datadog agent by default, or a collector on a host without one. Null sends none.";
+    };
+    alloy = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Run Grafana Alloy: host metrics and each computer's CPU, memory and disk IO from its VM's cgroup, written to Macro's Prometheus for the fleet dashboard. Nothing runs in guests.";
+      };
+      remoteWriteUrl = lib.mkOption {
+        type = lib.types.str;
+        default = "https://otlp.macro-internal.com/api/v1/write";
+        description = "Prometheus remote-write endpoint of the observability stack (infra/stacks/observability).";
+      };
+      passwordFile = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "/var/lib/macro/metrics-remote-write-password";
+        description = "Path of the remote-write password (root 0400, outside the Nix store).";
+      };
+    };
     environment = lib.mkOption {
       type = lib.types.enum [
         "local"
@@ -419,12 +458,25 @@ in
           message = "A user, group or subordinate id range falls in the Firecracker VMs' range (${toString uidBase} + slots).";
         }
         {
+          # Swap files and partitions alike: guest memory never goes to disk.
+          assertion = config.swapDevices == [ ];
+          message = "Firecracker hosts swap only to zram (macro.firecrackerHost.zramPercent); swapDevices must be empty.";
+        }
+        {
           assertion = cfg.datadog.enable -> cfg.datadog.apiKeyFile != null;
           message = "macro.firecrackerHost.datadog.apiKeyFile is required with the Datadog agent on.";
         }
         {
           assertion = cfg.datadog.apiKeyFile == null || !(lib.hasPrefix "/nix/store/" cfg.datadog.apiKeyFile);
           message = "The Datadog API key must not be in the Nix store.";
+        }
+        {
+          assertion = cfg.alloy.enable -> cfg.alloy.passwordFile != null;
+          message = "macro.firecrackerHost.alloy.passwordFile is required with Alloy on.";
+        }
+        {
+          assertion = cfg.alloy.passwordFile == null || !(lib.hasPrefix "/nix/store/" cfg.alloy.passwordFile);
+          message = "The remote-write password must not be in the Nix store.";
         }
       ]
       ++ lib.optionals (cfg.moves != null) [
@@ -460,6 +512,14 @@ in
         "kvm-intel"
         "tun"
       ];
+
+      # The squeeze's only swap, in RAM. The agent fails its swap health
+      # check (and stops squeezing) if anything else swaps.
+      zramSwap = {
+        enable = true;
+        algorithm = "zstd";
+        memoryPercent = cfg.zramPercent;
+      };
 
       # S-12 and friends: the host runs nothing but the agent, its VMs and
       # their Firecracker processes.
@@ -652,10 +712,11 @@ in
           DD_ENV = cfg.environment;
           RUST_LOG = "info";
         }
-        # Spans and metrics go to the local Datadog agent; host.name joins
-        # them to the host's own metrics and to the fleet's host rows.
-        // lib.optionalAttrs cfg.datadog.enable {
-          OTEL_EXPORTER_OTLP_ENDPOINT = "http://127.0.0.1:4317";
+        # Spans and metrics go to the local Datadog agent, or the collector
+        # `otlpEndpoint` names; host.name joins them to the host's own
+        # metrics and to the fleet's host rows.
+        // lib.optionalAttrs (cfg.otlpEndpoint != null) {
+          OTEL_EXPORTER_OTLP_ENDPOINT = cfg.otlpEndpoint;
           OTEL_RESOURCE_ATTRIBUTES = "host.name=${config.networking.hostName}";
         };
         serviceConfig = {
@@ -730,9 +791,10 @@ in
     })
 
     (lib.mkIf (cfg.storage.kind == "zfs") {
-      # Computers are dataset clones; block cloning still copies files inside
-      # the pool. It had corruption fixes through 2.2.4 and is on by default
-      # from 2.3; the hosts were measured on 2.4.
+      # Computers are dataset clones; hibernation and golden builds still
+      # move files with block cloning (the agent checks the same at start).
+      # Block cloning had corruption fixes through 2.2.4 and is on by
+      # default from 2.3; the hosts were measured on 2.4.
       assertions = [
         {
           assertion = lib.versionAtLeast config.boot.zfs.package.version minimumZfsVersion;
@@ -746,9 +808,14 @@ in
       boot.supportedFilesystems = [ "zfs" ];
       boot.zfs.extraPools = [ zfsPool ];
       boot.zfs.forceImportRoot = false;
-      # zfs_bclone_enabled and zfs_bclone_wait_dirty stay at their default
-      # 1; the storage unit refuses to go on otherwise.
-      boot.kernelParams = [ "zfs.zfs_arc_max=${toString cfg.storage.arcMaxBytes}" ];
+      # Block cloning on, and a clone of dirty data waits for it (both the
+      # 2.4 defaults, pinned so a default change can't turn them off); the
+      # storage unit and the agent refuse to go on otherwise.
+      boot.kernelParams = [
+        "zfs.zfs_arc_max=${toString cfg.storage.arcMaxBytes}"
+        "zfs.zfs_bclone_enabled=1"
+        "zfs.zfs_bclone_wait_dirty=1"
+      ];
       services.zfs.autoScrub.enable = true;
       services.zfs.trim.enable = true;
 
@@ -860,6 +927,37 @@ in
         ];
       };
       users.users.datadog.extraGroups = [ "systemd-journal" ];
+    })
+
+    (lib.mkIf cfg.alloy.enable {
+      services.alloy = {
+        enable = true;
+        configPath = pkgs.writeText "firecracker-host.alloy" (
+          lib.replaceStrings
+            [
+              "@HOST@"
+              "@ENVIRONMENT@"
+              "@REMOTE_WRITE_URL@"
+            ]
+            [
+              config.networking.hostName
+              cfg.environment
+              cfg.alloy.remoteWriteUrl
+            ]
+            (builtins.readFile ./firecracker-host.alloy)
+        );
+        extraFlags = [
+          "--server.http.listen-addr=127.0.0.1:12345"
+          "--disable-reporting"
+        ];
+      };
+      systemd.services.alloy.serviceConfig = {
+        # The password reaches Alloy as a root-only credential, like the
+        # agent's keys (S-18).
+        LoadCredential = [ "remote-write-password:${cfg.alloy.passwordFile}" ];
+        # Metrics never starve computers of memory.
+        MemoryMax = "512M";
+      };
     })
   ];
 }

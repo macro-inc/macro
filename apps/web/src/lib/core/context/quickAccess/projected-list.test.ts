@@ -3,6 +3,7 @@ import type {
   SearchCachePage,
   SearchDocumentWire,
 } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import { SpanStatusCode, trace } from '@opentelemetry/api';
 import {
@@ -91,6 +92,77 @@ function deferred<T>() {
 }
 
 describe('Quick Access local projection', () => {
+  it('retains visible results while refreshing after a same-access baseline correction', async () => {
+    const refresh = Promise.withResolvers<SearchCachePage>();
+    const started = Promise.withResolvers<void>();
+    const [revision, setRevision] = createSignal(0);
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(page(['kept']))
+      .mockImplementationOnce(() => {
+        started.resolve();
+        return refresh.promise;
+      });
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision,
+        materialize,
+      })
+    );
+    await vi.waitFor(() =>
+      expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:kept' }])
+    );
+    cacheSessionGeneration.initialize('corrected-owner-generation');
+    setRevision(1);
+    await started.promise;
+    expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:kept' }]);
+    refresh.resolve(page(['updated']));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:updated' }]);
+  });
+
+  it('drops email-only results and a delayed materialization when access is revoked', async () => {
+    const delayed = deferred<{ id: string }[]>();
+    const [revision, setRevision] = createSignal(0);
+    const project = vi
+      .fn()
+      .mockResolvedValueOnce([{ id: 'old mail' }])
+      .mockImplementationOnce(() => delayed.promise)
+      .mockResolvedValue([]);
+    const list = root(() =>
+      createProjectedList({
+        host: {
+          search: async () => ({
+            documents: [document('mail', 'email')],
+            nextCursor: null,
+          }),
+        },
+        buckets: ['email'],
+        revision,
+        materialize: project,
+      })
+    );
+    await vi.waitFor(() => expect(list.items()).toEqual([{ id: 'old mail' }]));
+    setRevision(1);
+    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(2));
+    const retirement = deferred<void>();
+    const transition = cacheSessionGeneration.transition(
+      () => retirement.promise
+    );
+    try {
+      await vi.waitFor(() => expect(list.items()).toEqual([]));
+      delayed.resolve([{ id: 'stale delayed mail' }]);
+      await Promise.resolve();
+      expect(list.items()).toEqual([]);
+    } finally {
+      retirement.resolve();
+      await transition;
+    }
+    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(3));
+    expect(list.items()).toEqual([]);
+  });
   it('ranks the row reads of a typed search with it, and leaves browsing reads alone', async () => {
     const readRecordsByKeys = vi.fn(async () => ({
       revision: 0 as never,
@@ -327,7 +399,8 @@ describe('Quick Access local projection', () => {
         host: {
           search,
           onCacheGenerationChanged: (listener) => {
-            engineReplaced = () => listener({ storage: 'preserved' });
+            engineReplaced = () =>
+              listener({ storage: 'preserved', queue: 'preserved' });
             return () => {};
           },
         },
@@ -369,7 +442,8 @@ describe('Quick Access local projection', () => {
         host: {
           search,
           onCacheGenerationChanged: (listener) => {
-            engineReplaced = () => listener({ storage: 'preserved' });
+            engineReplaced = () =>
+              listener({ storage: 'preserved', queue: 'preserved' });
             return () => {};
           },
         },
@@ -389,6 +463,40 @@ describe('Quick Access local projection', () => {
     expect(list.isSearching()).toBe(false);
   });
 
+  it('asks again for a first answer that ended before any owner was ready', async () => {
+    const timedOut = new Error('cache search timeout');
+    let ownerReady = () => {};
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockRejectedValueOnce(timedOut)
+      .mockResolvedValueOnce(page(['seamus']));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const list = root(() =>
+      createProjectedList({
+        host: {
+          search,
+          onOwnerReady: (listener) => {
+            ownerReady = listener;
+            return () => {};
+          },
+        },
+        buckets: ['note'],
+        revision: () => 0,
+        searchTerm: () => 'sea',
+        materialize,
+      })
+    );
+    await vi.waitFor(() => expect(list.error()).toBe(timedOut));
+
+    ownerReady();
+    await vi.waitFor(() =>
+      expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:seamus' }])
+    );
+    ownerReady();
+    await Promise.resolve();
+    expect(search).toHaveBeenCalledTimes(2);
+  });
+
   it('stops reporting a refused search as pending after the limit, and still replays it when the engine arrives', async () => {
     vi.useFakeTimers();
     const refused = Object.assign(new Error('cache reads unavailable'), {
@@ -405,7 +513,8 @@ describe('Quick Access local projection', () => {
         host: {
           search,
           onCacheGenerationChanged: (listener) => {
-            engineReplaced = () => listener({ storage: 'preserved' });
+            engineReplaced = () =>
+              listener({ storage: 'preserved', queue: 'preserved' });
             return () => {};
           },
         },
@@ -489,7 +598,8 @@ describe('Quick Access local projection', () => {
         host: {
           search,
           onCacheGenerationChanged: (listener) => {
-            engineReplaced = () => listener({ storage: 'preserved' });
+            engineReplaced = () =>
+              listener({ storage: 'preserved', queue: 'preserved' });
             return () => {};
           },
         },

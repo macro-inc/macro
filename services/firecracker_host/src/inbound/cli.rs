@@ -13,7 +13,8 @@ use firecracker_host_api::moves::{
 };
 use firecracker_host_api::{
     Action, ComputerId, ComputerResources, ComputerRole, ControlPlaneId, CreateComputer,
-    EnrollmentDocument, EnrollmentGeneration, GoldenKey, GuestImage, PairingId, SetEnrollment,
+    EnrollmentDocument, EnrollmentGeneration, GoldenKey, GuestImage, PairingId, ReplaceSystemDisk,
+    SetEnrollment, StageImage,
 };
 use rootcause::Report;
 use serde::Deserialize;
@@ -62,6 +63,14 @@ pub enum ClientCommand {
         vcpus: u8,
         #[arg(long)]
         memory_mib: u32,
+    },
+    /// Every image and where its staging stands.
+    Images,
+    /// Stage an image from a JSON `StageImage` request (image, files with
+    /// url, sha256 and bytes); answers at once, see `images`.
+    StageImage {
+        #[arg(long)]
+        request_file: PathBuf,
     },
     /// Every computer.
     List,
@@ -123,6 +132,13 @@ pub enum ClientCommand {
     Unfreeze { computer_id: ComputerId },
     /// Snapshot to disk and end the process.
     Hibernate { computer_id: ComputerId },
+    /// Boot from a system disk of `image` (or back to the previous one),
+    /// keeping `/home` and identity.
+    ReplaceSystemDisk {
+        computer_id: ComputerId,
+        #[arg(long)]
+        image: String,
+    },
     /// Destroy the computer and its disks.
     Destroy { computer_id: ComputerId },
     /// On the target: accept the computer from a source holding `ticket`
@@ -321,6 +337,21 @@ async fn run_command(endpoint: PathBuf, command: ClientCommand) -> Result<i32, C
         ClientCommand::Hibernate { computer_id } => {
             power(&client, computer_id, Action::Hibernate).await?
         }
+        ClientCommand::Images => json(&client.images().await?)?,
+        ClientCommand::StageImage { request_file } => {
+            let request: StageImage = serde_json::from_slice(&std::fs::read(request_file)?)?;
+            json(&client.stage_image(&request).await?)?
+        }
+        ClientCommand::ReplaceSystemDisk { computer_id, image } => json(
+            &client
+                .replace_system_disk(
+                    computer_id,
+                    &ReplaceSystemDisk {
+                        image: image_name(&image)?,
+                    },
+                )
+                .await?,
+        )?,
         ClientCommand::Destroy { computer_id } => {
             client.destroy(computer_id).await?;
             String::new()
@@ -438,6 +469,7 @@ async fn exec(
             ("PATH".to_owned(), GUEST_PATH.to_owned()),
         ]),
         cwd: home.to_owned(),
+        trace_id: None,
     };
     let (mut input, mut output) = client.exec(computer_id, request).await?.split();
 

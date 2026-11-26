@@ -9,8 +9,8 @@ use serde_json::json;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
 
-use super::{ADA, BOB, id, message_id, start, token};
-use crate::{Fault, FaultError, Route};
+use super::{ADA, BOB, folders, id, message_id, start, token};
+use crate::{Fault, FaultError, MessageChange, Route};
 
 const TWO_MAILBOXES: &str = r#"
 mailboxes:
@@ -129,9 +129,9 @@ async fn sending_a_draft_delivers_it_to_the_recipients_mailbox() {
     // Bob reads it with the real client, attachment included.
     let bob = token(&emulator, BOB);
     let received = message_id(&emulator, BOB, "Plan");
-    let folders = api.folders(&bob).await.unwrap();
+    let bob_folders = folders(&api, &bob).await;
     let read = api
-        .message(&bob, Uuid::now_v7(), &received, &folders)
+        .message(&bob, Uuid::now_v7(), &received, &bob_folders)
         .await
         .unwrap()
         .unwrap();
@@ -149,14 +149,55 @@ async fn sending_a_draft_delivers_it_to_the_recipients_mailbox() {
     assert_eq!(bytes, b"the plan");
 
     // Ada's copy reads as sent, by the flag that survives folder moves.
-    let folders = api.folders(&ada).await.unwrap();
+    let ada_folders = folders(&api, &ada).await;
     let own = api
-        .message(&ada, Uuid::now_v7(), &draft.id, &folders)
+        .message(&ada, Uuid::now_v7(), &draft.id, &ada_folders)
         .await
         .unwrap()
         .unwrap();
     assert!(own.content.message.is_sent);
     assert_eq!(own.draft_correlation, Some(request.correlation));
+}
+
+#[tokio::test]
+async fn the_sync_read_and_the_draft_read_of_a_draft_hold_the_same_content() {
+    let (emulator, api) = start(TWO_MAILBOXES).await;
+    let ada = token(&emulator, ADA);
+    let created = api
+        .create_draft(&ada, &request("Plan", "<p>First</p>"))
+        .await
+        .unwrap();
+    let ada_folders = folders(&api, &ada).await;
+    let read = async || {
+        let synced = api
+            .message(&ada, Uuid::now_v7(), &created.id, &ada_folders)
+            .await
+            .unwrap()
+            .unwrap();
+        let draft = api.get_draft(&ada, &created.id).await.unwrap().unwrap();
+        assert_eq!(synced.version, draft.version);
+        assert!(synced.draft_content.is_some());
+        assert_eq!(synced.draft_content, draft.content());
+        synced.draft_content
+    };
+
+    let before = read().await;
+    let edit = MessageChange {
+        body: Some("<p>Second</p>".into()),
+        ..MessageChange::default()
+    };
+    emulator
+        .update_message(ADA, created.id.as_str(), &edit)
+        .unwrap();
+    assert_ne!(read().await, before);
+
+    api.submit_draft(&ada, &created.id).await.unwrap();
+    let synced = api
+        .message(&ada, Uuid::now_v7(), &created.id, &ada_folders)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(synced.draft_content, None);
 }
 
 #[tokio::test]

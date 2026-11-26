@@ -166,6 +166,14 @@ struct Programs(std::sync::Mutex<usize>);
 
 #[async_trait::async_trait]
 impl ProgramExecutor for Programs {
+    async fn check_program(
+        &self,
+        _: &code_execution::domain::ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<(), code_execution::domain::Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: code_execution::domain::ExecuteRequest,
@@ -190,6 +198,7 @@ impl ProgramChecker for NoChecks {
         &self,
         _: &[code_execution::domain::SourceFile],
         _: &str,
+        _: code_execution::domain::ProgramImports,
     ) -> Result<Vec<code_execution::domain::Diagnostic>, code_execution::domain::CheckError> {
         Ok(Vec::new())
     }
@@ -332,6 +341,14 @@ struct RunTokens(std::sync::Mutex<Vec<String>>);
 
 #[async_trait::async_trait]
 impl ProgramExecutor for RunTokens {
+    async fn check_program(
+        &self,
+        _: &code_execution::domain::ExecuteRequest,
+        _: code_execution::domain::ContextShape,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<(), code_execution::domain::Outcome> {
+        Ok(())
+    }
     async fn execute_program(
         &self,
         _: code_execution::domain::ExecuteRequest,
@@ -500,10 +517,13 @@ mod real_deno {
         let runner = DenoRunner::new(deno.clone(), root.path().join("runs"), 128)
             .await
             .unwrap();
-        let executor = ExecutionService::new(Arc::new(runner), Limits::default()).unwrap();
-        let checker = DenoChecker::new(deno, root.path().join("checks"), 1, 64 * 1024)
-            .await
-            .unwrap();
+        let checker = Arc::new(
+            DenoChecker::new(deno, root.path().join("checks"), 1, 4, 64 * 1024)
+                .await
+                .unwrap(),
+        );
+        let executor =
+            ExecutionService::new(Arc::new(runner), checker.clone(), Limits::default()).unwrap();
         let endpoints = code_execution::domain::SdkEndpoints {
             hosts: ["cognition", "email", "storage"]
                 .map(|name| (name.to_owned(), host.to_owned()))
@@ -512,7 +532,7 @@ mod real_deno {
         };
         let code = SdkRoutineCode::new(
             Arc::new(executor),
-            Arc::new(checker),
+            checker,
             FixedToken,
             endpoints,
             Arc::new(ai_usage::NoOpUsageRecorder),
@@ -676,6 +696,58 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         assert!(failing[0].problems[0].contains("Property 'total' does not exist"));
     }
 
+    /// A channel message is typed, so a field the event doesn't carry fails
+    /// the check; every read the code-step guide has taught still checks,
+    /// so saved routines that make them aren't rewritten when the contract
+    /// changes.
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn an_event_message_is_typed_and_the_reads_the_guide_taught_still_check() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        let step = |body: &str| {
+            program(json!([{
+                "type": "code",
+                "title": "Read the event",
+                "source": format!(
+                    "export async function main({{ trigger }}: StepContext) {{\n  if (trigger.kind !== 'event') return null;\n  {body}\n}}\n"
+                ),
+            }]))
+        };
+        for body in [
+            // What the guide teaches now.
+            "const reply: boolean = trigger.item.message.is_reply; const root: string = trigger.item.message.root_id; return { reply, root, id: trigger.item.message_id ?? null };",
+            "if (trigger.item.message.is_reply) return { skipped: true }; return { text: trigger.item.message.text.toUpperCase() };",
+            "return { parent: trigger.item.thread_parent?.text ?? null, by: trigger.item.thread_parent?.sender ?? null };",
+            // What it taught before: `thread_id`, and the other events' items.
+            "if (trigger.item.message.thread_id !== trigger.item.message_id) return { skipped: true }; return { thread: trigger.item.message.thread_id };",
+            "const message = trigger.item.message; return { from: message.sender.toLowerCase(), text: message.text, channel: trigger.item.channel.name };",
+            "if (!trigger.item.message?.text || trigger.item.message.unavailable) return null; return trigger.item.message.text.length;",
+            "return { name: trigger.item.item.name, status: trigger.item.item.properties?.Status, body: trigger.item.item.content };",
+            "if (!trigger.item.email || trigger.item.email.unavailable) return null; return { subject: trigger.item.email.subject, from: trigger.item.email.from?.email, labels: trigger.item.email.labels };",
+            "return { title: trigger.item.call?.title, people: trigger.item.call?.participants?.length, lines: trigger.item.call?.transcript?.join('\\n') };",
+            "const { message } = trigger.item; return { edited: message.edited, files: message.attachments, at: message.sent_at };",
+        ] {
+            assert_eq!(
+                code.check_program(&step(body)).await.unwrap(),
+                Vec::new(),
+                "{body}"
+            );
+        }
+        for (body, field) in [
+            ("return trigger.item.message.isReply;", "isReply"),
+            ("return trigger.item.message.parent_id;", "parent_id"),
+            ("return trigger.item.message.id;", "id"),
+            ("return trigger.item.thread_parent?.thread;", "thread"),
+        ] {
+            let failing = code.check_program(&step(body)).await.unwrap();
+            assert_eq!(failing.len(), 1, "{body}");
+            assert!(
+                failing[0].problems[0].contains(&format!("Property '{field}' does not exist")),
+                "{failing:?}"
+            );
+        }
+    }
+
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
     async fn a_step_runs_with_its_inputs_and_journals_each_call() {
@@ -794,6 +866,222 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
             outcome.result.unwrap(),
             json!({ "priority": "High", "days": 8 })
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn a_step_reads_an_entity_knob_as_the_sdk_handle_for_its_item() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        let knobbed = |source: &str, entity_types: serde_json::Value| {
+            program(json!([{
+                "type": "code", "title": "Post bugs", "source": source,
+                "knobs": [{
+                    "type": "entity", "name": "bugs", "label": "Channel to post in",
+                    "entity_types": entity_types, "value": { "type": "channel", "id": "c1" },
+                }],
+            }]))
+        };
+        let posts = "export async function main({ knobs }: StepContext) { await knobs.bugs.send('Open bugs'); return knobs.bugs.id; }";
+        assert_eq!(
+            code.check_program(&knobbed(posts, json!(["channel"])))
+                .await
+                .unwrap(),
+            Vec::new()
+        );
+        // A channel is a Channel: code can't treat it as an id or another
+        // kind, and a knob that may be a document can't be posted to.
+        for (wrong, entity_types, problem) in [
+            (
+                "export async function main({ knobs }: StepContext) { return knobs.bugs.toUpperCase(); }",
+                json!(["channel"]),
+                "Property 'toUpperCase' does not exist",
+            ),
+            (
+                "export async function main({ knobs }: StepContext) { return knobs.bugs.rows(); }",
+                json!(["channel"]),
+                "Property 'rows' does not exist",
+            ),
+            (
+                posts,
+                json!(["channel", "document"]),
+                "Property 'send' does not exist",
+            ),
+        ] {
+            let failing = code
+                .check_program(&knobbed(wrong, entity_types))
+                .await
+                .unwrap();
+            assert_eq!(failing.len(), 1, "{wrong}");
+            assert!(failing[0].problems[0].contains(problem), "{failing:?}");
+        }
+        let routine = knobbed(
+            "export async function main({ macro, knobs }: StepContext) { return { id: knobs.bugs.id, handle: knobs.bugs.constructor === macro.channels.byId('x').constructor }; }",
+            json!(["channel"]),
+        );
+        let outcome = code
+            .run(
+                &owner(),
+                CodeRun {
+                    step: routine.code_steps()[0],
+                    context: &json!({ "run": {} }),
+                    steps: &json!({}),
+                    dry_run: false,
+                    acts_as: CodeIdentity::Agent,
+                    routine_id: Uuid::from_u128(1),
+                },
+            )
+            .await;
+        assert_eq!(
+            outcome.result.unwrap(),
+            json!({ "id": "c1", "handle": true })
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn every_entity_knob_kind_reaches_code_as_the_handle_its_type_names() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        let run = async |routine: &RoutineProgram| {
+            code.run(
+                &owner(),
+                CodeRun {
+                    step: routine.code_steps()[0],
+                    context: &json!({ "run": {} }),
+                    steps: &json!({}),
+                    dry_run: false,
+                    acts_as: CodeIdentity::Agent,
+                    routine_id: Uuid::from_u128(1),
+                },
+            )
+            .await
+        };
+        // One knob per kind: the type checks as the handle `factory` names,
+        // and the bootstrap hands over that very handle.
+        let kinds = routine_program::EntityKind::ALL;
+        let knobs: Vec<_> = kinds
+            .iter()
+            .enumerate()
+            .map(|(i, kind)| {
+                json!({
+                    "type": "entity", "name": format!("k{i}"), "label": format!("Item {i}"),
+                    "entity_types": [kind], "value": { "type": kind, "id": format!("id-{i}") },
+                })
+            })
+            .collect();
+        let reads = kinds
+            .iter()
+            .enumerate()
+            .map(|(i, kind)| {
+                let (namespace, method) = kind.factory();
+                format!(
+                    "k{i}: knobs.k{i}.constructor === macro.{namespace}.{method}('x').constructor && knobs.k{i}.id"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let every = program(json!([{
+            "type": "code", "title": "Read every kind",
+            "source": format!("export async function main({{ macro, knobs }}: StepContext) {{ return {{ {reads} }}; }}"),
+            "knobs": knobs,
+        }]));
+        assert_eq!(code.check_program(&every).await.unwrap(), Vec::new());
+        let expected: serde_json::Map<_, _> = (0..kinds.len())
+            .map(|i| (format!("k{i}"), json!(format!("id-{i}"))))
+            .collect();
+        assert_eq!(
+            run(&every).await.result.unwrap(),
+            serde_json::Value::Object(expected)
+        );
+        // A knob allowing several kinds is their union: code narrows it by
+        // `entityType` before calling what only an email thread has.
+        let any = |source: &str| {
+            program(json!([{
+                "type": "code", "title": "Archive it", "source": source,
+                "knobs": [{
+                    "type": "entity", "name": "item", "label": "Item",
+                    "entity_types": ["email_thread", "task", "crm_company"],
+                    "value": { "type": "email_thread", "id": "t1" },
+                }],
+            }]))
+        };
+        let narrowed = any(
+            "export async function main({ knobs }: StepContext) { if (knobs.item.entityType === 'email_thread') return { kind: knobs.item.entityType, archive: typeof knobs.item.archive }; return { kind: knobs.item.entityType }; }",
+        );
+        assert_eq!(code.check_program(&narrowed).await.unwrap(), Vec::new());
+        assert_eq!(
+            run(&narrowed).await.result.unwrap(),
+            json!({ "kind": "email_thread", "archive": "function" })
+        );
+        let unnarrowed = code
+            .check_program(&any(
+                "export async function main({ knobs }: StepContext) { await knobs.item.archive(); }",
+            ))
+            .await
+            .unwrap();
+        assert_eq!(unnarrowed.len(), 1, "{unnarrowed:?}");
+        assert!(
+            unnarrowed[0].problems[0].contains("Property 'archive' does not exist"),
+            "{unnarrowed:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn a_step_posts_in_the_channel_its_knob_names_and_follows_a_swap() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let host = format!("http://{}", listener.local_addr().unwrap());
+        let (paths, mut posted) = tokio::sync::mpsc::unbounded_channel();
+        let server = tokio::spawn(async move {
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let text = request(&mut stream).await;
+                paths
+                    .send(text.lines().next().unwrap_or_default().to_owned())
+                    .unwrap();
+                respond(&mut stream, r#"{"id":"message-1"}"#).await;
+            }
+        });
+        let (_root, code) = code(&host).await;
+        let posting = |channel: &str| {
+            program(json!([{
+                "type": "code", "title": "Post open bugs",
+                "source": "export async function main({ knobs }: StepContext) { await knobs.bugs.send('3 open bugs'); return { posted: knobs.bugs.id }; }",
+                "knobs": [{
+                    "type": "entity", "name": "bugs", "label": "Channel to post in",
+                    "entity_types": ["channel"], "value": { "type": "channel", "id": channel },
+                }],
+                "sentence": "Post open bugs in {bugs}.",
+            }]))
+        };
+        // The owner swaps bug-reports for triage in the settings; the code
+        // is the same, and the next run posts in the new channel.
+        for channel in [
+            "0199a1b2-0000-7000-8000-00000000b065",
+            "0199a1b2-0000-7000-8000-0000000071a6",
+        ] {
+            let routine = posting(channel);
+            assert_eq!(code.check_program(&routine).await.unwrap(), Vec::new());
+            let outcome = code
+                .run(
+                    &owner(),
+                    CodeRun {
+                        step: routine.code_steps()[0],
+                        context: &json!({ "run": {} }),
+                        steps: &json!({}),
+                        dry_run: false,
+                        acts_as: CodeIdentity::Agent,
+                        routine_id: Uuid::from_u128(1),
+                    },
+                )
+                .await;
+            assert_eq!(outcome.result.unwrap(), json!({ "posted": channel }));
+            let line = posted.recv().await.unwrap();
+            assert!(
+                line.starts_with(&format!("POST /messages/channel/{channel} ")),
+                "{line}"
+            );
+        }
+        server.await.unwrap();
     }
 
     #[tokio::test]
@@ -949,11 +1237,22 @@ fn an_area_reads_its_index_guidance_and_declarations_without_imports() {
     assert_eq!(
         files,
         [
+            "src/entities/task-templates/namespace.d.ts",
             "src/entities/tasks/namespace.d.ts",
-            "src/entities/tasks/task.d.ts"
+            "src/entities/time/namespace.d.ts",
+            "src/entities/task-templates/task-template.d.ts",
+            "src/entities/tasks/task.d.ts",
+            "src/entities/time/errors.d.ts",
+            "src/entities/time/report.d.ts",
+            "src/entities/time/task-time.d.ts",
+            "src/entities/time/time-entry.d.ts",
+            "src/entities/time/timer.d.ts"
         ]
     );
     assert!(reference.contains("class TaskNamespace "));
+    assert!(reference.contains("class TaskTemplateNamespace "));
+    assert!(reference.contains("class TaskTemplate "));
+    assert!(reference.contains("class TimeEntry "));
     assert!(!reference.lines().any(|line| line.starts_with("import ")));
     assert!(reference.len() <= ONE_AREA_BYTES + IMPORTED_TYPE_BYTES + 256);
 }

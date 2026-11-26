@@ -651,6 +651,7 @@ export const getBulkEntityPropertiesBody = zod
                 'CHANNEL',
                 'CHAT',
                 'COMPANY',
+                'CONTACT',
                 'DATABASE_ROW',
                 'DOCUMENT',
                 'INITIATIVE',
@@ -887,15 +888,21 @@ export const getBulkEntityPropertiesResponse = zod.record(
                       ),
                     zod
                       .object({
+                        has_time: zod
+                          .boolean()
+                          .optional()
+                          .describe(
+                            "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                          ),
                         type: zod.enum(['Date']),
                         value: zod.iso
                           .datetime({})
                           .describe(
-                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                           ),
                       })
                       .describe(
-                        'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                        'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                       ),
                     zod
                       .object({
@@ -1006,6 +1013,7 @@ export const getEntityPropertiesParams = zod.object({
       'CHANNEL',
       'CHAT',
       'COMPANY',
+      'CONTACT',
       'DATABASE_ROW',
       'DOCUMENT',
       'INITIATIVE',
@@ -1235,15 +1243,21 @@ export const getEntityPropertiesResponse = zod
                     ),
                   zod
                     .object({
+                      has_time: zod
+                        .boolean()
+                        .optional()
+                        .describe(
+                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                        ),
                       type: zod.enum(['Date']),
                       value: zod.iso
                         .datetime({})
                         .describe(
-                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                         ),
                     })
                     .describe(
-                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                     ),
                   zod
                     .object({
@@ -1359,6 +1373,7 @@ export const bulkUpdateEntityPropertyOptionsParams = zod.object({
       'CHANNEL',
       'CHAT',
       'COMPANY',
+      'CONTACT',
       'DATABASE_ROW',
       'DOCUMENT',
       'INITIATIVE',
@@ -1433,6 +1448,7 @@ export const setEntityPropertyParams = zod.object({
       'CHANNEL',
       'CHAT',
       'COMPANY',
+      'CONTACT',
       'DATABASE_ROW',
       'DOCUMENT',
       'INITIATIVE',
@@ -1460,10 +1476,13 @@ export const setEntityPropertyBody = zod
               .describe('Boolean true\/false value'),
             zod
               .object({
+                has_time: zod.boolean().optional(),
                 type: zod.enum(['date']),
                 value: zod.iso.datetime({}),
               })
-              .describe('Date and time value'),
+              .describe(
+                "Date value. `has_time: true` makes it an exact instant; `false` or no\nflag makes it a whole day, shown as the day its instant falls on in the\nviewer's time zone."
+              ),
             zod
               .object({
                 type: zod.enum(['date_range']),
@@ -1618,6 +1637,7 @@ export const addEntityPropertyOptionParams = zod.object({
       'CHANNEL',
       'CHAT',
       'COMPANY',
+      'CONTACT',
       'DATABASE_ROW',
       'DOCUMENT',
       'INITIATIVE',
@@ -1644,6 +1664,7 @@ export const removeEntityPropertyOptionParams = zod.object({
       'CHANNEL',
       'CHAT',
       'COMPANY',
+      'CONTACT',
       'DATABASE_ROW',
       'DOCUMENT',
       'INITIATIVE',
@@ -1692,6 +1713,7 @@ export const bulkUpdateEntitiesPropertyOptionsBody = zod
                 'CHANNEL',
                 'CHAT',
                 'COMPANY',
+                'CONTACT',
                 'DATABASE_ROW',
                 'DOCUMENT',
                 'INITIATIVE',
@@ -1739,6 +1761,7 @@ export const bulkUpdateEntitiesPropertyOptionsResponse = zod
                 'CHANNEL',
                 'CHAT',
                 'COMPANY',
+                'CONTACT',
                 'DATABASE_ROW',
                 'DOCUMENT',
                 'INITIATIVE',

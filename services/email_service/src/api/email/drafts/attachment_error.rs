@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    http::StatusCode,
+    http::{StatusCode, header::RETRY_AFTER},
     response::{IntoResponse, Response},
 };
 use email::domain::draft_attachments::AttachmentError;
@@ -18,14 +18,21 @@ impl IntoResponse for AttachmentApiError {
             AttachmentError::Invalid(_) => StatusCode::BAD_REQUEST,
             AttachmentError::Reauthorization => StatusCode::CONFLICT,
             AttachmentError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
-            AttachmentError::Infrastructure => StatusCode::SERVICE_UNAVAILABLE,
+            AttachmentError::Infrastructure | AttachmentError::Contended => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
         };
-        (
-            status,
-            Json(ErrorResponse {
-                message: self.to_string().into(),
-            }),
-        )
-            .into_response()
+        let body = Json(ErrorResponse {
+            message: self.to_string().into(),
+        });
+        // A 409 here means the draft changed under its approval, so a busy
+        // inbox answers 503 and says when to retry instead.
+        if matches!(self.0, AttachmentError::Contended) {
+            return (status, [(RETRY_AFTER, "5")], body).into_response();
+        }
+        (status, body).into_response()
     }
 }
+
+#[cfg(test)]
+mod test;

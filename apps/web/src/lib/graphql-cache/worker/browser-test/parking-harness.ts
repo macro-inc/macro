@@ -91,11 +91,16 @@ const api = {
       },
     });
     if (seed) {
-      await host.writeQuery({ query, data });
+      await host.writeQuery({
+        generation: (await host.authority!.current()).generation,
+        query,
+        data,
+      });
       seedUuid = crypto.randomUUID();
       const now = Date.now();
       await host.enqueueOptimisticMutation(
         {
+          generation: (await host.authority!.current()).generation,
           uuid: seedUuid,
           query: stringifyDocument(mutation),
           variables: variables(seedUuid),
@@ -149,16 +154,21 @@ const api = {
         'ChannelUnreadPresence',
         'CalendarChanges',
         'Calendars',
-      ].map((name, index) =>
+      ].map(async (name, index) =>
         current.writeQuery({
+          generation: (await current.authority!.current()).generation,
           query: `query ${name} { user { id } }`,
           data: { user: { id: `catchup-${index}` } },
         })
       ),
-      current.calendarCommit({
-        coverage: [{ kind: 'timed', start: 0, end: 1 }],
-        freshness: 'fresh',
-      }),
+      (async () =>
+        current.calendarCommit(
+          {
+            coverage: [{ kind: 'timed', start: 0, end: 1 }],
+            freshness: 'fresh',
+          },
+          (await current.authority!.current()).generation
+        ))(),
     ]);
   },
   async catchupDone() {
@@ -283,7 +293,11 @@ const api = {
   readResult: () => readResult,
   async beginMutation() {
     const current = requireHost();
-    await current.writeQuery({ query, data });
+    await current.writeQuery({
+      generation: (await current.authority!.current()).generation,
+      query,
+      data,
+    });
     generationBefore = await current.currentStorageGeneration();
     const uuid = crypto.randomUUID();
     const client = createClient({

@@ -77,7 +77,7 @@ async fn a_check_says_what_saving_would_refuse_and_saves_nothing() {
     );
 
     let check = svc
-        .check_action(&user_principal(), config, Vec::new(), None)
+        .check_action(&user_principal(), config, Vec::new(), Vec::new(), None)
         .await
         .unwrap();
 
@@ -107,7 +107,7 @@ async fn a_clean_check_returns_the_routine_as_saving_would_store_it() {
     );
 
     let check = svc
-        .check_action(&user_principal(), config, Vec::new(), None)
+        .check_action(&user_principal(), config, Vec::new(), Vec::new(), None)
         .await
         .unwrap();
 
@@ -169,18 +169,36 @@ async fn only_a_draft_sessions_own_check_is_kept_as_its_answer(pool: PgPool) {
     let stranger = CreationPrincipal::User(
         MacroUserIdStr::try_from("macro|stranger@macro.com".to_owned()).unwrap(),
     );
-    svc.check_action(&stranger, config.clone(), Vec::new(), Some(correlation))
-        .await
-        .unwrap();
+    svc.check_action(
+        &stranger,
+        config.clone(),
+        Vec::new(),
+        Vec::new(),
+        Some(correlation),
+    )
+    .await
+    .unwrap();
     // ...nor can a check that isn't from a session.
-    svc.check_action(&user_principal(), config.clone(), Vec::new(), None)
-        .await
-        .unwrap();
+    svc.check_action(
+        &user_principal(),
+        config.clone(),
+        Vec::new(),
+        Vec::new(),
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(hand_backs.handed_back(session).await.unwrap().checks, 0);
 
-    svc.check_action(&user_principal(), config, Vec::new(), Some(correlation))
-        .await
-        .unwrap();
+    svc.check_action(
+        &user_principal(),
+        config,
+        Vec::new(),
+        Vec::new(),
+        Some(correlation),
+    )
+    .await
+    .unwrap();
     let handed_back = hand_backs.handed_back(session).await.unwrap();
     assert_eq!(handed_back.checks, 1);
     assert!(handed_back.check.unwrap().ok);
@@ -236,6 +254,7 @@ impl<Check: ScheduledActionService> RoutineSessions for SessionOnAnotherReplica<
                     entity_type: model_entity::EntityType::Database,
                     entity_id: "bug-log".into(),
                 }],
+                Vec::new(),
                 Some(correlation),
             )
             .await
@@ -323,4 +342,80 @@ async fn a_check_made_on_one_replica_answers_a_draft_waiting_on_another(pool: Pg
         .await
         .unwrap();
     assert_eq!(left, 0, "the draft's row is gone");
+}
+
+fn app(slug: &str, name: &str) -> AgentMcpServer {
+    AgentMcpServer {
+        app_slug: slug.into(),
+        server_name: name.into(),
+    }
+}
+
+/// A draft's session names the apps its routine needs that its owner hasn't
+/// connected. The check keeps each one once, as an app, never one the
+/// routine already requires, and the draft's row keeps them with the check.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_drafts_check_keeps_the_apps_it_needs_that_arent_connected(pool: PgPool) {
+    let hand_backs = Arc::new(PgDraftHandBacks::new(pool));
+    let invocations = Arc::new(Invocations::default());
+    let svc = checking_service(hand_backs.clone(), invocations.clone());
+    let (session, correlation) = (generate_uuid_v7(), generate_uuid_v7());
+    hand_backs
+        .begin(session, &user(), bot_id::MACRO_NEW_BOT_ID)
+        .await
+        .unwrap();
+    invocations.0.lock().unwrap().insert(correlation, session);
+    let mut config = program_configuration(
+        json!({ "type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC" }),
+        json!([{ "type": "agent", "model": "m", "instructions": "File the bugs." }]),
+    );
+    config.task["mcp_servers"] = json!([{ "app_slug": "linear", "server_name": "Linear" }]);
+
+    let check = svc
+        .check_action(
+            &user_principal(),
+            config,
+            Vec::new(),
+            vec![
+                app(" github ", " GitHub "),
+                app("github", "GitHub again"),
+                // Required already.
+                app("linear", "Linear"),
+                app("not a slug", "Spaces"),
+                app("notion", ""),
+                app(&"a".repeat(101), "Long"),
+                app("notion", "Notion"),
+            ],
+            Some(correlation),
+        )
+        .await
+        .unwrap();
+
+    let kept = [app("github", "GitHub"), app("notion", "Notion")];
+    assert_eq!(check.missing_apps, kept);
+    let handed_back = hand_backs.handed_back(session).await.unwrap();
+    assert_eq!(handed_back.check.unwrap().missing_apps, kept);
+}
+
+#[tokio::test]
+async fn a_check_keeps_at_most_ten_missing_apps() {
+    let svc = checking_service(
+        Arc::new(PanickingHandBacks),
+        Arc::new(Invocations::default()),
+    );
+    let config = program_configuration(
+        json!({ "type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC" }),
+        steps(&["good"]),
+    );
+    let named = (0..12)
+        .map(|n| app(&format!("app_{n}"), &format!("App {n}")))
+        .collect();
+
+    let check = svc
+        .check_action(&user_principal(), config, Vec::new(), named, None)
+        .await
+        .unwrap();
+
+    assert_eq!(check.missing_apps.len(), 10);
+    assert_eq!(check.missing_apps[9].app_slug, "app_9");
 }

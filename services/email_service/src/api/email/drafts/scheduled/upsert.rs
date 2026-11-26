@@ -40,6 +40,7 @@ impl IntoResponse for UpsertScheduledError {
             EmailErr::MessageDeliveryConflict(_) | EmailErr::InvalidScheduleTime => {
                 StatusCode::BAD_REQUEST
             }
+            EmailErr::Contended => StatusCode::CONFLICT,
             _ => {
                 tracing::error!(error=?error, "schedule transition failed");
                 StatusCode::INTERNAL_SERVER_ERROR

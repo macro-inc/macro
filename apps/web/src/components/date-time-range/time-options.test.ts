@@ -3,9 +3,11 @@ import {
   completedTypedTime,
   DAY_TIME_OPTIONS,
   dayOffsetBetween,
+  dayTimeOptions,
   endTimeOptions,
   endValueFor,
   formatDuration,
+  formatTimeValue,
   matchTypedTime,
   parseTimeValue,
   selectedTimeOptionId,
@@ -26,6 +28,55 @@ describe('DAY_TIME_OPTIONS', () => {
     expect(
       DAY_TIME_OPTIONS.every((option) => option.detail === undefined)
     ).toBe(true);
+  });
+});
+
+describe('explicit clock preference', () => {
+  it('preserves locale-style labels for native hour12 callers', () => {
+    expect(
+      dayTimeOptions(true).find((option) => option.value === '14:00')?.label
+    ).toBe('2:00 PM');
+    expect(
+      dayTimeOptions(false).find((option) => option.value === '14:00')?.label
+    ).toBe('14:00');
+    expect(endTimeOptions('', false)).toBe(dayTimeOptions(false));
+    expect(
+      typedTimeOption(endTimeOptions('09:00', false), '3:10', false)?.label
+    ).toBe('15:10');
+  });
+  it('uses the requested display without changing option values or rollover', () => {
+    const options = endTimeOptions('22:00', '24-hour');
+    expect(dayTimeOptions('24-hour')[0]).toMatchObject({
+      value: '00:00',
+      label: '00:00',
+    });
+    expect(options.find((option) => option.value === '00:00')).toMatchObject({
+      label: '00:00',
+      dayOffset: 1,
+      detail: '2h',
+    });
+    expect(formatTimeValue('15:30', '12-hour')).toBe('3:30pm');
+    expect(formatTimeValue('15:30', '24-hour')).toBe('15:30');
+  });
+
+  it('keeps typed interpretation independent of the displayed clock', () => {
+    expect(
+      typedTimeOption(endTimeOptions('20:00', '24-hour'), '9p')
+    ).toMatchObject({ value: '21:00', dayOffset: 0 });
+    expect(
+      typedTimeOption(endTimeOptions('20:00', '12-hour'), '9a')
+    ).toMatchObject({ value: '09:00', dayOffset: 1 });
+  });
+  it('retains stable clock choices and formats exact off-step typed times', () => {
+    expect(dayTimeOptions()).toBe(DAY_TIME_OPTIONS);
+    expect(dayTimeOptions('24-hour')).toBe(dayTimeOptions('24-hour'));
+    expect(endTimeOptions('', '24-hour')).toBe(dayTimeOptions('24-hour'));
+    expect(
+      typedTimeOption(endTimeOptions('09:00', '24-hour'), '3:10', '24-hour')
+    ).toMatchObject({ value: '15:10', label: '15:10' });
+    expect(
+      typedTimeOption(endTimeOptions('09:00', '12-hour'), '3:10', '12-hour')
+    ).toMatchObject({ value: '15:10', label: '3:10pm' });
   });
 });
 

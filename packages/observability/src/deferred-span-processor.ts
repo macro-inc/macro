@@ -19,6 +19,10 @@ export class DeferredSpanProcessor implements SpanProcessor {
     this.#ready = this.#initialize(enabled, create);
   }
 
+  get isReady(): boolean {
+    return !this.#closed && this.#processor !== undefined;
+  }
+
   async #initialize(
     enabled: Promise<boolean>,
     create: () => SpanProcessor | Promise<SpanProcessor>

@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::backfill_jobs::BackfillJobRepository;
 use crate::domain::mailbox::connection::ConnectionSourceError;
-use crate::domain::mailbox::inbox_sync::CrmContactRecipient;
+use crate::domain::mailbox::inbox_sync::{CrmContactRecipient, ThreadReindexQueue};
 use ::crm::domain::{
     email_policy_work::{EmailPolicyHistoryContact, EmailPolicyHistoryPage},
     email_privacy::EmailContributionMailbox,
@@ -44,7 +44,7 @@ pub(super) struct State {
     pub sent_contacts: Vec<CrmContactRecipient>,
     pub received_contacts: Vec<CrmContactRecipient>,
     pub sent: Vec<(BackfillPubsubMessage, Option<(i32, u32)>)>,
-    pub connections: Vec<HashSet<MacroUserIdStr<'static>>>,
+    pub connections: Vec<Vec<MacroUserIdStr<'static>>>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -444,6 +444,16 @@ impl BackfillGmail for Fake {
         })
     }
 }
+impl ThreadReindexQueue for Fake {
+    type ReindexError = Error;
+    async fn enqueue_thread_reindex(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Vec<Uuid>,
+    ) -> Result<(), Error> {
+        self.call("reindex_queue")
+    }
+}
 impl BackfillQueue for Fake {
     type Err = Error;
     async fn enqueue(&self, data: BackfillPubsubMessage) -> Result<(), Error> {
@@ -509,10 +519,12 @@ impl BackfillEffects for Fake {
     }
     async fn connect(
         &self,
-        users: HashSet<MacroUserIdStr<'static>>,
+        link: &Link,
+        recipients: Vec<MacroUserIdStr<'static>>,
     ) -> Result<(), rootcause::Report> {
+        assert_eq!(link.id, LINK);
         self.call("connect").map_err(rootcause::Report::new)?;
-        self.0.lock().unwrap().connections.push(users);
+        self.0.lock().unwrap().connections.push(recipients);
         Ok(())
     }
     async fn acquire_crm(&self, team: Uuid) -> anyhow::Result<Option<Self>> {

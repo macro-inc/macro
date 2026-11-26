@@ -38,10 +38,12 @@ wait_dead() {
     sleep 0.5
   done
   # journald may write the agent's last line a moment after it died.
+  # grep reads everything (no -q): under pipefail, a grep that stops at the
+  # match kills journalctl and sed with SIGPIPE and fails the pipe.
   local _
   for _ in $(seq 20); do
     if sudo journalctl -u "$UNIT" --since "@$started_at" --no-pager -q -o cat | sed 's/\x1b\[[0-9;]*m//g' \
-      | grep -q "crash point reached"; then
+      | grep "crash point reached" >/dev/null; then
       return 0
     fi
     sleep 0.5

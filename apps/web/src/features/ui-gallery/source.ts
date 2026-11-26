@@ -126,7 +126,7 @@ export function extractGuidelines(source: string): Guidelines {
 }
 
 /**
- * Returns the source of a top-level `type <name> = …` declaration, so the
+ * Returns a top-level `type` declaration by name, so the
  * gallery can show a component's real prop type instead of a hand-copied table
  * that drifts. Returns null when the type is not declared in this file.
  */

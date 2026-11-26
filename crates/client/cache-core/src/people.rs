@@ -17,11 +17,22 @@ pub const MAX_PEOPLE_BATCH: usize = 500;
 /// Version 6 lists people with a positive interaction time first among
 /// word-start matches, counts an exact first name as an exact name, and
 /// renumbers `match_rank` (email prefix 6, identity 7, property self pin 8).
-pub const PEOPLE_POLICY_VERSION: u32 = 6;
+/// Version 7 accepts `listPriority` and `onlyListed`. A list order replaces
+/// the messaged split: name stage, then list group, then recency.
+/// Version 8 lets the list group decide before exact over word-prefix: among
+/// names starting with the query, the group, then exact before word-prefix,
+/// then recency. Without a list order it ranks as version 7 does.
+pub const PEOPLE_POLICY_VERSION: u32 = 8;
 /// Oldest suggestion policy a frontend still accepts. Native hosts (desktop,
 /// iOS, Android) compile this crate and update only with an app release, while
 /// the frontend ships over the air; their policy-5 windows differ only in order.
 pub const PEOPLE_MIN_POLICY_VERSION: u32 = 5;
+/// Most list groups one search may rank by.
+pub const MAX_LIST_GROUPS: usize = 16;
+/// Most list keys across all groups of one search.
+pub const MAX_LIST_KEYS: usize = 64;
+/// Longest list key; longer keys on a contact are ignored.
+pub const MAX_LIST_KEY_BYTES: usize = 128;
 /// Reference evidence is independent of suggestion matching and ordering.
 pub const PEOPLE_REFERENCE_POLICY_VERSION: u32 = 4;
 /// Two distinct matches suffice to disprove unique reference resolution.
@@ -143,6 +154,21 @@ pub struct PeopleSearch {
     pub now_ms: i64,
     /// Opaque continuation from this same account, generation and search policy.
     pub cursor: Option<String>,
+    /// Ordered groups of opaque contact list keys. A person ranks by the first
+    /// group holding any of their lists; people in no group come last. Among
+    /// exact-name and word-prefix matches the group decides before exact over
+    /// word-prefix, then recency; contains-only, then address matches follow,
+    /// each by group, then recency. Policy 7 hosts rank by name stage before
+    /// group. A nonempty order supersedes the policy 6 messaged split; empty
+    /// keeps the policy 6 order. Omitted when empty, which policy 5 and 6 hosts
+    /// require.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(any(test, feature = "schema"), schemars(length(max = MAX_LIST_GROUPS)))]
+    pub list_priority: Vec<Vec<String>>,
+    /// Drop people in none of the `list_priority` groups instead of ranking them
+    /// last; with no groups, nobody is listed. The empty-browse self pin stays.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub only_listed: bool,
 }
 
 /// Fully materialized winning person; neither the cache key nor DM id replaces user_id.

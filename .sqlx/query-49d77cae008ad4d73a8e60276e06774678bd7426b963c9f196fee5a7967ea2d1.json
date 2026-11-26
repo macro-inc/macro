@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO time_timer (user_id, id, task_id, started_at)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (user_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "49d77cae008ad4d73a8e60276e06774678bd7426b963c9f196fee5a7967ea2d1"
+}

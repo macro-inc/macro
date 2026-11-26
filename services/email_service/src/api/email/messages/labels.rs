@@ -104,6 +104,12 @@ fn error_response<E>(error: MessageLabelError<E>) -> Response {
             StatusCode::INTERNAL_SERVER_ERROR,
             "unable to commit transaction".into(),
         ),
+        MessageLabelError::Contended => (
+            StatusCode::CONFLICT,
+            email::domain::models::EmailErr::Contended
+                .to_string()
+                .into(),
+        ),
         MessageLabelError::Unqueued(_) | MessageLabelError::Command(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             "unable to queue the label change".into(),
@@ -111,3 +117,6 @@ fn error_response<E>(error: MessageLabelError<E>) -> Response {
     };
     (status, Json(ErrorResponse { message })).into_response()
 }
+
+#[cfg(test)]
+mod test;

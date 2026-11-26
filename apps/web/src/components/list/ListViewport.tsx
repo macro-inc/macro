@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, type JSX, Suspense } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
@@ -11,9 +12,13 @@ export function ListViewport<T>(props: {
   viewportRef?: (element: HTMLDivElement) => void;
   onScroll?: () => void;
   isSticky?: (item: T) => boolean;
+  /** A host scroller can place its own summary and pinned chrome before the rows. */
+  scrollContainer?: HTMLElement;
+  scrollStart?: number;
+  stickyInset?: number;
   /** Scrolls above the rows, outside them, so list focus skips it. */
   start?: JSX.Element;
-  /** Reserve floating touch chrome inside the scroller. */
+  /** Reserve floating touch chrome inside this list's own scroller. */
   touchInset?: boolean;
   children: (item: T) => JSX.Element;
 }) {
@@ -26,9 +31,13 @@ export function ListViewport<T>(props: {
     <div
       ref={(element) => {
         setViewport(element);
-        props.viewportRef?.(element);
+        if (!props.scrollContainer) props.viewportRef?.(element);
       }}
-      class="min-h-0 flex-1 overflow-auto overscroll-none"
+      class={
+        props.scrollContainer
+          ? 'min-w-0'
+          : 'min-h-0 flex-1 overflow-auto overscroll-none'
+      }
     >
       <div ref={setStart}>
         <div
@@ -46,10 +55,10 @@ export function ListViewport<T>(props: {
         <StickyVirtualizer
           ref={props.ref}
           data={props.items}
-          isSticky={props.isSticky}
-          stickyInset={insetSize.height ?? 0}
-          scrollRef={viewport()}
-          startMargin={startSize.height ?? 0}
+          isSticky={isTouchDevice() ? undefined : props.isSticky}
+          scrollRef={props.scrollContainer ?? viewport()}
+          startMargin={(props.scrollStart ?? 0) + (startSize.height ?? 0)}
+          stickyInset={props.stickyInset ?? insetSize.height ?? 0}
           bufferSize={240}
           itemSize={44}
           keepMounted={
@@ -60,6 +69,12 @@ export function ListViewport<T>(props: {
           {(row) => <div>{props.children(row)}</div>}
         </StickyVirtualizer>
       </Suspense>
+      {props.touchInset && !props.scrollContainer && (
+        <div
+          aria-hidden
+          class="h-0 touch:h-[calc(max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))+16px)]"
+        />
+      )}
     </div>
   );
 }

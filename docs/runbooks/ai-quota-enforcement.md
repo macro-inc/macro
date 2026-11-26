@@ -82,13 +82,15 @@ independent of `ENABLE_AI_USAGE_ENFORCEMENT` and of the deployment environment:
 there is no longer an `Environment::Develop` safeguard, so a true value settles
 in production.
 
-Pricing is four mandatory Doppler values, loaded once at startup by every host that
+Pricing is five mandatory Doppler values, loaded once at startup by every host that
 composes `ai_billing` (see [`config.rs`](../../crates/ai_billing/src/config.rs) and
 [`pricing.rs`](../../crates/ai_billing/src/domain/pricing.rs)): one allowance per plan,
 measured at provider cost — `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS` (the free plan's
 hard cap, per user per UTC calendar month), `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`
-(Premium, per seat per subscription period), and `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`
-(Max, per seat per subscription period) — and `AI_USAGE_OVERAGE_MARKUP_PERCENT`,
+(Premium, per seat per subscription period), `AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS`
+(Business, per seat per subscription period), and `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`
+(Max, per seat per subscription period; an annual subscription's period is metered
+one month at a time) — and `AI_USAGE_OVERAGE_MARKUP_PERCENT`,
 the whole-percent markup over cost applied to paid usage beyond the allowance before
 credits are consumed. There is no default in code: a missing,
 malformed, or out-of-range value fails startup and the Doppler CI validator. The values live in `shared_ai` (`lcl`,
@@ -271,7 +273,7 @@ inspect the content type and code rather than assuming every 503 is billing.
 
 ### Tools, protocols, queues, and background work
 
-- Subagent, native Anthropic tools, and AI editing return a failed tool result with
+- Subagent and AI editing return a failed tool result with
   the stable code and public explanation. These are tool/protocol failures, not
   necessarily HTTP 402/503 at the outer MCP transport. Do not treat an HTTP-success
   tool envelope as successful execution. No alternate provider is tried on refusal.
@@ -344,7 +346,6 @@ requests settlement). Admission itself never records usage or calls settlement.
 | Structured completion / DynamicCompletionsApi | [completion handler](../../services/agent_harness_service/src/cognition/api/structured_completion.rs) | DCS main, same recorder across both phases | [both phases and OpenAPI](../../services/agent_harness_service/src/cognition/api/structured_completion/test.rs) |
 | Chat naming / ChatRename | [chat renamer](../../services/agent_harness_service/src/cognition/service/chat_renamer.rs) | DCS main, same recorder | [safe naming skip](../../services/agent_harness_service/src/cognition/service/chat_renamer/test.rs) |
 | Direct subagent / inherited feature | [operations service](../../crates/ai_tools/src/ai_operations.rs), [subagent](../../crates/ai_tools/src/subagent.rs) | Host common context: T, DCS main, or [MCP context](../../services/agent_harness_service/src/public_mcp/context.rs) using `pg_settling_recorder` | [zero provider calls](../../crates/ai_tools/src/ai_operations/test.rs), [concurrent caller isolation](../../crates/ai_tools/src/subagent/test.rs) |
-| Native Anthropic code tools / inherited feature | [invoke_server_tool](../../crates/anthropic/src/toolset.rs) before both provider branches | Same common contexts via `FromRef`; observation only, **no legacy aggregate producer** | [tool attribution/refusal](../../crates/anthropic/src/toolset/test.rs) |
 | `WebSearch`/`WebFetch` tools and cognition `POST /web/search`, `/web/fetch` / `web_search` | [WebSearchService](../../crates/web_search/src/domain/service.rs) admits `web_search` before the Tavily call | `UsageRecorder` records Tavily's reported credits (`provider_credits`, pricing id `tavily`), counted when enforcement is on | [service and router tests](../../crates/web_search/src/domain/service/test.rs) |
 | AI document editing / AiEditing | [document orchestration](../../crates/documents/src/domain/ai_editing.rs) after verified edit receipt | Common context's recorder, existing per-model worker usage | [domain](../../crates/documents/src/domain/ai_editing/test.rs), [direct tool and permission precedence](../../crates/documents/src/inbound/toolset/edit_document/test.rs) |
 | Notion page imports / Import | [import admission](../../crates/import/src/domain/service/admission.rs), [execution/rechecks](../../crates/import/src/domain/service.rs) | DCS main, wrapped recorder | [delayed/deterministic cases](../../crates/import/src/domain/service/test/admission.rs), [HTTP](../../crates/import/src/inbound/axum_router/test.rs) |
@@ -413,9 +414,14 @@ procedure. Operators must approve and record each release gate.
    memory/common-tool host. Use the existing Doppler-backed application config,
    not a quoted JSON string, AWS secret indirection, or a second Pulumi flag.
    The pricing values `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS`,
-   `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`,
-   and `AI_USAGE_OVERAGE_MARKUP_PERCENT` are mandatory for these same hosts
+   `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS`,
+   `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`, and `AI_USAGE_OVERAGE_MARKUP_PERCENT` are mandatory for these same hosts
    whatever the flags say; see [Settlement](#settlement-enable_ai_usage_billing).
+   A host refuses to start without one, so register a newly required pricing
+   value (as `AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS` was) in every
+   participating config, and check its effective value there (each service's
+   Doppler validation binary, such as `authentication_service_doppler_config`),
+   before deploying the release that reads it.
    Before starting the agent harness, MCP, or scheduled action service,
    register `AUTHENTICATION_SERVICE_SECRET_KEY` (the authentication service's
    Secrets Manager name in deployed configs)

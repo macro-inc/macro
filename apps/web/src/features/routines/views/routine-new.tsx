@@ -1,5 +1,7 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, ConfirmDialog, ToggleSwitch } from '@ui';
+import type { ComponentProps } from 'solid-js';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';
 import type { RoutineEditorSlots } from '../context/routine-slots';
@@ -36,6 +38,7 @@ function CreatedItems(props: {
  */
 export function RoutineNewView(props: {
   source: RoutineCreatorSource;
+  mobileHeader?: ComponentProps<typeof RoutineEditor>['mobileHeader'];
   storage: RoutineDraftStorage;
   slots: RoutineEditorSlots;
   defaultModel: string;
@@ -77,6 +80,8 @@ export function RoutineNewView(props: {
   return (
     <>
       <RoutineEditor
+        mobile={isTouchDevice()}
+        mobileHeader={props.mobileHeader}
         {...routineSections({
           draft,
           onChange: change,
@@ -93,6 +98,7 @@ export function RoutineNewView(props: {
         })}
         creating
         draft={draft()}
+        appearance={draft().appearance}
         onChange={change}
         disabled={pending()}
         tab="settings"

@@ -29,15 +29,15 @@ export function modelProvider(
   if (slug.startsWith('muse')) return 'muse';
   if (
     id.startsWith('anthropic/') ||
-    /^(claude|sonnet|opus|haiku)(-|$)/.test(id)
+    /^(claude|sonnet|opus|haiku)(-|$)/.test(slug)
   )
     return 'anthropic';
   if (
     id.startsWith('openai/') ||
-    /^(gpt-|chatgpt-|codex|o[134](?:-|$))/.test(id)
+    /^(gpt-|chatgpt-|codex|o[134](?:-|$))/.test(slug)
   )
     return 'openai';
-  if (id.startsWith('google/') || id.startsWith('gemini')) return 'google';
+  if (id.startsWith('google/') || slug.startsWith('gemini')) return 'google';
   return undefined;
 }
 

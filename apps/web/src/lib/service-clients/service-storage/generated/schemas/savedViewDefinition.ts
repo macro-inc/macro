@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SavedViewDefinitionAppearance } from './savedViewDefinitionAppearance';
 import type { SavedViewDefinitionConfig } from './savedViewDefinitionConfig';
 import type { SavedViewDefinitionSharedTeamId } from './savedViewDefinitionSharedTeamId';
 
@@ -11,6 +12,7 @@ import type { SavedViewDefinitionSharedTeamId } from './savedViewDefinitionShare
  * A saved filter definition, not a snapshot of matching entities.
  */
 export interface SavedViewDefinition {
+  appearance?: SavedViewDefinitionAppearance;
   /** Versioned configuration interpreted by the consuming feature, with its
 `kind` (such as `email` or `task`) and `version`. */
   config: SavedViewDefinitionConfig;

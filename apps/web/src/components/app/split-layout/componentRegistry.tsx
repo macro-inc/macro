@@ -1,6 +1,11 @@
+import { AGENT_SCREEN_ROUTE_ID } from '@app/features/agent-screen/core/route';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
-import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
+import {
+  DayDraftRangeContext,
+  isDayDraftRangeBinding,
+} from '@app/features/calendar/context/day-draft-range-context';
+import type { CreatedCalendarEvent } from '@app/features/calendar/core/composer';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import {
   composePropsFromParams,
@@ -23,6 +28,10 @@ import {
 } from './split-router/app-route-shell';
 
 // Views load as their own chunks the first time a split opens them.
+const AgentScreenView = lazyNamed(
+  () => import('@app/features/agent-screen/route-views'),
+  'AgentScreenView'
+);
 const ForYouRouteView = lazyNamed(
   () => import('@app/features/suggestions/route-views'),
   'ForYouRouteView'
@@ -46,6 +55,14 @@ const AgentsRouteView = lazyNamed(
 const CalendarRouteView = lazyNamed(
   () => import('@app/features/calendar-view/route-views'),
   'CalendarRouteView'
+);
+const CalendarSearchRouteView = lazyNamed(
+  () => import('@app/features/calendar-view/calendar-search-route'),
+  'CalendarSearchRouteView'
+);
+const CalendarSettingsRouteView = lazyNamed(
+  () => import('@app/features/calendar-view/calendar-settings-route'),
+  'CalendarSettingsRouteView'
 );
 const BookingLinksRouteView = lazyNamed(
   () => import('@app/features/scheduling/route-views'),
@@ -242,6 +259,11 @@ registerComponent('getting-started', () => (
   <RedirectSplit to={{ type: 'component', id: 'home' }} />
 ));
 
+// Retired New Home: restored layouts open the Notifications view it replaced.
+registerComponent('new-home', () => (
+  <RedirectSplit to={{ type: 'component', id: 'notifications' }} />
+));
+
 registerComponent('new-project', withAuth(CreateProjectView), {
   splitPanelLayout: 'composable',
 });
@@ -280,6 +302,18 @@ registerComponent(
   () => composableLayout(true)
 );
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
+// Opened as split content by `agentScreenContent` (member card, DM header,
+// Settings → Machines); the route renders the same view from the URL.
+registerComponent(AGENT_SCREEN_ROUTE_ID, (params) =>
+  typeof params.harnessId === 'string' && params.harnessId ? (
+    <AgentScreenView
+      harnessId={params.harnessId}
+      continueDriving={params.continueDriving === 'true'}
+    />
+  ) : (
+    <NotFound />
+  )
+);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent(
   'for-you',
@@ -298,6 +332,9 @@ registerComponent(
   () => composableLayout()
 );
 registerComponent('routines', () => <AgentsRouteView />, {
+  splitPanelLayout: 'composable',
+});
+registerComponent('agents-archive', () => <AgentsRouteView />, {
   splitPanelLayout: 'composable',
 });
 registerComponent('agents', () => <AgentsRouteView />, {
@@ -326,6 +363,16 @@ registerComponent(
 registerComponent(
   'calendar',
   () => <CalendarRouteView />,
+  () => composableLayout(true)
+);
+registerComponent(
+  'calendar-search',
+  () => <CalendarSearchRouteView />,
+  () => composableLayout(true)
+);
+registerComponent(
+  'calendar-settings',
+  () => <CalendarSettingsRouteView />,
   () => composableLayout(true)
 );
 registerComponent(
@@ -394,7 +441,7 @@ registerComponent('agent-session-compose', () => (
 ));
 registerComponent('calendar-event-compose', (params) => {
   usePageViewTracking('calendar-event-compose');
-  return (
+  const composer = () => (
     <EventComposerSplit
       event={params?.event as CalendarEvent | undefined}
       initialValues={
@@ -404,6 +451,11 @@ registerComponent('calendar-event-compose', (params) => {
         params?.suggestedValues as
           | Promise<Partial<EventEditorInitialValues>>
           | undefined
+      }
+      initialDrawerHeight={
+        typeof params?.initialDrawerHeight === 'number'
+          ? params.initialDrawerHeight
+          : undefined
       }
       onCalendarChange={
         params?.onCalendarChange as
@@ -420,6 +472,16 @@ registerComponent('calendar-event-compose', (params) => {
           | undefined
       }
     />
+  );
+  const dayDraftRange = isDayDraftRangeBinding(params?.dayDraftRange)
+    ? params.dayDraftRange
+    : undefined;
+  return dayDraftRange ? (
+    <DayDraftRangeContext.Provider value={dayDraftRange}>
+      {composer()}
+    </DayDraftRangeContext.Provider>
+  ) : (
+    composer()
   );
 });
 registerComponent('skill-compose', (params) => {

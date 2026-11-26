@@ -1,3 +1,4 @@
+import type { EntityAppearance } from '../../../generated/storage/types.gen';
 import { iterate, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Team } from '../teams/team';
@@ -42,6 +43,8 @@ export class SavedViewsNamespace {
     config: SavedViewConfig;
     /** Share with this team, which you must belong to; private when omitted. */
     team?: Team;
+    /** Initial icon and color metadata; retries preserve the first creation. */
+    appearance?: EntityAppearance;
   }): Promise<SavedView> {
     return SavedView.create(this.client, opts);
   }

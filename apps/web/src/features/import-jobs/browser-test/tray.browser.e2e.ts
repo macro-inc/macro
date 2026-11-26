@@ -52,8 +52,13 @@ test('shows a failed import beside a running one and collapses', async ({
   const tray = page.getByRole('region', { name: 'Imports' });
   await expect(tray.getByRole('listitem')).toHaveCount(2);
   await expect(tray.getByRole('listitem', { name: 'Jira' })).toContainText(
-    'Import failed'
+    'Failed: Jira access lost'
   );
+  await tray
+    .getByRole('listitem', { name: 'Jira' })
+    .getByRole('button', { name: 'Reconnect Jira' })
+    .click();
+  await expect(page.getByLabel('Opened session')).toHaveText('reconnect:jira');
 
   await tray.getByRole('button', { name: 'Hide imports' }).click();
   await expect(tray.getByRole('listitem')).toHaveCount(0);

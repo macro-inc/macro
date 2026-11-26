@@ -1,3 +1,5 @@
+import { TimezoneSelect } from '@app/components/timezone-select/TimezoneSelect';
+import { timezoneOptions } from '@app/components/timezone-select/timezone-options';
 import {
   Checkbox,
   cn,
@@ -15,7 +17,6 @@ import {
   splitProps,
   useContext,
 } from 'solid-js';
-import { TimezoneSelect } from './TimezoneSelect';
 
 const FieldErrorContext = createContext<{
   readonly error?: string;
@@ -157,10 +158,8 @@ export function TimeZoneInput(props: {
       <TimezoneSelect
         value={props.value}
         onChange={props.onChange}
-        options={Intl.supportedValuesOf('timeZone').map((value) => ({
-          value,
-          label: value.replaceAll('_', ' '),
-        }))}
+        options={timezoneOptions()}
+        disabled={props.disabled}
         class="h-10 w-full rounded-lg border-edge bg-surface-2 px-3"
       />
     </fieldset>

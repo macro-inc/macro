@@ -99,9 +99,9 @@ impl Planner {
             CellValue::Boolean(checked) if data_type == DataType::Boolean => {
                 Ok(Some(PropertyValue::Bool(*checked)))
             }
-            CellValue::Date(date) if data_type == DataType::Date => {
-                Ok(Some(PropertyValue::Date(*date)))
-            }
+            CellValue::Date(date) if data_type == DataType::Date => Ok(Some(PropertyValue::Date(
+                models_properties::shared::DateValue::new(*date),
+            ))),
             CellValue::DateRange(range) if data_type == DataType::DateRange => {
                 models_properties::shared::DateRange::new(range.start, range.end)
                     .map(|range| Some(PropertyValue::DateRange(range)))

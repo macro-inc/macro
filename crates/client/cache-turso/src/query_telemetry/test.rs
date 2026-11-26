@@ -76,7 +76,7 @@ fn driver_times_reused_statements_and_failures_without_bound_values() {
         OpenOptions::new(Arc::new(SqliteDialect)),
     )
     .unwrap();
-    let connection = database.connect().unwrap();
+    let connection = crate::driver::Db::cached(database.connect().unwrap());
     let mut statement = crate::driver::prepare(&connection, "SELECT ?").unwrap();
     let telemetry = Rc::new(AdvancingTelemetry(TestTelemetry::default()));
     set_query_telemetry(Some(telemetry.clone()));

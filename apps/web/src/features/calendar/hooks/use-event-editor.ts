@@ -3,6 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
   isGuestEditRefused,
+  serverIssuedEventId,
   useCreateCalendarEventMutation,
   useInviteCalendarEventGuestsMutation,
   useUpdateCalendarEventMutation,
@@ -28,6 +29,9 @@ import {
   type EventEditorSubmitValues,
 } from '../components/composer/event-form-model';
 import { eventGuestOptions } from '../components/composer/guest-options';
+import type { CreatedCalendarEvent } from '../core/composer';
+import type { ComposerMetadataChanges } from '../core/composer-metadata';
+import type { EventReplacementRequest } from '../core/event-replacement';
 import {
   type CalendarEvent,
   DEFAULT_CALENDAR_SOURCE,
@@ -108,16 +112,49 @@ function hasTimeChanged(
     .otherwise(() => true);
 }
 
-/** A new event's id and the time it was created with. */
-export type CreatedCalendarEvent = {
-  eventId: string;
-  time: EventEditorSubmitValues['time'];
-};
+/**
+ * How a save treats the event's Macro call and provider conferencing: the
+ * values without a generated call link, and the conference change to send.
+ */
+function callPlan(
+  event: CalendarEvent | undefined,
+  values: EventEditorSubmitValues
+) {
+  const existingMeetingUrl = event ? calendarMacroCallUrl(event) : undefined;
+  const cleanContent = removeCalendarMacroCall(values, existingMeetingUrl);
+  const wantsMacroCall =
+    values.conferenceChoice === 'macro' &&
+    !values.outOfOffice &&
+    event?.eventType !== 'out_of_office';
+  const canManageCall =
+    !event || (editsPrimaryCopy(event) && viewerReplacesGuests(event));
+  // Older events can carry both a generated Macro link and provider
+  // conferencing. Use the saved provider state when clearing either choice.
+  const conference =
+    values.conference ??
+    (canManageCall &&
+    !values.outOfOffice &&
+    event?.eventType !== 'out_of_office' &&
+    event?.conferenceUrl &&
+    (values.conferenceChoice === 'macro' || values.conferenceChoice === 'none')
+      ? 'none'
+      : undefined);
+  return {
+    existingMeetingUrl,
+    cleanContent,
+    wantsMacroCall,
+    canManageCall,
+    conference,
+  };
+}
 
 interface UseEventEditorProps {
   event: Accessor<CalendarEvent | undefined>;
   onSaved: () => void;
-  /** Called with a new event once it exists, before `onSaved`. */
+  /**
+   * Called with a new event once it exists, under the id the server gave it.
+   * A create saved locally first closes the editor before this runs.
+   */
   onCreated?: (created: CreatedCalendarEvent) => void;
   macroCallsEnabled: Accessor<boolean>;
   /**
@@ -187,6 +224,8 @@ export function useEventEditor(props: UseEventEditorProps) {
           provider: calendar?.provider ?? event.calendar.provider,
           capabilities: calendar?.capabilities ?? event.calendar.capabilities,
           label: event.calendar.name || 'Calendar',
+          name: event.calendar.name,
+          accountLabel: calendar?.emailAddress,
           color: event.calendar.color,
           defaultReminders: reminderCalendar?.defaultReminders,
           isPrimary: calendar?.isPrimary ?? event.calendar.isPrimary,
@@ -199,6 +238,8 @@ export function useEventEditor(props: UseEventEditorProps) {
       provider: calendar.provider,
       capabilities: calendar.capabilities,
       label: calendarDisplayLabel(calendar, spansInboxes()),
+      name: calendar.name,
+      accountLabel: calendar.emailAddress,
       color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
       defaultReminders: calendar.defaultReminders,
       isPrimary: calendar.isPrimary,
@@ -303,24 +344,156 @@ export function useEventEditor(props: UseEventEditorProps) {
     });
   };
 
+  /**
+   * The update an edit of `event` sends: what Save writes, and what a
+   * replacement carries in place of the saved values.
+   */
+  const editUpdate = (
+    event: CalendarEvent,
+    values: EventEditorSubmitValues,
+    scope: CalendarUpdateScope | undefined,
+    metadata: ComposerMetadataChanges = {}
+  ) => {
+    const { existingMeetingUrl, cleanContent, wantsMacroCall, conference } =
+      callPlan(event, values);
+    const effectiveScope: CalendarUpdateScope = scope ?? 'all';
+    const targetsOneOccurrence = effectiveScope === 'this_event';
+    const initialContent = removeCalendarMacroCall(event, existingMeetingUrl);
+    const content =
+      event.eventType === 'out_of_office' ||
+      (existingMeetingUrl &&
+        wantsMacroCall &&
+        cleanContent.location === initialContent.location &&
+        cleanContent.description === initialContent.description)
+        ? {
+            location: event.location ?? '',
+            description: event.description ?? '',
+          }
+        : existingMeetingUrl && wantsMacroCall
+          ? attachCalendarMacroCall(
+              cleanContent,
+              existingMeetingUrl,
+              existingMeetingUrl
+            )
+          : cleanContent;
+
+    // A single occurrence has no recurrence of its own, and the provider
+    // rejects a recurrence-carrying patch scoped to one event, so recurrence
+    // lines only travel with a whole-series edit. Under `this_event` the
+    // recurrence controls are read-only, so any diff here is an incidental
+    // re-serialization (e.g. a date-dependent preset regenerated by a
+    // reschedule), not an intended rule change.
+    const recurrenceChanged =
+      !targetsOneOccurrence &&
+      values.recurrenceLines !== undefined &&
+      values.recurrenceLines.join('\n') !== initialLines().join('\n');
+
+    // A guest's additions go out as an invitation, which leaves the rest of
+    // the guest list alone; only the organizer's save replaces the list.
+    const invitedEmails =
+      guestEditing() === 'add'
+        ? addedGuestEmails(event, values.guestEmails)
+        : [];
+    const detailChanges = {
+      ...(values.title !== event.title ? { title: values.title } : {}),
+      ...(metadata.timeZoneChanged || hasTimeChanged(event, values.time)
+        ? { time: values.time }
+        : {}),
+      ...(content.location !== (event.location ?? '')
+        ? { location: content.location }
+        : {}),
+      ...(content.description !== (event.description ?? '')
+        ? { description: content.description }
+        : {}),
+      ...(recurrenceChanged ? { recurrenceLines: values.recurrenceLines } : {}),
+      ...(conference ? { conference } : {}),
+      ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
+      ...(metadata.visibility ? { visibility: metadata.visibility } : {}),
+      ...(metadata.transparency ? { transparency: metadata.transparency } : {}),
+    };
+    const updateArgs = {
+      eventId: event.eventId,
+      calendarId: event.calendarId,
+      scope: effectiveScope,
+      recurrenceId: targetsOneOccurrence
+        ? (event.recurrenceId ?? event.occurrenceKey)
+        : undefined,
+      occurrenceKey: targetsOneOccurrence ? event.occurrenceKey : undefined,
+      patch: {
+        // A guest who may not modify the event sends only their own fields.
+        ...(detailsLocked() ? {} : detailChanges),
+        ...(guestEditing() === 'replace' &&
+        guestListChanged(event, values.guestEmails)
+          ? {
+              attendees: values.guestEmails.map((email) => ({ email })),
+            }
+          : {}),
+        ...(values.reminders ? { reminders: values.reminders } : {}),
+        ...(values.guestPolicy &&
+        event.viewerCan.setGuestPolicy &&
+        !targetsOneOccurrence
+          ? { guestPolicy: values.guestPolicy }
+          : {}),
+      },
+    };
+    return { updateArgs, invitedEmails };
+  };
+
+  /**
+   * Replaces the event with the form's unsaved edits and without its online
+   * meeting, which the provider cannot remove from the saved event.
+   */
+  const replacementRequest = (
+    values: EventEditorSubmitValues,
+    scope?: CalendarUpdateScope,
+    metadata: ComposerMetadataChanges = {}
+  ): EventReplacementRequest | undefined => {
+    const event = props.event();
+    if (!event) return undefined;
+    const { patch, recurrenceId } = editUpdate(
+      event,
+      values,
+      scope,
+      metadata
+    ).updateArgs;
+    return {
+      target: {
+        eventId: event.eventId,
+        calendarId: event.calendarId,
+        recurrenceId,
+      },
+      changes: {
+        title: patch.title,
+        description: patch.description,
+        location: patch.location,
+        time: patch.time,
+        attendees: patch.attendees,
+        recurrenceLines: patch.recurrenceLines,
+        reminders: patch.reminders,
+        ...(patch.visibility ? { visibility: patch.visibility } : {}),
+        ...(patch.transparency ? { transparency: patch.transparency } : {}),
+      },
+    };
+  };
+
   const save = async (
     values: EventEditorSubmitValues,
-    scope?: CalendarUpdateScope
+    scope?: CalendarUpdateScope,
+    metadata: ComposerMetadataChanges = {}
   ) => {
     if (pending()) return;
     setPending(true);
     setSaveError(undefined);
 
     const event = props.event();
-    const existingMeetingUrl = event ? calendarMacroCallUrl(event) : undefined;
-    const cleanContent = removeCalendarMacroCall(values, existingMeetingUrl);
-    const wantsMacroCall =
-      values.conferenceChoice === 'macro' &&
-      !values.outOfOffice &&
-      event?.eventType !== 'out_of_office';
+    const {
+      existingMeetingUrl,
+      cleanContent,
+      wantsMacroCall,
+      canManageCall,
+      conference,
+    } = callPlan(event, values);
     const needsCall = () => props.macroCallsEnabled() && wantsMacroCall;
-    const canManageCall =
-      !event || (editsPrimaryCopy(event) && viewerReplacesGuests(event));
     if (
       needsCall() &&
       canManageCall &&
@@ -332,28 +505,29 @@ export function useEventEditor(props: UseEventEditorProps) {
       setPending(false);
       return;
     }
-    // Older events can carry both a generated Macro link and provider
-    // conferencing. Use the saved provider state when clearing either choice.
-    const conference =
-      values.conference ??
-      (canManageCall &&
-      !values.outOfOffice &&
-      event?.eventType !== 'out_of_office' &&
-      event?.conferenceUrl &&
-      (values.conferenceChoice === 'macro' ||
-        values.conferenceChoice === 'none')
-        ? 'none'
-        : undefined);
     let calendarSaved = false;
+    // A write saved locally and queued closes the editor before the server
+    // answers, as property saves do; a later refusal still reports below.
+    let closed = false;
+    const closeAccepted = () => {
+      if (closed) return;
+      closed = true;
+      setPending(false);
+      props.onSaved();
+    };
 
     try {
       if (!event) {
+        const calendar = writableCalendars().find(
+          (candidate) => candidate.id === values.calendarId
+        );
         // The server mints the call and writes its link into the event, so
         // the one invitation attendees receive already carries it.
         const created = await create.mutateAsync({
           title: values.title,
           time: values.time,
           calendarId: values.calendarId,
+          ...(calendar ? { calendar } : {}),
           recurrenceLines: values.recurrenceLines ?? [],
           location:
             cleanContent.location === '' ? undefined : cleanContent.location,
@@ -367,94 +541,39 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(values.reminders ? { reminders: values.reminders } : {}),
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
           ...(values.guestPolicy ? { guestPolicy: values.guestPolicy } : {}),
+          ...(metadata.visibility ? { visibility: metadata.visibility } : {}),
+          ...(metadata.transparency
+            ? { transparency: metadata.transparency }
+            : {}),
+          onAccepted: closeAccepted,
         });
-        props.onCreated?.({ eventId: created.id, time: values.time });
-        props.onSaved();
+        // A create still queued behind older writes has only a local id,
+        // which names nothing to open yet.
+        const eventId = created && serverIssuedEventId(created.id);
+        if (eventId) props.onCreated?.({ eventId, time: values.time });
+        closeAccepted();
         return;
       }
 
-      const effectiveScope: CalendarUpdateScope = scope ?? 'all';
-      const targetsOneOccurrence = effectiveScope === 'this_event';
-      const initialContent = removeCalendarMacroCall(event, existingMeetingUrl);
-      const content =
-        event.eventType === 'out_of_office' ||
-        (existingMeetingUrl &&
-          wantsMacroCall &&
-          cleanContent.location === initialContent.location &&
-          cleanContent.description === initialContent.description)
-          ? {
-              location: event.location ?? '',
-              description: event.description ?? '',
-            }
-          : existingMeetingUrl && wantsMacroCall
-            ? attachCalendarMacroCall(
-                cleanContent,
-                existingMeetingUrl,
-                existingMeetingUrl
-              )
-            : cleanContent;
-
-      // A single occurrence has no recurrence of its own, and the provider
-      // rejects a recurrence-carrying patch scoped to one event, so recurrence
-      // lines only travel with a whole-series edit. Under `this_event` the
-      // recurrence controls are read-only, so any diff here is an incidental
-      // re-serialization (e.g. a date-dependent preset regenerated by a
-      // reschedule), not an intended rule change.
-      const recurrenceChanged =
-        !targetsOneOccurrence &&
-        values.recurrenceLines !== undefined &&
-        values.recurrenceLines.join('\n') !== initialLines().join('\n');
-
-      // A guest's additions go out as an invitation, which leaves the rest of
-      // the guest list alone; only the organizer's save replaces the list.
-      const invitedEmails =
-        guestEditing() === 'add'
-          ? addedGuestEmails(event, values.guestEmails)
-          : [];
-      const detailChanges = {
-        ...(values.title !== event.title ? { title: values.title } : {}),
-        ...(hasTimeChanged(event, values.time) ? { time: values.time } : {}),
-        ...(content.location !== (event.location ?? '')
-          ? { location: content.location }
-          : {}),
-        ...(content.description !== (event.description ?? '')
-          ? { description: content.description }
-          : {}),
-        ...(recurrenceChanged
-          ? { recurrenceLines: values.recurrenceLines }
-          : {}),
-        ...(conference ? { conference } : {}),
-        ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
-      };
-      const updateArgs = {
-        eventId: event.eventId,
-        calendarId: event.calendarId,
-        scope: effectiveScope,
-        recurrenceId: targetsOneOccurrence
-          ? (event.recurrenceId ?? event.occurrenceKey)
-          : undefined,
-        occurrenceKey: targetsOneOccurrence ? event.occurrenceKey : undefined,
-        patch: {
-          // A guest who may not modify the event sends only their own fields.
-          ...(detailsLocked() ? {} : detailChanges),
-          ...(guestEditing() === 'replace' &&
-          guestListChanged(event, values.guestEmails)
-            ? {
-                attendees: values.guestEmails.map((email) => ({ email })),
-              }
-            : {}),
-          ...(values.reminders ? { reminders: values.reminders } : {}),
-          ...(values.guestPolicy &&
-          event.viewerCan.setGuestPolicy &&
-          !targetsOneOccurrence
-            ? { guestPolicy: values.guestPolicy }
-            : {}),
-        },
-      };
-      if (Object.keys(updateArgs.patch).length > 0) {
-        await update.mutateAsync(updateArgs);
+      const { updateArgs, invitedEmails } = editUpdate(
+        event,
+        values,
+        scope,
+        metadata
+      );
+      const updates = Object.keys(updateArgs.patch).length > 0;
+      const invites = invitedEmails.length > 0;
+      // A new Macro call is minted by its own request and linked by a second
+      // update, so that save waits for the server to finish.
+      const addsCall = needsCall() && canManageCall && !existingMeetingUrl;
+      const lastWrite = addsCall ? undefined : invites ? 'invite' : 'update';
+      if (updates) {
+        await update.mutateAsync({
+          ...updateArgs,
+          ...(lastWrite === 'update' ? { onAccepted: closeAccepted } : {}),
+        });
       }
-      if (invitedEmails.length > 0) {
+      if (invites) {
         await invite.mutateAsync({
           eventId: updateArgs.eventId,
           calendarId: updateArgs.calendarId,
@@ -462,11 +581,12 @@ export function useEventEditor(props: UseEventEditorProps) {
           scope: updateArgs.scope,
           recurrenceId: updateArgs.recurrenceId,
           occurrenceKey: updateArgs.occurrenceKey,
+          ...(lastWrite === 'invite' ? { onAccepted: closeAccepted } : {}),
         });
       }
       calendarSaved = true;
 
-      if (needsCall() && canManageCall && !existingMeetingUrl) {
+      if (addsCall) {
         const meetingUrl = await createScheduledMeeting(values);
         const linkedContent = attachCalendarMacroCall(cleanContent, meetingUrl);
         if (needsCall())
@@ -481,13 +601,13 @@ export function useEventEditor(props: UseEventEditorProps) {
         const shareToken = getMeetingShareToken(existingMeetingUrl);
         if (shareToken) await syncScheduledMeeting(shareToken, values);
       }
-      props.onSaved();
+      closeAccepted();
     } catch (error) {
       const subtext = error instanceof Error ? error.message : undefined;
       if (calendarSaved) {
         if (existingMeetingUrl) {
           toast.alert('Event saved, but call details could not be updated');
-          props.onSaved();
+          closeAccepted();
         } else {
           setSaveError(
             'Your event is saved, but its call link could not be added. Save again to retry.'
@@ -547,5 +667,6 @@ export function useEventEditor(props: UseEventEditorProps) {
     pending,
     saveError,
     save,
+    replacementRequest,
   };
 }

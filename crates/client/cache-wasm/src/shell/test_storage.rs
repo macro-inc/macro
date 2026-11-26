@@ -17,7 +17,7 @@ use cache_core::store::{QueueDiagnostics, Storage};
 use cache_core::value::{EntityKey, Record};
 use cache_turso::{PhysicalResetReason, TursoStorage, TursoStorageError};
 use predicate_index::{EffectiveOptimisticProjection, RecordKey, ValidatedIndexQuery};
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 #[derive(Clone, Copy)]
 pub(super) enum TestStorageFault {
@@ -31,6 +31,9 @@ pub(super) enum TestStorageFault {
 pub(super) struct BrowserStorage {
     inner: TursoStorage,
     fault: AtomicU8,
+    /// Set once a fault fires: like a Turso file that latched a reset, the
+    /// storage then reports no write position.
+    failed: AtomicBool,
 }
 
 impl BrowserStorage {
@@ -38,11 +41,16 @@ impl BrowserStorage {
         Self {
             inner,
             fault: AtomicU8::new(0),
+            failed: AtomicBool::new(false),
         }
     }
 
     pub(super) fn into_inner(self) -> TursoStorage {
         self.inner
+    }
+
+    pub(super) fn inner(&self) -> &TursoStorage {
+        &self.inner
     }
 
     pub(super) fn arm(&self, fault: TestStorageFault) {
@@ -55,6 +63,7 @@ impl BrowserStorage {
             .compare_exchange(fault as u8, 0, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
         {
+            self.failed.store(true, Ordering::Release);
             Err(TursoStorageError::PhysicalResetRequired(
                 PhysicalResetReason::Codec,
             ))
@@ -66,6 +75,31 @@ impl BrowserStorage {
 
 impl Storage for BrowserStorage {
     type Error = TursoStorageError;
+
+    fn write_position(&self) -> Option<cache_core::store::WritePosition> {
+        if self.failed.load(Ordering::Acquire) {
+            return None;
+        }
+        self.inner.write_position()
+    }
+
+    async fn record_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.inner.record_keys(typename, after_id, limit).await
+    }
+
+    async fn projection_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.inner.projection_keys(typename, after_id, limit).await
+    }
 
     async fn scan_contact_records(
         &self,
@@ -174,6 +208,20 @@ impl Storage for BrowserStorage {
     ) -> Result<Vec<Option<EffectiveOptimisticProjection>>, Self::Error> {
         self.take(TestStorageFault::LoadOptimisticProjections)?;
         self.inner.load_optimistic_projections(keys).await
+    }
+
+    async fn replace_optimistic_layers(
+        &mut self,
+        layers: &[(
+            cache_core::queue::MutationId,
+            cache_core::queue::PersistedOptimisticLayer,
+        )],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .replace_optimistic_layers(layers, affected_projection_keys, projections)
+            .await
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {

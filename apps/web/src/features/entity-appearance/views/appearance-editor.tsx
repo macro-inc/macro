@@ -2,19 +2,20 @@ import { MobileDrawer } from '@app/components/app/mobile/MobileDrawer';
 import { t } from '@app/lib/i18n';
 import { getEntityIconType } from '@core/component/EntityIcon';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Popover } from '@kobalte/core/popover';
 import type { ManagedDialogProps } from '@ui/components/ImperativeDialog';
 import type { Result } from 'neverthrow';
 import { createEffect, Show } from 'solid-js';
-import type { EntityData } from '../../entity/types/entity';
 import { AppearancePicker } from '../components/appearance-picker';
 import type { EntityAppearance } from '../core/appearance';
 import { createAppearanceEditor } from '../primitives/create-appearance-editor';
 import { createRecentIcons } from '../primitives/create-recent-icons';
+import type { AppearanceEntity } from '../types';
 
 export type AppearanceEditorProps = ManagedDialogProps & {
-  entity: EntityData;
+  entity: AppearanceEntity;
   userId: string;
   anchor?: { x: number; y: number; width: number; height: number };
   isCurrent: () => boolean;
@@ -64,7 +65,7 @@ export function AppearanceEditor(props: AppearanceEditorProps) {
   );
   return (
     <Show
-      when={isMobile()}
+      when={isTouchDevice()}
       fallback={
         <>
           <span

@@ -2,12 +2,19 @@
  * worker module graph and the WASM binary must not look like a wedged database.
  */
 export const COORDINATOR_CONNECT_TIMEOUT_MS = 60_000;
+/** For a page that was connected before, whose browser has the script: what is
+ * left is a SharedWorker that starts, or one that never does. */
+export const COORDINATOR_RECONNECT_TIMEOUT_MS = 10_000;
+/** How often a page that waits for an answer looks whether the others found
+ * another coordinator. */
+export const COORDINATOR_WATCH_INTERVAL_MS = 1_000;
+export const LOCK_QUERY_TIMEOUT_MS = 5_000;
 export const ENGINE_ASSET_LOAD_TIMEOUT_MS = 5 * 60_000;
 export const ENGINE_DATABASE_OPEN_TIMEOUT_MS = 20_000;
 /** Delays between attempts to take a busy database owner lock. The engine
  * never queues for it: a handoff between owners of one build frees it within
  * milliseconds, and after these ~10s the engine gives up without touching
- * storage, so pages use the network until they reload.
+ * storage, so pages use the network while the coordinator tries again.
  */
 export const OWNER_LOCK_RETRY_DELAYS_MS: readonly number[] = [
   25, 50, 100, 200, 400, 800, 1_600, 3_200, 3_200,
@@ -29,8 +36,3 @@ export const COORDINATOR_CONNECT_RETRY_DELAYS_MS: readonly number[] = [
 ];
 export const COORDINATOR_CONNECT_ATTEMPTS =
   COORDINATOR_CONNECT_RETRY_DELAYS_MS.length + 1;
-
-/** Only the live coordinator can prove that every failed attempt stayed before
- * the open grant. A missing progress message is not proof of untouched storage.
- */
-export class CacheBootstrapExhaustedError extends Error {}

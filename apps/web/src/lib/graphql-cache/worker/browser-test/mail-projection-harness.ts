@@ -155,6 +155,7 @@ document
   .addEventListener('click', async () => {
     try {
       await host.writeQuery({
+        generation: (await host.authority!.current()).generation,
         query,
         identity: 'offline-mail-viewer',
         data: {
@@ -226,6 +227,7 @@ document.querySelector('#create-draft')!.addEventListener('click', async () => {
     };
     const enqueued = await host.enqueueOptimisticMutation(
       {
+        generation: (await host.authority!.current()).generation,
         uuid: id(8001),
         query: stringifyDocument(SaveEmailDraftDocument),
         operationName: 'SaveEmailDraft',
@@ -525,6 +527,7 @@ document
     }
   });
 await host.writeQuery({
+  generation: (await host.authority!.current()).generation,
   query,
   identity: 'offline-mail-viewer',
   data: {

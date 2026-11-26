@@ -84,20 +84,17 @@ export function MacroToolCall(props: {
       title={props.common.label}
       subtitle={subtitle()}
       status={props.common.status}
-      muted={props.common.muted || failure()}
       trailing={
         props.common.trailing ??
-        (failure()
-          ? 'Failed'
-          : props.common.status === 'completed'
-            ? resultSummary(response())
-            : undefined)
+        (!failure() && props.common.status === 'completed'
+          ? resultSummary(response())
+          : undefined)
       }
     />
   );
   const canRenderResults = () =>
     props.common.status === 'completed' &&
-    !props.common.muted &&
+    !props.common.unsuccessful &&
     props.common.trailing == null &&
     !failure() &&
     (response() !== undefined || legacyImage() !== undefined);

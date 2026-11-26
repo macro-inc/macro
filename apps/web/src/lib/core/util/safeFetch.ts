@@ -300,7 +300,7 @@ export type TextResponse = { contentType: 'text/plain'; body: string };
  * }
  */
 export async function safeFetch<
-  T extends (ObjectLike & (TextResponse | {})) | Uint8Array,
+  T extends (ObjectLike & (TextResponse | {})) | Uint8Array | null,
   CustomErrorCode extends string = never,
 >(
   input: RequestInfo,

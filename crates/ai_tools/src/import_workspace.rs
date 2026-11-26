@@ -3,8 +3,10 @@
 
 use crate::ToolEntityCreator;
 use crate::tool_context::ImportedContent;
-use databases::domain::models::{CreateDatabase, DatabaseDetail, DatabaseId, OpBatch, Viewer};
-use databases::domain::ports::DatabasesService as _;
+use databases::domain::models::{
+    CreateDatabase, DatabaseDetail, DatabaseError, DatabaseId, OpBatch, Viewer,
+};
+use databases::domain::ports::{DatabasesProjectService as _, DatabasesService as _};
 use databases::domain::receipt::database_receipt;
 use databases::domain::sharing::DatabaseSharingService as _;
 use documents::domain::models::DocumentError;
@@ -13,8 +15,9 @@ use documents::domain::ports::DocumentService as _;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService as _;
 use import::domain::ports::{
-    ImportedDocumentProperties, ImportedTarget, ImportedTaskProperties, NewDatabase, NotionLinks,
-    SharedEntity, SourceDates, TeamMember,
+    CreatedImportDocument, DatabaseWriteFailure, ImportedDocumentProperties, ImportedLinkBody,
+    ImportedTarget, ImportedTaskProperties, NewDatabase, NotionLinkDestination,
+    NotionLinkReference, NotionLinks, SharedEntity, SourceDates, TeamMember,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
@@ -24,6 +27,74 @@ use projects::domain::ports::ProjectService as _;
 use uuid::Uuid;
 
 mod lifecycle;
+
+/// Host services for reading and committing an import-owned hyperlink revision.
+#[derive(Clone)]
+pub struct NotionLinkEditor {
+    lexical: std::sync::Arc<lexical_client::LexicalClient>,
+    sync: sync_service_client::SyncServiceClient,
+    jwt_secret: String,
+}
+
+fn revision_receipt(revision: &[u8]) -> Uuid {
+    Uuid::new_v5(&Uuid::NAMESPACE_OID, revision)
+}
+
+impl NotionLinkEditor {
+    /// Use the same lexical and sync services as normal document creation.
+    pub fn new(
+        lexical: std::sync::Arc<lexical_client::LexicalClient>,
+        sync: sync_service_client::SyncServiceClient,
+        jwt_secret: String,
+    ) -> Self {
+        Self {
+            lexical,
+            sync,
+            jwt_secret,
+        }
+    }
+
+    pub(crate) async fn initial_revision(&self, snapshot: &[u8]) -> Option<Uuid> {
+        if snapshot.len() > sync_service_client::document_state::MAX_DOCUMENT_BINARY_BYTES {
+            return None;
+        }
+        let result = self.lexical.notion_link_delta(snapshot, &[]).await;
+        match result {
+            Ok(delta) if !delta.references.is_empty() => {
+                delta.revision_bytes().ok().as_deref().map(revision_receipt)
+            }
+            Ok(_) => None,
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not inspect the initial Notion document revision");
+                None
+            }
+        }
+    }
+
+    async fn owner_token(
+        &self,
+        creator: &ToolEntityCreator,
+        user: &MacroUserIdStr<'static>,
+        document: Uuid,
+    ) -> anyhow::Result<sync_service_client::document_state::DocumentPermissionToken> {
+        let receipt = creator
+            .entity_access_service
+            .generate_entity_access_receipt::<OwnerAccessLevel>(
+                user,
+                None,
+                &document.to_string(),
+                model_entity::EntityType::Document,
+            )
+            .await?;
+        Ok(
+            documents::domain::permission_token::encode_receipt_permission_token(
+                &receipt,
+                AccessLevel::Owner,
+                &self.jwt_secret,
+            )?,
+        )
+    }
+}
 
 #[cfg(test)]
 mod test;
@@ -50,6 +121,43 @@ fn team_share() -> UpdateSharePermissionRequestV2 {
 pub(crate) fn notion_markdown(markdown: &str, links: &NotionLinks) -> NotionMarkdown {
     NotionMarkdown {
         markdown: markdown.to_string(),
+        databases: links
+            .databases
+            .iter()
+            .map(|occurrence| {
+                use documents::domain::notion_markdown::{
+                    NotionDatabaseFallback as Fallback, NotionDatabaseOccurrence,
+                    NotionDatabaseTarget as Target,
+                };
+                use import::domain::ports::{
+                    NotionDatabaseFallback as Reason, NotionDatabaseTarget as Source,
+                };
+                let target = match &occurrence.target {
+                    Source::Resolved {
+                        database_id,
+                        table_id,
+                        view_id,
+                    } => Target::Resolved {
+                        database_id: *database_id,
+                        table_id: table_id.into_uuid(),
+                        view_id: view_id.map(|id| id.into_uuid()),
+                    },
+                    Source::Fallback(reason) => Target::Fallback {
+                        reason: match reason {
+                            Reason::NoAccess => Fallback::NoAccess,
+                            Reason::NotFound => Fallback::NotFound,
+                            Reason::NotImported => Fallback::NotImported,
+                            Reason::Unresolved => Fallback::Unresolved,
+                        },
+                    },
+                };
+                NotionDatabaseOccurrence {
+                    container_id: occurrence.container_id.to_string(),
+                    ordinal: occurrence.ordinal,
+                    target,
+                }
+            })
+            .collect(),
         pages: links
             .pages
             .iter()
@@ -97,11 +205,20 @@ pub(crate) fn already_created(created: anyhow::Result<String>, id: Uuid) -> anyh
 /// only column that table starts with.
 fn new_database(detail: &DatabaseDetail) -> anyhow::Result<NewDatabase> {
     let database_id = *detail.database.id.as_uuid();
-    let Some(table) = detail.tables.first() else {
-        anyhow::bail!("new database {database_id} has no table");
+    let ids = databases::domain::models::FirstTableIds::for_database(detail.database.id);
+    let Some(table) = detail
+        .tables
+        .iter()
+        .find(|entry| entry.table.id == ids.table)
+    else {
+        return Err(DatabaseWriteFailure::MissingStarterTable.into());
     };
-    let Some(title_column) = table.columns.first() else {
-        anyhow::bail!("new database {database_id}'s starter table has no column");
+    let Some(title_column) = table
+        .columns
+        .iter()
+        .find(|entry| entry.column.id == ids.title_column)
+    else {
+        return Err(DatabaseWriteFailure::MissingTitleColumn.into());
     };
     Ok(NewDatabase {
         database_id,
@@ -131,9 +248,9 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         id: Uuid,
         name: &str,
         markdown: &str,
-        shared: bool,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
-        self.create_tracker_project_impl(user, id, name, markdown, shared)
+        self.create_tracker_project_impl(user, id, name, markdown, visibility)
             .await
     }
     async fn create_tracker_task(
@@ -143,9 +260,9 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         name: &str,
         markdown: &str,
         properties: &ImportedTaskProperties,
-        shared: bool,
-    ) -> anyhow::Result<String> {
-        self.create_tracker_task_impl(user, id, name, markdown, properties, shared)
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<import::domain::ports::CreatedImportTask> {
+        self.create_tracker_task_impl(user, id, name, markdown, properties, visibility)
             .await
     }
     async fn link_tracker_task(
@@ -163,11 +280,14 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         user: &MacroUserIdStr<'static>,
         name: &str,
         parent: Option<Uuid>,
+        visibility: import::domain::ports::ImportVisibility,
     ) -> anyhow::Result<Uuid> {
         // Mirrors the CreateProject tool: creating inside a parent requires
         // edit access to it.
         if let Some(parent) = parent {
-            self.authorize_folder(user, parent).await?;
+            self.authorize_folder(user, parent)
+                .await
+                .map_err(|_| DatabaseWriteFailure::FolderUnavailable)?;
         }
         let project = self
             .project_service
@@ -177,10 +297,14 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                     name: name.to_string(),
                     project_parent_id: parent,
                 },
+                crate::tool_context::imported_link_share(visibility),
             )
             .await
-            .map_err(|error| anyhow::anyhow!("failed to create imported folder: {error:?}"))?;
-        Ok(project.id.parse()?)
+            .map_err(|_| DatabaseWriteFailure::FolderUnavailable)?;
+        Ok(project
+            .id
+            .parse()
+            .map_err(|_| DatabaseWriteFailure::FolderUnavailable)?)
     }
 
     #[tracing::instrument(skip(self, user, name, notion_markdown, links, properties), err)]
@@ -194,7 +318,8 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         properties: &ImportedDocumentProperties,
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
-    ) -> anyhow::Result<String> {
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<CreatedImportDocument> {
         let created = self
             .create_imported_document(
                 user,
@@ -204,9 +329,137 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 properties,
                 folder,
                 dates,
+                visibility,
             )
             .await;
-        already_created(created, id)
+        match created {
+            Ok(document) => Ok(document),
+            Err(error) => Ok(CreatedImportDocument {
+                id: already_created(Err(error), id)?,
+                link_revision: None,
+            }),
+        }
+    }
+
+    async fn owns_notion_link_target(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        target: ImportedTarget,
+    ) -> anyhow::Result<bool> {
+        use model_entity::EntityType;
+        let (id, kind) = match target {
+            ImportedTarget::Document(id) => (id, EntityType::Document),
+            ImportedTarget::Database(id) => (id, EntityType::Database),
+            _ => return Ok(false),
+        };
+        match self
+            .entity_access_service
+            .generate_entity_access_receipt::<OwnerAccessLevel>(user, None, &id.to_string(), kind)
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(error) if crate::tool_context::refuses_view(&error) => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    #[tracing::instrument(skip_all, fields(document = %document), err)]
+    async fn inspect_import_links(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        document: Uuid,
+        receipt: Uuid,
+    ) -> anyhow::Result<Option<ImportedLinkBody>> {
+        let Some(editor) = &self.notion_link_editor else {
+            return Ok(None);
+        };
+        let token = editor.owner_token(self, user, document).await?;
+        let state = editor
+            .sync
+            .document_state(&document.to_string(), &token)
+            .await?;
+        if revision_receipt(&state.revision) != receipt {
+            return Ok(None);
+        }
+        let parsed = editor
+            .lexical
+            .notion_link_delta(&state.snapshot, &[])
+            .await?;
+        Ok(Some(ImportedLinkBody {
+            snapshot: state.snapshot,
+            revision: state.revision,
+            references: parsed
+                .references
+                .into_iter()
+                .filter_map(|source| {
+                    Some(NotionLinkReference {
+                        id: source.id.try_into().ok()?,
+                        view_id: match source.view_id {
+                            Some(id) => Some(id.try_into().ok()?),
+                            None => None,
+                        },
+                    })
+                })
+                .collect(),
+        }))
+    }
+
+    #[tracing::instrument(skip_all, fields(document = %document, references = links.len()), err)]
+    async fn rewrite_import_links(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        document: Uuid,
+        body: ImportedLinkBody,
+        links: &[(NotionLinkReference, NotionLinkDestination)],
+    ) -> anyhow::Result<usize> {
+        use lexical_client::notion::{
+            NotionLinkDestination as Destination, NotionLinkReference as Source,
+            NotionLinkReplacement,
+        };
+        let Some(editor) = &self.notion_link_editor else {
+            return Ok(0);
+        };
+        let replacements: Vec<_> = links
+            .iter()
+            .map(|(source, destination)| NotionLinkReplacement {
+                source: Source {
+                    id: source.id.as_str().to_owned(),
+                    view_id: source.view_id.as_ref().map(|id| id.as_str().to_owned()),
+                },
+                destination: match destination {
+                    NotionLinkDestination::Page(id) => Destination::Page {
+                        document_id: id.to_string(),
+                    },
+                    NotionLinkDestination::Database {
+                        database,
+                        table,
+                        view,
+                    } => Destination::Database {
+                        database_id: database.to_string(),
+                        table_id: table.to_string(),
+                        view_id: view.map(|id| id.to_string()),
+                    },
+                },
+            })
+            .collect();
+        let prepared = editor
+            .lexical
+            .notion_link_delta(&body.snapshot, &replacements)
+            .await?;
+        let Some(delta) = prepared.update_bytes()? else {
+            return Ok(0);
+        };
+        let token = editor.owner_token(self, user, document).await?;
+        let result = editor
+            .sync
+            .update_import_links(&document.to_string(), &token, &body.revision, &delta)
+            .await?;
+        Ok(match result {
+            sync_service_client::document_state::DocumentUpdate::Applied { .. } => {
+                prepared.rewritten
+            }
+            sync_service_client::document_state::DocumentUpdate::Conflict => 0,
+        })
     }
 
     #[tracing::instrument(skip(self, user, name, notion_markdown, links, properties), err)]
@@ -220,7 +473,8 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         properties: &ImportedTaskProperties,
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
-    ) -> anyhow::Result<String> {
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<import::domain::ports::CreatedImportTask> {
         let created = self
             .create_imported_task(
                 user,
@@ -232,12 +486,108 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 dates,
                 // A shared task list shares its folder, which reaches its tasks.
                 false,
+                visibility,
             )
             .await;
-        already_created(created, id)
+        match created {
+            Ok(created) => Ok(created),
+            Err(error) => {
+                let task = already_created(Err(error), id)?;
+                let (_, roster) = self.team_roster(user).await;
+                let notice = self
+                    .apply_task_properties(user, &task, properties, &roster, visibility)
+                    .await;
+                Ok(import::domain::ports::CreatedImportTask { id: task, notice })
+            }
+        }
+    }
+
+    #[tracing::instrument(skip_all, fields(task_id = %id, visibility = ?visibility), err)]
+    async fn reapply_task_assignee(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        email: &str,
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<Option<import::domain::ports::TaskImportNoticeReason>> {
+        let access = self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &id.to_string(),
+                model_entity::EntityType::Document,
+            )
+            .await
+            .map_err(anyhow::Error::new)?;
+        use teams::domain::team_repo::TeamRepository as _;
+        // Replay must not clear an omission notice after a failed roster lookup.
+        let roster = match self.entity_access_service.get_user_team(user).await? {
+            Some(team) => self
+                .team_repository
+                .get_team_members(&team.team_id)
+                .await?
+                .into_iter()
+                .map(|member| macro_user_id::cowlike::CowLike::into_owned(member.user_id))
+                .collect(),
+            None => Vec::new(),
+        };
+        self.apply_task_assignee(
+            user,
+            access.entity().entity_id.as_ref(),
+            Some(email),
+            &roster,
+            visibility,
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self, user), err)]
+    async fn folder_has_explicit_grant(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> anyhow::Result<bool> {
+        let receipt = self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &folder.to_string(),
+                model_entity::EntityType::Project,
+            )
+            .await
+            .map_err(database_folder_access_failure)?;
+        Ok(self
+            .project_service
+            .folder_has_explicit_grant(receipt)
+            .await
+            .map_err(|_| DatabaseWriteFailure::FolderUnavailable)?)
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn folder_has_team_edit_grant(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> anyhow::Result<bool> {
+        let receipt = self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &folder.to_string(),
+                model_entity::EntityType::Project,
+            )
+            .await
+            .map_err(database_folder_access_failure)?;
+        Ok(self
+            .project_service
+            .folder_has_team_edit_grant(receipt)
+            .await
+            .map_err(|_| DatabaseWriteFailure::FolderUnavailable)?)
+    }
+
     async fn folder_exists(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -253,44 +603,133 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
             )
             .await
         {
-            Ok(_) => {
-                import::domain::ports::ImportedTargetReader::target_exists(
-                    self,
-                    ImportedTarget::Folder(folder),
-                )
-                .await
-            }
+            Ok(_) => import::domain::ports::ImportedTargetReader::target_exists(
+                self,
+                ImportedTarget::Folder(folder),
+            )
+            .await
+            .map_err(|_| DatabaseWriteFailure::FolderUnavailable.into()),
             Err(error) if crate::tool_context::refuses_view(&error) => Ok(false),
-            Err(error) => Err(anyhow::Error::new(error)),
+            Err(error) => Err(database_folder_access_failure(error).into()),
         }
+    }
+
+    #[tracing::instrument(skip_all, fields(database_id = %id), err)]
+    async fn database_access(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> anyhow::Result<bool> {
+        use entity_access::domain::models::AccessError;
+        match database_receipt::<ViewAccessLevel, _>(
+            self.entity_access_service.as_ref(),
+            &viewer(user),
+            DatabaseId::from_uuid(id),
+        )
+        .await
+        {
+            Ok(_) => Ok(true),
+            Err(
+                AccessError::Unauthorized
+                | AccessError::UnauthorizedWithMessage(_)
+                | AccessError::NotFound(_),
+            ) => Ok(false),
+            Err(error) => Err(database_access_failure(error).into()),
+        }
+    }
+
+    #[tracing::instrument(skip_all, fields(database_id = %id, table_id = %table), err)]
+    async fn database(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        table: models_databases::TableId,
+    ) -> anyhow::Result<import::domain::ports::ImportedDatabase> {
+        imported_database(&self.import_database_detail(user, id).await?, table)
+    }
+
+    #[tracing::instrument(name = "notion.persist_database_view", skip_all, fields(database_id = %database, view_id = %id), err)]
+    async fn ensure_database_view(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        database: Uuid,
+        table: models_databases::TableId,
+        id: models_databases::views::ViewId,
+        view: models_databases::views::NewView,
+    ) -> anyhow::Result<()> {
+        let exists = |detail: &DatabaseDetail| {
+            detail.tables.iter().any(|entry| {
+                entry.table.id == table && entry.views.iter().any(|view| view.id == id)
+            })
+        };
+        let result = import::domain::ports::WorkspaceWriter::apply_database_ops(
+            self,
+            user,
+            database,
+            vec![models_databases::DatabaseOp::View {
+                table,
+                view: id,
+                change: models_databases::ViewChange::Create { view },
+            }],
+        )
+        .await;
+        if let Err(error) = result {
+            // A committed create whose response/marker was lost is already complete.
+            if !exists(&self.import_database_detail(user, database).await?) {
+                return Err(error);
+            }
+        }
+        Ok(())
     }
 
     #[tracing::instrument(skip(self, user, name), err)]
     async fn create_database(
         &self,
         user: &MacroUserIdStr<'static>,
+        id: Uuid,
         name: &str,
+        folder: Option<Uuid>,
     ) -> anyhow::Result<NewDatabase> {
         let viewer = viewer(user);
-        let database = self
-            .databases_service
-            .create_database(CreateDatabase {
-                name: name.to_string(),
-                owner_id: user.clone(),
-                acting_bot: viewer.acting_bot,
-                first_table: None,
-            })
-            .await?;
+        let command = CreateDatabase {
+            name: name.to_string(),
+            owner_id: user.clone(),
+            acting_bot: viewer.acting_bot,
+            first_table: None,
+        };
+        let database = if let Some(folder) = folder {
+            let project = self
+                .entity_access_service
+                .generate_entity_access_receipt::<OwnerAccessLevel>(
+                    user,
+                    None,
+                    &folder.to_string(),
+                    model_entity::EntityType::Project,
+                )
+                .await
+                .map_err(database_folder_access_failure)?;
+            self.databases_service
+                .create_database_in_project(DatabaseId::from_uuid(id), command, project)
+                .await
+                .map_err(database_write_failure)?
+        } else {
+            self.databases_service
+                .create_database_with_id(DatabaseId::from_uuid(id), command)
+                .await
+                .map_err(database_write_failure)?
+        };
         let receipt = database_receipt::<ViewAccessLevel, _>(
             self.entity_access_service.as_ref(),
             &viewer,
             database.id,
         )
         .await
-        .map_err(|error| {
-            anyhow::anyhow!("no view access to new database {}: {error:?}", database.id)
-        })?;
-        let detail = self.databases_service.get_database(receipt).await?;
+        .map_err(database_access_failure)?;
+        let detail = self
+            .databases_service
+            .get_database(receipt)
+            .await
+            .map_err(database_write_failure)?;
         new_database(&detail)
     }
 
@@ -308,11 +747,12 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
             DatabaseId::from_uuid(database_id),
         )
         .await
-        .map_err(|error| anyhow::anyhow!("no edit access to database {database_id}: {error:?}"))?;
+        .map_err(database_access_failure)?;
         Ok(self
             .databases_service
             .apply_ops(receipt, viewer, OpBatch::from(ops))
-            .await?)
+            .await
+            .map_err(database_write_failure)?)
     }
 
     #[tracing::instrument(skip(self, user), err)]
@@ -417,4 +857,79 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
             })
             .collect())
     }
+}
+
+impl ToolEntityCreator {
+    async fn import_database_detail(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> anyhow::Result<DatabaseDetail> {
+        let receipt = database_receipt::<ViewAccessLevel, _>(
+            self.entity_access_service.as_ref(),
+            &viewer(user),
+            DatabaseId::from_uuid(id),
+        )
+        .await
+        .map_err(database_access_failure)?;
+        Ok(self
+            .databases_service
+            .get_database(receipt)
+            .await
+            .map_err(database_write_failure)?)
+    }
+}
+
+/// A service refusal is source-specific; repository failures affect the run.
+fn database_write_failure(error: DatabaseError) -> DatabaseWriteFailure {
+    match error {
+        DatabaseError::NotFound => DatabaseWriteFailure::NotFound,
+        DatabaseError::Unauthorized => DatabaseWriteFailure::PermissionDenied,
+        DatabaseError::VersionConflict => DatabaseWriteFailure::Conflict,
+        DatabaseError::Repo(_) => DatabaseWriteFailure::Unavailable,
+        DatabaseError::RowInUse
+        | DatabaseError::OptionInUse
+        | DatabaseError::InvalidAppearance(_)
+        | DatabaseError::InvalidSchemaOperation(_)
+        | DatabaseError::InvalidSharing(_)
+        | DatabaseError::InvalidOp(_) => DatabaseWriteFailure::InvalidSchema,
+    }
+}
+
+/// A filing failure may affect every source in that folder; always re-check it.
+fn database_folder_access_failure(
+    _: entity_access::domain::models::AccessError,
+) -> DatabaseWriteFailure {
+    DatabaseWriteFailure::FolderUnavailable
+}
+
+fn database_access_failure(
+    error: entity_access::domain::models::AccessError,
+) -> DatabaseWriteFailure {
+    use entity_access::domain::models::AccessError;
+    match error {
+        AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
+            DatabaseWriteFailure::PermissionDenied
+        }
+        AccessError::NotFound(_) => DatabaseWriteFailure::NotFound,
+        AccessError::BadRequest(_) => DatabaseWriteFailure::InvalidSchema,
+        AccessError::Unavailable(_) | AccessError::Internal(_) => DatabaseWriteFailure::Unavailable,
+    }
+}
+
+/// Reused copies follow their holder's marker, independent of UI tab order.
+fn imported_database(
+    detail: &DatabaseDetail,
+    table: models_databases::TableId,
+) -> anyhow::Result<import::domain::ports::ImportedDatabase> {
+    let table = detail
+        .tables
+        .iter()
+        .find(|entry| entry.table.id == table)
+        .ok_or(import::domain::models::SourceStopReason::RecordedTableMissing)?;
+    Ok(import::domain::ports::ImportedDatabase {
+        database_id: detail.database.id.into_uuid(),
+        table: table.table.id,
+        views: table.views.iter().map(|view| view.id).collect(),
+    })
 }

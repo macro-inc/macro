@@ -133,7 +133,7 @@ main email fields also use it, with composition coverage in
 
 `/?share-recipients` mounts the Share menu's real To field (`ShareRecipientField`,
 `RecipientSelector`, `useCombinedRecipientSource`) over an account sized by the
-URL: `groups` (named channels and group DMs), `dms`, `people` in the contact
+URL: `groups` (named channels and group chats), `dms`, `people` in the contact
 cache and its read `latency` in milliseconds. `share-recipient-adapters.ts`
 builds them from a fixed seed. The page shows the selected recipients
 (`data-testid="recipients"`) and counts contact reads (`data-testid="reads"`)

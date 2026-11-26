@@ -21,6 +21,9 @@ use anyhow::Result;
 use super::instance::{Instance, Port};
 use super::{Mode, frontend, identity, proxy, resources};
 
+/// Issuer of the local Passwords service JWTs that OpenBao team roles trust.
+pub const PASSWORDS_JWT_ISSUER: &str = "macro-local-passwords";
+
 /// The public hostnames `--with-cf-tunnel` minted for this run.
 ///
 /// Both exist for the same reason: an agent that is not on this machine — a
@@ -139,10 +142,7 @@ impl LocalEnv {
         // stack and aborts the process.
         env.insert("RUST_MIN_STACK".into(), "67108864".into());
         env.insert("OPENBAO_ADDRESS".into(), "http://openbao:8200".into());
-        env.insert(
-            "PASSWORDS_JWT_ISSUER".into(),
-            "macro-local-passwords".into(),
-        );
+        env.insert("PASSWORDS_JWT_ISSUER".into(), PASSWORDS_JWT_ISSUER.into());
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
@@ -791,6 +791,9 @@ impl BootStubEnv {
             "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME".into(),
             "local-cloudfront-signer-private-key".into(),
         );
+        // Local stacks run a computer fleet, so the agents worker that takes
+        // back agent teammates of released computers is on.
+        env.insert("COMPUTERS_AGENT_EFFECTS".into(), "true".into());
         // authentication_service's third-party OAuth/Stripe config. The Google
         // pair is the client the stack's Gmail emulator is given (see
         // google_emulator.rs); the FusionAuth kickstart only creates the
@@ -844,14 +847,18 @@ impl BootStubEnv {
             "local-stripe-webhook-secret".into(),
         );
         // ai_billing's mandatory pricing (crates/ai_billing/src/config.rs). Every
-        // host that composes billing refuses to boot without all four; these
-        // mirror the published plan table ($5 free cap, $15 Pro, $150 Max,
-        // list price + 25%). Doppler's shared_ai configs are authoritative.
+        // host that composes billing refuses to boot without all five; these
+        // mirror the published plan table ($5 free cap, $15 Pro, $45 Business,
+        // $150 Max, list price + 25%). Doppler's shared_ai configs are authoritative.
         env.insert(
             "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS".into(),
             "500".into(),
         );
         env.insert("AI_USAGE_INCLUDED_ALLOWANCE_CENTS".into(), "1500".into());
+        env.insert(
+            "AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS".into(),
+            "4500".into(),
+        );
         env.insert(
             "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS".into(),
             "15000".into(),
@@ -950,6 +957,9 @@ impl BootStubEnv {
         // Doppler; real provider calls still fail on the dummy keys.
         // Doppler's shared_ai name is singular: FIREWORK_API_KEY.
         env.insert("FIREWORK_API_KEY".into(), "local-firework-key".into());
+        // Empty turns the harness's CAPTCHA solving off (`notConfigured`): a
+        // placeholder key would send real tasks to CapSolver and fail them.
+        env.insert("CAPSOLVER_API_KEY".into(), String::new());
         env.insert("CEREBRAS_API_KEY".into(), "local-cerebras-key".into());
         env.insert(
             super::model_emulator::API_KEY_VAR.into(),

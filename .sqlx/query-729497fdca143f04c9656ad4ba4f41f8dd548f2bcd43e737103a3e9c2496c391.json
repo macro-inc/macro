@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1,failures=0 WHERE link_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "729497fdca143f04c9656ad4ba4f41f8dd548f2bcd43e737103a3e9c2496c391"
+}

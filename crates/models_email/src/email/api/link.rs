@@ -12,7 +12,8 @@ mod test;
 
 /// Coarse sync state for an inbox, used to render a one-line hint in the
 /// multi-inbox settings list. Derived from the link's `is_sync_active` flag, its
-/// reauth health, and its most recent backfill job.
+/// reauth health, whether the provider serves its mailbox, and its most recent
+/// backfill job.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum SyncStatus {
@@ -24,6 +25,9 @@ pub enum SyncStatus {
     Error,
     /// The link's Google grant has stopped working; the user must reconnect.
     NeedsReauth,
+    /// Microsoft serves no mailbox for this Outlook account (no Exchange
+    /// Online licence, or an inactive mailbox); sync resumes once it has one.
+    MailboxUnavailable,
     /// Syncing has been turned off for this inbox.
     Inactive,
 }

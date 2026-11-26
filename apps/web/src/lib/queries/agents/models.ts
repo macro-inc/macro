@@ -1,3 +1,4 @@
+import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
@@ -39,7 +40,10 @@ const REMOTE_MODELS_STALE_TIME = 5 * 60 * 1000;
 
 const MODELS_GC_TIME = 30 * 60 * 1000;
 
-export function agentModelsQueryOptions(target: AgentModelTarget) {
+export function agentModelsQueryOptions(
+  target: AgentModelTarget,
+  userId: string | undefined
+) {
   const staleTime =
     target.harness === 'in-memory'
       ? IN_MEMORY_MODELS_STALE_TIME
@@ -48,6 +52,7 @@ export function agentModelsQueryOptions(target: AgentModelTarget) {
     queryKey: [
       'agent-models',
       'load',
+      userId ?? null,
       target.harness,
       target.harnessId ?? null,
     ] as const,
@@ -69,8 +74,12 @@ export function agentModelsQueryOptions(target: AgentModelTarget) {
 export function useAgentModelsQueries(
   targets: () => readonly AgentModelTarget[]
 ) {
+  const userId = useUserId();
   return useQueries(() => ({
-    queries: targets().map(agentModelsQueryOptions),
+    queries: targets().map((target) => ({
+      ...agentModelsQueryOptions(target, userId()),
+      enabled: Boolean(userId()),
+    })),
   }));
 }
 
@@ -79,8 +88,9 @@ export function useAgentModelsQuery(
   target: () => AgentModelTarget,
   enabled: () => boolean = () => true
 ) {
+  const userId = useUserId();
   return useQuery(() => ({
-    ...agentModelsQueryOptions(target()),
-    enabled: enabled(),
+    ...agentModelsQueryOptions(target(), userId()),
+    enabled: Boolean(userId()) && enabled(),
   }));
 }

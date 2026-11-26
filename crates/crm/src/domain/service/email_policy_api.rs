@@ -179,7 +179,16 @@ where
             .companies_repository
             .email_rule_targets(access.team_id(), user.as_ref(), link, &rules.include)
             .await?;
-        validate_targets(rules, facts, &mailbox)
+        let validated = validate_targets(rules, facts, &mailbox)?;
+        self.companies_repository
+            .admit_email_rule_resources(
+                access.team_id(),
+                user.as_ref(),
+                link,
+                &validated.rules.include,
+            )
+            .await?;
+        Ok(validated)
     }
 
     #[tracing::instrument(skip_all, fields(team_id = %access.team_id(), request_id = %command.request_id), err)]
@@ -261,6 +270,7 @@ where
             })?;
             let facts = tx.lock_rule_targets(&rules.include).await?;
             let validated = validate_targets(rules.clone(), facts, &mailbox)?;
+            tx.admit_rule_resources(&validated.rules.include).await?;
             Some(tx.save_rule_revision(&validated.rules).await?)
         } else {
             if !withdraw && tx.authoring_mailbox().await?.is_none() {

@@ -12,20 +12,11 @@ import type {
   ApiThread as Thread,
   UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
-import { markGraphqlEmailThreadUnread } from '@service-storage/graphql-email-read-state';
-import {
-  getGraphqlSoupClient,
-  graphqlCacheEnabled,
-} from '@service-storage/graphql-soup';
 import { type InfiniteData, useMutation } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { refetchSoupEntity } from '../soup/cache';
-import {
-  getUnmaintainedGraphqlSoupRevalidations,
-  refreshActiveGraphqlSoupQueries,
-} from '../soup/graphql/active-queries';
 import { revalidateMailImportanceLists } from '../soup/graphql/mail-list-revalidation';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
@@ -41,7 +32,13 @@ import {
   type EmailArchiveDisposition,
 } from './integration';
 import { emailKeys } from './keys';
-import { type MarkThreadAsSeenParams, markEmailThreadSeen } from './read-state';
+import {
+  type MarkThreadAsSeenParams,
+  type MarkThreadAsUnreadParams,
+  type MarkThreadAsUnreadResult,
+  markEmailThreadSeen,
+  markEmailThreadUnread,
+} from './read-state';
 
 /**
  * Flatten infinite query pages into a single thread with all messages.
@@ -117,6 +114,9 @@ export type ThreadQueryData = {
 export type ThreadQueryResult<TData> = {
   /** Canonical identity for this route, including a resolved offline handle. */
   readonly resolvedThreadId: string;
+  /** Waiting for the cache to say whether the route is a local draft; the
+   * thread is not requested meanwhile. */
+  readonly isResolvingIdentity: boolean;
   readonly data: TData | undefined;
   readonly error: Error | null;
   readonly isLoading: boolean;
@@ -165,17 +165,18 @@ export function useThreadQuery<TData = ThreadQueryData>(
   const select = () =>
     options?.().select ?? (selectThreadQueryData as ThreadQuerySelector<TData>);
 
-  const { query, resolvedThreadId } = createGraphqlEmailThreadQuery<TData>(
-    threadId,
-    () => ({
+  const { query, resolvedThreadId, identityPending } =
+    createGraphqlEmailThreadQuery<TData>(threadId, () => ({
       enabled: options?.().enabled !== false,
       select: select(),
-    })
-  );
+    }));
 
   return {
     get resolvedThreadId() {
       return resolvedThreadId();
+    },
+    get isResolvingIdentity() {
+      return identityPending();
     },
     get data() {
       return query.data;
@@ -223,27 +224,21 @@ export function useMarkThreadAsSeenMutation(
   }));
 }
 
-type MarkThreadAsUnreadParams = { threadId: string };
-
 /**
  * Mark a thread unread through the shared mailbox-state contract.
  */
 export function useMarkThreadAsUnreadMutation(
-  callbacks?: MutationCallbacks<void, Error, MarkThreadAsUnreadParams>
+  callbacks?: MutationCallbacks<
+    MarkThreadAsUnreadResult,
+    Error,
+    MarkThreadAsUnreadParams
+  >,
+  options?: { observeQueuedSettlement: boolean }
 ) {
   return useMutation(() => ({
-    mutationFn: async (params: MarkThreadAsUnreadParams) => {
-      // The optimistic and committed `isRead` reach every list the cache
-      // maintains; the rest are read again when the write commits.
-      const disposition = await markGraphqlEmailThreadUnread(
-        getGraphqlSoupClient(),
-        params.threadId,
-        getUnmaintainedGraphqlSoupRevalidations()
-      );
-      if (disposition === 'committed' && !graphqlCacheEnabled())
-        await refreshActiveGraphqlSoupQueries();
-    },
-    ...withCallbacks<void, Error, MarkThreadAsUnreadParams>(
+    mutationFn: (params: MarkThreadAsUnreadParams) =>
+      markEmailThreadUnread(params, options?.observeQueuedSettlement ?? false),
+    ...withCallbacks<MarkThreadAsUnreadResult, Error, MarkThreadAsUnreadParams>(
       {
         onSettled: () => invalidateEmailFolderQueries(),
       },

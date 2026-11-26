@@ -208,7 +208,10 @@ impl<P: PropertiesService> DocumentPropertiesApplicator<P> {
                 Some(SetPropertyValue::Boolean { value: *value })
             }
             ImportedDocumentPropertyValue::Date { value } => match dateparser::parse(value) {
-                Ok(value) => Some(SetPropertyValue::Date { value }),
+                Ok(value) => Some(SetPropertyValue::Date {
+                    value,
+                    has_time: false,
+                }),
                 Err(error) => {
                     tracing::warn!(
                         document_id,

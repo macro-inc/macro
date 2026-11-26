@@ -41,6 +41,8 @@ pub struct GuestUsage {
     pub hibernated: bool,
     /// Memory only it holds, in bytes; `None` without a process.
     pub private_memory_bytes: Option<u64>,
+    /// Its memory the host swapped out, in bytes; `None` without a process.
+    pub swap_bytes: Option<u64>,
     /// CPU time its process used since it started; `None` without a process.
     pub cpu_usage_microseconds: Option<u64>,
 }

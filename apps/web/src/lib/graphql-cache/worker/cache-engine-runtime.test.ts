@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { CacheRequest } from '../protocol';
 import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
@@ -185,7 +185,7 @@ const attachRuntime = async (
   const scope = new FakeWorkerScope();
   installCacheEngineWorker({
     scope,
-    ownerLockIsHeld: async () => true,
+    findOwnerLock: async () => ({}),
     createCore,
   });
   scope.activate(
@@ -232,7 +232,7 @@ describe('cache engine worker runtime', () => {
     });
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async (name) => ({ name, clientId: 'engine-client' }),
       createCore: () => ({
         prepare,
         handleRequest,
@@ -252,9 +252,47 @@ describe('cache engine worker runtime', () => {
     expect(handleRequest).not.toHaveBeenCalled();
     direct.receive({ ...version, kind: 'open-engine', ownerEpoch: 7 });
     await vi.waitFor(() =>
-      expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(1)
+      expect(messagesOfKind(direct, 'engine-ready')).toEqual([
+        expect.objectContaining({ ownerLockClientId: 'engine-client' }),
+      ])
     );
     expect(handleRequest).toHaveBeenCalledOnce();
+  });
+
+  it('gives up the owner lock when drained before its storage grant', async () => {
+    const scope = new FakeWorkerScope();
+    const direct = new FakePort();
+    direct.autoOpen = false;
+    const handleRequest = vi.fn();
+    let initialization: Promise<unknown> | undefined;
+    installRuntime({
+      scope,
+      createCore: (coreOptions) => ({
+        prepare: async () => undefined,
+        handleRequest: async () => {
+          initialization = coreOptions.onOwnerLockAcquired?.();
+          await initialization;
+          handleRequest();
+        },
+        addPort: vi.fn(),
+        // Like CacheWorkerCore, which waits for an initialization under way.
+        drain: async () => {
+          await Promise.allSettled([initialization]);
+        },
+      }),
+    });
+    scope.activate(activation(), direct);
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'owner-lock-acquired')).toHaveLength(1)
+    );
+    direct.receive({ ...version, kind: 'drain-engine', ownerEpoch: 7 });
+
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'engine-drained')).toHaveLength(1)
+    );
+    expect(scope.closed).toBe(true);
+    expect(messagesOfKind(direct, 'activation-failed')).toEqual([]);
+    expect(handleRequest).not.toHaveBeenCalled();
   });
 
   it('fatals on a storage grant before it holds the owner lock', async () => {
@@ -313,7 +351,7 @@ describe('cache engine worker runtime', () => {
     installRuntime({
       scope,
       sleep,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: (coreOptions) => ({
         handleRequest: async (port, request) => {
           if (request.kind === 'init') {
@@ -394,7 +432,7 @@ describe('cache engine worker runtime', () => {
       const direct = new FakePort();
       installRuntime({
         scope,
-        ownerLockIsHeld: async () => true,
+        findOwnerLock: async () => ({}),
         createCore: (coreOptions) => ({
           handleRequest: async (port, request) => {
             await coreOptions.onOwnerLockAcquired?.();
@@ -490,7 +528,7 @@ describe('cache engine worker runtime', () => {
     );
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: (options) => {
         coreOptions = options;
         return {
@@ -514,6 +552,70 @@ describe('cache engine worker runtime', () => {
     });
   });
 
+  it.each([
+    ['reset', 'heartbeat', 2],
+    ['reset', 'engine-request', 2],
+    ['preserved', 'heartbeat', 0],
+  ] as const)(
+    'lets go of a lost queue only once the coordinator took it in (%s, %s)',
+    async (queue, proof, attempts) => {
+      const scope = new FakeWorkerScope();
+      const direct = new FakePort();
+      const queueLossTold = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('the side file is busy'))
+        .mockResolvedValue(undefined);
+      const emitted = vi.fn();
+      const held = [{ name: 'owner-lock', mode: 'exclusive' }];
+      vi.stubGlobal('navigator', { locks: { query: async () => ({ held }) } });
+      onTestFinished(() => {
+        vi.unstubAllGlobals();
+      });
+      installCacheEngineWorker({
+        scope,
+        hooks: { onEvent: emitted },
+        createCore: (options) => ({
+          addPort: vi.fn(),
+          handleRequest: async (port, request) => {
+            options.onInitializationOutcome?.('opened-existing', queue);
+            port.postMessage({ id: request.id, ok: true, result: null });
+          },
+          drain: vi.fn(),
+          queueLossTold,
+        }),
+      });
+
+      scope.activate(activation('open-existing'), direct);
+      await vi.waitFor(() =>
+        expect(emitted).toHaveBeenCalledWith(
+          expect.objectContaining({ kind: 'ready' })
+        )
+      );
+
+      // Posting it proves nothing: the coordinator may die before it reads it.
+      expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(1);
+      expect(queueLossTold).not.toHaveBeenCalled();
+
+      for (const id of [1, 2, 3]) {
+        const rest =
+          proof === 'heartbeat'
+            ? { heartbeatId: id }
+            : { routeId: id, request: { id, kind: 'current-revision' } };
+        direct.receive({ ...version, kind: proof, ownerEpoch: 7, ...rest });
+        await vi.waitFor(() =>
+          expect(
+            messagesOfKind(
+              direct,
+              proof === 'heartbeat' ? 'heartbeat-ack' : 'engine-response'
+            )
+          ).toHaveLength(id)
+        );
+      }
+
+      expect(queueLossTold).toHaveBeenCalledTimes(attempts);
+    }
+  );
+
   it('throttles runtime linear memory, emits cached queue state, and drains high-water values', async () => {
     const scope = new FakeWorkerScope();
     const direct = new FakePort();
@@ -526,7 +628,7 @@ describe('cache engine worker runtime', () => {
       now: () => now,
       readLinearMemoryBytes: () => memoryBytes,
       memoryTelemetryIntervalMs: 60_000,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       telemetry: {
         record: (observation) => observations.push(observation),
         flush: vi.fn(),
@@ -586,7 +688,7 @@ describe('cache engine worker runtime', () => {
     const direct = new FakePort();
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: () => ({
         addPort: vi.fn(),
         drain: vi.fn(),
@@ -657,7 +759,7 @@ describe('cache engine worker runtime', () => {
     });
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       hooks: {
         beforeRequest: async (request) => {
           if (request.kind === 'read') await hookBlocker;
@@ -714,7 +816,7 @@ describe('cache engine worker runtime', () => {
     let corePort: { postMessage(message: unknown): void } | undefined;
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: () => ({
         addPort: (port) => {
           corePort = port;
@@ -755,7 +857,7 @@ describe('cache engine worker runtime', () => {
     });
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: () => ({
         addPort: vi.fn(),
         handleRequest: async (port, request) => {
@@ -816,7 +918,7 @@ describe('cache engine worker runtime', () => {
     });
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: () => ({
         addPort: vi.fn(),
         handleRequest,
@@ -1119,7 +1221,10 @@ describe('cache engine worker runtime', () => {
         drain: vi.fn(),
         handleRequest: async (port, request) => {
           if (request.kind === 'init') {
-            options.onInitializationOutcome?.('reset-storage-uncertain');
+            options.onInitializationOutcome?.(
+              'reset-storage-uncertain',
+              'reset'
+            );
             port.postMessage({ id: request.id, ok: true, result: null });
           }
         },
@@ -1166,7 +1271,7 @@ describe('cache engine worker runtime', () => {
     );
     installCacheEngineWorker({
       scope,
-      ownerLockIsHeld: async () => true,
+      findOwnerLock: async () => ({}),
       createCore: () => ({
         addPort: vi.fn(),
         handleRequest,

@@ -210,6 +210,31 @@ fn agent_harness_egress_url_selects_defaults_without_a_required_config_value() {
 }
 
 #[test]
+fn telemetry_intake_url_parses() {
+    assert_parses_for_all_environments(TelemetryIntakeUrl::default_for_environment);
+}
+
+#[test]
+fn telemetry_intake_url_is_the_analytics_proxy_outside_local() {
+    with_mock_override_env(missing_override, || {
+        for (environment, expected) in [
+            (Environment::Local, "http://localhost:4318"),
+            (
+                Environment::Develop,
+                "https://macro-prox-dev.macroverse.workers.dev/i/otlp",
+            ),
+            (
+                Environment::Production,
+                "https://macro-prox-prod.macroverse.workers.dev/i/otlp",
+            ),
+        ] {
+            let url = TelemetryIntakeUrl::new_for_environment(environment).unwrap();
+            assert_eq!(url.as_str(), expected);
+        }
+    });
+}
+
+#[test]
 fn agent_harness_egress_url_honors_the_standard_override_for_tunnels() {
     with_mock_override_env(
         |name| {

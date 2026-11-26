@@ -371,19 +371,17 @@ function ReviewsRoot() {
         <ReviewsListTopBar />
         <ViewShell.Header>
           <div class="flex min-w-0 flex-col gap-3">
-            <div class="h-10 min-w-0 flex-1">
+            <div class="flex h-10 min-w-0 flex-1 items-center gap-2">
               <PillTabs
                 scrollable
                 leading={
-                  <>
-                    <ViewSidebar.Toggle action="expand" presentation="pill" />
-                    <ReviewsFilterDrawer {...controls()} />
-                  </>
+                  <ViewSidebar.Toggle action="expand" presentation="pill" />
                 }
                 items={REVIEW_SCOPE_TABS}
                 value={scope()}
                 onChange={selectScope}
               />
+              <ReviewsFilterDrawer {...controls()} />
             </div>
             <SearchBar
               label="Search reviews"

@@ -182,6 +182,7 @@ export const ErrorCode = z.enum([
   'version_conflict',
   'vault_busy',
   'vault_unavailable',
+  'vault_not_provisioned',
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
 

@@ -192,9 +192,11 @@ impl RedisClient {
         self.acquire_write_slot(&SLOTS).await
     }
 
-    /// Waits for one of a team's CRM population slots. Returns `None` when
-    /// none frees up in time; the caller defers its operation.
-    pub async fn acquire_crm_population_slot(
+    /// One of a team's CRM population slots if one is free now. Never waits:
+    /// a team whose slots are all taken is usually paused or busy for far
+    /// longer than a backfill worker should sit idle, so the caller defers its
+    /// operation instead.
+    pub async fn try_acquire_crm_population_slot(
         &self,
         team_id: Uuid,
     ) -> redis::RedisResult<Option<BackfillWriteSlot>> {
@@ -203,7 +205,7 @@ impl RedisClient {
             key: &key,
             capacity: CRM_POPULATION_CAPACITY,
             lease: LEASE,
-            wait: WAIT,
+            wait: Duration::ZERO,
         })
         .await
     }

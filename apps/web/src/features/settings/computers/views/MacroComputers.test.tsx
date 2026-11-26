@@ -82,6 +82,7 @@ vi.mock('@queries/computers/computers', () => ({
   }),
   useSetComputerPowerMutation: () => ({ isPending: false }),
   useCancelComputerMutation: () => ({ isPending: false }),
+  useComputerUsageQuery: () => ({ isPending: true }),
   useUndoCancelComputerMutation: () => ({ isPending: false }),
   useRestoreComputerMutation: () => ({
     isPending: false,

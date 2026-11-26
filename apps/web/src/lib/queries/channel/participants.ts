@@ -1,13 +1,24 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   type MessageResponse,
   storageServiceClient,
 } from '@service-storage/client';
-import { useMutation } from '@tanstack/solid-query';
+import {
+  type MutationFunctionContext,
+  useMutation,
+} from '@tanstack/solid-query';
+import {
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  mutationQueryAccount,
+} from '../auth/account-scope';
+import { useQueryAccount } from '../auth/use-query-account';
 import { queryClient } from '../client';
 import { softInvalidateChannelParticipants } from './channel-participants';
+import { refreshChannelDirectory } from './directory';
 import { channelKeys } from './keys';
 import type { ChannelParticipant } from './types';
 
@@ -164,19 +175,53 @@ type RemoveParticipantsParams = {
 type AddParticipantsMutationContext = AddParticipantsContext | undefined;
 type RemoveParticipantsMutationContext = RemoveParticipantsContext | undefined;
 
+type AddParticipantsCallbacks = MutationCallbacks<
+  MessageResponse,
+  Error,
+  AddParticipantsParams,
+  AddParticipantsMutationContext
+>;
+type RemoveParticipantsCallbacks = MutationCallbacks<
+  MessageResponse,
+  Error,
+  RemoveParticipantsParams,
+  RemoveParticipantsMutationContext
+>;
+
 /**
- * Mutation to add participants to a channel.
+ * Whether the sign-in that made a roster change is still the current one. A
+ * change that settles in another leaves its caches alone: the participants
+ * list is keyed by channel only, and the new sign-in read every query again
+ * (`invalidateAllAfterLogin`), so its copy is newer than anything the change
+ * could restore or ask for.
  */
-export function useAddParticipantsMutation(
-  callbacks?: MutationCallbacks<
-    MessageResponse,
-    Error,
-    AddParticipantsParams,
-    AddParticipantsMutationContext
-  >
+function sameSignIn(context: MutationFunctionContext) {
+  return isCurrentQueryAccount(mutationQueryAccount(context));
+}
+
+/**
+ * After a roster change, whatever its outcome: the participants list reads
+ * again, and the channel directory reads the channel from the primary, so
+ * the readers of its record (call and DM Work members, DM peers) show the
+ * change before the soup update reaches the cache.
+ */
+function afterRosterChange(
+  channelId: string,
+  context: MutationFunctionContext
 ) {
-  return useMutation(() => ({
+  if (!sameSignIn(context)) return;
+  fireAndForget(refreshChannelDirectory([channelId]), 'channel-participants');
+  return softInvalidateChannelParticipants(channelId);
+}
+
+/** Adds participants to a channel, as `account`. */
+export function addParticipantsMutationOptions(
+  callbacks?: AddParticipantsCallbacks,
+  account = currentQueryAccount()
+) {
+  return {
     gcTime: 0,
+    meta: { queryAccount: account },
     mutationFn: async (vars: AddParticipantsParams) => {
       return await throwOnErr(
         async () =>
@@ -198,34 +243,41 @@ export function useAddParticipantsMutation(
             channelId: vars.channelId,
             participants: vars.participants,
           }),
-        onError(error, vars, context) {
+        onError(error, vars, context, mutation) {
           console.error('failed to add participants', error);
           toast.failure('Failed to add participants to channel');
-          if (context) {
+          if (context && sameSignIn(mutation)) {
             rollbackAddParticipants(vars.channelId, context);
           }
         },
-        onSettled: (_, __, vars) =>
-          softInvalidateChannelParticipants(vars.channelId),
+        onSettled: (_data, _error, vars, _result, context) =>
+          afterRosterChange(vars.channelId, context),
       },
       callbacks
     ),
-  }));
+  };
 }
 
 /**
- * Mutation to remove participants from a channel.
+ * Mutation to add participants to a channel.
  */
-export function useRemoveParticipantsMutation(
-  callbacks?: MutationCallbacks<
-    MessageResponse,
-    Error,
-    RemoveParticipantsParams,
-    RemoveParticipantsMutationContext
-  >
+export function useAddParticipantsMutation(
+  callbacks?: AddParticipantsCallbacks
 ) {
-  return useMutation(() => ({
+  const account = useQueryAccount();
+  return useMutation(() =>
+    addParticipantsMutationOptions(callbacks, account())
+  );
+}
+
+/** Removes participants from a channel, as `account`. */
+export function removeParticipantsMutationOptions(
+  callbacks?: RemoveParticipantsCallbacks,
+  account = currentQueryAccount()
+) {
+  return {
     gcTime: 0,
+    meta: { queryAccount: account },
     mutationFn: async (vars: RemoveParticipantsParams) => {
       return await throwOnErr(
         async () =>
@@ -247,17 +299,29 @@ export function useRemoveParticipantsMutation(
             channelId: vars.channelId,
             participants: vars.participants,
           }),
-        onError(error, vars, context) {
+        onError(error, vars, context, mutation) {
           console.error('failed to remove participants', error);
           toast.failure('Failed to remove participants from channel');
-          if (context) {
+          if (context && sameSignIn(mutation)) {
             rollbackRemoveParticipants(vars.channelId, context);
           }
         },
-        onSettled: (_, __, vars) =>
-          softInvalidateChannelParticipants(vars.channelId),
+        onSettled: (_data, _error, vars, _result, context) =>
+          afterRosterChange(vars.channelId, context),
       },
       callbacks
     ),
-  }));
+  };
+}
+
+/**
+ * Mutation to remove participants from a channel.
+ */
+export function useRemoveParticipantsMutation(
+  callbacks?: RemoveParticipantsCallbacks
+) {
+  const account = useQueryAccount();
+  return useMutation(() =>
+    removeParticipantsMutationOptions(callbacks, account())
+  );
 }

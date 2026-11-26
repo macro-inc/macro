@@ -83,7 +83,162 @@ pub enum Knob {
         /// investors, fundraising or finance?".
         value: String,
     },
+    /// One of the owner's items the code uses, such as the channel it posts
+    /// in, which the owner swaps by picking another. The code gets an SDK
+    /// handle for it, never its id.
+    Entity {
+        /// How the code reads it: `knobs.<name>`.
+        name: KnobName,
+        /// What it is, for the owner, e.g. "Channel to post in".
+        label: String,
+        /// The kinds of item the owner may pick, at least one, each once.
+        entity_types: Vec<EntityKind>,
+        /// The item picked; none yet in a starter, which its owner picks
+        /// before saving.
+        #[serde(default)]
+        value: Option<EntityValue>,
+    },
 }
+
+/// A kind of item an entity knob names: each kind the app's entity picker
+/// offers, which Macro's SDK has a handle for, and whole databases. Its
+/// name is the SDK's for the kind (`EntityReference`'s `type`, which the
+/// handle's `entityType` repeats), except `task`, a document that is a
+/// task.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = RoutineKnobEntityType))]
+#[serde(rename_all = "snake_case")]
+pub enum EntityKind {
+    /// A channel or direct message.
+    Channel,
+    /// A document.
+    Document,
+    /// A folder.
+    Project,
+    /// A whole database.
+    Database,
+    /// A person.
+    User,
+    /// A task: a document that is a task.
+    Task,
+    /// An email thread.
+    EmailThread,
+    /// An AI chat.
+    Chat,
+    /// A CRM company.
+    CrmCompany,
+    /// A CRM contact.
+    CrmContact,
+    /// A project: a named group of tasks.
+    Initiative,
+}
+
+impl EntityKind {
+    /// Every kind, in the order the drafter's guide lists them.
+    pub const ALL: [Self; 11] = [
+        Self::Channel,
+        Self::Document,
+        Self::Project,
+        Self::Database,
+        Self::User,
+        Self::Task,
+        Self::EmailThread,
+        Self::Chat,
+        Self::CrmCompany,
+        Self::CrmContact,
+        Self::Initiative,
+    ];
+
+    /// The SDK call that gives this kind's handle from its id:
+    /// `macro.<namespace>.<method>(id)`. The Deno bootstrap makes the same
+    /// calls (`code_execution`'s `bootstrap.mjs`).
+    pub fn factory(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Channel => ("channels", "byId"),
+            Self::Document => ("documents", "byId"),
+            Self::Project => ("projects", "byId"),
+            Self::Database => ("databases", "byId"),
+            Self::User => ("users", "byId"),
+            Self::Task => ("tasks", "byId"),
+            Self::EmailThread => ("email", "byId"),
+            Self::Chat => ("chats", "byId"),
+            Self::CrmCompany => ("crm", "companyById"),
+            Self::CrmContact => ("crm", "contactById"),
+            Self::Initiative => ("initiatives", "byId"),
+        }
+    }
+
+    /// What it is called, for the owner: "channel".
+    pub fn noun(self) -> &'static str {
+        match self {
+            Self::Channel => "channel",
+            Self::Document => "document",
+            Self::Project => "folder",
+            Self::Database => "database",
+            Self::User => "person",
+            Self::Task => "task",
+            Self::EmailThread => "email thread",
+            Self::Chat => "chat",
+            Self::CrmCompany => "company",
+            Self::CrmContact => "contact",
+            Self::Initiative => "project",
+        }
+    }
+}
+
+/// The item an entity knob names: its kind and id.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = RoutineKnobEntity))]
+#[serde(deny_unknown_fields)]
+pub struct EntityValue {
+    /// Its kind.
+    #[serde(rename = "type")]
+    pub kind: EntityKind,
+    /// Its id.
+    pub id: EntityId,
+}
+
+/// An item's id: not blank, without spaces, at most 256 characters.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = RoutineKnobEntityId))]
+#[serde(try_from = "String", into = "String")]
+pub struct EntityId(String);
+
+impl EntityId {
+    /// The id as written.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for EntityId {
+    type Error = InvalidEntityId;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let valid = !value.is_empty()
+            && value.len() <= 256
+            && !value.chars().any(|c| c.is_whitespace() || c.is_control());
+        if valid {
+            Ok(Self(value))
+        } else {
+            Err(InvalidEntityId)
+        }
+    }
+}
+
+impl From<EntityId> for String {
+    fn from(id: EntityId) -> Self {
+        id.0
+    }
+}
+
+/// An entity knob's id that is blank, has spaces or is too long.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("an entity knob's id must be 1 to 256 characters without spaces")]
+pub struct InvalidEntityId;
 
 impl Knob {
     /// How the code reads it.
@@ -93,7 +248,8 @@ impl Knob {
             | Self::Number { name, .. }
             | Self::Boolean { name, .. }
             | Self::Choice { name, .. }
-            | Self::Question { name, .. } => name,
+            | Self::Question { name, .. }
+            | Self::Entity { name, .. } => name,
         }
     }
 
@@ -104,18 +260,21 @@ impl Knob {
             | Self::Number { label, .. }
             | Self::Boolean { label, .. }
             | Self::Choice { label, .. }
-            | Self::Question { label, .. } => label,
+            | Self::Question { label, .. }
+            | Self::Entity { label, .. } => label,
         }
     }
 
     /// Its value as the step's sentence shows it: a question by its
-    /// clause, on or off as yes or no.
-    pub fn sentence_text(&self) -> String {
+    /// clause, on or off as yes or no. None for an entity, whose item's
+    /// name this crate doesn't know.
+    pub fn sentence_text(&self) -> Option<String> {
         match self {
-            Self::Text { value, .. } | Self::Choice { value, .. } => value.clone(),
-            Self::Number { value, .. } => value.to_string(),
-            Self::Boolean { value, .. } => if *value { "yes" } else { "no" }.to_owned(),
-            Self::Question { label, .. } => label.clone(),
+            Self::Text { value, .. } | Self::Choice { value, .. } => Some(value.clone()),
+            Self::Number { value, .. } => Some(value.to_string()),
+            Self::Boolean { value, .. } => Some(if *value { "yes" } else { "no" }.to_owned()),
+            Self::Question { label, .. } => Some(label.clone()),
+            Self::Entity { .. } => None,
         }
     }
 
@@ -134,12 +293,30 @@ impl Knob {
                 .map(Value::Number)
                 .unwrap_or(Value::Null),
             Self::Boolean { value, .. } => Value::Bool(*value),
+            // The runner turns the marked item into the SDK's handle for it.
+            Self::Entity {
+                value: Some(value), ..
+            } => serde_json::json!({ "$entity": value }),
+            Self::Entity { value: None, .. } => Value::Null,
+        }
+    }
+
+    /// An entity knob's item, if one is picked, and the kinds it allows.
+    pub fn entity(&self) -> Option<(Option<&EntityValue>, &[EntityKind])> {
+        match self {
+            Self::Entity {
+                value,
+                entity_types,
+                ..
+            } => Some((value.as_ref(), entity_types)),
+            _ => None,
         }
     }
 
     /// Its TypeScript type in the step's `knobs`. A choice is the union of
     /// its options, so code comparing against an option that doesn't exist
-    /// fails the check.
+    /// fails the check; an entity is the SDK handle of each kind it allows,
+    /// so code calling what a channel doesn't have fails it.
     pub(crate) fn ts_type(&self) -> String {
         match self {
             Self::Text { .. } | Self::Question { .. } => "string".to_owned(),
@@ -148,6 +325,14 @@ impl Knob {
             Self::Choice { options, .. } => options
                 .iter()
                 .map(|option| Value::String(option.clone()).to_string())
+                .collect::<Vec<_>>()
+                .join(" | "),
+            Self::Entity { entity_types, .. } => entity_types
+                .iter()
+                .map(|kind| {
+                    let (namespace, method) = kind.factory();
+                    format!("ReturnType<import('@macro-inc/sdk').Macro['{namespace}']['{method}']>")
+                })
                 .collect::<Vec<_>>()
                 .join(" | "),
         }
@@ -276,7 +461,8 @@ pub struct SentenceRun {
 /// `sentence` with `knobs`' values in its slots, as runs; none when a slot
 /// is malformed, names no knob, or is written the wrong way for its knob
 /// (`{?name}` for a question, `{name}` for the rest). Saving refuses those,
-/// so this fails only for a step that wasn't saved.
+/// so this fails only for a step that wasn't saved. None too when a slot
+/// shows an entity knob, whose item's name this crate doesn't know.
 pub fn sentence_runs(sentence: &str, knobs: &[Knob]) -> Option<Vec<SentenceRun>> {
     sentence_pieces(sentence)
         .ok()?
@@ -290,9 +476,11 @@ pub fn sentence_runs(sentence: &str, knobs: &[Knob]) -> Option<Vec<SentenceRun>>
                 .iter()
                 .find(|knob| knob.name().as_str() == slot.name)
                 .filter(|knob| knob.is_question() == slot.question)
-                .map(|knob| SentenceRun {
-                    text: knob.sentence_text(),
-                    knob: true,
+                .and_then(|knob| {
+                    Some(SentenceRun {
+                        text: knob.sentence_text()?,
+                        knob: true,
+                    })
                 }),
         })
         .collect()

@@ -56,6 +56,15 @@ pub trait InboxSyncHistoryFacts: InboxSyncRepository {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
+/// A message carrying a label, and its thread.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LabelledMessage {
+    /// Message row id.
+    pub message_id: Uuid,
+    /// Thread row id.
+    pub thread_id: Uuid,
+}
+
 /// Existing Catalog capabilities for inbox imports.
 pub trait InboxSyncCatalog: InboxSyncRepository {
     /// Read the complete stored label catalog.
@@ -74,6 +83,15 @@ pub trait InboxSyncCatalog: InboxSyncRepository {
         &self,
         labels: Vec<service::label::Label>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Up to `limit` messages carrying this provider label, in message order
+    /// after `after` (the nil id for the first page).
+    fn labelled_messages(
+        &self,
+        link: Uuid,
+        label: &str,
+        after: Uuid,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<LabelledMessage>, Self::Err>> + Send;
 }
 
 /// Existing MessageStore capabilities for inbox imports.
@@ -85,19 +103,26 @@ pub trait InboxSyncMessageStore: InboxSyncRepository {
         provider: &str,
     ) -> impl Future<Output = Result<HashMap<String, Uuid>, Self::Err>> + Send;
     /// Insert the already cleaned message with the original resync snapshot.
+    /// Returns the user labels its thread gained.
     fn insert_message(
         &self,
         link: Uuid,
         thread: Uuid,
         message: &mut service::message::Message,
         resync: Option<&InboxSyncResync>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
     /// Insert a cleaned provider thread and its messages atomically.
     fn insert_thread(
         &self,
         link: Uuid,
         thread: service::thread::Thread,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// The user labels a message of a thread that was just imported whole
+    /// carries and none of the thread's earlier messages does.
+    fn labels_new_to_thread(
+        &self,
+        message: Uuid,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
     /// Resolve the committed message and thread identities.
     fn message_ids(
         &self,
@@ -262,12 +287,13 @@ pub trait InboxSyncUploads: Send + Sync + 'static {
     ) -> BoxFuture<'a, Result<String, InboxSyncUploadError>>;
 }
 
-/// Contact connection publication without exposing transport request types.
+/// Contact publication without exposing transport request types.
 pub trait InboxSyncContacts: Send + Sync + 'static {
-    /// Publish the already selected valid contacts for this owner.
+    /// Record the already selected valid contacts as known to the owner
+    /// through this inbox.
     fn connect<'a>(
         &'a self,
-        owner: &'a MacroUserIdStr<'static>,
+        link: &'a service::link::Link,
         contacts: Vec<MacroUserIdStr<'static>>,
     ) -> BoxFuture<'a, anyhow::Result<()>>;
 }

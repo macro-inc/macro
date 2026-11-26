@@ -16,16 +16,20 @@ import {
 } from '../../views/email-privacy';
 import { PrivacyNavigationFixture } from './navigation-fixture';
 import {
+  excludedListReads,
   lastChange,
   lastToast,
+  mailboxConnections,
   setStatusUnavailable,
 } from './preview-adapters';
+import { SelectiveSettingsFixture } from './selective-fixture';
 import { ThreadMenuFixture } from './thread-menu-fixture';
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 queryClient.setQueryDefaults(crmKeys.excludedEmailThreads._def, {
   retry: false,
 });
+queryClient.setQueryDefaults(crmKeys.emailPrivacy._def, { retry: false });
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
   id: 'member@example.com',
   authenticated: true,
@@ -49,7 +53,9 @@ function Fixture() {
   return (
     <main class="min-h-dvh bg-page text-ink">
       <CrmEmailOptInBanner />
+      <output data-testid="excluded-list-reads">{excludedListReads()}</output>
       <output data-testid="toast">{lastToast()}</output>
+      <output data-testid="mailbox-connections">{mailboxConnections()}</output>
       <div class="p-6">
         <Button onClick={() => setOpen(true)}>Email settings</Button>
         <ThreadMenuFixture />
@@ -84,7 +90,13 @@ if (root)
             path="*"
             component={() => (
               <PrivacyNavigationFixture>
-                <Fixture />
+                {new URLSearchParams(location.search).has(
+                  'selective-settings'
+                ) ? (
+                  <SelectiveSettingsFixture />
+                ) : (
+                  <Fixture />
+                )}
               </PrivacyNavigationFixture>
             )}
           />

@@ -16,6 +16,7 @@ use sqlx::{Pool, Postgres};
 use tracing::Instrument;
 
 use crate::api::context::{ApiContext, AuthorizationService};
+use models_email::email::service::pubsub::LinkManagerSender;
 use sqs_client::email::LinkManagerMessage;
 
 /// Delete user webhook
@@ -89,12 +90,13 @@ pub async fn handler(
             (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
         })?;
 
-    // Await the durable cleanup so FusionAuth can retry failures. Acknowledging
-    // before cleanup would strand resources if a service is unavailable.
+    // FusionAuth does not redeliver this event: `user.delete.complete` is
+    // non-transactional, so a failure here is reported but never retried.
+    // Inbox removal has its own sweep in `email_refresh_handler`.
     delete_user(ctx, macro_user, fusionauth_user_id, user_ids)
         .await
         .map_err(|error| {
-            tracing::error!(error=?error, "unable to complete user deletion; FusionAuth will retry");
+            tracing::error!(error=?error, "unable to complete user deletion; FusionAuth does not retry");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         })?;
 
@@ -132,7 +134,10 @@ async fn delete_user(
             let message = LinkManagerMessage::DeleteUser {
                 fusionauth_user_id: fusionauth_user_id.clone(),
             };
-            match sqs_client.enqueue_link_manager_notification(message).await {
+            match sqs_client
+                .enqueue_link_manager_notification(message, LinkManagerSender::Event)
+                .await
+            {
                 Ok(_) => tracing::info!("enqueued email link deletion"),
                 Err(e) => {
                     tracing::error!(error=?e, "unable to enqueue email link deletion");

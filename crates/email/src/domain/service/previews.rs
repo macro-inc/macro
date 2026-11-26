@@ -4,8 +4,8 @@ use entity_access::domain::models::ViewAccessLevel;
 
 use crate::domain::{
     models::{
-        EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery, PreviewView,
-        PreviewViewStandardLabel, UserProvider,
+        EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorPage,
+        PreviewCursorQuery, PreviewView, PreviewViewStandardLabel, UserProvider,
     },
     ports::EmailRepo,
 };
@@ -102,11 +102,13 @@ where
             team_id,
         };
 
-        let previews = self
+        let PreviewCursorPage {
+            previews,
+            continue_below,
+        } = self
             .email_repo
-            .previews_for_view_cursor(query, macro_id.copied().into_owned())
-            .await
-            .map_err(anyhow::Error::from)?;
+            .previews_page_for_view_cursor(query, macro_id.copied().into_owned())
+            .await?;
 
         let thread_ids: Vec<Uuid> = previews.iter().map(|p| p.id).collect();
 
@@ -118,14 +120,15 @@ where
         let frecency_scores = get_frecency_scores(
             &self.frecency_service,
             include_frecency,
-            macro_id,
+            macro_id.copied(),
             ids.as_slice(),
         );
 
         let (attachment_map_result, participant_result, labels_result, frecency_scores) = tokio::join!(
             self.email_repo.attachments_by_thread_ids(&thread_ids),
             self.email_repo.contacts_by_thread_ids(&thread_ids),
-            self.email_repo.labels_by_thread_ids(&thread_ids),
+            self.email_repo
+                .labels_by_thread_ids(&thread_ids, Some(&macro_id)),
             frecency_scores,
         );
 
@@ -144,7 +147,7 @@ where
 
         let mut frecency_scores_map: HashMap<AggregateId<'static>, FrecencyData> = frecency_scores?;
 
-        Ok(previews
+        let page = previews
             .into_iter()
             .map(|thread| {
                 let id = AggregateId {
@@ -163,7 +166,8 @@ where
                 }
             })
             .paginate_on(limit as usize, sort_method)
-            .into_page())
+            .into_page();
+        Ok(continued(page, continue_below, limit as usize, sort_method))
     }
 
     /// Hydrate the Soup preview of each receipt-authorized thread. The
@@ -399,4 +403,31 @@ fn authorized_threads_request(
         team_receipt: None,
         crm_scope: None,
     }
+}
+
+/// `page` with a cursor below `continue_below` when the read stopped short
+/// of a full page before the end of the mail: a list then reads on past a
+/// short or empty page instead of ending it there.
+fn continued<T>(
+    mut page: PaginatedCursor<T, Uuid, SimpleSortMethod, ()>,
+    continue_below: Option<(chrono::DateTime<chrono::Utc>, Uuid)>,
+    limit: usize,
+    sort_type: SimpleSortMethod,
+) -> PaginatedCursor<T, Uuid, SimpleSortMethod, ()> {
+    if page.next_cursor.is_none()
+        && let Some((last_val, id)) = continue_below
+    {
+        page.next_cursor = Some(models_pagination::Base64Str::encode_json(
+            models_pagination::Cursor {
+                id,
+                limit,
+                val: models_pagination::CursorVal {
+                    sort_type,
+                    last_val,
+                },
+                filter: (),
+            },
+        ));
+    }
+    page
 }

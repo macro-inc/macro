@@ -1062,6 +1062,51 @@ fn description_edits_and_clear_keep_the_provider_meeting_block() {
     }
 }
 
+#[test]
+fn a_description_edit_in_macro_writes_outlooks_own_meeting_block_back() {
+    let join = "https://teams.example/join?a=1&b=2";
+    let blob = "<div class=\"me-email-text\"><div><span>Microsoft Teams meeting</span></div><div><a href=\"https://teams.example/join?a=1&amp;b=2\">Join the meeting now</a></div><div><span>Meeting ID: 123<br>Passcode: abc</span></div></div>";
+    let current = json!({"isOnlineMeeting":true,"onlineMeeting":{"joinUrl":join},"body":{"content":format!("<html><body><p>Old description</p>{blob}</body></html>")}});
+    // The description as Macro's editor exports it after an edit.
+    let edited = "<p>New description</p><p>Microsoft Teams meeting</p><p><a href=\"https://teams.example/join?a=1&amp;b=2\">Join the meeting now</a></p><p>Meeting ID: 123<br>Passcode: abc</p>";
+
+    let body = patch_body(
+        &CalendarEventPatch {
+            description: Some(edited.into()),
+            ..Default::default()
+        },
+        Some(&current),
+    )
+    .unwrap();
+
+    assert_eq!(
+        body["body"]["content"],
+        format!("<p>New description</p>{blob}")
+    );
+}
+
+#[test]
+fn a_description_whose_meeting_block_was_already_rewritten_is_written_as_given() {
+    let join = "https://teams.example/join";
+    let flattened = "<p>Old description</p><p><a href=\"https://teams.example/join\">Join the meeting now</a></p>";
+    let current = json!({"isOnlineMeeting":true,"onlineMeeting":{"joinUrl":join},"body":{"content":flattened}});
+    let edited = format!(
+        "<p>New description</p>{}",
+        &flattened["<p>Old description</p>".len()..]
+    );
+
+    let body = patch_body(
+        &CalendarEventPatch {
+            description: Some(edited.clone()),
+            ..Default::default()
+        },
+        Some(&current),
+    )
+    .unwrap();
+
+    assert_eq!(body["body"]["content"], edited);
+}
+
 #[tokio::test]
 async fn moved_event_is_absent_from_its_old_calendar_even_if_mailbox_id_survives() {
     let (server, api) = setup().await;

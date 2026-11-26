@@ -248,7 +248,11 @@ async fn formula_fixture(pool: &PgPool) -> (QueryTable, Vec<RowId>) {
     commit(pool, table.database_id, columns).await;
 
     let number = |value: f64| PropertyValue::Num(value);
-    let date = |value: &str| PropertyValue::Date(value.parse().unwrap());
+    let date = |value: &str| {
+        PropertyValue::Date(models_properties::shared::DateValue::new(
+            value.parse().unwrap(),
+        ))
+    };
     commit(
         pool,
         table.database_id,
@@ -514,7 +518,13 @@ async fn checkbox_dates_and_links_keep_the_existing_cell_semantics(pool: PgPool)
             Some("2026-01-02T00:00:00Z"),
             None,
         ]
-        .map(|value| value.map(|value| PropertyValue::Date(value.parse().unwrap())))
+        .map(|value| {
+            value.map(|value| {
+                PropertyValue::Date(models_properties::shared::DateValue::new(
+                    value.parse().unwrap(),
+                ))
+            })
+        })
         .into(),
     )
     .await;
@@ -865,7 +875,13 @@ async fn date_comparisons_preserve_sub_microsecond_precision(pool: PgPool) {
             Some("2026-01-01T00:00:00.999999999Z"),
             None,
         ]
-        .map(|value| value.map(|value| PropertyValue::Date(value.parse().unwrap())))
+        .map(|value| {
+            value.map(|value| {
+                PropertyValue::Date(models_properties::shared::DateValue::new(
+                    value.parse().unwrap(),
+                ))
+            })
+        })
         .into(),
     )
     .await;

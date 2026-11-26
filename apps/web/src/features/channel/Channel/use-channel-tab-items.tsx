@@ -32,16 +32,6 @@ function LiveCallDot(props: { class?: string; channelId?: string }) {
   );
 }
 
-/** The live Call tab's label in menus that draw their own icon. */
-export function CallTabLabel(props: { channelId: string }) {
-  return (
-    <span class="flex items-center gap-1.5">
-      <LiveCallDot channelId={props.channelId} />
-      Call
-    </span>
-  );
-}
-
 /**
  * The tabs a channel host should offer right now: DMs hide participants,
  * calls-disabled builds hide call history, and the live Call tab appears only
@@ -60,7 +50,7 @@ export function useChannelTabItems(
   // `activeTab` to `call` before the join request resolves).
   const showCallTab = () =>
     ENABLE_CALLS &&
-    !channel()?.agent_dm &&
+    !channel()?.agentDm &&
     canUseInlineCallTab() &&
     (call.isInThisChannel() ||
       call.isJoining() ||
@@ -70,7 +60,7 @@ export function useChannelTabItems(
     let filtered = [...CHANNEL_TABS];
     if (channelType() === ChannelType.direct_message)
       filtered = filtered.filter((tab) => tab.value !== 'participants');
-    if (!ENABLE_CALLS || channel()?.agent_dm)
+    if (!ENABLE_CALLS || channel()?.agentDm)
       filtered = filtered.filter((tab) => tab.value !== 'calls');
     if (!showCallTab())
       filtered = filtered.filter((tab) => tab.value !== 'call');

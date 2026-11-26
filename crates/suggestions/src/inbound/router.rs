@@ -19,10 +19,11 @@ use serde::Deserialize;
 use utoipa::IntoParams;
 
 use crate::domain::model::{
-    Accept, AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion,
+    Accept, AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, RunReport,
     SuggestionCaller, SuggestionError, SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
 };
 use crate::domain::ports::SuggestionApi;
+use crate::domain::topic::NameTopic;
 
 #[cfg(test)]
 mod test;
@@ -75,6 +76,7 @@ where
             "/suggestions/viewed",
             post(record_suggestions_viewed::<S, Auth>),
         )
+        .route("/suggestions/topics", put(name_suggestion_topic::<S, Auth>))
         .route(
             "/suggestions/{id}",
             axum::routing::patch(rewrite_suggestion::<S, Auth>),
@@ -98,6 +100,14 @@ where
         .route(
             "/suggestions/{id}/restore",
             post(restore_suggestion::<S, Auth>),
+        )
+        .route(
+            "/suggestions/{id}/stop",
+            post(stop_suggestion_run::<S, Auth>),
+        )
+        .route(
+            "/suggestions/runs/report",
+            put(report_suggestion_run::<S, Auth>),
         )
         .with_state(state)
 }
@@ -133,7 +143,9 @@ impl IntoResponse for SuggestionApiError {
                 (StatusCode::CONFLICT, error.to_string()).into_response()
             }
             Self::Service(
-                error @ (SuggestionError::NotGenerating | SuggestionError::Generating),
+                error @ (SuggestionError::NotGenerating
+                | SuggestionError::Generating
+                | SuggestionError::NotARun),
             ) => (StatusCode::FORBIDDEN, error.to_string()).into_response(),
             Self::Service(error @ SuggestionError::Changed(_)) => {
                 let message = error.to_string();
@@ -373,12 +385,13 @@ where
         (status = 401, body = String),
         (status = 403, body = String, description = "A generation session may not restore"),
         (status = 404, body = String, description = "No suggestion with this id for the caller, or suggestions are off"),
-        (status = 409, body = String, description = "Not dismissed in the last five minutes, or a routine suggestion"),
+        (status = 409, body = String, description = "Not dismissed, or completed by acting on it, in the last five minutes; or a routine suggestion"),
         (status = 500, body = String),
     )
 )]
-/// The caller, or their own agent, takes back dismissing a suggestion, within
-/// five minutes of it.
+/// The caller, or their own agent, takes back dismissing a suggestion, or
+/// completing one by acting on it (not a finished run or an answered reply),
+/// within five minutes of it.
 pub async fn restore_suggestion<S, Auth>(
     State(state): State<SuggestionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -395,6 +408,78 @@ where
         .restore(&user.authorization.macro_user_id, caller, id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    post,
+    path = "/suggestions/{id}/stop",
+    tag = "suggestions",
+    operation_id = "stop_suggestion_run",
+    params(("id" = String, Path, description = "ID of the suggestion")),
+    responses(
+        (status = 204, description = "Its run is being stopped, and the suggestion stays open: it shows running until the run settles, then can run again; with nothing under way, nothing changes"),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not stop a run"),
+        (status = 404, body = String, description = "No open suggestion with this id for the caller, or suggestions are off"),
+        (status = 500, body = String),
+    )
+)]
+/// The caller, or their own agent, stops an open suggestion's run without
+/// dismissing it.
+pub async fn stop_suggestion_run<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let caller = caller(&user.authorization, &headers);
+    state
+        .service
+        .stop_run(&user.authorization.macro_user_id, caller, id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    put,
+    path = "/suggestions/runs/report",
+    tag = "suggestions",
+    operation_id = "report_suggestion_run",
+    request_body = RunReport,
+    responses(
+        (status = 200, body = SuggestionWriteOutcome, description = "Whether the report was stored, and what to fix when it wasn't"),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "Only a suggestion's background run, still under way, may report"),
+        (status = 404, body = String, description = "Suggestions are off for the user"),
+        (status = 500, body = String),
+    )
+)]
+/// A suggestion's background run says, in one line for the person, what it
+/// did and what it sent.
+pub async fn report_suggestion_run<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    body: Result<Json<RunReport>, JsonRejection>,
+) -> Result<Json<SuggestionWriteOutcome>, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let Json(report) = body.map_err(SuggestionApiError::InvalidRequest)?;
+    // The run is named by its session, which only a signed code-mode
+    // invocation carries.
+    let correlation = agent_correlation::context::current();
+    Ok(Json(
+        state
+            .service
+            .report_run(&principal, correlation, report)
+            .await?,
+    ))
 }
 
 #[utoipa::path(
@@ -457,6 +542,42 @@ where
         state
             .service
             .suggest(&principal, correlation, request)
+            .await?,
+    ))
+}
+
+#[utoipa::path(
+    put,
+    path = "/suggestions/topics",
+    tag = "suggestions",
+    operation_id = "name_suggestion_topic",
+    request_body = NameTopic,
+    responses(
+        (status = 200, body = SuggestionWriteOutcome, description = "Whether the topic was named, and what to fix when it wasn't"),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "Only a suggestions generation session may name a topic"),
+        (status = 404, body = String, description = "Suggestions are off for the user"),
+        (status = 500, body = String),
+    )
+)]
+/// Name a topic suggestions may belong to, from a suggestions generation
+/// session, or change the name and reason of the one with its key.
+pub async fn name_suggestion_topic<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    body: Result<Json<NameTopic>, JsonRejection>,
+) -> Result<Json<SuggestionWriteOutcome>, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let Json(request) = body.map_err(SuggestionApiError::InvalidRequest)?;
+    let correlation = agent_correlation::context::current();
+    Ok(Json(
+        state
+            .service
+            .name_topic(&principal, correlation, request)
             .await?,
     ))
 }

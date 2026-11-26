@@ -83,7 +83,9 @@ impl Jails {
             for (name, path) in [("vmstate", VMSTATE), ("mem", MEMORY)] {
                 let source = self.layout().in_chroot(&JailId::golden(), path);
                 let target = golden.join(name);
-                move_file(&source, &target).map_err(io("move", &source))?;
+                move_file(&source, &target)
+                    .await
+                    .map_err(io("move", &source))?;
                 own(&target, 0, 0o444)?;
             }
             Ok::<_, JailError>(())

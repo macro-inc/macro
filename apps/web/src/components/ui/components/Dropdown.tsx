@@ -1,3 +1,4 @@
+import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -145,6 +146,32 @@ function resolvePortalMount(
   return searchRef?.closest<HTMLElement>('.portal-scope') ?? undefined;
 }
 
+/** Shared menu chrome for controls that retain listbox or combobox semantics. */
+function DropdownContentFrame(props: SurfaceProps) {
+  const [local, rest] = splitProps(props, ['class']);
+  return (
+    <Surface
+      depth={2}
+      hideBorder
+      {...rest}
+      class={cn(
+        'menu-surface rounded-xl size-auto z-action-menu menu-open-animation text-sm',
+        local.class
+      )}
+    />
+  );
+}
+
+function DropdownItemFrame(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['class']);
+  return <div {...rest} class={cn(ROW_CLASS, local.class)} />;
+}
+
+function DropdownGroupFrame(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['class']);
+  return <div {...rest} class={cn('flex flex-col p-1.5', local.class)} />;
+}
+
 function installKeyboardNavigation(el: HTMLElement) {
   const cleanup = addCtrlJKMenuNavigation(el);
   onCleanup(cleanup);
@@ -271,15 +298,9 @@ function DropdownContent(props: DropdownContentProps) {
           />
         </Show>
         <KobalteDropdownMenu.Content
-          class={cn(
-            // Paint the same surface as context menus, including custom
-            // contents (calendar month lists) without a Dropdown.Group.
-            'menu-surface rounded-xl size-auto z-action-menu menu-open-animation text-sm',
-            local.class
-          )}
+          class={local.class}
           depth={local.depth ?? 2}
-          as={Surface}
-          hideBorder
+          as={DropdownContentFrame}
           {...rest}
           onOpenAutoFocus={handleOpenAutoFocus}
           ref={setContentRef}
@@ -316,13 +337,9 @@ function DropdownSubContent(props: DropdownSubContentProps) {
         mount={resolvePortalMount(searchRef, local.mount, local.portalScope)}
       >
         <KobalteDropdownMenu.SubContent
-          class={cn(
-            'menu-surface rounded-xl size-auto z-action-menu menu-open-animation text-sm',
-            local.class
-          )}
+          class={local.class}
           depth={local.depth ?? 2}
-          as={Surface}
-          hideBorder
+          as={DropdownContentFrame}
           {...rest}
           ref={setContentRef}
         >
@@ -339,7 +356,8 @@ function DropdownGroup(props: DropdownGroupProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
     <KobalteDropdownMenu.Group
-      class={cn('flex flex-col p-1.5', local.class)}
+      as={DropdownGroupFrame}
+      class={local.class}
       {...rest}
     />
   );
@@ -374,6 +392,13 @@ function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
     'ref',
     'closeOnSelect',
   ]);
+  // A plain function, not a JSX ternary: Solid compiles a ternary prop into a
+  // getter that creates a memo, and Kobalte reads it in its select handler,
+  // outside any owner.
+  const closeOnSelect = () =>
+    local.closeOnSelect === 'unless-shift'
+      ? selection.shouldClose()
+      : local.closeOnSelect;
   return (
     <KobalteDropdownMenu.CheckboxItem
       class={cn(ROW_CLASS, local.class)}
@@ -382,11 +407,7 @@ function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
         selection.track(element);
         callRef(local.ref, element);
       }}
-      closeOnSelect={
-        local.closeOnSelect === 'unless-shift'
-          ? selection.shouldClose()
-          : local.closeOnSelect
-      }
+      closeOnSelect={closeOnSelect()}
     >
       {local.indicator ?? (
         <div class={CHECKBOX_ITEM_BOX_CLASS}>
@@ -487,6 +508,13 @@ function DropdownItem(props: DropdownItemProps) {
     'closeOnSelect',
     'disabledReason',
   ]);
+  // A plain function, not a JSX ternary: Solid compiles a ternary prop into a
+  // getter that creates a memo, and Kobalte reads it in its select handler,
+  // outside any owner.
+  const closeOnSelect = () =>
+    local.closeOnSelect === 'unless-shift'
+      ? selection.shouldClose()
+      : local.closeOnSelect;
   return (
     <Show
       when={local.disabledReason}
@@ -498,11 +526,7 @@ function DropdownItem(props: DropdownItemProps) {
             selection.track(element);
             callRef(local.ref, element);
           }}
-          closeOnSelect={
-            local.closeOnSelect === 'unless-shift'
-              ? selection.shouldClose()
-              : local.closeOnSelect
-          }
+          closeOnSelect={closeOnSelect()}
         />
       }
     >
@@ -602,31 +626,63 @@ function DropdownTrigger<T extends ValidComponent = 'button'>(
   );
 }
 
-export const Dropdown = Object.assign(
-  (props: ComponentProps<typeof KobalteDropdownMenu>) => (
-    <KobalteDropdownMenu gutter={4} {...props} />
-  ),
-  {
-    RadioGroup:
-      KobalteDropdownMenu.RadioGroup /* passthrough — pure logical wrapper */,
-    Separator:
-      KobalteDropdownMenu.Separator /* passthrough — styled via class at use sites */,
-    ItemIndicator: DropdownItemIndicator,
-    ItemLabel:
-      KobalteDropdownMenu.ItemLabel /* passthrough — names the item for assistive tech */,
-    ItemDescription:
-      KobalteDropdownMenu.ItemDescription /* passthrough — describes the item for assistive tech */,
-    CheckboxItem: DropdownCheckboxItem,
-    MultiSelectItem: DropdownMultiSelectItem,
-    SubContent: DropdownSubContent,
-    SubTrigger: DropdownSubTrigger,
-    GroupLabel: DropdownGroupLabel,
-    RadioItem: DropdownRadioItem,
-    Content: DropdownContent,
-    Trigger: DropdownTrigger,
-    Group: DropdownGroup,
-    Item: DropdownItem,
-    CopyItem: DropdownCopyItem,
-    Sub: DropdownSub,
-  }
-);
+/**
+ * The menu root. On touch it closes when the app navigates to another page,
+ * as sheets do (`createCloseOnNavigation`): its content is portaled to the
+ * body, so a menu whose owner outlives the navigation would stay over the new
+ * page. It holds uncontrolled open state itself so navigation can close it.
+ */
+function DropdownRoot(props: ComponentProps<typeof KobalteDropdownMenu>) {
+  const [local, rest] = splitProps(props, [
+    'open',
+    'defaultOpen',
+    'onOpenChange',
+  ]);
+  const [uncontrolledOpen, setUncontrolledOpen] = createSignal(
+    local.defaultOpen ?? false
+  );
+  const open = () => local.open ?? uncontrolledOpen();
+  const changeOpen = (next: boolean) => {
+    if (local.open === undefined) setUncontrolledOpen(next);
+    local.onOpenChange?.(next);
+  };
+  createCloseOnNavigation({
+    open: () => isTouchDevice() && open(),
+    close: () => changeOpen(false),
+  });
+  return (
+    <KobalteDropdownMenu
+      gutter={4}
+      {...rest}
+      open={open()}
+      onOpenChange={changeOpen}
+    />
+  );
+}
+
+export const Dropdown = Object.assign(DropdownRoot, {
+  RadioGroup:
+    KobalteDropdownMenu.RadioGroup /* passthrough — pure logical wrapper */,
+  Separator:
+    KobalteDropdownMenu.Separator /* passthrough — styled via class at use sites */,
+  ItemIndicator: DropdownItemIndicator,
+  ItemLabel:
+    KobalteDropdownMenu.ItemLabel /* passthrough — names the item for assistive tech */,
+  ItemDescription:
+    KobalteDropdownMenu.ItemDescription /* passthrough — describes the item for assistive tech */,
+  CheckboxItem: DropdownCheckboxItem,
+  MultiSelectItem: DropdownMultiSelectItem,
+  SubContent: DropdownSubContent,
+  SubTrigger: DropdownSubTrigger,
+  GroupLabel: DropdownGroupLabel,
+  RadioItem: DropdownRadioItem,
+  Content: DropdownContent,
+  ContentFrame: DropdownContentFrame,
+  GroupFrame: DropdownGroupFrame,
+  ItemFrame: DropdownItemFrame,
+  Trigger: DropdownTrigger,
+  Group: DropdownGroup,
+  Item: DropdownItem,
+  CopyItem: DropdownCopyItem,
+  Sub: DropdownSub,
+});

@@ -3,6 +3,7 @@
 use super::{ProviderId, SendRequest};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use uuid::Uuid;
 
 /// A draft created for one stable Macro message, with a searchable correlation ID.
@@ -35,6 +36,37 @@ pub struct ProviderDraft {
     /// A missing digest forbids advancing through an attachment edit to delivery.
     #[serde(default)]
     pub content_fingerprint: Option<String>,
+    /// Digest of each content field the fingerprint covers, by its provider
+    /// name, so a log can say which field an edit changed and nothing else.
+    #[serde(default)]
+    pub field_digests: BTreeMap<String, String>,
+}
+
+/// The content of a draft as the provider held it, by digest: the whole, and
+/// each field by its provider name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DraftContent {
+    /// Digest of every field the fingerprint covers.
+    pub fingerprint: String,
+    /// Digest of each of those fields.
+    #[serde(default)]
+    pub fields: BTreeMap<String, String>,
+    /// The version the draft had when it held this content. Content recorded
+    /// at another version than the one it is compared from is no baseline.
+    #[serde(default)]
+    pub version: Option<String>,
+}
+
+impl ProviderDraft {
+    /// The content this read of the draft holds, if the provider returned all
+    /// of it.
+    pub fn content(&self) -> Option<DraftContent> {
+        Some(DraftContent {
+            fingerprint: self.content_fingerprint.clone()?,
+            fields: self.field_digests.clone(),
+            version: self.version.clone(),
+        })
+    }
 }
 
 /// Attachment identity supplied by the provider and the app's stable content ID.

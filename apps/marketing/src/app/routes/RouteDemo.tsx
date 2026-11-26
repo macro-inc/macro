@@ -7,7 +7,7 @@ import uiStyles from '../../styles/site-ui.css?inline';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../features/marketing/components/workspace-story.css';
 import '../../features/setup/cream-preview.css';
-import { createSitePalette } from '../../features/setup/sitePalette';
+import { sitePalette } from '../../features/setup/sitePalette';
 
 // The signed-in app uses neutral dark surfaces; the marketing palette has a blue tint.
 const workspacePalette = palette.replaceAll('0.002 250deg', '0 0deg');
@@ -24,7 +24,6 @@ const HomepageScene = lazy(
 
 export default function RouteDemo() {
   const [params] = useSearchParams();
-  const palette = createSitePalette();
   setPageSeo({
     title: 'Macro — Sample workspace',
     description:
@@ -36,8 +35,8 @@ export default function RouteDemo() {
     <DemoInteractionScope>
       <main
         class="dummy-route"
-        data-theme-light={palette() === 'cream' ? 'true' : 'false'}
-        data-palette={palette() === 'cream' ? 'cream' : undefined}
+        data-theme-light={sitePalette() === 'cream' ? 'true' : 'false'}
+        data-palette={sitePalette() === 'cream' ? 'cream' : undefined}
         data-embedded={params.embedded === 'true'}
       >
         <style>{properties}</style>

@@ -1,15 +1,15 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { HarnessIcon } from '@core/component/HarnessIcon';
+import { ConnectorIcon } from '@core/connectors/ConnectorIcon';
+import { AppConnectionContext } from '@core/connectors/connection-context';
+import { requestConnectApp } from '@core/connectors/pendingConnect';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
-import { AppConnectionContext } from '@core/pipedream/connection-context';
-import { requestConnectApp } from '@core/pipedream/pendingConnect';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import type { ConnectAppDecoratorProps } from '@macro-inc/lexical-core';
+import { useConnectors } from '@queries/connectors';
 import { useHarnessConnectionStatus } from '@queries/harnesses/connections';
-import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { cn } from '@ui/utils/classname';
 import { type Accessor, type JSX, Show, useContext } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -17,29 +17,29 @@ import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 /**
  * The chip a reply renders when the reader has to connect something before
- * the agent can continue: a Pipedream app or an agent harness account.
+ * the agent can continue: a catalog app or an agent harness account.
  * Clicking it opens the settings surface
  * that connects it. Once the reader has connected it, the same chip reads as
  * connected rather than nagging.
  */
 export function ConnectApp(props: ConnectAppDecoratorProps) {
   return match(props.target)
-    .with('connections', () => <ConnectPipedreamApp {...props} />)
+    .with('connections', () => <ConnectCatalogApp {...props} />)
     .with('harness', () => <ConnectHarness {...props} />)
     .exhaustive();
 }
 
-function ConnectPipedreamApp(props: ConnectAppDecoratorProps) {
+function ConnectCatalogApp(props: ConnectAppDecoratorProps) {
   const inChat = useContext(AppConnectionContext);
   const layout = useSplitLayout();
-  const connections = usePipedreamConnectedSlugs();
+  const connectors = useConnectors();
   return (
     <ConnectChip
       {...props}
       connected={() =>
-        connections.ready() && connections.slugs().has(props.appSlug)
+        connectors.ready() && connectors.connectedApps().has(props.appSlug)
       }
-      icon={<PipedreamConnectorIcon appSlug={props.appSlug} class="size-3.5" />}
+      icon={<ConnectorIcon appSlug={props.appSlug} class="size-3.5" />}
       disabled={inChat?.disabled}
       onConnect={() => {
         if (inChat) {
@@ -49,7 +49,7 @@ function ConnectPipedreamApp(props: ConnectAppDecoratorProps) {
           );
           return;
         }
-        // Connections picks this up and starts the Connect flow.
+        // Integrations picks this up and starts connecting the app.
         requestConnectApp(props.appSlug);
         openAgentsPage(layout, 'connections');
       }}

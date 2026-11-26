@@ -1,4 +1,6 @@
-use crate::outbound::postgres::{fetch_inactive_link_ids, fetch_unused_link_ids};
+use crate::outbound::postgres::{
+    fetch_inactive_link_ids, fetch_ownerless_link_ids, fetch_unused_link_ids,
+};
 use anyhow::Result;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
@@ -103,6 +105,102 @@ async fn fetch_inactive_link_ids_respects_threshold_parameters(pool: Pool<Postgr
         !unused_result.is_empty() || !inactive_result.is_empty(),
         "Low thresholds should return some links"
     );
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn ownerless_links_are_only_those_whose_owner_account_is_gone(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    // A person's account, and a promoted shared mailbox's minted account.
+    for (fusion, macro_id, email) in [
+        (
+            "00000000-0000-0000-0000-0000000000a1",
+            "macro|person@example.com",
+            "person@example.com",
+        ),
+        (
+            "00000000-0000-0000-0000-0000000000a2",
+            "macro|shared@example.com",
+            "shared@example.com",
+        ),
+    ] {
+        let fusion = Uuid::parse_str(fusion)?;
+        sqlx::query!(
+            "INSERT INTO macro_user (id,username,email,stripe_customer_id) VALUES ($1,$2,$3,$4)",
+            fusion,
+            macro_id,
+            email,
+            format!("cus_{fusion}")
+        )
+        .execute(&pool)
+        .await?;
+        sqlx::query!(
+            r#"INSERT INTO "User" (id,email,macro_user_id) VALUES ($1,$2,$3)"#,
+            macro_id,
+            email,
+            fusion
+        )
+        .execute(&pool)
+        .await?;
+    }
+    sqlx::query!(
+        "INSERT INTO promoted_shared_mailboxes (macro_id) VALUES ('macro|shared@example.com')"
+    )
+    .execute(&pool)
+    .await?;
+
+    let person = Uuid::parse_str("00000000-0000-0000-0000-0000000000b1")?;
+    let shared = Uuid::parse_str("00000000-0000-0000-0000-0000000000b2")?;
+    let ownerless = Uuid::parse_str("00000000-0000-0000-0000-0000000000b3")?;
+    let disconnecting = Uuid::parse_str("00000000-0000-0000-0000-0000000000b4")?;
+    let purging = Uuid::parse_str("00000000-0000-0000-0000-0000000000b5")?;
+    let also_ownerless = Uuid::parse_str("00000000-0000-0000-0000-0000000000b6")?;
+    for (id, owner, address) in [
+        (person, "macro|person@example.com", "person@example.com"),
+        (shared, "macro|shared@example.com", "shared@example.com"),
+        (ownerless, "macro|gone@example.com", "gone@example.com"),
+        (
+            disconnecting,
+            "macro|gone@example.com",
+            "gone-2@example.com",
+        ),
+        (purging, "macro|gone@example.com", "gone-3@example.com"),
+        (
+            also_ownerless,
+            "macro|gone@example.com",
+            "gone-4@example.com",
+        ),
+    ] {
+        sqlx::query!(
+            "INSERT INTO email_links (id,macro_id,fusionauth_user_id,email_address,provider) VALUES ($1,$2,'credentials',$3,'GMAIL')",
+            id,
+            owner,
+            address
+        )
+        .execute(&pool)
+        .await?;
+    }
+    sqlx::query!(
+        "UPDATE email_links SET disconnect_requested_at = now() WHERE id = $1",
+        disconnecting
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "UPDATE email_links SET deleting_at = now() WHERE id = $1",
+        purging
+    )
+    .execute(&pool)
+    .await?;
+
+    assert_eq!(
+        fetch_ownerless_link_ids(&pool, 100).await?,
+        vec![ownerless, also_ownerless],
+        "never a live owner, a promoted shared mailbox, or a link whose removal started"
+    );
+    assert_eq!(fetch_ownerless_link_ids(&pool, 1).await?, vec![ownerless]);
 
     Ok(())
 }

@@ -2494,3 +2494,25 @@ async fn invalid_date_buckets_are_rejected_before_the_service_runs() {
         assert_eq!(status, StatusCode::BAD_REQUEST);
     }
 }
+
+#[tokio::test]
+async fn email_rule_resource_failure_is_not_an_empty_soup_page_or_an_opaque_error() {
+    use axum::response::IntoResponse;
+    use crm::domain::email_rule_discovery::{EmailRuleLimitExceeded, EmailRuleWorkLimit};
+    let error =
+        super::SoupErr::EmailErr(EmailErr::EmailRuleLimitExceeded(EmailRuleLimitExceeded {
+            limit: EmailRuleWorkLimit::SourceAddresses,
+            maximum: 50_000,
+            observed: 123_456,
+        }));
+    let response = super::SoupHandlerErr::from(error).into_response();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let bytes = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        body,
+        json!({"message":"email sharing rules exceed the source_addresses limit (50000)"})
+    );
+}

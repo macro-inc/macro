@@ -645,6 +645,7 @@ impl Jails {
             gid: 0,
             env: [("PATH".to_owned(), GUEST_ROOT_PATH.to_owned())].into(),
             cwd: "/".to_owned(),
+            trace_id: macro_tower_layers::current_trace_id(),
         };
         write_frame(&mut stream, &Frame::Start(request))
             .await
@@ -786,8 +787,10 @@ fn own(path: &Path, uid: u32, mode: u32) -> Result<(), JailError> {
 }
 
 /// A copy-on-write clone of `source` at `target`.
-fn reflink(source: &Path, target: &Path) -> Result<(), JailError> {
-    clone_file(source, target).map_err(io("clone", source))
+async fn reflink(source: &Path, target: &Path) -> Result<(), JailError> {
+    clone_file(source, target)
+        .await
+        .map_err(io("clone", source))
 }
 
 /// Where a hibernation is assembled before its one-rename publish.

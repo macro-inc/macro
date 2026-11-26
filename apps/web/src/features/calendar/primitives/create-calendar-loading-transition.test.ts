@@ -14,6 +14,18 @@ describe('calendar loading transition', () => {
     vi.useRealTimers();
   });
 
+  it('shows a zero-delay navigation skeleton immediately and releases it when data arrives', () => {
+    createRoot((dispose) => {
+      const transition = createCalendarLoadingTransition(undefined, 0, 0);
+      transition.setLoading(true);
+      expect(transition.phase()).toBe('visible');
+      transition.setLoading(false);
+      vi.advanceTimersByTime(1);
+      expect(transition.phase()).toBe('leaving');
+      dispose();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
   it('skips the skeleton when the answer was queued behind a long mount', () => {
     const phases: CalendarLoadingPhase[] = [];
 

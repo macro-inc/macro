@@ -1,6 +1,7 @@
 import type { UrqlQueryOptions } from '@app/lib/urql-solid';
 import type { CacheHost, ReadRecordsByKeysArgs } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type {
   ItemPreviewDetailsFieldsFragment,
   ItemPreviewFieldsFragment,
@@ -88,6 +89,58 @@ function cacheHost(
 }
 
 describe('GraphQL item previews', () => {
+  it('discards a document cache preview that arrives after its authority epoch changed', async () => {
+    let resolve!: (
+      records: Array<{ recordKey: string; record: unknown }>
+    ) => void;
+    const read = vi.fn(
+      () =>
+        new Promise<Array<{ recordKey: string; record: unknown }>>((done) => {
+          resolve = done;
+        })
+    );
+    getGraphqlSoupCacheHostMock.mockReturnValue(cacheHost(read));
+    trackPreviewBatches();
+    const { query, dispose } = createRoot((dispose) => ({
+      query: createGraphqlItemPreviewQuery(() => ({
+        id: 'late-document',
+        type: 'document',
+      })),
+      dispose,
+    }));
+    await vi.advanceTimersByTimeAsync(30);
+    expect(read).toHaveBeenCalledTimes(1);
+    const resolveOld = resolve;
+    const retirement = Promise.withResolvers<void>();
+    const transition = cacheSessionGeneration.transition(
+      () => retirement.promise
+    );
+    try {
+      resolveOld([
+        {
+          recordKey: 'GraphqlSoupDocument:late-document',
+          record: {
+            __typename: 'GraphqlSoupDocument',
+            appearance: null,
+            id: 'late-document',
+            displayName: 'Old title',
+            documentName: 'Old title',
+            fileType: 'md',
+            subType: null,
+          },
+        },
+      ]);
+      retirement.resolve();
+      await transition;
+      await vi.advanceTimersByTimeAsync(30);
+      expect(query.data()).toBeUndefined();
+    } finally {
+      retirement.resolve();
+      await transition;
+      dispose();
+    }
+  });
+
   it('maps normalized document fields without the full Soup projection', () => {
     const record = {
       __typename: 'GraphqlSoupDocument',
@@ -490,7 +543,8 @@ describe('GraphQL item previews', () => {
           name: 'New document',
           fileType: 'md',
         },
-        'user-1'
+        'user-1',
+        cacheSessionGeneration.capture()
       );
 
       createRoot((dispose) => {
@@ -722,7 +776,8 @@ describe('GraphQL item previews', () => {
           fileType: 'md',
           subType: { type: 'task', is_completed: false },
         },
-        'user-1'
+        'user-1',
+        cacheSessionGeneration.capture()
       );
 
       expect(writeQuery).toHaveBeenNthCalledWith(

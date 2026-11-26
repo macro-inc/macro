@@ -36,8 +36,8 @@ fn test_build_bool_query_join_shape_multi_term_and() -> anyhow::Result<()> {
             expected_term
         );
     };
-    term_match(&must[0], "foo", "match_phrase_prefix");
-    term_match(&must[1], "bar", "match_phrase_prefix");
+    term_match(&must[0], "foo", "match_bool_prefix");
+    term_match(&must[1], "bar", "match_bool_prefix");
 
     Ok(())
 }
@@ -132,6 +132,29 @@ fn test_build_bool_query_join_shape_sub_type_filter() -> anyhow::Result<()> {
 }
 
 #[test]
+fn excluded_sub_types_leave_those_documents_out() -> anyhow::Result<()> {
+    let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
+        .match_type("partial")
+        .user_id("alice")
+        .excluded_sub_types(vec!["task".to_string()]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let must_not = json["bool"]["must_not"].as_array().expect("must_not array");
+    assert!(
+        must_not.contains(&serde_json::json!({"terms": {"sub_type": ["task"]}})),
+        "tasks should be left out on the parent: {must_not:?}"
+    );
+    let filter = json["bool"]["filter"].as_array().expect("filter array");
+    assert!(
+        !filter
+            .iter()
+            .any(|f| f.get("terms").and_then(|t| t.get("sub_type")).is_some()),
+        "documents without a sub type must stay: {filter:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_build_bool_query_join_shape_has_inner_hits() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string(), "bar".to_string()])
         .match_type("partial")
@@ -178,7 +201,7 @@ fn test_build_bool_query_name_mode_matches_document_name() -> anyhow::Result<()>
     let must = json["bool"]["must"].as_array().expect("must array");
     assert_eq!(must.len(), 1, "name mode emits one title clause: {must:?}");
     assert_eq!(
-        must[0]["match_phrase_prefix"]["document_name"]["query"],
+        must[0]["match_bool_prefix"]["document_name"]["query"],
         "report"
     );
     assert!(
@@ -215,7 +238,7 @@ fn test_build_bool_query_name_content_mode_matches_either() -> anyhow::Result<()
     assert!(
         should
             .iter()
-            .any(|c| c["match_phrase_prefix"]["document_name"]["query"] == "report"),
+            .any(|c| c["match_bool_prefix"]["document_name"]["query"] == "report"),
         "missing document_name branch: {should:?}"
     );
     // …the other matches child content via has_child.
@@ -305,10 +328,10 @@ fn test_build_bool_query_tag_filter_emits_flat_terms() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
         .match_type("partial")
         .user_id("alice")
-        .tag_option_ids(vec![
+        .tag_groups(vec![vec![
             "00000001-0000-0000-0003-000000000001".to_string(),
             "00000001-0000-0000-0003-000000000002".to_string(),
-        ]);
+        ]]);
 
     let json = builder.build_bool_query()?.build().to_json();
     let filter = json["bool"]["filter"].as_array().expect("filter array");
@@ -341,21 +364,24 @@ fn test_build_bool_query_tag_filter_emits_flat_terms() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_build_bool_query_tag_filter_match_all_emits_per_option_musts() -> anyhow::Result<()> {
+fn test_build_bool_query_tag_groups_each_must_hold() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
         .match_type("partial")
         .user_id("alice")
-        .tag_option_ids(vec![
-            "00000001-0000-0000-0003-000000000001".to_string(),
-            "00000001-0000-0000-0003-000000000002".to_string(),
-        ])
-        .match_all_tags(true);
+        .tag_groups(vec![
+            vec![
+                "00000001-0000-0000-0003-000000000001".to_string(),
+                "00000001-0000-0000-0003-000000000002".to_string(),
+            ],
+            vec!["00000001-0000-0000-0003-000000000003".to_string()],
+        ]);
 
     let json = builder.build_bool_query()?.build().to_json();
     let filter = json["bool"]["filter"].as_array().expect("filter array");
 
-    // Match-all wraps one nested clause per option id inside a bool.must, so
-    // an entity must hold every id (possibly across nested property entries).
+    // Each group is one nested clause inside a bool.must, so an entity must
+    // meet every group, each by any of its ids (possibly across nested
+    // property entries).
     let tag_bool: Vec<&serde_json::Value> = filter
         .iter()
         .filter(|f| f["bool"]["must"].is_array())
@@ -363,17 +389,21 @@ fn test_build_bool_query_tag_filter_match_all_emits_per_option_musts() -> anyhow
     assert_eq!(tag_bool.len(), 1, "one bool wrapper for tags: {filter:?}");
 
     let musts = tag_bool[0]["bool"]["must"].as_array().expect("must array");
-    assert_eq!(musts.len(), 2, "one nested clause per option id");
-    for (must, option_id) in musts.iter().zip([
-        "00000001-0000-0000-0003-000000000001",
-        "00000001-0000-0000-0003-000000000002",
-    ]) {
+    assert_eq!(musts.len(), 2, "one nested clause per group");
+    let groups = [
+        serde_json::json!([
+            "00000001-0000-0000-0003-000000000001",
+            "00000001-0000-0000-0003-000000000002"
+        ]),
+        serde_json::json!(["00000001-0000-0000-0003-000000000003"]),
+    ];
+    for (must, option_ids) in musts.iter().zip(groups) {
         let nested = &must["nested"];
         assert_eq!(nested["path"], "properties");
         assert_eq!(nested["ignore_unmapped"], true);
         assert_eq!(
             nested["query"],
-            serde_json::json!({"terms": {"properties.values": [option_id]}})
+            serde_json::json!({"terms": {"properties.values": option_ids}})
         );
     }
 
@@ -385,13 +415,13 @@ fn test_build_bool_query_tag_filter_empty_skipped() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
         .match_type("partial")
         .user_id("alice")
-        .tag_option_ids(vec![]);
+        .tag_groups(vec![]);
 
     let json = builder.build_bool_query()?.build().to_json();
     let filter = json["bool"]["filter"].as_array().expect("filter array");
     assert!(
         !filter.iter().any(|f| f.get("nested").is_some()),
-        "empty tag_option_ids should emit no nested clause: {filter:?}"
+        "no tag groups should emit no nested clause: {filter:?}"
     );
     Ok(())
 }
@@ -645,7 +675,7 @@ fn dynamic_matching_requires_most_significant_terms_in_one_passage() -> anyhow::
         {"match_phrase": {"content": "quarterly"}},
         {"match_phrase": {"content": "revenue"}},
         {"match_phrase": {"content": "forecast"}},
-        {"match_phrase_prefix": {"content": {"query": "dash", "max_expansions": 256}}},
+        {"match_bool_prefix": {"content": {"query": "dash"}}},
     ]);
     assert_eq!(has_child["query"]["bool"]["should"], expected_terms);
     assert_eq!(has_child["query"]["bool"]["minimum_should_match"], 3);
@@ -679,7 +709,7 @@ fn dynamic_matching_counts_a_repeated_term_once_and_keeps_phrases() -> anyhow::R
         serde_json::json!([
             {"match_phrase": {"content": "deal review"}},
             {"match_phrase": {"content": "Acme"}},
-            {"match_phrase_prefix": {"content": {"query": "notes", "max_expansions": 256}}},
+            {"match_bool_prefix": {"content": {"query": "notes"}}},
         ])
     );
     assert_eq!(passage["minimum_should_match"], 2);
@@ -755,7 +785,7 @@ fn dynamic_matching_keeps_a_last_term_that_may_be_a_word_in_progress() -> anyhow
         serde_json::json!([
             {"match_phrase": {"content": "revenue"}},
             {"match_phrase": {"content": "q3"}},
-            {"match_phrase_prefix": {"content": {"query": "for", "max_expansions": 256}}},
+            {"match_bool_prefix": {"content": {"query": "for"}}},
         ])
     );
     // An exact search has no word in progress, and neither has a stopword too
@@ -773,6 +803,126 @@ fn dynamic_matching_keeps_a_last_term_that_may_be_a_word_in_progress() -> anyhow
             {"match_phrase": {"content": "revenue"}},
             {"match_phrase": {"content": "q3"}},
         ])
+    );
+    Ok(())
+}
+
+/// A content prefix finds every word it starts, however many other words share
+/// it. `match_phrase_prefix` kept only the first 256 expansions of a segment,
+/// so a word sorting after them never matched. Uses only a uniquely named
+/// scratch index; never changes application indices.
+#[tokio::test]
+#[ignore = "requires local OpenSearch at http://localhost:9200"]
+async fn a_content_prefix_matches_words_past_the_first_256_that_share_it() {
+    use crate::OpensearchClient;
+    use opensearch::{
+        BulkParts, SearchParts,
+        http::request::JsonBody,
+        indices::{IndicesDeleteParts, IndicesForcemergeParts},
+    };
+
+    let client =
+        OpensearchClient::new("http://localhost:9200".into(), "".into(), "".into()).unwrap();
+    let index = format!("document-prefix-test-{}", uuid::Uuid::now_v7());
+    client
+        .ensure_index_exists(
+            &index,
+            serde_json::json!({
+                "settings": {"number_of_shards": 1, "number_of_replicas": 0},
+                "mappings": {"dynamic": "false", "properties": {
+                    "entity_id": {"type": "keyword"},
+                    "owner_id": {"type": "keyword"},
+                    "document_name": {"type": "text"},
+                    "content": {"type": "text", "analyzer": "standard"},
+                    "document_relation": {"type": "join", "relations": {"document": "chunk"}}
+                }}
+            }),
+        )
+        .await
+        .unwrap();
+
+    let result: anyhow::Result<()> = async {
+        // 300 other words start with `zeb` and sort before `zebrafinch`, in
+        // another owner's document, so a capped expansion never reaches it.
+        let mut body: Vec<JsonBody<serde_json::Value>> = Vec::new();
+        for (document_id, owner_id, words) in [
+            ("doc-other", "macro|other@example.com", (0..300).map(|n| format!("zeb{n:03}")).collect::<Vec<_>>()),
+            ("doc-mine", "macro|viewer@example.com", vec!["the zebrafinch report".to_string()]),
+        ] {
+            body.push(serde_json::json!({"index": {"_id": document_id, "routing": document_id}}).into());
+            body.push(serde_json::json!({"entity_id": document_id, "owner_id": owner_id,
+                "document_name": "notes", "document_relation": "document"}).into());
+            for (chunk, content) in words.iter().enumerate() {
+                body.push(serde_json::json!({"index": {"_id": format!("{document_id}:{chunk}"), "routing": document_id}}).into());
+                body.push(serde_json::json!({"entity_id": document_id, "node_id": chunk.to_string(), "content": content,
+                    "document_relation": {"name": "chunk", "parent": document_id}}).into());
+            }
+        }
+        client.inner.bulk(BulkParts::Index(&index)).refresh(opensearch::params::Refresh::True)
+            .body(body).send().await?.error_for_status_code()?;
+        // One segment, so the per-segment expansion cap sees every `zeb` word.
+        client.inner.indices().forcemerge(IndicesForcemergeParts::Index(&[&index]))
+            .max_num_segments(1).send().await?.error_for_status_code()?;
+
+        let builder = DocumentQueryBuilder::new(vec!["zeb".to_string()])
+            .match_type("partial")
+            .user_id("macro|viewer@example.com");
+        let mut query = builder.build_bool_query()?.build().to_json();
+        // Only redirect the production index constraint to our isolated scratch index.
+        let filters = query["bool"]["filter"].as_array_mut().unwrap();
+        let index_filter = filters.iter_mut().find(|filter| filter["term"]["_index"].is_string()).unwrap();
+        index_filter["term"]["_index"] = serde_json::json!(index);
+
+        let response: serde_json::Value = client.inner.search(SearchParts::Index(&[&index]))
+            .body(serde_json::json!({"query": query}))
+            .send().await?.error_for_status_code()?.json().await?;
+        let hits = response["hits"]["hits"].as_array().unwrap();
+        assert_eq!(hits.len(), 1, "{response}");
+        assert_eq!(hits[0]["_id"], "doc-mine");
+        let chunk = &hits[0]["inner_hits"]["term_0"]["hits"]["hits"][0];
+        assert_eq!(chunk["_source"]["node_id"], "0");
+        assert_eq!(
+            chunk["highlight"]["content"][0],
+            "the <macro_em>zebrafinch</macro_em> report"
+        );
+        Ok(())
+    }.await;
+    client
+        .inner
+        .indices()
+        .delete(IndicesDeleteParts::Index(&[&index]))
+        .send()
+        .await
+        .unwrap();
+    result.unwrap();
+}
+
+#[test]
+fn a_left_out_term_drops_documents_it_matches_by_the_modes_fields() -> anyhow::Result<()> {
+    let built = |mode: DocumentSearchMode| -> anyhow::Result<serde_json::Value> {
+        let builder = DocumentQueryBuilder::new(vec!["budget".to_string()])
+            .match_type("partial")
+            .user_id("alice")
+            .mode(mode)
+            .excluded_terms(vec!["draft".to_string()]);
+        Ok(builder.build_bool_query()?.build().to_json())
+    };
+    let by_name = serde_json::json!({"match_bool_prefix": {"document_name": {"query": "draft"}}});
+    let by_chunk = serde_json::json!({"has_child": {
+        "type": "chunk",
+        "query": {"match_bool_prefix": {"content": {"query": "draft"}}},
+    }});
+
+    let content = built(DocumentSearchMode::Content)?;
+    assert_eq!(content["bool"]["must_not"], serde_json::json!([by_chunk]));
+
+    let name = built(DocumentSearchMode::Name)?;
+    assert_eq!(name["bool"]["must_not"], serde_json::json!([by_name]));
+
+    let either = built(DocumentSearchMode::NameContent)?;
+    assert_eq!(
+        either["bool"]["must_not"],
+        serde_json::json!([by_name, by_chunk])
     );
     Ok(())
 }

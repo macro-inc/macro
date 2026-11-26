@@ -112,6 +112,20 @@ export function registerEmailHotkeys(
     keyDownHandler: handlers.navigateToNextMessage,
     hotkeyToken: TOKENS.email.nextMessage,
   });
+  registerHotkey({
+    hotkey: 'space',
+    scopeId,
+    description: () => t('commands.scrollThreadPageDown'),
+    keyDownHandler: handlers.pageDown,
+    hotkeyToken: TOKENS.email.pageDown,
+  });
+  registerHotkey({
+    hotkey: 'shift+space',
+    scopeId,
+    description: () => t('commands.scrollThreadPageUp'),
+    keyDownHandler: handlers.pageUp,
+    hotkeyToken: TOKENS.email.pageUp,
+  });
 
   registerHotkey({
     hotkey: 'o',

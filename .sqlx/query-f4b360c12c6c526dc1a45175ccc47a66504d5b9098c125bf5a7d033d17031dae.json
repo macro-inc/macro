@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- One page of channels in id order. A private channel named like a signup\n-- support channel is flagged; whether it holds a support-roster address is\n-- decided from its members. The first page starts after the nil uuid, so no\n-- nullable cursor turns the bound into a filter.\nSELECT\n    c.id,\n    c.channel_type::text AS \"channel_type!\",\n    (c.channel_type = 'private' AND c.name LIKE 'Macro Support x %') AS \"support_name!\"\nFROM comms_channels c\nWHERE c.id > $1\nORDER BY c.id\nLIMIT $2\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "support_name!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "f4b360c12c6c526dc1a45175ccc47a66504d5b9098c125bf5a7d033d17031dae"
+}

@@ -1,24 +1,17 @@
 import { setPageSeo } from '../../../app/utils/utilSeo';
-import {
-  ChannelAgentDemo,
-  ChannelInboxDemo,
-  ChannelPermissionsDemo,
-  ChannelThreadDemo,
-} from '../components/channels/ChannelStories';
 import { FeatureComparisons } from '../components/comparisons/FeatureComparisons';
-import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
+import { FeaturePhoneScreens } from '../components/FeatureScreenshot';
 import { HomepageClosing } from '../components/HomepageClosing';
-import { PaperChatCreate } from '../components/paper/PaperChatCreate';
-import { PaperFeatureGraphic } from '../components/paper/PaperFeatureGraphic';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
 import { chatComparisons } from '../core/feature-comparisons';
+import { featureScreens, phoneScreens } from '../core/feature-screens';
 
 export function RouteChannels() {
   setPageSeo({
     title: 'Macro Chat — Focused team chat',
     description:
-      'Macro channels are filed into Signal or Noise, with an actual inbox like email. Mention work to share it with the channel, or create tasks from the conversation.',
+      'Macro channels are filed into Signal or Noise with an actual inbox like email. Mention work to share it with the channel or create tasks from the conversation.',
     path: '/channels',
   });
   return (
@@ -26,72 +19,41 @@ export function RouteChannels() {
       <ProductHero
         product="Chat"
         title="Chat for people and agents."
-        description="Macro Chat brings your people and agents together in channels. Share context and work on the same tasks."
+        description="Chat puts your teammates and AI agents in the same channels and DMs with inline threads, Signal and Noise filtering, and workspace mentions."
         cta="channels_hero_get_started"
         tutorial="chat"
       />
       <FeaturePageSection
         id="shared-work"
         title="Integrated with everything else."
-        description="Channels are already the lifeblood of your company. Macro makes that a feature rather than an anti-pattern: @mention an email, doc, or task, create a task right from any message, or ask Macro, without leaving the conversation."
-      >
-        <PaperFeatureGraphic label="Create a task, share a document, or ask Macro from the channel composer.">
-          <PaperChatCreate />
-        </PaperFeatureGraphic>
-      </FeaturePageSection>
+        description="Channels are already where work happens. Mention Macro Mail, Macro Docs, or Macro Tasks right in the thread. Turn any message into a task or bring in Macro Agents without leaving the conversation."
+        screen={featureScreens['shared-work']}
+      />
       <FeaturePageSection
         id="channel-access"
-        demo={{
-          tone: 'chat',
-        }}
         title="@mention to share with the right people."
         description="Anything you @mention in a channel is automatically shared with its members. Join a channel, gain access; leave, lose it. No permission-request dance."
-      >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <ChannelPermissionsDemo />}
-        />
-      </FeaturePageSection>
+        screen={featureScreens['channel-access']}
+      />
       <FeaturePageSection
         id="channel-agents"
-        demo={{
-          tone: 'chat',
-        }}
-        title="Macro Agents are first-class, like humans."
-        description="@mention an agent to get it working on something, with the whole conversation as context. Or let it listen in and reply when it’s needed, like a teammate would, without @mentioning."
-      >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <ChannelAgentDemo />}
-        />
-      </FeaturePageSection>
+        title="Macro Agents are first-class like humans."
+        description="Tag Macro Agents in a thread and they read the full conversation plus every linked file, email, and task. You can also let them chime in automatically when they can help."
+        screen={featureScreens['channel-agents']}
+      />
       <FeaturePageSection
         id="channel-threads"
-        demo={{
-          tone: 'chat',
-        }}
         title="Built for focused technical conversations."
-        description="The first couple of replies show inline and the rest collapse into a thread, so a busy channel stays readable. Slack’s side panel is nice for organization but can make it hard to find things; iMessage and Discord are good for casual conversations, but not deep technical ones."
-      >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <ChannelThreadDemo />}
-        />
-      </FeaturePageSection>
+        description="The first few replies show up inline and the rest tuck cleanly into a thread. It reads like a structured forum and feels as fast as iMessage without Slack’s buried sidebars."
+        screen={featureScreens['channel-threads']}
+      />
       <FeaturePageSection
         id="chat-inbox"
-        demo={{
-          tone: 'chat',
-        }}
-        title="A real inbox, like Macro Mail."
-        description="Slack has no real inbox, only read and unread. Macro keeps messages waiting for later, so you don’t have to remember to reply, and you mark them done as you go. Mark a channel as Signal or Noise to decide what reaches your main inbox."
-      >
-        <span id="catch-up" />
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <ChannelInboxDemo />}
-        />
-      </FeaturePageSection>
+        title="A real inbox like Macro Mail."
+        description="Slack has no real inbox, only read and unread. Macro keeps messages waiting for later so you don’t have to remember to reply and you mark them done as you go. Mark a channel as Signal or Noise to decide what reaches your main inbox."
+        screen={featureScreens['chat-inbox']}
+      />
+      <FeaturePhoneScreens screens={phoneScreens['channels']} product="Chat" />
       <FeatureComparisons
         title="Compare Team Chat Apps"
         comparisons={chatComparisons}
@@ -103,7 +65,7 @@ export function RouteChannels() {
         items={[
           {
             q: 'How do I start a channel with my team?',
-            a: 'Create a channel and invite people by name or email. Choose a team channel for conversations teammates can discover, or a private channel for invited people only.',
+            a: 'Create a channel and invite people by name or email. Choose a team channel for conversations teammates can discover or a private channel for invited people only.',
           },
           {
             q: 'Can I bring conversations from another app?',
@@ -121,7 +83,7 @@ export function RouteChannels() {
               <>
                 Yes. Mention workspace items to open them beside the
                 conversation. A shared email includes the thread and later
-                replies, but does not let recipients send from your mailbox. See{' '}
+                replies but does not let recipients send from your mailbox. See{' '}
                 <a href="/email">email sharing</a>.
               </>
             ),

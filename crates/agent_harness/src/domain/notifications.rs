@@ -12,9 +12,9 @@
 //! | --- | --- | --- |
 //! | `settled` | [`AgentSessionSettledMetadata`] | the session's audience: owner plus everyone who has driven it - unless the turn was a chat agent's announced reply, whose patched message already notifies the thread, or the turn a routine prompted |
 //! | `waiting_for_input` | [`AgentSessionWaitingForInputMetadata`] | the same audience - anyone with edit access may answer, and these are the people already driving it - with the same exception for a chat agent's announced turn, whose reply is patched to say it is waiting |
-//! | `mentioned` | [`AgentSessionMentionedMetadata`] | the users the prompt named, who can now open the session - unless the prompt was posted as a channel or document message, whose own mention notification already reached them |
 //!
-//! Everything else is nobody's news.
+//! Everything else is nobody's news. Naming someone in a prompt tells the
+//! agent who is meant; it notifies nobody and shares the session with nobody.
 //!
 //! Whether the session's bot is a coding agent comes in beside the fact
 //! because the fact does not carry it (see
@@ -30,22 +30,12 @@
 //! announcements also keep notifications: they reuse the originating message as
 //! a session link and never patch it into a discussion answer.
 //!
-//! A mention has the same shape of exception, and the fact does carry it: a
-//! prompt that arrived as a channel or document message names its users in
-//! that message, and the message service notifies each of them of the
-//! mention when the message is posted. Notifying them again for the session
-//! would tell the same people the same thing twice, so a mention with an
-//! origin message plans nothing; the users are still shared into the
-//! session. A prompt typed into the session view has no message to have
-//! spoken for it, so it keeps its notification.
-//!
 //! The turn a routine prompted plans nothing however it ended: the
 //! scheduler reports every routine run itself (`routine_run_finished`, with
 //! its outcome), including runs that never reached an agent. Its questions
-//! and mentions still notify, since they need somebody whether or not a
-//! routine asked. A turn the
-//! owner prompts afterwards, from the session itself, notifies as in any
-//! other session.
+//! still notify, since they need somebody whether or not a routine asked. A
+//! turn the owner prompts afterwards, from the session itself, notifies as in
+//! any other session.
 //!
 //! Retracting a notification once it is stale (the question answered, the
 //! next turn started) is deliberately not done yet: the notification ingress
@@ -54,7 +44,7 @@
 //! # Ids
 //!
 //! A notification's id is derived from what it is about - the session, the
-//! turn (or prompt), and the kind - not from the event that carried it. The
+//! turn (or held tool call), and the kind - not from the event that carried it. The
 //! notification service creates idempotently on id, so publishing the same
 //! fact twice is a no-op, and a later retraction can name the notification
 //! without looking anything up.
@@ -66,16 +56,15 @@ use std::collections::HashSet;
 
 use agent_egress::domain::approval::MACRO_SERVER_SLUG;
 use agent_session::domain::events::{
-    AgentSessionLifecycleEvent, SessionIdentity, SessionMentionedMetadata, SessionSettledMetadata,
-    WaitingForInputMetadata,
+    AgentSessionLifecycleEvent, SessionIdentity, SessionSettledMetadata, WaitingForInputMetadata,
 };
 use agent_session::domain::model::{SessionSource, TurnId};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_entity::{Entity, EntityType};
 use model_notifications::{
-    AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionOriginParent,
-    AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata,
+    AgentSessionNotificationRef, AgentSessionOriginParent, AgentSessionSettledMetadata,
+    AgentSessionWaitingForInputMetadata,
 };
 use notification::domain::models::apple::PushNotificationData;
 use notification::domain::models::request::SendNotificationRequestBuilder;
@@ -137,8 +126,6 @@ pub enum PlannedNotification {
     Settled(Notify<AgentSessionSettledMetadata>),
     /// Tell the session's audience the agent is waiting on an answer.
     WaitingForInput(Notify<AgentSessionWaitingForInputMetadata>),
-    /// Tell the people a prompt named.
-    Mentioned(Notify<AgentSessionMentionedMetadata>),
 }
 
 impl PlannedNotification {
@@ -148,7 +135,6 @@ impl PlannedNotification {
         match self {
             Self::Settled(_) => AgentSessionSettledMetadata::TYPE_NAME,
             Self::WaitingForInput(_) => AgentSessionWaitingForInputMetadata::TYPE_NAME,
-            Self::Mentioned(_) => AgentSessionMentionedMetadata::TYPE_NAME,
         }
     }
 }
@@ -161,7 +147,6 @@ pub fn plan(event: &AgentSessionLifecycleEvent, is_coding: bool) -> Vec<PlannedN
     match event {
         AgentSessionLifecycleEvent::Settled(settled) => plan_settled(settled, is_coding),
         AgentSessionLifecycleEvent::WaitingForInput(waiting) => plan_waiting(waiting, is_coding),
-        AgentSessionLifecycleEvent::Mentioned(mentioned) => plan_mentioned(mentioned),
         AgentSessionLifecycleEvent::Opened(_)
         | AgentSessionLifecycleEvent::TurnStarted(_)
         | AgentSessionLifecycleEvent::TurnEnded(_)
@@ -282,32 +267,6 @@ pub fn plan_tool_approval(
     })
 }
 
-fn plan_mentioned(mentioned: &SessionMentionedMetadata) -> Vec<PlannedNotification> {
-    if mentioned.mentioned.is_empty() {
-        return Vec::new();
-    }
-    // The message the prompt was posted as already notified the people it
-    // named, on the post itself.
-    if mentioned.origin_message_id.is_some() {
-        return Vec::new();
-    }
-    let (entity, secondary_entity) = entities(&mentioned.identity);
-    vec![PlannedNotification::Mentioned(Notify {
-        notification_id: mentioned_notification_id(
-            mentioned.identity.session_id.as_uuid(),
-            mentioned.action_id.as_uuid(),
-        ),
-        entity,
-        secondary_entity,
-        recipients: dedup(mentioned.mentioned.iter().cloned()),
-        metadata: AgentSessionMentionedMetadata {
-            session: session_ref(&mentioned.identity, None),
-            mentioned_by: mentioned.mentioned_by.clone(),
-            action_id: mentioned.action_id.as_uuid(),
-        },
-    })]
-}
-
 /// What the notification is filed under: the session itself. That is what a
 /// click opens, what the inbox hydrates as a row, and what a user mutes to
 /// stop hearing about one run. The thread the chip lives in, when there is
@@ -376,15 +335,6 @@ pub fn waiting_notification_id(session_id: Uuid, turn: TurnId) -> Uuid {
         "{session_id}:{}:{}",
         turn.0,
         AgentSessionWaitingForInputMetadata::TYPE_NAME
-    ))
-}
-
-/// The id of the "mentioned you" notification for one prompt to one session.
-#[must_use]
-pub fn mentioned_notification_id(session_id: Uuid, action_id: Uuid) -> Uuid {
-    derived_id(&format!(
-        "{session_id}:{action_id}:{}",
-        AgentSessionMentionedMetadata::TYPE_NAME
     ))
 }
 

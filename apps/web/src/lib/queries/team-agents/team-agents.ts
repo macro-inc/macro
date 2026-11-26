@@ -15,6 +15,12 @@ import { invalidateTeam } from '../team/teams';
 import { teamAgentKeys } from './keys';
 
 const PROVISIONING_POLL_MS = 3_000;
+/**
+ * How often a settled agent is checked again: its computer can stop
+ * answering, or recover from a failure, with nothing on this client to cue a
+ * refetch.
+ */
+const SETTLED_POLL_MS = 30_000;
 
 type CreateTeamAgentArgs = {
   teamId: string;
@@ -24,14 +30,24 @@ type CreateTeamAgentArgs = {
 };
 type RemoveTeamAgentArgs = { teamId: string; userId: string };
 
-/** Polls only while an agent's computer is still being set up, or the agent is starting. */
+/**
+ * Polls fast while an agent's computer is being set up, the agent is
+ * starting, or its computer is unhealthy and coming back by itself; slowly
+ * while any agent could still change on its own; not at all once every agent
+ * is released.
+ */
 export function teamAgentsPollInterval(
   agents: readonly TeamAgent[] | undefined
 ): number | false {
-  const provisioning = agents?.some(
-    (agent) => agent.status === 'provisioning' || agent.status === 'starting'
+  const moving = agents?.some(
+    (agent) =>
+      agent.status === 'provisioning' ||
+      agent.status === 'starting' ||
+      agent.status === 'unhealthy'
   );
-  return provisioning ? PROVISIONING_POLL_MS : false;
+  if (moving) return PROVISIONING_POLL_MS;
+  const live = agents?.some((agent) => agent.status !== 'released');
+  return live ? SETTLED_POLL_MS : false;
 }
 
 // Cached callbacks outlive the hooks; keep hook scope out of these closures.

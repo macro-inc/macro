@@ -1,6 +1,6 @@
 import { DateTimeRangeFields } from '@app/components/date-time-range/date-time-range-fields';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import { format, isValid, parseISO } from 'date-fns';
+import { isValid, parseISO } from 'date-fns';
 import {
   createEffect,
   createMemo,
@@ -22,7 +22,9 @@ import {
   guestEmail,
 } from '../../calendar/components/composer/event-form-model';
 import { RecurrenceBuilder } from '../../calendar/components/composer/RecurrenceBuilder';
+import { useCalendarPreferences } from '../../calendar/utils/preferences';
 import { buildRecurrenceLines } from '../../calendar/utils/recurrence';
+import { formatCalendarTime } from '../../calendar/utils/time-format';
 import type { InputDisplay } from '../context/capabilities';
 import { formatRecipientTerms } from '../core/recipients';
 import { parseRecurrenceDraft } from '../core/recurrence';
@@ -38,6 +40,7 @@ export function CalendarDraft(props: {
   const s = props.state;
   const a = props.actions;
   const hintId = createUniqueId();
+  const [preferences] = useCalendarPreferences();
   onCleanup(() => a.captureCalendarEditor?.(undefined));
   const calendars = createMemo(() =>
     a.calendars().map((calendar) => ({
@@ -106,7 +109,7 @@ export function CalendarDraft(props: {
     if (s.draft().edited.calendar.includes('start') || !phrase) return;
     const start = parseISO(s.fields().start);
     if (!isValid(start)) return;
-    return `Assumed ${format(start, 'h:mm a')} for “${phrase}”. Adjust the start time if you meant otherwise.`;
+    return `Assumed ${formatCalendarTime(start, preferences.timeFormat)} for “${phrase}”. Adjust the start time if you meant otherwise.`;
   };
   const changeStart = (start: string) => {
     const duration =
@@ -132,6 +135,7 @@ export function CalendarDraft(props: {
         startDisabled={s.sending()}
         endDisabled={s.sending()}
         describedBy={assumption() ? hintId : undefined}
+        timeFormat={preferences.timeFormat}
       />
       <Show when={assumption()}>
         {(hint) => (

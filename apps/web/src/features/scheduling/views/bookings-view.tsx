@@ -1,3 +1,5 @@
+import { TimezoneSelect } from '@app/components/timezone-select/TimezoneSelect';
+import { timezoneOptions } from '@app/components/timezone-select/timezone-options';
 import { SearchBar } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -6,19 +8,16 @@ import {
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { type JSX, Show } from 'solid-js';
+import { useCalendarPreferences } from '../../calendar/utils/preferences';
 import { BookingDetailsDialog } from '../components/booking-details-dialog';
 import { BookingStatusTabs, BookingsPanel } from '../components/bookings-panel';
 import { SelectInput } from '../components/fields';
 import { SchedulingFilterSection } from '../components/scheduling-filter-section';
 import { SchedulingFilters } from '../components/scheduling-filters';
-import { TimezoneSelect } from '../components/TimezoneSelect';
 import type { Booking, EventType, SchedulingMember } from '../core/types';
 import { createBookingsView } from '../primitives/create-bookings-view';
 
-const TIME_ZONES = Intl.supportedValuesOf('timeZone').map((value) => ({
-  value,
-  label: value.replaceAll('_', ' '),
-}));
+const TIME_ZONES = timezoneOptions();
 
 export function BookingsView(props: {
   headerTitle?: JSX.Element;
@@ -39,6 +38,8 @@ export function BookingsView(props: {
   onManage: (id: string) => void;
   onAttendance: (id: string, attendance: Booking['attendance']) => void;
 }) {
+  const [preferences] = useCalendarPreferences();
+  const hour12 = () => preferences.timeFormat === '12-hour';
   const state = createBookingsView({
     bookings: () => props.bookings,
     events: () => props.events,
@@ -164,6 +165,7 @@ export function BookingsView(props: {
           search={state.search()}
           eventId={state.eventId()}
           timeZone={state.timeZone()}
+          hour12={hour12()}
           count={state.visible().length}
           loading={props.loading}
           error={props.error}
@@ -188,6 +190,7 @@ export function BookingsView(props: {
                 )}
                 members={props.members}
                 timeZone={state.timeZone()}
+                hour12={hour12()}
                 currentUserId={props.currentUserId}
                 canManageBookings={props.canManageBookings}
                 busyId={props.busyId}

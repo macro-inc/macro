@@ -1,6 +1,6 @@
 import ClockCounterIcon from '@icon/system/regular/clock-counter-clockwise.svg';
 import LightningIcon from '@icon/system/regular/lightning.svg';
-import { Badge, Button, Card } from '@ui';
+import { Button, Card } from '@ui';
 import { For, Show } from 'solid-js';
 
 /** A shared routine template as a card under the message that links it. */
@@ -17,17 +17,17 @@ export function TemplateCard(props: {
 }) {
   return (
     <Card
+      variant="raised"
       aria-label={`Routine template: ${props.name}`}
       class="mt-2 max-w-xl"
       role="article"
     >
       <Card.Header>
-        <Card.Metadata class="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" size="xs">
-            <ClockCounterIcon />
-            Routine template
-          </Badge>
-          by {props.authorName}
+        <Card.Metadata class="flex-nowrap items-start gap-x-1.5">
+          <ClockCounterIcon class="size-4 shrink-0" />
+          <span class="min-w-0 [overflow-wrap:anywhere]">
+            Routine template by {props.authorName}
+          </span>
         </Card.Metadata>
         <Card.Title>{props.name}</Card.Title>
         <Show when={props.description}>
@@ -47,25 +47,29 @@ export function TemplateCard(props: {
         </Card.Body>
       </Show>
       <Card.Footer>
-        <span class="text-sm text-ink-muted">
+        <Card.Metadata>
           {props.activeCount === 1
             ? 'Active for 1 person'
             : `Active for ${props.activeCount} people`}
-        </span>
-        <div class="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={() => props.onView()}>
+        </Card.Metadata>
+        <Card.Actions>
+          <Button
+            variant={props.canActivate ? 'ghost' : 'secondary'}
+            size="sm"
+            onClick={() => props.onView()}
+          >
             View template
           </Button>
           <Show when={props.canActivate}>
             <Button
-              variant="primary"
+              variant="secondary"
               size="sm"
               onClick={() => props.onActivate()}
             >
               Activate for me
             </Button>
           </Show>
-        </div>
+        </Card.Actions>
       </Card.Footer>
     </Card>
   );

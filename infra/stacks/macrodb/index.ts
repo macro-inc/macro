@@ -245,6 +245,9 @@ const readReplica = new aws.rds.Instance(
     storageType: config.require('storage_type'),
     iops: config.getNumber('storage_iops'),
     storageThroughput: config.getNumber('storage_throughput'),
+    // A replica does not grow when its primary autoscales: it needs its own
+    // ceiling, or it fills up first while serving every read.
+    maxAllocatedStorage: config.requireNumber('max_allocated_storage'),
     caCertIdentifier: config.require('ca_cert_identifier'),
     kmsKeyId: config.require('kms_key_id'),
     storageEncrypted: true,

@@ -27,16 +27,19 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import type {
+  CrmCommentTarget,
   CrmRecordNavigation,
   CrmRoute,
 } from './context/workspace-context';
 import { pipelineIdOfTab, pipelineTab } from './core/navigation';
 import type { CrmRecordRef, CrmRecordSection } from './core/record';
+import { useOpenMergedRecord } from './crm-merged-record';
 import {
   type CrmItemParams,
   type CrmRecordParams,
   crmItemBlockType,
   crmRecordSearch,
+  crmRecordSearchCodec,
   crmSearch,
   crmSearchCodec,
 } from './crm-route';
@@ -92,8 +95,11 @@ function itemDestination(source: CrmBranchParams, item: CrmItemParams) {
   };
 }
 
+/** The split showing the Customers route, which an opened item navigates. */
+type CrmRoutePane = { captureEntryState(): void; activate(): void };
+
 /** The Customers location held by the pane's route. */
-export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
+export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
   const [search] = createSearchParams(crmSearch);
   const [recordSearch] = createSearchParams(crmRecordSearch);
   const params = useParams<CrmBranchParams>();
@@ -124,10 +130,14 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
     return [record];
   };
 
-  // Records open where the user asks, even when another split shows them too.
+  // Records open where the user asks, even when another split shows them too;
+  // a link from one record to another goes to the split already showing it.
   const showRecord = (
     trail: readonly CrmRecordRef[],
-    section: CrmRecordSection | undefined
+    section: CrmRecordSection | undefined,
+    followLink = false,
+    replace = false,
+    commentTarget?: CrmCommentTarget
   ) => {
     const record = trail.at(-1);
     if (!record) return;
@@ -138,9 +148,14 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
     };
     // A message target belongs to the record it was asked for.
     const options = {
-      allowDuplicate: true,
+      allowDuplicate: !followLink,
+      replace,
       state: [...trail],
-      search: { [crmRecordSearch.namespace]: undefined },
+      search: {
+        [crmRecordSearch.namespace]: commentTarget
+          ? crmRecordSearchCodec.serialize(commentTarget)
+          : undefined,
+      },
     };
     const pipelineId = params.pipelineId;
     fireAndForget(
@@ -156,6 +171,28 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
       'crm'
     );
   };
+
+  const openMerged = useOpenMergedRecord((survivor) => {
+    const before = records().slice(0, -1);
+    // A trail that passed the record that stays goes back to it.
+    const earlier = before.findIndex(
+      (record) =>
+        record.type === survivor.type &&
+        record.id.toLowerCase() === survivor.id.toLowerCase()
+    );
+    // The merged record's tab and Discussion message are the one that
+    // stays's; a new seek scrolls its Discussion to the message.
+    const commentId = recordSearch.commentId;
+    showRecord(
+      earlier === -1
+        ? [...before, { type: survivor.type, id: survivor.id, name: '' }]
+        : before.slice(0, earlier + 1),
+      params.section,
+      true,
+      true,
+      commentId ? { commentId, seek: crypto.randomUUID() } : undefined
+    );
+  });
 
   const showList = (next: string, replace?: boolean) => {
     const pipelineId = pipelineIdOfTab(next);
@@ -215,12 +252,16 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
       itemId: entity.id,
       ...(entity.type === 'document'
         ? {
-            itemFileType: fileTypeToResolvedBlockName(entity.fileType ?? 'md'),
+            itemFileType: fileTypeToResolvedBlockName(entity.fileType),
             itemSubType: entity.subType?.type,
           }
         : {}),
     };
-    captureEntryState?.();
+    pane?.captureEntryState();
+    // Activate before navigating: when another split already shows the item,
+    // the router brings that split up, and activating afterwards (the focus
+    // the click moved here) would take it back.
+    pane?.activate();
     const trail = records();
     const destination = itemDestination(params, itemParams);
     fireAndForget(
@@ -301,7 +342,8 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
       shown() && recordSearch.commentId
         ? { commentId: recordSearch.commentId, seek: recordSearch.seek }
         : undefined,
-    open: (trail) => showRecord(trail, undefined),
+    open: (trail, options) => showRecord(trail, undefined, options?.followLink),
+    openMerged,
     setSection: (section) => showRecord(records(), section),
     item,
     openItem,

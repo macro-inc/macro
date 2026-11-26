@@ -113,7 +113,7 @@ export type ViewShellRootProps = Omit<
   /**
    * Sticky navigation visibility and width, scoped to this app type rather
    * than an entry. Only the first split follows the saved visibility; other
-   * splits start collapsed. Every split opens at the last saved width; a drag
+   * splits start open. Every split opens at the last saved width; a drag
    * in one split leaves the others' current widths alone.
    */
   asidePreferenceKey?: string;
@@ -173,15 +173,16 @@ function Root(props: ViewShellRootProps) {
   ]);
 
   const panel = useContext(SplitPanelContext);
-  // A view opened beside another split starts without navigation, then keeps
-  // that split's choice as the split moves between views; only the primary
-  // split follows, and writes, the saved preference.
+  // A view opened beside another split starts with navigation, as any split
+  // above the layout breakpoint does, then keeps that split's choice as the
+  // split moves between views; only the primary split follows, and writes,
+  // the saved preference.
   const secondarySplit =
     local.asidePreferenceKey !== undefined &&
     panel !== undefined &&
     !untrack(panel.handle.isFirst);
   const [wideAsideCollapsed, setWideAsideCollapsed] = secondarySplit
-    ? (panel?.navigationCollapsed ?? createSignal(true))
+    ? (panel?.navigationCollapsed ?? createSignal(false))
     : local.asidePreferenceKey
       ? usePreference(asideCollapsedPreferenceKey(local.asidePreferenceKey), {
           default: false,
@@ -465,6 +466,7 @@ function Root(props: ViewShellRootProps) {
         !narrowList(),
       isOverlay: asideOverlay,
       isSheet: navigationSheet,
+      fillsShell: () => narrowList() === 'list',
       collapse: () => setAsideOpen(false),
       expand: () => setAsideOpen(true),
       toggle: () => {
@@ -844,13 +846,21 @@ function Main(props: ViewShellMainProps) {
 }
 
 function TopBar(
-  props: JSX.HTMLAttributes<HTMLDivElement> & { floating?: boolean }
+  props: JSX.HTMLAttributes<HTMLDivElement> & {
+    floating?: boolean;
+    /** Render this explicit mobile composition in the pane's floating chrome. */
+    touch?: boolean;
+    /** Replaces automatic navigation when the host owns the leading action. */
+    navigation?: JSX.Element;
+  }
 ) {
   const [local, rest] = splitProps(props, [
     'children',
     'class',
     'ref',
     'floating',
+    'touch',
+    'navigation',
   ]);
   const [bar, setBar] = createSignal<HTMLDivElement>();
   // On touch the bar floats over its pane as islands, like a standalone
@@ -864,6 +874,7 @@ function TopBar(
         ref={mergeRefs(setBar, local.ref, tourTarget(VIEW_SHELL_TOUR.topBar))}
         class={cn(
           '@container/split-header flex h-12 min-w-0 shrink-0 items-center gap-1 px-2 py-3 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden',
+          local.touch && 'touch:flex',
           local.class,
           floats() &&
             'touch:pointer-events-none touch:absolute touch:inset-x-0 touch:top-0 touch:z-split-panel-chrome touch:h-auto touch:min-h-0 touch:gap-2 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)] touch:pb-3'
@@ -875,7 +886,7 @@ function TopBar(
         }
         data-view-shell-top-bar=""
       >
-        <ViewNavigationControls />
+        {local.navigation ?? <ViewNavigationControls />}
         {local.children}
       </div>
     </SplitHeaderContextMenu>

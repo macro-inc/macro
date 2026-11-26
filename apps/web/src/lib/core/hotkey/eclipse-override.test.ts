@@ -111,6 +111,29 @@ describe('eclipse override', () => {
     expect(hotkeyTokenMap().get(token)).toHaveLength(1);
   });
 
+  test('a second owner-bound same-token registration hands the key back when disposed', () => {
+    const scopeId = makeScope();
+    const token = 'eclipse-test:owner-bound-token' as HotkeyToken;
+    const disposeView = createRoot((disposeRoot) => {
+      register(scopeId, 'view', { hotkeyToken: token });
+      return disposeRoot;
+    });
+    // A loading skeleton of the same view, mounted while the view suspends.
+    const disposeSkeleton = createRoot((disposeRoot) => {
+      register(scopeId, 'skeleton', { hotkeyToken: token });
+      return disposeRoot;
+    });
+
+    expect(effectiveDescriptions(scopeId, 'x')).toEqual(['skeleton']);
+
+    disposeSkeleton();
+    expect(effectiveDescriptions(scopeId, 'x')).toEqual(['view']);
+    expect(hotkeyTokenMap().get(token)).toHaveLength(1);
+
+    disposeView();
+    expect(rawCommands(scopeId, 'x')).toHaveLength(0);
+  });
+
   test('a same-token override replaces a previous unkeyed registration', () => {
     const scopeId = makeScope();
     const token = 'eclipse-test:unkeyed-token' as HotkeyToken;

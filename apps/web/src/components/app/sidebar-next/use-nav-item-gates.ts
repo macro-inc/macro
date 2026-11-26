@@ -9,6 +9,7 @@ import {
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
 import { useCurrentTeamQuery } from '@queries/team/teams';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { type Accessor, createMemo } from 'solid-js';
 import type { NavItemGates } from './nav-items';
 import { useSidebarPrefs } from './use-sidebar-prefs';
@@ -31,6 +32,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   return createMemo(() => ({
     showNotifications: notifications(),
     showForYou: suggestions(),
+    showCustomers: crmAccessAllowed(),
     showCalls: ENABLE_CALLS,
     showReviews: reviews().enabled,
     showActivity: activity(),

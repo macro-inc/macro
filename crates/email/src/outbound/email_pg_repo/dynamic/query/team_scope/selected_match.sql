@@ -4,19 +4,7 @@
                                 SELECT link_id, thread_id FROM selected_threads
                             )) IS TRUE
                             OR EXISTS (
-                                SELECT 1 FROM (
-                                    SELECT lower(pc.email_address) AS address,
-                                           lower(split_part(pc.email_address, '@', 2)) AS domain
-                                    FROM email_messages pm
-                                    JOIN email_contacts pc ON pc.id = pm.from_contact_id
-                                    WHERE pm.thread_id = t.id AND NOT pm.is_draft
-                                    UNION
-                                    SELECT lower(pc.email_address), lower(split_part(pc.email_address, '@', 2))
-                                    FROM email_messages pm
-                                    JOIN email_message_recipients pr ON pr.message_id = pm.id
-                                    JOIN email_contacts pc ON pc.id = pr.contact_id
-                                    WHERE pm.thread_id = t.id AND NOT pm.is_draft
-                                ) participant
+                                SELECT 1 FROM crm_thread_participants participant
                                 CROSS JOIN LATERAL (
                                     SELECT participant.domain AS suffix
                                     UNION ALL

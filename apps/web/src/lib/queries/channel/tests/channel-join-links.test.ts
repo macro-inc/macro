@@ -69,7 +69,7 @@ describe('channel join-link mutations', () => {
     });
   });
 
-  it('joins with the supplied code and invalidates the channel list', async () => {
+  it('joins with the supplied code and rereads the channel directory', async () => {
     vi.mocked(storageServiceClient.joinChannelByCode).mockResolvedValue(
       ok(undefined)
     );
@@ -86,7 +86,7 @@ describe('channel join-link mutations', () => {
 
     await options.onSuccess?.(undefined, args, undefined, mutationContext());
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: channelKeys.listChannels('viewer').queryKey,
+      queryKey: channelKeys.directory._def,
     });
   });
 

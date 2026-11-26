@@ -12,6 +12,7 @@ import type { TeamAgent } from '@service-auth/team-agents';
 import { confirmDialog } from '@ui';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { TeamAgentClaudeStatus } from '../components/team-agent-claude-status';
+import { computerFailureMessage } from '../computers/core/computer-display';
 import {
   agentClaudeMode,
   agentClaudeState,
@@ -70,8 +71,13 @@ export function TeamAgentClaude(props: { agent: TeamAgent }) {
     if (!confirmed) return;
     try {
       await signOut.mutateAsync(id);
-    } catch {
-      toast.failure(t('teamAgents.useCreditsFailed', { name }));
+    } catch (error) {
+      toast.failure(
+        computerFailureMessage(
+          error,
+          t('teamAgents.useCreditsFailed', { name })
+        )
+      );
     }
   };
 

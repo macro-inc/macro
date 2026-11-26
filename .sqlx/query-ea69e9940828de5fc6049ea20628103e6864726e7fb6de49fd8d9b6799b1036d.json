@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT l.id AS link_id,l.macro_id AS \"user_id?\",member.team_role::text AS \"role?\",\n                    c.active_rule_revision AS revision,r.kind AS \"kind?\",r.value AS \"value?\"\n                FROM unnest($2::uuid[]) selected(id)\n                CROSS JOIN LATERAL (SELECT id,macro_id FROM email_links WHERE id=selected.id AND is_primary AND deleting_at IS NULL OFFSET 0)l\n                CROSS JOIN LATERAL (SELECT active_rule_revision FROM crm_email_consent WHERE team_id=$1 AND user_id=l.macro_id AND link_id=l.id AND mode='selected' AND selected_enabled OFFSET 0)c\n                CROSS JOIN LATERAL (SELECT team_role FROM team_user WHERE team_id=$1 AND user_id=l.macro_id OFFSET 0)member\n                LEFT JOIN LATERAL (\n                    SELECT 'thread'::text kind,thread_id::text value FROM crm_email_rule_threads WHERE team_id=$1 AND user_id=l.macro_id AND revision=c.active_rule_revision\n                    UNION ALL SELECT 'address',address FROM crm_email_rule_addresses WHERE team_id=$1 AND user_id=l.macro_id AND revision=c.active_rule_revision\n                    UNION ALL SELECT 'contact',contact_id::text FROM crm_email_rule_contacts WHERE team_id=$1 AND user_id=l.macro_id AND revision=c.active_rule_revision\n                    UNION ALL SELECT 'domain',domain FROM crm_email_rule_domains WHERE team_id=$1 AND user_id=l.macro_id AND revision=c.active_rule_revision\n                    UNION ALL SELECT 'company',company_id::text FROM crm_email_rule_companies WHERE team_id=$1 AND user_id=l.macro_id AND revision=c.active_rule_revision\n                    OFFSET 0\n                )r ON TRUE LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "role?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "value?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "ea69e9940828de5fc6049ea20628103e6864726e7fb6de49fd8d9b6799b1036d"
+}

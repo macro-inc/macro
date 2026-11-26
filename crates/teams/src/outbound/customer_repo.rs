@@ -11,6 +11,7 @@ mod subscription_items;
 use subscription_items::{cadence, item_quantity_updates, update_error};
 mod computer_items;
 mod computer_refunds;
+mod payment_terms;
 pub use computer_items::{
     COMPUTER_ID_KEY, item_computer_id, item_computer_uuid, list_subscription_items,
 };
@@ -28,8 +29,9 @@ use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
         BillingCadence, ComputerPurchaseCredit, CustomerError, ItemChangeSettlement,
-        ItemChangeStatus, ItemProration, ItemQuantityChange, ItemRemoval, PriceInfo,
-        ScheduledSeatPlan, SeatPlan, SeatPrices, SubscriptionItemView, SubscriptionTerms,
+        ItemChangeStatus, ItemProration, ItemQuantityChange, ItemRemoval, PaymentTerms, PriceInfo,
+        ProratedCharge, ScheduledSeatPlan, SeatDowngrade, SeatPlan, SeatPrices,
+        SubscriptionItemView, SubscriptionTerms,
     },
 };
 
@@ -38,7 +40,7 @@ use crate::domain::{
 pub struct CustomerRepositoryImpl {
     /// The underlying stripe::Client connected to stripe.
     client: Arc<stripe::Client>,
-    /// The Stripe price behind each plan's seat item. A team subscription
+    /// The Stripe prices behind each plan's seat item. A team subscription
     /// holds one item per plan its members are on.
     seat_prices: SeatPrices,
     pool: sqlx::PgPool,
@@ -66,6 +68,12 @@ struct ItemUpdateOptions<'a> {
 struct SeatItem {
     id: String,
     quantity: u64,
+}
+
+/// A subscription's seat items, one per plan, and how often it bills.
+struct SeatItems {
+    by_plan: HashMap<SeatPlan, SeatItem>,
+    cadence: BillingCadence,
 }
 
 impl CustomerRepository for CustomerRepositoryImpl {
@@ -124,12 +132,12 @@ impl CustomerRepository for CustomerRepositoryImpl {
     ) -> Result<(), CustomerError> {
         let _billing = self.subscription_guard(subscription_id, None).await?;
         let items = self.get_seat_items(subscription_id).await?;
-        let existing = items.get(&plan);
+        let existing = items.by_plan.get(&plan);
         let quantity = existing
             .map_or(0, |item| item.quantity)
             .checked_add(amount)
             .context("seat count overflow")?;
-        let update = self.seat_item_update(plan, existing, quantity)?;
+        let update = self.seat_item_update(plan, existing, quantity, items.cadence)?;
 
         self.update_items(subscription_id, vec![update], ItemUpdateOptions::default())
             .await
@@ -144,17 +152,17 @@ impl CustomerRepository for CustomerRepositoryImpl {
     ) -> Result<(), CustomerError> {
         let _billing = self.subscription_guard(subscription_id, None).await?;
         let items = self.get_seat_items(subscription_id).await?;
-        let Some(existing) = items.get(&plan) else {
+        let Some(existing) = items.by_plan.get(&plan) else {
             return Err(CustomerError::NoMatchingLineItem);
         };
-        let total: u64 = items.values().map(|item| item.quantity).sum();
+        let total: u64 = items.by_plan.values().map(|item| item.quantity).sum();
         // Never leave the subscription without a seat: the payer keeps one.
         let removable = existing.quantity.min(total.saturating_sub(1));
         let quantity = existing.quantity - amount.min(removable);
         if quantity == existing.quantity {
             return Ok(());
         }
-        let update = self.seat_item_update(plan, Some(existing), quantity)?;
+        let update = self.seat_item_update(plan, Some(existing), quantity, items.cadence)?;
 
         self.update_items(subscription_id, vec![update], ItemUpdateOptions::default())
             .await
@@ -171,18 +179,28 @@ impl CustomerRepository for CustomerRepositoryImpl {
             return Ok(());
         }
         let _billing = self.subscription_guard(subscription_id, None).await?;
-        // Make sure the target plan is sold before touching anything.
-        self.seat_prices.price_id(to)?;
-
         let items = self.get_seat_items(subscription_id).await?;
-        let Some(source) = items.get(&from) else {
+        let Some(source) = items.by_plan.get(&from) else {
             return Err(CustomerError::NoMatchingLineItem);
         };
-        let target = items.get(&to);
+        let target = items.by_plan.get(&to);
 
+        // The target update comes first: it fails before anything is sent
+        // when the target plan is not sold at the subscription's interval.
+        let target_update = self.seat_item_update(
+            to,
+            target,
+            target.map_or(0, |item| item.quantity) + 1,
+            items.cadence,
+        )?;
         let updates = vec![
-            self.seat_item_update(from, Some(source), source.quantity.saturating_sub(1))?,
-            self.seat_item_update(to, target, target.map_or(0, |item| item.quantity) + 1)?,
+            self.seat_item_update(
+                from,
+                Some(source),
+                source.quantity.saturating_sub(1),
+                items.cadence,
+            )?,
+            target_update,
         ];
 
         self.update_items(subscription_id, updates, ItemUpdateOptions::default())
@@ -193,12 +211,23 @@ impl CustomerRepository for CustomerRepositoryImpl {
         &self,
         id: &stripe::SubscriptionId,
         user: &MacroUserIdStr<'_>,
-        plan: Option<SeatPlan>,
+        downgrade: Option<SeatDowngrade>,
     ) -> Result<(), CustomerError> {
+        if let Some(downgrade) = downgrade
+            && downgrade.to >= downgrade.from
+        {
+            return Err(CustomerError::PlanUnavailable(downgrade.to));
+        }
         let _billing = self.subscription_guard(id, None).await?;
         let subscription = stripe::Subscription::retrieve(&self.client, id, &[])
             .await
             .map_err(storage)?;
+        if let Some(downgrade) = downgrade {
+            // The renewal phase bills the target plan, so it must be sold at
+            // the subscription's interval (Premium has no annual price).
+            let cadence = payment_terms::terms_of(&subscription)?.interval;
+            self.seat_prices.price_id(downgrade.to, cadence)?;
+        }
         let existing = if let Some(id) = subscription.schedule.as_ref().map(|s| s.id()) {
             let schedule = stripe::SubscriptionSchedule::retrieve(&self.client, &id, &[])
                 .await
@@ -208,7 +237,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         } else {
             None
         };
-        if plan.is_none() && existing.is_none() {
+        if downgrade.is_none() && existing.is_none() {
             return Ok(());
         }
         let mut pending = if let Some(schedule) = existing.as_ref() {
@@ -225,11 +254,12 @@ impl CustomerRepository for CustomerRepositoryImpl {
                 members: HashMap::new(),
             };
         }
-        match plan {
-            Some(SeatPlan::Premium) => {
-                pending.members.insert(user.to_string(), SeatPlan::Premium);
+        match downgrade {
+            Some(downgrade) => {
+                pending
+                    .members
+                    .insert(user.to_string(), PendingSeat::of(downgrade));
             }
-            Some(_) => return Err(CustomerError::PlanUnavailable(plan.unwrap())),
             None => {
                 pending.members.remove(user.as_ref());
             }
@@ -287,8 +317,10 @@ impl CustomerRepository for CustomerRepositoryImpl {
             })
             .ok_or(CustomerError::NoMatchingLineItem)?;
         let end_trial = end_trial && subscription.status == stripe::SubscriptionStatus::Trialing;
+        let cadence = payment_terms::terms_of(&subscription)?.interval;
+        let price = self.seat_prices.price_id(plan, cadence)?.to_string();
         let mut params = UpdateSubscription {
-            items: Some(vec![UpdateSubscriptionItems { id: Some(item.id.to_string()), price: Some(self.seat_prices.price_id(plan)?.to_string()), ..Default::default() }]),
+            items: Some(vec![UpdateSubscriptionItems { id: Some(item.id.to_string()), price: Some(price), ..Default::default() }]),
             metadata: Some(HashMap::from([("macro_plan_change_at".to_string(), chrono::Utc::now().to_rfc3339()), (APPLIED_KEY.to_string(), String::new())])),
             proration_behavior: Some(stripe::generated::billing::subscription::SubscriptionProrationBehavior::AlwaysInvoice), ..Default::default()
         };
@@ -318,7 +350,11 @@ impl CustomerRepository for CustomerRepositoryImpl {
         };
         let changes = self.read_pending(id.as_str(), encoded).await?;
         Ok(if subscription.current_period_start >= changes.at {
-            changes.members.into_iter().collect()
+            changes
+                .members
+                .into_iter()
+                .map(|(user, seat)| (user, seat.downgrade().to))
+                .collect()
         } else {
             Vec::new()
         })
@@ -463,22 +499,24 @@ impl CustomerRepository for CustomerRepositoryImpl {
         )
         .await
         .map_err(storage)?;
-        let interval = subscription
-            .items
-            .data
-            .iter()
-            .find_map(|item| item.price.as_ref()?.recurring.as_ref())
-            .map(|recurring| cadence(recurring.interval))
-            .ok_or(SubscriptionDataError::MissingRecurringItem)?;
-        let current_period_end =
-            chrono::DateTime::from_timestamp(subscription.current_period_end, 0)
-                .ok_or(SubscriptionDataError::InvalidPeriodEnd)?;
-        Ok(SubscriptionTerms {
-            current_period_end,
-            interval,
-            currency: subscription.currency.to_string(),
-            trialing: subscription.status == stripe::SubscriptionStatus::Trialing,
-        })
+        payment_terms::terms_of(&subscription)
+    }
+
+    #[tracing::instrument(skip(self), fields(card = tracing::field::Empty), err)]
+    async fn payment_terms(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+    ) -> Result<PaymentTerms, CustomerError> {
+        self.read_payment_terms(subscription_id).await
+    }
+
+    #[tracing::instrument(skip(self, prices), fields(prices = prices.len()), err)]
+    async fn preview_prorations(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        prices: &[stripe::PriceId],
+    ) -> Result<Vec<ProratedCharge>, CustomerError> {
+        self.read_prorations(subscription_id, prices).await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -599,7 +637,41 @@ const APPLIED_KEY: &str = "macro_renewed_seats";
 #[derive(serde::Serialize, serde::Deserialize)]
 struct PendingChanges {
     at: i64,
-    members: HashMap<String, SeatPlan>,
+    members: HashMap<String, PendingSeat>,
+}
+
+/// One member's scheduled downgrade, as stored in
+/// `subscription_plan_schedule.member_plans`. A downgrade from Max is stored
+/// as its bare target, as binaries built before Business read it; only a
+/// move involving Business needs the source plan written out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum PendingSeat {
+    /// The plan the seat moves from and to.
+    Move(SeatDowngrade),
+    /// A record written while Max -> Premium was the only downgrade: just
+    /// the target plan, always from Max.
+    Target(SeatPlan),
+}
+
+impl PendingSeat {
+    fn of(downgrade: SeatDowngrade) -> Self {
+        if downgrade.from == SeatPlan::Max {
+            PendingSeat::Target(downgrade.to)
+        } else {
+            PendingSeat::Move(downgrade)
+        }
+    }
+
+    fn downgrade(self) -> SeatDowngrade {
+        match self {
+            PendingSeat::Move(downgrade) => downgrade,
+            PendingSeat::Target(to) => SeatDowngrade {
+                from: SeatPlan::Max,
+                to,
+            },
+        }
+    }
 }
 #[derive(serde::Serialize)]
 struct ScheduleUpdate<'a> {

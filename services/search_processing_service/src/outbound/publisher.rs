@@ -18,13 +18,14 @@ impl SqsSearchEventPublisher {
 }
 
 impl SearchEventPublisher for SqsSearchEventPublisher {
-    async fn publish(&self, messages: Vec<SearchQueueMessage>) -> Result<(), BackfillError> {
+    async fn publish(&self, messages: Vec<SearchQueueMessage>) -> Result<usize, BackfillError> {
         if messages.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
         self.sqs
             .bulk_send_message_to_search_event_queue(messages)
             .await
+            .map(|unqueued| unqueued.len())
             .map_err(BackfillError::Publish)
     }
 }

@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 chrono = { workspace = true }
+model_entity = { package = "model-entity", path = "../model-entity" }
 macro_uuid = { path = "../macro_uuid" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

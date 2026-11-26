@@ -39,6 +39,8 @@ export type FakeImportScript = {
   loseResponses?: number;
   /** How the failed requests fail; retryable unless set. */
   failWith?: ImportRequestFailure;
+  /** The team's vault was never set up: every item is answered `vault_not_provisioned`. */
+  notProvisioned?: boolean;
   requests?: ImportBatchBody[];
 };
 
@@ -102,6 +104,13 @@ export function createFakePasswordSource(
         existing.id === item.id ? updated : existing
       );
       return ok(updated);
+    },
+    async setFavorite(id, favorite) {
+      if (!items.some((item) => item.id === id)) return err('failed');
+      items = items.map((item) =>
+        item.id === id ? { ...item, favorite } : item
+      );
+      return ok(undefined);
     },
     async remove(id) {
       items = items.filter((item) => item.id !== id);
@@ -234,6 +243,12 @@ export function createFakePasswordSource(
         folderIds.set(source.key, id);
       }
       const answers: ImportBatchResult['items'] = batch.items.map((entry) => {
+        if (script.notProvisioned)
+          return {
+            sourceKey: entry.sourceKey,
+            outcome: 'failed',
+            errorCode: 'vault_not_provisioned',
+          };
         const busy = script.busy?.get(entry.sourceKey) ?? 0;
         if (busy > 0) {
           script.busy?.set(entry.sourceKey, busy - 1);

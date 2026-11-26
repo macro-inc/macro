@@ -4,7 +4,7 @@ use super::*;
 fn free_access_is_exact_and_paid_access_preserves_routed_models() {
     let models = [
         FREE_MODEL,
-        "anthropic/claude-haiku-4-5",
+        "anthropic/claude-haiku-5-5",
         "fireworks/kimi-k3",
     ];
     assert_eq!(ModelAccess::Free.models(&models), [FREE_MODEL]);
@@ -13,6 +13,22 @@ fn free_access_is_exact_and_paid_access_preserves_routed_models() {
     assert_eq!(ModelAccess::Paid.default_model(models[1]), models[1]);
     assert!(!ModelAccess::Free.allows("gemini-3.8-flash"));
     assert!(!ModelAccess::Free.allows("unknown/model"));
+}
+
+#[test]
+fn a_retired_default_model_opens_on_its_replacement() {
+    assert_eq!(
+        ModelAccess::Paid.default_model("anthropic/claude-haiku-4-5"),
+        "anthropic/claude-haiku-5-5"
+    );
+    assert_eq!(
+        ModelAccess::Paid.default_model("openai/gpt-5.6-mini"),
+        "openai/gpt-6-luna"
+    );
+    assert_eq!(
+        ModelAccess::Free.default_model("anthropic/claude-haiku-4-5"),
+        FREE_MODEL
+    );
 }
 
 use macro_user_id::user_id::MacroUserIdStr;

@@ -25,3 +25,6 @@ pub use ops::{
 
 /// Longest SQL statement, run or saved, anywhere a statement is accepted.
 pub const MAX_STATEMENT_LENGTH: usize = 256 * 1024;
+
+/// Longest accepted select-option label.
+pub const MAX_OPTION_LABEL_LEN: usize = 200;

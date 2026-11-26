@@ -122,6 +122,15 @@ impl crate::domain::ports::Billing for Arc<Stripe> {
         })
     }
 
+    async fn purchase_terms(
+        &self,
+        _team_id: Uuid,
+        _sizes: &[ComputerSize],
+        _billing: &crate::domain::models::PurchaseBilling,
+    ) -> Result<crate::domain::models::PurchaseTerms, BillingError> {
+        unimplemented!("no race test lists purchase offers")
+    }
+
     async fn purchase_price(
         &self,
         team_id: Uuid,

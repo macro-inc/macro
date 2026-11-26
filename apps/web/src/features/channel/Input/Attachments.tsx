@@ -1,7 +1,9 @@
+import { t } from '@app/lib/i18n';
 import { MediaImage } from '@channel/Media/MediaImage';
 import { MediaVideo } from '@channel/Media/MediaVideo';
 import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
 import type { MediaItem } from '@channel/Media/media-items';
+import { VoiceMemoPlayer } from '@channel/Media/VoiceMemoPlayer';
 import { EntityIcon } from '@core/component/EntityIcon';
 import {
   staticFileIdEndpoint,
@@ -9,7 +11,7 @@ import {
 } from '@core/constant/servers';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import XIcon from '@icon/system/regular/x.svg';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import {
   children,
   createMemo,
@@ -21,11 +23,14 @@ import {
   Switch,
   splitProps,
 } from 'solid-js';
+import { AttachmentChip } from './attachment-chip/attachment-chip';
 import { useInput, useInputCommands } from './context';
 import type { InputAttachmentData, InputAttachmentKind } from './types';
 
 type AttachmentsProps = JSX.HTMLAttributes<HTMLDivElement> & {
   kind?: InputAttachmentKind | 'media';
+  /** Compact filename chips retain the same upload, removal, and media viewer. */
+  appearance?: 'preview' | 'chips';
 };
 
 function truncateFilename(name: string, maxLength = 24): string {
@@ -131,6 +136,34 @@ function MediaAttachmentItem(props: {
   );
 }
 
+function AudioAttachmentItem(props: {
+  attachment: InputAttachmentData;
+  onRemove: (attachment: InputAttachmentData) => void;
+}) {
+  return (
+    <Show when={!props.attachment.pending}>
+      <VoiceMemoPlayer
+        // Not the local preview: a restored draft's blob: URL is dead.
+        src={staticFileIdEndpoint(props.attachment.id)}
+        label={t('channelComposer.voiceMemo')}
+        trailing={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={t('channelComposer.removeVoiceMemo')}
+            onClick={(event: MouseEvent) => {
+              event.stopPropagation();
+              props.onRemove(props.attachment);
+            }}
+          >
+            <XIcon class="size-3.5 text-ink-muted" />
+          </Button>
+        }
+      />
+    </Show>
+  );
+}
+
 function DocumentAttachmentItem(props: {
   attachment: InputAttachmentData;
   onRemove: (attachment: InputAttachmentData) => void;
@@ -158,14 +191,23 @@ function DocumentAttachmentItem(props: {
 export function Attachments(props: AttachmentsProps) {
   const input = useInput();
   const commands = useInputCommands();
-  const [local, rest] = splitProps(props, ['class', 'children', 'kind']);
+  const [local, rest] = splitProps(props, [
+    'class',
+    'children',
+    'kind',
+    'appearance',
+  ]);
   const resolved = children(() => local.children);
 
   const [viewerOpen, setViewerOpen] = createSignal(false);
   const [selectedIndex, setSelectedIndex] = createSignal(0);
 
   const visibleAttachments = () => {
-    const items = input().attachments ?? [];
+    // A voice memo uploads under its recording panel, which says so; a
+    // pending chip below it would only grow the composer and move the panel.
+    const items = (input().attachments ?? []).filter(
+      (attachment) => !(attachment.kind === 'audio' && attachment.pending)
+    );
     if (!local.kind) return items;
     if (local.kind === 'media') {
       return items.filter(
@@ -228,6 +270,19 @@ export function Attachments(props: AttachmentsProps) {
             <For each={visibleAttachments()}>
               {(attachment) => (
                 <Switch>
+                  <Match when={local.appearance === 'chips'}>
+                    <AttachmentChip
+                      attachment={attachment}
+                      onRemove={handleRemove}
+                      onOpen={
+                        !attachment.pending &&
+                        (attachment.kind === 'image' ||
+                          attachment.kind === 'video')
+                          ? () => handleOpen(attachment)
+                          : undefined
+                      }
+                    />
+                  </Match>
                   <Match
                     when={
                       attachment.kind === 'image' || attachment.kind === 'video'
@@ -237,6 +292,12 @@ export function Attachments(props: AttachmentsProps) {
                       attachment={attachment}
                       onRemove={handleRemove}
                       onOpen={() => handleOpen(attachment)}
+                    />
+                  </Match>
+                  <Match when={attachment.kind === 'audio'}>
+                    <AudioAttachmentItem
+                      attachment={attachment}
+                      onRemove={handleRemove}
                     />
                   </Match>
                   <Match when={attachment.kind === 'document'}>

@@ -28,7 +28,8 @@ const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
   dms: ['dm'],
   documents: ['note', 'document', 'snippet', 'project', 'database', 'form'],
   tasks: ['task'],
-  chats: ['chat'],
+  // Agent sessions are the Agents tab's rows; legacy AI chats stay listed.
+  chats: ['agent_session', 'chat'],
   projects: ['initiative'],
   people: ['person'],
 };

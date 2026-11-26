@@ -16,6 +16,7 @@ const defaultPrefs = (overrides: Partial<SidebarPrefs> = {}): SidebarPrefs => ({
 });
 
 const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
+  showCustomers: true,
   showNotifications: true,
   showForYou: false,
   showCalls: true,
@@ -241,4 +242,23 @@ describe('Passwords on the rail', () => {
     );
     expect(ids.filter((id) => id !== 'for-you').slice(0, 5)).toEqual(order);
   });
+});
+
+it('omits CRM from the rail, More, and customization for a denied member', () => {
+  for (const hidden of [new Set<string>(), new Set(['companies'])]) {
+    const gates = defaultGates({
+      showCustomers: false,
+      prefs: defaultPrefs({ hidden }),
+    });
+    for (const items of [
+      visibleNavItems(gates),
+      moreMenuItems(gates),
+      customizableNavItems(gates),
+    ]) {
+      expect(items.some((item) => item.id === 'companies')).toBe(false);
+    }
+  }
+  expect(
+    customizableNavItems(defaultGates()).some((item) => item.id === 'companies')
+  ).toBe(true);
 });

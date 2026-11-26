@@ -1,4 +1,5 @@
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
+import { shownPage } from '@components/app/mobile/close-on-navigation';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Accordion } from '@kobalte/core/accordion';
@@ -63,8 +64,11 @@ export function EmailFilterDrawer() {
     dialog: DialogHandle,
     scope: ReturnType<typeof savedViewScope>
   ) => {
+    // A navigation that closed the dialog took the user elsewhere.
+    const page = shownPage();
     await dialog.closed;
-    if (!disposed && scope === savedViewScope()) setOpen(true);
+    if (disposed || scope !== savedViewScope() || page !== shownPage()) return;
+    setOpen(true);
   };
   const afterClose = (present: boolean) => {
     if (present || open()) return;

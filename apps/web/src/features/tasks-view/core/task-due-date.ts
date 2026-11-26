@@ -125,17 +125,23 @@ export function taskDueDateBucket(
   return 'later';
 }
 
-/** Presentation urgency for an open task, based on viewer-local calendar days. */
+/**
+ * Presentation urgency for an open task, based on viewer-local calendar days.
+ * A due date with a time of day is overdue from that moment, not from the
+ * next day.
+ */
 export function taskDueDateUrgency(
   value: string | undefined,
   closed: boolean,
-  calendar: DateBucketBoundaries
+  calendar: DateBucketBoundaries,
+  timed?: { now: number }
 ): 'danger' | 'warning' | undefined {
   if (closed || !value) return;
   const due = Date.parse(value);
   if (!Number.isFinite(due)) return;
   const b = calendar.boundaries;
   if (due < Date.parse(b.today)) return 'danger';
+  if (timed && due < timed.now) return 'danger';
   if (due < Date.parse(b.day_two)) return 'warning';
 }
 
@@ -181,4 +187,68 @@ export function taskDueDatePickerBounds(
 
 export function isTaskDueDateBucket(value: string): value is TaskDueDateBucket {
   return TASK_DUE_DATE_BUCKETS.some((bucket) => bucket.id === value);
+}
+
+/**
+ * Start date buckets mirror the due date's; a start before today has started
+ * rather than being overdue.
+ */
+export const TASK_START_DATE_BUCKETS = [
+  { id: 'started', label: 'Started' },
+  { id: 'today', label: 'Today' },
+  { id: 'tomorrow', label: 'Tomorrow' },
+  { id: 'next_7_days', label: 'Next 7 days' },
+  { id: 'later', label: 'Later' },
+  { id: 'no_start_date', label: 'No start date' },
+] as const;
+
+export type TaskStartDateBucket =
+  (typeof TASK_START_DATE_BUCKETS)[number]['id'];
+export type TaskStartDateFilter =
+  | { type: TaskStartDateBucket | 'has_start_date' }
+  | { type: 'range'; start?: string; end?: string };
+
+function startAsDueBucket(bucket: TaskStartDateBucket): TaskDueDateBucket {
+  return match(bucket)
+    .with('started', () => 'overdue' as const)
+    .with('no_start_date', () => 'no_due_date' as const)
+    .with('today', 'tomorrow', 'next_7_days', 'later', (same) => same)
+    .exhaustive();
+}
+
+function startAsDueFilter(filter: TaskStartDateFilter): TaskDueDateFilter {
+  if (filter.type === 'range') return filter;
+  if (filter.type === 'has_start_date') return { type: 'has_due_date' };
+  return { type: startAsDueBucket(filter.type) };
+}
+
+export function taskStartDatePredicate(
+  filter: TaskStartDateFilter | undefined,
+  calendar: DateBucketBoundaries
+): TaskDatePredicate | undefined {
+  return taskDueDatePredicate(filter && startAsDueFilter(filter), calendar);
+}
+
+export function taskStartDateBucket(
+  value: string | undefined,
+  calendar: DateBucketBoundaries
+): TaskStartDateBucket {
+  return match(taskDueDateBucket(value, calendar))
+    .with('overdue', () => 'started' as const)
+    .with('no_due_date', () => 'no_start_date' as const)
+    .with('today', 'tomorrow', 'next_7_days', 'later', (same) => same)
+    .exhaustive();
+}
+
+export function taskStartDatePickerBounds(
+  bucket: TaskStartDateBucket,
+  calendar: DateBucketBoundaries
+): { min?: string; max?: string } {
+  return taskDueDatePickerBounds(startAsDueBucket(bucket), calendar);
+}
+
+export function isTaskStartDateBucket(
+  value: string
+): value is TaskStartDateBucket {
+  return TASK_START_DATE_BUCKETS.some((bucket) => bucket.id === value);
 }

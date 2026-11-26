@@ -358,6 +358,27 @@ test('shows the AM/PM assumption and lets a manual start edit override it', asyn
   ).toHaveCount(0);
 });
 
+test('shows the start and its assumption on a 24-hour calendar’s clock', async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      'macro:pref:calendar:settings',
+      JSON.stringify({ timeFormat: '24-hour' })
+    )
+  );
+  await page.goto('/');
+  await page
+    .getByRole('textbox', { name: 'Your input', exact: true })
+    .fill('call with Julia tomorrow at 7');
+  await expect(
+    page.getByRole('combobox', { name: 'event start time', exact: true })
+  ).toHaveValue('19:00');
+  await expect(
+    page.getByText('Assumed 19:00 for', { exact: false })
+  ).toBeVisible();
+});
+
 test('keeps note tags with the draft through inference, switching types', async ({
   page,
 }) => {
