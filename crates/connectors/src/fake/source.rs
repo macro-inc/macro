@@ -45,6 +45,43 @@ pub(crate) struct FakeRow {
     pub(crate) response: (http::StatusCode, String),
     /// Answers given one per API call, in order, before `response`.
     pub(crate) in_turn: Arc<Mutex<VecDeque<ApiResponse>>>,
+    /// Scripted answers per tool, one per call in order, before the default
+    /// `<name>:<tool>` text.
+    pub(crate) tool_answers: Arc<Mutex<HashMap<String, VecDeque<CallToolResult>>>>,
+    /// What dialing its MCP server does.
+    pub(crate) dial: FakeDial,
+    /// A test's own MCP server, served in place of the scripted one.
+    pub(crate) served_by: Option<FakeServe>,
+}
+
+/// Serves a test's own MCP server on one end of an in-process session.
+#[derive(Clone)]
+pub(crate) struct FakeServe(
+    pub(crate)  Arc<
+        dyn Fn(tokio::io::DuplexStream) -> futures::future::BoxFuture<'static, ()> + Send + Sync,
+    >,
+);
+
+impl std::fmt::Debug for FakeServe {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("FakeServe")
+    }
+}
+
+/// What dialing a fake connection's MCP server does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum FakeDial {
+    /// Connects.
+    #[default]
+    Connects,
+    /// Fails as a transport outage would.
+    Fails,
+    /// Refuses, as a server does when it revoked the refresh token the row
+    /// still holds.
+    Revoked,
+    /// Never finishes, as a server that accepts the connection and never
+    /// answers the handshake.
+    Hangs,
 }
 
 impl FakeRow {
@@ -67,6 +104,9 @@ impl FakeRow {
             tools: Vec::new(),
             response: (http::StatusCode::OK, "{}".to_owned()),
             in_turn: Arc::default(),
+            tool_answers: Arc::default(),
+            dial: FakeDial::Connects,
+            served_by: None,
         }
     }
 }
@@ -86,11 +126,23 @@ pub struct ApiCall {
     pub body: Option<serde_json::Value>,
 }
 
-/// The rows every fake source reads, and the API calls they received.
+/// One MCP tool call a fake connection's server received.
+#[derive(Clone, Debug, PartialEq)]
+pub struct McpCall {
+    /// The app or server it went to.
+    pub key: ConnectorKey,
+    /// The tool, by the name the server lists.
+    pub tool: String,
+    /// The call's arguments.
+    pub arguments: serde_json::Map<String, serde_json::Value>,
+}
+
+/// The rows every fake source reads, and the calls they received.
 #[derive(Default)]
 pub(crate) struct FakeStore {
     pub(crate) rows: Vec<FakeRow>,
     pub(crate) api_calls: Vec<ApiCall>,
+    pub(crate) mcp_calls: Vec<McpCall>,
     /// Users whose connections no source can list, as when a store is down.
     pub(crate) unreachable: Vec<MacroUserIdStr<'static>>,
 }
@@ -133,8 +185,13 @@ impl FakeSource {
             enabled: row.enabled,
             grant: row.grant,
             mcp: Some(Arc::new(FakeMcp {
+                key: row.key.clone(),
                 name: row.name.clone(),
                 tools: row.tools.clone(),
+                tool_answers: row.tool_answers.clone(),
+                dial: row.dial,
+                served_by: row.served_by.clone(),
+                store: self.store.clone(),
                 scope: match (&row.source, &row.key) {
                     (SourceKind::Pipedream, ConnectorKey::App(app)) => {
                         Some((row.user.clone(), app.clone()))
@@ -232,8 +289,13 @@ impl Source for FakeSource {
             return Ok(None);
         }
         let mcp = FakeMcp {
+            key: ConnectorKey::App(app.clone()),
             name: app.to_string(),
             tools: Vec::new(),
+            tool_answers: Arc::default(),
+            dial: FakeDial::Connects,
+            served_by: None,
+            store: self.store.clone(),
             scope: Some((user.clone(), app.clone())),
         };
 
@@ -361,8 +423,13 @@ impl ServerDirectory for FakeSource {
 
 /// An MCP connection that dials an in-process server listing its tools.
 struct FakeMcp {
+    key: ConnectorKey,
     name: String,
     tools: Vec<String>,
+    tool_answers: Arc<Mutex<HashMap<String, VecDeque<CallToolResult>>>>,
+    dial: FakeDial,
+    served_by: Option<FakeServe>,
+    store: SharedStore,
     /// For a Pipedream row, the user and app its upstream is scoped to,
     /// stamped as Pipedream's own scoping headers.
     scope: Option<(MacroUserIdStr<'static>, ConnectorId)>,
@@ -376,10 +443,26 @@ const PIPEDREAM_APP_HEADER: &str = "x-pd-app-slug";
 #[async_trait::async_trait]
 impl McpConnection for FakeMcp {
     async fn dial(&self) -> Result<McpServer, rootcause::Report> {
+        match self.dial {
+            FakeDial::Connects => {}
+            FakeDial::Fails => return Err(rootcause::report!("the fake server is unreachable")),
+            FakeDial::Revoked => return Err(SourceRefusal::NeedsReauth(self.key.clone()).into()),
+            FakeDial::Hangs => std::future::pending().await,
+        }
         let (server_side, client_side) = tokio::io::duplex(SESSION_BUFFER);
+        if let Some(FakeServe(serve)) = &self.served_by {
+            tokio::spawn(serve(server_side));
+            return mcp_toolset::client_info()
+                .serve(client_side)
+                .await
+                .map_err(|error| rootcause::report!("fake MCP handshake failed: {error}"));
+        }
         let server = FakeServer {
+            key: self.key.clone(),
             name: self.name.clone(),
             tools: self.tools.clone(),
+            tool_answers: self.tool_answers.clone(),
+            store: self.store.clone(),
         };
         tokio::spawn(async move {
             if let Ok(running) = server.serve(server_side).await {
@@ -411,11 +494,15 @@ impl McpConnection for FakeMcp {
     }
 }
 
-/// Lists its tools; each answers `<server>:<tool>`.
+/// Lists its tools; each answers its scripted results in turn, then
+/// `<server>:<tool>`. Records every call.
 #[derive(Clone)]
 struct FakeServer {
+    key: ConnectorKey,
     name: String,
     tools: Vec<String>,
+    tool_answers: Arc<Mutex<HashMap<String, VecDeque<CallToolResult>>>>,
+    store: SharedStore,
 }
 
 impl rmcp::ServerHandler for FakeServer {
@@ -447,9 +534,29 @@ impl rmcp::ServerHandler for FakeServer {
         request: CallToolRequestParams,
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
-        let answer = format!("{}:{}", self.name, request.name);
+        let tool = request.name.to_string();
+        if !self.tools.contains(&tool) {
+            return Err(ErrorData::invalid_params(
+                format!("unknown tool {tool}"),
+                None,
+            ));
+        }
+        lock(&self.store).mcp_calls.push(McpCall {
+            key: self.key.clone(),
+            tool: tool.clone(),
+            arguments: request.arguments.unwrap_or_default(),
+        });
+        let scripted = self
+            .tool_answers
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get_mut(&tool)
+            .and_then(VecDeque::pop_front);
+        let answer = scripted.unwrap_or_else(|| {
+            CallToolResult::success(vec![ContentBlock::text(format!("{}:{tool}", self.name))])
+        });
 
-        Ok(CallToolResult::success(vec![ContentBlock::text(answer)]).into())
+        Ok(answer.into())
     }
 }
 

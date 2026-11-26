@@ -16,6 +16,7 @@ use crate::domain::ports::{
 use crate::domain::resolve::{self, MacroConnectEnabledFlag, Resolution};
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_toolset::{ConnectedServer, RemoteMcpToolSet};
+use rmcp::model::{CallToolRequestParams, CallToolResult};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
@@ -43,6 +44,25 @@ pub trait McpConnectionsService: Send + Sync + 'static {
     /// Tools for in-process agents. A connection that fails to dial is left
     /// out, not an error.
     fn toolset(&self, connections: &[McpHandle]) -> impl Future<Output = UserMcpTools> + Send;
+
+    /// Call one tool on a connection's server, by the name the server lists
+    /// it under (not the mangled `mcp__<server>__<tool>` of
+    /// [`Self::toolset`]), for a caller that makes fixed calls itself, such
+    /// as an importer. Dials the connection for the call. Nothing is
+    /// dropped: a dead grant is [`ConnectorsError::NeedsReauth`], a
+    /// connection the source no longer holds is [`ConnectorsError::NotFound`],
+    /// a tool the server does not list is [`ConnectorsError::ToolNotListed`],
+    /// a server silent past [`CALL_DEADLINE`] at any step is
+    /// [`ConnectorsError::TimedOut`], and any dial or transport failure, or
+    /// `arguments` that are not a JSON object, is
+    /// [`ConnectorsError::Internal`]. A result the tool itself marked as an
+    /// error (`is_error`) is returned as it came, for the caller to read.
+    fn call_tool(
+        &self,
+        connection: &McpHandle,
+        tool: &str,
+        arguments: serde_json::Value,
+    ) -> impl Future<Output = Result<CallToolResult>> + Send;
 
     /// The upstream call for the sandbox proxy. Takes proof the session may
     /// reach it. For an app the user cannot use yet
@@ -136,6 +156,11 @@ pub trait ConnectionManagementService: Send + Sync + 'static {
         key: &ConnectorKey,
     ) -> impl Future<Output = Result<()>> + Send;
 }
+
+/// The longest [`McpConnectionsService::call_tool`] waits for each step of a
+/// call (dialing, the call, the listing that explains a failure), so a server
+/// that never answers cannot hold its caller.
+pub const CALL_DEADLINE: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// How many users [`ApiConnectionsService::holders`] resolves at once.
 const HOLDER_RESOLUTIONS_IN_FLIGHT: usize = 8;
@@ -565,6 +590,46 @@ fn refusal_error(report: rootcause::Report) -> ConnectorsError {
     }
 }
 
+/// One `tools/call` that fails with [`rmcp::ServiceError::Timeout`] once
+/// [`CALL_DEADLINE`] passes without an answer.
+async fn call_with_deadline(
+    client: &mcp_toolset::McpServer,
+    params: CallToolRequestParams,
+) -> Result<CallToolResult, rmcp::ServiceError> {
+    let mut options = rmcp::service::PeerRequestOptions::no_options();
+    options.timeout = Some(CALL_DEADLINE);
+    let response = client
+        .peer()
+        .send_request_with_option(
+            rmcp::model::ClientRequest::CallToolRequest(rmcp::model::CallToolRequest::new(params)),
+            options,
+        )
+        .await?
+        .await_response()
+        .await?;
+    match response {
+        rmcp::model::ServerResult::CallToolResult(result) => Ok(result),
+        _ => Err(rmcp::ServiceError::UnexpectedResponse),
+    }
+}
+
+/// What kind of failure a tool call was, without the server's message, which
+/// can quote the call's arguments.
+fn service_error_kind(error: &rmcp::ServiceError) -> String {
+    match error {
+        rmcp::ServiceError::McpError(data) => format!("the server answered error {}", data.code.0),
+        rmcp::ServiceError::TransportSend(_) | rmcp::ServiceError::TransportClosed => {
+            "the transport failed".to_owned()
+        }
+        rmcp::ServiceError::Timeout { .. } => "the call timed out".to_owned(),
+        rmcp::ServiceError::Cancelled { .. } => "the call was cancelled".to_owned(),
+        rmcp::ServiceError::UnexpectedResponse => {
+            "the server sent an unexpected response".to_owned()
+        }
+        _ => "the call failed".to_owned(),
+    }
+}
+
 impl McpConnectionsService for Connectors {
     #[tracing::instrument(name = "connectors.mcp_connections", skip_all, err, fields(connections = tracing::field::Empty, connect_catalog_down = tracing::field::Empty))]
     async fn connections(&self, user: &MacroUserIdStr<'static>) -> Result<McpConnections> {
@@ -614,6 +679,68 @@ impl McpConnectionsService for Connectors {
         tracing::Span::current().record("dialed", servers.len());
 
         UserMcpTools::new(RemoteMcpToolSet::from_connected(servers, None).await)
+    }
+
+    // Arguments and results are content: never span fields or logs.
+    #[tracing::instrument(name = "connectors.call_tool", skip_all, err, fields(connector = %connection.key(), tool = %tool, is_error = tracing::field::Empty))]
+    async fn call_tool(
+        &self,
+        connection: &McpHandle,
+        tool: &str,
+        arguments: serde_json::Value,
+    ) -> Result<CallToolResult> {
+        let serde_json::Value::Object(arguments) = arguments else {
+            return Err(rootcause::report!("tool arguments must be a JSON object").into());
+        };
+        // The source names a refusal by its own key (an overlaid app's
+        // server); the caller knows the connection by the handle's.
+        let timed_out = || ConnectorsError::TimedOut {
+            connector: connection.key().clone(),
+            tool: tool.to_owned(),
+        };
+        let client = tokio::time::timeout(CALL_DEADLINE, connection.connection().dial())
+            .await
+            .map_err(|_| timed_out())?
+            .map_err(|report| match refusal_error(report) {
+                ConnectorsError::NeedsReauth(_) => {
+                    ConnectorsError::NeedsReauth(connection.key().clone())
+                }
+                ConnectorsError::NotFound(_) => ConnectorsError::NotFound(connection.key().clone()),
+                error => error,
+            })?;
+        let called = call_with_deadline(
+            &client,
+            CallToolRequestParams::new(tool.to_owned()).with_arguments(arguments),
+        )
+        .await;
+        let answer = match called {
+            Ok(result) => {
+                tracing::Span::current().record("is_error", result.is_error.unwrap_or(false));
+                Ok(result)
+            }
+            Err(rmcp::ServiceError::Timeout { .. }) => Err(timed_out()),
+            // A server answers a tool it does not list with an error of its
+            // own choosing, so only its listing tells unknown from failed.
+            Err(error) => {
+                match tokio::time::timeout(CALL_DEADLINE, client.list_all_tools()).await {
+                    Err(_) => Err(timed_out()),
+                    Ok(Ok(listed)) if !listed.iter().any(|listed| listed.name == tool) => {
+                        Err(ConnectorsError::ToolNotListed {
+                            connector: connection.key().clone(),
+                            tool: tool.to_owned(),
+                        })
+                    }
+                    Ok(_) => Err(rootcause::report!(
+                        "the MCP tool call failed: {}",
+                        service_error_kind(&error)
+                    )
+                    .into()),
+                }
+            }
+        };
+        let _ = client.cancel().await;
+
+        answer
     }
 
     #[tracing::instrument(name = "connectors.upstream", skip_all, err, fields(connector = %permitted.key()))]

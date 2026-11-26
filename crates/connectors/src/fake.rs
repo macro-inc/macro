@@ -14,11 +14,12 @@ use crate::domain::ports::{
 };
 use crate::domain::service::Connectors;
 use macro_user_id::user_id::MacroUserIdStr;
-use source::{FakeRow, FakeSource, FakeStore, SharedStore, lock};
+use rmcp::model::CallToolResult;
+use source::{FakeDial, FakeRow, FakeServe, FakeSource, FakeStore, SharedStore, lock};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-pub use source::ApiCall;
+pub use source::{ApiCall, McpCall};
 
 pub(crate) mod source;
 
@@ -32,6 +33,9 @@ pub struct FakeConnection {
     tools: Vec<String>,
     response: (http::StatusCode, String),
     in_turn: Vec<ApiResponse>,
+    tool_answers: HashMap<String, Vec<CallToolResult>>,
+    dial: FakeDial,
+    served_by: Option<FakeServe>,
 }
 
 #[derive(Clone, Debug)]
@@ -63,6 +67,9 @@ impl FakeConnection {
             tools: Vec::new(),
             response: (http::StatusCode::OK, "{}".to_owned()),
             in_turn: Vec::new(),
+            tool_answers: HashMap::new(),
+            dial: FakeDial::Connects,
+            served_by: None,
         }
     }
 
@@ -87,6 +94,64 @@ impl FakeConnection {
     /// The tools its MCP server lists. Calling one answers `<name>:<tool>`.
     pub fn with_tools(mut self, tools: &[&str]) -> Self {
         self.tools = tools.iter().map(|tool| (*tool).to_owned()).collect();
+        self
+    }
+
+    /// Its MCP server lists `tool` and answers its calls with `results`, one
+    /// per call in order, then `<name>:<tool>`: a scripted MCP source for a
+    /// test of a client that makes fixed tool calls.
+    pub fn answering_tool(
+        mut self,
+        tool: &str,
+        results: impl IntoIterator<Item = CallToolResult>,
+    ) -> Self {
+        if !self.tools.iter().any(|listed| listed == tool) {
+            self.tools.push(tool.to_owned());
+        }
+        self.tool_answers
+            .entry(tool.to_owned())
+            .or_default()
+            .extend(results);
+        self
+    }
+
+    /// Its MCP server is `server`, a test's own handler (a stand-in for a
+    /// vendor's server), served in process on every dial. Its calls are not
+    /// recorded in [`FakeConnectors::mcp_calls`] and the scripted tools are
+    /// not listed.
+    pub fn served_by<Server>(mut self, server: Server) -> Self
+    where
+        Server: rmcp::ServerHandler + Clone,
+    {
+        self.served_by = Some(FakeServe(Arc::new(move |session| {
+            let server = server.clone();
+            Box::pin(async move {
+                if let Ok(running) = rmcp::ServiceExt::serve(server, session).await {
+                    let _ = running.waiting().await;
+                }
+            })
+        })));
+        self
+    }
+
+    /// Dialing its MCP server fails, as in a transport outage.
+    pub fn unreachable(mut self) -> Self {
+        self.dial = FakeDial::Fails;
+        self
+    }
+
+    /// Dialing its MCP server never finishes, as a server that accepts the
+    /// connection and never answers.
+    pub fn never_answering(mut self) -> Self {
+        self.dial = FakeDial::Hangs;
+        self
+    }
+
+    /// Its server refuses the grant when dialed, as when it revoked the
+    /// refresh token the row still holds: the row reads as working until
+    /// then.
+    pub fn revoked_upstream(mut self) -> Self {
+        self.dial = FakeDial::Revoked;
         self
     }
 
@@ -192,6 +257,7 @@ impl FakeConnectors {
         *lock(&self.store) = FakeStore {
             rows,
             api_calls: Vec::new(),
+            mcp_calls: Vec::new(),
             unreachable: self.unreachable.clone(),
         };
 
@@ -220,6 +286,12 @@ impl FakeConnectors {
             FakeMacroConnectEnabledFlag(self.flags.clone()),
             FakeOverlays(overlays),
         )
+    }
+
+    /// Every MCP tool call the servers of connections built here received,
+    /// in order.
+    pub fn mcp_calls(&self) -> Vec<McpCall> {
+        lock(&self.store).mcp_calls.clone()
     }
 
     /// Every API call made through connectors built here, in order.
@@ -277,6 +349,15 @@ impl FakeConnectors {
         row.in_turn = Arc::new(std::sync::Mutex::new(
             connection.in_turn.iter().cloned().collect(),
         ));
+        row.tool_answers = Arc::new(std::sync::Mutex::new(
+            connection
+                .tool_answers
+                .iter()
+                .map(|(tool, results)| (tool.clone(), results.iter().cloned().collect()))
+                .collect(),
+        ));
+        row.dial = connection.dial;
+        row.served_by = connection.served_by.clone();
 
         row
     }

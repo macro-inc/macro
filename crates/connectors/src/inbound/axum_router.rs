@@ -200,10 +200,11 @@ impl IntoResponse for ConnectorsHttpError {
         let status = match &self {
             Self::InvalidKey(_) | Self::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             Self::Service(error) => match error {
-                ConnectorsError::UnknownApp(_) | ConnectorsError::NotFound(_) => {
-                    StatusCode::NOT_FOUND
-                }
+                ConnectorsError::UnknownApp(_)
+                | ConnectorsError::NotFound(_)
+                | ConnectorsError::ToolNotListed { .. } => StatusCode::NOT_FOUND,
                 ConnectorsError::NeedsReauth(_) => StatusCode::CONFLICT,
+                ConnectorsError::TimedOut { .. } => StatusCode::GATEWAY_TIMEOUT,
                 ConnectorsError::NonPublicServer(_) | ConnectorsError::EmptyName => {
                     StatusCode::BAD_REQUEST
                 }
