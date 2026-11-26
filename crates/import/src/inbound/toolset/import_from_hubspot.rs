@@ -66,6 +66,9 @@ impl<T: WorkspaceImporter> AsyncTool<ImportToolContext<T>> for ImportFromHubspot
             },
         }
         .map_err(|error| match error {
+            ImportError::NotRolledOut(source) => {
+                tool_error(super::not_rolled_out_message(source), error)
+            }
             ImportError::CrmAccessRequired => tool_error(
                 "Importing into the CRM needs a team whose CRM the user may use. Tell them to join a team or ask an admin for CRM access.".into(),
                 error,

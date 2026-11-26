@@ -60,3 +60,24 @@ fn the_tool_asks_to_start_only_a_ready_plan() {
         "{schema}"
     );
 }
+
+#[test]
+fn a_source_not_rolled_out_is_refused_calmly_and_without_retrying() {
+    let text = super::super::not_rolled_out_message(ImportSource::Hubspot);
+
+    assert!(
+        text.starts_with(
+            "The HubSpot import is in early access and not turned on for this account yet."
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains("Nothing is wrong with the user's HubSpot connection or data"),
+        "{text}"
+    );
+    assert!(text.contains("do not retry"), "{text}");
+    assert!(
+        text.contains("do not recreate their HubSpot records with other tools"),
+        "{text}"
+    );
+}

@@ -91,6 +91,20 @@ impl ImportSource {
         ]
     }
 
+    /// The feature flag this source's import waits on while it is rolled
+    /// out, shared with the web registry and the connectors listing; `None`
+    /// for an import that is on for everyone. Every source decides here:
+    /// there is no default.
+    pub fn rollout_flag(self) -> Option<&'static str> {
+        match self {
+            ImportSource::Linear
+            | ImportSource::Jira
+            | ImportSource::Notion
+            | ImportSource::Slack
+            | ImportSource::Hubspot => None,
+        }
+    }
+
     /// This source's app in the connectors catalog. Slack's `slack_v2` is
     /// the same app; the connectors services decide which connection
     /// counts.

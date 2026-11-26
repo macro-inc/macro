@@ -33,7 +33,9 @@ Pipedream, Macro Connect) or tell which one holds a connection.
 - `src/composition.rs`: `build`/`compose`, the only constructor of adapters.
   Call one once per process; the flag, overlay and Connect catalog caches
   live in what it returns. It re-exports the config types hosts fill in.
-- `src/inbound/`: `axum_router.rs` (`/connectors`), `callbacks.rs` (the
+- `src/inbound/`: `axum_router.rs` (`/connectors`; `importAvailable` from
+  the host's `Importable`, where `with_flagged` imports show only for users
+  whose flag `with_import_flags` reads as on), `callbacks.rs` (the
   fixed-path routes vendors call: MCP OAuth callback and client metadata,
   Connect consent, Pipedream webhook), `toolset.rs` (`DiscoverConnectors`,
   `ConnectMcpServer`; `run` keeps refusals and outages apart for hosts that

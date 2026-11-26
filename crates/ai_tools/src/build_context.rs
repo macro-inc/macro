@@ -704,6 +704,7 @@ pub async fn build_tool_service_context_from_env(
             .with_hubspot(Arc::new(import_hubspot::outbound::client::HubspotApi::new(
                 connections,
             )))
+            .with_import_rollout(import_rollout(side_effect_clients.feature_flags.clone()))
             .with_crm_writer(Arc::new(crate::CrmRecordWriter::new(
                 &crm_tool_context,
                 &pipeline_tool_context,
@@ -814,4 +815,15 @@ pub async fn build_tool_service_context_from_env(
 /// every web call fails with a "not configured" error.
 pub fn build_web_search_provider_from_env() -> Arc<dyn web_search::domain::ports::SearchProvider> {
     Arc::new(web_search::outbound::tavily::TavilyClient::from_env())
+}
+
+/// Which users may plan an import still being rolled out: its flag where the
+/// host has a flag client, off where it has none.
+pub fn import_rollout(
+    flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
+) -> Arc<dyn import::domain::ports::ImportRollout> {
+    match flags {
+        Some(flags) => Arc::new(import::outbound::import_rollout::FlaggedImports(flags)),
+        None => Arc::new(import::domain::ports::ImportsOff),
+    }
 }

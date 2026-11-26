@@ -983,7 +983,9 @@ pub fn failure_kind(error: &ImportError) -> RunErrorKind {
         | ImportError::ImportRunning
         | ImportError::AccessCheck(_)
         | ImportError::RunNotReviewable(_)
-        | ImportError::CrmAccessRequired => RunErrorKind::Internal,
+        | ImportError::CrmAccessRequired
+        // A run adopted after its source's rollout was turned off.
+        | ImportError::NotRolledOut(_) => RunErrorKind::Internal,
         ImportError::NotStarted(error) => failure_kind(error),
         // Usage refusals and tracker failures often arrive wrapped.
         ImportError::Other(error) => {

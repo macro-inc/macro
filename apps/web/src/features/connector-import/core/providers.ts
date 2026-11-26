@@ -1,3 +1,4 @@
+import type { RemoteFlag } from '@core/constant/featureFlags';
 import type { ImportSource } from '@service-cognition/import';
 import type { Component, JSX } from 'solid-js';
 
@@ -18,6 +19,8 @@ export type ImportProvider = {
    * and teammates are never handed a duplicate.
    */
   ledger?: ImportSource;
+  /** A rollout flag the row waits on; without it the row is always offered. */
+  flag?: RemoteFlag;
 };
 
 type ImportCategoryCopy = {

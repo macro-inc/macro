@@ -322,6 +322,7 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections
     >,
     hubspot: Option<Arc<dyn import_hubspot::domain::HubspotConnections>>,
     crm_writer: Option<Arc<dyn crate::domain::ports::CrmImportWriter>>,
+    rollout: Arc<dyn crate::domain::ports::ImportRollout>,
     slack_source: Arc<W>,
     mcp_tools: Arc<S>,
     creator: Arc<C>,
@@ -370,6 +371,7 @@ impl<R: Clone, S, C, W: SlackWorkspaceSource, N> Clone for ImportServiceImpl<R, 
             trackers: self.trackers.clone(),
             hubspot: self.hubspot.clone(),
             crm_writer: self.crm_writer.clone(),
+            rollout: self.rollout.clone(),
             slack_source: self.slack_source.clone(),
             mcp_tools: self.mcp_tools.clone(),
             creator: self.creator.clone(),
@@ -398,6 +400,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
             trackers: Default::default(),
             hubspot: None,
             crm_writer: None,
+            rollout: Arc::new(crate::domain::ports::ImportsOff),
             slack_source: Arc::new(NoSlackSource),
             mcp_tools,
             creator,
@@ -424,6 +427,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             trackers: self.trackers,
             hubspot: self.hubspot,
             crm_writer: self.crm_writer,
+            rollout: self.rollout,
             mcp_tools: self.mcp_tools,
             creator: self.creator,
             recorder: self.recorder,
@@ -454,6 +458,16 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
         reader: Arc<dyn import_hubspot::domain::HubspotConnections>,
     ) -> Self {
         self.hubspot = Some(reader);
+        self
+    }
+
+    /// Decide which users may plan an import still being rolled out
+    /// through `rollout`. Hosts without it leave every flagged import off.
+    pub fn with_import_rollout(
+        mut self,
+        rollout: Arc<dyn crate::domain::ports::ImportRollout>,
+    ) -> Self {
+        self.rollout = rollout;
         self
     }
 
@@ -501,6 +515,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             trackers: self.trackers,
             hubspot: self.hubspot,
             crm_writer: self.crm_writer,
+            rollout: self.rollout,
             mcp_tools: self.mcp_tools,
             creator: self.creator,
             recorder: self.recorder,

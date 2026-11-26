@@ -63,6 +63,10 @@ pub enum ImportError {
     /// The connected HubSpot portal could not be read.
     #[error(transparent)]
     Hubspot(#[from] import_hubspot::domain::HubspotError),
+    /// The source's import is still being rolled out and is not turned on
+    /// for this user (see [`ImportRollout`]).
+    #[error("the {} import is not turned on for this account yet", .0.label())]
+    NotRolledOut(crate::domain::models::ImportSource),
     /// A CRM import needs a team whose CRM the user may use.
     #[error("importing into the CRM needs a team with CRM access")]
     CrmAccessRequired,
@@ -1583,6 +1587,37 @@ pub trait WrittenObjects: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         objects: &[WrittenObject],
     ) -> impl Future<Output = Result<Vec<WrittenObject>>> + Send;
+}
+
+/// Whether a source's import is rolled out to a user. Object-safe
+/// (`#[async_trait]`) so the import service holds it without a type
+/// parameter.
+#[async_trait::async_trait]
+pub trait ImportRollout: Send + Sync + 'static {
+    /// Whether `user` may plan an import from `source`.
+    async fn enabled_for(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: crate::domain::models::ImportSource,
+    ) -> bool;
+}
+
+/// The rollout of a host with no feature flag client: imports waiting on a
+/// flag ([`ImportSource::rollout_flag`]) are off for everyone, every other
+/// import is on.
+///
+/// [`ImportSource::rollout_flag`]: crate::domain::models::ImportSource::rollout_flag
+pub struct ImportsOff;
+
+#[async_trait::async_trait]
+impl ImportRollout for ImportsOff {
+    async fn enabled_for(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        source: crate::domain::models::ImportSource,
+    ) -> bool {
+        source.rollout_flag().is_none()
+    }
 }
 
 /// A team's CRM as a CRM import writes it.

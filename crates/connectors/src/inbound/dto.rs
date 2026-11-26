@@ -167,7 +167,11 @@ pub enum ImportSurface {
 
 /// The apps Macro can import from, as the host declares them.
 #[derive(Clone, Debug, Default)]
-pub struct Importable(HashMap<ConnectorId, ImportSurface>);
+pub struct Importable {
+    apps: HashMap<ConnectorId, ImportSurface>,
+    /// Apps importable only for users with a feature flag on, by flag key.
+    flagged: HashMap<ConnectorId, (ImportSurface, &'static str)>,
+}
 
 impl Importable {
     /// No app can be imported from.
@@ -177,8 +181,40 @@ impl Importable {
 
     /// `app` can be imported from through `surface`.
     pub fn with(mut self, app: ConnectorId, surface: ImportSurface) -> Self {
-        self.0.insert(app, surface);
+        self.apps.insert(app, surface);
         self
+    }
+
+    /// `app` can be imported from through `surface`, but only by users with
+    /// the feature flag `flag` on: an import still being rolled out.
+    pub fn with_flagged(
+        mut self,
+        app: ConnectorId,
+        surface: ImportSurface,
+        flag: &'static str,
+    ) -> Self {
+        self.flagged.insert(app, (surface, flag));
+        self
+    }
+
+    /// The flags some app's import waits on.
+    pub(crate) fn flags(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.flagged.values().map(|(_, flag)| *flag)
+    }
+
+    /// What one user can import from: every app, and the flagged ones whose
+    /// flag `enabled` says is on for them.
+    pub(crate) fn for_user(&self, enabled: impl Fn(&str) -> bool) -> Self {
+        let mut apps = self.apps.clone();
+        for (app, (surface, flag)) in &self.flagged {
+            if enabled(flag) {
+                apps.insert(app.clone(), *surface);
+            }
+        }
+        Self {
+            apps,
+            flagged: HashMap::new(),
+        }
     }
 
     /// Whether the connector's connection provides what its import reads.
@@ -186,7 +222,7 @@ impl Importable {
         let ConnectorKey::App(app) = connector.key() else {
             return false;
         };
-        match self.0.get(app) {
+        match self.apps.get(app) {
             Some(ImportSurface::Mcp) => connector.surfaces().mcp(),
             Some(ImportSurface::Api) => connector.surfaces().api(),
             None => false,

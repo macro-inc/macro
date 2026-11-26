@@ -537,6 +537,17 @@ offers no sharing choice. Rows are keyed `{portal}:{type}:{id}` (pipeline ids
 are words, record ids numbers), so re-runs and teammates dedupe through the
 ledger and the `import_entity_hubspot_team_object_key` index.
 
+An import still being rolled out waits on a feature flag: `ImportSource::rollout_flag`
+(an exhaustive match, `None` for an import on for everyone) names it, the
+host's `ImportRollout` (`with_import_rollout`: `outbound/import_rollout.rs`
+`FlaggedImports` over its flag client, `ImportsOff` without one, where a
+failed flag load is off) decides per user, and `check_crm_access` and
+`plan_crm` refuse with `ImportError::NotRolledOut(source)` before reading
+the source, so a run adopted after its flag went off reads nothing. The CRM
+tools answer it with `not_rolled_out_message`, calm and without a retry. The
+same key gates the web catalog row (`ImportProvider.flag`) and the
+connectors listing (`Importable::with_flagged`).
+
 Plans are fully decided when staged: deals with no company or no live pipeline
 are `skip` with a reason; everything Macro CRM cannot hold is a typed
 `CrmLoss` on the row (its serialized names are stored: never rename one),

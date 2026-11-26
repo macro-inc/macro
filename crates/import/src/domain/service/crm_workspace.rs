@@ -184,6 +184,7 @@ where
     /// Refuse before a run starts when the user may not write the team's CRM
     /// or has not connected this source, so neither leaves a failed import.
     pub(super) async fn check_crm_access(&self, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.check_rolled_out(user).await?;
         self.crm_writer()?
             .crm_team(user)
             .await?
@@ -194,6 +195,17 @@ where
             | ImportSource::Jira
             | ImportSource::Notion
             | ImportSource::Slack => Err(NOT_AVAILABLE),
+        }
+    }
+
+    /// Refuse a source whose import is not rolled out to the user. Checked
+    /// before a run starts and again before planning reads the source, so a
+    /// run adopted after its flag went off reads nothing.
+    async fn check_rolled_out(&self, user: &MacroUserIdStr<'static>) -> Result<()> {
+        if self.rollout.enabled_for(user, self.workspace_source).await {
+            Ok(())
+        } else {
+            Err(ImportError::NotRolledOut(self.workspace_source))
         }
     }
 
@@ -209,6 +221,7 @@ where
     where
         Read: Future<Output = Result<plan::CrmInventory>>,
     {
+        self.check_rolled_out(user).await?;
         let writer = self.crm_writer()?;
         let team = writer
             .crm_team(user)

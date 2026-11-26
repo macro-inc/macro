@@ -64,7 +64,8 @@ use time_tracking::inbound::toolset::time_tracking_toolset;
 
 pub use build_context::{
     build_cognition_tool_context, build_image_generator_from_env,
-    build_tool_service_context_from_env, build_web_search_provider_from_env, service_feature_flags,
+    build_tool_service_context_from_env, build_web_search_provider_from_env, import_rollout,
+    service_feature_flags,
 };
 pub use crm_import::CrmRecordWriter;
 pub use deferred::{DeferredToolSet, deferred_tools};

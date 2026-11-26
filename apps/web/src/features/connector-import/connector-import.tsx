@@ -6,7 +6,7 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { createSignal, type JSX, Show, Suspense } from 'solid-js';
-import { IMPORT_CATEGORIES } from './core/catalog';
+import { IMPORT_CATEGORIES, offeredCategory } from './core/catalog';
 import type { ImportCategory } from './core/providers';
 import { importPromotionId } from './primitives/promotion';
 import type { ImportAlternative } from './views/import-dialog';
@@ -52,7 +52,7 @@ export function ConnectorImportPromotion(props: {
   secondaryAction?: PromoAction;
   class?: string;
 }): JSX.Element {
-  const config = () => IMPORT_CATEGORIES[props.category];
+  const config = () => offeredCategory(IMPORT_CATEGORIES[props.category]);
   const dialogConfig = config;
   const [open, setOpen] = createSignal(false);
   // The dialog's code loads on first open (and is fetched ahead on hover).
