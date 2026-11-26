@@ -257,7 +257,11 @@ Within about 30 seconds the backend registers a Granola webhook at the widest
 scope the key allows, and removing or disabling the connection stops sync. Notes
 whose first summary is generated, edited, or shared after that are imported as
 private calls about a minute after Granola finishes the summary, and appear in
-Soup lists without a refresh; history is not backfilled. Imported calls appear
+Soup lists without a refresh. Once the webhook is registered, earlier notes the
+key can see are imported too, newest first, about 30 notes at a time; deleted
+notes are skipped, and a note already imported by a webhook updates the same call
+rather than adding one. Connecting Granola again repeats that backfill without
+duplicating calls. Imported calls appear
 in `All` and `Attended`, never in a channel's `Calls` tab, and open in the
 normal call detail with title, summary, attendees
 (shown as guests), and transcript but no recording. Rename and delete do not
