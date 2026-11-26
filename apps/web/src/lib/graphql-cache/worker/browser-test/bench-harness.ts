@@ -7,6 +7,10 @@
  */
 import { stringifyDocument } from '@urql/core';
 import { createRoot } from 'solid-js';
+import {
+  createPredicateQuery,
+  type PredicateQueryRequest,
+} from '../../../queries/soup/graphql/create-predicate-query';
 import * as generated from '../../../service-clients/service-storage/graphql/generated/graphql';
 import { selectRecords } from '../../exchange/record-selection';
 import type { CacheHost } from '../../host/types';
@@ -23,10 +27,6 @@ import type {
   CacheTelemetryObservation,
   CacheTelemetryRecorderLike,
 } from '../../telemetry';
-import {
-  createPredicateQuery,
-  type PredicateQueryRequest,
-} from '../../../queries/soup/graphql/create-predicate-query';
 import mailTabs from './bench-mail-tabs.json';
 
 const resultElement = document.querySelector<HTMLElement>('#result');
@@ -408,8 +408,9 @@ async function channelPass(viewCount: number, writeCount: number) {
   const target = requireHost();
   const steps: Step[] = [];
   const counts: Record<string, number[]> = {};
-  const count = (name: string, value: number) =>
-    (counts[name] ??= []).push(value);
+  const count = (name: string, value: number) => {
+    counts[name] = [...(counts[name] ?? []), value];
+  };
   let inFlight = 0;
   let reads = 0;
   let rows = 0;
