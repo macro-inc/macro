@@ -27,6 +27,7 @@ const SERVICES: &[&str] = &[
     "email-service",
     "email-suppression",
     "image-proxy-service",
+    "imap-service",
     "lambda-aggregate-frecency",
     "lexical-service",
     "link-sharing",

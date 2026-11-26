@@ -28,6 +28,8 @@ import './monitors/firecracker';
 import './monitors/graphql-soup';
 import './monitors/harness-presence';
 import './monitors/harness-runtimes';
+import './monitors/imap-credentials';
+import './monitors/imap-host-catchup';
 import './monitors/macrodb';
 import './monitors/oauth';
 import './monitors/outlook-sync';

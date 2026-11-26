@@ -37,6 +37,7 @@ same call after the build is the recheck. Teardown calls `Locked::release`.
 
 - Append new `Port` variants: offsets are declaration order, and inserting one
   moves every running named instance's later ports.
+- `Port::Imap` reserves the internal IMAP engine API without exposing it through the browser proxy.
 - Changing `fnv1a`, `WINDOW_START`, `STRIDE` or the block layout moves existing
   instances; `layout/test.rs` pins the values.
 - Registry tests run the test binary again as child processes

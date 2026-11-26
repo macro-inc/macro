@@ -48,6 +48,7 @@ process; the harness's OAuth broker accepts its `/mcp` URL as a token resource.
 
 ## Gotchas
 
+- `ImapServiceUrl` uses private Cloud Map DNS in dev/prod; never add it to public browser or SDK transport maps.
 - The override env var name is derived from the struct name
   (`CalendarServiceUrl` → `OVERRIDE_CALENDAR_SERVICE_URL`); renaming a struct
   silently changes what override callers must set.

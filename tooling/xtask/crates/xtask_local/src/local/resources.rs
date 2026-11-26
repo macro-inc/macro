@@ -48,6 +48,9 @@ pub const CODEX_OAUTH_KMS_ALIAS: &str = "alias/macro-local-codex-oauth";
 /// Key the public MCP OAuth broker encrypts its authorization codes' tokens with.
 pub const MCP_OAUTH_KMS_ALIAS: &str = "alias/macro-local-mcp-oauth";
 
+/// Local key for link-bound IMAP/SMTP mailbox credentials.
+pub const IMAP_CREDENTIAL_KMS_ALIAS: &str = "alias/macro-local-imap-credentials";
+
 /// Key the authentication service encrypts Microsoft refresh tokens' data
 /// keys with.
 pub const MICROSOFT_TOKEN_KMS_ALIAS: &str = "alias/macro-local-microsoft-token";

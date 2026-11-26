@@ -651,6 +651,12 @@ service_url! {
             dev: "https://dev-gateway.macro.com/email",
             prod: "https://gateway.macro.com/email",
         },
+        /// Internal IMAP/SMTP engine API; every operation requires service authentication.
+        pub ImapServiceUrl {
+            local: "http://localhost:8113",
+            dev: "http://engine.imap-dev.macro.internal:8080",
+            prod: "http://engine.imap-prod.macro.internal:8080",
+        },
         /// Calendar service API URL. The calendar write authority once
         /// `calendar_service` owns provider mutations; its API is mounted at
         /// the root and under the `/calendar` gateway prefix.
