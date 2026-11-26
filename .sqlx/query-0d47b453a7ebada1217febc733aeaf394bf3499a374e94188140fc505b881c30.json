@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_run AS run\n            SET status = 'importing', error = NULL, error_kind = NULL, updated_at = NOW(),\n                lease_owner = NULL, lease_expires_at = NULL, adoptions = 0,\n                write_review_id = $3\n            FROM import_run AS prior\n            WHERE prior.user_id = run.user_id AND prior.source = run.source\n              AND run.user_id = $1 AND run.source = $2\n              AND ((run.status = 'ready'\n                    AND (run.review_id = $3\n                         OR (run.review_id IS NULL AND EXISTS (\n                             SELECT 1 FROM import_entity AS entity\n                             WHERE entity.review_id = $3 AND entity.user_id = $1\n                               AND entity.source = $2 AND entity.status = 'staged'\n                         ))))\n                   -- A failed write, retried by the review it admitted, once\n                   -- no earlier writer can still hold the run.\n                   OR (run.status = 'failed' AND run.write_review_id = $3\n                       AND (run.lease_expires_at IS NULL OR run.lease_expires_at < NOW())))\n            RETURNING prior.status::text AS \"status!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0d47b453a7ebada1217febc733aeaf394bf3499a374e94188140fc505b881c30"
+}

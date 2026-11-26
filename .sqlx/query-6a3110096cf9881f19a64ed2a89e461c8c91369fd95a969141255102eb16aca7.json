@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT source, status::text AS \"status!\", error, updated_at,\n                   CASE WHEN status = 'running' THEN scanned_pages END AS scanned_pages,\n                   CASE WHEN status = 'running' THEN scanned_data_sources END\n                       AS scanned_data_sources,\n                   review_id, review_session_id\n            FROM import_run WHERE user_id = $1\n            ORDER BY source\n            ",
+  "query": "\n            SELECT source, status::text AS \"status!\", error, error_kind, updated_at,\n                   CASE WHEN status = 'running' THEN scanned_pages END AS scanned_pages,\n                   CASE WHEN status = 'running' THEN scanned_data_sources END\n                       AS scanned_data_sources,\n                   review_id, review_session_id\n            FROM import_run WHERE user_id = $1\n            ORDER BY source\n            ",
   "describe": {
     "columns": [
       {
@@ -20,26 +20,31 @@
       },
       {
         "ordinal": 3,
+        "name": "error_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "scanned_pages",
         "type_info": "Int4"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "scanned_data_sources",
         "type_info": "Int4"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "review_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "review_session_id",
         "type_info": "Uuid"
       }
@@ -53,6 +58,7 @@
       false,
       null,
       true,
+      true,
       false,
       null,
       null,
@@ -60,5 +66,5 @@
       true
     ]
   },
-  "hash": "72be600cf8cb00544625d9f2af06e998b0312decf07fc2c926c5fee2494ec214"
+  "hash": "6a3110096cf9881f19a64ed2a89e461c8c91369fd95a969141255102eb16aca7"
 }

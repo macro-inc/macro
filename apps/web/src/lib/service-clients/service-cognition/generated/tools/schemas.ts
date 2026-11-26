@@ -11590,6 +11590,40 @@ export const HubspotImportResponse = z.object({
       ])
       .optional(),
     error: z.union([z.string(), z.null()]).optional(),
+    errorKind: z
+      .union([
+        z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('not_found'),
+            z.literal('forbidden'),
+            z.literal('access_lost'),
+            z.literal('connection_unavailable'),
+            z.literal('not_connected'),
+            z.literal('rate_limited'),
+            z.literal('unreachable'),
+            z.literal('usage_refused'),
+            z.literal('interrupted'),
+            z.literal('internal'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        z.null(),
+      ])
+      .optional(),
     scanned: z
       .union([
         z.object({
@@ -12094,6 +12128,40 @@ export const TrackerImportResponse = z.object({
       ])
       .optional(),
     error: z.union([z.string(), z.null()]).optional(),
+    errorKind: z
+      .union([
+        z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('not_found'),
+            z.literal('forbidden'),
+            z.literal('access_lost'),
+            z.literal('connection_unavailable'),
+            z.literal('not_connected'),
+            z.literal('rate_limited'),
+            z.literal('unreachable'),
+            z.literal('usage_refused'),
+            z.literal('interrupted'),
+            z.literal('internal'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        z.null(),
+      ])
+      .optional(),
     scanned: z
       .union([
         z.object({
@@ -12651,6 +12719,40 @@ export const ImportFromNotionResponse = z.object({
       ])
       .optional(),
     error: z.union([z.string(), z.null()]).optional(),
+    errorKind: z
+      .union([
+        z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('not_found'),
+            z.literal('forbidden'),
+            z.literal('access_lost'),
+            z.literal('connection_unavailable'),
+            z.literal('not_connected'),
+            z.literal('rate_limited'),
+            z.literal('unreachable'),
+            z.literal('usage_refused'),
+            z.literal('interrupted'),
+            z.literal('internal'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        z.null(),
+      ])
+      .optional(),
     scanned: z
       .union([
         z.object({

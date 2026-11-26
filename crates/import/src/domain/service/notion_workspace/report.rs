@@ -44,7 +44,17 @@ pub(in crate::domain::service) fn report(
 
     let mut report = NotionImportReport {
         status: run.map(|run| run.status),
-        error: run.and_then(|run| run.error.clone()),
+        // Only text written with a kind is Macro's; anything else may be a
+        // provider's text from before kinds were recorded, so the card
+        // shows its generic copy instead (a completed run's summary is
+        // rebuilt below).
+        error: run
+            .filter(|run| {
+                run.error_kind.is_some()
+                    || (run.source == ImportSource::Hubspot && run.status == RunStatus::Completed)
+            })
+            .and_then(|run| run.error.clone()),
+        error_kind: run.and_then(|run| run.error_kind),
         scanned: run
             .filter(|run| run.status == RunStatus::Running)
             .and_then(|run| run.scanned),
@@ -345,7 +355,7 @@ pub(in crate::domain::service) fn report(
     // A settled run can still carry the completion summary from an older writer.
     if run.is_some_and(|run| {
         run.source != ImportSource::Hubspot && run.status == RunStatus::Completed
-    }) && let Some(error) = report.error.as_deref()
+    }) && let Some(error) = run.and_then(|run| run.error.as_deref())
         && let Some((count, summary)) = error.split_once(' ')
         && let Ok(count) = count.parse::<usize>()
         && (error == partial_write_error(count)

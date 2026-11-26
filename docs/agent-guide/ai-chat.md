@@ -2841,7 +2841,18 @@ until the agent starts its reply. This behaves the same on mobile. Approving an
 import plan only starts its write, so no **Responding** shows until the write
 ends; the card shows its final state and the agent's reply follows. Verify that
 sibling pages keep their review order while writing and after completion, even
-for a large plan staged together. A plan still being made when it was presented also wakes the agent once it is ready.
+for a large plan staged together. A plan
+still being made when it was presented also wakes the agent once it is ready.
+An import review cannot be presented for a plan that failed, finished, or was
+never made: the agent is told why (for example, the source lost access), and
+nothing is saved or shown. If the plan fails while the review is being saved,
+the review stays saved, dismissed with the reason, and is never shown. A card
+whose plan fails after it was presented shows **Couldn't plan this import.**
+with what happened (from the failure's kind, never the raw error) and
+**Dismiss**, plus **Reconnect <source>** when the connection was revoked,
+expired or unusable. Dismissing it keeps that line and shows no plan rows.
+Approving a plan that is no longer ready (it failed, or a newer plan replaced
+it) is refused on the card and in chat, and nothing is written.
 These events create no user bubble; events without an existing card use a
 quiet timeline row.
 The agent can read final drafts and confirmed outcomes through **GetReview**.

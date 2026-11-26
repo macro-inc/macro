@@ -28,7 +28,8 @@ use uuid::Uuid;
 use super::{ImportServiceImpl, NOTION_IMPORT_MODEL, NotionWorkspaceImporter};
 use crate::domain::models::{
     ImportEntity, ImportKind, ImportSource, ImportStatus, NotionDecision, NotionImportReport,
-    NotionJob, NotionSharing, NotionWriteChoices, RunStatus, ScanCounts,
+    NotionJob, NotionSharing, NotionWriteChoices, RunErrorKind, RunStatus, ScanCounts,
+    explain_failure,
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility, NotionPlanRepo,
@@ -146,7 +147,9 @@ impl NotionApi for NoNotionApi {
     }
 }
 
-/// Run states a new plan or write may start from.
+/// Runs a new plan may replace. Never a write's guard: writing starts only
+/// from the review's own ready plan, or the failed write it admitted
+/// (`start_reviewed_write`).
 const SETTLED: [RunStatus; 4] = [
     RunStatus::Ready,
     RunStatus::Completed,
@@ -299,6 +302,44 @@ where
     W: SlackWorkspaceSource,
     N: NotionConnections,
 {
+    /// The report once a write has started. The write is running, so a
+    /// failed read must not say it did not start.
+    pub(super) async fn report_after_start(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> NotionImportReport {
+        match self.notion_import_report(user).await {
+            Ok(report) => report,
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not read the report of a write that started");
+                NotionImportReport {
+                    status: Some(RunStatus::Importing),
+                    ..NotionImportReport::default()
+                }
+            }
+        }
+    }
+
+    /// Put a run the fence just started back where it started from (`ready`,
+    /// or `failed` for a retried write) when the write could not get going,
+    /// so the same review can approve it again and a failed write never
+    /// reads as a fresh plan.
+    pub(super) async fn reopen_plan(&self, user: &MacroUserIdStr<'static>, from: RunStatus) {
+        if let Err(error) = self
+            .repo
+            .transition_run(
+                user,
+                self.workspace_source,
+                &[RunStatus::Importing],
+                from,
+                None,
+            )
+            .await
+        {
+            tracing::warn!(error = ?error, "could not reopen the import plan");
+        }
+    }
+
     /// Hold the run that just moved to `status` and record its job, so it
     /// survives this process; fails the run when that is not possible.
     pub(super) async fn hold_new_run(
@@ -311,12 +352,13 @@ where
             return Ok(());
         }
         self.repo
-            .transition_run(
+            .transition_reviewed_run(
                 user,
-                self.workspace_source,
                 &[status],
                 RunStatus::Failed,
                 Some(IMPORT_STOPPED),
+                Some(RunErrorKind::Interrupted),
+                |_| None,
             )
             .await?;
         Err(ImportError::NotReady(
@@ -359,15 +401,16 @@ where
                 // Cancelled: the run is `dismissed` already.
                 None => Ok(()),
             };
-            let (to, error) = match &outcome {
-                Ok(()) => (RunStatus::Ready, None),
+            let (to, error, kind) = match &outcome {
+                Ok(()) => (RunStatus::Ready, None, None),
                 Err(error) => {
-                    tracing::warn!(error = ?error, "notion import planning failed");
-                    (RunStatus::Failed, Some(failure_text(error)))
+                    let kind = failure_kind(error);
+                    tracing::warn!(error = ?error, kind = kind.as_ref(), "notion import planning failed");
+                    (RunStatus::Failed, Some(failure_text(error, self.workspace_source)), Some(kind))
                 }
             };
             // A cancelled run is `dismissed` already, so this moves nothing.
-            if let Err(error) = self.end_plan(user, to, error.as_deref()).await {
+            if let Err(error) = self.end_plan(user, to, error.as_deref(), kind).await {
                 tracing::warn!(error = ?error, "could not record the notion planning outcome");
             }
             self.notify(user).await;
@@ -534,27 +577,35 @@ where
             }
             return;
         }
-        let (to, error) = if control.cancel.stopped() || self.cancelled(user).await {
-            (RunStatus::Dismissed, Some("Cancelled".to_owned()))
+        let (to, error, kind) = if control.cancel.stopped() || self.cancelled(user).await {
+            (RunStatus::Dismissed, Some("Cancelled".to_owned()), None)
         } else {
             match &outcome {
-                Ok(0) => (RunStatus::Completed, None),
+                Ok(0) => (RunStatus::Completed, None, None),
                 Ok(failed) if self.workspace_source == ImportSource::Hubspot => (
                     RunStatus::Completed,
                     Some(format!(
                         "{failed} objects could not be imported. Plan again to retry them."
                     )),
+                    None,
                 ),
                 Ok(failed) => (
                     RunStatus::Completed,
                     Some(report::partial_write_error(*failed)),
+                    None,
                 ),
                 Err(error) => {
+                    let kind = failure_kind(error);
                     tracing::warn!(
                         retryable = true,
+                        kind = kind.as_ref(),
                         "notion import write failed; details retained in the report"
                     );
-                    (RunStatus::Failed, Some(failure_text(error)))
+                    (
+                        RunStatus::Failed,
+                        Some(failure_text(error, self.workspace_source)),
+                        Some(kind),
+                    )
                 }
             }
         };
@@ -577,7 +628,7 @@ where
                     .await;
             }
         }
-        if let Err(error) = self.end_write(user, to, error.as_deref()).await {
+        if let Err(error) = self.end_write(user, to, error.as_deref(), kind).await {
             tracing::warn!(error = ?error, "could not record the notion write outcome");
         }
         if self.workspace_source != ImportSource::Notion {
@@ -890,30 +941,138 @@ impl Place<'_> {
     }
 }
 
-/// A failure as the user reads it on the run or the row.
-fn failure_text(error: &ImportError) -> String {
+/// The kind of a plan or write failure, recorded on the run for what the
+/// user and the agent are told.
+pub fn failure_kind(error: &ImportError) -> RunErrorKind {
+    use import_notion::domain::ports::NotionError;
+    use import_tracker::domain::model::TrackerError;
     match error {
-        ImportError::Notion(error) => notion_failure_text(error).to_owned(),
+        ImportError::Notion(error) => match error {
+            NotionError::NotFound => RunErrorKind::NotFound,
+            NotionError::Forbidden => RunErrorKind::Forbidden,
+            NotionError::AccessLost => RunErrorKind::AccessLost,
+            NotionError::ConnectionUnavailable => RunErrorKind::ConnectionUnavailable,
+            NotionError::RateLimited { .. } => RunErrorKind::RateLimited,
+            // An incomplete saved-view list is the source's to finish; a
+            // later retry can read it.
+            NotionError::Upstream { .. }
+            | NotionError::Transport(_)
+            | NotionError::IncompleteViewList => RunErrorKind::Unreachable,
+            NotionError::Decode(_) => RunErrorKind::Internal,
+        },
+        ImportError::Tracker(error) => tracker_failure_kind(error),
+        ImportError::Hubspot(error) => hubspot_failure_kind(error),
+        ImportError::NotionNotConnected => RunErrorKind::NotConnected,
+        ImportError::Admission(_) => RunErrorKind::UsageRefused,
+        ImportError::UnsupportedDiscovery(_)
+        | ImportError::Db(_)
+        | ImportError::Metadata(_)
+        | ImportError::SourceConfirmationRequired
+        | ImportError::SourceMismatch
+        | ImportError::TargetConflict
+        | ImportError::TargetNotReserved
+        | ImportError::NotionSharingRequired
+        | ImportError::NotReady(_)
+        | ImportError::EntityNotAccessible(_)
+        | ImportError::ImportRunning
+        | ImportError::AccessCheck(_)
+        | ImportError::RunNotReviewable(_)
+        | ImportError::CrmAccessRequired => RunErrorKind::Internal,
+        ImportError::NotStarted(error) => failure_kind(error),
+        // Usage refusals and tracker failures often arrive wrapped.
         ImportError::Other(error) => {
-            let notion = error.chain().find_map(|cause| {
-                cause.downcast_ref::<NotionError>().or_else(|| {
-                    match cause.downcast_ref::<ImportError>() {
-                        Some(ImportError::Notion(error)) => Some(error),
-                        _ => None,
-                    }
-                })
-            });
-            notion.map_or_else(
-                || super::admission::failure_reason(error),
-                |error| notion_failure_text(error).to_owned(),
-            )
+            if error
+                .downcast_ref::<ai_billing::AiAdmissionError>()
+                .is_some()
+            {
+                RunErrorKind::UsageRefused
+            } else if let Some(error) = error.downcast_ref::<TrackerError>() {
+                tracker_failure_kind(error)
+            } else {
+                RunErrorKind::Internal
+            }
         }
-        other => other.to_string(),
     }
 }
 
-fn notion_failure_text(error: &NotionError) -> &'static str {
+/// The kind of a HubSpot failure.
+fn hubspot_failure_kind(error: &import_hubspot::domain::HubspotError) -> RunErrorKind {
+    use import_hubspot::domain::HubspotError;
     match error {
+        HubspotError::NotConnected => RunErrorKind::NotConnected,
+        HubspotError::MissingScope(_) => RunErrorKind::Forbidden,
+        HubspotError::Upstream { status: 401, .. } => RunErrorKind::AccessLost,
+        HubspotError::Upstream { status: 403, .. } => RunErrorKind::Forbidden,
+        HubspotError::Upstream { status: 404, .. } => RunErrorKind::NotFound,
+        HubspotError::Upstream { status: 429, .. } => RunErrorKind::RateLimited,
+        HubspotError::Unavailable | HubspotError::Upstream { .. } | HubspotError::Transport(_) => {
+            RunErrorKind::Unreachable
+        }
+        HubspotError::Decode(_) => RunErrorKind::Internal,
+    }
+}
+
+/// The kind of an issue tracker failure.
+fn tracker_failure_kind(error: &import_tracker::domain::model::TrackerError) -> RunErrorKind {
+    use import_tracker::domain::model::TrackerError;
+    match error {
+        TrackerError::NotConnected => RunErrorKind::NotConnected,
+        TrackerError::Forbidden { status: 401, .. } => RunErrorKind::AccessLost,
+        TrackerError::Forbidden { .. } => RunErrorKind::Forbidden,
+        TrackerError::Upstream { status: 401, .. } => RunErrorKind::AccessLost,
+        TrackerError::Upstream { status: 404, .. } => RunErrorKind::NotFound,
+        TrackerError::Upstream { status: 429, .. } => RunErrorKind::RateLimited,
+        TrackerError::Upstream { .. } | TrackerError::Transport(_) => RunErrorKind::Unreachable,
+        TrackerError::Decode(_) => RunErrorKind::Internal,
+    }
+}
+
+/// A write failure whose text Macro wrote: a canned reason and the title of
+/// the reviewed object it stopped at, never a provider's text. The run's
+/// report keeps it; anything else reads from the failure's kind.
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub(super) struct NamedRunFailure(pub(super) String);
+
+/// A failure as the user and the agent read it on the run or the row,
+/// written from its kind. The raw error (which can carry a provider's
+/// response) stays on the warning the caller logs.
+pub(super) fn failure_text(error: &ImportError, source: ImportSource) -> String {
+    if let ImportError::Other(error) = error
+        && let Some(named) = error.downcast_ref::<NamedRunFailure>()
+    {
+        return named.0.clone();
+    }
+    // Notion's own failures keep their finer, Macro-written copy; a lost or
+    // unusable connection reads from its kind, which says how to fix it.
+    let notion = match error {
+        ImportError::Notion(error) => Some(error),
+        ImportError::Other(error) => error.chain().find_map(|cause| {
+            cause.downcast_ref::<NotionError>().or_else(|| {
+                match cause.downcast_ref::<ImportError>() {
+                    Some(ImportError::Notion(error)) => Some(error),
+                    _ => None,
+                }
+            })
+        }),
+        _ => None,
+    };
+    if let Some(text) = notion.and_then(notion_failure_text) {
+        return text.to_owned();
+    }
+    let sentence = explain_failure(Some(failure_kind(error)), source);
+    let mut letters = sentence.chars();
+    match letters.next() {
+        Some(first) => first.to_uppercase().chain(letters).collect::<String>() + ".",
+        None => sentence,
+    }
+}
+
+/// Copy for a Notion failure, written by Macro and never the provider's
+/// text; `None` where the failure's kind says it better.
+fn notion_failure_text(error: &NotionError) -> Option<&'static str> {
+    Some(match error {
+        NotionError::AccessLost | NotionError::ConnectionUnavailable => return None,
         NotionError::NotFound => "Notion couldn’t find this item or hasn’t shared it.",
         NotionError::Forbidden => "Notion hasn’t granted access to this item.",
         NotionError::Upstream { status: 401, .. } => "Reconnect Notion and try again.",
@@ -928,5 +1087,5 @@ fn notion_failure_text(error: &NotionError) -> &'static str {
         NotionError::Transport(_) | NotionError::Upstream { .. } => {
             "Notion couldn’t complete the request."
         }
-    }
+    })
 }

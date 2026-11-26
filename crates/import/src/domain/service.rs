@@ -35,6 +35,7 @@ mod admission;
 mod hubspot_workspace;
 pub(crate) mod lifecycle;
 mod notion_workspace;
+pub use notion_workspace::failure_kind;
 mod tracker_workspace;
 mod workspace;
 pub use workspace::WorkspaceImporter;
