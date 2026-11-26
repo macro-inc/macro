@@ -899,6 +899,15 @@ function isCanvasCard(
   );
 }
 
+function isEmptyCanvasPreview(value: unknown): boolean {
+  return (
+    value == null ||
+    (typeof value === 'object' &&
+      !Array.isArray(value) &&
+      Object.keys(value).length === 0)
+  );
+}
+
 function preserveStoredCanvasView(
   current: SerializedLexicalNode,
   stored: SerializedLexicalNode | undefined
@@ -914,11 +923,11 @@ function preserveStoredCanvasView(
   const next = current.previewData;
   if (
     (prior && typeof prior === 'object' && 'view' in prior) ||
-    (next && typeof next === 'object' && 'view' in next)
+    (next && typeof next === 'object' && 'view' in next) ||
+    (isEmptyCanvasPreview(prior) && isEmptyCanvasPreview(next))
   ) {
     // An older peer may have changed or removed this seed while a local
-    // edit was queued. Keep the stored value instead of replaying the seed
-    // from the editor snapshot that scheduled the write.
+    // edit was queued. Keep the stored seed and its representation when unset.
     current.previewData = prior;
   }
 }

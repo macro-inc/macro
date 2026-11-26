@@ -258,16 +258,24 @@ describe('loroSyncState peer-local ownership', () => {
       const second = await openStored(
         first.manager.doc.export({ mode: 'snapshot' })
       );
+      first.manager.doc.setPeerId(1n);
+      second.manager.doc.setPeerId(2n);
+
+      for (const [peer, runtimeLocal] of [
+        [first, true],
+        [second, false],
+      ] as const) {
+        peer.editor.update(
+          () => $setLocal($nodesOfType(CommentNode)[0], runtimeLocal),
+          { discrete: true, tag: LOCAL_STATUS_TAG }
+        );
+      }
 
       for (const [writer, receiver, runtimeLocal] of [
         [first, second, true],
         [second, first, false],
         [first, second, true],
       ] as const) {
-        writer.editor.update(
-          () => $setLocal($nodesOfType(CommentNode)[0], runtimeLocal),
-          { discrete: true, tag: LOCAL_STATUS_TAG }
-        );
         expect(await writer.write({ compareAll: true })).toEqual([]);
 
         writer.editor.update(
@@ -298,6 +306,11 @@ describe('loroSyncState peer-local ownership', () => {
         ).toBe(runtimeLocal);
 
         receiver.receive(writer.manager.doc.export({ mode: 'update', from }));
+        expect(
+          receiver.editor
+            .getEditorState()
+            .read(() => $getLocal($nodesOfType(CommentNode)[0]))
+        ).toBe(!runtimeLocal);
       }
     }
   );
@@ -482,6 +495,72 @@ describe('canvas card viewport serialization', () => {
     blockParams: { canvas_x: '15', canvas_y: '25', canvas_scale: '100' },
     previewData: { view: { x: 30, y: 40, scale: 100 } },
   };
+
+  it.each([
+    [{}, undefined],
+    [undefined, {}],
+    [null, {}],
+  ])(
+    'keeps stored canvas preview %j when the editor has %j during a text edit',
+    async (storedPreview, editorPreview) => {
+      const editorBody = apiBody(
+        ['Before'],
+        [{ ...canvas, previewData: undefined }]
+      );
+      const storedBody = structuredClone(editorBody);
+      if (storedPreview === undefined) {
+        Reflect.deleteProperty(storedBody.root.children[1], 'previewData');
+      } else {
+        Object.assign(storedBody.root.children[1], {
+          previewData: storedPreview,
+        });
+      }
+      Object.assign(editorBody.root.children[1], {
+        previewData: editorPreview,
+      });
+      const doc = await openStored(storedBody, editorBody);
+      const card = doc.manager.doc.getByPath('root/children/1');
+      if (!(card instanceof LoroMap)) throw new Error('Missing canvas card');
+      expect(card.toJSON().previewData).toEqual(storedPreview);
+
+      doc.editor.update(
+        () => {
+          const paragraph = $getRoot().getFirstChildOrThrow<ParagraphNode>();
+          paragraph.getFirstChildOrThrow<TextNode>().setTextContent('After');
+        },
+        { discrete: true }
+      );
+
+      const ops = await doc.write();
+      expect(ops.length).toBeGreaterThan(0);
+      expect(ops.some((op) => cameraFields.has(op.content.key))).toBe(false);
+      expect(card.toJSON().previewData).toEqual(storedPreview);
+    }
+  );
+
+  it('writes non-viewport preview metadata on an existing canvas card', async () => {
+    const body = apiBody(['Before'], [{ ...canvas, previewData: undefined }]);
+    Object.assign(body.root.children[1], { previewData: {} });
+    const doc = await openStored(body);
+    const previewData = { poll: { optionCount: 3 } };
+    doc.editor.update(
+      () =>
+        $getRoot()
+          .getLastChildOrThrow<DocumentCardNode>()
+          .setPreviewData(previewData),
+      { discrete: true }
+    );
+
+    const ops = await doc.write();
+    expect(
+      ops.some(
+        (op) => op.content.key === 'poll' || op.content.key === 'previewData'
+      )
+    ).toBe(true);
+    const card = doc.manager.doc.getByPath('root/children/1');
+    if (!(card instanceof LoroMap)) throw new Error('Missing canvas card');
+    expect(card.toJSON().previewData).toEqual(previewData);
+  });
 
   it.each([true, false])(
     'keeps a stored legacy viewport change or removal while publishing local text and card edits (has view: %s)',
