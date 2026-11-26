@@ -48,6 +48,14 @@ then `bun run --filter @macro-inc/bots preview`. That preview serves only
 `dist-local`. Set `BOTS_PREVIEW_HOST` to a single exact hostname when an
 authorized local reverse proxy needs a forwarded Host header.
 
-The default build writes `dist` and excludes the Fleet, Hire and Brain fixtures. Keep
+The default build writes `dist` and excludes the Fleet, Hire, Brain, and Brain Email fixtures. Keep
 `dev.bots.macro.com` and `bots.macro.com` as planning targets until the relevant
 auth, infrastructure, and release changes are approved.
+
+## Brain Email
+
+`src/brain-email-reader.ts` defines the scoped, read-only inbox and thread
+port. `src/brain-email.tsx` supplies the Email view and mailbox identity
+slot. Pass the same mailbox accessor to both after validating the current
+viewer, team, and agent. Only a trusted local preview may load
+`src/brain-email-fixture.ts`.

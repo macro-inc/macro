@@ -1,0 +1,346 @@
+.brain-email {
+  min-width: 0;
+  overflow: hidden;
+  background: #111927;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.brain-email-identity {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 8px;
+  max-width: 100%;
+  font-size: 12px;
+}
+
+.brain-email-address {
+  color: var(--amber);
+  font-family: ui-monospace, monospace;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.brain-email-fixture-label,
+.brain-email-count,
+.brain-email time {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.brain-email-status {
+  padding: 16px;
+  color: var(--muted);
+}
+
+.brain-email-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-height: 40px;
+  padding: 4px 14px;
+  background: #141e30;
+  border-bottom: 1px solid var(--border);
+}
+
+.brain-email-toolbar h2 {
+  margin-inline-end: auto;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.brain-email-count::before {
+  content: "·";
+  margin-inline: 4px 6px;
+}
+
+.brain-email-toolbar input {
+  width: min(13em, 54%);
+  min-height: 34px;
+}
+
+.brain-email-copy {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 3px;
+}
+
+.brain-email-copy-status {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.brain-email-copy-status:empty {
+  position: absolute;
+}
+
+.brain-email-panes {
+  display: grid;
+  grid-template-columns: clamp(280px, 31%, 436px) minmax(0, 1fr);
+  height: clamp(300px, calc(100svh - 207px), 760px);
+}
+
+.brain-email-list-pane,
+.brain-email-detail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.brain-email-list-pane {
+  border-inline-end: 1px solid var(--border);
+  background: #101827;
+}
+
+.brain-email-list,
+.brain-email-reader {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.brain-email-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: center;
+  column-gap: 10px;
+  width: 100%;
+  min-height: 55px;
+  padding: 7px 14px;
+  border: 0;
+  border-bottom: 1px solid #202c3d;
+  border-radius: 0;
+  background: transparent;
+  text-align: start;
+}
+
+.brain-email-list button:hover {
+  background: #182335;
+}
+
+.brain-email-list button[aria-selected="true"] {
+  background: #202a3b;
+  box-shadow: inset 3px 0 var(--amber);
+}
+
+.brain-email-list button:focus-visible,
+.brain-email-reader:focus-visible {
+  outline: 2px solid #85c2ff;
+  outline-offset: -3px;
+}
+
+.brain-email-sender,
+.brain-email-subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brain-email-sender {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.brain-email-subject {
+  grid-column: 1 / -1;
+}
+
+.brain-email-list
+  button[aria-selected="true"]
+  :is(.brain-email-sender, .brain-email-subject) {
+  color: inherit;
+  font-weight: 650;
+}
+
+.brain-email-envelope {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  background: #151f31;
+}
+
+.brain-email-envelope h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+  scroll-margin-block-start: 8px;
+}
+
+.brain-email-envelope summary {
+  min-height: 32px;
+  padding-block: 6px;
+  cursor: pointer;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.brain-email-details-toggle {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.brain-email-envelope dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 4px 0 0;
+  padding: 8px 12px;
+  border-inline-start: 2px solid var(--amber);
+  background: #101827;
+  font-size: 12px;
+}
+
+.brain-email-envelope dt {
+  color: var(--muted);
+}
+
+.brain-email-envelope dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.brain-email-reader {
+  padding: 12px 18px 18px;
+}
+
+.brain-email-reader article {
+  padding: 12px 0;
+  overflow-wrap: anywhere;
+}
+
+.brain-email-reader article + article {
+  border-top: 1px solid var(--border);
+}
+
+.brain-email-reader article header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin-bottom: 8px;
+}
+
+.brain-email-reader article header span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.brain-email-reader article time {
+  margin-inline-start: auto;
+}
+
+.brain-email-reader article p {
+  color: var(--muted);
+  white-space: pre-wrap;
+  line-height: 1.56;
+}
+
+@media (max-width: 980px) {
+  .brain-email-panes {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .brain-email-list-pane {
+    border-inline-end: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .brain-email-list {
+    max-height: 290px;
+  }
+
+  .brain-email-reader {
+    overflow-y: visible;
+  }
+}
+
+@media (max-width: 520px) {
+  .brain-email-toolbar {
+    padding-inline: 10px;
+  }
+
+  .brain-email-toolbar input,
+  .brain-email-copy,
+  .brain-email-envelope summary {
+    min-height: 44px;
+  }
+
+  .brain-email-copy {
+    min-width: 44px;
+  }
+
+  .brain-email-envelope,
+  .brain-email-reader {
+    padding-inline: 12px;
+  }
+}
+
+/* Paint inside the browser's native gutter without changing its geometry. */
+@media (forced-colors: none) {
+  :is(html:has(.brain-email-inbox), .brain-email-scroll) {
+    --brain-email-thumb: transparent;
+  }
+
+  .brain-email-scroll:is(:hover, :focus-within, .brain-email-scrolling),
+  html:has(.brain-email-inbox):is(
+    .brain-email-scrolling,
+    :hover:not(:has(body:hover))
+  ) {
+    --brain-email-thumb: rgb(148 168 195 / 52%);
+  }
+
+  @supports selector(::-webkit-scrollbar) {
+    :is(html:has(.brain-email-inbox), .brain-email-scroll)::-webkit-scrollbar,
+    :is(
+        html:has(.brain-email-inbox),
+        .brain-email-scroll
+      )::-webkit-scrollbar-track,
+    :is(
+        html:has(.brain-email-inbox),
+        .brain-email-scroll
+      )::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+
+    :is(
+        html:has(.brain-email-inbox),
+        .brain-email-scroll
+      )::-webkit-scrollbar-button {
+      display: none;
+    }
+
+    :is(
+        html:has(.brain-email-inbox),
+        .brain-email-scroll
+      )::-webkit-scrollbar-thumb {
+      background: linear-gradient(
+        to right,
+        transparent 30%,
+        var(--brain-email-thumb) 30% 70%,
+        transparent 70%
+      );
+      border-radius: 999px;
+    }
+
+    :is(
+        html:has(.brain-email-inbox),
+        .brain-email-scroll
+      )::-webkit-scrollbar-thumb:hover {
+      --brain-email-thumb: rgb(148 168 195 / 78%);
+    }
+  }
+
+  @supports not selector(::-webkit-scrollbar) {
+    :is(html:has(.brain-email-inbox), .brain-email-scroll) {
+      scrollbar-color: var(--brain-email-thumb) transparent;
+    }
+  }
+}
