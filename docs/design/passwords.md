@@ -277,3 +277,26 @@ are direct children of the batch; `passwords.lease.hold` records the actual
 guard lifetime. Batch audit failure preserves the
 per-item results; the team foreign key removes audit rows racing team deletion.
 Import request types have no Debug implementation, and all errors have fixed text.
+
+
+## Missing-item request proof
+
+The in-process proof binds the request to its team, admitted teammate and
+exact requested kind. The human review receipt binds the same scope to the
+reviewer's personal session. Candidate listing and decisions recheck current
+human membership, reviewer rollout and the teammate's directory facts.
+Login and API candidates require current creator or administrator management
+authority and the absence of an Agent grant for this exact teammate. Add
+records the selected item and explicit permission after checking those facts
+again. Card requests can wait for a human and offer no item to add to the
+agent's access.
+
+In this proof the addressed current human or a current administrator can
+decline. Address selection, human eligibility for initial delivery and
+reassignment still need a product decision. A single in-process request
+records one intent and treats an identical authorized replay as an
+acknowledgement. Durable admission, outbox and intent uniqueness still need
+design, including retention and retry behavior. A future grant operation
+needs to recheck item and request authority under the existing vault lease,
+and commit the decision, explicit grant and any standing approval with the
+appropriate revision fences. The proof records the human decision only.
