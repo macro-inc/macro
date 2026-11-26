@@ -249,7 +249,10 @@ fn an_original_that_cannot_be_put_back_stays_for_the_next_open() {
     block_on(async {
         let directory = tempfile::tempdir().unwrap();
         let kept = directory.path().join("cache.turso");
-        let mut storage = TursoFileDatabase::new(&kept).unwrap().open("scope").unwrap();
+        let mut storage = TursoFileDatabase::new(&kept)
+            .unwrap()
+            .open("scope")
+            .unwrap();
         storage.enqueue_mutation(queued("Pending")).await.unwrap();
         let pending = storage.load_mutation_queue().await.unwrap();
         storage.try_close().unwrap();
@@ -281,7 +284,10 @@ fn an_original_that_cannot_be_put_back_stays_for_the_next_open() {
         assert!(blocked_backup.is_file());
 
         std::fs::rename(&blocked_backup, &kept).unwrap();
-        let storage = TursoFileDatabase::new(&kept).unwrap().open("scope").unwrap();
+        let storage = TursoFileDatabase::new(&kept)
+            .unwrap()
+            .open("scope")
+            .unwrap();
         assert_eq!(storage.load_mutation_queue().await.unwrap(), pending);
         storage.try_close().unwrap();
     });
