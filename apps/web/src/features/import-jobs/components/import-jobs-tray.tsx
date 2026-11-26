@@ -123,11 +123,15 @@ function failedAction(job: ImportJob): 'reconnect' | 'details' | null {
 
 function ImportJobRow(props: {
   job: ImportJob;
+  /** Whether that chat is already the active split. */
+  inSession: boolean;
   onOpen: (job: ImportJob) => void;
   onDismiss: (job: ImportJob) => void;
   onReconnect: (job: ImportJob) => void;
 }) {
   const source = () => SOURCES[props.job.source];
+  // Opening the chat you are in changes nothing on screen, so say so.
+  const here = () => (props.inSession ? t('importJobs.inThisChat') : undefined);
   const label = () => phaseLabel(props.job.source, props.job.phase);
   const percent = () => {
     const fraction = phaseFraction(props.job.phase);
@@ -182,10 +186,11 @@ function ImportJobRow(props: {
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={t('importJobs.openImport', {
+            aria-label={t('importJobs.openImportChatLabel', {
               source: source().name,
             })}
-            tooltip={t('importJobs.openImport', { source: source().name })}
+            aria-description={here()}
+            tooltip={here() ?? t('importJobs.openImportChat')}
             onClick={() => props.onOpen(props.job)}
           >
             <ArrowSquareOut class="size-4 shrink-0" />
@@ -209,6 +214,13 @@ function ImportJobRow(props: {
   );
 }
 
+function inSession(
+  job: ImportJob,
+  isSessionActive: (sessionId: string) => boolean
+): boolean {
+  return job.sessionId !== undefined && isSessionActive(job.sessionId);
+}
+
 /**
  * Background imports as a rail button beside Help and Settings, opening
  * into one row per job, so nothing floats over the page. The button shows a
@@ -218,6 +230,7 @@ export function ImportJobsRailButton(props: {
   jobs: readonly ImportJob[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  isSessionActive: (sessionId: string) => boolean;
   onOpen: (job: ImportJob) => void;
   onDismiss: (job: ImportJob) => void;
   onReconnect: (job: ImportJob) => void;
@@ -310,6 +323,7 @@ export function ImportJobsRailButton(props: {
                   {(job) => (
                     <ImportJobRow
                       job={job()}
+                      inSession={inSession(job(), props.isSessionActive)}
                       onOpen={(opened) => {
                         openingSession = true;
                         props.onOpen(opened);
@@ -337,6 +351,7 @@ export function ImportJobsCornerTray(props: {
   jobs: readonly ImportJob[];
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
+  isSessionActive: (sessionId: string) => boolean;
   onOpen: (job: ImportJob) => void;
   onDismiss: (job: ImportJob) => void;
   onReconnect: (job: ImportJob) => void;
@@ -362,6 +377,7 @@ export function ImportJobsCornerTray(props: {
               {(job) => (
                 <ImportJobRow
                   job={job()}
+                  inSession={inSession(job(), props.isSessionActive)}
                   onOpen={props.onOpen}
                   onDismiss={props.onDismiss}
                   onReconnect={props.onReconnect}

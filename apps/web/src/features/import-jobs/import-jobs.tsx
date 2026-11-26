@@ -15,6 +15,7 @@ import {
   readDismissedRuns,
   writeDismissedRuns,
 } from './dismissed-runs';
+import { isImportSessionActive, openImportSession } from './open-session';
 import {
   ImportJobsCornerView,
   ImportJobsRailView,
@@ -55,12 +56,8 @@ function useProductionContext(): ImportJobsContext {
     reconnect(source) {
       return connectConnector({ key: appConnectorKey(source) });
     },
-    openSession(sessionId) {
-      globalSplitManager()?.openWithSplit(
-        { type: 'agent', id: sessionId },
-        { activate: true }
-      );
-    },
+    openSession: openImportSession,
+    isSessionActive: isImportSessionActive,
   };
 }
 

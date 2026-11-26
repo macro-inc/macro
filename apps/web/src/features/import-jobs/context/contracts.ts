@@ -26,8 +26,10 @@ export type ImportJobsContext = {
   createReport(
     source: WorkspaceSource
   ): Accessor<NotionImportReport | undefined>;
-  /** Open the agent session presenting an import's review. */
+  /** Open the agent session presenting an import's review, and focus it. */
   openSession(sessionId: string): void;
+  /** Whether that session is already the active split; reactive. */
+  isSessionActive(sessionId: string): boolean;
   /** Called once by the mounted tray. */
   createDismissals(): ImportDismissals;
   /** Run the source's connect flow again; rejects when it failed. */
