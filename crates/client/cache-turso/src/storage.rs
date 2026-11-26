@@ -739,19 +739,20 @@ impl TursoFileDatabase {
     }
 
     /// Finishes a swap [`Self::install_compacted`] left when a crash stopped
-    /// it. Before the compacted file was in place, it puts back the original:
-    /// the migrated database, without which the open would start an empty
-    /// cache and lose the queued writes the migration kept. After, it deletes
-    /// the original, which a later physical reset would otherwise reopen,
-    /// with writes that have settled since queued again. Either step failing
-    /// fails the open without asking for a reset, which would delete both
-    /// files: the next open tries again.
+    /// it. Before the compacted file was in place, with no file at the
+    /// database's path, it puts back the original: the migrated database,
+    /// without which the open would start an empty cache and lose the queued
+    /// writes the migration kept. After, it deletes the original, which a
+    /// later physical reset would otherwise reopen, with writes that have
+    /// settled since queued again. Either step failing fails the open without
+    /// asking for a reset, which would delete both files: the next open tries
+    /// again.
     fn recover_interrupted_swap(&self) -> Result<(), TursoStorageError> {
         let backup_path = self.path.with_extension("backup");
         if !backup_path.is_file() {
             return Ok(());
         }
-        let recovered = if self.path.exists() {
+        let recovered = if self.path.is_file() {
             match std::fs::remove_file(&backup_path) {
                 Err(error) if error.kind() != ErrorKind::NotFound => Err(error),
                 _ => Ok(()),

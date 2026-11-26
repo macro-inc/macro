@@ -268,7 +268,19 @@ fn an_original_that_cannot_be_put_back_stays_for_the_next_open() {
         ));
         assert!(backup_path.is_file());
 
-        std::fs::rename(&backup_path, &kept).unwrap();
+        // Anything but a file at the database's path is no compacted copy.
+        let blocked = directory.path().join("blocked.turso");
+        let blocked_backup = blocked.with_extension("backup");
+        std::fs::create_dir(&blocked).unwrap();
+        std::fs::rename(&backup_path, &blocked_backup).unwrap();
+        let database = TursoFileDatabase::new(&blocked).unwrap();
+        assert!(matches!(
+            database.open_or_reset("scope"),
+            Err(error) if !error.requires_physical_reset()
+        ));
+        assert!(blocked_backup.is_file());
+
+        std::fs::rename(&blocked_backup, &kept).unwrap();
         let storage = TursoFileDatabase::new(&kept).unwrap().open("scope").unwrap();
         assert_eq!(storage.load_mutation_queue().await.unwrap(), pending);
         storage.try_close().unwrap();
