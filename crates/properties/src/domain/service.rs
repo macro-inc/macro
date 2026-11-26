@@ -247,6 +247,18 @@ pub trait PropertiesService: Send + Sync + 'static {
         request: &AddPropertyOptionRequest,
     ) -> impl Future<Output = Result<PropertyOption, PropertiesErr>> + Send;
 
+    /// Add an option under an id the client minted, so a retried request
+    /// answers with the option the first attempt created instead of adding
+    /// another. An id held by any other option is refused.
+    fn add_property_option_with_id(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+        request: &AddPropertyOptionRequest,
+    ) -> impl Future<Output = Result<PropertyOption, PropertiesErr>> + Send;
+
     /// Get or create an option by exact value on a property owned by the caller.
     /// Preserves existing option metadata and tolerates concurrent creation.
     fn get_or_create_property_option(

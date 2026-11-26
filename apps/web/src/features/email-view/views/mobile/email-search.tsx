@@ -1,11 +1,15 @@
 import { SearchOperatorOverlay } from '@app/components/view-shell/search-operator-text';
+import { SearchTipsSheet } from '@app/components/view-shell/search-tips';
+import { EMAIL_SEARCH_DOCS_URL } from '@app/constants/docs-links';
 import { t } from '@app/lib/i18n';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
+import InfoIcon from '@icon/system/regular/info.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, CommandMenuSearchInput } from '@ui';
-import { onCleanup, onMount, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { EmailSearchSuggestionList } from '../../components/EmailSearchSuggestionList';
+import { emailSearchTips } from '../../components/EmailSearchTips';
 import type { EmailSearchSuggestions } from '../../search/create-email-search-suggestions';
 import { emailSearchTextParts } from '../../search/email-search-scope';
 
@@ -23,6 +27,7 @@ export function EmailMobileSearchField(props: {
   ref: (input: HTMLInputElement) => void;
 }) {
   let input: HTMLInputElement | undefined;
+  const [tipsOpen, setTipsOpen] = createSignal(false);
 
   // Escape leaves the page, as Cancel does, from the field and after Search
   // has dropped its focus, since a hardware keyboard can still press it.
@@ -110,7 +115,20 @@ export function EmailMobileSearchField(props: {
             }}
           />
         </div>
-        <Show when={props.search}>
+        {/* The empty field offers its tips where the X clears typed text. */}
+        <Show
+          when={props.search}
+          fallback={
+            <Button
+              aria-label={t('searchOperators.tips')}
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setTipsOpen(true)}
+            >
+              <InfoIcon class="size-4" />
+            </Button>
+          }
+        >
           <Button
             aria-label={t('emailViews.clearSearch')}
             variant="ghost"
@@ -128,6 +146,12 @@ export function EmailMobileSearchField(props: {
           {t('common.cancel')}
         </Button>
       </MobileHeader.Island>
+      <SearchTipsSheet
+        tips={emailSearchTips()}
+        docsUrl={EMAIL_SEARCH_DOCS_URL}
+        open={tipsOpen()}
+        onOpenChange={setTipsOpen}
+      />
     </div>
   );
 }

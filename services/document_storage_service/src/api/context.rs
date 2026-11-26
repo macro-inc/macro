@@ -1013,6 +1013,7 @@ pub(crate) type DssMcpSubscriptionService =
         webhook::outbound::PgMcpSubscriptionRepository,
         ReqwestWebhookValidationClient,
         webhook::outbound::KmsMcpSecretCipher<cursor_api_key::cipher::AwsKmsCiphertexts>,
+        webhook::outbound::RateLimitedMcpVerifications<DssWebhookRateLimiter>,
     >;
 
 /// Type alias for the internal MCP Events subscription router state.
@@ -1184,10 +1185,14 @@ impl From<&ApiContext> for PropertiesHandlerState {
             ctx.entity_access_service.clone(),
             ctx.authorization_state.clone(),
         )
-        .with_managed_team_definitions([
-            crm::domain::stages::CRM_TEAM_STAGE_DEFINITION_NAME.to_string(),
-        ])
+        .with_managed_team_definitions(managed_team_property_definitions())
     }
+}
+
+/// Team property definitions another feature manages from its own settings,
+/// which the generic property writes (REST and GraphQL) refuse.
+pub(crate) fn managed_team_property_definitions() -> [String; 1] {
+    [crm::domain::stages::CRM_TEAM_STAGE_DEFINITION_NAME.to_string()]
 }
 
 impl FromRef<ApiContext> for PropertiesHandlerState {

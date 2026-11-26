@@ -6,6 +6,7 @@ import {
   enableCrmThreadExclusions,
 } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { Button, Dialog, Panel } from '@ui';
 import {
   createSignal,
@@ -55,6 +56,28 @@ function domainWarningText(reason: MailboxDomainConflict | undefined) {
     .exhaustive(() => undefined);
 }
 
+function OpenArchivedCompanyButton(props: {
+  domain: string;
+  onOpen: (preferNewSplit: boolean) => void;
+}) {
+  const open = useSplitNavigationHandler<HTMLButtonElement>((event) =>
+    props.onOpen(event.shiftKey)
+  );
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-label={t('crm.privacyOpenArchivedCompanyLabel', {
+        domain: props.domain,
+      })}
+      onMouseDown={open.onMouseDown}
+      onClick={open.onClick}
+    >
+      {t('crm.privacyOpenArchivedCompany')}
+    </Button>
+  );
+}
+
 function DomainBlocklist(props: {
   source: PrivacySource;
   scope: EmailBlockScope;
@@ -82,9 +105,12 @@ function DomainBlocklist(props: {
     props.scope === 'team'
       ? settings()?.archivedTeamDomains?.[domain]
       : undefined;
-  const openCompany = (id: string) => {
+  const openCompany = (id: string, preferNewSplit: boolean) => {
     props.onOpenCompany?.();
-    navigation.openWithSplit({ type: 'company', id }, { activate: true });
+    navigation.openWithSplit(
+      { type: 'company', id },
+      { activate: true, preferNewSplit }
+    );
   };
   const rowDescription = (domain: string) =>
     archivedCompany(domain)
@@ -98,14 +124,10 @@ function DomainBlocklist(props: {
     const company = archivedCompany(domain);
     if (company)
       return (
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={t('crm.privacyOpenArchivedCompanyLabel', { domain })}
-          onClick={() => openCompany(company)}
-        >
-          {t('crm.privacyOpenArchivedCompany')}
-        </Button>
+        <OpenArchivedCompanyButton
+          domain={domain}
+          onOpen={(preferNewSplit) => openCompany(company, preferNewSplit)}
+        />
       );
     return (
       <Button

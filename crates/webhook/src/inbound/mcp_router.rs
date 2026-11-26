@@ -115,6 +115,10 @@ impl From<McpSubscriptionError> for McpRouterError {
                 StatusCode::TOO_MANY_REQUESTS,
                 McpSubscriptionErrorBody::ResourceExhausted { max },
             ),
+            McpSubscriptionError::VerificationsExhausted { max } => (
+                StatusCode::TOO_MANY_REQUESTS,
+                McpSubscriptionErrorBody::VerificationsExhausted { max },
+            ),
             McpSubscriptionError::CallbackEndpoint(reason) => (
                 StatusCode::BAD_GATEWAY,
                 McpSubscriptionErrorBody::CallbackEndpointError { reason },

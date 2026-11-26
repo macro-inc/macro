@@ -37,6 +37,8 @@ struct FakeStore {
     failing_reads: Arc<Mutex<HashSet<Uuid>>>,
     /// The inbox each stale-thread read was given.
     stale_reads: Arc<Mutex<Vec<Uuid>>>,
+    /// The `mail_since` each stale-thread read was given, by inbox.
+    mail_since_reads: Arc<Mutex<Vec<(Uuid, Option<DateTime<Utc>>)>>>,
     mail_reads: Arc<Mutex<usize>>,
     /// The cutoff each list read was given.
     waiting_before: Arc<Mutex<Vec<DateTime<Utc>>>>,
@@ -103,10 +105,15 @@ impl FocusStore for FakeStore {
         &self,
         link_id: Uuid,
         _since: DateTime<Utc>,
+        mail_since: Option<DateTime<Utc>>,
         after: Option<StaleThread>,
         limit: i64,
     ) -> Result<Vec<StaleThread>, Report> {
         self.stale_reads.lock().unwrap().push(link_id);
+        self.mail_since_reads
+            .lock()
+            .unwrap()
+            .push((link_id, mail_since));
         if self.failing_reads.lock().unwrap().contains(&link_id) {
             return Err(rootcause::report!(
                 "canceling statement due to statement timeout"
@@ -681,6 +688,7 @@ async fn sweep_classifies_every_stale_thread() {
             inboxes_unknown: 0,
             inboxes_left: 0,
             inboxes_failed: 0,
+            inboxes_read_in_full: 1,
             candidates: 3,
             classified: 2,
             redecided: 0,
@@ -914,10 +922,114 @@ async fn only_a_full_sweep_forgets_what_it_settled() {
     assert_eq!(report.skipped, 1);
     assert_eq!(*store.mail_reads.lock().unwrap(), 2);
 
-    // A full sweep that no longer finds it forgets it, so the map stays small.
+    // A full read that no longer finds it forgets it, so the map stays small.
     set_stale(&store, &[], noon());
+    service.full_reads().clear();
     service.sweep(Duration::days(30), 100).await.unwrap();
     assert!(service.settled().is_empty());
+}
+
+/// The `mail_since` of each stale-thread read of `link_id`, in order.
+fn mail_since_reads(store: &FakeStore, link_id: Uuid) -> Vec<Option<DateTime<Utc>>> {
+    store
+        .mail_since_reads
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(link, _)| *link == link_id)
+        .map(|(_, mail_since)| *mail_since)
+        .collect()
+}
+
+#[tokio::test]
+async fn sweep_reads_an_inbox_in_full_once_a_day_and_its_recent_mail_between() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let service = service(&store, &classifier, &enrolled());
+    set_stale(&store, &[insert(&store, thread(OWNER))], noon());
+
+    // The first sweep after a start reads in full, and counts the read as
+    // made up to a day earlier, so the inboxes a start lines up come due
+    // again spread over the day.
+    let started = Utc::now();
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(report.inboxes_read_in_full, 1);
+    assert_eq!(mail_since_reads(&store, INBOX), vec![None]);
+    let read_at = service.full_reads()[&INBOX];
+    assert!(read_at <= started && read_at > started - FULL_READ_EVERY);
+
+    // Within the day: only threads with mail from the last day.
+    let started = Utc::now();
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(report.inboxes_read_in_full, 0);
+    let mail_since = mail_since_reads(&store, INBOX)[1].unwrap();
+    assert!(mail_since >= started - REREAD_MAIL && mail_since <= Utc::now() - REREAD_MAIL);
+    assert_eq!(service.full_reads()[&INBOX], read_at);
+
+    // A day after the last full read, the next one.
+    service
+        .full_reads()
+        .insert(INBOX, Utc::now() - FULL_READ_EVERY);
+    let started = Utc::now();
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(report.inboxes_read_in_full, 1);
+    assert_eq!(mail_since_reads(&store, INBOX)[2], None);
+    assert!(service.full_reads()[&INBOX] >= started);
+}
+
+#[tokio::test]
+async fn a_full_read_that_fails_or_stops_short_is_made_again_next_sweep() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
+    let service = service(&store, &classifier, &enrolled());
+    set_stale(&store, &[insert(&store, thread(OWNER))], noon());
+
+    store.failing_reads.lock().unwrap().insert(INBOX);
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!((report.inboxes_failed, report.inboxes_read_in_full), (1, 0));
+    store.failing_reads.lock().unwrap().clear();
+
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert!(report.stopped_early);
+    assert_eq!(report.inboxes_read_in_full, 0);
+    assert_eq!(mail_since_reads(&store, INBOX), vec![None, None]);
+    assert!(service.full_reads().is_empty());
+}
+
+#[tokio::test]
+async fn a_full_read_forgets_only_its_own_inbox_s_settled_threads() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let mut ours = thread(OWNER);
+    ours.is_signal = false;
+    let ours = insert(&store, ours);
+    let mut theirs = thread("other@acme.example");
+    theirs.is_signal = false;
+    theirs.link_id = Uuid::new_v4();
+    let their_inbox = theirs.link_id;
+    let theirs = insert(&store, theirs);
+    let enrollment = FakeEnrollment::enrolling(&[OWNER, "other@acme.example"]);
+    let service = service(&store, &classifier, &enrollment);
+    set_stale(&store, &[ours, theirs], noon());
+    service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(service.settled().len(), 2);
+
+    // Neither is stale now. A read of recent mail forgets nothing: it never
+    // reads the older threads.
+    set_stale(&store, &[], noon());
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(report.inboxes_read_in_full, 0);
+    assert_eq!(service.settled().len(), 2);
+
+    // Our inbox's full read forgets our thread and leaves theirs.
+    service.full_reads().remove(&INBOX);
+    let report = service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(report.inboxes_read_in_full, 1);
+    assert_eq!(
+        service.settled().keys().copied().collect::<Vec<_>>(),
+        vec![theirs]
+    );
+    assert!(mail_since_reads(&store, their_inbox)[2].is_some());
 }
 
 #[tokio::test]

@@ -31,6 +31,21 @@ pub(super) fn select(
     excluded_optimistic: &[i64],
     include_sort: bool,
 ) -> Result<driver::Rows, TursoStorageError> {
+    let compile = || {
+        if include_sort {
+            compile_predicate_selection(query, excluded_optimistic, true)
+        } else {
+            compile_predicate_sql(query)
+        }
+    };
+    if listed_within_window(connection, query.as_query())? {
+        let (sql, parameters) = compile();
+        // Turso can refuse the set-based SQL (a residual it flattens past the
+        // parser's depth) where the window's prepares: then take the window.
+        if let Some(mut statement) = driver::prepare_unless_refused(connection, &sql)? {
+            return driver::query_prepared(&mut statement, parameters);
+        }
+    }
     if let Some(hits) = try_select(connection, query, excluded_optimistic)? {
         return Ok(hits
             .into_iter()
@@ -43,12 +58,84 @@ pub(super) fn select(
             })
             .collect());
     }
-    let (sql, parameters) = if include_sort {
-        compile_predicate_selection(query, excluded_optimistic, true)
-    } else {
-        compile_predicate_sql(query)
-    };
+    let (sql, parameters) = compile();
     driver::query(connection, &sql, parameters)
+}
+
+/// Whether every partition the query searches starts from a list of exact
+/// values (an id list) whose facts number no more than the first window's
+/// candidates. The set-based plan then reads those facts through the lookup
+/// index, never more rows than the first window would, while a window walks
+/// the sort index and tests each candidate against the whole list, which past
+/// a few dozen values costs far more than the facts themselves: 500 channel
+/// ids took 40 to 200 ms in windows and 5 ms set-based. Both plans answer the
+/// same rows in the same order, so this only chooses the cheaper one.
+pub(super) fn listed_within_window(
+    connection: &Db,
+    query: &IndexQuery,
+) -> Result<bool, TursoStorageError> {
+    let mut lists = Vec::new();
+    for partition in searched_partitions(query) {
+        let seed =
+            conjunction::split(&partition.predicate).map_or(&partition.predicate, |(seed, _)| seed);
+        let mut list = match seed {
+            PredicateExpr::Exact { attribute, value } => (attribute, vec![value]),
+            PredicateExpr::Or(_, _) => match alternatives::exact_alternatives(seed) {
+                Some(list) => list,
+                None => return Ok(false),
+            },
+            _ => return Ok(false),
+        };
+        // A repeated value would count its facts twice.
+        list.1
+            .sort_by(|left, right| left.as_bytes().cmp(right.as_bytes()));
+        list.1
+            .dedup_by(|left, right| left.as_bytes() == right.as_bytes());
+        lists.push(list);
+    }
+    // A single value per partition is what the window tests cheaply.
+    if !lists.iter().any(|(_, values)| values.len() > 1) {
+        return Ok(false);
+    }
+    let budget = candidate_budget(query);
+    // Driven from the values: one lookup-index seek each. `value IN (...)`
+    // would scan every fact of the attribute and test it against the list.
+    let mut parameters = Vec::new();
+    let mut wanted = Vec::new();
+    for (index, (_, values)) in lists.iter().enumerate() {
+        parameters.extend(
+            values
+                .iter()
+                .map(|value| Value::from_blob(value.as_bytes().to_vec())),
+        );
+        wanted.push(format!(
+            "w{index}(value) AS (VALUES {})",
+            vec!["(?)"; values.len()].join(", ")
+        ));
+    }
+    let mut branches = Vec::new();
+    for (index, (attribute, _)) in lists.iter().enumerate() {
+        parameters.push(text(attribute.as_str()));
+        branches.push(format!(
+            "SELECT 1 FROM w{index} AS w CROSS JOIN exact_facts AS f INDEXED BY exact_facts_lookup_idx ON f.attribute = ? AND f.value = w.value"
+        ));
+    }
+    parameters.push(Value::from_i64(
+        i64::try_from(budget.saturating_add(1)).unwrap_or(i64::MAX),
+    ));
+    let rows = driver::query(
+        connection,
+        &format!(
+            "WITH {} SELECT count(*) FROM ({} LIMIT ?)",
+            wanted.join(", "),
+            branches.join(" UNION ALL ")
+        ),
+        parameters,
+    )?;
+    match rows.as_slice() {
+        [row] => Ok(usize::try_from(required_i64(row, 0)?).is_ok_and(|facts| facts <= budget)),
+        _ => Err(invariant()),
+    }
 }
 
 fn candidate_budget(query: &IndexQuery) -> usize {
@@ -337,7 +424,7 @@ fn has_optimistic_documents(connection: &Db) -> Result<bool, TursoStorageError> 
 /// Reads both fact sources' windows, continuing any that cannot yet prove the
 /// page past the candidates it already read, until every window is exhausted
 /// or reaches past the page's cutoff.
-fn try_select(
+pub(super) fn try_select(
     connection: &Db,
     query: &ValidatedIndexQuery,
     excluded_optimistic: &[i64],

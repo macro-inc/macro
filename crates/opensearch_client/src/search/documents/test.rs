@@ -328,10 +328,10 @@ fn test_build_bool_query_tag_filter_emits_flat_terms() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
         .match_type("partial")
         .user_id("alice")
-        .tag_option_ids(vec![
+        .tag_groups(vec![vec![
             "00000001-0000-0000-0003-000000000001".to_string(),
             "00000001-0000-0000-0003-000000000002".to_string(),
-        ]);
+        ]]);
 
     let json = builder.build_bool_query()?.build().to_json();
     let filter = json["bool"]["filter"].as_array().expect("filter array");
@@ -364,21 +364,24 @@ fn test_build_bool_query_tag_filter_emits_flat_terms() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_build_bool_query_tag_filter_match_all_emits_per_option_musts() -> anyhow::Result<()> {
+fn test_build_bool_query_tag_groups_each_must_hold() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
         .match_type("partial")
         .user_id("alice")
-        .tag_option_ids(vec![
-            "00000001-0000-0000-0003-000000000001".to_string(),
-            "00000001-0000-0000-0003-000000000002".to_string(),
-        ])
-        .match_all_tags(true);
+        .tag_groups(vec![
+            vec![
+                "00000001-0000-0000-0003-000000000001".to_string(),
+                "00000001-0000-0000-0003-000000000002".to_string(),
+            ],
+            vec!["00000001-0000-0000-0003-000000000003".to_string()],
+        ]);
 
     let json = builder.build_bool_query()?.build().to_json();
     let filter = json["bool"]["filter"].as_array().expect("filter array");
 
-    // Match-all wraps one nested clause per option id inside a bool.must, so
-    // an entity must hold every id (possibly across nested property entries).
+    // Each group is one nested clause inside a bool.must, so an entity must
+    // meet every group, each by any of its ids (possibly across nested
+    // property entries).
     let tag_bool: Vec<&serde_json::Value> = filter
         .iter()
         .filter(|f| f["bool"]["must"].is_array())
@@ -386,17 +389,21 @@ fn test_build_bool_query_tag_filter_match_all_emits_per_option_musts() -> anyhow
     assert_eq!(tag_bool.len(), 1, "one bool wrapper for tags: {filter:?}");
 
     let musts = tag_bool[0]["bool"]["must"].as_array().expect("must array");
-    assert_eq!(musts.len(), 2, "one nested clause per option id");
-    for (must, option_id) in musts.iter().zip([
-        "00000001-0000-0000-0003-000000000001",
-        "00000001-0000-0000-0003-000000000002",
-    ]) {
+    assert_eq!(musts.len(), 2, "one nested clause per group");
+    let groups = [
+        serde_json::json!([
+            "00000001-0000-0000-0003-000000000001",
+            "00000001-0000-0000-0003-000000000002"
+        ]),
+        serde_json::json!(["00000001-0000-0000-0003-000000000003"]),
+    ];
+    for (must, option_ids) in musts.iter().zip(groups) {
         let nested = &must["nested"];
         assert_eq!(nested["path"], "properties");
         assert_eq!(nested["ignore_unmapped"], true);
         assert_eq!(
             nested["query"],
-            serde_json::json!({"terms": {"properties.values": [option_id]}})
+            serde_json::json!({"terms": {"properties.values": option_ids}})
         );
     }
 
@@ -408,13 +415,13 @@ fn test_build_bool_query_tag_filter_empty_skipped() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string()])
         .match_type("partial")
         .user_id("alice")
-        .tag_option_ids(vec![]);
+        .tag_groups(vec![]);
 
     let json = builder.build_bool_query()?.build().to_json();
     let filter = json["bool"]["filter"].as_array().expect("filter array");
     assert!(
         !filter.iter().any(|f| f.get("nested").is_some()),
-        "empty tag_option_ids should emit no nested clause: {filter:?}"
+        "no tag groups should emit no nested clause: {filter:?}"
     );
     Ok(())
 }
@@ -888,4 +895,34 @@ async fn a_content_prefix_matches_words_past_the_first_256_that_share_it() {
         .await
         .unwrap();
     result.unwrap();
+}
+
+#[test]
+fn a_left_out_term_drops_documents_it_matches_by_the_modes_fields() -> anyhow::Result<()> {
+    let built = |mode: DocumentSearchMode| -> anyhow::Result<serde_json::Value> {
+        let builder = DocumentQueryBuilder::new(vec!["budget".to_string()])
+            .match_type("partial")
+            .user_id("alice")
+            .mode(mode)
+            .excluded_terms(vec!["draft".to_string()]);
+        Ok(builder.build_bool_query()?.build().to_json())
+    };
+    let by_name = serde_json::json!({"match_bool_prefix": {"document_name": {"query": "draft"}}});
+    let by_chunk = serde_json::json!({"has_child": {
+        "type": "chunk",
+        "query": {"match_bool_prefix": {"content": {"query": "draft"}}},
+    }});
+
+    let content = built(DocumentSearchMode::Content)?;
+    assert_eq!(content["bool"]["must_not"], serde_json::json!([by_chunk]));
+
+    let name = built(DocumentSearchMode::Name)?;
+    assert_eq!(name["bool"]["must_not"], serde_json::json!([by_name]));
+
+    let either = built(DocumentSearchMode::NameContent)?;
+    assert_eq!(
+        either["bool"]["must_not"],
+        serde_json::json!([by_name, by_chunk])
+    );
+    Ok(())
 }

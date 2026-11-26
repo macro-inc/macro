@@ -4,6 +4,7 @@ import IconJira from '@icon/import/jira.svg';
 import IconNotion from '@icon/import/notion.svg';
 import IconLinear from '@icon/mcp-linear.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
+import type { RunErrorKind } from '@service-cognition/import';
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { Button } from '@ui/components/Button';
 import { Card } from '@ui/components/Card';
@@ -12,6 +13,7 @@ import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
+  failureCopy,
   type ImportDraft,
   type ImportedCopy,
   type ImportPlanEntry,
@@ -22,6 +24,7 @@ import {
   type ImportVolume,
   omissionCountLabel,
   omissionTotals,
+  sourceLabel,
   volumeLabel,
 } from '../core/import-plan';
 import { ImportPlanRow } from './import-plan-row';
@@ -55,6 +58,34 @@ function failedItemSentence(count: number) {
   return `${count}\u00a0${count === 1 ? 'item' : 'items'} couldn’t be imported.`;
 }
 
+/** A failed plan or write: a plain first line, then what happened, muted. */
+function Failure(props: {
+  stage: 'plan' | 'write';
+  source: ImportDraft['source'];
+  errorKind: RunErrorKind | null;
+  /** Labelled `Dismissed` too, once the owner dismissed it. */
+  dismissed: boolean;
+}) {
+  const copy = () => failureCopy(props.stage, props.source, props.errorKind);
+  return (
+    <div role="alert" class="flex min-w-0 flex-col gap-0.5">
+      <p class="text-sm text-failure">
+        {copy().headline}
+        <Show when={props.dismissed}>
+          <span class="text-ink-muted"> Dismissed.</span>
+        </Show>
+      </p>
+      <Show when={copy().detail}>
+        {(detail) => (
+          <p class="line-clamp-3 min-w-0 text-xs text-ink-muted wrap-break-word">
+            {detail()}
+          </p>
+        )}
+      </Show>
+    </div>
+  );
+}
+
 function PhaseStatus(props: {
   source: ImportDraft['source'];
   phase: ImportReviewPhase;
@@ -70,11 +101,10 @@ function PhaseStatus(props: {
       props.progress?.failureCount ?? props.progress?.failures.length ?? 0;
     const failed = failures > 0 ? ` ${failedItemSentence(failures)}` : '';
     if (!confirmed) {
-      const written =
-        imported() > 0
-          ? `Imported ${plural(imported(), 'item')}.`
-          : 'Nothing was imported.';
-      return written + failed;
+      // Without confirmed counts, say how many of the planned objects made it.
+      return failures > 0
+        ? `Imported ${imported()} of ${plural(imported() + failures, 'object')}`
+        : `Imported ${plural(imported(), 'object')}`;
     }
     const parts = [
       confirmed.documents > 0 ? plural(confirmed.documents, 'page') : '',
@@ -106,9 +136,21 @@ function PhaseStatus(props: {
   // Rebuild only when the phase changes, not on every progress tick.
   const kind = createMemo(() => props.phase.kind);
   const error = () =>
-    props.phase.kind === 'failed' || props.phase.kind === 'unknown'
-      ? props.phase.error
-      : null;
+    props.phase.kind === 'unknown' ? props.phase.error : null;
+  const writeFailure = () =>
+    props.phase.kind === 'failed' ? props.phase.errorKind : null;
+  const planFailure = () =>
+    match(props.phase)
+      .with({ kind: 'planFailed' }, ({ errorKind }) => ({
+        errorKind,
+        dismissed: false,
+      }))
+      .with({ kind: 'dismissed' }, ({ planFailure }) =>
+        planFailure
+          ? { errorKind: planFailure.errorKind, dismissed: true }
+          : null
+      )
+      .otherwise(() => null);
   return (
     <>
       {match(kind())
@@ -155,14 +197,31 @@ function PhaseStatus(props: {
           </p>
         ))
         .with('failed', () => (
-          <p role="alert" class="text-sm text-failure">
-            {error()}
-          </p>
+          <Failure
+            stage="write"
+            source={props.source}
+            errorKind={writeFailure()}
+            dismissed={false}
+          />
         ))
-        .with('dismissed', () => (
-          <p role="status" class="text-sm text-ink-muted">
-            Dismissed — nothing was imported
-          </p>
+        .with('planFailed', 'dismissed', () => (
+          <Show
+            when={planFailure()}
+            fallback={
+              <p role="status" class="text-sm text-ink-muted">
+                Dismissed — nothing was imported
+              </p>
+            }
+          >
+            {(failure) => (
+              <Failure
+                stage="plan"
+                source={props.source}
+                errorKind={failure().errorKind}
+                dismissed={failure().dismissed}
+              />
+            )}
+          </Show>
         ))
         .with('unknown', () => (
           <p role="alert" class="text-sm text-failure">
@@ -266,6 +325,8 @@ type ImportPlanCardProps = {
   canAct: boolean;
   /** Trimming and approving are open. */
   editable: boolean;
+  /** Dismissing is open: the plan is ready, or failed. */
+  dismissable: boolean;
   /** The agent approved it because the owner told it to in chat. */
   startedByAgent: boolean;
   working: boolean;
@@ -281,6 +342,10 @@ type ImportPlanCardProps = {
   onApprove: () => void;
   onDismiss: () => void;
   onStop: () => void;
+  /** Runs the source's connect flow again; absent where it can't. */
+  onReconnect?: () => void;
+  /** The connect flow is open. */
+  reconnecting?: boolean;
 };
 
 /** What the plan holds per kind, e.g. "Databases 18 (405 rows)". */
@@ -316,6 +381,19 @@ function PlanContents(
   const running = () =>
     props.phase.kind === 'starting' || props.phase.kind === 'importing';
   const failures = () => props.progress?.failures ?? [];
+  // A failed plan has nothing to approve, and a dismissed one nothing left to
+  // do, so neither shows its summary or rows (which would read 'Waiting').
+  const planFailed = () =>
+    props.phase.kind === 'planFailed' || props.phase.kind === 'dismissed';
+  const reconnect = () =>
+    match(props.phase)
+      .with(
+        { kind: 'planFailed' },
+        { kind: 'failed' },
+        ({ errorKind }) =>
+          failureCopy('plan', props.source ?? 'notion', errorKind).reconnect
+      )
+      .otherwise(() => false);
   const details = () =>
     props.phase.kind === 'completed' ||
     ((props.phase.kind === 'failed' || props.phase.kind === 'stopped') &&
@@ -341,14 +419,14 @@ function PlanContents(
         >
           <ActionDialogShell.Title>{props.title}</ActionDialogShell.Title>
         </Show>
-        <Show when={props.summary && !details()}>
+        <Show when={props.summary && !planFailed() && !details()}>
           <p class="text-xs text-ink-muted">{props.summary}</p>
         </Show>
         <Show when={(choosing() || planning()) && props.sharingSummary}>
           <p class="text-xs text-ink-muted">{props.sharingSummary}</p>
         </Show>
       </header>
-      <Show when={!details()}>
+      <Show when={!planFailed() && !details()}>
         <PlanTotals totals={props.totals} />
         <Show
           when={
@@ -430,9 +508,9 @@ function PlanContents(
         </p>
       </Show>
       <Show
-        when={props.hasPlan}
+        when={props.hasPlan && !planFailed()}
         fallback={
-          <Show when={!planning()}>
+          <Show when={!planning() && !planFailed()}>
             <p class="text-xs text-ink-muted">
               {props.alreadyInMacro.length > 0
                 ? 'Everything shared by this source is already in Macro.'
@@ -489,7 +567,7 @@ function PlanContents(
           )}
         </Show>
       </Show>
-      <Show when={props.alreadyInMacro.length > 0}>
+      <Show when={props.alreadyInMacro.length > 0 && !planFailed()}>
         <AlreadyInMacro
           summary={props.alreadyInMacroSummary}
           entries={props.alreadyInMacro}
@@ -527,19 +605,49 @@ function PlanContents(
           <Button
             variant="ghost"
             size="sm"
-            disabled={!props.editable}
+            disabled={!props.dismissable}
             onClick={() => props.onDismiss()}
           >
             Dismiss
           </Button>
           <Button
-            variant="primary"
+            variant={props.full ? 'primary' : 'secondary'}
             size="sm"
             disabled={!props.editable || props.count === 0}
             onClick={() => props.onApprove()}
           >
             {planning() ? 'Import' : `Import ${volumeLabel(props.volume)}`}
           </Button>
+        </footer>
+      </Show>
+      <Show
+        when={
+          props.canAct && (props.phase.kind === 'planFailed' || reconnect())
+        }
+      >
+        <footer class="flex flex-wrap justify-end gap-2">
+          <Show when={props.phase.kind === 'planFailed'}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!props.dismissable}
+              onClick={() => props.onDismiss()}
+            >
+              Dismiss
+            </Button>
+          </Show>
+          <Show when={reconnect() && props.onReconnect}>
+            {(onReconnect) => (
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={props.reconnecting}
+                onClick={() => onReconnect()()}
+              >
+                Reconnect {sourceLabel(props.source ?? 'notion')}
+              </Button>
+            )}
+          </Show>
         </footer>
       </Show>
       <Show when={props.canAct && running()}>
@@ -567,7 +675,7 @@ export function ImportPlanCard(props: ImportPlanCardProps) {
   const [full, setFull] = createSignal(false);
   return (
     <>
-      <Card class="my-3 flex min-w-0 flex-col gap-3 p-3">
+      <Card variant="filled" depth={3} class="my-3 gap-3 p-3">
         <PlanContents
           {...props}
           full={false}

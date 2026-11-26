@@ -27,7 +27,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 374336de0b98c02e5327ff9a8cec293c9538816ccd381a4453ce012c82844dd0
+        checksum/config: 1f3a085dfbb8481f31e12fa48952fa15b1a0ea35478ee38557d31829493b0282
       labels:
         app.kubernetes.io/component: compactor
         app.kubernetes.io/instance: tempo
@@ -62,7 +62,7 @@ spec:
             - -config.file=/conf/tempo.yaml
           env:
             - name: GOMEMLIMIT
-              value: 2176MiB
+              value: 5222MiB
             - name: GOGC
               value: "80"
           image: docker.io/grafana/tempo:2.10.7
@@ -71,7 +71,7 @@ spec:
             httpGet:
               path: /ready
               port: http-metrics
-            initialDelaySeconds: 60
+            initialDelaySeconds: 180
             timeoutSeconds: 5
           name: compactor
           ports:
@@ -89,10 +89,10 @@ spec:
             timeoutSeconds: 1
           resources:
             limits:
-              memory: 2560Mi
+              memory: 6Gi
             requests:
               cpu: 50m
-              memory: 1536Mi
+              memory: 4Gi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

@@ -1,10 +1,13 @@
+import v8 from 'node:v8';
+import vm from 'node:vm';
 import { gql } from '@urql/core';
 import fc from 'fast-check';
 import { createComputed, createRoot } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { describe, expect, it } from 'vitest';
 import { createKeyedProjection } from '../../queries/soup/create-keyed-projection';
 import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
-import { LiveQuery, querySnapshot } from './live-query';
+import { LiveQuery, querySnapshot, readRowSnapshot } from './live-query';
 import { applyQueryPatches } from './query-patches';
 import { queryShape } from './query-shape';
 
@@ -350,5 +353,119 @@ describe('live query field propagation', () => {
       expect(reads).toBe(2);
       dispose();
     });
+  });
+
+  it('tracks per-row patches through readRowSnapshot without attaching Solid store nodes to nested arrays', () => {
+    type NestedRow = {
+      __typename: string;
+      id: string;
+      isRead: boolean;
+      participants: Array<{ userId: string; role: string }>;
+    };
+    createRoot((dispose) => {
+      const rows: NestedRow[] = Array.from({ length: 20 }, (_, id) => ({
+        __typename: 'Channel',
+        id: String(id),
+        isRead: false,
+        participants: Array.from({ length: 15 }, (_, p) => ({
+          userId: `user-${p}`,
+          role: 'MEMBER',
+        })),
+      }));
+      const view = new LiveQuery({ rows });
+      const live = view.data as { rows: NestedRow[] };
+      let maps = 0;
+      const projected = createKeyedProjection(
+        () => live.rows,
+        (row) => row.id,
+        (row) => {
+          maps += 1;
+          const raw = readRowSnapshot(row);
+          return {
+            id: raw.id,
+            read: raw.isRead,
+            members: raw.participants.map((p) => `${p.userId}:${p.role}`),
+          };
+        }
+      );
+
+      expect(projected()).toHaveLength(20);
+      expect(maps).toBe(20);
+      const rawParticipant = unwrap(live.rows[0]).participants[0];
+      expect(Object.getOwnPropertySymbols(rawParticipant)).toEqual([]);
+
+      view.replace(
+        applyQueryPatches(view.snapshot, [
+          { path: ['rows', 5, 'isRead'], value: true },
+        ])
+      );
+      expect(maps).toBe(21);
+      expect(projected()[5].read).toBe(true);
+      expect(projected()[4].read).toBe(false);
+
+      // A full snapshot replacement must also remap only the row that changed.
+      const fullNext = structuredClone(view.snapshot as { rows: NestedRow[] });
+      fullNext.rows[7].isRead = true;
+      view.replace(fullNext);
+      expect(maps).toBe(22);
+      expect(projected()[7].read).toBe(true);
+      expect(projected()[4].read).toBe(false);
+      dispose();
+    });
+  });
+
+  it('does not retain the LiveQuery or sibling rows when a single row is held', async () => {
+    v8.setFlagsFromString('--expose_gc');
+    const runGc = vm.runInNewContext('gc') as () => void;
+
+    const retainOneRow = () => {
+      let view: LiveQuery | undefined = new LiveQuery({
+        user: {
+          soup: {
+            items: [
+              {
+                __typename: 'GraphqlSoupChannel',
+                id: 'ch-1',
+                name: 'General',
+                payload: 'a'.repeat(4096),
+              },
+              {
+                __typename: 'GraphqlSoupChannel',
+                id: 'ch-2',
+                name: 'Random',
+                payload: 'b'.repeat(4096),
+              },
+            ],
+          },
+        },
+      });
+      const items = (
+        view.data as {
+          user: { soup: { items: Array<{ id: string; name: string }> } };
+        }
+      ).user.soup.items;
+      const keptRow = unwrap(items[0]);
+      const siblingRow = unwrap(items[1]);
+      // Exercise readRowSnapshot inside a disposed computation too.
+      createRoot((dispose) => {
+        expect(readRowSnapshot(items[0]).name).toBe('General');
+        dispose();
+      });
+      const viewRef = new WeakRef(view);
+      const siblingRef = new WeakRef(siblingRow);
+      view = undefined;
+      return { keptRow, viewRef, siblingRef };
+    };
+
+    const { keptRow, viewRef, siblingRef } = retainOneRow();
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      runGc();
+      if (!viewRef.deref() && !siblingRef.deref()) break;
+    }
+
+    expect(keptRow.id).toBe('ch-1');
+    expect(viewRef.deref()).toBeUndefined();
+    expect(siblingRef.deref()).toBeUndefined();
   });
 });

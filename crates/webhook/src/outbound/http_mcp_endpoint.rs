@@ -69,16 +69,24 @@ fn status_failure(status: StatusCode) -> McpEndpointFailure {
     }
 }
 
-/// Read at most `limit` bytes of the body; `None` when it is longer.
-async fn bounded_body(mut response: Response, limit: usize) -> Option<Vec<u8>> {
+/// Read at most `limit` bytes of the body; `None` when it is longer. A body
+/// that times out or breaks off is a transport failure, not a wrong echo.
+async fn bounded_body(
+    mut response: Response,
+    limit: usize,
+) -> Result<Option<Vec<u8>>, McpEndpointFailure> {
     let mut body = Vec::new();
-    while let Ok(Some(chunk)) = response.chunk().await {
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| transport_failure(&error))?
+    {
         if body.len() + chunk.len() > limit {
-            return None;
+            return Ok(None);
         }
         body.extend_from_slice(&chunk);
     }
-    Some(body)
+    Ok(Some(body))
 }
 
 impl ReqwestWebhookValidationClient {
@@ -167,6 +175,7 @@ impl McpEndpointClient for ReqwestWebhookValidationClient {
         }
         let echoed = bounded_body(response, CHALLENGE_RESPONSE_MAX_BYTES)
             .await
+            .map_err(McpEndpointVerifyError::Failed)?
             .and_then(|body| serde_json::from_slice::<ChallengeEcho>(&body).ok())
             .map(|echo| echo.challenge);
         match echoed {

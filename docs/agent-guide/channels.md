@@ -394,6 +394,19 @@ remain literal; source-controlled tags must not inject entities. Test live edits
 and deletion before deferred reconciliation: neither may be overwritten or revived.
 See the [rollout/recovery gates](../runbooks/slack-archive-import.md).
 
+## Message times
+
+Every message, reply, system update and comment says when it was sent: `2:33 PM`
+today, `Yesterday at 11:47 PM` the day before, `11/6/26, 2:33 PM` earlier. A time
+alone is always today's. The date order and the 12- or 24-hour clock follow the
+browser's locale, hovering shows the whole date, and labels change on their own
+when the day does. The same goes for a message without a header, whose time
+shows in its hover toolbar. The first message of a day always has a header, even
+from the same sender minutes later.
+
+Date dividers stand between top-level messages of different days: `Today`,
+`Yesterday`, the weekday up to six days back, then the date. Replies have none.
+
 ## Collapsed reply chains
 
 Collapsed channel threads show up to the first three replies from the timeline
@@ -409,8 +422,9 @@ row out of view and back. Expanding again must retain every incoming reply.
 
 Standalone thread previews show the first three complete message groups instead.
 Consecutive replies from the same sender within the five-minute avatar-grouping
-window count as one group. Different senders, longer gaps, deleted replies, and
-agent replies triggered by different users preserve their avatar group boundaries.
+window count as one group. Different senders, longer gaps, a new day, deleted
+replies, and agent replies triggered by different users preserve their avatar
+group boundaries.
 
 Channel timelines show system updates alongside messages: participant additions
 and removals, renames, profile picture changes, and completed calls with their
@@ -567,10 +581,9 @@ The new-message compose screen and channel message/reply inputs use the same
 attachment and send controls on mobile and desktop. On phones, the `+` drawer
 offers `Format text` beneath `Mention` to toggle the formatting ribbon.
 iOS uses the native media attachment picker.
-In the iOS app, both collapsed and expanded channel inputs use the shared
-[glass press spotlight](navigation.md#mobile-glass-feedback). Tap the editor and its
-enabled actions to check the highlight; the caret, draft, keyboard, and action
-timing should remain unchanged. Flat embedded inputs keep their host's surface.
+Collapsed and expanded channel inputs use the shared
+[mobile glass](navigation.md#mobile-glass-feedback) edge, with normal tap
+feedback. Flat embedded inputs keep their host's surface.
 Short top-level drafts place attachment, message text, and send on one row on
 both mobile and desktop. Text that wraps onto a second line, explicit line
 breaks, non-paragraph blocks (lists, blockquotes, headings, etc.), and attachments
@@ -1153,27 +1166,30 @@ notifications along with the other notifications for that thread.
 Desktop only, behind `enable-channel-notification-gutter`, which is on in
 local development (`VITE_ENABLE_CHANNEL_NOTIFICATION_GUTTER` overrides it).
 Open a channel in a pane at least 1400px wide, so the list docks in the
-gutter, with notifications from another account: new top-level messages, a
-thread reply, and a mention. Then narrow the pane to see the popover and the
-hidden states. Check that:
+gutter, with unread notifications from another account: new top-level
+messages, a thread reply, and a mention. Then narrow the pane to see the
+popover and the hidden states. Check that:
 
-- A round check sits in the gutter left of each stack's newest message. For a
-  thread, it sits beside the newest notified reply, or beside the top-level
-  message while the thread is collapsed. Clicking it removes the check and
-  marks that stack's notifications done in Home.
 - A toggle with the notifications bell and a count sits at the top left of
   the gutter. With ≥240px of gutter (pane ≥1400px), it opens the list as a
-  card docked in the gutter. Narrower panes open the list as a popover. Not
-  done and Unread switch which stacks it lists. Clicking a row scrolls to its
-  message, and the row's check marks it done (or read, in Unread). While a
-  list's notifications load it says so, and if the read fails it offers Retry
-  instead of an empty list.
-- Unseen stacks show an unread dot before their icon, and the toggle shows
-  one after its count while any not-done stack is unseen. Reading a stack (here, in Home, or
-  on another device) clears its dot.
-- With nothing left to mark done, the bell and the list hide (an open popover
-  closes); a new notification brings the bell back.
-- Below 72px of gutter, the toggle hides. Below 1008px, the checks hide.
+  card docked in the gutter. Narrower panes open the list as a popover. There
+  are no checks beside the messages and no view switch: the list, headed
+  **Unread**, holds what was unread when the channel opened. Opening the
+  channel from its Home or inbox row (which marks that row read) still lists
+  the row's notifications, without their unread dot.
+- Scrolling through every message leaves the list unchanged; read entries
+  lose their unread dot, and the toggle loses its dot once none is unread.
+- A thread reply or a mention that arrives while the channel is open joins
+  the list (its thread's entry, or a new one). A new top-level message does
+  not; it is listed the next time the channel opens.
+- Clicking an entry scrolls to its message and leaves it listed (a popover
+  closes). Its check removes only that entry and marks its whole stack done:
+  Home and the inbox drop it. A failed mark puts the entry back and says so.
+- After the last entry is checked off (or **Mark all done**), the bell and
+  the list hide; a reply or mention arriving brings the bell back. Leaving
+  and reopening the channel takes a fresh list.
+- While the channel's notifications load nothing shows; if the read fails,
+  the bell offers Retry. Below 72px of gutter, the toggle hides.
 
 ## Requests to join
 

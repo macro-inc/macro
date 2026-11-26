@@ -1,10 +1,16 @@
+import {
+  compileToAst,
+  defineQueryFilters,
+  queryStateFrom,
+} from '@app/features/next-soup/filters/filter-store';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { type EntityItem, useQuickAccess } from '@core/context/quickAccess';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EmailEntity, WithSearch } from '@entity';
 import {
-  type SoupItemsQueryArgs,
-  useSoupItemsQuery,
+  QUICK_ACCESS_FEED_OPTIONS,
+  type SoupAstItemsQueryArgs,
+  useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import {
   type SearchSoupQueryArgs,
@@ -18,12 +24,12 @@ import { match } from 'ts-pattern';
 const USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS: boolean = false;
 
 /** The viewer's newest threads, for when the GraphQL cache is off. */
-function recentEmailThreadsArgs(): SoupItemsQueryArgs {
-  return {
-    params: { limit: 20, sort_method: 'updated_at' },
-    body: { ...QUERY_FILTERS_BASE, email_filters: {} },
-  };
-}
+export const RECENT_EMAIL_THREADS_ARGS: SoupAstItemsQueryArgs = {
+  params: { limit: 20, sort_method: 'updated_at' },
+  body: compileToAst(
+    queryStateFrom(defineQueryFilters({}, { skipTargets: ['ef'] }))
+  ),
+};
 
 function emailEntityItem(email: EmailEntity): EntityItem {
   return {
@@ -66,7 +72,7 @@ type EmailMentionSource = 'search' | 'quickAccess' | 'recentThreads';
  * supplies them behind USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS, and for
  * `recentWhenShort` menus while the term is too short to search. Its email
  * bucket needs the GraphQL cache, so without the cache those menus list the
- * newest threads from the REST Soup list instead.
+ * newest threads from the Soup list instead.
  */
 export function useEmailSearchMention(
   options: UseEmailSearchMentionOptions
@@ -96,13 +102,17 @@ export function useEmailSearchMention(
   );
 
   // Like the search below, asks again whenever it is shown.
-  const recentThreadsQuery = useSoupItemsQuery(recentEmailThreadsArgs, () => ({
-    enabled: source() === 'recentThreads' && listEnabled(),
-    staleTime: 0,
-  }));
+  const recentThreadsQuery = useSoupAstItemsQuery(
+    () => RECENT_EMAIL_THREADS_ARGS,
+    () => ({
+      ...QUICK_ACCESS_FEED_OPTIONS,
+      enabled: source() === 'recentThreads' && listEnabled(),
+      staleTime: 0,
+    })
+  );
   const recentThreads = createLazyMemo((): EntityItem[] => {
     if (recentThreadsQuery.isPending) return [];
-    return (recentThreadsQuery.data ?? [])
+    return (recentThreadsQuery.data?.entities ?? [])
       .filter(
         (entity): entity is EmailEntity =>
           entity.type === 'email' && !entity.isDraft
@@ -177,7 +187,7 @@ export function useEmailSearchMention(
     hasMore: () =>
       match(source())
         .with('quickAccess', () => cachedEmails.hasMore())
-        // The REST list is one page of the newest threads.
+        // The Soup list is one page of the newest threads.
         .with('recentThreads', () => false)
         .with('search', () => Boolean(emailSearchQuery.hasNextPage))
         .exhaustive(),

@@ -784,7 +784,6 @@ async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() 
             }),
             RecordingLifecyclePublisher::new(),
             crate::domain::pending::PendingCommands::new(),
-            PromptMentionsMock::new(),
             NotifierMock::new(),
         );
         service.inner.queues.enqueue(id, entry.clone()).unwrap();

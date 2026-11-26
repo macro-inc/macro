@@ -6,6 +6,7 @@ import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { queryClient } from './client';
 import { historyKeys } from './history/keys';
 import { invalidatePreview } from './preview';
+import { refreshActiveGraphqlSoupQueries } from './soup/graphql/active-queries';
 import { soupKeys } from './soup/keys';
 
 const CHAT_STALE_TIME = 30 * 1000;
@@ -51,6 +52,12 @@ export function useChatRenameWebsocketSync() {
     queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
     queryClient.invalidateQueries({ queryKey: soupKeys.astItems._def });
     queryClient.invalidateQueries({ queryKey: soupKeys.search._def });
+    // Soup updates rename the chat in the GraphQL cache; lists it doesn't
+    // maintain, and every list without it, read again.
+    fireAndForget(
+      refreshActiveGraphqlSoupQueries({ unmaintainedOnly: true }),
+      'chat-rename-sync'
+    );
     fireAndForget(invalidatePreview(data.chat_id), 'chat-rename-sync');
   });
 }

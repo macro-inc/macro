@@ -4,8 +4,8 @@ use models_properties::service::property_value::PropertyValue;
 use uuid::Uuid;
 
 use super::plan::{
-    FiledPerson, RecordValue, ValueVisibility, plan_values, request_fingerprint,
-    rewrite_sharing_rules, same_address_block,
+    FiledPerson, MergingContact, RecordValue, ValueVisibility, different_companies_block,
+    plan_values, request_fingerprint, rewrite_sharing_rules, same_address_block,
 };
 use super::*;
 use crate::domain::email_rules::{
@@ -231,6 +231,104 @@ fn people_sharing_an_address_across_records_block_the_merge_archived_ones_too() 
             .iter()
             .all(|person| person.address == "pat@a.example.com")
     );
+}
+
+/// A consumer provider; no reserved example domain is one.
+const PERSONAL_DOMAIN: &str = "gmail.com";
+
+#[test]
+fn people_under_another_company_with_a_work_address_block_a_contact_merge() {
+    let contact = |n: u128, company: Option<u128>, addresses: &[&str]| MergingContact {
+        contact_id: id(n),
+        name: Some(format!("Person {n}")),
+        company: company.map(|company| (id(company), format!("Company {company}"))),
+        addresses: addresses
+            .iter()
+            .map(|address| address.to_string())
+            .collect(),
+    };
+    let survivor = contact(1, Some(10), &["pat@a.example.com"]);
+    let personal = format!("pat@{PERSONAL_DOMAIN}");
+
+    assert_eq!(
+        different_companies_block(
+            &survivor,
+            &[
+                contact(2, Some(10), &["pat.r@a.example.com"]),
+                contact(3, None, &["pat@b.example.com"]),
+                contact(4, Some(11), &[personal.as_str()]),
+            ],
+        ),
+        None,
+        "the same company, no company, or only personal addresses may join it"
+    );
+
+    let Some(MergeBlock::DifferentCompanies { people }) = different_companies_block(
+        &survivor,
+        &[
+            contact(5, Some(11), &[personal.as_str(), "pat@b.example.com"]),
+            contact(6, Some(12), &[]),
+            contact(7, Some(11), &[personal.as_str()]),
+        ],
+    ) else {
+        panic!("expected a block");
+    };
+    assert_eq!(
+        people
+            .iter()
+            .map(|person| (person.contact_id, person.company_id))
+            .collect::<Vec<_>>(),
+        vec![(id(5), id(11)), (id(6), id(12))],
+        "a work address, or no address to change company with, blocks it"
+    );
+
+    let unfiled = contact(1, None, &["pat@a.example.com"]);
+    assert!(
+        different_companies_block(&unfiled, &[contact(2, Some(10), &["pat@a.example.com"])])
+            .is_some(),
+        "a person on a company's domain can't leave it for a contact without one"
+    );
+}
+
+#[test]
+fn keeping_a_rule_naming_a_merged_contact_names_its_addresses() {
+    let merged: HashMap<Uuid, Vec<String>> = HashMap::from([(
+        id(2),
+        vec![
+            "pat@home.example.com".to_string(),
+            "pat@a.example.com".to_string(),
+        ],
+    )]);
+    let before = rules(vec![EmailInclusionRule::Contact { contact_id: id(2) }]);
+
+    let kept = rewrite_sharing_rules(
+        &before,
+        MergeRecordType::Contact,
+        &merged,
+        SharingRulesChoice::Keep,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        kept.include,
+        vec![
+            EmailInclusionRule::Address {
+                address: "pat@a.example.com".into()
+            },
+            EmailInclusionRule::Address {
+                address: "pat@home.example.com".into()
+            },
+        ]
+    );
+    let stopped = rewrite_sharing_rules(
+        &before,
+        MergeRecordType::Contact,
+        &merged,
+        SharingRulesChoice::Stop,
+    )
+    .unwrap()
+    .unwrap();
+    assert!(stopped.include.is_empty());
 }
 
 #[test]

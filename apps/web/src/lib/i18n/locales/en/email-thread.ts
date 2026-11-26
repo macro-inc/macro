@@ -8,4 +8,7 @@ export default {
   nextEmail: 'Next email',
   markDone: 'Mark done',
   markNotDone: 'Mark as not done',
+  // The subject above an open thread, cut to three lines.
+  showFullSubject: 'Show full subject',
+  showLess: 'Show less',
 };

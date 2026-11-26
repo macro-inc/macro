@@ -10,13 +10,6 @@ spec:
             matchLabels:
               app.kubernetes.io/instance: tempo
               app.kubernetes.io/name: tempo
-    - ports:
-        - port: 8080
-          protocol: TCP
-      to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: mimir
   ingress:
     - from:
         - podSelector:

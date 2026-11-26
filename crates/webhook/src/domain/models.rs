@@ -344,7 +344,6 @@ pub const WEBHOOK_EVENT_NAMES: &[&str] = &[
     "agent_session.settled",
     "agent_session.waiting_for_input",
     "agent_session.input_received",
-    "agent_session.mentioned",
     "agent_session.stopped",
     "agent_session.renamed",
     "agent_session.deleted",

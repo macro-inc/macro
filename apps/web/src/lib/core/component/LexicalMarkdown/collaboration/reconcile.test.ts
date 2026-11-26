@@ -1,6 +1,9 @@
 import { loroSyncState } from '@core/component/LexicalMarkdown/utils';
 import {
+  $createDocumentCardNode,
+  $isDocumentCardNode,
   $updateAllNodeIds,
+  DocumentCardNode,
   type NodeIdMappings,
 } from '@macro-inc/lexical-core';
 import {
@@ -118,5 +121,72 @@ describe('$reconcileLexicalState', () => {
     expect(keysAfter[5]).toBe(keysBefore[4]);
     expect(keysAfter[6]).toBe(keysBefore[2]);
     expect(keysAfter).not.toContain(keysBefore[1]);
+  });
+
+  it("applies a card's remote fields, so the next local write keeps them", () => {
+    const editor = createEditor({
+      namespace: 'reconcile-card',
+      nodes: [DocumentCardNode],
+      onError: (error) => {
+        throw error;
+      },
+    });
+    const mappings: NodeIdMappings = {
+      idToNodeKeyMap: new Map(),
+      nodeKeyToIdMap: new Map(),
+    };
+    editor.update(
+      () => {
+        $getRoot().append(
+          $createDocumentCardNode({
+            documentId: 'canvas-1',
+            documentName: 'Canvas',
+            blockName: 'canvas',
+            previewData: { view: { x: 164, y: -687, scale: 100 } },
+          })
+        );
+        $updateAllNodeIds(mappings);
+      },
+      { discrete: true }
+    );
+    const local = structuredClone(
+      loroSyncState(editor.getEditorState())
+    ) as SerializedEditorState;
+
+    // Another person panned the embedded canvas and resized the card.
+    const remote = structuredClone(local);
+    const remoteCard = remote.root.children[0] as SerializedLexicalNode &
+      Record<string, unknown>;
+    remoteCard.previewData = { view: { x: 215, y: -3940, scale: 100 } };
+    remoteCard.previewBox = ['100%', '600px'];
+    remoteCard.blockParams = { view: 'board' };
+    // A viewer without access to the canvas names it differently.
+    remoteCard.documentName = 'No Access';
+
+    editor.update(
+      () =>
+        $reconcileLexicalState(
+          editor.getEditorState().toJSON(),
+          remote,
+          mappings,
+          () => '1'
+        ),
+      { discrete: true }
+    );
+
+    editor.read(() => {
+      const card = $getRoot().getFirstChild();
+      if (!$isDocumentCardNode(card)) throw new Error('card missing');
+      expect(card.getPreviewData()).toEqual(remoteCard.previewData);
+      expect(card.getPreviewBox()).toEqual(remoteCard.previewBox);
+      expect(card.getBlockParams()).toEqual(remoteCard.blockParams);
+      expect(card.getDocumentName()).toBe('Canvas');
+    });
+    // What this editor writes next is what Loro already holds, apart from the
+    // name it resolves for itself: it does not put its own earlier view back.
+    expect(loroSyncState(editor.getEditorState()).root.children[0]).toEqual({
+      ...remoteCard,
+      documentName: 'Canvas',
+    });
   });
 });

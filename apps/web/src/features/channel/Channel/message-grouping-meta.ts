@@ -1,4 +1,5 @@
 import type { MessageData } from '@core/messages/types';
+import { isSameDay } from '@core/util/time';
 
 export type GroupableMessage = Pick<
   MessageData,
@@ -37,9 +38,12 @@ export function shouldGroupWithPreviousMessage(
   if (isDeleted(current) || isDeleted(previous)) return false;
   if (hasThreadReplies(previous)) return false;
 
-  const currentCreatedAt = new Date(current.created_at).getTime();
-  const previousCreatedAt = new Date(previous.created_at).getTime();
-  const timeGap = currentCreatedAt - previousCreatedAt;
+  // A grouped message shows no time, so the first one of a day keeps its header.
+  const currentCreatedAt = new Date(current.created_at);
+  const previousCreatedAt = new Date(previous.created_at);
+  if (!isSameDay(currentCreatedAt, previousCreatedAt)) return false;
+
+  const timeGap = currentCreatedAt.getTime() - previousCreatedAt.getTime();
 
   return timeGap >= 0 && timeGap <= MESSAGE_GROUPING_WINDOW_MS;
 }

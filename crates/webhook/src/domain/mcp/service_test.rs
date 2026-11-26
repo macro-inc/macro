@@ -7,6 +7,7 @@ use crate::domain::mcp::models::{
     McpDeliveryProfile, McpEndpointFailure, McpEventSubscription, McpMatchCandidate,
     McpPreviousSecret, McpSecretCiphertext, McpSubscriptionId, McpTtlRequest,
 };
+use crate::domain::mcp::ports::McpLiveStanding;
 use chrono::{DateTime, Utc};
 use std::sync::{Arc, Mutex};
 use webhook_signature::standard::SigningSecret;
@@ -151,15 +152,26 @@ impl McpSubscriptionRepo for FakeRepo {
         Ok(deleted)
     }
 
-    async fn has_live_endpoint(
+    async fn live_standing(
         &self,
         user_id: &MacroUserIdStr<'static>,
         endpoint_url: &str,
-    ) -> Result<bool, FakeError> {
+        subscription_id: &McpSubscriptionId,
+    ) -> Result<McpLiveStanding, FakeError> {
         let now = Utc::now();
-        Ok(self.rows().iter().any(|row| {
-            &row.user_id == user_id && row.endpoint_url == endpoint_url && row.is_live(now)
-        }))
+        let rows = self.rows();
+        let live = rows
+            .iter()
+            .filter(|row| &row.user_id == user_id && row.is_live(now));
+        Ok(McpLiveStanding {
+            others: live
+                .clone()
+                .filter(|row| &row.subscription_id != subscription_id)
+                .count()
+                .try_into()
+                .expect("few rows"),
+            endpoint_verified: live.clone().any(|row| row.endpoint_url == endpoint_url),
+        })
     }
 
     async fn list_live_subscriber_ids(&self) -> Result<Vec<String>, FakeError> {
@@ -265,6 +277,36 @@ impl McpEndpointClient for FakeEndpoint {
             body,
         ));
         self.deliver
+    }
+}
+
+/// Verification attempts left to a user, shared by every user here.
+#[derive(Clone)]
+struct FakeLimiter {
+    left: Arc<Mutex<u32>>,
+}
+
+impl Default for FakeLimiter {
+    fn default() -> Self {
+        Self {
+            left: Arc::new(Mutex::new(MAX_FAILED_VERIFICATIONS)),
+        }
+    }
+}
+
+impl McpVerificationLimiter for FakeLimiter {
+    type Ticket = ();
+
+    async fn take(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+    ) -> Result<Option<()>, rootcause::Report> {
+        let mut left = self.left.lock().expect("lock");
+        Ok(left.checked_sub(1).map(|rest| *left = rest))
+    }
+
+    async fn give_back(&self, (): ()) {
+        *self.left.lock().expect("lock") += 1;
     }
 }
 
@@ -380,8 +422,20 @@ fn rotating(request: McpSubscribeRequest) -> McpSubscribeRequest {
 fn service(
     repo: &FakeRepo,
     endpoint: &FakeEndpoint,
-) -> McpEventSubscriptionServiceImpl<FakeRepo, FakeEndpoint, FakeCipher> {
-    McpEventSubscriptionServiceImpl::new(repo.clone(), endpoint.clone(), FakeCipher { fail: false })
+) -> McpEventSubscriptionServiceImpl<FakeRepo, FakeEndpoint, FakeCipher, FakeLimiter> {
+    McpEventSubscriptionServiceImpl::new(
+        repo.clone(),
+        endpoint.clone(),
+        FakeCipher { fail: false },
+        FakeLimiter::default(),
+    )
+}
+
+fn at(url: &str, query: &str) -> McpSubscribeRequest {
+    McpSubscribeRequest {
+        endpoint_url: url.to_owned(),
+        ..request(query, mentions_of_me_in_channels())
+    }
 }
 
 #[tokio::test]
@@ -494,6 +548,110 @@ async fn the_quota_counts_live_subscriptions_only() {
         .expect("expired ones no longer count");
     let now = Utc::now();
     assert_eq!(repo.rows().iter().filter(|row| row.is_live(now)).count(), 1);
+}
+
+#[tokio::test]
+async fn a_user_at_the_quota_is_refused_before_their_endpoint_is_called() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let service = service(&repo, &endpoint);
+    for index in 0..MAX_SUBSCRIPTIONS_PER_USER {
+        service
+            .subscribe(
+                user(ME),
+                request(&format!("q{index}"), mentions_of_me_in_channels()),
+            )
+            .await
+            .expect("under the quota");
+    }
+    let verified = endpoint.verify_count();
+
+    let elsewhere = service
+        .subscribe(user(ME), at("https://elsewhere.example.com/hook", "new"))
+        .await;
+    assert!(matches!(
+        elsewhere,
+        Err(McpSubscriptionError::ResourceExhausted { max: 50 })
+    ));
+    assert_eq!(endpoint.verify_count(), verified);
+}
+
+#[tokio::test]
+async fn failed_verifications_are_limited_and_passed_ones_are_not_counted() {
+    let repo = FakeRepo::default();
+    let accepting = FakeEndpoint::accepting();
+    let limiter = FakeLimiter::default();
+    // Endpoints that agree cost nothing, however many there are.
+    let agreeing = McpEventSubscriptionServiceImpl::new(
+        repo.clone(),
+        accepting.clone(),
+        FakeCipher { fail: false },
+        limiter.clone(),
+    );
+    for index in 0..MAX_FAILED_VERIFICATIONS + 5 {
+        agreeing
+            .subscribe(
+                user(ME),
+                at(&format!("https://hooks.example.com/{index}"), "mentions"),
+            )
+            .await
+            .expect("verified");
+    }
+    // Nor does a URL refused before any request is sent.
+    let refusing_urls = McpEventSubscriptionServiceImpl::new(
+        repo.clone(),
+        FakeEndpoint {
+            verify: Err(McpEndpointVerifyError::InvalidUrl("not https")),
+            ..FakeEndpoint::accepting()
+        },
+        FakeCipher { fail: false },
+        limiter.clone(),
+    );
+    for _ in 0..MAX_FAILED_VERIFICATIONS + 5 {
+        let refused = refusing_urls
+            .subscribe(user(ME), at("http://hooks.example.com/plain", "mentions"))
+            .await;
+        assert!(matches!(
+            refused,
+            Err(McpSubscriptionError::InvalidParams(_))
+        ));
+    }
+
+    let unwilling = FakeEndpoint {
+        verify: Err(McpEndpointVerifyError::Failed(McpEndpointFailure::Http4xx)),
+        ..FakeEndpoint::accepting()
+    };
+    let failing = McpEventSubscriptionServiceImpl::new(
+        repo.clone(),
+        unwilling.clone(),
+        FakeCipher { fail: false },
+        limiter,
+    );
+    for index in 0..MAX_FAILED_VERIFICATIONS {
+        let failed = failing
+            .subscribe(
+                user(ME),
+                at(&format!("https://victim.example.com/{index}"), "mentions"),
+            )
+            .await;
+        assert!(matches!(
+            failed,
+            Err(McpSubscriptionError::CallbackEndpoint(
+                McpEndpointFailure::Http4xx
+            ))
+        ));
+    }
+    let over = failing
+        .subscribe(user(ME), at("https://victim.example.com/more", "mentions"))
+        .await;
+    assert!(matches!(
+        over,
+        Err(McpSubscriptionError::VerificationsExhausted { max: 10 })
+    ));
+    assert_eq!(
+        unwilling.verify_count(),
+        usize::try_from(MAX_FAILED_VERIFICATIONS).expect("small")
+    );
 }
 
 #[tokio::test]

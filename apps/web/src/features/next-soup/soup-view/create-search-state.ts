@@ -13,6 +13,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor, Setter } from 'solid-js';
+import { leavesOutName } from '../core/search-operators';
 import { buildSoupSearchRequest } from '../queries/search-request';
 
 interface CreateSearchStateArgs {
@@ -33,6 +34,8 @@ interface CreateSearchStateArgs {
   serviceText?: Accessor<string>;
   /** The words names are matched with, when they differ from the field's. */
   nameText?: Accessor<string>;
+  /** Words a minus leaves out: no name match may hold one. */
+  leftOutWords?: Accessor<readonly string[]>;
   /**
    * The types a query's operators leave to search, which name matches are
    * narrowed to, or undefined for every type.
@@ -73,6 +76,7 @@ export const createSearchState = ({
   setSearchText,
   serviceText,
   nameText,
+  leftOutWords,
   operatorIndexes,
 }: CreateSearchStateArgs) => {
   const notificationSource = useGlobalNotificationSource();
@@ -95,10 +99,15 @@ export const createSearchState = ({
       Boolean(namesText().trim())
   );
   const localPool = createLazyMemo(() => {
-    const pool =
+    const searched =
       surface() === 'search'
         ? [...entityPool(), ...searchContext.routinePool()]
         : entityPool();
+    const leftOut = leftOutWords?.() ?? [];
+    const pool =
+      leftOut.length > 0
+        ? searched.filter((item) => !leavesOutName(item.data.name, leftOut))
+        : searched;
     const activeIds = soup.predicates
       .activeIds()
       .filter((id) => id !== 'explicit-noise');

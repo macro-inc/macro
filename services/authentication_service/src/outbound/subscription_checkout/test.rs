@@ -13,6 +13,7 @@ fn request() -> CheckoutRequest<'static> {
     CheckoutRequest {
         user_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
         plan: SeatPlan::Premium,
+        interval: teams::domain::model::BillingCadence::Month,
         onboarding_trial: true,
         success_url: "https://macro.com/app/onboarding?subscriptionSuccess=true".into(),
         cancel_url: "https://macro.com/app/onboarding?subscriptionCancel=true".into(),
@@ -160,8 +161,16 @@ async fn stub_gateway(
         Arc::new(stripe::Client::from_url(url.as_str(), "sk_test_fixture")),
         Arc::new(()),
         SeatPrices {
-            premium: stripe::PriceId::from_str("price_test").unwrap(),
-            max: None,
+            premium: teams::domain::model::PlanPrices {
+                monthly: Some(stripe::PriceId::from_str("price_test").unwrap()),
+                ..Default::default()
+            },
+            business: teams::domain::model::PlanPrices {
+                monthly: Some(stripe::PriceId::from_str("price_business").unwrap()),
+                yearly: Some(stripe::PriceId::from_str("price_business_year").unwrap()),
+                legacy: Vec::new(),
+            },
+            max: Default::default(),
         },
     );
     (gateway, stub, task)

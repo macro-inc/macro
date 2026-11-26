@@ -788,7 +788,6 @@ pub(crate) fn lifecycle_audience(event: &AgentSessionLifecycleEvent) -> Lifecycl
         | AgentSessionLifecycleEvent::Settled(_)
         | AgentSessionLifecycleEvent::WaitingForInput(_)
         | AgentSessionLifecycleEvent::InputReceived(_)
-        | AgentSessionLifecycleEvent::Mentioned(_)
         | AgentSessionLifecycleEvent::Stopped(_)
         | AgentSessionLifecycleEvent::Renamed(_) => LifecycleAudience::Session,
     }

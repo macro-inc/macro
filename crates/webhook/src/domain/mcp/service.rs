@@ -7,18 +7,20 @@ mod test;
 
 use super::live_subscribers::McpLiveSubscribers;
 use super::models::{
-    MAX_ARGUMENTS_BYTES, MAX_DELIVERY_BYTES, MAX_SUBSCRIPTIONS_PER_USER, McpDeliveryOutcome,
-    McpDeliveryProfile, McpEventOccurrence, McpEventQueueMessage, McpEventSubscription,
-    McpPreviousSecret, McpSubscribeRequest, McpSubscribeResult, McpSubscriptionKey,
-    SECRET_ROTATION_WINDOW,
+    MAX_ARGUMENTS_BYTES, MAX_DELIVERY_BYTES, MAX_FAILED_VERIFICATIONS, MAX_SUBSCRIPTIONS_PER_USER,
+    McpDeliveryOutcome, McpDeliveryProfile, McpEventOccurrence, McpEventQueueMessage,
+    McpEventSubscription, McpPreviousSecret, McpSubscribeRequest, McpSubscribeResult,
+    McpSubscriptionKey, SECRET_ROTATION_WINDOW,
 };
 use super::ports::{
     McpEndpointClient, McpEndpointVerifyError, McpEventDeliveryService, McpEventEnqueuer,
     McpEventFanout, McpEventSubscriptionService, McpSecretCipher, McpStoreOutcome,
-    McpSubscriptionError, McpSubscriptionRepo, McpSubscriptionUpsert,
+    McpSubscriptionError, McpSubscriptionRepo, McpSubscriptionUpsert, McpVerificationLimiter,
 };
 use crate::domain::delivery::{MAX_HTTP_ATTEMPTS, retry_delay};
-use crate::domain::models::{NormalizedWebhookEvent, WebhookWorkerDisposition};
+use crate::domain::models::{
+    NormalizedWebhookEvent, WEBHOOK_EVENT_NAMES, WebhookWorkerDisposition,
+};
 use chrono::{DateTime, Utc};
 use futures::StreamExt as _;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -63,6 +65,17 @@ fn check_arguments(arguments: &serde_json::Value) -> Result<(), McpSubscriptionE
     Ok(())
 }
 
+/// An event type as a span may record it: a name Macro emits, or
+/// `"unrecognized"` for whatever else a caller sent.
+fn recorded_event_type(event_type: &str) -> &str {
+    WEBHOOK_EVENT_NAMES
+        .iter()
+        .chain(std::iter::once(&"macro.events"))
+        .find(|name| **name == event_type)
+        .copied()
+        .unwrap_or("unrecognized")
+}
+
 /// Whether any key or string in `value` holds a NUL character.
 fn holds_nul(value: &serde_json::Value) -> bool {
     match value {
@@ -79,25 +92,28 @@ fn holds_nul(value: &serde_json::Value) -> bool {
 
 /// Subscribe and unsubscribe.
 #[derive(Clone)]
-pub struct McpEventSubscriptionServiceImpl<R, E, X> {
+pub struct McpEventSubscriptionServiceImpl<R, E, X, L> {
     repo: R,
     endpoint: E,
     cipher: X,
+    verifications: L,
 }
 
-impl<R, E, X> McpEventSubscriptionServiceImpl<R, E, X> {
+impl<R, E, X, L> McpEventSubscriptionServiceImpl<R, E, X, L> {
     /// Create the service. `cipher` opens a refreshed subscription's stored
-    /// secret, to tell whether the refresh replaces it.
-    pub fn new(repo: R, endpoint: E, cipher: X) -> Self {
+    /// secret, to tell whether the refresh replaces it; `verifications`
+    /// limits each user's failed callback verifications.
+    pub fn new(repo: R, endpoint: E, cipher: X, verifications: L) -> Self {
         Self {
             repo,
             endpoint,
             cipher,
+            verifications,
         }
     }
 }
 
-impl<R, E, X> McpEventSubscriptionServiceImpl<R, E, X>
+impl<R, E, X, L> McpEventSubscriptionServiceImpl<R, E, X, L>
 where
     X: McpSecretCipher,
 {
@@ -135,17 +151,18 @@ where
     }
 }
 
-impl<R, E, X> McpEventSubscriptionService for McpEventSubscriptionServiceImpl<R, E, X>
+impl<R, E, X, L> McpEventSubscriptionService for McpEventSubscriptionServiceImpl<R, E, X, L>
 where
     R: McpSubscriptionRepo,
     E: McpEndpointClient,
     X: McpSecretCipher,
+    L: McpVerificationLimiter,
 {
     #[tracing::instrument(
         name = "mcp_events.subscribe",
         skip_all,
         fields(
-            event_type = %request.event_type,
+            event_type = recorded_event_type(&request.event_type),
             profile = %request.profile,
             subscription_id = tracing::field::Empty,
             verified = tracing::field::Empty,
@@ -182,25 +199,43 @@ where
         }
 
         // A live subscription of this user to this URL means the endpoint
-        // already proved it wants their deliveries.
-        let verified = self
+        // already proved it wants their deliveries. A user at the quota is
+        // refused here, before their endpoint is called.
+        let standing = self
             .repo
-            .has_live_endpoint(&key.user_id, &key.endpoint_url)
+            .live_standing(&key.user_id, &key.endpoint_url, &subscription_id)
             .await
             .map_err(McpSubscriptionError::internal)?;
-        span.record("verified", verified);
-        if !verified {
-            self.endpoint
-                .verify(&key.endpoint_url, &request.secret, &subscription_id)
+        span.record("verified", standing.endpoint_verified);
+        if standing.others >= MAX_SUBSCRIPTIONS_PER_USER {
+            return Err(McpSubscriptionError::ResourceExhausted {
+                max: MAX_SUBSCRIPTIONS_PER_USER,
+            });
+        }
+        if !standing.endpoint_verified {
+            let ticket = self
+                .verifications
+                .take(&key.user_id)
                 .await
-                .map_err(|error| match error {
-                    McpEndpointVerifyError::InvalidUrl(message) => {
-                        McpSubscriptionError::InvalidParams(message.to_owned())
-                    }
-                    McpEndpointVerifyError::Failed(failure) => {
-                        McpSubscriptionError::CallbackEndpoint(failure)
-                    }
+                .map_err(McpSubscriptionError::Internal)?
+                .ok_or(McpSubscriptionError::VerificationsExhausted {
+                    max: MAX_FAILED_VERIFICATIONS,
                 })?;
+            let verified = self
+                .endpoint
+                .verify(&key.endpoint_url, &request.secret, &subscription_id)
+                .await;
+            if !matches!(verified, Err(McpEndpointVerifyError::Failed(_))) {
+                self.verifications.give_back(ticket).await;
+            }
+            verified.map_err(|error| match error {
+                McpEndpointVerifyError::InvalidUrl(message) => {
+                    McpSubscriptionError::InvalidParams(message.to_owned())
+                }
+                McpEndpointVerifyError::Failed(failure) => {
+                    McpSubscriptionError::CallbackEndpoint(failure)
+                }
+            })?;
         }
 
         // A refresh may replace the secret; deliveries then carry both
@@ -294,7 +329,10 @@ where
     #[tracing::instrument(
         name = "mcp_events.unsubscribe",
         skip_all,
-        fields(event_type = %key.event_type, subscription_id = tracing::field::Empty),
+        fields(
+            event_type = recorded_event_type(&key.event_type),
+            subscription_id = tracing::field::Empty,
+        ),
         err
     )]
     async fn unsubscribe(&self, key: McpSubscriptionKey) -> Result<(), McpSubscriptionError> {

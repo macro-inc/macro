@@ -128,6 +128,13 @@ html[data-theme-light='true'] .tutorial-video-play:focus-visible { outline-color
   pointer-events: none;
 }
 
+/* The diagram is line art drawn in light strokes for the dark page, not a
+   product capture. The light palette flips its lightness and turns the hue
+   back, so strokes read dark and the accents keep their colors. */
+html[data-theme-light='true'] .benefit-video-poster {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 /* Keep the play control outside the focal product detail. */
 .tutorial-video-embed .tutorial-video-stage-benefit .tutorial-video-play {
   top: 90%;

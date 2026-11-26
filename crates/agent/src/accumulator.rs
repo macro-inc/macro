@@ -100,6 +100,7 @@ fn stream_part_to_message_part(part: StreamPart) -> Option<AssistantMessagePart>
         | StreamPart::Thinking(_)
         | StreamPart::Usage(_)
         | StreamPart::ToolCallStarted(_)
-        | StreamPart::ToolCallArgs { .. } => None,
+        | StreamPart::ToolCallArgs { .. }
+        | StreamPart::ToolCallDropped { .. } => None,
     }
 }

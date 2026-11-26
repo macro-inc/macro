@@ -248,6 +248,15 @@ pub enum CodeModeError {
     /// Invalid source, deadline, or discovery arguments.
     #[error("{0}")]
     Invalid(String),
+    /// A saved review can never be presented (an import whose plan failed);
+    /// the message says why. Unlike other presentation failures it is not
+    /// retried: the review is settled as dismissed.
+    #[error("{0}")]
+    Unpresentable(String),
+    /// A submit refused because the review's action cannot start now (an
+    /// import whose plan is not ready for it); nothing was started.
+    #[error("{0}")]
+    NotApprovable(String),
     /// Admission is bounded before starting work.
     #[error("code execution is busy; try again later")]
     Busy,

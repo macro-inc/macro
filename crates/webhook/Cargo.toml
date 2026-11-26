@@ -53,6 +53,7 @@ outbound = [
   "dep:genai_telemetry",
   "dep:webhook_signature",
   "dep:macro_uuid",
+  "dep:rate_limit",
   "dep:reqwest",
   "dep:sqlx",
   "dep:sqs_client",

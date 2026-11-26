@@ -386,8 +386,11 @@ async function readViewportItems(
   );
 }
 
-// The outstanding first read of each host that has not answered yet.
-const firstReads = new WeakMap<object, Promise<unknown>>();
+// Share one bounded startup wait until the underlying host read settles.
+const firstReads = new WeakMap<
+  object,
+  Promise<CalendarRangeCacheResult | 'not-ready'>
+>();
 
 export type CalendarRangeRead =
   | { kind: 'range'; data: CalendarOccurrencesData }
@@ -403,9 +406,8 @@ export type CalendarRangeRead =
 type TraceSpan = Pick<Span, 'setAttr'>;
 
 /**
- * Asks the host for a viewport. A host that has never answered gets a head
- * start; past it, or while an earlier first read is still outstanding, the
- * caller reads from REST instead of waiting on cache startup.
+ * Share the unanswered host's head start across concurrent viewports. Each
+ * caller then reads its own range; an expired startup falls back immediately.
  */
 async function askCalendarRange(
   host: Pick<CacheHost, 'calendarRange'>,
@@ -413,22 +415,30 @@ async function askCalendarRange(
   headStartMs: number
 ): Promise<CalendarRangeCacheResult | 'not-ready'> {
   if (calendarCacheAnswered(host)) return host.calendarRange(args);
-  if (firstReads.has(host)) return 'not-ready';
-  const answer = (async (): Promise<CalendarRangeCacheResult | 'not-ready'> => {
-    try {
-      const result = await host.calendarRange(args);
-      if (result.kind === 'range') markCalendarCacheAnswered(host);
-      return result;
-    } catch {
-      // A failed first read leaves the host unanswered: this viewport reads
-      // REST and the next read asks again.
-      return 'not-ready';
-    } finally {
-      firstReads.delete(host);
+  const pending = firstReads.get(host);
+  if (pending) {
+    const first = await pending;
+    if (first === 'not-ready' || first.kind !== 'range') return 'not-ready';
+    return host.calendarRange(args);
+  }
+  const answer = Promise.resolve().then(
+    async (): Promise<CalendarRangeCacheResult | 'not-ready'> => {
+      try {
+        const result = await host.calendarRange(args);
+        if (result.kind === 'range') markCalendarCacheAnswered(host);
+        return result;
+      } catch {
+        // A failed first read leaves the host unanswered: this viewport reads
+        // REST and the next read asks again.
+        return 'not-ready';
+      } finally {
+        firstReads.delete(host);
+      }
     }
-  })();
-  firstReads.set(host, answer);
-  return withinCacheHeadStart(answer, headStartMs);
+  );
+  const bounded = withinCacheHeadStart(answer, headStartMs);
+  firstReads.set(host, bounded);
+  return bounded;
 }
 
 /** Brings a cache that may be behind forward, unless a pending write shaped the week. */

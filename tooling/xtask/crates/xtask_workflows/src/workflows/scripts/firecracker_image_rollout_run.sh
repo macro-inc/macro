@@ -9,6 +9,12 @@ fail() {
 }
 
 [ "$ENVIRONMENT" = "dev" ] || fail "environment must be dev"
+bin="$CLI_DIR/image-upgrade"
+[[ ${CLI_SHA256:-} =~ ^[0-9a-f]{64}$ ]] || fail "the rollout CLI checksum is missing or invalid"
+printf '%s  %s\n' "$CLI_SHA256" "$bin" | sha256sum --check --strict - \
+  || fail "the rollout CLI checksum could not be verified"
+# Artifact downloads discard executable permissions.
+chmod +x "$bin"
 command -v jq >/dev/null || fail "jq is missing on this runner"
 
 [[ "${NIX_CACHE_URL:-}" =~ ^s3://([a-z0-9.-]+)\?(.*&)?region=([a-z0-9-]+) ]] \
@@ -18,6 +24,9 @@ region=${BASH_REMATCH[3]}
 prefix="firecracker-images/$IMAGE_VERSION"
 files="$FILES_DIR/files.json"
 [ -s "$files" ] || fail "the build job's digests are missing"
+# shellcheck disable=SC2016 # $source_sha is jq's, not the shell's
+jq -e --arg source_sha "$SOURCE_SHA" '.source_sha == $source_sha' "$files" >/dev/null \
+  || fail "files.json has a different source commit"
 
 # The runner's own temp directory: emptied at the start of every job, so a
 # job killed before its trap still leaves nothing for the next one.
@@ -29,10 +38,14 @@ trap 'rm -rf "$secrets"' EXIT
 # dropped from the database once the image is staged.
 sources='[]'
 for name in vmlinux rootfs.ext4 boot_args; do
-  url=$(AWS_DEFAULT_REGION=$region aws s3 presign --expires-in 21600 "s3://$bucket/$prefix/$name.zst")
+  # Named by its contents, as the build job uploaded it.
+  # shellcheck disable=SC2016 # $name is jq's, not the shell's
+  sha256=$(jq -r --arg name "$name" '.files[] | select(.name == $name) | .sha256' "$files")
+  [[ $sha256 =~ ^[0-9a-f]{64}$ ]] || fail "files.json has no SHA-256 for $name"
+  url=$(AWS_DEFAULT_REGION=$region aws s3 presign --expires-in 21600 "s3://$bucket/$prefix/$sha256-$name.zst")
   echo "::add-mask::$url"
   sources=$(jq --arg name "$name" --arg url "$url" --slurpfile files "$files" \
-    '. + [{file: ($files[0][] | select(.name == $name)), url: $url}]' <<<"$sources")
+    '. + [{file: ($files[0].files[] | select(.name == $name)), url: $url}]' <<<"$sources")
 done
 jq -n --arg image "$IMAGE_VERSION" --argjson sources "$sources" \
   '{image: $image, sources: $sources}' >"$secrets/manifest.json"
@@ -47,10 +60,8 @@ fi
 echo "::add-mask::$database_url"
 printf '%s' "$database_url" >"$secrets/database.url"
 
-cargo build --release --locked -p hosted_runtimes --features image-upgrade-cli --bin image-upgrade
-bin=target/release/image-upgrade
-
-upgrade_id=$("$bin" start --environment dev --database-url-file "$secrets/database.url" \
+upgrade_id=$(env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY \
+  "$bin" start --environment dev --database-url-file "$secrets/database.url" \
   --manifest "$secrets/manifest.json" --computers "$COMPUTERS" --batch-size "$BATCH_SIZE" \
   --idle-wait-minutes "$IDLE_WAIT_MINUTES" --reconnect-timeout-minutes "$RECONNECT_TIMEOUT_MINUTES" \
   --created-by "$RUN_URL")
@@ -62,5 +73,6 @@ count=$(tr ',' '\n' <<<"$COMPUTERS" | wc -l)
 timeout=$((IDLE_WAIT_MINUTES + 60 + count * (RECONNECT_TIMEOUT_MINUTES + 5)))
 # Under the job's 360 minutes, so the cleanup above runs.
 if [ "$timeout" -gt 300 ]; then timeout=300; fi
-"$bin" wait --environment dev --database-url-file "$secrets/database.url" \
+env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY \
+  "$bin" wait --environment dev --database-url-file "$secrets/database.url" \
   --upgrade-id "$upgrade_id" --timeout-minutes "$timeout" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -1,20 +1,30 @@
+/* The glass material's colors. The cream palette overrides them in
+   cream-preview.css: a pale fill with ink hairlines instead of white ones. */
+:is(.feature-page, .macro-homepage) {
+  --demo-glass-fill: rgb(16 16 18 / 64%);
+  --demo-glass-solid: #111113;
+  --demo-glass-chip: rgb(30 32 32 / 54%);
+  --demo-glass-chip-solid: #202222;
+  --demo-glass-rim: 255 255 255;
+}
+
 /* A mostly opaque reading surface, with just a little of the page color beneath. */
 :is(.feature-page, .macro-homepage)
   :is(.product-page, .feature-page-visual, .homepage-sections)
   :is(.product-demo.glass, .feature-demo-context.glass, .workspace-feature-scene.glass, .macro-preview-back, .mds-card, .mail-app, .homepage-spreadsheet, .homepage-email-surface, .homepage-agent-chip .demo-cursor-card, .email-desktop-window) {
-  --glass-rim-background: linear-gradient(135deg, #ffffff16, #ffffff08 35%, #ffffff04 65%, #ffffff09);
-  background: linear-gradient(135deg, #ffffff07, transparent 55%), rgb(16 16 18 / 64%);
+  --glass-rim-background: linear-gradient(135deg, rgb(var(--demo-glass-rim) / 8.6%), rgb(var(--demo-glass-rim) / 3.1%) 35%, rgb(var(--demo-glass-rim) / 1.6%) 65%, rgb(var(--demo-glass-rim) / 3.5%));
+  background: linear-gradient(135deg, rgb(var(--demo-glass-rim) / 2.7%), transparent 55%), var(--demo-glass-fill);
   backdrop-filter: blur(16px) saturate(115%);
   -webkit-backdrop-filter: blur(16px) saturate(115%);
-  box-shadow: inset 0 1px 0 #ffffff12, inset 0 0 0 1px #ffffff07, 0 14px 32px -24px #0009;
+  box-shadow: inset 0 1px 0 rgb(var(--demo-glass-rim) / 7.1%), inset 0 0 0 1px rgb(var(--demo-glass-rim) / 2.7%), 0 14px 32px -24px #0009;
 }
 
 /* Homepage agent and CRM cards keep a softer edge than the other demo panels. */
 .macro-homepage .homepage-sections .homepage-agent-chip .demo-cursor-card,
 .macro-homepage .homepage-sections .homepage-crm .mds-card {
-  --glass-rim-background: linear-gradient(135deg, #ffffff0d, #ffffff05 35%, #ffffff02 65%, #ffffff05);
-  background: linear-gradient(135deg, #ffffff04, transparent 55%), rgb(16 16 18 / 64%);
-  box-shadow: inset 0 1px 0 #ffffff0b, inset 0 0 0 1px #ffffff04, 0 14px 32px -24px #0000005c;
+  --glass-rim-background: linear-gradient(135deg, rgb(var(--demo-glass-rim) / 5.1%), rgb(var(--demo-glass-rim) / 2%) 35%, rgb(var(--demo-glass-rim) / 0.8%) 65%, rgb(var(--demo-glass-rim) / 2%));
+  background: linear-gradient(135deg, rgb(var(--demo-glass-rim) / 1.6%), transparent 55%), var(--demo-glass-fill);
+  box-shadow: inset 0 1px 0 rgb(var(--demo-glass-rim) / 4.3%), inset 0 0 0 1px rgb(var(--demo-glass-rim) / 1.6%), 0 14px 32px -24px #0000005c;
 }
 .macro-homepage .homepage-sections .homepage-agent-chip .demo-cursor-card::after,
 .macro-homepage .homepage-sections .homepage-crm .mds-card::before,
@@ -22,10 +32,10 @@
 
 /* Reduce the homepage document, email, and CRM edge depth by 35%. */
 .macro-homepage .homepage-sections :is(.homepage-email-surface, .homepage-collaborative-doc .mds-card) {
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4.588%), inset 0 0 0 1px rgb(255 255 255 / 1.784%), 0 14px 32px -24px rgb(0 0 0 / 39%);
+  box-shadow: inset 0 1px 0 rgb(var(--demo-glass-rim) / 4.588%), inset 0 0 0 1px rgb(var(--demo-glass-rim) / 1.784%), 0 14px 32px -24px rgb(0 0 0 / 39%);
 }
 .macro-homepage .homepage-sections .homepage-crm .mds-card {
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 2.804%), inset 0 0 0 1px rgb(255 255 255 / 1.02%), 0 14px 32px -24px rgb(0 0 0 / 23.451%);
+  box-shadow: inset 0 1px 0 rgb(var(--demo-glass-rim) / 2.804%), inset 0 0 0 1px rgb(var(--demo-glass-rim) / 1.02%), 0 14px 32px -24px rgb(0 0 0 / 23.451%);
 }
 .macro-homepage .homepage-sections .homepage-email-surface::after,
 .macro-homepage .homepage-sections .homepage-collaborative-doc .mds-card::before { opacity: .65; }
@@ -44,7 +54,7 @@
   :is(.feature-page, .macro-homepage)
     :is(.product-page, .feature-page-visual, .homepage-sections)
     :is(.product-demo.glass, .feature-demo-context.glass, .workspace-feature-scene.glass, .macro-preview-back, .mds-card, .mail-app, .homepage-spreadsheet, .homepage-email-surface, .homepage-agent-chip .demo-cursor-card, .email-desktop-window) {
-    background: #111113;
+    background: var(--demo-glass-solid);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
@@ -54,32 +64,32 @@
 .feature-page .feature-page-section :is(.calendar-story-glass, .forms-card, .booking-story-card, .benefit-glass, .workspace-feature-scene, .mail-sharing-email) {
   position: relative;
   isolation: isolate;
-  background: linear-gradient(135deg, #ffffff0b, transparent 55%), rgb(16 16 18 / 64%);
+  background: linear-gradient(135deg, rgb(var(--demo-glass-rim) / 4.3%), transparent 55%), var(--demo-glass-fill);
   backdrop-filter: blur(16px) saturate(115%);
   -webkit-backdrop-filter: blur(16px) saturate(115%);
-  box-shadow: inset 0 1px 0 #ffffff18, inset 0 0 0 1px #ffffff0c;
+  box-shadow: inset 0 1px 0 rgb(var(--demo-glass-rim) / 9.4%), inset 0 0 0 1px rgb(var(--demo-glass-rim) / 4.7%);
 }
 .feature-page .feature-page-section :is(.calendar-story-glass, .forms-card, .booking-story-card, .benefit-glass, .mail-sharing-email)::before {
   content: '';
   position: absolute;
   inset: -8px;
   z-index: -1;
-  border: 1px solid #ffffff14;
+  border: 1px solid rgb(var(--demo-glass-rim) / 7.8%);
   border-radius: calc(var(--illustration-radius, 26.25px) + 8px);
-  background: linear-gradient(135deg, #ffffff04, transparent 55%, #ffffff02);
+  background: linear-gradient(135deg, rgb(var(--demo-glass-rim) / 1.6%), transparent 55%, rgb(var(--demo-glass-rim) / 0.8%));
   pointer-events: none;
 }
 /* Keep diagrams and external chat bubbles unframed. */
 .feature-page-section .demo-reserved-badge { display: inline-flex; max-width: 100%; min-width: 0; }
 .feature-page-section .demo-reserved-badge[data-visible=false] { visibility: hidden; pointer-events: none; }
 .feature-page-section :is(.benefit-tag, .calendar-story-choice) {
-  background: linear-gradient(135deg, #ffffff09, #ffffff02), rgb(30 32 32 / 54%);
-  box-shadow: inset 0 1px 0 #ffffff0c, inset 0 0 0 1px #ffffff06;
+  background: linear-gradient(135deg, rgb(var(--demo-glass-rim) / 3.5%), rgb(var(--demo-glass-rim) / 0.8%)), var(--demo-glass-chip);
+  box-shadow: inset 0 1px 0 rgb(var(--demo-glass-rim) / 4.7%), inset 0 0 0 1px rgb(var(--demo-glass-rim) / 2.4%);
   backdrop-filter: blur(10px);
 }
 @media (prefers-reduced-transparency: reduce) {
   .feature-page .feature-page-section :is(.calendar-story-glass, .forms-card, .booking-story-card, .benefit-glass, .workspace-feature-scene, .mail-sharing-email) {
-    background: #101012;
+    background: var(--demo-glass-solid);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
@@ -88,8 +98,8 @@
 .feature-demo-art[data-glass-frame] :is(.booking-story-card, .workspace-feature-scene)::before { display: none; }
 /* This email window clips its contents; draw its outer lip outside the clip. */
 .feature-page .feature-page-section .mail-sharing-email {
-  box-shadow: inset 0 1px 0 #ffffff18, inset 0 0 0 1px #ffffff0c,
-    0 0 0 7px #ffffff04, 0 0 0 8px #ffffff14;
+  box-shadow: inset 0 1px 0 rgb(var(--demo-glass-rim) / 9.4%), inset 0 0 0 1px rgb(var(--demo-glass-rim) / 4.7%),
+    0 0 0 7px rgb(var(--demo-glass-rim) / 1.6%), 0 0 0 8px rgb(var(--demo-glass-rim) / 7.8%);
 }
 .feature-page .feature-page-section .mail-sharing-email::before { display: none; }
 

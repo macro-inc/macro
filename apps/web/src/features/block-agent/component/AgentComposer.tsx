@@ -6,6 +6,7 @@ import {
 import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
   preferredSpeed,
+  preferredSpeedRevision,
   setPreferredSpeed,
 } from '@core/component/AI/signal/speed';
 /**
@@ -25,6 +26,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
+import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { isNoRuntimeAccessError } from '@service-agent-harness/no-runtime-access';
 import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
@@ -107,22 +109,47 @@ export function AgentComposer(props: {
 
   const [configuring, setConfiguring] = createSignal(false);
   const chooseModel = async (model: string, selection?: EffortSelection) => {
-    if (readOnly() || configuring()) return;
+    if (readOnly() || configuring()) return false;
+    const resetSpeed = !selection && isMacroHarness(session()?.harness);
+    const speedRevision = preferredSpeedRevision();
     setConfiguring(true);
     try {
       await selectModel(model, selection);
+      if (resetSpeed && speedRevision === preferredSpeedRevision())
+        setPreferredSpeed('standard');
+      return true;
     } catch (error) {
       toast.failure(
         error instanceof Error
           ? error.message
           : 'The model settings could not be changed'
       );
+      return false;
     } finally {
       setConfiguring(false);
     }
   };
 
   const effort = () => effortConfigOption(metadata()?.configOptions ?? []);
+  // Session currentValue changes after confirmation; discovery retains the model default.
+  const defaultCapabilities = useAgentCapabilitiesQuery(() => {
+    const source = session()?.harness;
+    const harness = isMacroHarness(source) ? 'in-memory' : source;
+    const model = metadata()?.model;
+    if (
+      !model ||
+      !effort() ||
+      (harness !== 'in-memory' && harness !== 'cursor')
+    )
+      return;
+    return { harness, model };
+  });
+  const defaultEffortValue = () =>
+    effortConfigOption(
+      defaultCapabilities.isSuccess
+        ? defaultCapabilities.data.configOptions
+        : []
+    )?.currentValue;
   /** Macro's tier option, when the current model offers more than standard.
    * Other harnesses' speed values are theirs to interpret, so they are left alone. */
   const speedOption = () => {
@@ -387,6 +414,7 @@ export function AgentComposer(props: {
               suggestedModels: catalog(),
               effort: effort(),
               effortValue: changingEffort(),
+              defaultEffortValue: defaultEffortValue(),
               effortDisabled:
                 changingModel(messages(), metadata()?.model ?? null) !==
                 undefined,
@@ -400,8 +428,7 @@ export function AgentComposer(props: {
                 pending() ||
                 configuring() ||
                 changingEffort() !== undefined,
-              onModel: (model) =>
-                fireAndForget(chooseModel(model), 'agent-composer'),
+              onModel: chooseModel,
               onEffort: (choice) => {
                 if (
                   changingModel(messages(), metadata()?.model ?? null) !==
@@ -409,8 +436,7 @@ export function AgentComposer(props: {
                 )
                   return;
                 const model = sessionModel();
-                if (model)
-                  fireAndForget(chooseModel(model, choice), 'agent-composer');
+                if (model) return chooseModel(model, choice);
               },
               onSpeed: setPreferredSpeed,
               onCloseAutoFocus: restoreInputFocus,

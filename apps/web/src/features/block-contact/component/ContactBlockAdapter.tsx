@@ -8,7 +8,7 @@ import { CrmCopyLinkButton } from '@app/features/crm/crm-link';
 import { useOpenMergedRecord } from '@app/features/crm/crm-merged-record';
 import {
   type CrmRecordBlockProps,
-  crmRecordSectionKey,
+  createRecordSection,
   mergedRecordBlockContent,
 } from '@app/features/crm/crm-record-block';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
@@ -18,7 +18,6 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
-import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import {
@@ -43,10 +42,10 @@ export function ContactBlockAdapter(props: CrmRecordBlockProps) {
   const sentComment = props[COMMENT_LINK_PARAM];
   if (sentComment) params.navigate({ [COMMENT_LINK_PARAM]: sentComment });
   const shownComment = useResolvedParam(params, COMMENT_LINK_PARAM);
-  const [section, setSection] = useEntryState<ContactSection>(
-    crmRecordSectionKey({ type: 'contact', id: contactId }),
-    { default: 'overview' }
-  );
+  const [section, setSection] = createRecordSection({
+    type: 'contact',
+    id: contactId,
+  });
   const panel = useSplitPanelOrThrow();
   const chooseSection = (next: ContactSection) => {
     setSection(next);

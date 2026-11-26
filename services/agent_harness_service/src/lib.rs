@@ -106,7 +106,6 @@ use agent_harness::outbound::github_repositories::GithubReachableRepositories;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
 use agent_harness::outbound::primary_calendar_time_zones::PrimaryCalendarTimeZones;
-use agent_harness::outbound::prompt_mentions::{LexicalPromptMentions, PgSessionAccess};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
 use agent_harness::outbound::tool_approvals::{
@@ -862,6 +861,7 @@ pub async fn run() -> anyhow::Result<()> {
             admission: admission.clone(),
             recorder: recorder.clone(),
         },
+        redis.clone(),
     )
     .await
     .context("failed to compose public MCP")?;
@@ -1398,8 +1398,6 @@ pub async fn run() -> anyhow::Result<()> {
         Arc::clone(&entity_access),
         lexical.clone(),
     );
-    let prompt_mentions =
-        LexicalPromptMentions::new(lexical.clone(), PgSessionAccess::new(pool.clone()));
     let prompt_context =
         MessagePromptContextAdapter::new(message_service.clone(), Arc::clone(&entity_access));
     let prompt_composer = LexicalAgentPromptComposer::new(
@@ -1771,8 +1769,7 @@ pub async fn run() -> anyhow::Result<()> {
                 Arc::clone(&tool_approvals),
             ),
             pending_commands,
-            prompt_mentions,
-            // Finished / asking / mentioned reach people through the same
+            // Finished and asking reach people through the same
             // notification ingress channel messages use.
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
         )
@@ -2163,7 +2160,7 @@ pub async fn run() -> anyhow::Result<()> {
         authorization: MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     });
     let gateway_state = RuntimeGatewayState::new(
-        runtimes,
+        Arc::clone(&runtimes),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     // Served to the app by `POST /agent-mode-choice` for the composer's Auto mode.
@@ -2351,6 +2348,10 @@ pub async fn run() -> anyhow::Result<()> {
                 computer_tasks.clone(),
             )),
             waker: Arc::clone(operator) as _,
+            macrod_connection: {
+                let runtimes = Arc::clone(&runtimes);
+                Arc::new(move |harness| runtimes.connection_of(harness))
+            },
             medias: computers::screen::ScreenMedias {
                 vnc: Arc::new(computers::screen::media::VncMedia),
             },

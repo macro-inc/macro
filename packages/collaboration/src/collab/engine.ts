@@ -1,7 +1,7 @@
 import { type InferType, SyncDirection } from '@loro-mirror/core';
 import type { Attributes, Span } from '@macro-inc/observability';
 import { Mutex } from 'async-mutex';
-import type { VersionVector } from 'loro-crdt';
+import type { LoroDoc, VersionVector } from 'loro-crdt';
 import type { ResultAsync } from 'neverthrow';
 import {
   type Accessor,
@@ -22,7 +22,11 @@ import {
 } from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { SnapshotStore } from './snapshot-store';
-import { peerCounterAttr, telemetrySpan } from './telemetry';
+import {
+  CollaborationHealthTelemetry,
+  peerCounterAttr,
+  telemetrySpan,
+} from './telemetry';
 
 // SnapshotStore in the engine is always Loro updates — RawUpdate.
 type LoroSnapshotStore = SnapshotStore<RawUpdate>;
@@ -81,6 +85,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private readonly bindings: EngineBindings<S>;
   private readonly readonly: () => boolean;
   private readonly syncLock = new Mutex();
+  private readonly health = CollaborationHealthTelemetry.sample();
   private unsubscribe?: () => void;
   private liveUnsubscribe?: () => void;
   private snapshotInterval?: ReturnType<typeof setInterval>;
@@ -160,6 +165,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
     this._isRunning = true;
     this.lifecycleGeneration++;
+    this.health?.start();
 
     this.liveUnsubscribe?.();
     this.liveUnsubscribe = this.syncs.live.listen((event) =>
@@ -181,6 +187,11 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   }
 
   public stop() {
+    this.stopSync();
+    this.health?.finish();
+  }
+
+  private stopSync() {
     this._isRunning = false;
     this.lifecycleGeneration++;
 
@@ -238,7 +249,8 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     const wasRunning = this._isRunning;
 
     if (wasRunning) {
-      this.stop();
+      this.health?.reset();
+      this.stopSync();
     }
     const generation = this.lifecycleGeneration;
 
@@ -314,6 +326,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
   private async handleLocalUpdates(update: LoroRawUpdate) {
     if (this.readonly()) return;
+    this.health?.localBatch();
     this.log('debug', 'engine: local update, appending to WAL');
     void this.syncs.wal.append(update);
     this.chatter?.post({ type: 'update', data: update });
@@ -329,10 +342,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       this.log('debug', 'engine: persisting snapshot', {
         operations: doc.opCount(),
       });
-      const snapshot = doc.export({
-        mode: 'shallow-snapshot',
-        frontiers: doc.oplogFrontiers(),
-      });
+      const snapshot = this.exportSnapshot(doc);
       await this.snapshotStore.save(snapshot);
       // now safe to drop WAL entries it captures. we prune only
       // after the save succeeds so that we can always recover fully.
@@ -343,6 +353,22 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         errName: err instanceof Error ? err.name : undefined,
         errMessage: err instanceof Error ? err.message : String(err),
       });
+    }
+  }
+
+  private exportSnapshot(doc: LoroDoc): RawUpdate {
+    const frontiers = doc.oplogFrontiers();
+    const startedAt = this.health?.beginSnapshotExport();
+    let outcome: 'exported' | 'failed' = 'failed';
+
+    try {
+      const snapshot = doc.export({ mode: 'shallow-snapshot', frontiers });
+      outcome = 'exported';
+      return snapshot;
+    } finally {
+      if (startedAt !== undefined) {
+        this.health?.endSnapshotExport(startedAt, outcome);
+      }
     }
   }
 
@@ -407,6 +433,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         this.handleRemoteUpdate(event.snapshot);
         break;
       case 'reconnect':
+        this.health?.reconnect();
         this.log(
           'info',
           'engine: reconnect, requesting updates since current version'

@@ -5,11 +5,11 @@ import { t } from '@app/lib/i18n';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { UserIcon } from '@core/component/UserIcon';
 import { disableCrmContactSearch } from '@core/constant/featureFlags';
-import { isBotPrincipalId } from '@core/constant/macroAgent';
 import type { QuickAccessItem } from '@core/context/quickAccess';
 import { deduplicateContactItems } from '@core/context/quickAccess/crm-contacts';
 import { keepUnchangedRows } from '@core/context/quickAccess/unchanged-rows';
 import { useEmail, useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
 import {
   capPeople,
@@ -24,13 +24,7 @@ import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { matchesTokenSubsequences } from '@core/util/string';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
-import {
-  createEmailsInfiniteQuery,
-  type EmailEntity,
-  Entity,
-  type EntityData,
-} from '@entity';
-import CheckIcon from '@icon/system/regular/check.svg';
+import { createEmailsInfiniteQuery, type EmailEntity } from '@entity';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
 import { usePinnedContactUsers } from '@queries/contacts/use-directory';
@@ -40,17 +34,17 @@ import {
 } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn, InlineCheckbox, inputClasses } from '@ui';
+import { Button, cn, inputClasses } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
   createEffect,
   createMemo,
   createSignal,
-  For,
   type JSX,
   on,
   Show,
 } from 'solid-js';
+import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import {
   allowsEntityType,
   type CombinedEntity,
@@ -67,6 +61,7 @@ import {
   userToEntity,
 } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
+import { getEntityName, PropertyEntityRow } from './PropertyEntityRow';
 import type { EntitySelectorConfig } from './types';
 
 type EntityInputProps = {
@@ -115,33 +110,9 @@ function getEntityTypePluralLabel(
   }
 }
 
-type UserEntityParts = {
-  name: string;
-  email?: string;
-};
-
-function getUserEntityParts(entity: CombinedEntity): UserEntityParts | null {
-  if (entity.kind !== 'user') return null;
-
-  const { name, email } = entity.data;
-  if (!name || name === email) return { name: email };
-  return { name, email };
-}
-
-/** Gets display name for a CombinedEntity */
-function getEntityName(entity: CombinedEntity): string {
-  if (entity.kind === 'user') {
-    return entity.data.name || entity.data.email;
-  }
-
-  const data = entity.data;
-  if (data.type === 'email') {
-    return data.name ?? 'No Subject';
-  }
-  return data.name ?? '';
-}
-
 const MAX_LIST_HEIGHT = 192;
+const ROW_HEIGHT = 36;
+const TOUCH_ROW_HEIGHT = 48;
 const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
 const MAX_SEARCH_RESULTS = 20;
 const SERVER_SEARCH_DEBOUNCE_MS = 250;
@@ -192,6 +163,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const keyboardMode = useKeyPressed(100);
 
   let scrollContainerRef: HTMLDivElement | undefined;
+  let list: VirtualizerHandle | undefined;
 
   // Debounce search term updates (60ms like MentionsMenu)
   const debouncedSetSearchTerm = debounce(
@@ -775,11 +747,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   // Scroll the selected row into view during keyboard navigation
   createEffect(() => {
     const index = selectedIndex();
-    if (!keyboardMode() || !scrollContainerRef) return;
-    const row = scrollContainerRef.querySelector<HTMLDivElement>(
-      `[data-entity-index="${index}"]`
-    );
-    row?.scrollIntoView({ block: 'nearest' });
+    if (keyboardMode()) list?.scrollToIndex(index, { align: 'nearest' });
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -892,138 +860,38 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                 'max-height': fills() ? undefined : `${MAX_LIST_HEIGHT}px`,
               }}
               class={cn(
-                'overflow-y-auto overflow-x-hidden scrollbar-hidden',
+                'overflow-y-auto overflow-x-hidden touch:overscroll-none scrollbar-hidden',
                 fills() && 'min-h-0 flex-1'
               )}
             >
-              <For each={sortedEntities()}>
-                {(entity, index) => {
-                  const isSelected = () =>
-                    props.selectedOptions().has(entity.id);
-                  const isKeyboardSelected = () => index() === selectedIndex();
-
-                  return (
-                    <>
-                      <Show
-                        when={!inSheet() && shouldShowSelectedDivider(index())}
-                      >
-                        <div class="my-1 border-t border-edge-muted" />
-                      </Show>
-                      <div
-                        data-entity-index={index()}
-                        role={inSheet() ? 'checkbox' : undefined}
-                        aria-checked={inSheet() ? isSelected() : undefined}
-                        tabIndex={inSheet() ? 0 : undefined}
-                        class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default min-w-0 touch:min-h-12"
-                        classList={{
-                          'bg-hover': isKeyboardSelected(),
-                        }}
-                        onClick={() => toggleEntity(entity)}
-                        onKeyDown={(event) => {
-                          if (
-                            event.key === 'Enter' ||
-                            (inSheet() && event.key === ' ')
-                          ) {
-                            event.preventDefault();
-                            toggleEntity(entity);
-                          }
-                        }}
-                        onMouseEnter={() => {
-                          if (!keyboardMode()) {
-                            setSelectedIndex(index());
-                            highlight.hold();
-                          }
-                        }}
-                      >
-                        <Show when={props.config.isMultiSelect}>
-                          <div class="shrink-0 flex">
-                            <Show
-                              when={inSheet()}
-                              fallback={
-                                <OptionCheckBox
-                                  checked={isSelected()}
-                                  multiselect
-                                  visible={props.config.visibleCheckboxes}
-                                />
-                              }
-                            >
-                              <InlineCheckbox
-                                checked={isSelected()}
-                                size="md"
-                              />
-                            </Show>
-                          </div>
-                        </Show>
-                        <div class="flex items-center gap-2 flex-1 min-w-0">
-                          <div class="size-4 shrink-0 flex items-center">
-                            <Show
-                              when={entity.kind === 'entity'}
-                              fallback={
-                                <UserIcon
-                                  id={entity.id}
-                                  name={
-                                    entity.kind === 'user'
-                                      ? entity.data.name
-                                      : undefined
-                                  }
-                                  size="sm"
-                                  isDeleted={false}
-                                  suppressClick={true}
-                                  photoUrl={
-                                    entity.kind === 'user'
-                                      ? entity.data.photoUrl
-                                      : undefined
-                                  }
-                                />
-                              }
-                            >
-                              <Entity.Icon entity={entity.data as EntityData} />
-                            </Show>
-                          </div>
-                          <span class="truncate min-w-0 max-w-full">
-                            <Show
-                              when={entity.kind === 'entity'}
-                              fallback={
-                                <Show
-                                  when={getUserEntityParts(entity)}
-                                  fallback={getEntityName(entity)}
-                                >
-                                  {(parts) => (
-                                    <>
-                                      {parts().name}
-                                      <Show when={parts().email}>
-                                        {/* An en space is the 0.5em gap; unlike a margin, Safari's truncated-text tooltip keeps it. */}
-                                        {' '}
-                                        <span class="opacity-50">
-                                          {parts().email}
-                                        </span>
-                                      </Show>
-                                    </>
-                                  )}
-                                </Show>
-                              }
-                            >
-                              <Entity.Title
-                                entity={entity.data as EntityData}
-                              />
-                            </Show>
-                          </span>
-                          <Show when={isBotPrincipalId(entity.id)}>
-                            <span class="shrink-0 text-xs text-ink-muted">
-                              Agent
-                            </span>
-                          </Show>
-                        </div>
-                        <Show
-                          when={!props.config.isMultiSelect && isSelected()}
-                        >
-                          <CheckIcon class="size-3.5 shrink-0 text-accent" />
-                        </Show>
-                      </div>
-                    </>
-                  );
+              <Virtualizer
+                ref={(handle) => {
+                  list = handle;
                 }}
-              </For>
+                data={sortedEntities()}
+                itemSize={isTouchDevice() ? TOUCH_ROW_HEIGHT : ROW_HEIGHT}
+              >
+                {(entity, index) => (
+                  <PropertyEntityRow
+                    entity={entity}
+                    index={index()}
+                    selected={props.selectedOptions().has(entity.id)}
+                    highlighted={index() === selectedIndex()}
+                    keyboardMode={keyboardMode()}
+                    divider={!inSheet() && shouldShowSelectedDivider(index())}
+                    multiselect={props.config.isMultiSelect}
+                    visibleCheckboxes={props.config.visibleCheckboxes}
+                    inSheet={inSheet()}
+                    onToggle={() => toggleEntity(entity)}
+                    onMouseEnter={() => {
+                      if (!keyboardMode()) {
+                        setSelectedIndex(index());
+                        highlight.hold();
+                      }
+                    }}
+                  />
+                )}
+              </Virtualizer>
               <Show when={hasMore()}>
                 <div ref={setSentinel} class="h-px [overflow-anchor:none]" />
               </Show>

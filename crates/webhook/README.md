@@ -93,11 +93,10 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
   `webhook.validated`.
 - Agent triggers: `agent_trigger.new` and `agent_trigger.existing`.
 - Agent sessions: `agent_session.opened`, `agent_session.turn_started`,
-  `agent_session.command_rejected`, `agent_session.mentioned`,
-  `agent_session.turn_ended`, `agent_session.settled`,
-  `agent_session.waiting_for_input`, `agent_session.input_received`,
-  `agent_session.stopped`, `agent_session.renamed`, and
-  `agent_session.deleted`.
+  `agent_session.command_rejected`, `agent_session.turn_ended`,
+  `agent_session.settled`, `agent_session.waiting_for_input`,
+  `agent_session.input_received`, `agent_session.stopped`,
+  `agent_session.renamed`, and `agent_session.deleted`.
 - Users: `user.picture_changed` (`entity_type = "user"`, entity and ordering key
   are the user id; `file_id` and `url` are both null when the picture was
   removed). Persisted webhooks go only to the changed user's own personal and
@@ -395,7 +394,7 @@ encrypts the secret before calling it.
   subscription id and the secret's KMS binding keep the old user id, so a
   renamed user's subscriptions stop delivering (decryption fails, five
   attempts) until they expire; nothing in production renames users. The quota
-  count and the endpoint check read the `(user_id, expires_at)` index, so a
+  counts and the endpoint check read the `(user_id, expires_at)` index, so a
   backlog of expired rows costs them nothing.
 - **Live subscribers.** Most events reach no subscriber, so fan-out first
   narrows the audience to the users with a live subscription, held in memory
@@ -424,7 +423,16 @@ encrypts the secret before calling it.
 - **Verification.** A new endpoint must echo a signed
   `{"type":"verification","challenge"}` within the call; a user's live
   subscription to the same URL counts as already verified. Failures map to
-  the spec's `CallbackEndpointError` reasons.
+  the spec's `CallbackEndpointError` reasons. Before the endpoint is called,
+  one query (`live_standing`) reads the user's live rows: a user already at
+  the quota is refused without a request, and the same read says whether the
+  URL is verified. A user may cause at most 10 failed verifications an hour
+  (`MAX_FAILED_VERIFICATIONS`, the allowance a plain webhook has for
+  validations), counted in the shared `rate_limit` store under
+  `mcp-events-failed-verifications:{macro_user_id}`: each verification takes
+  one, and one that passes, or a URL refused before any request, gives it
+  back, so only POSTs to endpoints that did not agree are limited. Past the
+  limit, subscribe answers 429 `verifications_exhausted`.
 - **Delivery.** Fan-out queues one message per matched row on the webhook FIFO
   queue, 16 sends at a time (group `mcp:<row id>`, dedup
   `mcp:<row id>:<event id>`). Ingestion runs it after queueing the event's

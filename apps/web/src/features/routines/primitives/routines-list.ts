@@ -8,6 +8,7 @@ import {
   describeTrigger,
   hasOnlyScheduledTriggers,
   type RoutineTriggerDraft,
+  summarizeTriggerLabels,
   triggerKind,
 } from '../core/routine-triggers';
 import {
@@ -45,16 +46,18 @@ function lastRun(routine: RoutineSnapshot): RoutineRow['lastRun'] {
   };
 }
 
-/** What starts the routine, its AI check included, in a line. */
-function describeWhen(triggers: RoutineTriggerDraft[]): string {
-  return triggers
-    .map((trigger) => {
-      const condition =
-        trigger.kind === 'event' ? trigger.condition?.trim() : undefined;
-      const text = describeTrigger(trigger);
-      return condition ? `${text} · ${condition}` : text;
-    })
-    .join(' · ');
+/** A compact trigger line and the full descriptions for search and details. */
+function describeWhen(triggers: RoutineTriggerDraft[]) {
+  const labels = triggers.map((trigger) => {
+    const condition =
+      trigger.kind === 'event' ? trigger.condition?.trim() : undefined;
+    const text = describeTrigger(trigger);
+    return condition ? `${text}: ${condition}` : text;
+  });
+  return {
+    when: summarizeTriggerLabels(labels),
+    whenDetails: labels.join('\n'),
+  };
 }
 
 /**
@@ -98,7 +101,7 @@ export function createRoutineRows(
       appearance: routine.appearance,
       description: draft?.description?.trim() || undefined,
       createdAt: routine.createdAt,
-      when: describeWhen(draft?.triggers ?? []),
+      ...describeWhen(draft?.triggers ?? []),
       whenKind: first ? triggerKind(first) : undefined,
       does: work.text,
       ai: work.chip,

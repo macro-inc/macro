@@ -11,7 +11,6 @@ vi.mock('@app/features/soup', async () => ({
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => true }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@app/features/soup/SoupEntityActionDrawerContext', () => ({
   useSoupEntityActionDrawer: () => drawer,
 }));

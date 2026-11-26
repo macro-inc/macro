@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import type { WakeContext, Woke } from '../../../core/agent.ts';
+import { behavior, serve } from '../../../core/behavior.ts';
+import { lifecycle } from '../../../core/hook.ts';
+import { maintenance } from '../../../core/maintenance.ts';
 import { simple } from '../../../runtimes/simple.ts';
 import { scripts } from '../../../runtimes/test/scripts.ts';
 import type { Clock } from '../../time/index.ts';
@@ -47,6 +50,94 @@ describe('scheduler', () => {
       { name: 'poll', due: '2026-11-09T09:10:00Z', data: { inbox: 'work' } },
       { name: 'poll', due: '2026-11-09T09:20:00Z', data: { inbox: 'work' } },
     ]);
+  });
+
+  test('drains only after the completed occurrence is persisted', async () => {
+    const clock = fakeClock('2026-11-09T09:00:00Z');
+    const stored = memoryStore();
+    const writingEnd = Promise.withResolvers<void>();
+    const persistEnd = Promise.withResolvers<void>();
+    const stop = new AbortController();
+    const schedules = scheduler({
+      store: {
+        read: stored.read,
+        write: async (table) => {
+          if (table.reminder?.run.ended !== undefined) {
+            writingEnd.resolve();
+            await persistEnd.promise;
+          }
+          await stored.write(table);
+        },
+      },
+      clock,
+      tz: 'UTC',
+      signal: stop.signal,
+    });
+    await schedules.set('reminder', { at: '2026-11-09T09:00:00Z' });
+    const control = maintenance();
+    const drained = Promise.withResolvers<void>();
+    control.change(() => {
+      if (control.drained() === 'test') drained.resolve();
+    });
+    const agent = behavior()
+      .source({ fired: schedules.fired })
+      .on(
+        (sources) => sources.fired,
+        async () => {
+          control.setFence('test');
+          stop.abort();
+        }
+      )
+      .on(
+        (sources) => sources.hooks.failed,
+        async () => {}
+      );
+    const run = serve(agent, lifecycle(), {
+      control,
+      accept: async () => {},
+      wakeFor: async () => {
+        throw new Error('unexpected wake');
+      },
+    });
+    await writingEnd.promise;
+    expect(control.drained()).toBeUndefined();
+    expect((await stored.read()).reminder?.run.running).toBe(true);
+    persistEnd.resolve();
+    await Promise.all([drained.promise, run]);
+    expect((await stored.read()).reminder?.run.running).toBeUndefined();
+  });
+
+  test('replays a persisted occurrence queued when a runtime stopped', async () => {
+    const store = memoryStore();
+    const clock = fakeClock('2026-11-09T09:00:00Z');
+    const first = scheduler({ store, clock, tz: 'UTC' });
+    await first.set('reminder', { at: '2026-11-09T09:00:00Z', data: 'call' });
+    const queued = await first.fired[Symbol.asyncIterator]().next();
+    expect(queued.value).toEqual({
+      name: 'reminder',
+      due: '2026-11-09T09:00:00Z',
+      data: 'call',
+    });
+    const ordinaryStop = new AbortController();
+    const ordinary = scheduler({
+      store: memoryStore(await store.read()),
+      clock: fakeClock('2026-11-10T09:00:00Z'),
+      tz: 'UTC',
+      signal: ordinaryStop.signal,
+    });
+    await ordinary.set('poll', { every: '1m' });
+    expect(await take(ordinary.fired, 1, ordinaryStop)).toEqual([
+      { name: 'poll', due: '2026-11-10T09:00:00Z' },
+    ]);
+    const stop = new AbortController();
+    const restarted = scheduler({
+      store,
+      clock: fakeClock('2026-11-10T09:00:00Z'),
+      tz: 'UTC',
+      recoverPending: async () => {},
+      signal: stop.signal,
+    });
+    expect(await take(restarted.fired, 1, stop)).toEqual([queued.value]);
   });
 
   test('fires rules and ats in order, sleeping in between', async () => {

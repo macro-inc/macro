@@ -413,15 +413,26 @@ async fn delete_is_scoped_to_the_user(pool: PgPool) -> anyhow::Result<()> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn live_endpoint_is_per_user_and_url(pool: PgPool) -> anyhow::Result<()> {
+async fn live_standing_counts_live_rows_and_finds_the_url(pool: PgPool) -> anyhow::Result<()> {
     let repo = setup(&pool).await?;
-    store(
+    let mine = store(
         &repo,
         upsert(
             ME,
             URL,
             "mentions",
             &["message.mentioned"],
+            Duration::hours(1),
+        ),
+    )
+    .await?;
+    store(
+        &repo,
+        upsert(
+            ME,
+            "https://hooks.example.com/second",
+            "posts",
+            &["message.posted"],
             Duration::hours(1),
         ),
     )
@@ -437,17 +448,42 @@ async fn live_endpoint_is_per_user_and_url(pool: PgPool) -> anyhow::Result<()> {
         ),
     )
     .await?;
-    assert!(repo.has_live_endpoint(&user(ME), URL).await?);
-    assert!(!repo.has_live_endpoint(&user(OTHER), URL).await?);
-    assert!(
-        !repo
-            .has_live_endpoint(&user(ME), "https://hooks.example.com/expired")
+    let other_id =
+        upsert(ME, URL, "other", &["message.posted"], Duration::hours(1)).subscription_id;
+
+    // A new subscription counts both live rows; a refresh does not count
+    // itself. The expired row counts for nothing.
+    assert_eq!(
+        repo.live_standing(&user(ME), URL, &other_id).await?,
+        McpLiveStanding {
+            others: 2,
+            endpoint_verified: true,
+        }
+    );
+    assert_eq!(
+        repo.live_standing(&user(ME), URL, &mine.subscription_id)
             .await?
+            .others,
+        1
     );
     assert!(
         !repo
-            .has_live_endpoint(&user(ME), "https://hooks.example.com/other")
+            .live_standing(&user(ME), "https://hooks.example.com/expired", &other_id)
             .await?
+            .endpoint_verified
+    );
+    assert!(
+        !repo
+            .live_standing(&user(ME), "https://hooks.example.com/other", &other_id)
+            .await?
+            .endpoint_verified
+    );
+    assert_eq!(
+        repo.live_standing(&user(OTHER), URL, &other_id).await?,
+        McpLiveStanding {
+            others: 0,
+            endpoint_verified: false,
+        }
     );
     Ok(())
 }

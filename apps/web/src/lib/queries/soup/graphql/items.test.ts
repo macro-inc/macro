@@ -72,7 +72,11 @@ import {
   disposeChannelNotificationRefresh,
 } from '../../channel/notification-refresh';
 import { registerChannelNotificationRefresh } from '../../channel/register-notification-refresh';
-import { getActiveGraphqlSoupRevalidations } from './active-queries';
+import {
+  getActiveGraphqlSoupRevalidations,
+  getUnmaintainedGraphqlSoupRevalidations,
+  refreshActiveGraphqlSoupQueries,
+} from './active-queries';
 import { createSoupLiveQuery } from './create-soup-live-query';
 import { createGraphqlSoupAstItemsQuery } from './items';
 import {
@@ -2531,6 +2535,202 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       }
     } finally {
       dispose();
+    }
+  });
+
+  it('reads preview lists without notifications on every page and refresh', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+      cursor
+        ? { continuation: { cursor } }
+        : { initial: { limit: 500, sortMethod: 'UPDATED_AT' } }
+    );
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true, projection: 'preview' })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: 'next' })
+      );
+      const more = query.fetchNextPage();
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      await more;
+      for (const entry of getActiveGraphqlSoupRevalidations()) {
+        expect(print(entry.document)).toContain('query SoupPreviewPage');
+      }
+      const refresh = query.refresh();
+      fake.executions[2].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      await refresh;
+      for (const execution of fake.executions) {
+        expect(print(execution.document)).toContain('query SoupPreviewPage');
+        expect(print(execution.document)).not.toContain('notifications');
+      }
+    } finally {
+      dispose();
+    }
+  });
+
+  it('reads a list the network answered within its staleTime from the cache', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockReturnValue({
+      initial: { limit: 50, sortMethod: 'UPDATED_AT' },
+    });
+    const mount = (staleTime?: number) =>
+      createRoot((dispose) => {
+        createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true, staleTime })
+        );
+        return dispose;
+      });
+    const policies = () =>
+      fake.executions.map((execution) => execution.context.requestPolicy);
+    try {
+      // Nothing answered yet: fetch.
+      mount(60_000)();
+      expect(policies()).toEqual(['cache-and-network']);
+      const first = mount(60_000);
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      first();
+      // Answered a moment ago: the cached page, no fetch.
+      mount(60_000)();
+      // A reader without a staleTime still fetches.
+      mount()();
+      vi.setSystemTime(new Date('2026-11-24T12:01:01Z'));
+      // Older than its staleTime: fetch again.
+      mount(60_000)();
+      expect(policies()).toEqual([
+        'cache-and-network',
+        'cache-and-network',
+        'cache-first',
+        'cache-and-network',
+        'cache-and-network',
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    ['a refresh after a write', () => refreshActiveGraphqlSoupQueries()],
+    [
+      'a write revalidating the unmaintained lists',
+      () => getUnmaintainedGraphqlSoupRevalidations(),
+    ],
+  ])(
+    'reads a list from the network again after %s, within its staleTime',
+    async (_write, write) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      makeGraphqlSoupInputMock.mockReturnValue({
+        initial: { limit: 50, sortMethod: 'UPDATED_AT' },
+      });
+      const mount = () =>
+        createRoot((dispose) => {
+          createGraphqlSoupAstItemsQuery(
+            () => ({ params: {}, body: {} }),
+            () => ({ enabled: true, staleTime: 60_000 })
+          );
+          return dispose;
+        });
+      const policies = () =>
+        fake.executions.map((execution) => execution.context.requestPolicy);
+      try {
+        const first = mount();
+        fake.executions[0].next(
+          graphqlSoupPage({ items: [], next_cursor: null })
+        );
+        first();
+        // Unmounted, so the write reaches no reader of this list.
+        await write();
+        mount()();
+        expect(policies()).toEqual(['cache-and-network', 'cache-and-network']);
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
+
+  it('decides whether its answer is fresh when a disabled list is enabled', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockReturnValue({
+      initial: { limit: 50, sortMethod: 'UPDATED_AT' },
+    });
+    const policies = () =>
+      fake.executions.map((execution) => execution.context.requestPolicy);
+    try {
+      const first = createRoot((dispose) => {
+        createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true, staleTime: 60_000 })
+        );
+        return dispose;
+      });
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      first();
+      // Mounted while the answer is fresh, but not reading yet.
+      const [enabled, setEnabled] = createSignal(false);
+      const dispose = createRoot((dispose) => {
+        createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: enabled(), staleTime: 60_000 })
+        );
+        return dispose;
+      });
+      // A write while it waits: the cached page may be older than the server.
+      await refreshActiveGraphqlSoupQueries();
+      setEnabled(true);
+      expect(policies()).toEqual(['cache-and-network', 'cache-and-network']);
+      // Its own answer is fresh now, but a list that reads the network keeps
+      // that policy, and so the pages it loaded.
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      setEnabled(false);
+      setEnabled(true);
+      expect(policies()).not.toContain('cache-first');
+      dispose();
+      // A list that took its cached page keeps that policy too, through a
+      // write while disabled: changing it would drop the pages it loaded.
+      const [reading, setReading] = createSignal(true);
+      const cached = createRoot((dispose) => {
+        createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: reading(), staleTime: 60_000 })
+        );
+        return dispose;
+      });
+      const before = policies().length;
+      setReading(false);
+      await refreshActiveGraphqlSoupQueries();
+      setReading(true);
+      expect(new Set(policies().slice(before))).toEqual(
+        new Set(['cache-first'])
+      );
+      cached();
+    } finally {
+      vi.useRealTimers();
     }
   });
 
@@ -5564,5 +5764,226 @@ describe('createGraphqlSoupAstItemsQuery', () => {
 
       dispose();
     });
+  });
+
+  it('projects predicate rows without attaching Solid store nodes to nested arrays and updates on patches', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const changes = new Set<(revision: string) => void>();
+    const rawParticipants = Array.from({ length: 10 }, (_, index) => ({
+      userId: `user-${index}`,
+      role: 'MEMBER',
+    }));
+    const rawRecord = {
+      __typename: 'GraphqlSoupChannel' as const,
+      id: 'chan-1',
+      name: 'Before',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      participants: rawParticipants,
+    };
+    let callCount = 0;
+    entityFilterMock.mockImplementation(async (args) => {
+      if (args.liveQuery?.release) return { kind: 'unsupported' };
+      callCount += 1;
+      if (callCount === 1) {
+        return {
+          kind: 'live-query',
+          revision: parseCacheRevision(REVISION_1),
+          reset: true,
+          keys: ['GraphqlSoupChannel:chan-1'],
+          upserts: [
+            { recordKey: 'GraphqlSoupChannel:chan-1', record: rawRecord },
+          ],
+          patches: [],
+          removed: [],
+          retainedKeys: [],
+          optimistic: false,
+        };
+      }
+      return {
+        kind: 'live-query',
+        revision: parseCacheRevision(REVISION_2),
+        reset: false,
+        upserts: [],
+        patches: [
+          {
+            recordKey: 'GraphqlSoupChannel:chan-1',
+            fields: [{ path: ['name'], value: 'After' }],
+            identity: { mutationUuid: null, pending: false },
+          },
+        ],
+        removed: [],
+        retainedKeys: [],
+        optimistic: false,
+      };
+    });
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      liveQueries: true,
+      currentRevision: async () => REVISION_1,
+      entityFilter: entityFilterMock,
+      onCacheChanged: (callback: (revision: string) => void) => {
+        changes.add(callback);
+        return () => changes.delete(callback);
+      },
+      onCacheGenerationChanged: () => () => {},
+    });
+    mapGraphqlSoupItemMock.mockImplementation((record: typeof rawRecord) => ({
+      id: record.id,
+      name: record.name,
+      memberIds: record.participants.map((p) => p.userId),
+    }));
+    const ready = deferred<void>();
+    const patched = deferred<void>();
+    const { query, dispose } = createRoot((dispose) => {
+      const query = createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'updated_at' }, body: {} }) as never,
+        () => ({
+          enabled: true,
+          projection: 'channel-list',
+          cacheFirstEntities: [{ entityType: 'CHANNEL', entityId: 'chan-1' }],
+        })
+      );
+      createComputed(() => {
+        if (query.cacheStatus?.() === 'ready') ready.resolve();
+        if (query.data()?.entities[0]?.name === 'After') patched.resolve();
+      });
+      return { query, dispose };
+    });
+    try {
+      await ready.promise;
+      expect(query.data()?.entities[0]?.name).toBe('Before');
+      expect(query.data()?.itemsById).toBeUndefined();
+      // Walking `participants` during projection must not allocate Solid store
+      // proxy/signal symbols on nested array elements.
+      expect(Object.getOwnPropertySymbols(rawParticipants[0])).toEqual([]);
+
+      for (const changed of changes) changed(REVISION_2);
+      await patched.promise;
+      expect(query.data()?.entities[0]?.name).toBe('After');
+      expect(Object.getOwnPropertySymbols(rawParticipants[0])).toEqual([]);
+    } finally {
+      dispose();
+      mapGraphqlSoupItemMock.mockImplementation((item) => item);
+    }
+  });
+
+  it('fences a same-host cache generation reset while disabled and resyncs revision on re-enable', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    let currentRev = '5';
+    let onGeneration: (() => void) | undefined;
+    let currentRevCalls = 0;
+    const revSynced = deferred<void>();
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      liveQueries: false,
+      currentRevision: async () => {
+        currentRevCalls += 1;
+        if (currentRevCalls >= 2) revSynced.resolve();
+        return currentRev;
+      },
+      entityFilter: vi.fn(async () => ({
+        kind: 'reconciled',
+        revision: parseCacheRevision(currentRev),
+        keys: [],
+        retainedKeys: [],
+        optimistic: false,
+      })),
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: (cb: () => void) => {
+        onGeneration = cb;
+        return () => {
+          onGeneration = undefined;
+        };
+      },
+    });
+    const [enabled, setEnabled] = createSignal(true);
+    const { source, dispose } = createRoot((dispose) => ({
+      dispose,
+      source: createSoupLiveQuery(
+        () => ({ sortMethod: 'UPDATED_AT', limit: 20 }),
+        () => ({ enabled: enabled() })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [{ id: 'before-reset' }], next_cursor: null }),
+        { source: 'live-network', revision: '5' }
+      );
+      expect(source.hasPageData()).toBe(true);
+      const scopeBefore = source.queryScope();
+
+      setEnabled(false);
+      // A same-host generation reset arrives while disabled.
+      currentRev = '0';
+      onGeneration?.();
+      expect(source.hasPageData()).toBe(false);
+      expect(source.queryScope()).not.toBe(scopeBefore);
+
+      setEnabled(true);
+      await revSynced.promise;
+      expect(currentRevCalls).toBe(2);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('ignores out-of-order currentRevision reads after disable and re-enable', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const staleRead = deferred<string>();
+    const freshRead = deferred<string>();
+    const entityFilter = vi.fn(async () => ({
+      kind: 'reconciled' as const,
+      revision: parseCacheRevision('5'),
+      keys: [],
+      retainedKeys: [],
+      optimistic: false,
+    }));
+    const currentRevision = vi
+      .fn<() => Promise<string>>()
+      .mockImplementationOnce(() => staleRead.promise)
+      .mockImplementationOnce(() => freshRead.promise);
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      liveQueries: false,
+      currentRevision,
+      entityFilter,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    const [enabled, setEnabled] = createSignal(true);
+    const { dispose } = createRoot((dispose) => ({
+      dispose,
+      source: createSoupLiveQuery(
+        () => ({ sortMethod: 'UPDATED_AT', limit: 20 }),
+        () => ({ enabled: enabled() })
+      ),
+    }));
+    try {
+      expect(currentRevision).toHaveBeenCalledTimes(1);
+      // Disable and re-enable before the initial currentRevision read settles.
+      setEnabled(false);
+      setEnabled(true);
+      expect(currentRevision).toHaveBeenCalledTimes(2);
+
+      // Network page arrives at revision 5 and the newer read resolves first.
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [{ id: 'fresh' }], next_cursor: null }),
+        { source: 'live-network', revision: '5' }
+      );
+      freshRead.resolve('5');
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(entityFilter).not.toHaveBeenCalled();
+
+      // The earlier slow read settles with revision 1 and must not rewind the
+      // current revision behind the authoritative network revision.
+      staleRead.resolve('1');
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(entityFilter).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
   });
 });

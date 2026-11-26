@@ -1,3 +1,4 @@
+import { Card } from '@ui';
 import type { ParentProps } from 'solid-js';
 
 /**
@@ -6,8 +7,11 @@ import type { ParentProps } from 'solid-js';
  */
 export function AccountManagerCardFrame(props: ParentProps) {
   return (
-    <span class="my-1 flex h-[4.5rem] max-w-md flex-col justify-center gap-1.5 rounded-lg border border-edge-muted bg-panel px-3">
+    <Card
+      variant="raised"
+      class="my-1 h-[4.5rem] max-w-md justify-center gap-1.5 px-3"
+    >
       {props.children}
-    </span>
+    </Card>
   );
 }

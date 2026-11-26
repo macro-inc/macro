@@ -23,6 +23,7 @@ import { Tooltip } from './Tooltip';
 const buttonFrames = {
   primary:
     'bg-button-primary-bg text-button-primary-ink border-transparent shadow-button',
+  value: 'bg-control text-ink border-transparent shadow-none',
   accent:
     'bg-button-accent-bg text-button-accent-ink border-transparent shadow-button',
   secondary: cn(
@@ -33,6 +34,7 @@ const buttonFrames = {
     'bg-transparent text-ink-muted border-border-secondary bg-none shadow-none',
   ghost:
     'bg-button-tertiary-bg text-ink-muted border-transparent bg-none shadow-none',
+  row: 'bg-button-tertiary-bg text-ink border-transparent bg-none shadow-none',
   danger: 'bg-button-danger-bg text-failure border-transparent shadow-button',
   'danger-ghost':
     'bg-button-tertiary-bg text-failure border-transparent bg-none shadow-none',
@@ -56,6 +58,11 @@ const buttonStyles = createVariants(
         'not-data-disabled:hover:bg-button-primary-hover not-data-disabled:active:bg-button-primary-pressed aria-pressed:bg-button-primary-pressed aria-pressed:not-data-disabled:hover:bg-button-primary-pressed popup-open:bg-button-primary-pressed popup-open:not-data-disabled:hover:bg-button-primary-pressed',
         buttonPressedStyles
       ),
+      value: cn(
+        buttonFrames.value,
+        'px-2.5 not-touch:not-data-disabled:hover:bg-button-secondary-hover not-data-disabled:active:bg-button-secondary-hover popup-open:ring-[1.5px] popup-open:ring-accent aria-expanded:ring-[1.5px] aria-expanded:ring-accent',
+        buttonPressedStyles
+      ),
       accent: cn(
         buttonFrames.accent,
         'not-data-disabled:hover:bg-button-accent-hover not-data-disabled:active:bg-button-accent-pressed aria-pressed:bg-button-accent-pressed aria-pressed:not-data-disabled:hover:bg-button-accent-pressed popup-open:bg-button-accent-pressed popup-open:not-data-disabled:hover:bg-button-accent-pressed',
@@ -76,6 +83,11 @@ const buttonStyles = createVariants(
       ghost: cn(
         buttonFrames.ghost,
         'not-touch:not-data-disabled:hover:bg-button-tertiary-hover not-touch:not-data-disabled:hover:text-ink not-data-disabled:active:bg-button-tertiary-pressed not-data-disabled:active:text-ink aria-pressed:bg-button-tertiary-pressed aria-pressed:text-ink not-touch:aria-pressed:not-data-disabled:hover:bg-button-tertiary-pressed popup-open:bg-button-tertiary-pressed popup-open:text-ink not-touch:popup-open:not-data-disabled:hover:bg-button-tertiary-pressed',
+        buttonPressedStyles
+      ),
+      row: cn(
+        buttonFrames.row,
+        'not-touch:not-data-disabled:hover:bg-button-tertiary-hover not-data-disabled:active:bg-button-tertiary-pressed popup-open:bg-button-tertiary-pressed aria-expanded:ring-[1.5px] aria-expanded:ring-accent',
         buttonPressedStyles
       ),
       danger: cn(
@@ -103,6 +115,10 @@ const buttonStyles = createVariants(
       'icon-xs': iconControlSizes.xs,
       'icon-sm': iconControlSizes.sm,
       'icon-md': iconControlSizes.md,
+      sheet: 'min-h-11 touch:min-h-11 px-4 py-2 text-base',
+      'sheet-row': 'min-h-11 touch:min-h-11 px-0 py-2 text-base font-normal',
+      field: 'h-9 px-3 text-base font-normal',
+      select: 'h-8 min-w-0 justify-between rounded-lg px-3 text-sm font-normal',
       'icon-lg': iconControlSizes.lg,
       'icon-xl': iconControlSizes.xl,
     },
@@ -126,10 +142,15 @@ export type ButtonClassOptions = {
 };
 
 function buttonFinishClasses(variant: ButtonVariant, finish?: ButtonFinish) {
-  if (finish === 'flat' || variant === 'outline') return 'shadow-none';
+  if (finish === 'flat' || variant === 'outline' || variant === 'value') {
+    return 'shadow-none';
+  }
   if (
     finish !== 'raised' &&
-    (variant === 'ghost' || variant === 'danger-ghost' || variant === 'link')
+    (variant === 'ghost' ||
+      variant === 'danger-ghost' ||
+      variant === 'link' ||
+      variant === 'row')
   ) {
     return undefined;
   }
@@ -192,6 +213,7 @@ export type ButtonProps<T extends ValidComponent = 'button'> = PolymorphicProps<
 /**
  * Actions use Button; navigation uses anchors. Framed variants adapt to the device.
  * @do Use primary for solid neutral emphasis and accent for explicit theme-color emphasis.
+ * @do Use value for quiet editable values, and sheet size for 44px sheet actions.
  * @do Set aria-label for icon-only actions and use an explicit icon-* size.
  * @do Use tooltip strings for content only, or options for hotkeys and placement.
  * @dont Use Button for links or size descendant icons through the control.

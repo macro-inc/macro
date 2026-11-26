@@ -743,16 +743,18 @@ export async function createChannelDirectoryBackfillFetcher(
   };
 }
 
-/** The lane's fetcher: the production defaults, with the lane run's signal so
- * a cancelled run stops listing the cache it no longer reconciles. */
+/** The lane's fetcher: the production defaults around the lane's page fetch,
+ * with the lane run's signal so a cancelled run stops listing the cache it no
+ * longer reconciles. */
 export function channelDirectoryBackfillFetcher(
   userId: string,
+  fetch: FetchPage = fetchDirectoryPage,
   signal?: AbortSignal
 ): Promise<FetchPage> {
   return createChannelDirectoryBackfillFetcher(
     userId,
     getGraphqlSoupCacheHost(),
-    fetchDirectoryPage,
+    fetch,
     cacheSessionGeneration.capture,
     readChannelOnPrimary,
     signal

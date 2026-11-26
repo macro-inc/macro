@@ -10,6 +10,11 @@ const TARGETS = {
   // Intel Macs: a failed or skipped Intel build leaves the feed without it.
   'darwin-x86_64': { suffix: '-x86_64-darwin.app.tar.gz', required: false },
   'linux-x86_64': { suffix: '-x86_64-linux.AppImage', required: true },
+  // Present only when the Windows build was signed and released. A release
+  // without it keeps Windows users on their current version until a later
+  // release includes Windows again; the feed holds one version for every
+  // target, so it cannot point Windows at an older release's installer.
+  'windows-x86_64': { suffix: '-x86_64-windows-setup.exe', required: false },
 };
 
 /** Map existing four-part desktop tags to sortable SemVer and OTA build IDs. */
@@ -81,6 +86,21 @@ export function createManifest(directory, tag, repository, macosMinimum) {
   return { version: identity.version, notes: `Macro ${identity.tag}`, platforms };
 }
 
+/** The Tauri config a non-Nix release build merges over `tauri.conf.json`;
+ * `nix/tauri-desktop.nix` builds the same plugin settings for macOS and Linux. */
+export function tauriReleaseConfig(config) {
+  return {
+    version: config.version,
+    build: { beforeBuildCommand: '' },
+    bundle: { externalBin: ['binaries/macrod'] },
+    plugins: {
+      'desktop-update': { enabled: config.enabled },
+      'macro-bundle-updater': { nativeBuild: config.nativeBuild },
+      updater: { pubkey: config.publicKey, endpoints: [config.endpoint] },
+    },
+  };
+}
+
 function main([command, ...args]) {
   if (command === 'prepare') {
     const [ref] = args;
@@ -104,6 +124,11 @@ function main([command, ...args]) {
     const macosMinimum = JSON.parse(readFileSync(CEF_CONFIG, 'utf8')).bundle.macOS.minimumSystemVersion;
     const manifest = createManifest(directory, tag, repository, macosMinimum);
     writeFileSync(join(directory, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  } else if (command === 'tauri-config') {
+    const [output] = args;
+    if (!output) throw new Error('Missing output path');
+    const config = JSON.parse(readFileSync(CONFIG, 'utf8'));
+    writeFileSync(output, `${JSON.stringify(tauriReleaseConfig(config), null, 2)}\n`);
   } else if (command === 'newer') {
     const [candidatePath, currentPath] = args;
     const candidate = JSON.parse(readFileSync(candidatePath, 'utf8'));
@@ -111,7 +136,7 @@ function main([command, ...args]) {
     // Exit 2 distinguishes a superseded/equal release from validation/network errors.
     if (!isNewer(candidate.version, current.version)) process.exitCode = 2;
   } else {
-    throw new Error('Usage: desktop-release.mjs prepare REF | manifest DIR TAG REPO | newer CANDIDATE CURRENT');
+    throw new Error('Usage: desktop-release.mjs prepare REF | manifest DIR TAG REPO | tauri-config OUTPUT | newer CANDIDATE CURRENT');
   }
 }
 

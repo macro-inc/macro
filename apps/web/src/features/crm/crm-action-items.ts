@@ -12,9 +12,10 @@ import type { EntityActionListState } from '../next-soup/actions/entity-action-c
 import { makeSetCompanyPropertyAction } from './crm-actions';
 import { makeHideCompanyAction } from './crm-hide-action';
 import {
+  mergeActionLabel,
   mergeCandidates,
-  openMergeCompanies,
-  useCanMergeCompanies,
+  openMerge,
+  useCanMerge,
 } from './crm-merge';
 import { useSetCompanyHiddenMutation } from './record-adapter';
 
@@ -34,7 +35,7 @@ export function createCrmEntityActionItems() {
       hiddenMutation.mutateAsync({ companyId, hidden }),
   });
   const setCompanyPropertyAction = makeSetCompanyPropertyAction();
-  const canMerge = useCanMergeCompanies();
+  const canMerge = useCanMerge();
 
   return (
     entities: EntityData[],
@@ -80,15 +81,13 @@ export function createCrmEntityActionItems() {
       });
     }
 
-    const merging = canMerge() ? mergeCandidates(entities) : [];
-    if (merging.length > 0) {
+    const merging = canMerge() ? mergeCandidates(entities) : undefined;
+    if (merging) {
       crmItems.push({
-        id: 'merge-companies',
+        id: `merge-${merging.recordType}`,
         icon: GitMergeIcon,
-        label:
-          merging.length > 1 ? t('crm.mergeCompanies') : t('crm.mergeWith'),
-        onClick: () =>
-          openMergeCompanies(merging, () => soup.selection.clear()),
+        label: mergeActionLabel(merging),
+        onClick: () => openMerge(merging, () => soup.selection.clear()),
       });
     }
 

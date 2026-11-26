@@ -240,6 +240,9 @@ describe('TypeDoc documentation packaging', () => {
     expect(guide('search')).toContain('macro.search.all');
     expect(guide('search')).toContain('macro.documents.search');
     expect(guide('search')).toContain('macro.workspace.page');
+    expect(guide('connectedApps')).toContain(
+      "a custom MCP server's `key` is an opaque id"
+    );
     expect(guide('core')).toBe('');
     expect(docs.symbols.DatabaseNamespace).toContain('## Agent guidance');
   });
@@ -280,6 +283,9 @@ describe('TypeDoc documentation packaging', () => {
     expect(entity('apiKeys')).toContain('### UserApiKey');
     expect(entity('entityMentions')).toContain('EntityMentionNamespace');
     expect(entity('githubPullRequests')).toContain('PullRequestChangeset');
+    expect(docs.symbols.ConnectedApp).toContain(
+      "a custom MCP server's opaque id"
+    );
     expect(entity('core')).toContain('`SharePermissionOptions`');
     expect(entity('search')).toContain('### SearchNamespace (`macro.search`)');
     expect(entity('search')).toContain('`SearchNamespace.all`');

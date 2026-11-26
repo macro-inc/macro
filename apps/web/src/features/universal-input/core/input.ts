@@ -41,6 +41,8 @@ export const fieldsSchema = z.object({
   bcc: z.string().default(''),
   query: z.string().default(''),
   searchFilters: z.string().default(''),
+  /** What the tokens of an edited Search for stand for, by id. */
+  searchBindings: z.string().default(''),
   start: z.string().default(''),
   start_assumption: z.string().default(''),
   end: z.string().default(''),

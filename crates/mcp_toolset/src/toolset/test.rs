@@ -404,3 +404,24 @@ async fn a_withheld_calls_server_error_is_logged_without_its_text() {
         "{withheld:#?}"
     );
 }
+
+/// A failed send says what went wrong, not the Rust type of the transport:
+/// that name runs to kilobytes and reaches the model and the transcript.
+#[test]
+fn a_failed_send_reads_without_the_transport_type() {
+    let error = rmcp::ServiceError::TransportSend(
+        rmcp::transport::DynamicTransportError::from_parts(
+            "rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<Client>>",
+            std::any::TypeId::of::<()>(),
+            Box::new(std::io::Error::other("upstream did not answer")),
+        ),
+    );
+
+    assert_eq!(
+        Error::ToolCall(call_error(&error)).to_string(),
+        "tool call failed: the MCP server call failed: upstream did not answer"
+    );
+    // Every other failure reads as rmcp words it.
+    let error = rmcp::ServiceError::TransportClosed;
+    assert_eq!(call_error(&error), "Transport closed");
+}

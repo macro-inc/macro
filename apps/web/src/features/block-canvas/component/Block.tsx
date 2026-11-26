@@ -1,11 +1,6 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
-import {
-  blockDataSignalAs,
-  useBlockId,
-  useBlockNestedContext,
-  useIsNestedBlock,
-} from '@core/block';
+import { blockDataSignalAs, useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
@@ -28,7 +23,6 @@ export default function BlockCanvas(props: BlockCanvasProps) {
   const documentId = useBlockId();
   const data = blockDataSignalAs<CanvasData>('canvas');
   const isNested = useIsNestedBlock();
-  const nestedContext = useBlockNestedContext<'canvas'>();
   const canEdit = useCanEdit();
   const file = blockFileSignal.get;
   const blockHandle = blockHandleSignal.get;
@@ -49,9 +43,6 @@ export default function BlockCanvas(props: BlockCanvasProps) {
           isNested={isNested}
           view={props.view}
           locationParams={locationParams}
-          onLocationChange={
-            nestedContext?.parentContext?.canvas?.onLocationChange
-          }
           registerMethods={registerMethods}
         >
           {(content, state) => {

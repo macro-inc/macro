@@ -54,6 +54,14 @@ const COMPILED_CACHE_ENTRIES: NonZeroUsize = match NonZeroUsize::new(1024) {
 /// Streams one user may hold open on one process. Each holds one event
 /// stream from the document storage service per distinct `ids` in its filter.
 pub(crate) const MAX_STREAMS_PER_USER: u8 = 5;
+/// Subscribes one user may send in [`SUBSCRIBE_WINDOW`]. Each seals the
+/// signing secret with KMS before the document storage service sees it. A
+/// user at the subscription cap who refreshes every subscription at half its
+/// default TTL sends 100 an hour; this allows twice that.
+pub(crate) const MAX_SUBSCRIBES_PER_WINDOW: u32 =
+    4 * webhook::domain::mcp::models::MAX_SUBSCRIPTIONS_PER_USER;
+/// The window [`MAX_SUBSCRIBES_PER_WINDOW`] counts over.
+const SUBSCRIBE_WINDOW: std::time::Duration = std::time::Duration::from_secs(3600);
 
 /// Encrypts a subscriber's signing secret for storage.
 // Object-safe (`async_trait`): `McpEvents` holds it as `Arc<dyn SecretSealer>`
@@ -82,6 +90,30 @@ where
         webhook::domain::mcp::ports::McpSecretCipher::encrypt(self, user, profile, secret)
             .await
             .map_err(|error| rootcause::Report::new(error).into_dynamic())
+    }
+}
+
+/// Counts each user's subscribes, in a store every replica shares.
+#[async_trait::async_trait]
+pub(crate) trait SubscribeLimiter: Send + Sync {
+    /// Count one subscribe: `false` once the user's window is spent.
+    async fn admit(&self, user: &MacroUserIdStr<'static>) -> Result<bool, rootcause::Report>;
+}
+
+/// [`SubscribeLimiter`] over the shared rate limiter.
+pub(crate) struct RateLimitedSubscribes<R>(pub(crate) R);
+
+#[async_trait::async_trait]
+impl<R: rate_limit::RateLimitService> SubscribeLimiter for RateLimitedSubscribes<R> {
+    async fn admit(&self, user: &MacroUserIdStr<'static>) -> Result<bool, rootcause::Report> {
+        let key = rate_limit::RateLimitKey::builder(&"mcp-events-subscribes")
+            .append(&user.as_ref())
+            .finish();
+        let config = rate_limit::RateLimitConfig::new(
+            u64::from(MAX_SUBSCRIBES_PER_WINDOW),
+            SUBSCRIBE_WINDOW,
+        );
+        Ok(self.0.check_rate_limit(key, config).await?.is_ok())
     }
 }
 
@@ -130,6 +162,12 @@ impl From<StoreError> for EventsError {
                     limit: "subscriptions",
                     max: Some(max),
                 },
+                McpSubscriptionErrorBody::VerificationsExhausted { max } => {
+                    Self::ResourceExhausted {
+                        limit: "failed callback verifications per hour",
+                        max: Some(max),
+                    }
+                }
                 McpSubscriptionErrorBody::CallbackEndpointError { reason } => {
                     Self::CallbackEndpoint(reason)
                 }
@@ -200,6 +238,23 @@ pub(crate) struct Subscribed {
 /// fills.
 type CompiledCache = LruCache<(String, String), Arc<tokio::sync::OnceCell<McpEventFilter>>>;
 
+/// Refuse a callback URL that is not an absolute `http` or `https` URL with
+/// a host. Which scheme and address are allowed is the document storage
+/// service's check; this only keeps a malformed URL from costing a seal.
+fn check_callback_url(url: &str) -> Result<(), EventsError> {
+    let parsed = url::Url::parse(url).ok();
+    if url.contains('\0')
+        || !parsed.is_some_and(|parsed| {
+            matches!(parsed.scheme(), "http" | "https") && parsed.host().is_some()
+        })
+    {
+        return Err(EventsError::InvalidParams(
+            "delivery.url must be an absolute http or https URL".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 /// Events for the public MCP server: compiling selections, webhook
 /// subscriptions through the document storage service, and the source
 /// streams read.
@@ -208,6 +263,7 @@ pub(crate) struct McpEvents {
     store: Arc<dyn SubscriptionStore>,
     source: Arc<dyn EventSource>,
     sealer: Arc<dyn SecretSealer>,
+    subscribes: Arc<dyn SubscribeLimiter>,
     /// One cell per user and wording, so concurrent first requests share one
     /// model call; a failed call leaves the cell empty for the next.
     compiled: Mutex<CompiledCache>,
@@ -220,12 +276,14 @@ impl McpEvents {
         store: Arc<dyn SubscriptionStore>,
         source: Arc<dyn EventSource>,
         sealer: Arc<dyn SecretSealer>,
+        subscribes: Arc<dyn SubscribeLimiter>,
     ) -> Self {
         Self {
             compiler,
             store,
             source,
             sealer,
+            subscribes,
             compiled: Mutex::new(LruCache::new(COMPILED_CACHE_ENTRIES)),
             open_streams: Arc::default(),
         }
@@ -294,14 +352,28 @@ impl McpEvents {
 
     /// Create or refresh a webhook subscription. Its filter is part of its
     /// arguments, so subscribing costs no model call; words without a filter
-    /// are compiled and shown back before anything is sealed or stored.
+    /// are compiled and shown back before anything is sealed or stored. The
+    /// URL's form and the user's subscribe allowance are checked before the
+    /// secret is sealed; the document storage service checks the rest.
     pub(crate) async fn subscribe(
         &self,
         user: &MacroUserIdStr<'static>,
         request: Subscribe,
     ) -> Result<Subscribed, EventsError> {
         let selection = catalog::selection(&request.name, &request.arguments)?;
+        check_callback_url(&request.url)?;
         let compiled = self.compile(user, &selection).await?;
+        if !self
+            .subscribes
+            .admit(user)
+            .await
+            .map_err(EventsError::Internal)?
+        {
+            return Err(EventsError::ResourceExhausted {
+                limit: "subscribe requests per hour",
+                max: Some(MAX_SUBSCRIBES_PER_WINDOW),
+            });
+        }
         let secret_ciphertext = self
             .sealer
             .seal(user, request.profile, &request.secret)

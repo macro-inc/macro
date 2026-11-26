@@ -8,7 +8,10 @@ use super::protocol::{
     CHATGPT_METHOD_PREFIX, FILTER_META, INTERPRETATION_META, PROFILE_META, RequestScope, handle,
 };
 use super::stream::{NotificationSink, SUBSCRIPTION_ID_META, SinkClosed};
-use super::{Compiled, MAX_STREAMS_PER_USER, McpEvents, SecretSealer, Selection};
+use super::{
+    Compiled, MAX_STREAMS_PER_USER, MAX_SUBSCRIBES_PER_WINDOW, McpEvents, SecretSealer, Selection,
+    SubscribeLimiter,
+};
 use futures::StreamExt as _;
 use futures::channel::mpsc;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -278,6 +281,29 @@ impl SecretSealer for FakeSealer {
     }
 }
 
+/// Admits `left` more subscribes.
+struct FakeLimiter {
+    left: Mutex<u32>,
+}
+
+impl Default for FakeLimiter {
+    fn default() -> Self {
+        Self {
+            left: Mutex::new(MAX_SUBSCRIBES_PER_WINDOW),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl SubscribeLimiter for FakeLimiter {
+    async fn admit(&self, _: &MacroUserIdStr<'static>) -> Result<bool, rootcause::Report> {
+        let mut left = self.left.lock().unwrap();
+        let admitted = *left > 0;
+        *left = left.saturating_sub(1);
+        Ok(admitted)
+    }
+}
+
 /// The notifications a stream sent, in order.
 struct Sink(mpsc::UnboundedSender<(&'static str, Value)>);
 
@@ -294,6 +320,7 @@ struct Fixture {
     store: Arc<FakeStore>,
     source: Arc<FakeSource>,
     sealer: Arc<FakeSealer>,
+    limiter: Arc<FakeLimiter>,
     events: McpEvents,
 }
 
@@ -302,17 +329,20 @@ fn fixture() -> Fixture {
     let store = Arc::new(FakeStore::default());
     let source = Arc::new(FakeSource::default());
     let sealer = Arc::new(FakeSealer::default());
+    let limiter = Arc::new(FakeLimiter::default());
     let events = McpEvents::new(
         compiler.clone(),
         store.clone(),
         source.clone(),
         sealer.clone(),
+        limiter.clone(),
     );
     Fixture {
         compiler,
         store,
         source,
         sealer,
+        limiter,
         events,
     }
 }
@@ -404,6 +434,7 @@ fn a_named_type_takes_optional_ids() {
     );
     assert!(selection("message.posted", &json!({"ids": []})).is_err());
     assert!(selection("message.posted", &json!({"ids": [""]})).is_err());
+    assert!(selection("message.posted", &json!({"ids": ["  "]})).is_err());
     assert!(selection("message.posted", &json!({"ids": ["chan\u{0}nel"]})).is_err());
     let many: Vec<String> = (0..17).map(|index| index.to_string()).collect();
     assert!(selection("message.posted", &json!({"ids": many})).is_err());
@@ -715,6 +746,10 @@ async fn service_refusals_keep_their_codes() {
             -32025,
         ),
         (
+            McpSubscriptionErrorBody::VerificationsExhausted { max: 10 },
+            -32025,
+        ),
+        (
             McpSubscriptionErrorBody::CallbackEndpointError {
                 reason: McpEndpointFailure::ChallengeFailed,
             },
@@ -740,6 +775,61 @@ async fn service_refusals_keep_their_codes() {
         .unwrap_err();
         assert_eq!(error.code.0, code);
     }
+}
+
+#[tokio::test]
+async fn a_malformed_callback_url_is_refused_before_the_secret_is_sealed() {
+    for url in [
+        "agent.example/hook",
+        "ftp://agent.example/hook",
+        "https://",
+        "mailto:a@b.example",
+    ] {
+        let fixture = fixture();
+        let mut params = subscribe_params("message.posted", json!({}));
+        params["delivery"]["url"] = json!(url);
+        let error = call(
+            &fixture.events,
+            "events/subscribe",
+            params,
+            &no_extensions(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code.0, -32602, "{url}");
+        assert_eq!(*fixture.sealer.sealed.lock().unwrap(), 0, "{url}");
+        assert_eq!(
+            *fixture.limiter.left.lock().unwrap(),
+            MAX_SUBSCRIBES_PER_WINDOW
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_user_out_of_subscribes_is_refused_before_the_secret_is_sealed() {
+    let fixture = fixture();
+    *fixture.limiter.left.lock().unwrap() = 1;
+    call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params("message.posted", json!({})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+    let error = call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params("message.posted", json!({})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code.0, -32025);
+    let data = error.data.unwrap();
+    assert_eq!(data["limit"], "subscribe requests per hour");
+    assert_eq!(data["max"], MAX_SUBSCRIBES_PER_WINDOW);
+    assert_eq!(*fixture.sealer.sealed.lock().unwrap(), 1);
 }
 
 #[tokio::test]

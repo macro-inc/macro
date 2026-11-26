@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import type { CalendarOccurrenceDataOptions } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import {
   type CalendarEvent,
   TEAM_OOO_SOURCE_ID,
@@ -23,6 +24,7 @@ import { CalendarMiniCalendar, TeamOooUpcomingList } from './CalendarSidebar';
 
 const requests = vi.hoisted(() => ({
   teamOoo: vi.fn<() => Promise<TeamOutOfOfficeItem[]>>(),
+  occurrences: vi.fn<(options: CalendarOccurrenceDataOptions) => void>(),
 }));
 
 vi.mock('@core/context/user', () => ({
@@ -50,6 +52,12 @@ vi.mock('@queries/calendar/team-ooo', () => ({
       })),
     })),
 }));
+vi.mock('@app/features/calendar/hooks/use-calendar-occurrence-data', () => ({
+  useCalendarOccurrenceData: (options: CalendarOccurrenceDataOptions) => {
+    requests.occurrences(options);
+    return { visibleEvents: () => [] };
+  },
+}));
 
 const [selectedEvent, setSelectedEvent] = createSignal<CalendarEvent>();
 const [selectedEventAnchor, setSelectedEventAnchor] =
@@ -72,6 +80,8 @@ const closeEventDetails = vi.fn(() => {
 vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
   useCalendarView: () => ({
     displaySettings: { weekStartsOn: 1 },
+    sourceById: () => new Map(),
+    sourcesReady: () => true,
     selectedEvent,
     selectedEventAnchor,
     selectEvent,
@@ -80,8 +90,13 @@ vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
       sourceId === TEAM_OOO_SOURCE_ID ? overlayVisible() : true,
   }),
 }));
-vi.mock('@app/features/calendar/components/CalendarPagerContext', () => ({
-  useCalendarPager: () => ({ activeDateInfo: () => undefined, gotoDate }),
+vi.mock('@app/features/calendar/context/calendar-navigation-context', () => ({
+  useCalendarNavigation: () => ({
+    activeDate: () => undefined,
+    periodView: () => 'timeGridDay',
+    weekRange: () => undefined,
+    gotoDate,
+  }),
 }));
 vi.mock('../calendar-focus-target', () => ({
   useCalendarFocus: () => ({ focusOccurrence }),
@@ -133,6 +148,7 @@ const toggle = () =>
 const scrollIntoView = vi.fn();
 beforeEach(() => {
   Element.prototype.scrollIntoView = scrollIntoView;
+  vi.stubGlobal('scrollTo', vi.fn());
 });
 
 afterEach(() => {
@@ -142,9 +158,50 @@ afterEach(() => {
   setOverlayVisible(false);
   vi.useRealTimers();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('CalendarMiniCalendar', () => {
+  it('bounds marker reads to the independently browsed six-week grid', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 13));
+    const user = userEvent.setup();
+    render(() => <CalendarMiniCalendar />);
+    const options = requests.occurrences.mock.calls[0]?.[0];
+    if (!options) throw new Error('Missing mini-month data source');
+    expect(options.range()).toMatchObject({
+      startDate: '2026-10-26',
+      endDate: '2026-12-07',
+    });
+    expect(options.sourcesReady?.()).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Go to next month' }));
+    expect(options.range()).toMatchObject({
+      startDate: '2026-11-30',
+      endDate: '2027-01-11',
+    });
+    expect(gotoDate).not.toHaveBeenCalled();
+  });
+  it('changes only the mini when its month picker or Go to date submits', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 13));
+    const user = userEvent.setup();
+    render(() => <CalendarMiniCalendar />);
+    await user.click(screen.getByRole('button', { name: 'Choose month' }));
+    await user.click(screen.getByRole('button', { name: 'March 2026' }));
+    expect(
+      screen.getByRole('button', { name: 'Choose month' }).textContent
+    ).toContain('March 2026');
+    expect(gotoDate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Choose month' }));
+    const dateInput = screen.getByLabelText('Go to date');
+    fireEvent.input(dateInput, { target: { value: '2031-06-11' } });
+    fireEvent.keyDown(dateInput, { key: 'Enter' });
+    expect(
+      screen.getByRole('button', { name: 'Choose month' }).textContent
+    ).toContain('June 2031');
+    expect(gotoDate).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Go to date')).toBeNull();
+  });
   it.each([
     {
       date: new Date(2026, 9, 31),
@@ -235,6 +292,12 @@ describe('TeamOooUpcomingList', () => {
     expect(requests.teamOoo).toHaveBeenCalledTimes(initialRequests * 2);
     expect(screen.getByRole('button', { name: /Jackson/ })).toBe(anchor);
     expect(anchor.isConnected).toBe(true);
+
+    requests.teamOoo.mockRejectedValue(new Error('Refresh unavailable'));
+    await refetch();
+    expect(anchor.isConnected).toBe(true);
+    expect(anchor.getAttribute('aria-current')).toBe('true');
+    expect(screen.getByRole('alert')).toBeTruthy();
   });
 
   it('shows ten rows and the rest behind a "+N more" toggle', async () => {

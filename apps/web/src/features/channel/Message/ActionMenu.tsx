@@ -196,7 +196,7 @@ function ActionMenuContent(props: ActionMenuProps) {
           onClick={(event) => event.stopPropagation()}
         >
           <Show when={props.showTimestamp}>
-            <Timestamp format="time" class="px-1.5 whitespace-nowrap" />
+            <Timestamp class="px-1.5 whitespace-nowrap" />
             <Toolbar.Divider />
           </Show>
           <Show when={hasReactAction()}>

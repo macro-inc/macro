@@ -31,6 +31,7 @@ it('keeps a newly discovered external dependency excluded while refreshing its s
     reviewId: 'review',
     status: 'ready',
     error: null,
+    errorKind: null,
     scanned: null,
     onTeam: false,
     counts: {

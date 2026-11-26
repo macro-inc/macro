@@ -44,10 +44,16 @@ import type {
   ImportKind,
   ImportRun,
   ImportSource,
+  RunErrorKind,
   RunStatus,
 } from './generated/schemas';
 
-export type { ImportKind, ImportRun, ImportSource } from './generated/schemas';
+export type {
+  ImportKind,
+  ImportRun,
+  ImportSource,
+  RunErrorKind,
+} from './generated/schemas';
 
 export type ImportEntityStatus =
   | 'staged'
@@ -58,6 +64,32 @@ export type ImportEntityStatus =
 export type ImportInitiator = 'onboarding' | 'chat' | 'archive' | 'manual';
 
 export type ImportRunStatus = RunStatus;
+
+// Every kind, checked against the generated union: a new kind fails to
+// compile here until it is listed.
+const RUN_ERROR_KINDS = {
+  not_found: true,
+  forbidden: true,
+  access_lost: true,
+  connection_unavailable: true,
+  not_connected: true,
+  rate_limited: true,
+  unreachable: true,
+  usage_refused: true,
+  interrupted: true,
+  internal: true,
+} satisfies Record<RunErrorKind, true>;
+
+/**
+ * A run's failure kind from the server; a kind this build does not know (a
+ * newer server's) reads as `internal`, so it still renders.
+ */
+export function parseRunErrorKind(value: unknown): RunErrorKind | null {
+  if (value === null || value === undefined) return null;
+  return typeof value === 'string' && Object.hasOwn(RUN_ERROR_KINDS, value)
+    ? (value as RunErrorKind)
+    : 'internal';
+}
 
 /** Metadata shape for staged Linear issues (`source === 'linear'`). */
 export type LinearIssueMeta = {

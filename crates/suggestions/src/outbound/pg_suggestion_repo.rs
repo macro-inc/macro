@@ -2,7 +2,7 @@
 //! the items in `suggestion_target`, and every generation session's change in
 //! `suggestion_change`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -12,12 +12,15 @@ use sqlx::{PgConnection, PgPool};
 
 use crate::domain::lifecycle::{self, LifecycleEvent};
 use crate::domain::model::{
-    Category, Change, EntityAction, NewKind, OpenTarget, ResolveReason, StoredRun, Suggestion,
-    SuggestionContent, SuggestionDraft, SuggestionKind, SuggestionRun, SuggestionState,
-    SuggestionStatus, Target, TargetRole, result_of,
+    Category, Change, EntityAction, GenerationSession, NewKind, OpenTarget, ResolveReason,
+    StoredRun, Suggestion, SuggestionContent, SuggestionDraft, SuggestionKind, SuggestionRun,
+    SuggestionState, SuggestionStatus, Target, TargetRole, result_of,
 };
 use crate::domain::ports::{Limits, SuggestionRepo, Written};
 use crate::domain::run::{RunEvent, RunState};
+use crate::domain::topic::{NameTopic, StoredTopic, TopicName};
+
+mod topics;
 
 #[cfg(test)]
 pub(crate) mod test;
@@ -67,6 +70,7 @@ struct SuggestionRow {
     waiting_from: Option<String>,
     draft_preview: Option<String>,
     routine_suggestion_id: Option<Uuid>,
+    topic_key: Option<String>,
 }
 
 /// [`SuggestionRepo`] on MacroDB.
@@ -81,7 +85,8 @@ impl PgSuggestionRepo {
     }
 
     /// The person's suggestions that `read` names, one query per kind of read so
-    /// each plan uses its own index.
+    /// each plan uses its own index. Topics are named after, by their keys, so
+    /// they never change those plans.
     async fn load(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -101,7 +106,8 @@ impl PgSuggestionRepo {
                               p.prompt AS "prompt?", p.run_mode AS "run_mode?", p.sends AS "sends?",
                               e.action AS "action?", e.waiting_since AS "waiting_since?",
                               e.waiting_from AS "waiting_from?", e.draft_preview AS "draft_preview?",
-                              r.routine_suggestion_id AS "routine_suggestion_id?"
+                              r.routine_suggestion_id AS "routine_suggestion_id?",
+                              i.topic_key
                        FROM suggestion i
                        LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id
                        LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id
@@ -127,7 +133,8 @@ impl PgSuggestionRepo {
                               p.prompt AS "prompt?", p.run_mode AS "run_mode?", p.sends AS "sends?",
                               e.action AS "action?", e.waiting_since AS "waiting_since?",
                               e.waiting_from AS "waiting_from?", e.draft_preview AS "draft_preview?",
-                              r.routine_suggestion_id AS "routine_suggestion_id?"
+                              r.routine_suggestion_id AS "routine_suggestion_id?",
+                              i.topic_key
                        FROM (
                            SELECT * FROM suggestion
                            WHERE user_id = $1 AND state IN ('proposed', 'accepted')
@@ -155,7 +162,8 @@ impl PgSuggestionRepo {
                               p.prompt AS "prompt?", p.run_mode AS "run_mode?", p.sends AS "sends?",
                               e.action AS "action?", e.waiting_since AS "waiting_since?",
                               e.waiting_from AS "waiting_from?", e.draft_preview AS "draft_preview?",
-                              r.routine_suggestion_id AS "routine_suggestion_id?"
+                              r.routine_suggestion_id AS "routine_suggestion_id?",
+                              i.topic_key
                        FROM suggestion i
                        LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id
                        LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id
@@ -176,7 +184,8 @@ impl PgSuggestionRepo {
                               p.prompt AS "prompt?", p.run_mode AS "run_mode?", p.sends AS "sends?",
                               e.action AS "action?", e.waiting_since AS "waiting_since?",
                               e.waiting_from AS "waiting_from?", e.draft_preview AS "draft_preview?",
-                              r.routine_suggestion_id AS "routine_suggestion_id?"
+                              r.routine_suggestion_id AS "routine_suggestion_id?",
+                              i.topic_key
                        FROM suggestion i
                        LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id
                        LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id
@@ -210,6 +219,31 @@ impl PgSuggestionRepo {
         )
         .fetch_all(&mut *tx)
         .await?;
+        let keys: HashSet<&str> = rows
+            .iter()
+            .filter_map(|row| row.topic_key.as_deref())
+            .collect();
+        let keys: Vec<String> = keys.into_iter().map(str::to_owned).collect();
+        let topics: HashMap<String, String> = if keys.is_empty() {
+            HashMap::new()
+        } else {
+            sqlx::query!(
+                r#"SELECT t.key, t.name
+                   FROM unnest($2::text[]) AS wanted(key)
+                   CROSS JOIN LATERAL (
+                       SELECT key, name FROM suggestion_topic
+                       WHERE user_id = $1 AND key = wanted.key
+                       LIMIT 1
+                   ) t"#,
+                user.as_ref(),
+                &keys,
+            )
+            .fetch_all(&mut *tx)
+            .await?
+            .into_iter()
+            .map(|topic| (topic.key, topic.name))
+            .collect()
+        };
         tx.commit().await?;
         type Decoded = Result<(TargetRole, Target), PgSuggestionRepoError>;
         let mut by_suggestion: HashMap<Uuid, Vec<Decoded>> = HashMap::new();
@@ -309,6 +343,10 @@ impl PgSuggestionRepo {
                         .collect::<Result<_, _>>()?,
                     state,
                     state_reason: row.state_reason,
+                    topic: row.topic_key.and_then(|key| {
+                        let name = topics.get(&key)?.clone();
+                        Some(TopicName { key, name })
+                    }),
                     about: of(TargetRole::About),
                     produced,
                     created_at: row.created_at,
@@ -606,6 +644,24 @@ impl SuggestionRepo for PgSuggestionRepo {
             .next())
     }
 
+    async fn topics(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        keys: &[String],
+    ) -> Result<Vec<StoredTopic>, Self::Err> {
+        Ok(topics::topics(&self.pool, user, keys).await?)
+    }
+
+    async fn name_topic(
+        &self,
+        session: &GenerationSession,
+        topic: &NameTopic,
+        limit: u32,
+        at: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        Ok(topics::name_topic(&self.pool, session, topic, limit, at).await?)
+    }
+
     async fn added_in(&self, generation: Uuid) -> Result<u32, Self::Err> {
         let count = sqlx::query_scalar!(
             r#"SELECT count(*) AS "count!" FROM suggestion_change
@@ -861,8 +917,8 @@ impl SuggestionRepo for PgSuggestionRepo {
         let inserted = sqlx::query!(
             r#"INSERT INTO suggestion
                  (id, user_id, kind, dedup_key, title, summary, importance, categories,
-                  session_id, created_at, updated_at, state_changed_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $10)
+                  session_id, created_at, updated_at, state_changed_at, topic_key)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $10, $11)
                ON CONFLICT (user_id, dedup_key) DO NOTHING"#,
             id,
             user.as_ref(),
@@ -874,6 +930,7 @@ impl SuggestionRepo for PgSuggestionRepo {
             &category_names(&content.categories),
             change.session,
             change.at,
+            content.topic.as_deref(),
         )
         .execute(&mut *tx)
         .await?
@@ -956,6 +1013,7 @@ impl SuggestionRepo for PgSuggestionRepo {
             r#"UPDATE suggestion
                SET title = $4, summary = $5, importance = $6, categories = $7,
                    state = $8, state_reason = NULL, session_id = $9, updated_at = $10,
+                   topic_key = $11,
                    state_changed_at = CASE WHEN state = $8 THEN state_changed_at ELSE $10 END
                WHERE user_id = $1 AND id = $2 AND state = $3"#,
             user.as_ref(),
@@ -968,6 +1026,7 @@ impl SuggestionRepo for PgSuggestionRepo {
             to.as_ref(),
             change.session,
             change.at,
+            content.topic.as_deref(),
         )
         .execute(&mut *tx)
         .await?

@@ -3779,6 +3779,22 @@ export type RunStatus =
   | 'failed'
   | 'dismissed';
 /**
+ * Why a run failed, as a closed set readers branch on instead of the error
+ * text. Stored in `import_run.error_kind`; `None` on runs that failed
+ * before it was recorded.
+ */
+export type RunErrorKind =
+  | 'not_found'
+  | 'forbidden'
+  | 'access_lost'
+  | 'connection_unavailable'
+  | 'not_connected'
+  | 'rate_limited'
+  | 'unreachable'
+  | 'usage_refused'
+  | 'interrupted'
+  | 'internal';
+/**
  * Something a HubSpot import cannot carry into Macro CRM, counted on the
  * review card and in the final report.
  */
@@ -4169,7 +4185,7 @@ export type ParticipantAction = 'add' | 'remove';
 /**
  * The kind of record merged.
  */
-export type ToolMergeRecordType = 'company';
+export type ToolMergeRecordType = 'company' | 'contact';
 /**
  * What happens to teammates' email sharing that names a merged record.
  */
@@ -11290,9 +11306,18 @@ export interface NotionImportReport {
    */
   status?: RunStatus | null;
   /**
-   * Why the run failed, when it did.
+   * Why the run failed or what it could not finish, in text Macro wrote
+   * (a canned reason, a reviewed object's title, or the sentence for its
+   * kind; never a provider's text): the report keeps it only when the run
+   * recorded a kind. The agent's tool answers drop it and read
+   * `error_kind`.
    */
   error?: string | null;
+  /**
+   * The kind of failure, when the run failed and it was recorded. Show
+   * the user copy for this, not `error`.
+   */
+  errorKind?: RunErrorKind | null;
   /**
    * What planning has found in Notion so far, while it is `running`.
    */
@@ -13479,16 +13504,16 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
- * Merge duplicate CRM companies into the one that stays, exactly as a PreviewMerge review showed: people, domains, pipeline entries, references, discussions, favorites and lists move to it and the merged companies are deleted. It can't be undone; merge only after the user confirmed that review. Old ids keep opening the company that stays. Refused with merge_preview_stale when anything changed since the review: preview again.
+ * Merge duplicate CRM companies, or duplicate people (contacts), into the one that stays, exactly as a PreviewMerge review showed: for companies, people, domains and lists move to it; for contacts, addresses and mailbox sources; for both, pipeline entries, references, discussions and favorites. The merged records are deleted. It can't be undone; merge only after the user confirmed that review. Old ids keep opening the record that stays. Refused with merge_preview_stale when anything changed since the review: preview again.
  */
 export interface MergeRecords {
   recordType: ToolMergeRecordType;
   /**
-   * The company that stays, as reviewed.
+   * The record that stays, as reviewed.
    */
   survivorId: string;
   /**
-   * The companies merged into it, as reviewed.
+   * The records merged into it, as reviewed.
    */
   sourceIds: string[];
   /**
@@ -13652,16 +13677,16 @@ export interface OpenDirectMessageResponse {
   summary: string;
 }
 /**
- * Review merging duplicate CRM companies into the one that stays, without changing anything. Returns what moves (people, pipeline entries, references, discussion), the values that differ and which are kept, what email sync does, how many teammates' email sharing names a merged company, anything that blocks the merge, and the revision MergeRecords needs. Only team admins and owners can merge. Show the user the review before merging.
+ * Review merging duplicate CRM companies, or duplicate people (contacts), into the one that stays, without changing anything. Returns what moves (people, addresses, pipeline entries, references, discussion), the values that differ and which are kept, what email sync does, how many teammates' email sharing names a merged record, anything that blocks the merge, and the revision MergeRecords needs. Only team admins and owners can merge. Show the user the review before merging.
  */
 export interface PreviewMerge {
   recordType: ToolMergeRecordType;
   /**
-   * The company that stays; its name, domains and values win.
+   * The record that stays: its name and values win, and a company keeps its domains, a contact its company and primary address.
    */
   survivorId: string;
   /**
-   * The companies merged into it and deleted, at most ten.
+   * The records of the same kind merged into it and deleted, at most ten.
    */
   sourceIds: string[];
 }

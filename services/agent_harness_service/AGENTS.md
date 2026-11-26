@@ -285,7 +285,13 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   (`is_program_run`) and agent accounts, checks the rollout and the harness
   (`View` to watch, `Manage` to drive; `access.rs` adapts both, and people's
   names, to the domain's ports), limits tickets per person, and mints a
-  single-use 60 s ticket;
+  single-use 60 s ticket.
+  The existing `computer.screen.session` span records relay progress and a
+  bounded close reason. It joins the ticket trace and carries the browser's
+  journey and attempt number where supplied. The `computer.screen.tunnel`
+  child distinguishes relay and input and records the guest image when
+  resolved. The session records the local macrod connection epoch separately
+  when the runtime is registered on this replica.
   `GET /computers/{harness_id}/screen/ws?ticket=` redeems it and runs the
   socket (`socket.rs`): binary frames are raw RFB both ways, text frames JSON
   control (`takeOver`, `handBack`, `input`, `visibility`, `stop`; server
@@ -330,8 +336,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   this socket's unexpired drive; each send is bounded by the lease's end). A drive that ends in the middle of the guest's
   clipboard ends the socket rather than pass the rest. Xvnc is reached only by a `socat`
   tunnel over `tunnel.rs` `GuestExec` (the operator's `Fleet::exec`,
-  implemented in `computers.rs`): nothing before its ready line is media,
-  and a tunnel still running 2 s after its session closed is killed (on the
+  implemented in `computers.rs`). The Bash wrapper marks the helper pid
+  before it starts, and maps a refused loopback connection to a reserved
+  exit status. Only RFB bytes follow the marker on stdout. A tunnel still
+  running 2 s after its session closed is killed (on the
   computer tasks' tracker, only if the pid is still that socat). When
   media stops short, the operator says whether the computer runs, which
   picks `computerOff` or a named error (`tunnelFailed`, `sourceUnavailable`).
@@ -440,7 +448,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Results carry the filter and its reading in `_meta` (`com.macro/filter`,
   `com.macro/interpretation`). Subscriptions live in document storage
   (`dss.rs`: internal routes, secret sealed with the MCP OAuth KMS key under
-  purpose `mcp-event-subscription-secret`); the same words compile once per
+  purpose `mcp-event-subscription-secret`). Before the seal, a subscribe's
+  URL must be an absolute `http`/`https` URL and the user must be within 200
+  subscribes per hour (`MAX_SUBSCRIBES_PER_WINDOW`, the shared Redis rate
+  limiter); document storage then checks the rest. The same words compile once per
   user per process. Streams (`stream.rs`) read
   document storage's live event stream as the user (`POST`, the filter in
   the body, so its ids stay out of URLs), one connection per distinct `ids`,
@@ -609,7 +620,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
 - One `ai_tools::ImportJobs` serves the whole process: session tools, public MCP, and `cognition::build` (the `/import/*` routes and the only stalled workspace-import sweeper, which adopts Notion, Linear and Jira runs) share it, and `run()` in `lib.rs` hands running imports over on shutdown (`ImportJobs::hand_over`).
 - The import service registers read-only Notion, Linear, Jira and HubSpot readers over the connectors' API connections, and HubSpot's CRM writer, wherever it is built (`cognition/server.rs` and `ai_tools::build_context`, which public MCP reuses). Authenticated `/import/workspaces/{source}` report and `/cancel` routes serve the shared review card; `/import/notion` remains for existing clients. Workspace tools stage reviewed plans; they never write upstream.
 - The agent approves a presented review after its account holder says yes in chat by submitting it with `DecideReview`: `Actions::session` reports the turn's prompter from `agent_session.turn_prompter`, and `approvable` refuses an import whose plan is not `ready` for that review.
-- Presenting an import review ties its plan to the review and the session (`attach_workspace_review`); the import then produces `import.planned` and `review.settled` for that session itself, in the run's transaction (`crates/import`).
+- Presenting an import review ties its plan to the review and the session (`attach_workspace_review`); the import then produces `import.planned` and `review.settled` for that session itself, in the run's transaction (`crates/import`). A run that is not planning or ready is refused before the review is saved (`ReviewActions::presentable`, from the run's report) and again when it is attached (`ImportError::RunNotReviewable`, answered as `CodeModeError::Unpresentable`, which dismisses the saved review); the agent is told why instead of an empty card being shown. `start_import` maps the write fence's refusal (`start_reviewed_write`) and a start that failed before anything changed (`ImportError::NotStarted`) to `CodeModeError::NotApprovable`; any later failure may have started the write, so it stays an unknown outcome.
 - The owner connecting an app a session asked for produces an `app.connected` event (`agent_harness::domain::app_connections`).
 
 The composition root wires `PgExternalReplyStore` into the harness and recovers
@@ -655,6 +666,10 @@ must use distinct identities; replicas of one control plane share an identity.
 An enabled fleet also requires `COMPUTERS_IMAGE` and `COMPUTERS_AGENT_IMAGE`; how
 far each host is overcommitted is its own row's settings
 (`docs/runbooks/computer-overcommit.md`).
+The dev computer operator leases service-only runtime update requests and
+runs the fixed guest helper through the existing Firecracker mTLS identity.
+See the [rollout runbook](../../docs/runbooks/firecracker-computers-rollout.md).
+
 Firecracker additionally requires `COMPUTERS_FIRECRACKER_CLIENT_CERT` and
 `COMPUTERS_FIRECRACKER_CLIENT_KEY`, the mTLS identity every host agent trusts; each
 host's endpoint and pinned certificate are on its row. Docker additionally requires

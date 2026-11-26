@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearRowPress, holdRowPress, installRowPress } from './rowPress';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: () => {} }));
 
 let uninstall: () => void;
 let row: HTMLElement;

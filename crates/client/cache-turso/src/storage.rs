@@ -56,6 +56,10 @@ use turso_opfs::{
     ResetFailure,
 };
 
+#[cfg(target_arch = "wasm32")]
+pub use queue_salvage::read_queue;
+pub use queue_salvage::{QueueImport, QueueLoss, QueueRead, SalvageFile, SalvagedQueue};
+
 /// Frozen storage schema version, independent of cache postcard versions.
 pub const STORAGE_SCHEMA_VERSION: u32 = 12;
 
@@ -65,6 +69,9 @@ const SEARCH_REBUILD_RECORDS: &str =
     "SELECT id, value FROM records WHERE __typename = ?1 ORDER BY id LIMIT ?2";
 const SEARCH_REBUILD_RECORDS_AFTER: &str =
     "SELECT id, value FROM records WHERE __typename = ?1 AND id > ?2 ORDER BY id LIMIT ?3";
+
+#[cfg(feature = "migration-test-hooks")]
+pub use migration::test_hooks as migration_test_hooks;
 
 /// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -210,6 +217,9 @@ pub struct TursoStorage {
     /// The session's connection with its prepared statements. Its statements
     /// hold connection references, so closing releases them first.
     connection: Db,
+    /// The storage version this open upgraded the file from.
+    #[cfg(not(target_arch = "wasm32"))]
+    storage_upgraded_from: Option<u32>,
     #[cfg(all(test, not(target_arch = "wasm32")))]
     fault: Mutex<Option<TestFault>>,
 }
@@ -243,7 +253,7 @@ impl TursoStorage {
     ) -> Result<(Self, TursoStorageOpenOutcome), TursoStorageOpenFailure> {
         let fresh = session.disposition() == OpenDisposition::Fresh;
         let connection = Db::uncached(session.connection());
-        let result = initialize(&connection, scope, fresh);
+        let result = initialize(&connection, scope, fresh, OlderStorage::Reset);
         drop(connection);
         match result {
             Ok(_) => Ok((
@@ -349,6 +359,9 @@ impl TursoStorage {
             connection,
             ..
         } = self;
+        if reason.is_none() {
+            connection.checkpoint_before_close();
+        }
         connection.release_statements();
         drop(connection);
         let closed = session.try_close().map_err(TursoStorageCloseFailure::new)?;
@@ -450,6 +463,12 @@ impl ResetRequiredTursoStorageClosed {
     /// Returns the first reset-required reason latched by this storage.
     pub fn reason(&self) -> PhysicalResetReason {
         self.reason
+    }
+
+    /// Returns the still-locked owner with the unhealthy main/WAL pair as it
+    /// is, to be wiped once its queue was read.
+    pub fn preserve_for_wipe(self) -> Result<OpfsOwner, OpfsError> {
+        self.closed.preserve()
     }
 
     /// Physically resets the unhealthy main/WAL pair.
@@ -579,10 +598,11 @@ impl TursoStorageOpenFailure {
         self.error
     }
 
-    /// Consumes a non-reset failure, closes Turso, and preserves main and WAL.
+    /// Consumes the failure, closes Turso, and preserves main and WAL.
     ///
-    /// This accessor must only be used when [`Self::error`] does not require a
-    /// physical reset. A close failure poisons the worker-local owner.
+    /// When [`Self::error`] requires a physical reset, the owner must be wiped
+    /// before anything but its queue is read. A close failure poisons the
+    /// worker-local owner.
     pub fn preserve(self) -> Result<OpfsOwner, OpfsError> {
         let closed = self
             .session
@@ -700,13 +720,17 @@ impl TursoFileDatabase {
             let _ = remove_native_file(&compact_path);
             return Ok(storage);
         }
+        // The open after the swap finds nothing left to upgrade, so it
+        // reports what this open's upgrade did.
+        let storage_upgraded_from = storage.storage_upgraded_from;
         // The compacted file is complete; a close failure cannot invalidate it.
         let _ = storage.try_close();
         if self.install_compacted(&compact_path).is_err() {
             let _ = remove_native_file(&compact_path);
-            return Ok(self.open_with_outcome(scope, false)?.0);
         }
-        Ok(self.open_with_outcome(scope, false)?.0)
+        let mut reopened = self.open_with_outcome(scope, false)?.0;
+        reopened.storage_upgraded_from = storage_upgraded_from;
+        Ok(reopened)
     }
 
     /// Move the compacted database into place while keeping the original
@@ -832,8 +856,13 @@ fn open_native_database(
         let error = TursoStorageError::turso(error);
         return Err(if fresh { error } else { error.initialization() });
     }
-    let migrated = match initialize(&Db::uncached(connection.clone()), scope, fresh) {
-        Ok(migrated) => migrated,
+    let initialized = match initialize(
+        &Db::uncached(connection.clone()),
+        scope,
+        fresh,
+        OlderStorage::Upgrade,
+    ) {
+        Ok(initialized) => initialized,
         Err(error) => {
             if connection.close().is_err() {
                 return Err(TursoStorageError::reset(
@@ -848,10 +877,11 @@ fn open_native_database(
             health: AtomicU8::new(0),
             database,
             connection: Db::cached(connection),
+            storage_upgraded_from: initialized.storage_upgraded_from,
             #[cfg(all(test, not(target_arch = "wasm32")))]
             fault: Mutex::new(None),
         },
-        migrated,
+        initialized.format_migrated,
     ))
 }
 
@@ -931,6 +961,9 @@ impl TursoStorage {
     /// Consumes and explicitly closes the native Turso connection.
     pub fn try_close(self) -> Result<TursoStorageCloseOutcome, TursoStorageError> {
         let reason = self.latched_reason();
+        if reason.is_none() {
+            self.connection.checkpoint_before_close();
+        }
         self.connection.release_statements();
         self.connection.close().map_err(|_| {
             TursoStorageError::reset(PhysicalResetReason::TransactionOutcomeUncertain)
@@ -946,6 +979,14 @@ impl TursoStorage {
     fn connection(&self) -> Db {
         self.connection.clone()
     }
+
+    /// The storage version this open upgraded the file from, when an older
+    /// build wrote it (`storage/migration.rs`); `None` when it was already
+    /// current or new.
+    #[must_use]
+    pub fn upgraded_from_storage_version(&self) -> Option<u32> {
+        self.storage_upgraded_from
+    }
 }
 
 impl TursoStorage {
@@ -955,12 +996,20 @@ impl TursoStorage {
     /// ran and how many frames it copied. A host that never calls it keeps
     /// Turso's own checkpoint.
     ///
+    /// On a connection with Turso's own checkpoint off (the browser's), the
+    /// storage copies the WAL itself: here from 4,000 frames, starting the
+    /// log over, and after any COMMIT that takes it to 10,000.
+    ///
     /// A failure is never a reset: like Turso's own checkpoint, it leaves the
     /// WAL whole, and the next call tries again.
     pub fn checkpoint_if_due(&self) -> Result<WalCheckpoint, TursoStorageError> {
         self.require_healthy()?;
-        self.connection
-            .checkpoint_over(driver::CHECKPOINT_DUE_FRAMES)
+        let due = if self.connection.owns_checkpoints() {
+            driver::OWNED_CHECKPOINT_DUE_FRAMES
+        } else {
+            driver::CHECKPOINT_DUE_FRAMES
+        };
+        self.connection.checkpoint_over(due)
     }
 
     /// The end of the WAL. A caller that computed something from storage
@@ -3467,12 +3516,11 @@ impl SqlPredicateCompiler {
         profile: &Profile,
         partition: &Token,
     ) -> String {
+        if values.len() > 1 {
+            return self.exact_alternatives(attribute, values, profile, partition);
+        }
         let name = self.next_name();
-        let condition = if values.len() == 1 {
-            "= ?".to_owned()
-        } else {
-            format!("IN ({})", vec!["?"; values.len()].join(", "))
-        };
+        let condition = "= ?";
         for _ in 0..2 {
             self.parameters.push(text(profile.token().as_str()));
             self.parameters.push(text(partition.as_str()));
@@ -3485,6 +3533,46 @@ impl SqlPredicateCompiler {
         }
         self.ctes.push(format!(
             "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition} UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition})"
+        ));
+        name
+    }
+
+    /// Documents holding any of several values of one exact attribute, read
+    /// from the values through the lookup index: one seek each. `f.value IN
+    /// (...)` instead makes Turso read every fact of the attribute and test it
+    /// against the whole list (500 channel ids: 110 ms instead of 5).
+    fn exact_alternatives(
+        &mut self,
+        attribute: &Token,
+        values: &[&predicate_index::ExactValue],
+        profile: &Profile,
+        partition: &Token,
+    ) -> String {
+        // Each value once: a repeated one would seek and read its facts again.
+        let mut values = values.to_vec();
+        values.sort_by(|left, right| left.as_bytes().cmp(right.as_bytes()));
+        values.dedup_by(|left, right| left.as_bytes() == right.as_bytes());
+        let wanted = self.next_name();
+        self.parameters.extend(
+            values
+                .iter()
+                .map(|value| Value::from_blob(value.as_bytes().to_vec())),
+        );
+        self.ctes.push(format!(
+            "{wanted}(value) AS MATERIALIZED (VALUES {})",
+            vec!["(?)"; values.len()].join(", ")
+        ));
+        let name = self.next_name();
+        self.parameters.extend([
+            text(attribute.as_str()),
+            text(profile.token().as_str()),
+            text(partition.as_str()),
+            text(profile.token().as_str()),
+            text(partition.as_str()),
+            text(attribute.as_str()),
+        ]);
+        self.ctes.push(format!(
+            "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM {wanted} AS w CROSS JOIN exact_facts AS f INDEXED BY exact_facts_lookup_idx ON f.attribute = ? AND f.value = w.value CROSS JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value IN (SELECT value FROM {wanted}))"
         ));
         name
     }
@@ -3526,10 +3614,7 @@ fn migrate_previous_format(
     scope: &str,
     previous_namespace: &str,
 ) -> Result<(), TursoStorageError> {
-    let migratable = MIGRATABLE_CACHE_FORMAT_VERSIONS
-        .iter()
-        .any(|version| cache_namespace_at(scope, *version) == previous_namespace);
-    if !migratable {
+    if !migratable_namespace(scope, previous_namespace) {
         return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
     }
     driver::write_transaction(connection, || {
@@ -3548,9 +3633,82 @@ fn migrate_previous_format(
     .map_err(TursoStorageError::initialization)
 }
 
-/// Validates or initializes a database. Returns whether a previous format was
-/// carried forward, which native owners compact after opening.
-fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoStorageError> {
+/// Whether `namespace` is a previous cache format of `scope` that opening
+/// carries forward.
+fn migratable_namespace(scope: &str, namespace: &str) -> bool {
+    MIGRATABLE_CACHE_FORMAT_VERSIONS
+        .iter()
+        .any(|version| cache_namespace_at(scope, *version) == namespace)
+}
+
+/// Rejects a file that another scope wrote, or a cache format this build
+/// cannot carry forward, before any upgrade step commits to it: such a file
+/// resets as written.
+fn check_owner(connection: &Db, scope: &str) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        "SELECT key, value FROM meta WHERE key IN ('namespace', 'scope') ORDER BY key ASC",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let [namespace, stored_scope] = rows.as_slice() else {
+        return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
+    };
+    let namespace = meta_value(namespace, "namespace")?;
+    let owned = meta_value(stored_scope, "scope")? == scope
+        && (namespace == cache_namespace(scope) || migratable_namespace(scope, &namespace));
+    owned
+        .then_some(())
+        .ok_or_else(|| TursoStorageError::reset(PhysicalResetReason::Compatibility))
+}
+
+/// The value of a `meta` row read as `key, value`, which must be `key`'s.
+fn meta_value(row: &[Value], key: &str) -> Result<String, TursoStorageError> {
+    match (required_text(row, 0), required_text(row, 1)) {
+        (Ok(found), Ok(value)) if found == key => Ok(value),
+        _ => Err(TursoStorageError::reset(PhysicalResetReason::Compatibility)),
+    }
+}
+
+/// What opening an existing or fresh database changed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Initialized {
+    /// A previous cache format was carried forward; native owners compact
+    /// after opening.
+    format_migrated: bool,
+    /// The storage version an older database was upgraded from.
+    storage_upgraded_from: Option<u32>,
+}
+
+/// What opening does with a file written at an older storage version.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OlderStorage {
+    /// Runs the registered upgrade steps: a native file keeps its path
+    /// across builds.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "only native opens upgrade")
+    )]
+    Upgrade,
+    /// Resets it as incompatible. A browser database's name embeds the
+    /// storage version (`cache_core::codec::cache_database_name`), so an older
+    /// version under the current name was not written by the build that named
+    /// it.
+    #[cfg_attr(
+        all(not(target_arch = "wasm32"), not(test)),
+        expect(dead_code, reason = "only the browser open resets older versions")
+    )]
+    Reset,
+}
+
+/// Validates or initializes a database, first upgrading one written at an
+/// older storage version in place when `older` allows it.
+fn initialize(
+    connection: &Db,
+    scope: &str,
+    fresh: bool,
+    older: OlderStorage,
+) -> Result<Initialized, TursoStorageError> {
     enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
     if fresh {
         driver::write_transaction(connection, || {
@@ -3583,14 +3741,23 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
         if !has_fresh_schema(connection)? {
             validate_frozen_schema(connection)?;
         }
-        return Ok(false);
+        return Ok(Initialized::default());
     }
 
     // Ordinary reopen only validates compatibility and pending writes. A changed
     // derived projection performs one bounded rebuild before serving queries.
-    // A schema identical to the one this build creates passed the structural
-    // and statement checks in this build's tests, so only a different schema
-    // pays for them again.
+    // An older storage version is upgraded first, so the checks below hold the
+    // upgraded file to exactly what a fresh file has; one this scope does not
+    // own is never upgraded. A schema identical to the one this build creates
+    // passed the structural and statement checks in this build's tests, so
+    // only a different schema pays for them again.
+    let storage_upgraded_from = match older {
+        OlderStorage::Upgrade => {
+            check_owner(connection, scope)?;
+            migration::upgrade(connection)?
+        }
+        OlderStorage::Reset => None,
+    };
     let fresh_schema = has_fresh_schema(connection)?;
     if !fresh_schema {
         validate_frozen_schema(connection)?;
@@ -3626,7 +3793,7 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
             previous_namespace = Some(value.to_owned());
         }
     }
-    let migrated = match previous_namespace {
+    let format_migrated = match previous_namespace {
         Some(previous_namespace) => {
             migrate_previous_format(connection, scope, &previous_namespace)?;
             true
@@ -3643,7 +3810,10 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
     ensure_search_projection_version(connection)?;
     calendar::ensure_projection_version(connection)?;
     people_sql::open(connection)?;
-    Ok(migrated)
+    Ok(Initialized {
+        format_migrated,
+        storage_upgraded_from,
+    })
 }
 
 /// The digest of `sqlite_schema` in a database this build creates; see
@@ -5818,10 +5988,12 @@ mod conjunction;
 mod contact_search;
 mod derived_sorts;
 mod integrity;
+mod migration;
 mod mutation_retry;
 mod name_search;
 mod page_retention;
 mod people_sql;
+mod queue_salvage;
 mod record_batch;
 mod search;
 

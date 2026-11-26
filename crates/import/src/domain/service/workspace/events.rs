@@ -20,8 +20,8 @@ use uuid::Uuid;
 use super::super::ImportServiceImpl;
 use super::super::notion_workspace::{confirmed_import_ids, notice_import_ids, report};
 use crate::domain::models::{
-    ImportSource, ImportStatus, NotionImportReport, NotionReportItem, ReviewedRun, RunStatus,
-    WrittenKind,
+    ImportSource, ImportStatus, NotionImportReport, NotionReportItem, ReviewedRun, RunErrorKind,
+    RunStatus, WrittenKind, explain_failure,
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportRepo, NotionPlanRepo, NotionRunRepo, Result,
@@ -47,6 +47,7 @@ where
         user: &MacroUserIdStr<'static>,
         to: RunStatus,
         error: Option<&str>,
+        error_kind: Option<RunErrorKind>,
     ) -> Result<bool> {
         // Read before the run moves: once it has, the rows still claimed go
         // back to staged and no longer say they were part of this write.
@@ -60,9 +61,10 @@ where
                 &[RunStatus::Importing, RunStatus::Dismissed],
                 to,
                 error,
+                error_kind,
                 |run| {
                     let review = run.review?;
-                    let settlement = settlement(source, &report, root_folder, run)?;
+                    let settlement = settlement(source, &report, root_folder, run, error_kind)?;
                     produce(ProduceNotification {
                         session_id: review.session_id,
                         subject_id: review.review_id.to_string(),
@@ -86,12 +88,13 @@ where
         user: &MacroUserIdStr<'static>,
         to: RunStatus,
         error: Option<&str>,
+        error_kind: Option<RunErrorKind>,
     ) -> Result<bool> {
         let report = self.current_report(user).await?;
         let source = self.workspace_source;
         let moved = self
             .repo
-            .transition_reviewed_run(user, &[RunStatus::Running], to, error, |run| {
+            .transition_reviewed_run(user, &[RunStatus::Running], to, error, error_kind, |run| {
                 let review = run.review?;
                 if run.status != RunStatus::Ready {
                     return None;
@@ -238,6 +241,7 @@ fn settlement(
     report: &NotionImportReport,
     root_folder: Option<Uuid>,
     run: &ReviewedRun,
+    error_kind: Option<RunErrorKind>,
 ) -> Option<ImportSettlement> {
     let outcome = match run.status {
         RunStatus::Completed => ImportOutcome::Completed,
@@ -254,7 +258,15 @@ fn settlement(
         warnings: report.warnings.clone(),
         source: workspace(source)?,
         outcome,
-        error: run.error.as_deref().map(bounded),
+        // A failed write says why from its kind; a cancelled or partial one
+        // keeps Macro's own sentence. Never the importer's raw error.
+        error: match run.status {
+            RunStatus::Failed => Some(bounded(&explain_failure(error_kind, source))),
+            _ => run.error.as_deref().map(bounded),
+        },
+        error_kind: (run.status == RunStatus::Failed)
+            .then_some(error_kind)
+            .flatten(),
         imported: report.imported,
         planned: report.copy + report.tasks,
         documents: report.documents,

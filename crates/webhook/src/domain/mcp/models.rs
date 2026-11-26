@@ -25,6 +25,11 @@ pub const MAX_TTL: Duration = Duration::hours(24);
 pub const MIN_TTL: Duration = Duration::minutes(1);
 /// Most live subscriptions one user may hold.
 pub const MAX_SUBSCRIPTIONS_PER_USER: u32 = 50;
+/// Most failed callback verifications one user may cause in
+/// [`VERIFICATION_WINDOW`], the allowance a plain webhook has for validations.
+pub const MAX_FAILED_VERIFICATIONS: u32 = 10;
+/// The window [`MAX_FAILED_VERIFICATIONS`] counts over.
+pub const VERIFICATION_WINDOW: std::time::Duration = std::time::Duration::from_secs(3600);
 /// Largest subscription arguments, in bytes of JSON.
 pub const MAX_ARGUMENTS_BYTES: usize = 4 * 1024;
 /// Largest compiled filter, in bytes of JSON. Matching reads every
@@ -487,6 +492,11 @@ pub enum McpSubscriptionErrorBody {
     NotFound,
     /// The user holds the most subscriptions allowed.
     ResourceExhausted {
+        /// The limit.
+        max: u32,
+    },
+    /// The user's failed callback verifications reached the hourly limit.
+    VerificationsExhausted {
         /// The limit.
         max: u32,
     },

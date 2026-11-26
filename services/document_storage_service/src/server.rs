@@ -1251,6 +1251,11 @@ async fn run_server() -> anyhow::Result<()> {
             mcp_subscription_repository.clone(),
             webhook_http_client.clone(),
             mcp_secret_cipher.clone(),
+            webhook::outbound::RateLimitedMcpVerifications(RateLimitServiceImpl {
+                repo: RedisRateLimitAdapter {
+                    redis: redis_client.clone(),
+                },
+            }),
         ),
         authorization_state.clone(),
     );

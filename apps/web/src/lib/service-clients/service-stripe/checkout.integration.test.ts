@@ -37,7 +37,7 @@ it.each([true, false])(
     if (offer.isErr()) throw new Error('Eligibility request failed');
     await expect(
       stripeServiceClient.createCheckoutSessionV2(
-        getFreePlanCheckoutRequest('premium', offer.value.eligible)
+        getFreePlanCheckoutRequest('premium', offer.value.eligible, 'month')
       )
     ).resolves.toBe('https://checkout.stripe.com/confirmed');
 
@@ -52,6 +52,7 @@ it.each([true, false])(
       throw new Error('Expected a JSON checkout body');
     expect(JSON.parse(body)).toMatchObject({
       plan: 'premium',
+      interval: 'month',
       onboardingTrial: eligible,
     });
     for (const [, init] of fetch.mock.calls) {

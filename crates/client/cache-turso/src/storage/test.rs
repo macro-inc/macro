@@ -9,6 +9,9 @@ mod engine_writes;
 mod fact_lookup_cost;
 mod filter_scope_cost;
 mod filter_scope_semantics;
+mod id_list_semantics;
+mod migration;
+mod migration_cost;
 mod mutation_retry;
 mod optimistic_atomicity;
 mod page_retention;
@@ -2200,11 +2203,12 @@ fn fault_storage(io: Arc<FaultIo>) -> TursoStorage {
     let database =
         Database::open(io_trait, &path, OpenOptions::new(Arc::new(SqliteDialect))).unwrap();
     let connection = Db::cached(database.connect().unwrap());
-    initialize(&connection, "fault-scope", true).unwrap();
+    initialize(&connection, "fault-scope", true, OlderStorage::Upgrade).unwrap();
     TursoStorage {
         health: AtomicU8::new(0),
         database,
         connection,
+        storage_upgraded_from: None,
         fault: Mutex::new(None),
     }
 }
