@@ -67,12 +67,11 @@ pub fn event_description(name: &str) -> Option<&'static str> {
         "agent_session.input_received" => {
             "An agent session received the input it waited for. ids select sessions."
         }
-        "agent_session.mentioned" => "An agent session was mentioned. ids select sessions.",
         "agent_session.stopped" => "An agent session stopped mid-turn. ids select sessions.",
         "agent_session.renamed" => "An agent session was renamed. ids select sessions.",
         "agent_session.deleted" => "An agent session was deleted. ids select sessions.",
         "user.picture_changed" => {
-            "You or one of your contacts changed their profile picture. ids select users."
+            "You changed your profile picture; a stream also hears when one of your contacts changes theirs. ids select users."
         }
         "call.started" => "A call started. ids select calls.",
         "call.ended" => "A call ended. ids select calls.",
