@@ -14,7 +14,7 @@ const BACKGROUND_USERS: i32 = 20_000;
 
 async fn seed(pool: &PgPool) {
     // An autoanalyze snapshot here takes its xmin from the cluster's oldest
-    // transaction with an XID, which can be in another test database, and
+    // running transaction with an XID, which can be in another test database, and
     // holds VACUUM's horizon below the seed. Keep autovacuum off every table
     // the seed writes; catalogs cannot be excluded, so this lowers the odds.
     sqlx::raw_sql(
@@ -177,7 +177,7 @@ async fn seed(pool: &PgPool) {
         )
         .fetch_one(pool)
         .await
-        .unwrap()
+        .unwrap_or_else(|error| format!("<dump failed: {error}>"))
     };
     assert_eq!(
         unmarked,
