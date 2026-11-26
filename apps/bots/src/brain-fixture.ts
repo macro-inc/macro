@@ -1,5 +1,9 @@
 import kestrel from './assets/kestrel.svg';
 import {
+  brainEmailFixtureScope,
+  createFixtureBrainEmailReader,
+} from './brain-email-fixture';
+import {
   type BrainObservation,
   type BrainReader,
   type BrainScope,
@@ -11,6 +15,7 @@ import { fleetBots, fleetViewer } from './fleet-fixture';
 import { hireFleetPath, hireReceiptFor } from './hire-fixture';
 
 export const fixtureViewer = fleetViewer.viewerId;
+export const readBrainEmailFixture = createFixtureBrainEmailReader();
 
 type Fixture = Pick<
   BrainSnapshot,
@@ -130,7 +135,8 @@ function provisioningReceipt(scope: BrainScope) {
 export function admitBrainFixture(scope: BrainScope) {
   return (
     isFixtureScope(scope) &&
-    (scope.agent === 'kestrel' ||
+    (scope.agent === brainEmailFixtureScope.agent ||
+      scope.agent === 'kestrel' ||
       fleetBots.some(({ id }) => id === scope.agent) ||
       Boolean(provisioningReceipt(scope)))
   );
@@ -156,6 +162,21 @@ export const readBrainFixture: BrainReader = async (scope) => {
         setupPending: true,
         workStatus: 'Unavailable',
         statusSince: { label: 'Profile created', at: agent.createdAt },
+        activity: [],
+      },
+    };
+  }
+
+  if (scope.agent === brainEmailFixtureScope.agent) {
+    return {
+      status: 'ready',
+      snapshot: {
+        scope,
+        name: 'Finch',
+        role: 'Release & handoff assistant',
+        teamName: fleetViewer.teamName,
+        lifecycle: 'Ready',
+        workStatus: 'Unavailable',
         activity: [],
       },
     };

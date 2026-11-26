@@ -242,6 +242,30 @@
   line-height: 1.56;
 }
 
+@media (min-width: 981px) {
+  #root:has(.brain-frame ~ .brain-email .brain-email-inbox) {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    height: 100svh;
+    min-height: 550px;
+  }
+
+  .brain:has(> .brain-frame ~ .brain-email .brain-email-inbox) {
+    height: calc(100% - 32px);
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .brain-frame ~ .brain-email .brain-email-inbox {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+  }
+
+  .brain-frame ~ .brain-email .brain-email-panes {
+    height: auto;
+  }
+}
+
 @media (max-width: 980px) {
   .brain-email-panes {
     grid-template-columns: minmax(0, 1fr);

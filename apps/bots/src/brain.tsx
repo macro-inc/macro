@@ -9,6 +9,13 @@ import {
   Switch,
 } from 'solid-js';
 import {
+  BrainEmail,
+  BrainEmailIdentity,
+  type BrainEmailMailbox,
+  createBrainEmail,
+} from './brain-email';
+import type { BrainEmailReader } from './brain-email-reader';
+import {
   type ActivityEntry,
   type BrainReader,
   type BrainScope,
@@ -16,7 +23,7 @@ import {
   dailyJournal,
   readScopedBrain,
 } from './brain-model';
-import { AccessPanel, EmailPanel } from './brain-reserved-panels';
+import { AccessPanel } from './brain-reserved-panels';
 import {
   brainEntryPath,
   brainViews,
@@ -103,7 +110,11 @@ function Schedule() {
   );
 }
 
-function BrainHeader(props: { bot: BrainSnapshot; view: BrainRoute['view'] }) {
+function BrainHeader(props: {
+  bot: BrainSnapshot;
+  view: BrainRoute['view'];
+  mailbox: BrainEmailMailbox;
+}) {
   const bot = () => props.bot;
   const workIcon = () => {
     if (bot().workStatus === 'Working') return '∿';
@@ -136,6 +147,7 @@ function BrainHeader(props: { bot: BrainSnapshot; view: BrainRoute['view'] }) {
           <div class="brain-identity">
             <div class="brain-status-line">
               <h1>{bot().name}’s Hub</h1>
+              <BrainEmailIdentity mailbox={props.mailbox} />
               <span
                 class="brain-lifecycle"
                 classList={{
@@ -387,6 +399,7 @@ function ScopedBrain(props: {
   route: () => BrainRoute | undefined;
   scope: BrainScope;
   read: BrainReader;
+  emailReader: BrainEmailReader;
 }) {
   const scope = props.scope;
   const [result] = createResource(() => readScopedBrain(props.read, scope));
@@ -410,6 +423,13 @@ function ScopedBrain(props: {
     return { bot: value.snapshot, entry, view: route.view };
   });
 
+  const mailbox = createBrainEmail(() => {
+    const bot = model()?.bot;
+    if (bot && !bot.setupPending) return bot.scope;
+  }, props.emailReader);
+  const email = (): BrainEmailMailbox =>
+    model()?.bot.setupPending ? { status: 'in-progress' } : mailbox();
+
   return (
     <Show
       when={!result.loading}
@@ -422,7 +442,11 @@ function ScopedBrain(props: {
       <Show when={model()} fallback={<Unavailable />}>
         {(loaded) => (
           <section class="brain">
-            <BrainHeader bot={loaded().bot} view={loaded().view} />
+            <BrainHeader
+              bot={loaded().bot}
+              view={loaded().view}
+              mailbox={email()}
+            />
             <Switch>
               <Match when={props.route()?.view === 'overview'}>
                 <Overview bot={loaded().bot} />
@@ -431,7 +455,7 @@ function ScopedBrain(props: {
                 <Activity bot={loaded().bot} entry={loaded().entry} />
               </Match>
               <Match when={props.route()?.view === 'email'}>
-                <EmailPanel scope={loaded().bot.scope} />
+                <BrainEmail mailbox={email()} />
               </Match>
               <Match when={props.route()?.view === 'access'}>
                 <AccessPanel scope={loaded().bot.scope} />
@@ -493,6 +517,7 @@ export default function Brain() {
                   route={route}
                   scope={scope}
                   read={adapter().readBrainFixture}
+                  emailReader={adapter().readBrainEmailFixture}
                 />
               </Show>
             );

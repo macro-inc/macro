@@ -1,8 +1,6 @@
-export type BrainEmailScope = Readonly<{
-  viewer: string;
-  team: string;
-  agent: string;
-}>;
+import type { BrainScope } from './brain-model';
+
+export type BrainEmailScope = BrainScope;
 
 export type BrainEmailThreadSummary = Readonly<{
   id: string;
