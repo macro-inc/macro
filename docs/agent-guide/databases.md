@@ -874,7 +874,8 @@ Notion properties add columns. Writes act as the sync's creator and stop with
 `status.failure = "creator_lost_access"` if they lose edit access. Verify by
 running a sync and reading the table, then changing the source and choosing run.
 
-In the web app, **Database actions → Sync from…** (editors only) opens
+In the web app, **Database actions → Sync from…** (editors only; on phones,
+the title menu's **Sync from…**) opens
 **Synced tables** (a drawer on phones). It lists the database's syncs with
 their source (Granola meetings or the Notion database's title), the table they
 write, their status (waiting for the first sync, up to date, or last sync
