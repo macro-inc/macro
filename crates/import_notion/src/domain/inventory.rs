@@ -8,7 +8,7 @@ use lazy_regex::regex;
 
 use super::model::{
     DataSourceSummary, DrainedRows, ImportScope, Inventory, InventoryProgress, NotionDataSource,
-    NotionId, NotionPage, NotionParent, NotionUser, RowsNext, SearchHit, SearchObject,
+    NotionId, NotionPage, NotionParent, NotionUser, PlanStage, RowsNext, SearchHit, SearchObject,
 };
 use super::ports::{NotionApi, NotionError};
 
@@ -32,7 +32,17 @@ const MARKDOWN_CONCURRENCY: usize = 4;
 /// as are data sources whose rows cannot be read. Rows are counted from the
 /// search results; a data source is queried only when search showed none
 /// of its rows.
-#[tracing::instrument(skip_all, err, fields(pages, data_sources, queried_data_sources))]
+#[tracing::instrument(
+    name = "notion.plan.inventory",
+    skip_all,
+    err,
+    fields(
+        stage = <&'static str>::from(PlanStage::Inventory),
+        pages,
+        data_sources,
+        queried_data_sources,
+    )
+)]
 pub async fn inventory<Api: NotionApi>(
     api: &Api,
     scope: &ImportScope,

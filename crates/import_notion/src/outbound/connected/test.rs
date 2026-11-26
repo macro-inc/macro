@@ -9,7 +9,7 @@ use tokio::time::Instant;
 
 use super::ConnectedNotion;
 use crate::domain::model::NotionId;
-use crate::domain::ports::{NotionApi, NotionConnections};
+use crate::domain::ports::{NotionApi, NotionConnections, TransportClass};
 
 const EMPTY_DATABASE: &str = r#"{"object":"database","data_sources":[]}"#;
 
@@ -131,4 +131,61 @@ async fn without_a_usable_connection_with_api_access_there_is_no_notion() {
             .unwrap()
             .is_some()
     );
+}
+
+/// A request through the Pipedream proxy client fails the way that client
+/// reports it: a reqwest error under anyhow context, inside a report.
+fn through_the_proxy(error: reqwest::Error) -> connectors::ConnectorsError {
+    use anyhow::Context as _;
+    use rootcause::prelude::IntoRootcause as _;
+    let failed: anyhow::Result<()> = Err(error).context("calling the Pipedream Connect proxy");
+    connectors::ConnectorsError::Internal(failed.into_rootcause().unwrap_err())
+}
+
+#[tokio::test]
+async fn a_timeout_and_a_refused_connection_are_told_apart_from_other_failures() {
+    // Accepts the connection and never answers.
+    let silent = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let silent_address = silent.local_addr().unwrap();
+    // Nothing listens here once the listener is dropped.
+    let closed = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let closed_address = closed.local_addr().unwrap();
+    drop(closed);
+    let http = reqwest::Client::builder()
+        .timeout(Duration::from_millis(100))
+        .build()
+        .unwrap();
+
+    let timed_out = http
+        .get(format!("http://{silent_address}/"))
+        .send()
+        .await
+        .unwrap_err();
+    let refused = http
+        .get(format!("http://{closed_address}/"))
+        .send()
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        super::transport_class(&through_the_proxy(timed_out)),
+        TransportClass::Timeout
+    );
+    assert_eq!(
+        super::transport_class(&through_the_proxy(refused)),
+        TransportClass::Connect
+    );
+    assert_eq!(
+        super::transport_class(&connectors::ConnectorsError::Internal(
+            rootcause::report!("the proxy answered something else").into_dynamic()
+        )),
+        TransportClass::Other
+    );
+    assert_eq!(
+        super::transport_class(&connectors::ConnectorsError::NeedsReauth(
+            connectors::ConnectorKey::App(connectors::ConnectorId::parse("notion").unwrap())
+        )),
+        TransportClass::NeedsReauth
+    );
+    drop(silent);
 }

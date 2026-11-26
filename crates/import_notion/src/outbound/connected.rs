@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError, Weak};
 
-use connectors::{ApiConnectionsService, ApiHandle, ApiRequest, ConnectorId};
+use connectors::{ApiConnectionsService, ApiHandle, ApiRequest, ConnectorId, ConnectorsError};
 use http::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -13,7 +13,7 @@ use super::rest::{
     NOTION_REQUEST_INTERVAL, NOTION_VERSION, NotionRead, NotionRestClient, NotionTransport,
     RequestPacer, TransportResponse,
 };
-use crate::domain::ports::{NotionConnections, NotionError};
+use crate::domain::ports::{NotionConnections, NotionError, TransportClass};
 
 /// Notion's catalog app.
 const NOTION_APP: &str = "notion";
@@ -60,7 +60,10 @@ impl<S: ApiConnectionsService> NotionConnections for ConnectedNotion<S> {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> Result<Option<Self::Api>, NotionError> {
-        let app = ConnectorId::parse(NOTION_APP).map_err(transport)?;
+        let app = ConnectorId::parse(NOTION_APP).map_err(|error| NotionError::Transport {
+            class: TransportClass::Other,
+            report: rootcause::Report::new(error).into_dynamic(),
+        })?;
         let Some(handle) = self
             .service
             .connection(user, &app)
@@ -79,8 +82,48 @@ impl<S: ApiConnectionsService> NotionConnections for ConnectedNotion<S> {
     }
 }
 
-fn transport(error: impl std::error::Error + Send + Sync + 'static) -> NotionError {
-    NotionError::Transport(rootcause::Report::new(error).into_dynamic())
+fn transport(error: ConnectorsError) -> NotionError {
+    NotionError::Transport {
+        class: transport_class(&error),
+        report: rootcause::Report::new(error).into_dynamic(),
+    }
+}
+
+/// What the connection can tell about a request that did not complete.
+fn transport_class(error: &ConnectorsError) -> TransportClass {
+    match error {
+        ConnectorsError::NeedsReauth(_) => TransportClass::NeedsReauth,
+        ConnectorsError::NotFound(_) => TransportClass::NotConnected,
+        ConnectorsError::Internal(report) => report
+            .iter_reports()
+            .find_map(|report| {
+                report
+                    .downcast_current_context::<reqwest::Error>()
+                    .or_else(|| {
+                        // Pipedream's proxy client reports through anyhow.
+                        report
+                            .downcast_current_context::<anyhow::Error>()?
+                            .chain()
+                            .find_map(|cause| cause.downcast_ref::<reqwest::Error>())
+                    })
+            })
+            .map_or(TransportClass::Other, http_class),
+        ConnectorsError::UnknownApp(_)
+        | ConnectorsError::NonPublicServer(_)
+        | ConnectorsError::EmptyName => TransportClass::Other,
+    }
+}
+
+fn http_class(error: &reqwest::Error) -> TransportClass {
+    if error.is_timeout() {
+        TransportClass::Timeout
+    } else if error.is_connect() {
+        TransportClass::Connect
+    } else if error.is_body() || error.is_decode() {
+        TransportClass::Body
+    } else {
+        TransportClass::Other
+    }
 }
 
 /// Sends Notion REST requests through one user's Notion connection.
