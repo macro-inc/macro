@@ -162,9 +162,11 @@ pub enum ReviewResult {
     /// The email was sent.
     Email(EmailResult),
     /// The event was created.
-    Calendar(CalendarResult),
-    /// The import write started.
-    Import(ImportResult),
+    Calendar(Box<CalendarResult>),
+    /// The import write started. The large results are boxed so every
+    /// response is not sized like an import report, which carries a section
+    /// per CRM source.
+    Import(Box<ImportResult>),
 }
 
 impl From<ReviewDrafts> for ReviewItems {
@@ -302,9 +304,9 @@ impl ReviewItems {
         }
         match (self, result) {
             (Self::Email(items), ReviewResult::Email(result)) => store(items, index, result),
-            (Self::Calendar(items), ReviewResult::Calendar(result)) => store(items, index, result),
+            (Self::Calendar(items), ReviewResult::Calendar(result)) => store(items, index, *result),
             (Self::Import(items), ReviewResult::Import(result)) => {
-                store(&mut items[..], index, result)
+                store(&mut items[..], index, *result)
             }
             _ => Err(CodeModeError::Invalid(
                 "The action's response does not match the review's kind.".into(),

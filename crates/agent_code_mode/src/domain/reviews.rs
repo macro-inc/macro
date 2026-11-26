@@ -867,7 +867,7 @@ impl ReviewService {
                     .actions
                     .create_calendar_event(account_holder, &item.draft)
                     .await?;
-                Ok(ReviewResult::Calendar(result))
+                Ok(ReviewResult::Calendar(Box::new(result)))
             }
             ReviewItems::Import(items) => {
                 let item = items.get(index).ok_or(CodeModeError::Conflict)?;
@@ -875,7 +875,7 @@ impl ReviewService {
                     .actions
                     .start_import(account_holder, record, &item.draft)
                     .await?;
-                Ok(ReviewResult::Import(result))
+                Ok(ReviewResult::Import(Box::new(result)))
             }
         }
     }
