@@ -13,6 +13,15 @@ const TEAM_SIZE: i32 = 1_000;
 const BACKGROUND_USERS: i32 = 20_000;
 
 async fn seed(pool: &PgPool) {
+    // An autoanalyze here can inherit another test DB's older xmin and hold VACUUM's horizon.
+    sqlx::raw_sql(
+        "ALTER TABLE contact_list_members SET (autovacuum_enabled = false);
+         ALTER TABLE contact_inbox_members SET (autovacuum_enabled = false);
+         ALTER TABLE team_user SET (autovacuum_enabled = false);",
+    )
+    .execute(pool)
+    .await
+    .unwrap();
     // Users 0..TEAM_SIZE are the subject and its teammates, spread through
     // the subject's stored contacts so the roster interleaves with every page.
     // The rest fill background teams of ten, so the roster is a small part of
