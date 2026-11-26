@@ -1015,3 +1015,50 @@ fn an_equal_record_written_differently_is_neither_sent_nor_retained() {
         );
     });
 }
+
+#[test]
+fn a_record_holding_a_serde_json_marker_key_is_sent_again_on_a_reset() {
+    block_on(async {
+        let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
+        seed(&mut engine, "1", 1).await;
+        // Read back as text, serde_json takes the sorted-first key for its
+        // raw-value marker and refuses the object.
+        let marker = r#"{"z":1,"$serde_json::private::RawValue":"null"}"#;
+        engine
+            .put_records_with_projections(None, set_read(CacheValue::Opaque(marker.into())), vec![])
+            .await
+            .unwrap();
+        let first = engine.read_live_query("a", spec(), None).await.unwrap();
+        let reset = engine.read_live_query("a", spec(), None).await.unwrap();
+        assert!(reset.reset);
+        assert_eq!(
+            serde_json::to_value(&reset.upserts).unwrap(),
+            serde_json::to_value(&first.upserts).unwrap()
+        );
+    });
+}
+
+#[test]
+fn a_reset_right_after_an_equal_record_written_differently_sends_what_the_reader_shows() {
+    block_on(async {
+        let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
+        seed(&mut engine, "1", 1).await;
+        let number = |value: &str| set_read(CacheValue::Opaque(value.into()));
+        engine
+            .put_records_with_projections(None, number("-0.0"), vec![])
+            .await
+            .unwrap();
+        let first = engine.read_live_query("a", spec(), None).await.unwrap();
+        engine
+            .put_records_with_projections(None, number("0.0"), vec![])
+            .await
+            .unwrap();
+        // The row is read again in the reset itself.
+        let reset = engine.read_live_query("a", spec(), None).await.unwrap();
+        assert!(reset.reset);
+        assert_eq!(
+            reset.upserts[0].record.to_string(),
+            first.upserts[0].record.to_string()
+        );
+    });
+}

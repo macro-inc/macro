@@ -37,6 +37,8 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+# The desktop and mobile build reads JSON with `raw_value`; test what it reads.
+serde_json = { workspace = true, features = ["raw_value"] }
 miniz_oxide = { workspace = true }
 database_sql = { path = "../../database_sql", features = ["schema"] }
 schemars = { workspace = true }

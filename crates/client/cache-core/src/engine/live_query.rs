@@ -143,21 +143,52 @@ pub(super) struct Changes {
 }
 
 /// A row as the view last sent it, kept to diff the next read against and to
-/// send again on a reset. Compact JSON holds a channel row in about a fifth of
-/// the memory of its `Json` tree.
+/// send again on a reset.
 struct RetainedRow {
     identity: identity::IdentityStatus,
-    record: Box<str>,
+    record: RetainedRecord,
 }
 
-impl RetainedRow {
-    /// The record as it was sent. The text is `serde_json`'s own output of a
-    /// `Json`, so it parses back to an equal value; the depth limit is off
-    /// because a row can nest deeper than `serde_json` reads by default.
-    fn record<E: std::error::Error + 'static>(&self) -> Result<Json, EngineError<E>> {
-        let mut text = serde_json::Deserializer::from_str(&self.record);
-        text.disable_recursion_limit();
-        Json::deserialize(&mut text).map_err(EngineError::RetainedRow)
+/// The start of the keys `serde_json` reads as its own markers (a raw value, an
+/// arbitrary-precision number) when one comes first in an object: text holding
+/// one may not read back as the record it was written from.
+const SERDE_JSON_MARKER: &str = "$serde_json::private::";
+
+enum RetainedRecord {
+    /// Compact JSON: a channel row in about a fifth of the memory of its tree.
+    Text(Box<str>),
+    /// A record whose text holds a `serde_json` marker key, kept as it is.
+    Tree(Json),
+}
+
+impl RetainedRecord {
+    fn new(record: &Json) -> Self {
+        let text = record.to_string();
+        if text.contains(SERDE_JSON_MARKER) {
+            Self::Tree(record.clone())
+        } else {
+            Self::Text(text.into())
+        }
+    }
+
+    /// Whether the two are the same text. Equal text is an equal record; a
+    /// tree is never compared this way.
+    fn same_text(&self, other: &Self) -> bool {
+        matches!((self, other), (Self::Text(a), Self::Text(b)) if a == b)
+    }
+
+    /// The record as it was sent. Text is `serde_json`'s own output of a `Json`
+    /// without marker keys, so it parses back to an equal value; the depth limit
+    /// is off because a row can nest deeper than `serde_json` reads by default.
+    fn value<E: std::error::Error + 'static>(&self) -> Result<Json, EngineError<E>> {
+        match self {
+            Self::Text(text) => {
+                let mut text = serde_json::Deserializer::from_str(text);
+                text.disable_recursion_limit();
+                Json::deserialize(&mut text).map_err(EngineError::RetainedRow)
+            }
+            Self::Tree(record) => Ok(record.clone()),
+        }
     }
 }
 
@@ -402,7 +433,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
                 view.replace_dependencies(key, tracked.remove(key));
                 match selected.remove(key) {
                     Some(row) => {
-                        let record: Box<str> = row.record.to_string().into();
+                        let record = RetainedRecord::new(&row.record);
                         // A reset sends every retained row after the loop, so it
                         // only brings them up to date here.
                         let mut same_text = false;
@@ -414,14 +445,14 @@ impl<S: PredicateIndexStorage> Engine<S> {
                                 (true, None)
                             }
                             // Equal text is an equal record; most rows end here.
-                            Some(previous) if previous.record == record => {
+                            Some(previous) if previous.record.same_text(&record) => {
                                 same_text = true;
                                 (previous.identity != row.identity, Some(Vec::new()))
                             }
                             // Unequal text can still be an equal record (`-0.0` and
                             // `0.0`), which, as before, is neither sent nor retained.
                             Some(previous) => {
-                                let before = previous.record()?;
+                                let before = previous.record.value()?;
                                 let mut fields = Vec::new();
                                 if !reset {
                                     diff_fields(&before, &row.record, &mut Vec::new(), &mut fields);
@@ -470,7 +501,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
                     None => Ok(SelectedRecord {
                         identity: row.identity.clone(),
                         record_key: key.clone(),
-                        record: row.record()?,
+                        record: row.record.value()?,
                     }),
                 })
                 .collect::<Result<_, EngineError<S::Error>>>()?;
