@@ -35,9 +35,9 @@ function sampleMemoryOnEveryHeartbeat(): { page: Plugin; worker: Plugin } {
       enforce: 'pre',
       transform(code, id) {
         if (!id.endsWith(RUNTIME_MODULE)) return;
-        if (!code.includes(MEMORY_SAMPLE_INTERVAL)) {
+        if (code.split(MEMORY_SAMPLE_INTERVAL).length !== 2) {
           this.error(
-            `${RUNTIME_MODULE} no longer has ${MEMORY_SAMPLE_INTERVAL}`
+            `${RUNTIME_MODULE} no longer has ${MEMORY_SAMPLE_INTERVAL} exactly once`
           );
         }
         rewritten = true;

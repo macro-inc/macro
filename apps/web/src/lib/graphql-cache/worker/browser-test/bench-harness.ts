@@ -411,14 +411,16 @@ async function channelPass(viewCount: number, writeCount: number) {
   const count = (name: string, value: number) => {
     counts[name] = [...(counts[name] ?? []), value];
   };
-  // The engine's wasm memory in MiB, from the worker's next sample (-1 if none
-  // comes). Linear memory never shrinks, so it is also the high water.
+  // The engine's wasm memory in MiB (-1 if no sample comes). The first sample
+  // to arrive may have been taken before the checkpoint and still been on its
+  // way, so the second is read: the worker takes it a heartbeat later. Linear
+  // memory never shrinks, so it is also the high water.
   const linearMemory = async (name: string) => {
     const since = performance.now();
-    for (let waited = 0; waited < 5_000; waited += 100) {
-      const sample = observations.find(
+    for (let waited = 0; waited < 10_000; waited += 100) {
+      const sample = observations.filter(
         (each) => each.name === 'graphql_cache.linear_memory' && each.at > since
-      );
+      )[1];
       if (sample?.bytes !== undefined) {
         count(name, Math.round(sample.bytes / 2 ** 20));
         return;
