@@ -1,7 +1,7 @@
 //! Measures the first open of a retained production-size cache that a storage
 //! 11 build left, against an ordinary reopen of the same cache, and splits it
 //! into the 11 to 12 step and each derived rebuild that open also runs. Not a
-//! regular test: it needs a file and runs for minutes.
+//! regular test: it needs a file and runs for minutes, on Linux only.
 use super::*;
 use crate::storage::migration::test_hooks::{self, Storage11DerivedState};
 use std::path::{Path, PathBuf};
@@ -193,8 +193,8 @@ fn upgrade_cost_on_a_retained_cache() {
         let after = timed_open(&database);
         eprintln!(
             "run {run}: reopen at {STORAGE_SCHEMA_VERSION} {reopen}; open at 12 with its step \
-             {step}; open at 11 with upgrade {upgrade}; reopen after upgrade {after}; file \
-             after upgrade {} B",
+             {step}; open at 11 with its upgrade to {STORAGE_SCHEMA_VERSION} {upgrade}; reopen \
+             after upgrade {after}; file after upgrade {} B",
             file_bytes(&live),
         );
         copy_pair(&derived, &live);
@@ -207,7 +207,7 @@ fn upgrade_cost_on_a_retained_cache() {
             })
             .collect::<Vec<_>>();
         eprintln!(
-            "run {run} derived rebuilds at 12: all {rebuilds}; {}",
+            "run {run} derived rebuilds at {STORAGE_SCHEMA_VERSION}: all {rebuilds}; {}",
             each.join("; "),
         );
         let phases = step_phases(&older, &live)
@@ -322,24 +322,28 @@ fn format_migration_cost_on_a_retained_cache() {
         let adopt = started.elapsed();
         storage.try_close().unwrap();
         let migrated = file_bytes(&live);
-        let rows = drop_phase(&previous, &live, |connection| {
+        // Both keep the identity and authority records, as a Reset does.
+        let (rows, kept_by_rows) = drop_phase(&previous, &live, |connection| {
             for sql in [
                 "DELETE FROM search_documents",
                 "DELETE FROM index_documents",
-                "DELETE FROM records",
+                "DELETE FROM records WHERE NOT (__typename = '__meta' AND id IN ('identity', 'authority'))",
             ] {
                 driver::execute(connection, sql, vec![]).unwrap();
             }
             calendar::clear(connection).unwrap();
         });
-        let tables = drop_phase(&previous, &live, |connection| {
+        let (tables, kept_by_tables) = drop_phase(&previous, &live, |connection| {
             crate::storage::schema_store::clear_records(connection).unwrap();
         });
+        assert_eq!(kept_by_rows, kept_by_tables);
         eprintln!(
             "run {run}: open with migration and compaction {open}; adopt {:.1} ms {:?}; \
-             drop alone: deleting rows {:.1} ms, recreating tables {:.1} ms; file after {migrated} B",
+             drop alone, keeping {} records: deleting rows {:.1} ms, recreating tables {:.1} ms; \
+             file after {migrated} B",
             adopt.as_secs_f64() * 1e3,
             adoption.change,
+            kept_by_rows.len(),
             rows.as_secs_f64() * 1e3,
             tables.as_secs_f64() * 1e3,
         );
@@ -347,8 +351,8 @@ fn format_migration_cost_on_a_retained_cache() {
 }
 
 /// `drop` run on a copy of `previous` in one write transaction, timed with
-/// its commit.
-fn drop_phase(previous: &Path, live: &Path, drop: impl FnOnce(&Db)) -> Duration {
+/// its commit, and the records it kept.
+fn drop_phase(previous: &Path, live: &Path, drop: impl FnOnce(&Db)) -> (Duration, Vec<String>) {
     copy_pair(previous, live);
     let connection = native_connection(live);
     let started = Instant::now();
@@ -356,6 +360,15 @@ fn drop_phase(previous: &Path, live: &Path, drop: impl FnOnce(&Db)) -> Duration 
     drop(&connection);
     driver::execute(&connection, "COMMIT", vec![]).unwrap();
     let elapsed = started.elapsed();
+    let kept = driver::query(
+        &connection,
+        "SELECT __typename, id, value FROM records ORDER BY __typename, id",
+        vec![],
+    )
+    .unwrap()
+    .iter()
+    .map(|row| format!("{row:?}"))
+    .collect();
     connection.close().unwrap();
-    elapsed
+    (elapsed, kept)
 }

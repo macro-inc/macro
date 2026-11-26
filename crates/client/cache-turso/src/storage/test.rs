@@ -10,6 +10,8 @@ mod fact_lookup_cost;
 mod filter_scope_cost;
 mod filter_scope_semantics;
 mod migration;
+// Its I/O, CPU and memory counters read Linux's `/proc`.
+#[cfg(target_os = "linux")]
 mod migration_cost;
 mod mutation_retry;
 mod optimistic_atomicity;
