@@ -1,8 +1,8 @@
 import { t } from '@app/lib/i18n';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
-import { useSettingsState } from '@core/constant/SettingsState';
 import { ConnectorIcon } from '@core/connectors/ConnectorIcon';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { fireAndForget } from '@core/util/fireAndForget';
 import NotionIcon from '@icon/mcp-notion.svg';
 import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
