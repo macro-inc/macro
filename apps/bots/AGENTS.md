@@ -24,7 +24,7 @@ synthetic team and offer responses. See [Hire checkout](HIRE.md).
   viewer/team/agent reader and source-safe journal projection. The local
   fixture adapter reuses Fleet identity and the exact accepted Hire receipt.
   Replace the reader at the composition boundary when the backend contract is
-  available. Access has a reserved component seam.
+  available. Access uses an injected source.
 - `src/return-intent.ts`, `src/draft.ts`, and `src/session.ts` own the handoff.
 - `src/brain-access.tsx` renders inline Access with an injected source scoped to
   the viewer, team, and agent. `src/brain-access-fixture.ts` provides the local
@@ -51,7 +51,8 @@ then `bun run --filter @macro-inc/bots preview`. That preview serves only
 `dist-local`. Set `BOTS_PREVIEW_HOST` to a single exact hostname when an
 authorized local reverse proxy needs a forwarded Host header.
 
-The default build writes `dist` and excludes the Fleet, Hire, Brain, and Brain Email fixtures. Keep
+The default build writes `dist` and excludes the Fleet, Hire, Brain, Brain
+Email, and Brain Access fixtures. Keep
 `dev.bots.macro.com` and `bots.macro.com` as planning targets until the relevant
 auth, infrastructure, and release changes are approved.
 

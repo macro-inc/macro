@@ -12,10 +12,10 @@ import type {
   AccessOutcome,
   AccessRecord,
   AccessReview,
-  BrainAccessScope,
   BrainAccessSource,
   BrainAccessView,
 } from './brain-access-source';
+import type { BrainScope } from './brain-model';
 import './brain-access.css';
 
 const kindLabels = { login: 'Login', api: 'API', card: 'Card' };
@@ -377,10 +377,7 @@ function AccessRequestRow(props: {
   );
 }
 
-function ScopedAccess(props: {
-  scope: BrainAccessScope;
-  source: BrainAccessSource;
-}) {
+function ScopedAccess(props: { scope: BrainScope; source: BrainAccessSource }) {
   const [revision, setRevision] = createSignal(0);
   const view = createMemo(() => {
     revision();
@@ -492,7 +489,7 @@ function ScopedAccess(props: {
 }
 
 export function BrainAccess(props: {
-  scope: BrainAccessScope;
+  scope: BrainScope;
   source: BrainAccessSource;
 }) {
   const scope = createMemo(() => ({ ...props.scope }), undefined, {

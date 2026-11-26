@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { createBrainAccessFixture } from './brain-access-fixture';
 
+const team = { teamId: 'sample-team', teamName: 'Example team' };
 const sable = { viewer: 'preview-admin', team: 'sample-team', agent: 'sable' };
 const quill = { ...sable, agent: 'quill' };
 const login = 'req-sable-storybook';
@@ -8,7 +9,7 @@ const card = 'req-sable-font-card';
 
 test('reads and decisions require the exact viewer, team, and agent', () => {
   const source = createBrainAccessFixture({
-    teamId: 'sample-team',
+    ...team,
     viewerId: sable.viewer,
     role: 'admin',
   });
@@ -34,6 +35,7 @@ test('reads and decisions require the exact viewer, team, and agent', () => {
   );
   expect(
     createBrainAccessFixture({
+      ...team,
       teamId: 'other-team',
       viewerId: sable.viewer,
       role: 'admin',
@@ -43,7 +45,7 @@ test('reads and decisions require the exact viewer, team, and agent', () => {
 
 test('linking rechecks item team, kind, manager and existing grants', () => {
   const source = createBrainAccessFixture({
-    teamId: 'sample-team',
+    ...team,
     viewerId: sable.viewer,
     role: 'admin',
   });
@@ -70,7 +72,7 @@ test('linking rechecks item team, kind, manager and existing grants', () => {
 
   const ownerScope = { ...sable, viewer: 'preview-owner' };
   const owner = createBrainAccessFixture({
-    teamId: 'sample-team',
+    ...team,
     viewerId: ownerScope.viewer,
     role: 'owner',
   });
@@ -98,7 +100,7 @@ test('linking rechecks item team, kind, manager and existing grants', () => {
 
   const memberScope = { ...sable, viewer: 'preview-member' };
   const member = createBrainAccessFixture({
-    teamId: 'sample-team',
+    ...team,
     viewerId: memberScope.viewer,
     role: 'member',
   });
@@ -115,7 +117,7 @@ test('only a scoped admin can add or decline a missing item', () => {
   for (const role of ['owner', 'member'] as const) {
     const scope = { ...sable, viewer: `preview-${role}` };
     const source = createBrainAccessFixture({
-      teamId: 'sample-team',
+      ...team,
       viewerId: scope.viewer,
       role,
     });
@@ -132,7 +134,7 @@ test('only a scoped admin can add or decline a missing item', () => {
   }
 
   const source = createBrainAccessFixture({
-    teamId: 'sample-team',
+    ...team,
     viewerId: sable.viewer,
     role: 'admin',
   });
@@ -157,7 +159,7 @@ test('only a scoped admin can add or decline a missing item', () => {
 
 test('card matching and adding produce only an awaiting-human outcome', () => {
   const linked = createBrainAccessFixture({
-    teamId: 'sample-team',
+    ...team,
     viewerId: sable.viewer,
     role: 'admin',
   });
@@ -173,7 +175,7 @@ test('card matching and adding produce only an awaiting-human outcome', () => {
   });
 
   const added = createBrainAccessFixture({
-    teamId: 'sample-team',
+    ...team,
     viewerId: sable.viewer,
     role: 'admin',
   });
@@ -186,7 +188,7 @@ test('card matching and adding produce only an awaiting-human outcome', () => {
 
   expect(
     createBrainAccessFixture({
-      teamId: 'sample-team',
+      ...team,
       viewerId: sable.viewer,
       role: 'admin',
     }).read(sable)?.reviews[1]?.outcome

@@ -3,14 +3,15 @@ import type {
   AccessOutcome,
   AccessRecord,
   AccessRequest,
-  BrainAccessScope,
   BrainAccessSource,
 } from './brain-access-source';
+import type { BrainScope } from './brain-model';
 
 const teamId = 'sample-team';
 
 export type BrainAccessFixtureViewer = {
   teamId: string;
+  teamName: string;
   viewerId: string;
   role: 'admin' | 'owner' | 'member';
 };
@@ -183,6 +184,7 @@ const vault: readonly {
 
 export function createBrainAccessFixture({
   teamId: viewerTeamId,
+  teamName,
   viewerId,
   role,
 }: BrainAccessFixtureViewer): BrainAccessSource {
@@ -191,7 +193,7 @@ export function createBrainAccessFixture({
   const viewerLabel = Object.hasOwn(viewers, role) ? viewers[role] : undefined;
   const isAdmin = role === 'admin';
 
-  function findAgent(scope: BrainAccessScope) {
+  function findAgent(scope: BrainScope) {
     if (
       !viewerLabel ||
       !viewerId ||
@@ -223,7 +225,7 @@ export function createBrainAccessFixture({
 
       return {
         agentName: agent.name,
-        teamName: 'Sample team',
+        teamName,
         settingUp: agent.settingUp,
         viewerLabel: viewers[role],
         canResolveItemless: isAdmin,

@@ -1,8 +1,4 @@
-export type BrainAccessScope = Readonly<{
-  viewer: string;
-  team: string;
-  agent: string;
-}>;
+import type { BrainScope } from './brain-model';
 
 export type AccessKind = 'login' | 'api' | 'card';
 export type AccessLevel = 'View' | 'Edit';
@@ -53,9 +49,9 @@ export type AccessDecision = { requestId: string } & (
 );
 
 export interface BrainAccessSource {
-  read(scope: BrainAccessScope): BrainAccessView | undefined;
+  read(scope: BrainScope): BrainAccessView | undefined;
   decide(
-    scope: BrainAccessScope,
+    scope: BrainScope,
     decision: AccessDecision
   ): 'resolved' | 'denied' | 'unavailable';
 }

@@ -24,7 +24,9 @@ export function botsBoundary(includeFixtures: boolean): Plugin {
         if (
           output.type === 'chunk' &&
           Object.keys(output.modules).some((id) =>
-            /\/(?:fleet|hire|brain|brain-email)-fixture\.ts$/.test(id)
+            /\/(?:fleet|hire|brain|brain-access|brain-email)-fixture\.ts$/.test(
+              id
+            )
           )
         ) {
           this.error('The default Bots build cannot include local fixtures');
