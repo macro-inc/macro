@@ -5,7 +5,8 @@
 The standalone Vite entry for the public Character Creator and the Fleet shell.
 The auth seam uses checked-in SDK auth response types. Its current adapter is
 offline and exposes a disabled sign-in flow with a same-tab, expiring draft
-handoff. It cannot create bots.
+handoff. Real Hire is disabled. The local preview can rehearse Hire with
+synthetic team and offer responses. See [Hire checkout](HIRE.md).
 
 ## Start here
 

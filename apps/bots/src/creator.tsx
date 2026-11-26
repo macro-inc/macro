@@ -1,9 +1,13 @@
 import * as Slider from '@kobalte/core/slider';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { createSignal, For, onMount } from 'solid-js';
+import { createSignal, For, lazy, onMount } from 'solid-js';
 import { storeHireDraft, takeHireDraft } from './draft';
 import { creatorPresets, sampleSurnames } from './presets';
 import { buildSignInUrl, hireIntent } from './return-intent';
+
+const HirePanel = __BOTS_FIXTURES__
+  ? lazy(() => import('./hire-panel'))
+  : () => null;
 
 export default function Creator() {
   const location = useLocation();
@@ -62,8 +66,7 @@ export default function Creator() {
     navigate(buildSignInUrl(hireIntent, handoff));
   }
 
-  const name = () =>
-    [first().trim(), last().trim()].filter(Boolean).join(' ') || 'Unnamed bot';
+  const name = () => [first().trim(), last().trim()].filter(Boolean).join(' ');
 
   return (
     <div class="creator">
@@ -121,13 +124,13 @@ export default function Creator() {
             style={{ transform: `scaleX(${1 + width() / 100})` }}
           />
         </div>
-        <h1>{name()}</h1>
+        <h1>{name() || 'Unnamed bot'}</h1>
       </section>
       <section class="panel profile" aria-labelledby="hire-heading">
         <div class="profile-heading">
           <div class="eyebrow">Bot profile</div>
           <h2 id="hire-heading">Hire teammate</h2>
-          <p>Name your bot and preview its portrait.</p>
+          <p>A teammate for Macro, with its own email once set up.</p>
         </div>
         <div class="names">
           <label>
@@ -150,14 +153,28 @@ export default function Creator() {
         <div class="profile-summary">
           <img src={preset().portrait} alt="" />
           <div>
-            <strong>{name()}</strong>
+            <strong>{name() || 'Unnamed bot'}</strong>
             <p>Draft</p>
           </div>
         </div>
         <div class="hire">
-          <button type="button" class="primary" onClick={startHire}>
-            Hire {name()}
-          </button>
+          {__BOTS_FIXTURES__ ? (
+            <HirePanel
+              name={name()}
+              portrait={preset().portrait}
+              width={width()}
+            />
+          ) : (
+            <>
+              <button type="button" class="primary" onClick={startHire}>
+                Sign in with Macro
+              </button>
+              <p>
+                Hire is unavailable until the team and purchase terms can be
+                verified.
+              </p>
+            </>
+          )}
           {resume() && (
             <p role="status">Draft restored. Sign in to continue hiring.</p>
           )}
