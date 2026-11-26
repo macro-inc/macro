@@ -2,6 +2,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import IconHubSpot from '@icon/import/hubspot.svg';
 import IconJira from '@icon/import/jira.svg';
 import IconNotion from '@icon/import/notion.svg';
+import IconSalesforce from '@icon/import/salesforce.svg';
 import IconLinear from '@icon/mcp-linear.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import type { RunErrorKind } from '@service-cognition/import';
@@ -93,7 +94,7 @@ function PhaseStatus(props: {
 }) {
   const imported = () => props.progress?.imported ?? 0;
   const outcome = () => {
-    if (props.source === 'hubspot') {
+    if (props.source === 'hubspot' || props.source === 'salesforce') {
       return `Imported ${plural(imported(), 'object')}`;
     }
     const confirmed = props.progress?.confirmed;
@@ -191,7 +192,9 @@ function PhaseStatus(props: {
             Import stopped —{' '}
             {plural(
               imported(),
-              props.source === 'hubspot' ? 'imported object' : 'imported item'
+              props.source === 'hubspot' || props.source === 'salesforce'
+                ? 'imported object'
+                : 'imported item'
             )}{' '}
             {imported() === 1 ? 'stays' : 'stay'}
           </p>
@@ -409,6 +412,7 @@ function PlanContents(
             .with('linear', () => <IconLinear class="size-4" />)
             .with('jira', () => <IconJira class="size-4" />)
             .with('hubspot', () => <IconHubSpot class="size-4" />)
+            .with('salesforce', () => <IconSalesforce class="size-4" />)
             .exhaustive()}
         </span>
         <Show
@@ -578,7 +582,7 @@ function PlanContents(
       <Show when={!details() && failures().length > 0}>
         <section aria-label="Failures" class="flex flex-col gap-1">
           <h4 class="text-xs font-medium text-ink-muted">
-            {props.source === 'hubspot'
+            {props.source === 'hubspot' || props.source === 'salesforce'
               ? `${plural(failures().length, 'object')} couldn't be imported`
               : failedItemSentence(
                   props.progress?.failureCount ?? failures().length

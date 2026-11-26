@@ -209,3 +209,21 @@ it('decodes HubSpot pipelines, companies, contacts and deals', () => {
     ['d', 'deal'],
   ]);
 });
+
+it('decodes Salesforce stages, accounts, contacts and opportunities', () => {
+  const kinds = decodePlanEntries(
+    [
+      { ...row, id: 'p', source: 'salesforce', kind: 'salesforce_pipeline' },
+      { ...row, id: 'c', source: 'salesforce', kind: 'salesforce_company' },
+      { ...row, id: 'n', source: 'salesforce', kind: 'salesforce_contact' },
+      { ...row, id: 'd', source: 'salesforce', kind: 'salesforce_deal' },
+    ],
+    'review'
+  ).map((entry) => [entry.id, entry.kind]);
+  expect(kinds).toEqual([
+    ['p', 'pipeline'],
+    ['c', 'company'],
+    ['n', 'contact'],
+    ['d', 'deal'],
+  ]);
+});

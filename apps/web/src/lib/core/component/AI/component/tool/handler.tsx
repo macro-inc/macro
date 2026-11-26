@@ -127,6 +127,7 @@ import {
   importFromJiraHandler,
   importFromLinearHandler,
   importFromNotionHandler,
+  importFromSalesforceHandler,
   importNotionPageHandler,
   listImportEntitiesHandler,
 } from './ImportTools';
@@ -276,6 +277,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ImportFromLinear: importFromLinearHandler,
   ImportFromJira: importFromJiraHandler,
   ImportFromHubspot: importFromHubspotHandler,
+  ImportFromSalesforce: importFromSalesforceHandler,
   ImportNotionPage: importNotionPageHandler,
   ConnectMcpServer: connectMcpServerHandler,
   GetCompany: getCompanyHandler,

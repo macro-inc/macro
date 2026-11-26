@@ -29,7 +29,10 @@ the server says its connection can be imported from (`importAvailable`),
   Macro.”: its review lists deal pipelines, companies, contacts and deals, with
   owners matched to teammates and counted losses (deals without a company,
   unsupported currencies, personal-provider domains) in the totals, and no
-  sharing choice, since CRM records belong to the team. Other connectors list
+  sharing choice, since CRM records belong to the team. Salesforce opens the
+  same CRM review through `ImportFromSalesforce` (“Import my Salesforce CRM
+  into Macro.”): opportunity stages become one pipeline, accounts become
+  companies, and opportunities become deals. Other connectors list
   candidates and ask which ones to create. No importer writes to its source.
 - The shared review identifies its source, shows task/project totals for issue
   trackers, and lets the owner exclude objects and change sharing. On phones,

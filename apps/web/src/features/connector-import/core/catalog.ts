@@ -148,7 +148,8 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
       {
         appSlug: 'salesforce_rest_api',
         name: 'Salesforce',
-        detail: 'Accounts and contacts',
+        detail: 'Accounts, contacts and opportunities',
+        ledger: 'salesforce',
         icon: IconSalesforce as ImportIcon,
       },
       {
