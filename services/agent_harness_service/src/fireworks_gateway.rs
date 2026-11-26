@@ -37,7 +37,7 @@ use crate::anthropic_gateway::{
 use crate::solver_runs::{self, RunRefusal, SolverRunId, SolverRuns};
 use usage::{Observed, SseUsage};
 
-mod usage;
+pub(crate) mod usage;
 
 #[cfg(test)]
 mod test;

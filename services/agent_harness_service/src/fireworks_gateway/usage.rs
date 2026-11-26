@@ -5,6 +5,8 @@
 use std::num::NonZeroUsize;
 
 use ai_usage::UsageAmount;
+#[cfg(test)]
+use ai_usage::financial::{TrustedTokenUsage, UnresolvedReason, UsageEvidence};
 use serde::Deserialize;
 use sse_core::{SseDecoder, SseEvent};
 
@@ -29,6 +31,24 @@ struct WireUsage {
     prompt_tokens: Option<u64>,
     completion_tokens: Option<u64>,
     prompt_tokens_details: Option<WirePromptDetails>,
+}
+
+#[cfg(test)]
+impl WireUsage {
+    fn evidence(&self) -> UsageEvidence {
+        let (Some(input), Some(output)) = (self.prompt_tokens, self.completion_tokens) else {
+            return UsageEvidence::Missing(UnresolvedReason::UsageNotReported);
+        };
+        let cached = self
+            .prompt_tokens_details
+            .as_ref()
+            .and_then(|details| details.cached_tokens)
+            .unwrap_or_default();
+        TrustedTokenUsage::from_inclusive_totals(input, output, cached, 0, 0).map_or(
+            UsageEvidence::Missing(UnresolvedReason::UnsupportedDimensions),
+            UsageEvidence::Reported,
+        )
+    }
 }
 
 /// A completion, or one chunk of a streamed one.
@@ -107,9 +127,13 @@ pub(super) fn from_json_body(body: &[u8]) -> Observed {
 /// points. With `stream_options.include_usage`, the last chunk before
 /// `[DONE]` carries the usage.
 #[derive(Debug)]
-pub(super) struct SseUsage {
+pub(crate) struct SseUsage {
     observed: Observed,
     decoder: SseDecoder,
+    #[cfg(test)]
+    usage: UsageEvidence,
+    #[cfg(test)]
+    evidence: Option<UsageEvidence>,
 }
 
 impl Default for SseUsage {
@@ -117,26 +141,45 @@ impl Default for SseUsage {
         Self {
             observed: Observed::default(),
             decoder: SseDecoder::with_limit(MAX_EVENT_BYTES),
+            #[cfg(test)]
+            usage: UsageEvidence::Missing(UnresolvedReason::UsageNotReported),
+            #[cfg(test)]
+            evidence: None,
         }
     }
 }
 
 impl SseUsage {
-    pub(super) fn observe(&mut self, mut chunk: &[u8]) {
+    pub(crate) fn observe(&mut self, mut chunk: &[u8]) {
         while let Some(event) = self.decoder.next(&mut chunk) {
             let Ok(SseEvent::Message(message)) = event else {
                 continue;
             };
             if message.data == DONE {
+                #[cfg(test)]
+                {
+                    self.evidence.get_or_insert(self.usage);
+                }
                 continue;
             }
             match serde_json::from_str::<WireCompletion>(&message.data) {
-                Ok(completion) => self.observed.apply(completion),
+                Ok(completion) => {
+                    #[cfg(test)]
+                    if let Some(usage) = &completion.usage {
+                        self.usage = usage.evidence();
+                    }
+                    self.observed.apply(completion);
+                }
                 Err(error) => {
-                    tracing::warn!(error = ?error, "unreadable fireworks stream chunk");
+                    tracing::warn!(category = ?error.classify(), "unreadable fireworks stream chunk");
                 }
             }
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn evidence(&self) -> Option<UsageEvidence> {
+        self.evidence
     }
 
     pub(super) fn observed(&self) -> &Observed {

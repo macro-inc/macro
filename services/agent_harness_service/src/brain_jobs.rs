@@ -9,6 +9,8 @@ use uuid::Uuid;
 pub mod pg;
 
 #[cfg(test)]
+mod provider_metering;
+#[cfg(test)]
 mod test;
 
 /// Scope established by the trusted parent from current team and teammate identity.

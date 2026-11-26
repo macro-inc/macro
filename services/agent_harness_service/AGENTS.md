@@ -207,6 +207,14 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   retention handling that preserves the no-replay fence. The writer must still
   check current permissions and the job fence at the effect boundary after the
   database lock is released.
+- `src/brain_jobs/provider_metering.rs` rehearses provider usage in process
+  under `cfg(test)`. It uses the existing Brain identity and rollout checks,
+  derives the run from the trusted team, teammate, and job, and keeps the
+  parent-issued invocation ID across delivery retries. Its in-memory fence
+  claims unknown before sending and releases the lock before invoking the fake
+  sender. A downstream writer still needs its own fence. The handler awaits
+  `UsageTracking`, keeps dispatch and observation failures separate, and exposes
+  only scoped outcome and usage evidence. No provider or funding service is wired.
 - `src/voice_gateway.rs`: `GET /voices` and `GET /voices/{model}/sample` for
   team admins behind `enable-agent-teammates` (`team_agents::domain::voice`).
   The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's

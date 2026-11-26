@@ -7,6 +7,8 @@
 use std::num::NonZeroUsize;
 
 use ai_usage::UsageAmount;
+#[cfg(test)]
+use ai_usage::financial::{TrustedTokenUsage, UnresolvedReason, UsageEvidence};
 use serde::Deserialize;
 use sse_core::{SseDecoder, SseEvent};
 
@@ -94,13 +96,17 @@ pub(super) fn from_json_body(body: &[u8]) -> Option<TokenUsage> {
 
 /// Accumulates usage from an SSE byte stream split at arbitrary points.
 #[derive(Debug)]
-pub(super) struct SseUsage {
+pub(crate) struct SseUsage {
     usage: TokenUsage,
     decoder: SseDecoder,
     /// Whether the message ended: `message_stop` came. A stream that ends
     /// without it (an `error` event after the 200, a cut connection) did not
     /// finish.
     stopped: bool,
+    #[cfg(test)]
+    reported: [bool; 2],
+    #[cfg(test)]
+    evidence: Option<UsageEvidence>,
 }
 
 impl Default for SseUsage {
@@ -109,18 +115,26 @@ impl Default for SseUsage {
             usage: TokenUsage::default(),
             decoder: SseDecoder::with_limit(MAX_EVENT_BYTES),
             stopped: false,
+            #[cfg(test)]
+            reported: [false; 2],
+            #[cfg(test)]
+            evidence: None,
         }
     }
 }
 
 impl SseUsage {
-    pub(super) fn observe(&mut self, mut chunk: &[u8]) {
+    pub(crate) fn observe(&mut self, mut chunk: &[u8]) {
         while let Some(event) = self.decoder.next(&mut chunk) {
             // An oversized event is content; the decoder skips it.
             let Ok(SseEvent::Message(message)) = event else {
                 continue;
             };
             if message.event == MESSAGE_STOP {
+                #[cfg(test)]
+                if !self.stopped {
+                    self.evidence = Some(self.usage_evidence());
+                }
                 self.stopped = true;
                 continue;
             }
@@ -130,16 +144,46 @@ impl SseUsage {
             match serde_json::from_str::<WireEvent>(&message.data) {
                 Ok(WireEvent::MessageStart { message }) => {
                     if let Some(usage) = message.usage {
-                        self.usage.apply(usage);
+                        self.apply(usage);
                     }
                 }
-                Ok(WireEvent::MessageDelta { usage: Some(usage) }) => self.usage.apply(usage),
+                Ok(WireEvent::MessageDelta { usage: Some(usage) }) => self.apply(usage),
                 Ok(WireEvent::MessageDelta { usage: None }) => {}
                 Err(error) => {
-                    tracing::warn!(error = ?error, event = %message.event, "unreadable anthropic usage event");
+                    tracing::warn!(category = ?error.classify(), event = %message.event, "unreadable anthropic usage event");
                 }
             }
         }
+    }
+
+    fn apply(&mut self, usage: WireUsage) {
+        #[cfg(test)]
+        {
+            self.reported[0] |= usage.input_tokens.is_some();
+            self.reported[1] |= usage.output_tokens.is_some();
+        }
+        self.usage.apply(usage);
+    }
+
+    #[cfg(test)]
+    fn usage_evidence(&self) -> UsageEvidence {
+        let usage = self.usage;
+        if self.reported == [true; 2] {
+            UsageEvidence::Reported(TrustedTokenUsage::from_disjoint(
+                usage.input,
+                usage.output,
+                usage.cache_read,
+                usage.cache_write,
+                0,
+            ))
+        } else {
+            UsageEvidence::Missing(UnresolvedReason::UsageNotReported)
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn evidence(&self) -> Option<UsageEvidence> {
+        self.evidence
     }
 
     pub(super) fn usage(&self) -> TokenUsage {
