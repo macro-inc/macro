@@ -93,11 +93,10 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
   `webhook.validated`.
 - Agent triggers: `agent_trigger.new` and `agent_trigger.existing`.
 - Agent sessions: `agent_session.opened`, `agent_session.turn_started`,
-  `agent_session.command_rejected`, `agent_session.mentioned`,
-  `agent_session.turn_ended`, `agent_session.settled`,
-  `agent_session.waiting_for_input`, `agent_session.input_received`,
-  `agent_session.stopped`, `agent_session.renamed`, and
-  `agent_session.deleted`.
+  `agent_session.command_rejected`, `agent_session.turn_ended`,
+  `agent_session.settled`, `agent_session.waiting_for_input`,
+  `agent_session.input_received`, `agent_session.stopped`,
+  `agent_session.renamed`, and `agent_session.deleted`.
 - Users: `user.picture_changed` (`entity_type = "user"`, entity and ordering key
   are the user id; `file_id` and `url` are both null when the picture was
   removed). Persisted webhooks go only to the changed user's own personal and
