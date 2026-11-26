@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM imap_state_entries e USING jsonb_to_recordset($2::jsonb) AS d (kind text,\n                        key text)\n                    WHERE e.link_id = $1\n                        AND e.kind = d.kind\n                        AND e.key = d.key\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5feed1a64994d029d1840e4844be3098e7b11899d10f08120f8f681e5fb86839"
+}

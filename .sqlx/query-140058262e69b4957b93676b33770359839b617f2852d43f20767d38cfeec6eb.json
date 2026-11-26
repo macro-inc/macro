@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO imap_state_entries (link_id, kind, key, document)\n            VALUES ($1, 'folder', 'inbox', $2)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "140058262e69b4957b93676b33770359839b617f2852d43f20767d38cfeec6eb"
+}

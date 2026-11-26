@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE imap_accounts SET lease_until=now()-interval '1 second' WHERE link_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a20db3d9e3b33f89fc06fc472272939ef78e46944ea5bb1600ba70f5988357a2"
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO imap_verification_limits (scope_hash, window_start, attempts)\n                    VALUES ($1, date_bin ('15 minutes', now(), '2000-01-01'::timestamptz), 1)\n                ON CONFLICT (scope_hash, window_start)\n                    DO UPDATE SET\n                        attempts = imap_verification_limits.attempts + 1\n                    WHERE\n                        imap_verification_limits.attempts < $2\n                    RETURNING\n                        attempts\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attempts",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5ede093873cdd5fa859f9bb82ac9a9d17a2f1eb32e50dedc9593f42b37cd8c6f"
+}

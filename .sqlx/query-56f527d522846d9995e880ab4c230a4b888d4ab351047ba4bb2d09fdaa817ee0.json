@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM imap_accounts\n            WHERE link_id = $1\n                AND sync_generation = $2\n                AND grant_generation = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "56f527d522846d9995e880ab4c230a4b888d4ab351047ba4bb2d09fdaa817ee0"
+}

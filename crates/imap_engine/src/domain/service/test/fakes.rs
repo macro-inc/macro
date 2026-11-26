@@ -1,0 +1,541 @@
+use super::*;
+
+#[derive(Default)]
+pub(crate) struct RenewalControl {
+    pub(crate) blocked: std::sync::Mutex<Option<Arc<tokio::sync::Semaphore>>>,
+    pub(crate) failures: std::sync::atomic::AtomicU32,
+    pub(crate) calls: std::sync::atomic::AtomicU32,
+    pub(crate) attempted: tokio::sync::Notify,
+}
+
+pub(crate) struct MemoryRepository {
+    pub(crate) fingerprint_calls: std::sync::Mutex<Vec<usize>>,
+    pub(crate) fingerprint_failure: std::sync::atomic::AtomicBool,
+    pub(crate) renewal: RenewalControl,
+    pub(crate) revision: std::sync::atomic::AtomicI64,
+    pub(crate) scoped_acquire_errors: std::sync::atomic::AtomicU32,
+    pub(crate) owner_claims: std::sync::atomic::AtomicU32,
+    pub(crate) owner_gate: std::sync::Mutex<Option<Arc<tokio::sync::Semaphore>>>,
+    pub(crate) owner_errors: std::sync::atomic::AtomicU32,
+    pub(crate) releases: std::sync::atomic::AtomicU32,
+    pub(crate) acquire_gate: Option<Arc<tokio::sync::Semaphore>>,
+    pub(crate) command_leases: Option<std::sync::Mutex<std::collections::HashSet<Uuid>>>,
+    pub(crate) owner_available: std::sync::atomic::AtomicBool,
+    pub(crate) state: std::sync::Mutex<AccountState>,
+    pub(crate) saved_unknown: std::sync::atomic::AtomicBool,
+}
+impl MemoryRepository {
+    fn view(&self, binding: Binding, lease_id: Option<Uuid>) -> Account {
+        Account {
+            binding,
+            user_id: "owner".into(),
+            ciphertext: Vec::new(),
+            state: self.state.lock().unwrap().clone(),
+            checkpoint: Default::default(),
+            revision: self.revision.load(Ordering::Acquire),
+            folder_preferences_revision: 0,
+            loaded_for_sync: false,
+            lease_id,
+        }
+    }
+}
+#[async_trait::async_trait]
+impl Repository for MemoryRepository {
+    async fn idle_state(
+        &self,
+        _: &str,
+    ) -> Result<Option<crate::domain::adaptive_idle::IdleState>, Error> {
+        Ok(None)
+    }
+    async fn save_idle_state(
+        &self,
+        _: &str,
+        _: &crate::domain::adaptive_idle::IdleState,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+    async fn claim_owner(&self, _: Binding, _: Uuid) -> Result<bool, Error> {
+        self.owner_claims.fetch_add(1, Ordering::Relaxed);
+        let gate = self.owner_gate.lock().unwrap().clone();
+        if let Some(gate) = gate {
+            gate.acquire()
+                .await
+                .map_err(|_| Error::ConnectionUnavailable)?
+                .forget();
+        }
+        if self
+            .owner_errors
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1))
+            .is_ok()
+        {
+            return Err(Error::ConnectionUnavailable);
+        }
+        Ok(self.owner_available.load(Ordering::Acquire))
+    }
+    async fn holds_owner(&self, _: Binding, _: Uuid) -> Result<bool, Error> {
+        Ok(self.owner_available.load(Ordering::Acquire))
+    }
+    async fn release_owner(&self, _: Binding, _: Uuid) -> Result<(), Error> {
+        Ok(())
+    }
+    async fn admit_verification(&self, _: &[(String, i32)]) -> Result<(), Error> {
+        Ok(())
+    }
+    async fn put_verification(&self, _: VerifiedAccount) -> Result<(), Error> {
+        Err(Error::Invalid)
+    }
+    async fn verification(&self, _: Uuid) -> Result<VerifiedAccount, Error> {
+        Err(Error::NotFound)
+    }
+    async fn connect(&self, _: Binding, _: &str, _: Option<Vec<u8>>, _: Uuid) -> Result<(), Error> {
+        Err(Error::Invalid)
+    }
+    async fn credentials(&self, _: Binding) -> Result<(String, Vec<u8>), Error> {
+        Ok(("owner".into(), Vec::new()))
+    }
+    async fn acquire(&self, binding: Binding) -> Result<Account, Error> {
+        if let Some(gate) = &self.acquire_gate {
+            gate.acquire()
+                .await
+                .map_err(|_| Error::ConnectionUnavailable)?
+                .forget();
+        }
+        if let Some(leases) = &self.command_leases
+            && !leases.lock().unwrap().insert(binding.link_id)
+        {
+            return Err(Error::AccountBusy);
+        }
+        Ok(self.view(binding, Some(Uuid::now_v7())))
+    }
+
+    async fn acquire_scoped(&self, binding: Binding, _: StateSelection) -> Result<Account, Error> {
+        if self
+            .scoped_acquire_errors
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+            .is_ok()
+        {
+            return Err(Error::AccountBusy);
+        }
+        self.acquire(binding).await
+    }
+    async fn frozen_submission(
+        &self,
+        _: &Account,
+        draft_id: &str,
+    ) -> Result<Option<serde_json::Value>, Error> {
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .drafts
+            .get(draft_id)
+            .and_then(|draft| draft.frozen_content.clone()))
+    }
+
+    async fn read_scoped(&self, binding: Binding, _: StateSelection) -> Result<Account, Error> {
+        let mut account = if self.command_leases.is_some() {
+            self.view(binding, None)
+        } else {
+            self.acquire(binding).await?
+        };
+        account.lease_id = None;
+        Ok(account)
+    }
+    async fn validate_read(&self, _: &Account) -> Result<(), Error> {
+        if !self.owner_available.load(Ordering::Acquire) {
+            return Err(Error::Conflict);
+        }
+        let state = self.state.lock().unwrap();
+        if let Some(error) = state.credential_issue() {
+            return Err(error);
+        }
+        Ok(())
+    }
+    async fn lookup_locations(
+        &self,
+        account: &Account,
+        fingerprints: &[MessageFingerprint],
+    ) -> Result<Vec<Location>, Error> {
+        account.lease_id.ok_or(Error::Conflict)?;
+        self.fingerprint_calls
+            .lock()
+            .unwrap()
+            .push(fingerprints.len());
+        if self.fingerprint_failure.load(Ordering::Acquire) {
+            return Err(Error::ConnectionUnavailable);
+        }
+        let requested = fingerprints.iter().copied().collect::<BTreeSet<_>>();
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .locations
+            .iter()
+            .filter(|l| requested.contains(&l.fingerprint))
+            .cloned()
+            .collect())
+    }
+    async fn save_health(&self, account: &mut Account) -> Result<(), Error> {
+        self.save(account).await
+    }
+
+    async fn save(&self, account: &mut Account) -> Result<(), Error> {
+        account.lease_id.ok_or(Error::Conflict)?;
+        if account
+            .state
+            .drafts
+            .values()
+            .any(|d| d.submission == Some(SubmissionOutcome::Unknown))
+        {
+            self.saved_unknown.store(true, Ordering::Release);
+        }
+        let mut state = self.state.lock().unwrap();
+        *state = account.state.clone();
+        account.revision = self.revision.fetch_add(1, Ordering::AcqRel) + 1;
+        Ok(())
+    }
+    async fn renew(&self, account: &Account) -> Result<(), Error> {
+        account.lease_id.ok_or(Error::Conflict)?;
+        self.renewal.calls.fetch_add(1, Ordering::AcqRel);
+        self.renewal.attempted.notify_one();
+        let blocked = self.renewal.blocked.lock().unwrap().clone();
+        if let Some(blocked) = blocked {
+            blocked
+                .acquire()
+                .await
+                .map_err(|_| Error::ConnectionUnavailable)?
+                .forget();
+        }
+        let failed = self
+            .renewal
+            .failures
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+            .is_ok();
+        if failed {
+            Err(Error::ConnectionUnavailable)
+        } else {
+            Ok(())
+        }
+    }
+    async fn release(&self, account: &Account) -> Result<(), Error> {
+        account.lease_id.ok_or(Error::Conflict)?;
+        self.releases.fetch_add(1, Ordering::Relaxed);
+        if let Some(leases) = &self.command_leases {
+            assert!(leases.lock().unwrap().remove(&account.binding.link_id));
+        }
+        Ok(())
+    }
+    async fn delete(&self, _: Binding) -> Result<(), Error> {
+        Ok(())
+    }
+    async fn bindings(&self, _: i64, _: &[Uuid]) -> Result<Vec<Binding>, Error> {
+        Ok(Vec::new())
+    }
+}
+pub(crate) struct TestCipher;
+#[async_trait::async_trait]
+impl CredentialCipher for TestCipher {
+    async fn encrypt(&self, _: Uuid, _: &str, _: &Credentials) -> Result<Vec<u8>, Error> {
+        Ok(Vec::new())
+    }
+    async fn decrypt(&self, _id: Uuid, _: &str, _: &[u8]) -> Result<Credentials, Error> {
+        Ok(Credentials {
+            features: None,
+            binding: Some(Binding {
+                link_id: _id,
+                sync_generation: 1,
+                grant_generation: 1,
+            }),
+            user_id: "owner".into(),
+            email: "owner@example.net".into(),
+            imap: Login {
+                endpoint: Endpoint {
+                    host: "imap.example.net".into(),
+                    port: 993,
+                    tls: TlsMode::Implicit,
+                    username: "owner@example.net".into(),
+                },
+                password: Secret("sentinel-password".into()),
+            },
+            smtp: Login {
+                endpoint: Endpoint {
+                    host: "smtp.example.net".into(),
+                    port: 465,
+                    tls: TlsMode::Implicit,
+                    username: "owner@example.net".into(),
+                },
+                password: Secret("sentinel-password".into()),
+            },
+        })
+    }
+}
+pub(crate) struct OrganizationWorkControl {
+    pub(crate) reads: std::sync::atomic::AtomicU32,
+    pub(crate) writes: std::sync::atomic::AtomicU32,
+    pub(crate) seen: AtomicBool,
+    pub(crate) busy_after_write: AtomicBool,
+}
+
+pub(crate) struct IdleWorkControl {
+    pub(crate) entries: std::sync::atomic::AtomicU32,
+    pub(crate) started: tokio::sync::Notify,
+    pub(crate) released: tokio::sync::Semaphore,
+    pub(crate) outcome: WaitOutcome,
+}
+
+pub(crate) struct ProviderWorkControl {
+    pub(crate) idle: Option<Arc<IdleWorkControl>>,
+    pub(crate) failures: BTreeMap<u32, Error>,
+    pub(crate) organization: Option<Arc<OrganizationWorkControl>>,
+    pub(crate) source: Option<Vec<u8>>,
+    pub(crate) started: tokio::sync::mpsc::UnboundedSender<Uuid>,
+    pub(crate) released: tokio::sync::Semaphore,
+}
+impl ProviderWorkControl {
+    async fn wait(&self, credentials: &Credentials) -> Result<(), Error> {
+        let binding = credentials.binding.ok_or(Error::Invalid)?;
+        self.started
+            .send(binding.link_id)
+            .map_err(|_| Error::ConnectionUnavailable)?;
+        self.released
+            .acquire()
+            .await
+            .map_err(|_| Error::ConnectionUnavailable)?
+            .forget();
+        Ok(())
+    }
+}
+
+pub(crate) struct UncertainTransport {
+    pub(crate) repository: Arc<MemoryRepository>,
+    pub(crate) submissions: std::sync::atomic::AtomicU32,
+    pub(crate) deadline: AtomicBool,
+    pub(crate) submission_deadline: std::sync::Mutex<Option<tokio::time::Instant>>,
+    pub(crate) refusal: Option<SubmissionRefusal>,
+    pub(crate) sent_found: std::sync::Mutex<std::collections::BTreeSet<String>>,
+    pub(crate) provider_work: Option<Arc<ProviderWorkControl>>,
+    pub(crate) submit_control: Option<Arc<ProviderWorkControl>>,
+}
+#[async_trait::async_trait]
+impl MailTransport for UncertainTransport {
+    async fn maintenance(&self) {}
+
+    async fn verify_features(
+        &self,
+        credentials: &Credentials,
+    ) -> Result<Option<crate::domain::server_features::ServerFeatures>, Error> {
+        self.verify(credentials).await?;
+        Ok(None)
+    }
+
+    async fn wait_folder(
+        &self,
+        _: &Credentials,
+        _: &FolderState,
+        _: u64,
+    ) -> Result<WaitOutcome, Error> {
+        Ok(WaitOutcome::Changed)
+    }
+    async fn message(
+        &self,
+        _: &Credentials,
+        _: &str,
+        _: u32,
+        uid: u32,
+    ) -> Result<Option<RemoteMessage>, Error> {
+        if let Some(control) = &self.provider_work
+            && let Some(organization) = &control.organization
+        {
+            if organization.writes.load(Ordering::SeqCst) > 0
+                && organization.busy_after_write.swap(false, Ordering::SeqCst)
+            {
+                return Err(Error::AccountBusy);
+            }
+            organization.reads.fetch_add(1, Ordering::SeqCst);
+            let state = self.repository.state.lock().unwrap();
+            let Some(message) = state.messages.values().next() else {
+                return Ok(None);
+            };
+            return Ok(Some(RemoteMessage {
+                gmail_labels: None,
+                uid,
+                flags: if organization.seen.load(Ordering::SeqCst) {
+                    vec!["\\Seen".into()]
+                } else {
+                    Vec::new()
+                },
+                mime: Arc::from(STANDARD.decode(&message.mime_base64).unwrap()),
+                size: message.size,
+                received_at: message.received_at,
+                modseq: None,
+                gmail_message_id: None,
+                native_message_id: None,
+                native_thread_id: None,
+            }));
+        }
+        Ok(None)
+    }
+    async fn disconnect(&self, _: Binding) -> Result<(), Error> {
+        Ok(())
+    }
+    async fn source(
+        &self,
+        credentials: &Credentials,
+        _: &str,
+        _: u32,
+        uid: u32,
+    ) -> Result<Vec<u8>, Error> {
+        if let Some(control) = &self.provider_work {
+            control.wait(credentials).await?;
+            if let Some(error) = control.failures.get(&uid) {
+                return Err(*error);
+            }
+            if let Some(source) = &control.source {
+                return Ok(source.clone());
+            }
+        }
+        Err(Error::NotFound)
+    }
+    async fn wait_change(
+        &self,
+        _: &Credentials,
+        _: &[FolderState],
+        _: u64,
+    ) -> Result<WaitOutcome, Error> {
+        if let Some(control) = &self.provider_work {
+            if let Some(idle) = &control.idle {
+                idle.entries.fetch_add(1, Ordering::Relaxed);
+                idle.started.notify_one();
+                idle.released
+                    .acquire()
+                    .await
+                    .map_err(|_| Error::ConnectionUnavailable)?
+                    .forget();
+                return Ok(idle.outcome);
+            }
+            return std::future::pending().await;
+        }
+        Ok(WaitOutcome::Changed)
+    }
+    async fn verify(&self, _: &Credentials) -> Result<(), Error> {
+        Ok(())
+    }
+    async fn snapshot(
+        &self,
+        credentials: &Credentials,
+        _: &AccountState,
+    ) -> Result<Vec<RemoteFolder>, Error> {
+        if let Some(control) = &self.provider_work {
+            control.wait(credentials).await?;
+            if let Some(error) = control.failures.get(&0) {
+                return Err(*error);
+            }
+        }
+        Ok(Vec::new())
+    }
+    async fn apply(
+        &self,
+        _: &Credentials,
+        _: &str,
+        _: u32,
+        _: u32,
+        action: RemoteAction,
+    ) -> Result<RemoteWriteReceipt, ApplyError> {
+        if let Some(control) = &self.provider_work
+            && let Some(organization) = &control.organization
+        {
+            organization.writes.fetch_add(1, Ordering::SeqCst);
+            let RemoteAction::Flag { flag, enabled } = action else {
+                panic!("expected organization flag fixture");
+            };
+            assert_eq!(flag, "\\Seen");
+            organization.seen.store(enabled, Ordering::SeqCst);
+        }
+        Ok(RemoteWriteReceipt::default())
+    }
+    async fn submit(
+        &self,
+        credentials: &Credentials,
+        _: &str,
+        _: &[String],
+        _: &[u8],
+        pre_body_deadline: tokio::time::Instant,
+    ) -> Result<TransportSubmission, Error> {
+        assert!(self.repository.saved_unknown.load(Ordering::Acquire));
+        *self.submission_deadline.lock().unwrap() = Some(pre_body_deadline);
+        self.submissions.fetch_add(1, Ordering::AcqRel);
+        if let Some(control) = &self.submit_control {
+            match tokio::time::timeout_at(
+                pre_body_deadline + SUBMISSION_DATA_BUDGET,
+                control.wait(credentials),
+            )
+            .await
+            {
+                Ok(result) => result?,
+                Err(_) => {
+                    return Ok(TransportSubmission {
+                        outcome: SubmissionOutcome::Unknown,
+                        deadline_exceeded: true,
+                    });
+                }
+            }
+            control
+                .started
+                .send(credentials.binding.ok_or(Error::Invalid)?.link_id)
+                .map_err(|_| Error::ConnectionUnavailable)?;
+        }
+        Ok(TransportSubmission {
+            outcome: self.refusal.map_or(SubmissionOutcome::Unknown, |refusal| {
+                SubmissionOutcome::Rejected { refusal }
+            }),
+            deadline_exceeded: self.deadline.load(Ordering::Acquire),
+        })
+    }
+    async fn save_sent(
+        &self,
+        _: &Credentials,
+        message_id: &str,
+        _: &[u8],
+        allow_append: bool,
+    ) -> Result<SentCopy, Error> {
+        if allow_append {
+            assert!(
+                self.repository
+                    .state
+                    .lock()
+                    .unwrap()
+                    .drafts
+                    .values()
+                    .all(|d| d.sent_copy_attempted)
+            );
+            self.submissions.fetch_add(1, Ordering::AcqRel);
+            Err(Error::ConnectionUnavailable)
+        } else {
+            Ok(if self.sent_found.lock().unwrap().contains(message_id) {
+                SentCopy::Copied
+            } else {
+                SentCopy::NotFound
+            })
+        }
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct RecordingNotifier(
+    pub(crate) std::sync::Mutex<Vec<Notification>>,
+    pub(crate) std::sync::atomic::AtomicU32,
+);
+#[async_trait::async_trait]
+impl Notifier for RecordingNotifier {
+    async fn notify(&self, notification: Notification) -> Result<(), Error> {
+        if self
+            .1
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+            .is_ok()
+        {
+            return Err(Error::ConnectionUnavailable);
+        }
+        self.0.lock().unwrap().push(notification);
+        Ok(())
+    }
+}

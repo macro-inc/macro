@@ -855,3 +855,12 @@ service_url! {
         prod: "https://gateway.macro.com/preview",
     }
 }
+
+service_url! {
+    /// Base for the anonymous Thunderbird mail provider settings directory.
+    pub struct ThunderbirdAutoconfigUrl {
+        local: "https://autoconfig.thunderbird.net/v1.1/",
+        dev: "https://autoconfig.thunderbird.net/v1.1/",
+        prod: "https://autoconfig.thunderbird.net/v1.1/",
+    }
+}

@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM imap_account_owners o\n                JOIN imap_current_links l ON l.id=o.link_id\n                WHERE o.link_id=$1 AND o.sync_generation=$2\n                    AND o.grant_generation=$3 AND o.owner_id=$4 AND o.lease_until>now()\n                    AND l.sync_generation=o.sync_generation AND l.grant_generation=o.grant_generation\n                    AND NOT l.needs_reauth\n            ) AS \"owned!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owned!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ab30aabfc7e3a986b32fa6a2ff85f9113ebf12b69a240bd1b6cfb12c9bafe1e8"
+}

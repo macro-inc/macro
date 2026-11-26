@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO imap_accounts (link_id, user_id, sync_generation, grant_generation, credential_ciphertext, state)\n            SELECT\n                $1,\n                $2,\n                $3,\n                $4,\n                $5,\n                $6\n            WHERE\n                EXISTS (\n                    SELECT\n                        1\n                    FROM\n                        email_links\n                    WHERE\n                        id = $1\n                        AND macro_id = $2\n                        AND provider = 'IMAP')\n            ON CONFLICT (link_id)\n                DO UPDATE SET\n                    sync_generation = EXCLUDED.sync_generation,\n                    grant_generation = EXCLUDED.grant_generation,\n                    credential_ciphertext = EXCLUDED.credential_ciphertext,\n                    state = jsonb_set(\n                        imap_accounts.state - 'mailbox_issue' - 'sync_retry_at' - 'sync_size_failures',\n                        '{needs_reauth}',\n                        'false'::jsonb),\n                    lease_id = NULL,\n                    lease_until = NULL,\n                    revision = imap_accounts.revision + 1,\n                    folder_preferences_revision = imap_accounts.folder_preferences_revision + 1\n                WHERE\n                    imap_accounts.user_id = EXCLUDED.user_id\n                    AND imap_accounts.sync_generation <= EXCLUDED.sync_generation\n                    AND imap_accounts.grant_generation <= EXCLUDED.grant_generation\n                    AND (imap_accounts.sync_generation < EXCLUDED.sync_generation\n                        OR imap_accounts.grant_generation < EXCLUDED.grant_generation)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8",
+        "Bytea",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9bed83eaa1ee4702bc373dd0ba075de650e4a0e6ce796f9b2a4728ce2d38a1e7"
+}

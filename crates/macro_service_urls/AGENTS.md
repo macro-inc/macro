@@ -59,3 +59,6 @@ process; the harness's OAuth broker accepts its `/mcp` URL as a token resource.
 
 - Rules: `.agents/rules/config-and-service-urls.md` ·
   Docs: `docs/guides/new-service.md` (§5 Service discovery)
+
+The IMAP engine reads the Thunderbird ISPDB base from `ThunderbirdAutoconfigUrl`.
+The public-egress checks also apply to overrides.

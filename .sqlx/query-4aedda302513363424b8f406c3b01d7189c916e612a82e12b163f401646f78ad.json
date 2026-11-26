@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE\n            imap_accounts\n        SET\n            sync_generation = 2,\n            grant_generation = 2\n        WHERE\n            link_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4aedda302513363424b8f406c3b01d7189c916e612a82e12b163f401646f78ad"
+}

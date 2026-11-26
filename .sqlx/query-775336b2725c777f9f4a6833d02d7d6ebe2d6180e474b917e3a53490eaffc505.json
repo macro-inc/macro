@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO imap_account_owners (link_id, owner_id, sync_generation, grant_generation, lease_until)\n        SELECT\n            link_id,\n            $2,\n            sync_generation,\n            grant_generation,\n            now() + interval '5 minutes'\n        FROM\n            imap_accounts\n        WHERE\n            link_id = ANY ($1)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "775336b2725c777f9f4a6833d02d7d6ebe2d6180e474b917e3a53490eaffc505"
+}

@@ -1,0 +1,421 @@
+//! Per-account ownership, classified reconnects and tracked optional watcher sockets.
+use super::*;
+use std::time::Duration;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::Instrument;
+
+const FULL_WALK_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
+const UNREADABLE_CONFIRMATION: Duration = Duration::from_secs(30);
+
+struct AccountWatchers {
+    tasks: TaskTracker,
+    stopped: CancellationToken,
+    current: Option<super::watchers::Watcher>,
+}
+
+impl Engine {
+    /// Wake an owned account after a fenced configuration or provider notification.
+    pub fn wake_account(&self, link: Uuid) {
+        if let Ok(wakeups) = self.wakeups.lock()
+            && let Some((_, wake)) = wakeups.get(&link)
+        {
+            wake.notify_one();
+        }
+    }
+    /// Own a primary and optional watcher until shutdown or permanent credential refusal.
+    pub async fn run_account(
+        &self,
+        binding: Binding,
+        cancellation: CancellationToken,
+    ) -> Result<(), Error> {
+        let owner = Uuid::now_v7();
+        let wake = Arc::new(tokio::sync::Notify::new());
+        self.wakeups
+            .lock()
+            .map_err(|_| Error::ConnectionUnavailable)?
+            .insert(binding.link_id, (owner, wake.clone()));
+        let mut watchers = AccountWatchers {
+            tasks: TaskTracker::new(),
+            stopped: cancellation.child_token(),
+            current: None,
+        };
+        let lifetime = cancellation.child_token();
+        let hints_changed = Arc::new(tokio::sync::Notify::new());
+        let result = {
+            let work = self.account_loop(
+                binding,
+                owner,
+                &lifetime,
+                &wake,
+                &hints_changed,
+                &mut watchers,
+            );
+            let hints = self.retry_host_hints(binding, owner, &lifetime, &hints_changed);
+            tokio::pin!(work, hints);
+            tokio::select! {
+                result = &mut work => {
+                    lifetime.cancel();
+                    // Drain a bounded callback and any fenced ACK save before
+                    // dropping its future; a short command lease must not leak.
+                    let _ = hints.await;
+                    result
+                }
+                result = &mut hints => {
+                    lifetime.cancel();
+                    let drained = work.await;
+                    result.and(drained)
+                }
+            }
+        };
+        watchers.stopped.cancel();
+        if let Some(watcher) = &watchers.current {
+            watcher.stop.cancel();
+        }
+        watchers.tasks.close();
+        let drained = tokio::time::timeout(Duration::from_secs(10), watchers.tasks.wait()).await;
+        if let Ok(mut wakeups) = self.wakeups.lock()
+            && wakeups
+                .get(&binding.link_id)
+                .is_some_and(|(stored, _)| *stored == owner)
+        {
+            wakeups.remove(&binding.link_id);
+        }
+        // On a failed drain leave the owner lease in place until expiry rather than permit overlapping sockets.
+        if drained.is_err() {
+            return Err(Error::ConnectionUnavailable);
+        }
+        self.transport.disconnect(binding).await?;
+        let released = self.repository.release_owner(binding, owner).await;
+        match result {
+            Ok(()) => released,
+            Err(error) => Err(error),
+        }
+    }
+    async fn account_loop(
+        &self,
+        binding: Binding,
+        owner: Uuid,
+        cancellation: &CancellationToken,
+        wake: &Arc<tokio::sync::Notify>,
+        hints_changed: &Arc<tokio::sync::Notify>,
+        watchers: &mut AccountWatchers,
+    ) -> Result<(), Error> {
+        let mut failures = 0u32;
+        let mut credential_refusals = 0u8;
+        let mut unreadable_since = None;
+        let mut unreadable_attempts = 0u8;
+        let mut healthy_since = tokio::time::Instant::now();
+        let mut scan_required = true;
+        let mut baseline_failures = 0u8;
+        let mut rescan_after = None;
+        let mut next_full_walk = tokio::time::Instant::now() + FULL_WALK_INTERVAL;
+        loop {
+            if cancellation.is_cancelled() {
+                return Ok(());
+            }
+            let round_span = tracing::info_span!(parent: None, "imap.account_round", link_id = %binding.link_id, retry_count = failures, sync.full_scan = scan_required, idle.baseline_failures = baseline_failures);
+            let round_stop = cancellation.child_token();
+            let work = async {
+                if !self.repository.claim_owner(binding, owner).await? {
+                    return Err(Error::Conflict);
+                }
+                if scan_required {
+                    // Wait under the owner heartbeat, before taking any command
+                    // lease. Sends and mailbox actions remain independently admitted.
+                    if let Some(deadline) = rescan_after.take() {
+                        tokio::select! {
+                            biased;
+                            _ = round_stop.cancelled() => return Err(Error::Conflict),
+                            _ = wake.notified() => { baseline_failures = 0; },
+                            _ = tokio::time::sleep_until(deadline) => {},
+                        }
+                    }
+                    self.execute_owned_sync(binding, owner, &round_stop).await?;
+                    next_full_walk = tokio::time::Instant::now() + FULL_WALK_INTERVAL;
+                }
+                // Prompt one independent delivery attempt before IDLE without
+                // making provider progress wait for callback availability.
+                hints_changed.notify_one();
+                if !self.repository.claim_owner(binding, owner).await? {
+                    return Err(Error::Conflict);
+                }
+                let (user_id, ciphertext) = self.repository.credentials(binding).await?;
+                let credentials = self
+                    .cipher
+                    .decrypt(binding.link_id, &user_id, &ciphertext)
+                    .await?;
+                self.refresh_watcher(
+                    binding,
+                    owner,
+                    wake,
+                    &watchers.tasks,
+                    &watchers.stopped,
+                    &mut watchers.current,
+                )
+                .await?;
+                let committed = self.repository.read_scoped(binding, StateSelection::Catalog)
+                    .await?.state.folders.into_values().collect::<Vec<_>>();
+                let host = credentials.imap.endpoint.host.clone();
+                let host_hash = format!("{:x}", Sha256::digest(host.as_bytes()));
+                let previous = self.repository.idle_state(&host_hash).await?;
+                let interval = {
+                    let mut policy = self
+                        .idle_policy
+                        .lock()
+                        .map_err(|_| Error::ConnectionUnavailable)?;
+                    if policy.state(&host).is_none()
+                        && let Some(state) = previous
+                    {
+                        policy.restore(&host, state);
+                    }
+                    policy.restart_seconds(&host)
+                };
+                let result = tokio::select! {
+                    biased;
+                    _ = round_stop.cancelled() => return Err(Error::Conflict),
+                    _ = wake.notified() => Ok(WaitOutcome::Changed),
+                    _ = tokio::time::sleep_until(next_full_walk) => Ok(WaitOutcome::Changed),
+                    result = self.transport.wait_change(&credentials, &committed, interval) => result,
+                };
+                drop(credentials);
+                let observed = match result {
+                    Ok(WaitOutcome::IdleDisconnected { quiet_ms, age_ms }) => Some(super::super::adaptive_idle::Outcome::Drop {
+                        quiet_ms,
+                        age_ms,
+                        ran_interval_ms: Some(interval * 1000),
+                        idling: true,
+                    }),
+                    Ok(WaitOutcome::IdleCompleted) => Some(super::super::adaptive_idle::Outcome::Stable {
+                        age_ms: interval * 1000,
+                        ran_interval_ms: Some(interval * 1000),
+                    }),
+                    _ => None,
+                };
+                if let Some(observed) = observed {
+                    let state = {
+                        let mut policy = self
+                            .idle_policy
+                            .lock()
+                            .map_err(|_| Error::ConnectionUnavailable)?;
+                        let before = policy.state(&host).cloned();
+                        policy.observe(&host, &observed);
+                        policy.state(&host).filter(|after| Some(*after) != before.as_ref()).cloned()
+                    };
+                    if let Some(state) = state {
+                        self.repository.save_idle_state(&host_hash, &state).await?;
+                    }
+                }
+                result
+            }
+            .instrument(round_span.clone());
+            let outcome = {
+                tokio::pin!(work);
+                // Poll renewals beside the round: a slow database heartbeat must
+                // not suspend provider progress or its deadline/lease cleanup.
+                let heartbeat = async {
+                    let mut renewal = tokio::time::interval_at(
+                        tokio::time::Instant::now() + OWNER_RENEW_INTERVAL,
+                        OWNER_RENEW_INTERVAL,
+                    );
+                    renewal.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                    loop {
+                        tokio::select! {
+                            biased;
+                            _ = round_stop.cancelled() => return,
+                            _ = renewal.tick() => {},
+                        }
+                        match self
+                            .repository
+                            .claim_owner(binding, owner)
+                            .instrument(round_span.clone())
+                            .await
+                        {
+                            Ok(true) => {}
+                            Ok(false) => {
+                                round_stop.cancel();
+                                return;
+                            }
+                            Err(error) => tracing::warn!(
+                                ?error,
+                                "IMAP owner renewal failed; retrying next heartbeat"
+                            ),
+                        }
+                    }
+                };
+                tokio::select! {
+                    biased;
+                    result = &mut work => result,
+                    _ = heartbeat => work.await,
+                }
+            };
+            if cancellation.is_cancelled() {
+                return Ok(());
+            }
+            if !matches!(outcome, Err(Error::CredentialsUnreadable)) {
+                unreadable_since = None;
+                unreadable_attempts = 0;
+            }
+            scan_required = !matches!(
+                &outcome,
+                Ok(WaitOutcome::Restarted | WaitOutcome::IdleCompleted)
+            );
+            match outcome {
+                Ok(WaitOutcome::BaselineUnavailable) => {
+                    baseline_failures = baseline_failures.saturating_add(1);
+                    let seconds = (30
+                        * 2u64.pow(u32::from(baseline_failures.saturating_sub(1).min(6))))
+                    .min(FULL_WALK_INTERVAL.as_secs());
+                    rescan_after = Some(tokio::time::Instant::now() + Duration::from_secs(seconds));
+                    credential_refusals = 0;
+                    continue;
+                }
+                Ok(WaitOutcome::Changed | WaitOutcome::Restarted | WaitOutcome::IdleCompleted) => {
+                    baseline_failures = 0;
+                    credential_refusals = 0;
+                    if healthy_since.elapsed() >= Duration::from_secs(300) {
+                        failures = 0;
+                    }
+                }
+                Err(Error::SnapshotTooLarge) => {
+                    // The persisted deadline also protects provider bandwidth if
+                    // this owner expires or another replica starts an actor.
+                    let retry_at = self
+                        .repository
+                        .read_scoped(binding, StateSelection::Catalog)
+                        .await
+                        .ok()
+                        .and_then(|account| account.state.sync_retry_at);
+                    let delay = retry_at
+                        .and_then(|retry_at| (retry_at - Utc::now()).to_std().ok())
+                        .unwrap_or(Duration::from_secs(3600));
+                    tracing::warn!(link_id = %binding.link_id, retry_after_seconds = delay.as_secs_f64(),
+                        "Mailbox exceeds sync budget; waiting before retry");
+                    tokio::select! {
+                        biased;
+                        _ = cancellation.cancelled() => return Ok(()),
+                        _ = wake.notified() => {},
+                        _ = tokio::time::sleep(delay) => {},
+                    }
+                    continue;
+                }
+                Err(Error::CredentialsRejected) => {
+                    credential_refusals = credential_refusals.saturating_add(1);
+                    if credential_refusals >= 2 {
+                        return match self
+                            .deliver_reconnect(binding, owner, None, cancellation)
+                            .await
+                        {
+                            Ok(()) => Err(Error::CredentialsRejected),
+                            Err(Error::Conflict | Error::Forbidden | Error::NotFound) => Ok(()),
+                            Err(error) => Err(error),
+                        };
+                    }
+                    failures = failures.saturating_add(1);
+                    healthy_since = tokio::time::Instant::now();
+                }
+                Err(Error::CredentialsUnreadable) => {
+                    let first = unreadable_since.get_or_insert_with(tokio::time::Instant::now);
+                    unreadable_attempts = unreadable_attempts.saturating_add(1);
+                    if unreadable_attempts >= 2 && first.elapsed() >= UNREADABLE_CONFIRMATION {
+                        return match self.deliver_reconnect(
+                            binding, owner, Some(models_email::service::link::MailboxIssue::CredentialsUnreadable), cancellation
+                        ).await {
+                            Ok(()) => Err(Error::CredentialsUnreadable),
+                            Err(Error::Conflict | Error::Forbidden | Error::NotFound) => Ok(()),
+                            Err(error) => Err(error),
+                        };
+                    }
+                    failures = failures.saturating_add(1);
+                    healthy_since = tokio::time::Instant::now();
+                }
+                Err(Error::Conflict) if self.repository.holds_owner(binding, owner).await? => {
+                    // A preference write can fence this snapshot without retiring its owner.
+                    continue;
+                }
+                Err(Error::Conflict | Error::Forbidden | Error::NotFound) => return Ok(()),
+                outcome @ (Err(_) | Ok(WaitOutcome::IdleDisconnected { .. })) => {
+                    failures = failures.saturating_add(1);
+                    healthy_since = tokio::time::Instant::now();
+                    tracing::warn!(
+                        ?outcome,
+                        link_id = %binding.link_id,
+                        attempt = i64::from(failures),
+                        "IMAP reconnect scheduled"
+                    );
+                }
+            }
+            if failures > 0 {
+                let seconds = 2u64.pow(failures.min(9)).min(900);
+                let jitter = u64::try_from(Uuid::now_v7().as_u128() % u128::from(seconds * 1000))
+                    .map_err(|_| Error::Invalid)?;
+                tokio::select! {
+                    biased;
+                    _ = cancellation.cancelled() => return Ok(()),
+                    _ = wake.notified() => {},
+                    _ = tokio::time::sleep(Duration::from_millis(1000 + jitter)) => {},
+                }
+            }
+        }
+    }
+
+    /// Record the health transition even if another operation holds the command lease.
+    /// Release the lease before calling the email host.
+    async fn deliver_reconnect(
+        &self,
+        binding: Binding,
+        owner: Uuid,
+        issue: Option<models_email::service::link::MailboxIssue>,
+        cancellation: &CancellationToken,
+    ) -> Result<(), Error> {
+        let mut attempts = 0u32;
+        loop {
+            let delivery = async {
+                if !self.repository.claim_owner(binding, owner).await? {
+                    return Err(Error::Conflict);
+                }
+                let mut account = self
+                    .repository
+                    .acquire_scoped(binding, StateSelection::Health)
+                    .await?;
+                let result = self.record_reconnect(&mut account, issue).await;
+                let released = self.repository.release(&account).await;
+                result?;
+                released?;
+                self.notify_after_release(&account).await
+            }
+            .instrument(tracing::info_span!("imap.credentials.reconnect", link_id = %binding.link_id, retry_count = attempts))
+            .await;
+            match delivery {
+                Ok(true) => return Ok(()),
+                Err(Error::Conflict | Error::Forbidden | Error::NotFound) => {
+                    return Err(Error::Conflict);
+                }
+                Err(error) => tracing::warn!(?error, "Mailbox reconnect health remains pending"),
+                Ok(false) => {}
+            }
+            attempts = attempts.saturating_add(1);
+            let delay = Duration::from_secs((5 * u64::from(attempts)).min(60));
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => return Err(Error::Conflict),
+                _ = tokio::time::sleep(delay) => {},
+            }
+        }
+    }
+
+    async fn record_reconnect(
+        &self,
+        account: &mut Account,
+        issue: Option<models_email::service::link::MailboxIssue>,
+    ) -> Result<(), Error> {
+        if !account.state.needs_reauth || account.state.mailbox_issue != issue {
+            account.state.needs_reauth = true;
+            account.state.mailbox_issue = issue;
+            account.state.sync_retry_at = None;
+            account.state.mark_notification_pending();
+            self.repository.save_health(account).await?;
+        }
+        Ok(())
+    }
+}

@@ -1968,6 +1968,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-imap"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f97b87216c9f0ccc63c516263169085fa34bba25633f6d96c6a9b9ca1fd5f70a"
+dependencies = [
+ "async-channel 2.5.0",
+ "async-compression",
+ "base64 0.23.1",
+ "bytes",
+ "chrono",
+ "futures-util",
+ "imap-proto",
+ "log",
+ "nom 8.0.0",
+ "pin-project",
+ "pin-utils",
+ "self_cell",
+ "stop-token",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "async-io"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11513,6 +11536,63 @@ dependencies = [
 ]
 
 [[package]]
+name = "imap-proto"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ccf963d57074747b455398a1763d174da80bcaba6f51e3671a82252b531a68b"
+dependencies = [
+ "nom 8.0.0",
+]
+
+[[package]]
+name = "imap_engine"
+version = "0.1.0"
+dependencies = [
+ "async-imap",
+ "async-trait",
+ "aws-sdk-kms",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "egress_guard",
+ "email_api_client",
+ "futures",
+ "hickory-resolver",
+ "hmac 0.12.1",
+ "imap-proto",
+ "lazy-regex",
+ "macro_env_var",
+ "macro_service_urls",
+ "macro_tower_layers",
+ "macro_user_id",
+ "mailparse",
+ "models_email",
+ "nom 8.0.0",
+ "quick-xml",
+ "regex",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "strum 0.27.2",
+ "subtle",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "toml 0.8.23",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-normalization",
+ "utoipa",
+ "uuid",
+ "webpki-roots 1.0.10",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "imgref"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13453,9 +13533,9 @@ dependencies = [
 
 [[package]]
 name = "mailparse"
-version = "0.16.1"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60819a97ddcb831a5614eb3b0174f3620e793e97e09195a395bfa948fd68ed2f"
+checksum = "068d4f5d1083883b9e626051dc5bdaa321f5be01093e61ade3ee3ab44dafeadd"
 dependencies = [
  "charset",
  "data-encoding",
@@ -19087,6 +19167,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "self_cell"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ab42ca02749e120097e328d91d415325bdf43b1c72c4c8badf37375fe40a813"
+
+[[package]]
 name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -20601,6 +20687,18 @@ dependencies = [
  "tracing",
  "wiremock",
  "workspace-hack",
+]
+
+[[package]]
+name = "stop-token"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af91f480ee899ab2d9f8435bfdfc14d08a5754bd9d3fef1f1a1c23336aad6c8b"
+dependencies = [
+ "async-channel 1.9.0",
+ "cfg-if",
+ "futures-core",
+ "pin-project-lite",
 ]
 
 [[package]]
@@ -24420,6 +24518,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "base64 0.23.1",
  "bitflags 2.11.1",
  "block-buffer 0.12.0",
  "bstr",
@@ -24517,6 +24616,7 @@ dependencies = [
  "phf_shared 0.10.0",
  "phf_shared 0.11.3",
  "phf_shared 0.13.1",
+ "portable-atomic",
  "prettyplease",
  "proc-macro2",
  "prost 0.12.6",
