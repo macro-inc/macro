@@ -2213,9 +2213,11 @@ impl IntoResponse for CreateSessionApiError {
 
 /// Reject paths a harness cannot meaningfully run in. Rejection over
 /// normalization: a runtime that sends a relative path is confused about its
-/// own filesystem, and no server-side guess fixes that.
+/// own filesystem, and no server-side guess fixes that. The path is the
+/// runtime's, not this host's, so it is judged by the rules of either kind
+/// of machine a runtime runs on, never by `std::path` on this one.
 fn validate_workspace(workspace: &str) -> Result<(), CreateSessionApiError> {
-    if !workspace.starts_with('/') {
+    if !is_absolute_workspace(workspace) {
         return Err(CreateSessionApiError::InvalidWorkspace(
             "workspace must be an absolute path",
         ));
@@ -2230,12 +2232,35 @@ fn validate_workspace(workspace: &str) -> Result<(), CreateSessionApiError> {
             "workspace must not contain NUL",
         ));
     }
-    if workspace.len() > 1 && workspace.ends_with('/') {
+    if workspace.ends_with(['/', '\\']) && !is_root_workspace(workspace) {
         return Err(CreateSessionApiError::InvalidWorkspace(
             "workspace must not end with a slash",
         ));
     }
     Ok(())
+}
+
+/// Absolute on a Unix runtime (`/home/x`) or a Windows one: a drive path
+/// with either separator (`C:\x`, `C:/x`), or a UNC or verbatim path
+/// (`\\server\share\x`, `\\?\C:\x`). Drive-relative (`C:x`) and
+/// root-relative (`\x`) Windows paths depend on the runtime's current
+/// directory, so they are not.
+fn is_absolute_workspace(workspace: &str) -> bool {
+    match workspace.as_bytes() {
+        [b'/', ..] | [b'\\', b'\\', ..] => true,
+        [drive, b':', b'/' | b'\\', ..] => drive.is_ascii_alphabetic(),
+        _ => false,
+    }
+}
+
+/// A filesystem root, whose trailing separator is the whole path or its
+/// drive's: `/`, `C:\`, `C:/`.
+fn is_root_workspace(workspace: &str) -> bool {
+    match workspace.as_bytes() {
+        [b'/'] => true,
+        [drive, b':', b'/' | b'\\'] => drive.is_ascii_alphabetic(),
+        _ => false,
+    }
 }
 
 /// Resolve which bot the session runs for, from the principal and the body.

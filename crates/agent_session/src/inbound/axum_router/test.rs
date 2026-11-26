@@ -1764,6 +1764,7 @@ mod read;
 mod task;
 mod updates;
 mod user_cleanup;
+mod workspace;
 
 /// The client speculates under an id it mints and sends it alongside the
 /// action's own flattened fields, which are tagged under `type`.
