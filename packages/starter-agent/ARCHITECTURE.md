@@ -21,7 +21,7 @@ behavior/
   index.ts                     the whole behavior, composed from the areas
   context/                     the one place IO happens: disk, clock, shell, credentials, Macro, the relay
   agent/                       the agent as Claude Code (Agent SDK), its limits per event, its guards
-  brain/                       Brain job contracts, pinned prompt assembly and offline fixtures
+  brain/                       Brain job contracts, pinned prompts and parent effect authorization
   events/sources/<area>.ts     where events come from
   events/handlers/<area>.ts    what happens when one fires
   capabilities/<area>/     what the agent can do, and all of the area's logic
@@ -41,6 +41,19 @@ task pack, and Muppet script and catalog metadata. Reuse the metadata snapshot
 when resuming. The assembler verifies the charter's commit and byte digest and
 the task pack's identity and revision before returning a system prompt. The
 request and event travel separately as input.
+
+The parent task-time boundary accepts one explicitly approved `task.logTime`
+action per grant. The grant binds the team, authenticated teammate, task, date,
+minutes and a parent-issued UUIDv7 shared by the Brain action and the task-time
+entry. Every dispatch and receipt replay checks current authorization and the
+attempt lease. The parent claims the receipt before sending and can confirm it
+only from the owning attempt. An ambiguous send leaves an unknown receipt,
+even if the external entry is missing or deleted.
+
+This boundary is exercised with offline fixtures. When the hosted worker is
+wired, its authenticated client must preserve Starter's teammate identity and
+the task-time Edit and rollout checks. The worker must use the existing
+maintenance drain and persist the claim and receipt across runtime restarts.
 
 ## An area
 
