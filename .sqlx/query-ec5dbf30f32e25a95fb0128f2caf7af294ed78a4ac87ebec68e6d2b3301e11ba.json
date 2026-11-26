@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH tick AS MATERIALIZED (SELECT clock_timestamp() AS now)\n            UPDATE agent_brain_job\n            SET lease_until = LEAST(deadline_at, tick.now + $4::bigint * interval '1 second')\n            FROM tick\n            WHERE team_id = $1 AND user_id = $2 AND id = $3 AND lease_until > tick.now\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ec5dbf30f32e25a95fb0128f2caf7af294ed78a4ac87ebec68e6d2b3301e11ba"
+}

@@ -50,6 +50,11 @@ attempt lease. The parent claims the receipt before sending and can confirm it
 only from the owning attempt. An ambiguous send leaves an unknown receipt,
 even if the external entry is missing or deleted.
 
+The hosted harness service has an unwired MacroDB store for durable job and
+action receipts. The Starter boundary remains process-local. Applying the
+schema in a deployed environment and connecting the hosted parent each require
+separate rollout approval.
+
 This boundary is exercised with offline fixtures. When the hosted worker is
 wired, its authenticated client must preserve Starter's teammate identity and
 the task-time Edit and rollout checks. The worker must use the existing

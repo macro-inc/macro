@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH eligible AS MATERIALIZED (\n                SELECT action_id, lease_epoch FROM agent_brain_job\n                WHERE team_id = $1 AND user_id = $2 AND id = $3 AND lease_until > clock_timestamp()\n            ), inserted AS (\n                INSERT INTO agent_brain_action_receipt (action_id, dispatch_epoch)\n                SELECT action_id, lease_epoch FROM eligible\n                ON CONFLICT DO NOTHING\n                RETURNING action_id\n            )\n            SELECT EXISTS (SELECT 1 FROM inserted) AS \"inserted!\",\n                   EXISTS (\n                       SELECT 1 FROM agent_brain_action_receipt\n                       WHERE action_id = eligible.action_id AND confirmed_at IS NOT NULL\n                   ) AS \"confirmed!\"\n            FROM eligible\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "inserted!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "confirmed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "73c1d307ce971e19569669e19add4eac6a98a6bfeb44ea5e1fe87896756d83b4"
+}

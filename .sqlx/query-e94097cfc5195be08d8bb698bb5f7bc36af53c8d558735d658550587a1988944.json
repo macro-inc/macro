@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id FROM agent_brain_job\n            WHERE team_id = $1 AND user_id = $2 AND outcome IS NULL\n              AND lease_until <= statement_timestamp()\n            ORDER BY lease_until, id\n            LIMIT 1\n            FOR UPDATE SKIP LOCKED\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e94097cfc5195be08d8bb698bb5f7bc36af53c8d558735d658550587a1988944"
+}

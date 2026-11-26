@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH locked AS MATERIALIZED (\n            SELECT lease_until FROM agent_brain_job\n            WHERE team_id = $1 AND user_id = $2 AND id = $3 AND outcome IS NULL\n              AND lease_holder = $4 AND lease_epoch = $5\n            FOR UPDATE\n        )\n        SELECT lease_until > clock_timestamp() AS \"active!\" FROM locked\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "active!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2d4e0faccdbd6f08fb00a517cbeea89dc9c736b4e506c73582256c02bfb89e31"
+}
