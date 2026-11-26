@@ -17,7 +17,14 @@ import type {
 export const JEV_PRICE_PER_MILLION_INPUT_TOKENS_USD = 0.042;
 export const JEV_ESTIMATED_TOKENS_PER_CHANNEL_CALL = 450;
 export const JEV_MAX_CONCURRENCY = 3;
-export const JEV_MAX_BURST_CHANNELS = 25;
+/** Bounded burst per pass so Jev only evaluates what fits on screen. */
+export const JEV_MAX_BURST_CHANNELS = 15;
+/** Hard per-session classification cap so busy workspaces never chain unbounded bursts. */
+export const JEV_MAX_SESSION_CALLS = 50;
+/** On-demand Smart Organize cap. */
+export const JEV_MAX_ORGANIZE_CHANNELS = 25;
+/** Read support channels older than 7 days are treated as quiet/resolved without calling Jev. */
+export const JEV_SUPPORT_RECENCY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 export const JEV_MAX_CACHE_ENTRIES = 400;
 export const JEV_TAIL_TRUNCATE_CHARS = 400;
 
@@ -207,13 +214,15 @@ export function heuristicChannelTriage(options: {
 
 /**
  * Select up to `maxBurst` channels that genuinely benefit from Jev evaluation,
- * skipping channels already cached for their current `latestMessageId` and
- * channels where the viewer sent the latest message.
+ * skipping channels already cached for their current `latestMessageId`,
+ * channels where the viewer sent the latest message, and stale read support
+ * channels older than `supportRecencyWindowMs` (default 7 days).
  *
  * Priority order:
- * 1. Support channels with external/agent tail messages
- * 2. Unread/mentioned DMs
- * 3. Other unread channels
+ * 1. Unread support channels
+ * 2. Recent read support channels (< 7 days old) with external/agent tail
+ * 3. Unread/mentioned DMs
+ * 4. Other unread channels
  */
 export function selectChannelsForJevTriage(options: {
   channels: readonly SidebarChannel[];
@@ -222,9 +231,14 @@ export function selectChannelsForJevTriage(options: {
   currentUserId: string | undefined;
   cachedKeys: ReadonlySet<string>;
   maxBurst?: number;
+  nowMs?: number;
+  supportRecencyWindowMs?: number;
 }): SidebarChannel[] {
-  const maxBurst = options.maxBurst ?? JEV_MAX_BURST_CHANNELS;
+  const maxBurst = Math.max(0, options.maxBurst ?? JEV_MAX_BURST_CHANNELS);
+  if (maxBurst === 0) return [];
   const viewerLower = options.currentUserId?.toLowerCase();
+  const recencyWindowMs =
+    options.supportRecencyWindowMs ?? JEV_SUPPORT_RECENCY_WINDOW_MS;
 
   type Candidate = { channel: SidebarChannel; priority: number };
   const candidates: Candidate[] = [];
@@ -241,6 +255,10 @@ export function selectChannelsForJevTriage(options: {
     const isUnread = options.unreadOrMentionedIds.has(channel.id);
 
     if (isSupport) {
+      if (!isUnread && options.nowMs !== undefined) {
+        const lastAtMs = msg.createdAtMs || channel.updatedAtMs;
+        if (options.nowMs - lastAtMs > recencyWindowMs) continue;
+      }
       candidates.push({ channel, priority: isUnread ? 0 : 1 });
     } else if (isUnread && channel.channelType === 'direct_message') {
       candidates.push({ channel, priority: 2 });
