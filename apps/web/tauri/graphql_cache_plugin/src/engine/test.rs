@@ -6,6 +6,7 @@ mod bench;
 mod calendar;
 mod channels;
 mod contention;
+mod fuzz_views;
 mod people;
 mod soup;
 mod watch;
