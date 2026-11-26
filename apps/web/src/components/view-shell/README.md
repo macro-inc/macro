@@ -136,6 +136,10 @@ The sheet occupies no resize track and does not resize or remount the list or
 preview. Detail headers add no sidebar trigger; floating channel headers keep
 their measured local chrome.
 
+Use `<ViewShell.TopBar touch>` to display an explicit touch composition without
+caller-owned responsive visibility classes. It retains the same measured islands
+and default navigation behavior.
+
 On touch, `ViewShell.TopBar` inside `ViewShell.Main`, `ViewShell.Detail`, or a
 `CollectionPanes` detail floats over the pane as mobile chrome, like the split
 header of a standalone view. Wrap its title in `ViewShell.TopBarTitle`, its
@@ -158,7 +162,10 @@ legacy Block. Details not yet split contribute through `SplitHeaderLeft`,
 `SplitHeaderRight`, and the title file menu (`FileSplitHeader` for Drive files,
 `PrSplitHeader` for pull requests). `entityDetailHostsSplitHeader`
 lists the detail types that do; add a type there once its detail renders its
-standalone header without a Block. A `SplitHeaderScope.Root` that is off hides
+standalone header without a Block. It does not say which viewer a document
+opens in: `entityDetailOpensMarkdown` does (notes, tasks, snippets and skills
+in `MarkdownDetail`, files in their own detail), for `EntityDetail` and the
+hosts that wrap a detail themselves (Drive's detail stack, the CRM item view). A `SplitHeaderScope.Root` that is off hides
 any enclosing scope from its content, so `useSplitHeaderScope` answers for the
 nearest host only. Inline block previews (`PreviewFrame`) use the same scope.
 

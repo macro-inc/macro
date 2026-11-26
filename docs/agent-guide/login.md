@@ -68,7 +68,7 @@ Microsoft's place (see [running locally](../development/running-locally.md#micro
 
 `/app/signup/agent` is the agent signup page: Google or an emailed code, without
 the opening slides. The first slide of `/app/signup` links to it (`Sign up as
-agent`), as does `/mobile-signup`, and the marketing site's HTML carries a hidden
+agent`), and the marketing site's HTML carries a hidden
 notice pointing agents there. A new account made there, or by redeeming an invite
 sent with `team.invite(email, { agent: true })`, is an agent. An existing account keeps its
 type. An agent invite email links to `/app/signup/agent?team_invite=<id>`; a signed-in
@@ -278,11 +278,20 @@ Use browser Back to return from GitHub: when the page is restored from BFCache,
 it refreshes link status and restores the retry prompt only if reconnection is
 still needed.
 
-## Desktop onboarding
+## Web onboarding
 
-New desktop users enter the same flow from
-`/app/signup`, `/app/login`, or `/app/onboarding`. Marketing Get Started links
-open `/app/signup`. Existing members and native mobile keep their existing routes.
+New web users, on desktop and in phone browsers (including social apps'
+in-app browsers), enter the same flow from `/app/signup`, `/app/login`, or
+`/app/onboarding`. Marketing Get Started links open `/app/signup` on every
+device; the retired `/mobile-signup`, `/mobile-signup-sent`, and
+`/app/mobile-email-signup` paths forward there with their query. Existing
+members and the native apps keep their existing routes. Check the flow at
+390px with touch emulation and a short (about 660px) in-app-browser height.
+In a phone browser, finishing onboarding (Free, the trial's return from
+Stripe, or the routines step) ends on **Macro is better on desktop.** with
+**Download app** (the App Store, or Google Play on Android) and **Continue in
+browser**, which enters the app where desktop would have gone. Computers and
+the native apps skip it.
 
 Signed-out `/app/signup` starts at the workspace color picker, followed by feature
 interests and security. No account is required for these slides. The signed-out
@@ -432,7 +441,12 @@ Cancellation returns to this step. A successful return polls the server's licens
 state, completes onboarding, and enters the app without an extra confirmation
 click. A pending webhook shows a retryable confirmation state. If the catalog
 cannot load, Free remains available, Pro still returns to its offer, and
-Max checkout stays disabled until prices can be loaded with the retry action.
+Business and Max checkout stay disabled until prices can be loaded with the
+retry action. The comparison shows Business and Max at their annual rates with
+the monthly rate noted (Pro is monthly only), includes an `Active routines` row
+(`10` / `1,000` / `3,000` / `10,000`), and clicking `Continue with Business` or
+`Continue with Max` opens a compact billing-cycle dialog to choose Annual
+(default) or Monthly before Stripe Checkout.
 Both completion paths preserve an original `next` destination and otherwise land on Home (`/app/home`). Old saved email,
 connector, building, and summary step names are migrated on resume. A lifecycle
 email can open a specific step with `/app/onboarding?step=<step>` (see

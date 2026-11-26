@@ -29,11 +29,10 @@ import { CommandState } from '../../command/state';
 import type { CommandMenuItem } from '../../command/useCommandItems';
 import { CommandResults } from '../../command/views/command-results';
 import { ComposeSubjectField } from '../../email-compose/components/compose-subject-field';
-import { searchNeedsKeywords } from '../../next-soup/core/search-filters';
 import { SearchbarInput } from '../../next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { parsePropertyDraft } from '../../property/utils/parse-property-draft';
 import type { InputLayoutParts } from '../context/capabilities';
-import { resolveSearchFilters } from '../core/search';
+import { searchDraftText, searchNeedsWord } from '../core/search';
 import { SearchDraft } from '../views/search-draft';
 import { globalSearchRequests } from './global-search-service-fixture';
 import {
@@ -99,6 +98,39 @@ function FixtureLayout(parts: InputLayoutParts) {
   );
 }
 
+/**
+ * The Search field with operators inside a header that clips what overflows
+ * it, as a split header does, over a result its suggestion rows must cover.
+ */
+function OperatorSearchbarFixture() {
+  const [query, setQuery] = createSignal('');
+  const [opened, setOpened] = createSignal(0);
+  return (
+    <div>
+      <div class="relative isolate h-12 overflow-clip border-b border-edge">
+        <div class="flex h-full items-center px-2">
+          <SearchbarInput
+            operators
+            floatingSuggestions
+            label="Operator search"
+            value={query()}
+            onChange={setQuery}
+          />
+        </div>
+      </div>
+      <button
+        type="button"
+        class="block h-60 w-full text-left"
+        onClick={() => setOpened((count) => count + 1)}
+      >
+        First result
+      </button>
+      <output data-testid="operator-query">{query()}</output>
+      <output data-testid="opened-results">{opened()}</output>
+    </div>
+  );
+}
+
 function SearchbarFixture() {
   const [query, setQuery] = createSignal('');
   const [changes, setChanges] = createSignal(0);
@@ -144,6 +176,13 @@ function SearchbarFixture() {
       </button>
       <button onClick={() => setQuery('externally changed query')}>
         Set external search
+      </button>
+      <button
+        onClick={() =>
+          setQuery('comparison <ana@example.com> from:ana@example.com next')
+        }
+      >
+        Set external address search
       </button>
       <output data-testid="standalone-query">{query()}</output>
       <output data-testid="standalone-query-changes">{changes()}</output>
@@ -468,6 +507,21 @@ export function UniversalInputFixture(
     },
   ];
   const actions: InputDisplay = {
+    search: (fields) =>
+      searchDraftText(fields, {
+        people: actions.person,
+        channels: actions.searchChannels(),
+        inboxes: actions.inboxes(),
+        names: {
+          userId: 'macro|viewer@example.com',
+          tag: () => undefined,
+          channel: (id) =>
+            actions.searchChannels().find((channel) => channel.id === id)
+              ?.label,
+          inbox: (id) =>
+            actions.inboxes().find((inbox) => inbox.id === id)?.email_address,
+        },
+      }),
     person: (term) =>
       params.has('person-references') ? inputPeople()?.lookup(term) : people,
     createRecipientSource: useContactRecipientSource,
@@ -652,15 +706,10 @@ export function UniversalInputFixture(
           return 'Choose an unambiguous assignee';
       }
       if (input.intent === 'search') {
-        const filters = resolveSearchFilters(
-          input.fields.searchFilters,
-          actions.person,
-          actions.searchChannels(),
-          actions.inboxes()
-        );
-        if (filters.unresolved.length)
-          return `Choose a specific person or channel for ${filters.unresolved.join(', ')}`;
-        if (searchNeedsKeywords(filters.state, input.fields.query))
+        const draft = actions.search(input.fields);
+        if (draft.unresolved.length)
+          return `Choose a specific person or channel for ${draft.unresolved.join(', ')}`;
+        if (searchNeedsWord(draft.text, draft.bindings))
           return 'Add search text to search by sender or speaker.';
       }
       if (params.has('person-references')) {
@@ -764,6 +813,11 @@ export function UniversalInputFixture(
                 </Show>
                 <Show when={!props.embedded && params.has('searchbar')}>
                   <SearchbarFixture />
+                </Show>
+                <Show
+                  when={!props.embedded && params.has('operator-searchbar')}
+                >
+                  <OperatorSearchbarFixture />
                 </Show>
                 <Show when={!props.embedded && params.has('pagination')}>
                   <PaginationFixture short={params.has('short')} />

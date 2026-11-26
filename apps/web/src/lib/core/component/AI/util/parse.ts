@@ -1,12 +1,19 @@
-import { DEFAULT_MODEL, Model, type TModel } from '../constant/model';
+import {
+  currentModelId,
+  DEFAULT_MODEL,
+  Model,
+  type TModel,
+} from '../constant/model';
 
+const MODEL_IDS: readonly string[] = Object.values(Model);
+
+/** A catalog model id (a retired id reads as its replacement), or `undefined`. */
 export const parseModel = (
   value: string | null | undefined
 ): TModel | undefined => {
   if (!value) return undefined;
-  const values = Object.values(Model) as string[];
-  if (values.includes(value)) return value as TModel;
-  return undefined;
+  const id = currentModelId(value);
+  return MODEL_IDS.includes(id) ? (id as TModel) : undefined;
 };
 
 /** The selected model for a saved chat: draft, supported server model, default. */

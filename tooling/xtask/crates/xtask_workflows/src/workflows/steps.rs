@@ -308,6 +308,16 @@ pub fn mount_cache_volume() -> Step<Use> {
     })
 }
 
+/// Mount the desktop app check's cache volume: the Nix store with the Tauri
+/// libraries, and cargo's registry and git checkouts (the Tauri fork is a git
+/// dependency). Compiled objects use the desktop remote sccache, so the
+/// volume keeps no `target` directory to grow with every lockfile change.
+pub fn mount_desktop_cache_volume() -> Step<Use> {
+    nscloud_cache_action("Mount Namespace cache volume", |cache| {
+        cache.path("/nix\n/home/runner/.cargo/registry\n/home/runner/.cargo/git")
+    })
+}
+
 /// Mount a scratch directory for building the nextest filter, plus cargo's registry
 /// and git checkouts. `cargo metadata` fetches every crate in the lockfile, which took
 /// most of the filter's time when `path-check` had no registry to start from.
@@ -796,12 +806,16 @@ pub(crate) fn upload_artifact_action(name: &str, path: RuntimePath<'_>) -> Actio
         .retention_days(30)
 }
 
-/// Download all build artifacts into one directory for release publishing.
-pub fn download_artifacts(path: RuntimePath<'_>) -> Step<Use> {
-    ActionsDownloadArtifact::new("Download Build Artifacts")
-        .path(path.as_str())
-        .merge_multiple(true)
-        .step()
+/// Download the build artifacts (all, or those matching `pattern`) into one
+/// directory for release publishing.
+pub fn download_artifacts(path: RuntimePath<'_>, pattern: Option<&str>) -> Step<Use> {
+    let download = ActionsDownloadArtifact::new("Download Build Artifacts");
+    // A pattern keeps artifacts that are not release assets (QA results) out.
+    let download = match pattern {
+        Some(pattern) => download.pattern(pattern),
+        None => download,
+    };
+    download.path(path.as_str()).merge_multiple(true).step()
 }
 
 /// Attach build artifacts to the GitHub release for the resolved release tag.

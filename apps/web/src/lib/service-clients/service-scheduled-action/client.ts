@@ -49,6 +49,7 @@ import {
   getRecordSuggestionsViewedUrl,
   getRegenerateSuggestionsUrl,
   getRestoreSuggestionUrl,
+  getStopSuggestionRunUrl,
 } from './generated/client';
 import type {
   AcceptSuggestionRequest,
@@ -75,6 +76,11 @@ import type {
   SuggestionFeed,
   UnusableKnob,
 } from './generated/schemas';
+
+import {
+  type ROUTINE_LIMIT_ERROR,
+  routineLimitErrorResponseHandler,
+} from './routine-limit';
 
 /** How `POST /suggestions/regenerate` answered. */
 export type RegenerateAnswer =
@@ -155,33 +161,39 @@ export const scheduledActionClient = {
     body: ActionConfiguration,
     options: { suggestionId?: string } = {}
   ) =>
-    scheduledActionFetch<ScheduledAction>(
+    fetchWithToken<ScheduledAction, typeof ROUTINE_LIMIT_ERROR>(
       options.suggestionId
-        ? `/scheduled-actions?${new URLSearchParams({ suggestion_id: options.suggestionId })}`
-        : '/scheduled-actions',
-      { method: 'POST', body: JSON.stringify(body) }
+        ? `${scheduledActionHost}/scheduled-actions?${new URLSearchParams({ suggestion_id: options.suggestionId })}`
+        : `${scheduledActionHost}/scheduled-actions`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+        errorResponseHandler: routineLimitErrorResponseHandler,
+      }
     ),
 
   updateSchedule: async (args: {
     scheduleId: string;
     body: ActionConfigurationUpdate;
   }) =>
-    scheduledActionFetch<ScheduledAction>(
-      `/scheduled-actions/${args.scheduleId}`,
+    fetchWithToken<ScheduledAction, typeof ROUTINE_LIMIT_ERROR>(
+      `${scheduledActionHost}/scheduled-actions/${args.scheduleId}`,
       {
         method: 'PUT',
         body: JSON.stringify(args.body),
+        errorResponseHandler: routineLimitErrorResponseHandler,
       }
     ),
 
   setEnabled: async (args: { scheduleId: string; enabled: boolean }) =>
-    scheduledActionFetch<ScheduledAction>(
-      `/scheduled-actions/${args.scheduleId}/enabled`,
+    fetchWithToken<ScheduledAction, typeof ROUTINE_LIMIT_ERROR>(
+      `${scheduledActionHost}/scheduled-actions/${args.scheduleId}/enabled`,
       {
         method: 'PUT',
         body: JSON.stringify({
           enabled: args.enabled,
         } satisfies SetScheduledActionEnabled),
+        errorResponseHandler: routineLimitErrorResponseHandler,
       }
     ),
 
@@ -198,6 +210,12 @@ export const scheduledActionClient = {
       `${scheduledActionHost}/scheduled-actions/${args.scheduleId}/execute`,
       { method: 'POST', errorResponseHandler: aiUsageErrorResponseHandler }
     ),
+
+  /** Stop the run in progress; with none running, nothing changes. */
+  stopRun: async (args: { scheduleId: string }) =>
+    scheduledActionFetch(`/scheduled-actions/${args.scheduleId}/stop`, {
+      method: 'POST',
+    }),
 
   listHistory: async (args: { scheduleId: string }) =>
     scheduledActionFetch<ExecutionRecordResponse[]>(
@@ -300,9 +318,13 @@ export const scheduledActionClient = {
     }),
 
   activateTemplate: (args: { templateId: string; body: ActionConfiguration }) =>
-    scheduledActionFetch<ScheduledAction>(
-      `/scheduled-actions/${args.templateId}/template/activate`,
-      { method: 'POST', body: JSON.stringify(args.body) }
+    fetchWithToken<ScheduledAction, typeof ROUTINE_LIMIT_ERROR>(
+      `${scheduledActionHost}/scheduled-actions/${args.templateId}/template/activate`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+        errorResponseHandler: routineLimitErrorResponseHandler,
+      }
     ),
 
   /**
@@ -390,6 +412,12 @@ export const scheduledActionClient = {
   /** Take back the caller's own dismissal, within a few minutes of it. */
   restoreSuggestion: (args: { suggestionId: string }) =>
     scheduledActionFetch(getRestoreSuggestionUrl(args.suggestionId), {
+      method: 'POST',
+    }),
+
+  /** Stop a suggestion's run and keep the suggestion: it is open again once the run stops. */
+  stopSuggestionRun: (args: { suggestionId: string }) =>
+    scheduledActionFetch(getStopSuggestionRunUrl(args.suggestionId), {
       method: 'POST',
     }),
 

@@ -136,11 +136,13 @@ async fn enqueue_notification<T: serde::Serialize + std::fmt::Debug>(
 ) -> anyhow::Result<()> {
     let message_str = serde_json::to_string(message)?;
 
-    sqs_client
+    let mut request = sqs_client
         .send_message()
         .queue_url(queue_url)
-        .message_body(message_str)
-        .send()
-        .await?;
+        .message_body(message_str);
+    if let Some(context) = crate::email::trace_context::attribute() {
+        request = request.message_attributes(crate::email::trace_context::ATTRIBUTE, context);
+    }
+    request.send().await?;
     Ok(())
 }

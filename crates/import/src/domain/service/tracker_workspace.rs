@@ -25,7 +25,7 @@ use crate::domain::ports::{
     SlackWorkspaceSource, TrackerTaskRelations, WorkspaceWriter, WrittenObjects,
 };
 
-mod claim;
+pub(in crate::domain::service) mod claim;
 pub(in crate::domain::service) mod plan;
 pub(in crate::domain::service) mod values;
 
@@ -39,6 +39,13 @@ mod test;
 enum TrackerObject {
     Group(Group),
     Issue(Box<Issue>),
+}
+
+/// The plan of any reviewed source's row; approval reads nothing else, so
+/// tracker and HubSpot plans share it.
+#[derive(Debug, Clone, Deserialize)]
+struct Planned {
+    plan: NotionPlanItem,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -174,7 +181,7 @@ where
         let mut shared = Vec::new();
         let mut personal = Vec::new();
         for row in &planned {
-            let meta: TrackerMeta = serde_json::from_value(row.metadata.clone())
+            let meta: Planned = serde_json::from_value(row.metadata.clone())
                 .map_err(|error| ImportError::from(error).not_started())?;
             if meta.plan.shareable {
                 if choices.personal.contains(&row.id) {
@@ -186,12 +193,13 @@ where
         }
         // The fence first: a stale card never approves the replacement plan,
         // and a refused write changes nothing about it.
-        self.repo
+        let from = self
+            .repo
             .start_reviewed_write(user, self.workspace_source, review)
             .await
             .map_err(ImportError::not_started)?;
         if let Err(error) = self.repo.set_plan_sharing(user, &shared, &personal).await {
-            self.reopen_plan(user).await;
+            self.reopen_plan(user, from).await;
             return Err(error.not_started());
         }
         self.hold_new_run(
@@ -204,7 +212,7 @@ where
         // Claims are taken per object during writing, so one failed claimant
         // does not prevent unrelated rows being copied.
         for row in &planned {
-            let meta: TrackerMeta = serde_json::from_value(row.metadata.clone())?;
+            let meta: Planned = serde_json::from_value(row.metadata.clone())?;
             if choices.excluded.contains(&row.id)
                 || meta.plan.decision == Some(NotionDecision::Skip)
             {

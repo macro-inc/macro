@@ -155,7 +155,6 @@ fn harness_with_outbox(outbox: Arc<Outbox>) -> (TestBench, TurnSignals) {
         PromptComposerMock::default(),
         KindDefaultPolicies,
         HarnessDefaultCodingAgents,
-        PromptMentionsMock::new(),
         EgressProvisionerMock::new(),
         None,
         None,
@@ -756,6 +755,7 @@ async fn a_settled_import_wakes_an_idle_session_with_its_final_report() {
                 subject_id: review.to_string(),
                 event: NotificationEvent::ReviewSettled(ReviewSettlement::Import {
                     import: ImportSettlement {
+                        warnings: Vec::new(),
                         source: ImportWorkspace::Notion,
                         outcome: ImportOutcome::Completed,
                         error: None,
@@ -765,6 +765,7 @@ async fn a_settled_import_wakes_an_idle_session_with_its_final_report() {
                         documents: 3,
                         databases: 0,
                         database_rows: 0,
+                        partial_database_rows: 0,
                         task_lists: 0,
                         task_rows: 0,
                         skipped: 1,
@@ -774,6 +775,8 @@ async fn a_settled_import_wakes_an_idle_session_with_its_final_report() {
                         waiting_on_teammates: 0,
                         root_folder_id: None,
                         failures: Vec::new(),
+                        failure_count: None,
+                        details_truncated: false,
                         hand_items: Vec::new(),
                     },
                 }),

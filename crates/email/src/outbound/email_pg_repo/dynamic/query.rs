@@ -1277,6 +1277,40 @@ pub(crate) async fn dynamic_email_thread_cursor_with_discovery(
     .map(|(rows, _)| rows)
 }
 
+/// [`dynamic_email_thread_cursor_with_discovery`] with where a page the read
+/// cut short goes on.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "mirrors the cursor read's inputs"
+)]
+pub(crate) async fn dynamic_email_thread_page_with_discovery(
+    pool: &PgPool,
+    link_ids: &[Uuid],
+    limit: u32,
+    view: &PreviewView,
+    query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
+    user_id: &str,
+    team_id: Option<Uuid>,
+    discovery: Option<&RuleDiscoveryPort>,
+) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<(DateTime<Utc>, Uuid)>), PreviewReadError> {
+    read_page(
+        pool,
+        link_ids,
+        limit,
+        view,
+        query,
+        user_id,
+        team_id,
+        Reads {
+            team: Some(TeamReadTuning::DEFAULT),
+            owned: Some(OwnedReadTuning::DEFAULT),
+            discovery,
+        },
+    )
+    .await
+    .map(|(rows, stats)| (rows, stats.and_then(|stats| stats.continue_below)))
+}
+
 #[cfg(test)]
 #[tracing::instrument(skip(pool, view, query, user_id), fields(view = view.span_value()), err)]
 pub(crate) async fn dynamic_email_thread_cursor(

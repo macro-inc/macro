@@ -10,7 +10,7 @@ const retainers = new WeakMap<CacheHost, () => RetainedCacheHost | undefined>();
 export function retainCacheHost(
   host: CacheHost
 ): RetainedCacheHost | undefined {
-  if (host.disabled) return;
+  if (host.disabled && !host.paused) return;
   const retain = retainers.get(host);
   return retain ? retain() : { host, release() {} };
 }
@@ -27,6 +27,11 @@ export function retainCacheHost(
 export function createRetirableCacheHost(inner: CacheHost): CacheHost {
   let current = inner;
   let retained = 0;
+  // A retired engine never opens for this wrapper: readers waiting for it stop.
+  let markRetired!: () => void;
+  const retired = new Promise<void>((resolve) => {
+    markRetired = resolve;
+  });
   // Resolve the current host at dispatch, including for methods captured before
   // retirement. A retired publisher must never acknowledge a dropped write.
   const people: PeopleCache | undefined = inner.people
@@ -73,6 +78,17 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
     },
     get disabled() {
       return current.disabled;
+    },
+    // A retired host routes to the no-op host, which is always ready.
+    // Not the no-op host's "always ready": a retired cache is one that never
+    // opened, so a reader waiting to write after it opens gives up.
+    isReady: () => current === inner && (inner.isReady?.() ?? true),
+    whenReady: () =>
+      current === inner
+        ? Promise.race([inner.whenReady?.() ?? Promise.resolve(), retired])
+        : Promise.resolve(),
+    get paused() {
+      return current.paused;
     },
     currentRevision: () => current.currentRevision(),
     currentStorageGeneration: () => current.currentStorageGeneration(),
@@ -131,6 +147,10 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
       current.onCacheGenerationChanged((...args) => {
         if (current === inner) cb(...args);
       }),
+    onOwnerReady: (cb) =>
+      current.onOwnerReady?.(() => {
+        if (current === inner) cb();
+      }) ?? (() => undefined),
     onMutationSettled: (cb) =>
       current.onMutationSettled((...args) => {
         if (current === inner) cb(...args);
@@ -138,6 +158,7 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
     dispose() {
       if (current !== inner) return;
       current = createNoopCacheHost();
+      markRetired();
       if (retained === 0) inner.dispose();
     },
   };

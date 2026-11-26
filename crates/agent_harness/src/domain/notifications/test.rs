@@ -1,7 +1,7 @@
 use agent_runtime_protocol::domain::action::AgentActionId;
 use agent_session::domain::events::{
-    InputReceivedMetadata, SessionDeletedMetadata, SessionIdentity, SessionMentionedMetadata,
-    SessionOpenedMetadata, SessionSettledMetadata, ThreadOrigin, TurnStartedMetadata, TurnSummary,
+    InputReceivedMetadata, SessionDeletedMetadata, SessionIdentity, SessionOpenedMetadata,
+    SessionSettledMetadata, ThreadOrigin, TurnStartedMetadata, TurnSummary,
     WaitingForInputMetadata,
 };
 use agent_session::domain::model::{AgentSessionId, SessionSource};
@@ -343,75 +343,6 @@ fn every_other_waiting_turn_still_notifies() {
             ),
             "is_coding={is_coding} announced={announced:?}: {actions:#?}"
         );
-    }
-}
-
-#[test]
-fn mentioned_notifies_exactly_the_people_named() {
-    let action_id = AgentActionId::mint();
-    let actions = coder(&AgentSessionLifecycleEvent::Mentioned(
-        SessionMentionedMetadata {
-            identity: identity(),
-            action_id,
-            mentioned_by: Some(owner()),
-            mentioned: vec![
-                user("carol@macro.com"),
-                user("alice@macro.com"),
-                user("carol@macro.com"),
-            ],
-            origin_message_id: None,
-        },
-    ));
-
-    let [PlannedNotification::Mentioned(notify)] = actions.as_slice() else {
-        panic!("expected one mention notification, got {actions:#?}");
-    };
-    assert_eq!(
-        notify.recipients,
-        vec![user("carol@macro.com"), user("alice@macro.com")]
-    );
-    assert_eq!(notify.metadata.mentioned_by, Some(owner()));
-    assert_eq!(notify.metadata.action_id, action_id.as_uuid());
-    assert_eq!(
-        notify.notification_id,
-        mentioned_notification_id(SESSION, action_id.as_uuid())
-    );
-}
-
-#[test]
-fn a_mention_of_nobody_is_nothing() {
-    let actions = coder(&AgentSessionLifecycleEvent::Mentioned(
-        SessionMentionedMetadata {
-            identity: identity(),
-            action_id: AgentActionId::mint(),
-            mentioned_by: Some(owner()),
-            mentioned: Vec::new(),
-            origin_message_id: None,
-        },
-    ));
-
-    assert!(actions.is_empty());
-}
-
-/// A prompt posted as a channel or document message already notified the
-/// users it named on the post itself; the session does not tell them twice.
-/// Whether the bot is a coding agent makes no difference: the message service
-/// notifies the mention regardless of who else the message names.
-#[test]
-fn a_mention_in_a_posted_message_is_already_announced() {
-    for is_coding in [true, false] {
-        let actions = plan(
-            &AgentSessionLifecycleEvent::Mentioned(SessionMentionedMetadata {
-                identity: identity(),
-                action_id: AgentActionId::mint(),
-                mentioned_by: Some(owner()),
-                mentioned: vec![user("carol@macro.com"), user("alice@macro.com")],
-                origin_message_id: Some(Uuid::from_u128(7)),
-            }),
-            is_coding,
-        );
-
-        assert!(actions.is_empty(), "is_coding={is_coding}: {actions:#?}");
     }
 }
 

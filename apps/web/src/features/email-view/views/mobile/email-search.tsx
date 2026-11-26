@@ -1,11 +1,17 @@
+import { SearchOperatorOverlay } from '@app/components/view-shell/search-operator-text';
+import { SearchTipsSheet } from '@app/components/view-shell/search-tips';
+import { EMAIL_SEARCH_DOCS_URL } from '@app/constants/docs-links';
 import { t } from '@app/lib/i18n';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
+import InfoIcon from '@icon/system/regular/info.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, CommandMenuSearchInput } from '@ui';
-import { onCleanup, onMount, Show } from 'solid-js';
-import { EmailRecentSearches } from '../../components/EmailRecentSearches';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { EmailSearchSuggestionList } from '../../components/EmailSearchSuggestionList';
+import { emailSearchTips } from '../../components/EmailSearchTips';
 import type { EmailSearchSuggestions } from '../../search/create-email-search-suggestions';
+import { emailSearchTextParts } from '../../search/email-search-scope';
 
 /**
  * The field and Cancel of Email's search page on touch, in place of the list
@@ -21,6 +27,7 @@ export function EmailMobileSearchField(props: {
   ref: (input: HTMLInputElement) => void;
 }) {
   let input: HTMLInputElement | undefined;
+  const [tipsOpen, setTipsOpen] = createSignal(false);
 
   // Escape leaves the page, as Cancel does, from the field and after Search
   // has dropped its focus, since a hardware keyboard can still press it.
@@ -42,6 +49,27 @@ export function EmailMobileSearchField(props: {
 
   // Keeps the keyboard up for presses on the field's own controls.
   const keepFocus = (event: Event) => event.preventDefault();
+  // A hardware keyboard walks the rows under the field and picks one; a
+  // picked view or operator keeps the keyboard up for the words, as a tap
+  // does.
+  const moveInSuggestions = (event: KeyboardEvent) => {
+    const suggestions = props.suggestions;
+    const active = suggestions.active();
+    if (event.key === 'ArrowDown' && active < suggestions.count() - 1) {
+      suggestions.setActive(active + 1);
+      return true;
+    }
+    if (event.key === 'ArrowUp' && active >= 0) {
+      suggestions.setActive(active - 1);
+      return true;
+    }
+    if (event.key !== 'Enter' || active < 0) return false;
+
+    const editsQuery = suggestions.editsQuery?.(active) ?? false;
+    suggestions.pick(active);
+    if (!editsQuery) input?.blur();
+    return true;
+  };
 
   return (
     <div class="flex w-full min-w-0 items-center gap-2">
@@ -50,30 +78,57 @@ export function EmailMobileSearchField(props: {
           aria-hidden="true"
           class="size-4 shrink-0 text-ink-extra-muted"
         />
-        <CommandMenuSearchInput
-          ref={(element: HTMLInputElement) => {
-            input = element;
-            props.ref(element);
-          }}
-          type="search"
-          enterkeyhint="search"
-          autocomplete="off"
-          aria-label={t('emailViews.searchEmail')}
-          aria-controls={props.suggestions.listId}
-          aria-activedescendant={props.suggestions.activeId?.()}
-          placeholder={t('emailViews.searchEmail')}
-          class="text-base text-ink [&::-webkit-search-cancel-button]:hidden"
-          value={props.search}
-          onInput={(event) => props.setSearch(event.currentTarget.value)}
-          onFocus={() => props.suggestions.setFocused(true)}
-          onBlur={() => props.suggestions.setFocused(false)}
-          onKeyDown={(event) => {
-            if (isComposing(event)) return;
-            // Search drops the keyboard to show the results.
-            if (event.key === 'Enter') input?.blur();
-          }}
-        />
-        <Show when={props.search}>
+        {/* Operators (`in:sent`) are drawn as tokens behind the text. */}
+        <div class="relative flex min-w-0 flex-1">
+          <SearchOperatorOverlay
+            parts={emailSearchTextParts(props.search)}
+            input={() => input}
+            class="text-base text-ink"
+          />
+          <CommandMenuSearchInput
+            ref={(element: HTMLInputElement) => {
+              input = element;
+              props.ref(element);
+            }}
+            type="search"
+            enterkeyhint="search"
+            autocomplete="off"
+            aria-label={t('emailViews.searchEmail')}
+            aria-controls={props.suggestions.listId}
+            aria-activedescendant={props.suggestions.activeId?.()}
+            placeholder={t('emailViews.searchAllMail')}
+            class="text-base text-transparent caret-ink [&::-webkit-search-cancel-button]:hidden"
+            value={props.search}
+            onInput={(event) => props.setSearch(event.currentTarget.value)}
+            onFocus={() => props.suggestions.setFocused(true)}
+            onBlur={() => props.suggestions.setFocused(false)}
+            onKeyDown={(event) => {
+              if (isComposing(event)) return;
+              if (moveInSuggestions(event)) {
+                event.preventDefault();
+                return;
+              }
+              // Search drops the keyboard to show the results.
+              if (event.key !== 'Enter') return;
+              props.suggestions.commit();
+              input?.blur();
+            }}
+          />
+        </div>
+        {/* The empty field offers its tips where the X clears typed text. */}
+        <Show
+          when={props.search}
+          fallback={
+            <Button
+              aria-label={t('searchOperators.tips')}
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setTipsOpen(true)}
+            >
+              <InfoIcon class="size-4" />
+            </Button>
+          }
+        >
           <Button
             aria-label={t('emailViews.clearSearch')}
             variant="ghost"
@@ -91,12 +146,21 @@ export function EmailMobileSearchField(props: {
           {t('common.cancel')}
         </Button>
       </MobileHeader.Island>
+      <SearchTipsSheet
+        tips={emailSearchTips()}
+        docsUrl={EMAIL_SEARCH_DOCS_URL}
+        open={tipsOpen()}
+        onOpenChange={setTipsOpen}
+      />
     </div>
   );
 }
 
-/** Recent searches below the search field while it has focus. */
-export function EmailMobileRecentSearches(props: {
+/**
+ * The views an `in:` being typed can name, the operators that finish what is
+ * typed, or recent searches, below the search field while it has focus.
+ */
+export function EmailMobileSearchSuggestions(props: {
   suggestions: EmailSearchSuggestions;
   /** Drops the keyboard to show the picked search's results. */
   onPicked: () => void;
@@ -104,11 +168,13 @@ export function EmailMobileRecentSearches(props: {
   return (
     <Show when={props.suggestions.listed().length > 0}>
       <div class="shrink-0 pt-(--mobile-content-inset-top)">
-        <EmailRecentSearches
+        <EmailSearchSuggestionList
           suggestions={props.suggestions}
           onPick={(index) => {
+            const editsQuery = props.suggestions.editsQuery?.(index) ?? false;
             props.suggestions.pick(index);
-            props.onPicked();
+            // A view or operator picked keeps the keyboard up to type the words.
+            if (!editsQuery) props.onPicked();
           }}
         />
       </div>

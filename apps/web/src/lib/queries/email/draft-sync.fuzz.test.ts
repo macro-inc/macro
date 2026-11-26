@@ -271,6 +271,42 @@ async function run(world: DraftSyncWorld, actions: Action[]) {
   expect(world.server.drafts()).toHaveLength(kept.length);
 }
 
+// Sessions the fuzzer found, kept as they shrank so they replay exactly.
+
+// Seed -1923414228, path 61. A slow server keeps a save on the wire as its
+// draft is sent, so the save loses to the send and leaves the queue while the
+// draft's copy waits for the send; the page then reloads before the send
+// completes.
+it('does not report a save that lost to its own send across a reload', {
+  timeout: 600_000,
+}, async () => {
+  const world = await createDraftSyncWorld();
+  try {
+    await run(world, [
+      { kind: 'weather', weather: 'slow' },
+      { kind: 'type' },
+      { kind: 'wait', ms: 470 },
+      { kind: 'type' },
+      { kind: 'reopen' },
+      { kind: 'send' },
+      { kind: 'undo' },
+      { kind: 'type' },
+      { kind: 'wait', ms: 20 },
+      { kind: 'type' },
+      { kind: 'weather', weather: 'clear' },
+      { kind: 'type' },
+      { kind: 'wait', ms: 20 },
+      { kind: 'wait', ms: 2_320 },
+      { kind: 'reload' },
+      { kind: 'discard' },
+      { kind: 'type' },
+      { kind: 'weather', weather: 'clear' },
+    ]);
+  } finally {
+    await world.dispose();
+  }
+});
+
 it('never reports a failure and always converges under passing faults', {
   timeout: 600_000,
 }, async () => {

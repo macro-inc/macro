@@ -7,8 +7,21 @@ use uuid::Uuid;
 
 /// One list in a user's directory. A person is in the directory when they are
 /// in at least one of the owner's lists. The key (`as_ref`, parsed back with
-/// `FromStr`) is what storage and clients see.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, strum::AsRefStr, strum::EnumString)]
+/// `FromStr`, and the same in serde) is what storage and clients see.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    strum::AsRefStr,
+    strum::EnumString,
+)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ContactList {
     /// The owner's current team, computed from the roster at read time; never stored.

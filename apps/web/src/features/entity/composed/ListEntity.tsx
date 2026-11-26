@@ -239,6 +239,9 @@ export function ListEntity(props: ListEntityProps) {
     get onFilterByTag() {
       return props.onFilterByTag ?? soupView?.filterByTag;
     },
+    get labels() {
+      return props.labels;
+    },
     get showCalendarAttendance() {
       return (
         props.showCalendarAttendance ??
@@ -287,8 +290,10 @@ export function ListEntity(props: ListEntityProps) {
   // goes over the panel color rather than replacing it.
   const swipeFill = () => {
     if (!classic()) return undefined;
+    // The selected fill is an image over the panel; pressing keeps it under
+    // the press grey (index.css).
     if (props.checked)
-      return 'bg-panel bg-linear-to-b from-list-selected to-list-selected';
+      return 'bg-panel bg-linear-to-b from-list-selected to-list-selected [--press-underlay:linear-gradient(var(--color-list-selected),var(--color-list-selected))]';
     return unread() ? 'bg-control' : undefined;
   };
 
@@ -321,6 +326,7 @@ export function ListEntity(props: ListEntityProps) {
         props.onClick?.(e);
       }}
       ref={mergeRefs(props.ref, draggable)}
+      data-press-surface
       class={cn(
         // The row family class carries the --soup-row-* geometry (ListEntity.css)
         // that the layouts below and the soup group headers both read, so it has

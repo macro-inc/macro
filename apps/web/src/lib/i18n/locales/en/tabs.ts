@@ -30,6 +30,7 @@ export default {
   projectSections: 'Project sections',
   'project-overview': 'Overview',
   'project-tasks': 'Tasks',
+  'project-time': 'Time',
   // A project's name in its breadcrumb and split title before it loads.
   projectFallbackName: 'Project',
 };

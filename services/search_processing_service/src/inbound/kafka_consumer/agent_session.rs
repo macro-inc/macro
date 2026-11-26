@@ -18,9 +18,9 @@ use crate::domain::agent_session_index::ReconcileTrigger;
 /// runtime, so nothing reaches the log.
 pub(super) fn changes_search_projection(event: &AgentSessionLifecycleMacroEvent) -> bool {
     match &event.event().event {
-        AgentSessionLifecycleEvent::Settled(_)
-        | AgentSessionLifecycleEvent::Mentioned(_)
-        | AgentSessionLifecycleEvent::CommandRejected(_) => false,
+        AgentSessionLifecycleEvent::Settled(_) | AgentSessionLifecycleEvent::CommandRejected(_) => {
+            false
+        }
         AgentSessionLifecycleEvent::Opened(_)
         | AgentSessionLifecycleEvent::TurnStarted(_)
         | AgentSessionLifecycleEvent::TurnEnded(_)

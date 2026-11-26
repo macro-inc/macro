@@ -4088,6 +4088,61 @@
           }
         }
       },
+      "ConfirmedNotionWrites": {
+        "type": "object",
+        "description": "Objects confirmed in the current Notion write's ledger.",
+        "required": [
+          "documents",
+          "databases",
+          "databaseRows",
+          "taskLists",
+          "tasks"
+        ],
+        "properties": {
+          "databaseRows": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Rows inserted into databases, including writes from unfinished copies.",
+            "minimum": 0
+          },
+          "databases": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Copied databases.",
+            "minimum": 0
+          },
+          "documents": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Copied pages.",
+            "minimum": 0
+          },
+          "partialDatabaseRows": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The subset of database rows written before their source stopped.",
+            "minimum": 0
+          },
+          "partialTasks": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The subset of tasks written before their source stopped.",
+            "minimum": 0
+          },
+          "taskLists": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Databases copied as task lists.",
+            "minimum": 0
+          },
+          "tasks": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tasks inserted into task lists, including writes from unfinished lists.",
+            "minimum": 0
+          }
+        }
+      },
       "ConnectStep": {
         "oneOf": [
           {
@@ -5344,6 +5399,125 @@
           }
         }
       },
+      "HubspotLoss": {
+        "type": "string",
+        "description": "Something a HubSpot import cannot carry into Macro CRM, counted on the\nreview card and in the final report.",
+        "enum": [
+          "owner_not_member",
+          "deal_without_company",
+          "deal_without_pipeline",
+          "extra_company_links",
+          "domain_rejected",
+          "unsupported_currency",
+          "additional_domains",
+          "company_owner",
+          "merged_company",
+          "merged_contact",
+          "contact_without_company"
+        ]
+      },
+      "HubspotLossCount": {
+        "type": "object",
+        "description": "How many records lost one thing.",
+        "required": ["loss", "count"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records affected.",
+            "minimum": 0
+          },
+          "loss": {
+            "$ref": "#/components/schemas/HubspotLoss",
+            "description": "What was lost."
+          }
+        }
+      },
+      "HubspotReport": {
+        "type": "object",
+        "description": "What a HubSpot plan holds, for the review card.",
+        "required": [
+          "pipelines",
+          "companies",
+          "contacts",
+          "deals",
+          "owners",
+          "ownersMatched",
+          "alreadyImported",
+          "losses",
+          "customProperties"
+        ],
+        "properties": {
+          "alreadyImported": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records already in Macro from an earlier import, left as they are.",
+            "minimum": 0
+          },
+          "companies": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Companies.",
+            "minimum": 0
+          },
+          "contacts": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Contacts.",
+            "minimum": 0
+          },
+          "created": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records this import created in the CRM.",
+            "minimum": 0
+          },
+          "customProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Portal-defined property names whose values stay in HubSpot."
+          },
+          "deals": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Deals, each becoming an entry in its pipeline.",
+            "minimum": 0
+          },
+          "linked": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records this import matched to ones already in the CRM (same domain,\naddress or deal) or to a teammate's import, instead of creating them.",
+            "minimum": 0
+          },
+          "losses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubspotLossCount"
+            },
+            "description": "What cannot be carried over, by kind."
+          },
+          "owners": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HubSpot owners named by the planned records.",
+            "minimum": 0
+          },
+          "ownersMatched": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Of those, owners matched to a team member by email.",
+            "minimum": 0
+          },
+          "pipelines": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Deal pipelines, each becoming a Macro pipeline.",
+            "minimum": 0
+          }
+        }
+      },
       "ImportEntitiesResponse": {
         "type": "object",
         "description": "The caller's ledger rows.",
@@ -5464,7 +5638,11 @@
           "jira_issue",
           "jira_project",
           "jira_epic",
-          "channel"
+          "channel",
+          "hubspot_pipeline",
+          "hubspot_company",
+          "hubspot_contact",
+          "hubspot_deal"
         ]
       },
       "ImportNotionPageRequest": {
@@ -5563,7 +5741,7 @@
       "ImportSource": {
         "type": "string",
         "description": "External systems items can be imported from.",
-        "enum": ["linear", "jira", "notion", "slack"]
+        "enum": ["linear", "jira", "notion", "slack", "hubspot"]
       },
       "ImportState": {
         "type": "object",
@@ -5833,7 +6011,51 @@
           },
           "entityType": {
             "type": "string",
-            "description": "That entity's type (`md`, `project`)."
+            "description": "That entity's type (`md`, `project`, `database`)."
+          }
+        }
+      },
+      "NotionChangedView": {
+        "type": "object",
+        "description": "Changes to one view of an imported database.",
+        "required": ["viewId", "title", "changes"],
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotionViewChange"
+            },
+            "description": "Changes ordered by impact."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "viewId": {
+            "type": "string",
+            "description": "Stable Notion identity, separate from the title."
+          }
+        }
+      },
+      "NotionDatabaseViewChanges": {
+        "type": "object",
+        "description": "Views that changed on one database.",
+        "required": ["databaseId", "title", "views"],
+        "properties": {
+          "databaseId": {
+            "type": "string",
+            "description": "Stable Notion data source identity."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotionChangedView"
+            },
+            "description": "Views ordered by their highest impact."
           }
         }
       },
@@ -5904,6 +6126,17 @@
             "description": "Plan objects a teammate already imported and shared with the team;\nthey link to that copy and are not counted as copies.",
             "minimum": 0
           },
+          "confirmed": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConfirmedNotionWrites",
+                "description": "Actual writes from the completed Notion ledger, excluding reused copies."
+              }
+            ]
+          },
           "copy": {
             "type": "integer",
             "format": "int32",
@@ -5919,7 +6152,7 @@
           "databaseRows": {
             "type": "integer",
             "format": "int32",
-            "description": "Rows those databases hold, every one counted while planning.",
+            "description": "Estimated database rows while planning, confirmed rows once completed.",
             "minimum": 0
           },
           "databases": {
@@ -5934,11 +6167,26 @@
             "description": "Plan objects the decision model has not answered for yet, while\nplanning is still `running`.",
             "minimum": 0
           },
+          "details": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotionReportDetails",
+                "description": "Grouped report details for a Notion workspace review."
+              }
+            ]
+          },
           "documents": {
             "type": "integer",
             "format": "int32",
             "description": "Pages written as documents.",
             "minimum": 0
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Why the run failed or what it could not finish, in text Macro wrote\n(a canned reason, a reviewed object's title, or the sentence for its\nkind; never a provider's text): the report keeps it only when the run\nrecorded a kind. The agent's tool answers drop it and read\n`error_kind`."
           },
           "errorKind": {
             "oneOf": [
@@ -5950,6 +6198,12 @@
                 "description": "The kind of failure, when the run failed and it was recorded. Show\nthe user copy for this, not `error`."
               }
             ]
+          },
+          "failureCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total objects that failed, including those outside the sample.",
+            "minimum": 0
           },
           "failures": {
             "type": "array",
@@ -5971,10 +6225,21 @@
             },
             "description": "Objects that need handling by hand, with reasons."
           },
+          "hubspot": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HubspotReport",
+                "description": "A HubSpot plan's counts, owners and losses."
+              }
+            ]
+          },
           "imported": {
             "type": "integer",
             "format": "int32",
-            "description": "Plan objects already imported.",
+            "description": "Plan objects finished so far, or confirmed new copies once completed.",
             "minimum": 0
           },
           "issues": {
@@ -6120,6 +6385,20 @@
               }
             ]
           },
+          "dependencyOf": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Notion objects whose bodies require this external data source."
+          },
+          "inlineOn": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Planned objects whose bodies display this source inline."
+          },
           "path": {
             "type": "array",
             "items": {
@@ -6169,6 +6448,73 @@
           }
         }
       },
+      "NotionReportDetails": {
+        "type": "object",
+        "description": "Details alongside the outcome on a Notion import card.",
+        "required": ["notImported", "viewChanges", "tabChoices", "notes"],
+        "properties": {
+          "notImported": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotionReviewOmission"
+            },
+            "description": "A sample of items deliberately left out, with the reviewed reasons."
+          },
+          "noteCounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotionReportNoteCount"
+            },
+            "description": "Totals for each kind of notice."
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotionReportNote"
+            },
+            "description": "A sample of legacy notices and non-view fidelity changes."
+          },
+          "omissionCounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotionReviewOmissionCount"
+            },
+            "description": "Totals for each review choice."
+          },
+          "tabChoiceCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total number of placements that used a default tab.",
+            "minimum": 0
+          },
+          "tabChoices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotionTabChoice"
+            },
+            "description": "A sample of tab selections caused by an unspecified Notion tab."
+          },
+          "viewChangeCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total number of displayed and undisplayed change lines.",
+            "minimum": 0
+          },
+          "viewChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotionDatabaseViewChanges"
+            },
+            "description": "Saved view differences, sampled by impact and grouped by source and view."
+          },
+          "viewCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total number of changed views.",
+            "minimum": 0
+          }
+        }
+      },
       "NotionReportItem": {
         "type": "object",
         "description": "One object a workspace import report calls out.",
@@ -6197,6 +6543,127 @@
           }
         }
       },
+      "NotionReportNote": {
+        "type": "object",
+        "description": "A counted content or compatibility note.",
+        "required": ["kind", "count", "message"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of incidents represented by this notice.",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NotionReportNoteKind",
+            "description": "Semantic category."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable text, with affected source and property titles."
+          }
+        }
+      },
+      "NotionReportNoteCount": {
+        "type": "object",
+        "description": "Counts for one kind of content note, including notes outside the sample.",
+        "required": ["kind", "lines", "count"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of incidents described by the notices.",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NotionReportNoteKind",
+            "description": "Semantic category."
+          },
+          "lines": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of notices.",
+            "minimum": 0
+          }
+        }
+      },
+      "NotionReportNoteKind": {
+        "type": "string",
+        "description": "Content-level notes that do not describe a saved view or a reviewed skip.",
+        "enum": ["omitted", "snapshot", "reference", "other"]
+      },
+      "NotionReviewOmission": {
+        "type": "object",
+        "description": "A review choice and the item it left out.",
+        "required": ["kind", "item"],
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/NotionReportItem",
+            "description": "Source title, link and review reason."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NotionReviewOmissionKind",
+            "description": "Which review choice led to the omission."
+          }
+        }
+      },
+      "NotionReviewOmissionCount": {
+        "type": "object",
+        "description": "Counts for one review choice, including items outside the sample.",
+        "required": ["kind", "pages", "databases", "other"],
+        "properties": {
+          "databases": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Databases left out.",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NotionReviewOmissionKind",
+            "description": "The reviewed choice responsible."
+          },
+          "other": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Other objects left out.",
+            "minimum": 0
+          },
+          "pages": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Pages left out.",
+            "minimum": 0
+          }
+        }
+      },
+      "NotionReviewOmissionKind": {
+        "type": "string",
+        "description": "Why an item was left for the user in the reviewed plan.",
+        "enum": ["left_out", "excluded", "by_hand"]
+      },
+      "NotionTabChoice": {
+        "type": "object",
+        "description": "A first-tab choice when Notion omitted the view from a reference.",
+        "required": ["containerId", "database", "tab"],
+        "properties": {
+          "containerId": {
+            "type": "string",
+            "description": "Container identity. Different linked placements may choose different tabs."
+          },
+          "containerTitle": {
+            "type": ["string", "null"],
+            "description": "Title of the page or row containing the reference."
+          },
+          "database": {
+            "type": "string",
+            "description": "Database name shown in the reference."
+          },
+          "tab": {
+            "type": "string",
+            "description": "Name of the returned first tab."
+          }
+        }
+      },
       "NotionTaskFields": {
         "type": "object",
         "description": "Which Notion columns hold a task list's task fields, by property name.",
@@ -6218,6 +6685,32 @@
             "description": "The status column."
           }
         }
+      },
+      "NotionViewChange": {
+        "type": "object",
+        "description": "A counted, readable difference in an imported view.",
+        "required": ["kind", "count", "message"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of changed settings represented in this line.",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NotionViewChangeKind",
+            "description": "Semantic category used for ordering and grouping."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable description."
+          }
+        }
+      },
+      "NotionViewChangeKind": {
+        "type": "string",
+        "description": "The kind and severity of a user-visible change to a saved view.",
+        "enum": ["filter", "layout", "sort", "visibility", "display"]
       },
       "OnboardingRow": {
         "type": "object",

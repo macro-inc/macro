@@ -15,9 +15,6 @@
   --glass-tint: #fff;
   --glass-shade-color: #000;
   --glass-highlight-base: 6%;
-  --glass-rim-strong-base: 13.5%;
-  --glass-rim-soft-base: 9%;
-  --glass-rim-shade-base: 0%;
 }
 
 html[data-theme-light='true'] .onboarding-flow {
@@ -41,9 +38,6 @@ html[data-theme-light='true'] .onboarding-flow {
   --color-accent-contrast-muted: #e6e1d7;
   --color-input: #faf8f3;
   --glass-highlight-base: 18%;
-  --glass-rim-strong-base: 18%;
-  --glass-rim-soft-base: 12%;
-  --glass-rim-shade-base: 3%;
   --glass-shade-base: 3%;
 }
 

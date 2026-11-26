@@ -29,6 +29,7 @@ use graphql_permission::{
 };
 use graphql_properties::{EntityPropertyReader, GraphqlProperty, load_entity_properties};
 use graphql_soup::SoupEntityEdges;
+use graphql_time_tracking::{GraphqlTimeEntryPage, load_time_entries};
 use predicate_index::{RecordKey, utc_timestamp_micros};
 use soup_filter_projection::{
     MailCacheProjectionFacts, SoupCacheProjectionSupplement, encode_cache_projection_supplement,
@@ -80,6 +81,7 @@ where
     type AgentSessionEdges = SoupAgentSessionEdges;
     type InitiativeEdges = SoupInitiativeEdges;
     type CrmRecordEdges = SoupCrmRecordEdges;
+    type DocumentEdges = SoupDocumentEdges;
 
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
         Self {
@@ -138,6 +140,13 @@ where
 
     fn initiative_edges(initiative_id: Uuid) -> Self::InitiativeEdges {
         SoupInitiativeEdges { initiative_id }
+    }
+
+    fn document_edges(document_id: Uuid, is_task: bool) -> Self::DocumentEdges {
+        SoupDocumentEdges {
+            document_id,
+            is_task,
+        }
     }
 
     fn crm_record_edges(record: model_entity::Entity<'static>) -> Self::CrmRecordEdges {
@@ -757,6 +766,33 @@ impl SoupInitiativeEdges {
                 .await?
                 .completed_task_count,
         )
+    }
+}
+
+/// Document fields from other domains, composed onto Soup documents.
+#[derive(Clone)]
+pub struct SoupDocumentEdges {
+    /// The document whose fields are requested.
+    document_id: Uuid,
+    /// Whether the document is a task; only tasks have time logged.
+    is_task: bool,
+}
+
+#[Object]
+impl SoupDocumentEdges {
+    /// A page of the time logged on this task, newest day first, `limit`
+    /// entries at a time (50 by default, at most 200), continuing `after` a
+    /// cursor a previous page returned. A document that is not a task has none.
+    async fn time_entries(
+        &self,
+        ctx: &Context<'_>,
+        limit: Option<i32>,
+        after: Option<String>,
+    ) -> async_graphql::Result<GraphqlTimeEntryPage> {
+        if !self.is_task {
+            return Ok(GraphqlTimeEntryPage::default());
+        }
+        load_time_entries(ctx, self.document_id, limit, after).await
     }
 }
 

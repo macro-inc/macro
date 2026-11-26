@@ -1,7 +1,9 @@
 // Searching mail from the list: Ctrl+F reaches the search field, a query of
 // any length is searched, a query with no match says so, Escape leaves the
 // field with the search kept, and Escape again, in the list, leaves the
-// search. Each for a Gmail and an Outlook inbox.
+// search. Each for a Gmail and an Outlook inbox. And Back, with the
+// keyboard still in the field, leaves Mail for the view before it: Gmail
+// only, since the field is the same for either provider.
 //
 // The stack runs no search service, so the page's search request is
 // answered here: these tests prove what the list does with the field and
@@ -81,3 +83,40 @@ for (const provider of PROVIDERS) {
     });
   });
 }
+
+test.describe('leaving a search of a Gmail inbox', () => {
+  test.use({ provider: 'GMAIL' });
+  test.beforeEach(({ page }) => loadAppSteadily(page));
+
+  // When this fails, leaving Mail while the keyboard is in its search field
+  // opens nothing: the address changes, but the view left for stays blank
+  // or the app stops on an error.
+  test('Back with the keyboard in the search field opens the view before Mail', async ({
+    page,
+    mailbox,
+  }) => {
+    await mailbox.deliver({ from, subject: 'Alpha', text: 'Body of Alpha.' });
+    const alpha = await mailbox.synced('Alpha');
+    await page.route(/\/dss\/search(\?|$)/, (route) =>
+      route.fulfill({ json: { results: [], next_cursor: null } })
+    );
+    const field = page.getByRole('searchbox', { name: 'Search email' });
+    const tasks = page.getByRole('complementary', { name: 'Tasks navigation' });
+
+    await mailbox.open('/app/tasks');
+    await expect(tasks).toBeVisible();
+    await page.keyboard.press('g');
+    await page.keyboard.press('e');
+    await expect.poll(() => rowIds(page)).toEqual([alpha.id]);
+    await page.keyboard.press('ControlOrMeta+f');
+    did('AL-015');
+    await page.keyboard.type('ze');
+    await expect(page.getByText('No results for "ze"')).toBeVisible();
+    saw('STL-007');
+    await expect(field).toBeFocused();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/app\/tasks/);
+    await expect(tasks).toBeVisible();
+  });
+});

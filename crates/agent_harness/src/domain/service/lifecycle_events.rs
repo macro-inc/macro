@@ -1,15 +1,12 @@
 //! Publishing a session's lifecycle facts: who the session is.
 
-use agent_runtime_protocol::domain::action::AgentActionId;
 use agent_session::domain::events::{
-    AgentSessionLifecycleEvent, SessionIdentity, SessionMentionedMetadata, SessionOpenedMetadata,
+    AgentSessionLifecycleEvent, SessionIdentity, SessionOpenedMetadata,
 };
 use agent_session::domain::lifecycle::session_identity;
 
 use crate::domain::model::{ReplyPersona, is_coding_agent};
 use crate::domain::notifications::plan;
-use macro_user_id::user_id::MacroUserIdStr;
-use macro_uuid::Uuid;
 
 use super::*;
 
@@ -22,7 +19,6 @@ impl<
     PromptComposer,
     Egress,
     Lifecycle,
-    Mentions,
     Notifier,
 >
     AgentHarnessInner<
@@ -34,7 +30,6 @@ impl<
         PromptComposer,
         Egress,
         Lifecycle,
-        Mentions,
         Notifier,
     >
 where
@@ -46,7 +41,6 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
     /// The identity block for one session, from its row and its bot.
@@ -140,60 +134,6 @@ where
                 "skipping agent session lifecycle event: identity unavailable"
             ),
         }
-    }
-
-    /// Share the session with the users a prompt names and publish
-    /// `agent_session.mentioned` for them, if any.
-    ///
-    /// The author is never in the list: mentioning yourself is not news. Like
-    /// every lifecycle publish, a failure to resolve the mentions is logged
-    /// and the prompt goes on regardless - the mention is a courtesy to
-    /// whoever was named, not part of delivering the prompt.
-    ///
-    /// `origin_message_id` names the channel or document message the prompt
-    /// was posted as, when there is one. The fact carries it so the
-    /// notification plan can tell a prompt whose mentions the message service
-    /// already announced from one typed into the session view.
-    pub(super) async fn publish_mentions(
-        &self,
-        session_id: AgentSessionId,
-        action_id: AgentActionId,
-        actor: Option<MacroUserIdStr<'static>>,
-        prompt_markdown: &str,
-        origin_message_id: Option<Uuid>,
-    ) {
-        let mentioned = match self
-            .mentions
-            .share_with_mentioned(session_id, actor.as_ref(), prompt_markdown)
-            .await
-        {
-            Ok(mentioned) => mentioned,
-            Err(error) => {
-                tracing::warn!(
-                    error = ?error,
-                    %session_id,
-                    "skipping agent_session.mentioned: mentions unavailable"
-                );
-                return;
-            }
-        };
-        let mentioned: Vec<_> = mentioned
-            .into_iter()
-            .filter(|user| actor.as_ref() != Some(user))
-            .collect();
-        if mentioned.is_empty() {
-            return;
-        }
-        self.publish_lifecycle(session_id, |identity| {
-            AgentSessionLifecycleEvent::Mentioned(SessionMentionedMetadata {
-                identity,
-                action_id,
-                mentioned_by: actor,
-                mentioned,
-                origin_message_id,
-            })
-        })
-        .await;
     }
 
     /// Publish `agent_session.opened` for a row just created.

@@ -1,6 +1,10 @@
 import { StickyVirtualizer } from '@app/components/list/StickyVirtualizer';
 import { ListHeaderSearch } from '@app/components/view-shell/ListHeader';
-import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
+import { SearchTipsButton } from '@app/components/view-shell/search-tips';
+import {
+  LIST_VIEW_DOCS_URL,
+  SEARCH_OPERATORS_DOCS_URL,
+} from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { MobileAgentComposer } from '@app/features/agents-view/mobile-agent-composer';
 import {
@@ -8,6 +12,7 @@ import {
   resolveEntityActionViewContext,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
+import type { SearchOperatorBinding } from '@app/features/next-soup/core/search-operators';
 import type {
   GroupHeaderProps,
   SoupRow,
@@ -29,10 +34,6 @@ import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/sou
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
-import {
-  persistSoupNavigationTouchHighlight,
-  soupNavigationTouchHighlight,
-} from '@app/features/next-soup/soup-view/soup-navigation-touch-highlight';
 import { SoupRowMetadataProvider } from '@app/features/next-soup/soup-view/soup-row-metadata-provider';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/features/next-soup/soup-view/soup-view-create-button';
@@ -58,11 +59,13 @@ import {
   SoupEntityContextMenu,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
+import { holdRowPress } from '@components/app/mobile/rowPress';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import {
@@ -127,6 +130,8 @@ import type { CacheSnapshot } from 'virtua/unstable_core';
 import { makeMarkNotDoneAction } from '../actions/make-mark-not-done-action';
 import { SOUP_TOUR } from '../tour';
 import { SearchAskAiButton } from './search-ask-ai-button';
+import { SearchMoreChats } from './search-more-chats';
+import { searchViewTips } from './search-tips';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { SoupGroupContinuation } from './soup-group-continuation';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
@@ -219,6 +224,8 @@ interface SoupViewProps {
   initialClientFilters?: SetPredicatesInput<string>;
   initialFilters?: Query;
   initialSearchText?: string;
+  /** What the opener's tokens in `initialSearchText` stand for, by id. */
+  initialSearchBindings?: SearchOperatorBinding[];
   /**
    * Initial group-by id (same format as `soup.grouping.setActiveGroupId`,
    * e.g. `property:<definition-id>`). Applied only when no persisted state
@@ -270,6 +277,9 @@ export const SoupView = (props: SoupViewProps) => {
     | undefined;
 
   const persistedSearchText = entryState?.['search.text'] as string | undefined;
+  const persistedSearchBindings = entryState?.['search.bindings'] as
+    | SearchOperatorBinding[]
+    | undefined;
 
   const persistedGroupBy = entryState?.['soup.groupBy'] as
     | string
@@ -304,6 +314,11 @@ export const SoupView = (props: SoupViewProps) => {
         initialQuery: persistedFilters ?? props.initialFilters,
         initialClientFilters: persistedPredicates ?? props.initialClientFilters,
         initialSearchText: persistedSearchText ?? props.initialSearchText,
+        // The bindings belong to the text they came with.
+        initialSearchBindings:
+          persistedSearchText !== undefined
+            ? persistedSearchBindings
+            : props.initialSearchBindings,
         disableLocalSearch: props.disableLocalSearch,
         additionalEntities: props.additionalEntities,
       });
@@ -436,19 +451,30 @@ export const SoupView = (props: SoupViewProps) => {
                 <Show when={!isTouchDevice()}>
                   <div class="flex items-center gap-1">
                     <span class="text-sm font-semibold">{props.viewName}</span>
-                    <Show when={docsUrl()}>
-                      {(url) => (
-                        <Button
-                          aria-label="View documentation"
-                          tooltip="View documentation"
-                          size="icon-sm"
-                          variant="ghost"
-                          class="@max-[380px]/split-header:hidden"
-                          onClick={() => openExternalUrl(url())}
-                        >
-                          <InfoIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-                        </Button>
-                      )}
+                    <Show
+                      when={isComponentListView('search')}
+                      fallback={
+                        <Show when={docsUrl()}>
+                          {(url) => (
+                            <Button
+                              aria-label="View documentation"
+                              tooltip="View documentation"
+                              size="icon-sm"
+                              variant="ghost"
+                              class="@max-[380px]/split-header:hidden"
+                              onClick={() => openExternalUrl(url())}
+                            >
+                              <InfoIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                            </Button>
+                          )}
+                        </Show>
+                      }
+                    >
+                      <SearchTipsButton
+                        tips={searchViewTips()}
+                        docsUrl={SEARCH_OPERATORS_DOCS_URL}
+                        class="@max-[380px]/split-header:hidden"
+                      />
                     </Show>
                   </div>
                 </Show>
@@ -628,7 +654,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     source,
     rows,
     searchText,
+    searchAwaitingInput,
     featuredIds,
+    moreChatCount,
+    showMoreChats,
     isSearchServiceLoading,
     isLocalSearchSettling,
     activeTab,
@@ -883,7 +912,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       return;
     }
 
-    const finishTouchHighlight = persistSoupNavigationTouchHighlight(event);
+    const releaseRowPress = holdRowPress(event);
 
     try {
       await openEntityInSplitFromUnifiedList(entity, {
@@ -894,7 +923,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         notificationSource,
       });
     } finally {
-      finishTouchHighlight?.();
+      releaseRowPress?.();
     }
   };
 
@@ -1192,7 +1221,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                 >
                   <div class="flex items-center gap-2 p-3 text-xs text-ink-muted touch:mt-(--mobile-content-inset-top) touch:mb-(--mobile-content-inset-bottom)">
                     <Spinner class="size-3 animate-spin" />
-                    Searching...
+                    {t('searchResults.searching')}
                   </div>
                 </Match>
                 <Match when={showEmptyState()}>
@@ -1206,7 +1235,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         <EmptyState
                           content={props.emptyContent}
                           listView={currentView()}
-                          search={!!searchText()}
+                          search={!!searchText() && !searchAwaitingInput()}
                           hasRefinementsFromBase={hasActiveRefinements()}
                           hasHiddenItems={hasHiddenItems()}
                           onClearFilters={resetToTabDefaults}
@@ -1254,10 +1283,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     >
                       <SoupList
                         cache={readListEntryState()?.virtualCache}
-                        ref={(el) => {
-                          setLocalEntityListRef(el);
-                          soupNavigationTouchHighlight(el);
-                        }}
+                        ref={setLocalEntityListRef}
                         scrollerRef={setListScrollerRef}
                         virtualizerClass="scrollbar-hidden"
                         class="overflow-hidden flex min-w-0"
@@ -1306,7 +1332,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                             <>
                               <Show when={i() === 0 && featuredCount() > 0}>
                                 <SoupSectionHeader>
-                                  <span class="truncate">Featured Results</span>
+                                  <span class="truncate">
+                                    {currentView() === 'search'
+                                      ? t('searchResults.bestMatches')
+                                      : t('searchResults.featuredResults')}
+                                  </span>
                                 </SoupSectionHeader>
                               </Show>
                               <Show
@@ -1315,7 +1345,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                 }
                               >
                                 <SoupSectionHeader>
-                                  <span class="truncate">More Results</span>
+                                  <span class="truncate">
+                                    {t('searchResults.moreResults')}
+                                  </span>
                                 </SoupSectionHeader>
                               </Show>
 
@@ -1450,6 +1482,30 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                               </Switch>
                               <Show
                                 when={
+                                  i() === featuredCount() - 1 &&
+                                  moreChatCount() > 0
+                                }
+                              >
+                                <SearchMoreChats
+                                  count={moreChatCount()}
+                                  rowFamily={rowEntry().family}
+                                  onShow={() => {
+                                    // Keyboard focus moves to the first chat
+                                    // shown, where this row was.
+                                    const index = i() + 1;
+                                    showMoreChats();
+                                    soup.navigate.toIndex(index);
+                                    virtualizerHandle()?.scrollToIndex(index, {
+                                      align: 'nearest',
+                                    });
+                                    panel
+                                      .panelRef()
+                                      ?.focus({ preventScroll: true });
+                                  }}
+                                />
+                              </Show>
+                              <Show
+                                when={
                                   i() === rows().length - 1 &&
                                   (isSearchServiceLoading() ||
                                     source.isFetchingNextPage())
@@ -1458,8 +1514,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                 <div class="flex items-center gap-2 p-3 text-xs text-ink-muted">
                                   <Spinner class="size-3 animate-spin" />
                                   {source.isFetchingNextPage()
-                                    ? 'Loading more...'
-                                    : 'Searching...'}
+                                    ? t('searchResults.loadingMore')
+                                    : t('searchResults.searching')}
                                 </div>
                               </Show>
                               <Show when={i() === rows().length - 1}>

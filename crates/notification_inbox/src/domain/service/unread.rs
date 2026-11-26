@@ -9,13 +9,13 @@ use std::collections::{HashMap, VecDeque};
 
 use super::*;
 
-/// Groups that may hold an unread row, looked up per entity type. More than
-/// enough to reach [`UNREAD_ROWS_COUNTED`] unless most can no longer be
-/// opened.
+/// Groups that may hold an unread row, looked up per entity type. Usually
+/// more than enough to stop counting at, unless most can no longer be opened
+/// or, for channels, hold nothing Chat shows.
 const UNREAD_KEYS_PER_TYPE: u16 = 500;
 
 /// Groups of one entity type read per round, between checks of whether that
-/// type already holds [`UNREAD_ROWS_COUNTED`] unread rows.
+/// type already holds enough unread rows.
 const UNREAD_ROUND: usize = 100;
 
 impl<S, N, M, G, A, U> NotificationInboxServiceImpl<S, N, M, G, A, U>
@@ -27,23 +27,26 @@ where
     A: BulkActionStore,
     U: ClearUpdates,
 {
-    /// The kind of each unread row of the current groups among `keys`.
-    /// Groups that are gone, or hold no unread row, are absent.
+    /// The unread rows of the current groups among `keys`. Groups that are
+    /// gone, or hold no unread row, are absent.
     async fn unread_among(
         &self,
         viewer: &FeedViewer,
         keys: &[FeedKey],
-    ) -> Result<HashMap<FeedKey, Vec<InboxRowType>>, Report> {
+    ) -> Result<HashMap<FeedKey, Vec<UnreadRow>>, Report> {
         Ok(self
             .current(viewer, keys, CandidateRead::Replica)
             .await?
             .into_iter()
             .filter_map(|(key, group)| {
-                let unread: Vec<InboxRowType> = group
+                let unread: Vec<UnreadRow> = group
                     .rows
                     .iter()
                     .filter(|row| row.unseen)
-                    .map(|row| row.row_type)
+                    .map(|row| UnreadRow {
+                        row_type: row.row_type,
+                        in_chat: rows::unread_in_chat(row, &viewer.user),
+                    })
                     .collect();
                 (!unread.is_empty()).then_some((key, unread))
             })
@@ -73,7 +76,7 @@ where
         loop {
             let mut round = Vec::new();
             for (entity_type, keys) in &mut waiting {
-                if unread.rows_under(*entity_type) >= UNREAD_ROWS_COUNTED {
+                if unread.holds_enough(*entity_type) {
                     continue;
                 }
                 let take = keys.len().min(UNREAD_ROUND);
@@ -118,7 +121,7 @@ where
         let owed = unread
             .more
             .iter()
-            .any(|entity_type| unread.rows_under(*entity_type) < UNREAD_ROWS_COUNTED);
+            .any(|entity_type| !unread.holds_enough(*entity_type));
         if owed {
             return self.count_unread(viewer).await;
         }

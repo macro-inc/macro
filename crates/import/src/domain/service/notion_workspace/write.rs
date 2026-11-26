@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use futures::{FutureExt, StreamExt, stream};
-use import_notion::domain::inventory::{all_rows, full_markdown};
+use import_notion::domain::inventory::all_rows;
 use import_notion::domain::macro_cells::{PeopleMap, capped_name, derived_id};
 use import_notion::domain::model::NotionId;
 use import_notion::domain::ports::NotionApi;
@@ -23,20 +23,26 @@ use crate::domain::models::{
     WrittenObject,
 };
 use crate::domain::ports::{
-    ImportVisibility, NotionLinks, NotionPageLink, NotionUserLink, SharedEntity, SourceDates,
-    WorkspaceWriter, WrittenObjects,
+    ImportVisibility, NotionLinks, NotionUserLink, SharedEntity, SourceDates, WorkspaceWriter,
+    WrittenObjects,
 };
 
 use super::values::{task_body, task_properties};
 
 mod database;
-pub(super) use database::{WrittenDatabase, link_relations, recorded_database, write_database};
+mod reservation;
+pub(super) use database::{
+    PreparedDatabase, WrittenDatabase, link_relations, prepare_database, recorded_database,
+    write_prepared_database,
+};
 
 #[cfg(test)]
 mod test;
 
 /// Objects written at once.
 pub(super) const WRITE_CONCURRENCY: usize = 4;
+/// Source-specific reservation failures tolerated within one ledger generation.
+pub(super) const RESERVATION_ATTEMPTS: usize = 3;
 /// Row bodies fetched at once within one database.
 const BODY_CONCURRENCY: usize = 3;
 /// Name of the folder every workspace import writes into.
@@ -46,6 +52,11 @@ pub(super) const ROOT_FOLDER: &str = "Notion";
 pub(super) const DOCUMENT_ENTITY: &str = "md";
 pub(super) const DATABASE_ENTITY: &str = "database";
 pub(super) const FOLDER_ENTITY: &str = "project";
+
+/// A cancellation checkpoint, kept distinct from provider and source errors.
+#[derive(Debug, thiserror::Error)]
+#[error("Cancelled")]
+pub(super) struct Cancelled;
 
 /// Set once the write must stop (the user cancelled, the process is shutting
 /// down, or another process took the run over); long writes check it between
@@ -66,7 +77,9 @@ impl Cancel {
 
     /// Fail with "Cancelled" once the import was cancelled.
     pub fn ensure_running(&self) -> anyhow::Result<()> {
-        anyhow::ensure!(!self.stopped(), "Cancelled");
+        if self.stopped() {
+            return Err(Cancelled.into());
+        }
         Ok(())
     }
 }
@@ -76,6 +89,8 @@ impl Cancel {
 pub(in crate::domain::service) struct WriteItem {
     /// The ledger row.
     pub import_id: Uuid,
+    /// Planned objects referencing an external source, for placement reporting.
+    pub dependency_of: Vec<String>,
     /// The ledger row it sits under, if any.
     pub parent: Option<Uuid>,
     /// The Notion object.
@@ -111,6 +126,7 @@ impl WriteItem {
         let plan = meta.plan?;
         Some(Self {
             import_id: entity.id,
+            dependency_of: plan.dependency_of,
             parent: entity.parent_id,
             notion_id: NotionId::parse(&entity.foreign_id)?,
             kind: entity.kind,
@@ -196,29 +212,8 @@ pub(super) fn folder_for(
     root
 }
 
-/// Where the plan's pages and people resolve in Macro: every page gets the
-/// id of the document it becomes (`imported` when it already exists,
-/// otherwise [`document_id`], known before anything is written), and every
-/// person matched to a teammate their account.
-pub(super) fn notion_links(
-    items: &[WriteItem],
-    imported: &HashMap<NotionId, Uuid>,
-    people: &PeopleMap,
-) -> NotionLinks {
-    let pages = items
-        .iter()
-        .filter(|item| item.kind != ImportKind::DataSource)
-        .map(|item| {
-            let link = NotionPageLink {
-                document_id: imported
-                    .get(&item.notion_id)
-                    .copied()
-                    .unwrap_or_else(|| document_id(item.import_id)),
-                name: item.title.clone(),
-            };
-            (item.notion_id.clone(), link)
-        })
-        .collect();
+/// The initial conversion keeps hyperlinks and resolves only known people.
+pub(super) fn notion_links(people: &PeopleMap) -> NotionLinks {
     let users = people
         .iter()
         .filter_map(|(id, person)| {
@@ -229,7 +224,10 @@ pub(super) fn notion_links(
             Some((id.clone(), link))
         })
         .collect();
-    NotionLinks { pages, users }
+    NotionLinks {
+        users,
+        ..Default::default()
+    }
 }
 
 /// The document plan row `import_id` becomes, the same on every attempt.
@@ -243,7 +241,10 @@ pub(super) struct Progress<'a, Store> {
     store: &'a Store,
     user: &'a MacroUserIdStr<'static>,
     import_id: Uuid,
+    review_id: Option<Uuid>,
     known: Mutex<HashMap<(WrittenKind, String), Uuid>>,
+    warnings: Mutex<Vec<crate::domain::models::FidelityWarning>>,
+    losses: Mutex<HashMap<NotionId, HashSet<crate::domain::models::SourceLossFact>>>,
 }
 
 impl<'a, Store: WrittenObjects> Progress<'a, Store> {
@@ -263,8 +264,20 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
             store,
             user,
             import_id,
+            review_id: None,
             known: Mutex::new(known),
+            warnings: Mutex::new(Vec::new()),
+            losses: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Refuse unknown prerequisites before changing an interrupted source.
+    pub fn ensure_supported(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.all(WrittenKind::Unsupported).is_empty(),
+            crate::domain::models::SourceStopReason::UnsupportedMarker
+        );
+        Ok(())
     }
 
     /// The row's own object of `kind`, when an earlier attempt made it.
@@ -294,6 +307,38 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    /// A successful reservation releases its bounded retry and outage state.
+    pub async fn clear_reservation_failures(&self) -> anyhow::Result<()> {
+        if self.all(WrittenKind::DatabaseReservationFailure).is_empty() {
+            return Ok(());
+        }
+        self.store
+            .clear_database_reservation_failures(self.user, self.import_id)
+            .await?;
+        self.known
+            .lock()
+            .map_err(|_| anyhow::anyhow!("written marker buffer unavailable"))?
+            .retain(|(kind, _), _| *kind != WrittenKind::DatabaseReservationFailure);
+        Ok(())
+    }
+
+    /// Spend one source-scoped attempt; run-wide failures never call this.
+    pub async fn reservation_failure(&self) -> anyhow::Result<usize> {
+        let count = self.reservation_failures()?;
+        if count >= RESERVATION_ATTEMPTS {
+            return Ok(RESERVATION_ATTEMPTS);
+        }
+        let attempt = Uuid::now_v7();
+        self.record_all(vec![WrittenObject {
+            import_id: self.import_id,
+            kind: WrittenKind::DatabaseReservationFailure,
+            object: attempt.to_string(),
+            macro_id: attempt,
+        }])
+        .await?;
+        Ok(count + 1)
     }
 
     /// Resolve this source's omitted assignees once, without revisiting user edits.
@@ -334,6 +379,106 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
         Ok(())
     }
 
+    /// Record a semantic notice without pre-rendering its sentence.
+    pub async fn notice(
+        &self,
+        object: &NotionId,
+        source: &str,
+        kind: crate::domain::models::ImportNoticeKind,
+    ) -> anyhow::Result<()> {
+        self.warn_fidelity(&[crate::domain::models::FidelityWarning::Notice {
+            notice: crate::domain::models::ImportNotice::new(object, source, kind),
+        }])
+        .await
+    }
+
+    /// Forward another source's already counted warnings after its access check.
+    pub async fn warn_fidelity(
+        &self,
+        warnings: &[crate::domain::models::FidelityWarning],
+    ) -> anyhow::Result<()> {
+        self.warnings
+            .lock()
+            .map_err(|_| anyhow::anyhow!("warning buffer unavailable"))?
+            .extend_from_slice(warnings);
+        Ok(())
+    }
+
+    /// Report a typed source-only stop before recording its failure.
+    pub async fn source_stopped(
+        &self,
+        title: &str,
+        reason: crate::domain::models::SourceStopReason,
+    ) -> anyhow::Result<()> {
+        self.warn_fidelity(&[crate::domain::models::FidelityWarning::SourceStopped {
+            title: title.to_owned(),
+            reason,
+        }])
+        .await
+    }
+
+    /// Keep a typed loss until the same batch records its completed object.
+    pub fn loss(&self, mut fact: crate::domain::models::SourceLossFact) -> anyhow::Result<()> {
+        fact.bound_display_text();
+        self.losses
+            .lock()
+            .map_err(|_| anyhow::anyhow!("loss buffer unavailable"))?
+            .entry(fact.object.clone())
+            .or_default()
+            .insert(fact);
+        Ok(())
+    }
+
+    /// Persist one cumulative snapshot per phase, rebuilding facts after a restart.
+    pub async fn flush_warnings(&self) -> anyhow::Result<()> {
+        use crate::domain::models::{FidelityWarning, SourceLossFact};
+        let mut facts: Vec<SourceLossFact> = self
+            .all(WrittenKind::Loss)
+            .into_keys()
+            .map(|payload| serde_json::from_str(&payload))
+            .collect::<std::result::Result<_, _>>()?;
+        facts.extend(
+            self.losses
+                .lock()
+                .map_err(|_| anyhow::anyhow!("loss buffer unavailable"))?
+                .values()
+                .flatten()
+                .cloned(),
+        );
+        let mut warnings = self
+            .warnings
+            .lock()
+            .map_err(|_| anyhow::anyhow!("warning buffer unavailable"))?
+            .clone();
+        warnings.extend(SourceLossFact::warnings(facts));
+        let warnings = FidelityWarning::merge(warnings);
+        if !warnings.is_empty() {
+            self.store
+                .record_warnings(self.user, self.import_id, &warnings)
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Add small loss facts to an existing marker batch, never a per-row warning update.
+    pub fn loss_markers(&self, object: &NotionId) -> anyhow::Result<Vec<WrittenObject>> {
+        self.losses
+            .lock()
+            .map_err(|_| anyhow::anyhow!("loss buffer unavailable"))?
+            .get(object)
+            .into_iter()
+            .flatten()
+            .map(|fact| {
+                Ok(WrittenObject {
+                    import_id: self.import_id,
+                    kind: WrittenKind::Loss,
+                    object: serde_json::to_string(fact)?,
+                    macro_id: self.import_id,
+                })
+            })
+            .collect()
+    }
+
     /// Record the row's own object of `kind`.
     pub async fn record(&self, kind: WrittenKind, macro_id: Uuid) -> anyhow::Result<()> {
         self.record_all(vec![WrittenObject::own(self.import_id, kind, macro_id)])
@@ -347,13 +492,37 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
         row: &NotionId,
         macro_id: Uuid,
     ) -> anyhow::Result<()> {
-        self.record_all(vec![WrittenObject::for_row(
-            self.import_id,
-            kind,
-            row,
-            macro_id,
-        )])
-        .await
+        let mut objects = self.loss_markers(row)?;
+        objects.push(WrittenObject::for_row(self.import_id, kind, row, macro_id));
+        self.record_all(objects).await
+    }
+
+    /// Fence deferred document writes to the reviewed generation creating them.
+    pub fn in_review(mut self, review_id: Uuid) -> Self {
+        self.review_id = Some(review_id);
+        self
+    }
+
+    /// Store the body identity and initial revision in one ledger write.
+    pub async fn record_document(
+        &self,
+        kind: WrittenKind,
+        source: &NotionId,
+        document: &crate::domain::ports::CreatedImportDocument,
+    ) -> anyhow::Result<Uuid> {
+        let id: Uuid = document.id.parse()?;
+        let mut objects = self.loss_markers(source)?;
+        objects.push(WrittenObject::for_row(self.import_id, kind, source, id));
+        if let (Some(generation), Some(revision)) = (self.review_id, document.link_revision) {
+            objects.push(WrittenObject {
+                import_id: self.import_id,
+                kind: WrittenKind::LinkBodyRevision,
+                object: format!("{generation}/{id}"),
+                macro_id: revision,
+            });
+        }
+        self.record_all(objects).await?;
+        Ok(id)
     }
 
     /// Record `objects`, which must belong to this row.
@@ -378,15 +547,13 @@ pub(super) async fn folder_once<Writer: WorkspaceWriter, Store: WrittenObjects>(
     progress: &Progress<'_, Store>,
     kind: WrittenKind,
     name: &str,
-    parent: Uuid,
+    parent: Option<Uuid>,
     visibility: crate::domain::ports::ImportVisibility,
 ) -> anyhow::Result<Uuid> {
     if let Some(folder) = progress.get(kind) {
         return Ok(folder);
     }
-    let folder = writer
-        .create_folder(user, name, Some(parent), visibility)
-        .await?;
+    let folder = writer.create_folder(user, name, parent, visibility).await?;
     progress.record(kind, folder).await?;
     Ok(folder)
 }
@@ -407,6 +574,7 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
     share: bool,
     people: &PeopleMap,
     links: &tokio::sync::RwLock<NotionLinks>,
+    destinations: &super::databases::DatabaseDestinations,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
     personal_folder: Option<Uuid>,
@@ -422,7 +590,7 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                 progress,
                 WrittenKind::TasksFolder,
                 &capped_name(&item.title),
-                folder,
+                Some(folder),
                 visibility,
             )
             .await?
@@ -474,7 +642,14 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                         }
                         return Ok(());
                     }
-                    let content = full_markdown(api, &row.id).await?;
+                    let (content, database_links) = super::databases::body_links(
+                        api,
+                        &row.id,
+                        &row.title,
+                        destinations,
+                        progress,
+                    )
+                    .await?;
                     let body = task_body(&row, &content, &item.task_fields, people);
                     let properties = task_properties(&row, &item.task_fields, people);
                     let title = if row.title.trim().is_empty() {
@@ -483,14 +658,15 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                         row.title.trim()
                     };
                     let id = derived_id(item.import_id, &format!("task/{}", row.id.as_str()));
-                    let links = links.read().await.clone();
+                    let mut row_links = links.read().await.clone();
+                    row_links.databases = database_links;
                     let created = writer
                         .create_task(
                             user,
                             id,
                             title,
                             &body,
-                            &links,
+                            &row_links,
                             &properties,
                             Some(tasks_folder),
                             Some(SourceDates::from(&row)),

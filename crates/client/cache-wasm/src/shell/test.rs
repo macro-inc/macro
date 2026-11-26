@@ -12,6 +12,62 @@ wasm_bindgen_test_configure!(run_in_dedicated_worker);
 mod hydration_scope;
 mod mail_projection;
 mod people;
+mod queue_salvage;
+
+/// The old way of reading a hydrate's data, which `json_value_from_js` must
+/// match.
+fn json_value_from_js_old(value: JsValue) -> serde_json::Value {
+    serde_wasm_bindgen::from_value(value).unwrap()
+}
+
+#[wasm_bindgen_test]
+fn hydrate_data_reads_as_serde_wasm_bindgen_reads_it() {
+    let mut texts = vec![
+        r#"{"text":"line\n\"quoted\" 🙂 \u0000","nested":[null,true,false,{"value":1.25}],"safe":9007199254740991,"minSafe":-9007199254740991,"big":1152921504606846976,"minusBig":-1152921504606846976,"huge":1e21,"tiny":5e-324,"third":0.1,"negativeZero":-0,"int":42,"float":-17.5,"keys":{"b":1,"a":2,"10":3,"2":4},"__proto__":5,"empty":{},"list":[]}"#.to_owned(),
+        // A lone surrogate does not parse back from JSON.stringify's text.
+        r#"["\ud800 lone", {"\udc00": "\udbff"}]"#.to_owned(),
+        // Deeper than serde_json's recursion limit.
+        format!("{}1{}", "[".repeat(200), "]".repeat(200)),
+        "null".to_owned(),
+        "7".to_owned(),
+    ];
+    // Floats from random bit patterns.
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let floats = (0..2_000)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            f64::from_bits(state)
+        })
+        .filter(|float| float.is_finite())
+        .map(|float| {
+            js_sys::JSON::stringify(&JsValue::from_f64(float))
+                .unwrap()
+                .as_string()
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    texts.push(format!("[{}]", floats.join(",")));
+    for text in texts {
+        let value = js_sys::JSON::parse(&text).unwrap();
+        assert_eq!(
+            json_value_from_js(value.clone()).unwrap(),
+            json_value_from_js_old(value),
+            "{text}"
+        );
+    }
+    let big = json_value_from_js(js_sys::JSON::parse("[1152921504606846976]").unwrap()).unwrap();
+    assert!(big[0].is_f64());
+    // An `undefined` property, which JSON.parse never produces, is left out.
+    let object = js_sys::Object::new();
+    js_sys::Reflect::set(&object, &"gone".into(), &JsValue::UNDEFINED).unwrap();
+    js_sys::Reflect::set(&object, &"kept".into(), &JsValue::from_f64(1.0)).unwrap();
+    assert_eq!(
+        json_value_from_js(object.into()).unwrap(),
+        serde_json::json!({"kept": 1})
+    );
+}
 
 #[wasm_bindgen_test]
 fn read_response_conversion_preserves_json_and_revision_strings() {
@@ -2647,9 +2703,13 @@ async fn move_opfs_pair(from: &str, to: &str) {
 }
 
 async fn queue_one_mutation(engine: &CacheEngine) {
+    queue_mutation(engine, "00000000-0000-4000-8000-000000000011").await;
+}
+
+async fn queue_mutation(engine: &CacheEngine, uuid: &str) {
     resolved(engine.enqueue_optimistic_mutation(
         None,
-        "00000000-0000-4000-8000-000000000011".into(),
+        uuid.into(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_variables()),
@@ -2665,7 +2725,7 @@ async fn queue_one_mutation(engine: &CacheEngine) {
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
-        test_generation(&engine).await,
+        test_generation(engine).await,
     ))
     .await;
 }
@@ -2916,12 +2976,13 @@ async fn idle_checkpoint_copies_a_due_wal_once_and_keeps_reads() {
             copied = Some(result);
             break;
         }
-        // Below 500 frames nothing is copied.
+        // The browser connection copies its own WAL: nothing below 4,000
+        // frames, in COMMIT or here.
         assert_eq!(result["backfilledFrames"], 0);
-        assert!(result["walFrames"].as_u64().unwrap() < 500);
+        assert!(result["walFrames"].as_u64().unwrap() < 4_000);
     }
-    let copied = copied.expect("the WAL reached 500 frames");
-    assert!(copied["walFrames"].as_u64().unwrap() >= 500);
+    let copied = copied.expect("the WAL reached 4,000 frames");
+    assert!(copied["walFrames"].as_u64().unwrap() >= 4_000);
     assert_eq!(copied["backfilledFrames"], copied["walFrames"]);
 
     // Nothing new since the copy: the next call skips it.

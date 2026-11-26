@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
 use axum::extract::{FromRef, Path, State, rejection::JsonRejection};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
@@ -65,17 +65,6 @@ where
         .with_state(state)
 }
 
-/// The W3C trace context of the request being served, kept on the job so
-/// work on other replicas can name the trace it started in.
-fn current_traceparent() -> Option<String> {
-    let mut headers = HeaderMap::new();
-    macro_tower_layers::inject_trace_headers(&mut headers);
-    headers
-        .get("traceparent")
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_owned)
-}
-
 /// A background draft to start: what the blocking route takes, and the id
 /// the client made for this start.
 #[derive(Debug, Deserialize, ToSchema)]
@@ -122,7 +111,9 @@ where
             request.client_id,
             request.draft,
             request.context,
-            current_traceparent(),
+            // Kept on the job so work on other replicas can name the trace it
+            // started in.
+            crate::trace_context::current(),
         )
         .await?;
     Ok((StatusCode::ACCEPTED, Json(job)))

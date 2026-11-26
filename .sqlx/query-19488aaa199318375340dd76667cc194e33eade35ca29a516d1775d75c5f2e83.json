@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH old AS MATERIALIZED (\n               SELECT id, entity_id FROM comms_entity_mentions\n               WHERE entity_type = $1 AND entity_id = ANY($2)\n               ORDER BY id\n               FOR UPDATE\n           ), updated AS (\n               UPDATE comms_entity_mentions m SET entity_id = $3\n               FROM old WHERE m.id = old.id\n           )\n           SELECT id AS \"id!\", entity_id AS \"previous!\" FROM old",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "previous!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "19488aaa199318375340dd76667cc194e33eade35ca29a516d1775d75c5f2e83"
+}

@@ -39,8 +39,22 @@ export const searchClient = {
       ...previous,
       { kind: 'search', ...args.request },
     ]);
-    const query = args.request.query.toLowerCase();
-    const senders = args.request.filters?.channel_filters?.sender_ids;
+    // As the search service reads typed operators: `from:` with an address
+    // names a sender, and the other operators narrow it, so only the words
+    // are matched.
+    const terms = args.request.query.split(/\s+/).filter(Boolean);
+    const typedSenders = terms.flatMap((term) => {
+      const sender = /^from:(\S+@\S+)$/i.exec(term)?.[1];
+      return sender ? [`macro|${sender.toLowerCase()}`] : [];
+    });
+    const query = terms
+      .filter((term) => !/^-?[a-z_]+:/i.test(term))
+      .join(' ')
+      .toLowerCase();
+    const senders = [
+      ...(args.request.filters?.channel_filters?.sender_ids ?? []),
+      ...typedSenders,
+    ];
     const channelIds = args.request.filters?.channel_filters?.channel_ids;
     const documentsExcluded =
       args.request.filters?.document_filters?.document_ids?.includes(

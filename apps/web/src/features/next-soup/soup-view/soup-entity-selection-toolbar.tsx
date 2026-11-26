@@ -1,4 +1,5 @@
 import { CommandState } from '@app/features/command/state';
+import { CrmMergeSelectionButton } from '@app/features/crm/crm-merge';
 import { EntitySelectionToolbarModal } from '@app/features/entity/EntitySelectionToolbarModal';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { EntityData } from '@entity';
@@ -32,6 +33,11 @@ export const SoupEntitySelectionToolbar = (
         // selection modification commands with a preview of the selected entities
         CommandState.openForEntityAction(selected);
       }}
-    />
+    >
+      <CrmMergeSelectionButton
+        selected={props.selected}
+        onMerged={props.onClear}
+      />
+    </EntitySelectionToolbarModal>
   );
 };

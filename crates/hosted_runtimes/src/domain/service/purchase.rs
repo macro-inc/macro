@@ -21,6 +21,7 @@ use crate::domain::ports::{
     Applied, Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, ItemCharge,
     ReserveError,
 };
+use crate::domain::telemetry::invite_purchase_phase;
 
 /// How long a reservation holds capacity while its charge is confirmed;
 /// after this the confirm worker settles it for good.
@@ -105,10 +106,12 @@ impl<
         let funding = match &request.billing {
             // Computers are for paying teams: refused before anything is reserved.
             PurchaseBilling::Stripe => Funding::Stripe {
-                price_id: self
-                    .billing
-                    .purchase_price(request.team_id, request.size)
-                    .await?,
+                price_id: invite_purchase_phase(
+                    agent.is_some(),
+                    "price",
+                    self.billing.purchase_price(request.team_id, request.size),
+                )
+                .await?,
             },
             PurchaseBilling::Comped { reason } => Funding::Comped {
                 reason: reason.clone(),
@@ -212,7 +215,13 @@ impl<
         price_id: &stripe::PriceId,
     ) -> Result<Purchase, ComputerError> {
         let confirming = Purchase::Confirming(reservation.id);
-        let _billing = match self.repo.lock_billing(reservation.id).await {
+        let _billing = match invite_purchase_phase(
+            reservation.agent.is_some(),
+            "billing_lock",
+            self.repo.lock_billing(reservation.id),
+        )
+        .await
+        {
             Ok(guard) => guard,
             Err(error) => {
                 tracing::error!(computer_id = %reservation.id, error = ?error,

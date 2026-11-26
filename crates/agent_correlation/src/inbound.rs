@@ -304,6 +304,9 @@ async fn propagate_request(
         Err(rejection) => return rejection.into_response(),
     };
     let token = tokens.authenticating;
+    let program = token
+        .as_ref()
+        .is_some_and(|token| token.agent_id.is_some() || token.routine_id.is_some());
     let signed = match checked_signed_scope(token.as_ref(), &parts) {
         Ok(signed) => signed,
         Err(rejection) => return rejection.into_response(),
@@ -335,6 +338,7 @@ async fn propagate_request(
     let attribution = Attribution {
         correlation_id,
         routine_id: token.and_then(|token| token.routine_id),
+        program,
         session_id: correlation.map(|(_, correlation)| correlation.session_id),
         scope: narrowest(
             correlation

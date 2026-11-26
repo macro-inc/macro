@@ -183,7 +183,10 @@ describe('channel unread edge revalidation', () => {
     const second = handler.onPatch(newNotification);
     await vi.advanceTimersByTimeAsync(0);
     expect(host.writeQuery).toHaveBeenCalledOnce();
-    host.onCacheGenerationChanged.mock.calls[0][0]({ storage: 'reset' });
+    host.onCacheGenerationChanged.mock.calls[0][0]({
+      storage: 'reset',
+      queue: 'reset',
+    });
     finish?.();
     await Promise.all([first, second]);
     expect(host.writeQuery).toHaveBeenCalledOnce();

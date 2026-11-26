@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
-import { useUpsertToHistoryMutation } from '@queries/history/history';
+import { recordHistoryView } from '@queries/history/history';
 import {
   hasSoupEntity,
   optimisticUpdateSoupItemViewedAt,
@@ -13,8 +13,6 @@ import {
   type ItemType,
   isCloudStorageItem,
 } from '@service-storage/client';
-import type { QueryClient } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { BlockName } from '../block';
 
@@ -85,11 +83,9 @@ async function fetchOpenedSoupEntity(
 export function track({
   itemId,
   blockName,
-  client,
 }: {
   itemId: string;
   blockName: BlockName;
-  client: Accessor<QueryClient>;
 }) {
   const itemType = blockNameToItemType(blockName);
 
@@ -104,6 +100,5 @@ export function track({
 
   if (!shouldTrackInUserHistory(itemType)) return;
 
-  const upsertToHistoryMutation = useUpsertToHistoryMutation(undefined, client);
-  upsertToHistoryMutation.mutate({ itemId, itemType });
+  fireAndForget(recordHistoryView({ itemId, itemType }), 'track-block-opened');
 }

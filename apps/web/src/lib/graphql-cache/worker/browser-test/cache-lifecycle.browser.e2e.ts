@@ -604,7 +604,7 @@ test('Cache terminates each admitted mutating RPC before core without replay', a
       midSqlExecutionClaimed: false,
       oldRequestRejected: true,
       replacementRecordsEmpty: true,
-      replacementQueueEmpty: true,
+      replacementQueueKept: true,
       mutationAdmissionCount: 1,
       unexpectedReplacementMutatingAdmissionCount: 0,
       replacementAdmissionBarrierObserved: true,
@@ -637,9 +637,19 @@ test('Cache lock-safe incompatible namespace and corrupt queue payload recover e
   await page.goto('/app/cache-recovery.html');
   await expect(page.locator('#result')).toHaveAttribute('data-status', 'ready');
   const recoveryHookUrls = new Set<string>();
-  for (const [kind, openOutcome] of [
-    ['incompatible-namespace', 'reset-incompatible'],
-    ['corrupt-queue-payload', 'reset-corrupt'],
+  for (const [kind, openOutcome, queue] of [
+    // Another build's optimistic layers: nobody can tell what they mean.
+    [
+      'incompatible-namespace',
+      'reset-incompatible',
+      { queueOutcome: 'unreadable', queueKept: 0, queueDropped: 1 },
+    ],
+    // One more row, which cannot be decoded, beside the mutation it keeps.
+    [
+      'corrupt-queue-payload',
+      'reset-corrupt',
+      { queueOutcome: 'partial', queueKept: 1, queueDropped: 1 },
+    ],
   ] as const) {
     const result = await page.evaluate(
       async (recoveryKind) =>
@@ -658,12 +668,13 @@ test('Cache lock-safe incompatible namespace and corrupt queue payload recover e
       productionCoordinatorProtocolUnchanged: true,
       openOutcome,
       recordsWiped: true,
-      durableQueueWiped: true,
+      durableQueueKept: queue.queueKept === 1,
       usableAfterReset: true,
       storageResetRequiredCount: 1,
       logicalResetCount: 1,
       resetWipeCount: 1,
-      queueTelemetryObserved: true,
+      queueDepths: expect.arrayContaining([queue.queueKept]),
+      queueOutcomes: expect.arrayContaining([queue]),
     });
     recoveryHookUrls.add(result.browserTestWasmUrl);
   }

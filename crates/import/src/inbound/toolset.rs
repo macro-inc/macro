@@ -23,6 +23,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod import_from_hubspot;
+
 /// What the agent does after a workspace plan failed: tell the user once,
 /// instead of planning again, which fails the same way.
 const FAILED_NEXT: &str = "Tell the user in one sentence why it failed and what they can do about it. Do not plan again, check its status, or present a review until the user asks you to try again.";
@@ -35,6 +37,7 @@ fn failure_reason(source: ImportSource, kind: Option<RunErrorKind>) -> String {
 
 mod import_from_notion;
 mod import_from_tracker;
+pub use import_from_hubspot::{HubspotImportResponse, ImportFromHubspot};
 pub use import_from_tracker::{ImportFromJira, ImportFromLinear, TrackerImportResponse};
 
 pub use import_from_notion::{ImportFromNotion, ImportFromNotionResponse, NotionImportAction};
@@ -92,6 +95,7 @@ pub fn import_toolset<T: ImportStager + NotionPageImporter + WorkspaceImporter>(
         .add_tool::<ImportFromNotion, ImportToolContext<T>>()
         .add_tool::<ImportFromLinear, ImportToolContext<T>>()
         .add_tool::<ImportFromJira, ImportToolContext<T>>()
+        .add_tool::<ImportFromHubspot, ImportToolContext<T>>()
         .add_tool::<DeleteImportEntity, ImportToolContext<T>>()
         .add_tool::<ListImportEntities, ImportToolContext<T>>()
 }

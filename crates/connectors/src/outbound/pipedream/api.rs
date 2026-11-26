@@ -382,7 +382,7 @@ impl PipedreamClient {
     /// callers that proxy raw MCP-over-HTTP traffic. It carries our
     /// project-level bearer, so it must never travel anywhere
     /// user-controlled.
-    #[tracing::instrument(skip_all, err, fields(app = %record.app_slug, user_id = %record.user_id))]
+    #[tracing::instrument(skip_all, err, fields(app = %record.app_slug))]
     pub(crate) async fn mcp_upstream(
         &self,
         record: &PipedreamConnection,

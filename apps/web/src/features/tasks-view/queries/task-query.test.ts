@@ -1,8 +1,14 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  TASK_DEFAULT_GROUP_BY,
+  withoutStartDateGrouping,
+  withoutStartDateSort,
+} from '../constants';
+import {
   createDateBucketBoundaries,
   taskDueDatePredicate,
+  taskStartDatePredicate,
 } from '../core/task-due-date';
 import {
   captureTaskSavedView,
@@ -10,7 +16,6 @@ import {
   materializeTaskSavedView,
   readTaskSavedView,
 } from '../filters/task-saved-view';
-
 import { type BuildTaskQueryOptions, buildTaskQuery } from './task-query';
 import { buildTaskSearchRequest } from './task-search';
 
@@ -282,6 +287,143 @@ it.each([
     ).toBe(reversed);
   }
 );
+describe('start dates', () => {
+  it('groups by Start Date with its own past and missing buckets, filters and sorts on it', () => {
+    const startDate = taskStartDatePredicate({ type: 'started' }, calendar);
+    const query = buildTaskQuery({
+      ...options,
+      facets: {},
+      groupBy: 'start_date',
+      sort: [{ id: 'start_date_earliest', reversed: true }],
+      startDate,
+      calendar,
+    });
+    expect(query.params).toMatchObject({
+      sort_method: 'property',
+      sort_property_definition_id: SYSTEM_PROPERTY_IDS.START_DATE,
+      sort_direction: 'asc',
+    });
+    expect(query.groupBy).toMatchObject({
+      type: 'property',
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.START_DATE,
+      bucketing: {
+        type: 'date_ranges',
+        missingValueBucketKey: 'no_start_date',
+        ranges: [
+          { key: 'started', start: null, end: calendar.boundaries.today },
+          { key: 'today' },
+          { key: 'tomorrow' },
+          { key: 'next_7_days' },
+          { key: 'later' },
+        ],
+      },
+    });
+    expect(query.body.propf).toEqual({
+      l: {
+        pd: SYSTEM_PROPERTY_IDS.START_DATE,
+        et: 'TASK',
+        v: { dr: { end: calendar.boundaries.today } },
+      },
+    });
+  });
+
+  it('filters on both dates at once and keeps start sorting out of text search', () => {
+    const query = buildTaskQuery({
+      ...options,
+      facets: {},
+      dueDate: taskDueDatePredicate({ type: 'has_due_date' }, calendar),
+      startDate: taskStartDatePredicate({ type: 'no_start_date' }, calendar),
+      sort: [{ id: 'start_date_latest' }],
+      searching: true,
+    });
+    expect(query.body.propf).toEqual({
+      '&': [
+        {
+          l: { pd: SYSTEM_PROPERTY_IDS.DUE_DATE, et: 'TASK', v: { dr: {} } },
+        },
+        {
+          '!': {
+            l: {
+              pd: SYSTEM_PROPERTY_IDS.START_DATE,
+              et: 'TASK',
+              v: { dr: {} },
+            },
+          },
+        },
+      ],
+    });
+    expect(query.params.sort_method).toBe('updated_at');
+    expect(
+      buildTaskSearchRequest({
+        query: 'launch',
+        matchType: 'partial',
+        tab: 'team-tasks',
+        userId: 'user',
+        facets: {},
+        startDate: taskStartDatePredicate(
+          { type: 'range', start: '2026-11-02', end: '2026-11-03' },
+          calendar
+        ),
+      }).body.filters?.property_filters
+    ).toContainEqual({
+      property_definition_id: SYSTEM_PROPERTY_IDS.START_DATE,
+      entity_type: 'TASK',
+      date_range: {
+        start: '2026-11-02T05:00:00.000Z',
+        end: '2026-11-04T05:00:00.000Z',
+      },
+    });
+  });
+
+  it('falls back to the tab grouping and Updated sort when start dates are off', () => {
+    expect(withoutStartDateGrouping('start_date', 'my-tasks')).toBe(
+      TASK_DEFAULT_GROUP_BY['my-tasks']
+    );
+    expect(withoutStartDateGrouping('start_date', 'created-by-me')).toBe(
+      TASK_DEFAULT_GROUP_BY['created-by-me']
+    );
+    expect(withoutStartDateGrouping('due_date', 'my-tasks')).toBe('due_date');
+    expect(withoutStartDateSort([{ id: 'start_date_latest' }])).toEqual([
+      { id: 'updated_at' },
+    ]);
+    const due = [{ id: 'due_date_earliest' as const }];
+    expect(withoutStartDateSort(due)).toBe(due);
+    const query = buildTaskQuery({
+      ...options,
+      groupBy: withoutStartDateGrouping('start_date', 'team-tasks'),
+      sort: withoutStartDateSort([{ id: 'start_date_earliest' }]),
+      calendar,
+    });
+    expect(query.params).toMatchObject({ sort_method: 'updated_at' });
+    expect(query.groupBy).toEqual({
+      type: 'property',
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PRIORITY,
+    });
+  });
+
+  it('round-trips a start-date filter, grouping and sort through a saved view', () => {
+    const captured = captureTaskSavedView({
+      tab: 'team-tasks',
+      facets: {},
+      groupBy: 'start_date',
+      sort: [{ id: 'start_date_latest' }],
+      startDate: { type: 'next_7_days' },
+      dueDate: { type: 'has_due_date' },
+      context: { tagPropertyDefinitionByOptionId: new Map() },
+    });
+    expect(captured.isOk()).toBe(true);
+    if (captured.isErr()) return;
+    const { config, issues } = readTaskSavedView(captured.value);
+    expect(issues).toEqual([]);
+    expect(materializeTaskSavedView(config)).toMatchObject({
+      groupBy: 'start_date',
+      sort: [{ id: 'start_date_latest', reversed: false }],
+      startDate: { type: 'next_7_days' },
+      dueDate: { type: 'has_due_date' },
+    });
+  });
+});
+
 it('sorts titles A to Z by default and Z to A when reversed', () => {
   expect(
     buildTaskQuery({ ...options, sort: [{ id: 'title' }] }).params
@@ -330,6 +472,7 @@ describe('saved task presentation', () => {
         ...options,
         ...restored,
         dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+        startDate: undefined,
       }).groupBy
     ).toEqual({
       type: 'project',
@@ -340,6 +483,7 @@ describe('saved task presentation', () => {
         ...options,
         ...restored,
         dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+        startDate: undefined,
         groupBy: 'none',
       }).params
     ).toMatchObject({ sort_method: 'created_at', sort_direction: 'asc' });
@@ -375,6 +519,7 @@ describe('saved task presentation', () => {
         ...options,
         ...restored,
         dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+        startDate: undefined,
         calendar,
       });
       expect(query.params).toMatchObject({
@@ -441,6 +586,7 @@ describe('saved task presentation', () => {
         ...options,
         ...restored,
         dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+        startDate: undefined,
         groupBy: 'none',
       }).params
     ).toMatchObject({ sort_method: 'viewed_at', sort_direction: 'desc' });
@@ -483,6 +629,7 @@ describe('saved task presentation', () => {
       ...options,
       ...restored,
       dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+      startDate: undefined,
       groupBy: 'none',
     });
     expect(JSON.stringify(query.body.propf)).toContain(status);
@@ -544,11 +691,13 @@ describe('saved task filter execution', () => {
           ...options,
           ...restored,
           dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+          startDate: undefined,
           userId: viewer,
         });
         const search = buildTaskSearchRequest({
           ...restored,
           dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+          startDate: undefined,
           query: 'review',
           matchType: 'partial',
           userId: viewer,
@@ -621,10 +770,12 @@ describe('saved task filter execution', () => {
       ...options,
       ...restored,
       dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+      startDate: undefined,
     });
     const search = buildTaskSearchRequest({
       ...restored,
       dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+      startDate: undefined,
       userId: 'user',
       query: 'review',
       matchType: 'partial',
@@ -675,6 +826,7 @@ describe('saved task filter execution', () => {
         ...options,
         ...restored,
         dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+        startDate: undefined,
       });
       expect(query.body.df).toEqual({ l: { dst: 'task' } });
       expect(query.body.propf).toBeUndefined();
@@ -750,7 +902,12 @@ describe('Project task filters', () => {
     const restored = materializeTaskSavedView(saved.value);
     expect(restored.facets.project).toEqual(projectIds);
     expect(
-      buildTaskQuery({ ...options, ...restored, dueDate: undefined }).body.propf
+      buildTaskQuery({
+        ...options,
+        ...restored,
+        dueDate: undefined,
+        startDate: undefined,
+      }).body.propf
     ).toEqual({
       '|': projectIds.map((id) => ({
         l: { pd: SYSTEM_PROPERTY_IDS.PROJECT, v: { er: id } },
@@ -760,6 +917,7 @@ describe('Project task filters', () => {
       buildTaskSearchRequest({
         ...restored,
         dueDate: undefined,
+        startDate: undefined,
         userId: 'viewer',
         query: 'launch',
         matchType: 'partial',

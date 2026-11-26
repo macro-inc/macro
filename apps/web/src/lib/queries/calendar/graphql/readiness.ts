@@ -1,6 +1,5 @@
-// A host answers nothing until its engine has started, and a start that fails
-// can take minutes to give up, so callers wait on a host only once it has
-// answered a calendar read.
+// Cache startup gets one bounded head start shared by concurrent readers.
+// Once it expires, callers use REST until the outstanding host read answers.
 const answeredHosts = new WeakSet<object>();
 
 /**

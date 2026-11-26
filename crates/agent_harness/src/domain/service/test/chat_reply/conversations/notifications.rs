@@ -19,7 +19,6 @@ async fn a_running_quiet_batch_leaves_the_next_conversation_message_queued(pool:
         PromptComposerMock::default(),
         KindDefaultPolicies,
         HarnessDefaultCodingAgents,
-        PromptMentionsMock::new(),
         EgressProvisionerMock::new(),
         Some(journal.clone()),
         None,

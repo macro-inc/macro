@@ -23,6 +23,9 @@ mod agent_runtime_directory;
 mod anthropic_gateway;
 mod api;
 mod bots_directory;
+#[cfg(feature = "brain-bench")]
+pub mod brain_bench;
+mod captcha_gateway;
 mod code_mode;
 mod coding_agent;
 mod coding_agents;
@@ -31,6 +34,7 @@ mod config;
 mod containers;
 mod conversation_admission;
 mod external_session_requests;
+mod fireworks_gateway;
 mod harness_bindings;
 mod internal_mcp;
 mod model_providers;
@@ -43,6 +47,7 @@ mod routine_sessions;
 mod runtime_commands;
 mod runtime_gauges;
 mod scheduling;
+mod solver_runs;
 mod speech_gateway;
 mod trigger;
 mod voice_gateway;
@@ -99,7 +104,6 @@ use agent_harness::outbound::github_repositories::GithubReachableRepositories;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
 use agent_harness::outbound::primary_calendar_time_zones::PrimaryCalendarTimeZones;
-use agent_harness::outbound::prompt_mentions::{LexicalPromptMentions, PgSessionAccess};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
 use agent_harness::outbound::tool_approvals::{
@@ -1387,8 +1391,6 @@ pub async fn run() -> anyhow::Result<()> {
         Arc::clone(&entity_access),
         lexical.clone(),
     );
-    let prompt_mentions =
-        LexicalPromptMentions::new(lexical.clone(), PgSessionAccess::new(pool.clone()));
     let prompt_context =
         MessagePromptContextAdapter::new(message_service.clone(), Arc::clone(&entity_access));
     let prompt_composer = LexicalAgentPromptComposer::new(
@@ -1425,10 +1427,101 @@ pub async fn run() -> anyhow::Result<()> {
         redis.clone(),
     )
     .await?;
-    let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> = Arc::new(
-        anthropic_gateway::brain::PgBrainAuthenticator::new(pool.clone()),
+    let computer_tasks = tokio_util::task::TaskTracker::new();
+    // Watching and driving agents' screens; the hold below keeps an agent's
+    // brain waiting while a person drives its computer.
+    let guest_files = computers::screen::guest_files::GuestFiles::new(
+        computer_operator
+            .clone()
+            .map(|operator| computers::screen::guest_files::Guest {
+                exec: operator.clone(),
+                power: operator,
+            }),
+        &computer_tasks,
+        service_shutdown.clone(),
     );
-    // Both brain routes serve only agents with agent teammates on for their
+    let unfrozen_drives = guest_files.unfrozen_drives();
+    let screens: Arc<computers::screen::Screens> =
+        Arc::new(computer_screen::domain::service::ScreenService::new(
+            computer_screen::outbound::pg::PgScreenRepo::new(pool.clone()),
+            guest_files,
+            computer_screen::outbound::lease_changes::PgLeaseChanges::listen(
+                pool.clone(),
+                &computer_tasks,
+                service_shutdown.clone(),
+            )
+            .await,
+            computers::screen::access::HarnessScreenAccess::new(
+                Arc::new(computers::harness_service(&pool)),
+                feature_flags
+                    .clone()
+                    .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+                    .unwrap_or_default()
+                    .with_allowlist(config.computer_rollout_allowlist()?),
+                hosted_runtimes::outbound::pg::PgComputerAgents::new(pool.clone()),
+            ),
+            computers::screen::access::MacroPeople::new(pool.clone()),
+        ));
+    // Freezes again (while live) or ends drives a renewal found unfrozen:
+    // each computer's one at a time, the latest request coalesced.
+    if let Some(mut unfrozen_drives) = unfrozen_drives {
+        let refreezes = computers::screen::refreezes::Refreezes::new(
+            {
+                let screens = Arc::clone(&screens);
+                Arc::new(move |computer, drive| {
+                    let screens = Arc::clone(&screens);
+                    Box::pin(async move {
+                        if let Err(error) = screens.refreeze(computer, &drive).await {
+                            tracing::warn!(error = ?error, "could not freeze an unfrozen drive's agent again");
+                        }
+                    })
+                })
+            },
+            computer_tasks.clone(),
+        );
+        let shutdown = service_shutdown.clone();
+        computer_tasks.spawn(async move {
+            loop {
+                let unfrozen = tokio::select! {
+                    () = shutdown.cancelled() => return,
+                    unfrozen = unfrozen_drives.recv() => unfrozen,
+                };
+                let Some(unfrozen) = unfrozen else {
+                    return;
+                };
+                refreezes.request(unfrozen.computer_id, unfrozen.drive);
+            }
+        });
+    }
+    // Releases lapsed leases and retries owed thaws, in case the process that
+    // should have thawed died first. One span per round.
+    {
+        let screens = Arc::clone(&screens);
+        let shutdown = service_shutdown.clone();
+        computer_tasks.spawn(async move {
+            let mut every = tokio::time::interval(computer_screen::domain::service::REAP_EVERY);
+            loop {
+                tokio::select! {
+                    () = shutdown.cancelled() => return,
+                    _ = every.tick() => {}
+                }
+                if let Err(error) = screens.reap().await {
+                    tracing::warn!(error = ?error, "could not reap computer screen leases");
+                }
+            }
+        });
+    }
+    // Every /brain/* route authenticates through this one, held while a
+    // person drives the agent's computer.
+    let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> =
+        Arc::new(anthropic_gateway::brain::HeldBrains::new(
+            Arc::new(anthropic_gateway::brain::PgBrainAuthenticator::new(
+                pool.clone(),
+            )),
+            Arc::clone(&screens),
+            service_shutdown.clone(),
+        ));
+    // Every brain route serves only agents with agent teammates on for their
     // creator.
     let brain_rollout = feature_flags
         .clone()
@@ -1451,6 +1544,52 @@ pub async fn run() -> anyhow::Result<()> {
         speech_gateway::LIVEKIT_INFERENCE_URL,
         speech_gateway::DEEPGRAM_MODELS_URL,
     )?);
+    let brain_access = anthropic_gateway::brain::BrainAccess {
+        brains: brains.clone(),
+        rollout: brain_rollout.clone(),
+        admission: admission.clone(),
+    };
+    // No CapSolver key turns CAPTCHA solving off: every solve answers
+    // `notConfigured`; no Fireworks key makes every model call a 503. Either
+    // missing, a solver run answers `notConfigured`.
+    let capsolver = match config.capsolver_api_key.value().map(str::trim) {
+        Some(key) if !key.is_empty() => Some(captcha_gateway::Capsolver::new(
+            key,
+            macro_service_urls::CapsolverApiUrl::new()?.as_str(),
+        )?),
+        _ => None,
+    };
+    let firework_api_key = config
+        .firework_api_key
+        .value()
+        .map(str::trim)
+        .filter(|key| !key.is_empty());
+    // CAPTCHA solves and Fireworks slot releases outlive their requests;
+    // shutdown waits for them.
+    let brain_tasks = tokio_util::task::TaskTracker::new();
+    let run_limits = solver_runs::RunLimits::default();
+    let solver_runs = Arc::new(solver_runs::pg::PgSolverRuns::new(pool.clone(), run_limits));
+    let captcha = captcha_gateway::CaptchaGateway::new(
+        brain_access.clone(),
+        capsolver,
+        firework_api_key.is_some(),
+        recorder.clone(),
+        captcha_gateway::Ledgers {
+            runs: solver_runs.clone(),
+            solves: solver_runs.clone(),
+            run_limits,
+            solve_limits: captcha_gateway::SolveLimits::default(),
+            tasks: brain_tasks.clone(),
+        },
+    );
+    let fireworks = fireworks_gateway::FireworksGateway::new(
+        brain_access,
+        recorder.clone(),
+        solver_runs,
+        fireworks_gateway::FIREWORKS_API_URL,
+        firework_api_key,
+        brain_tasks.clone(),
+    )?;
     let anthropic_gateway = anthropic_gateway::router(
         anthropic_gateway::GatewayState::new(
             Arc::new(session_repo.clone()),
@@ -1460,10 +1599,12 @@ pub async fn run() -> anyhow::Result<()> {
             anthropic_gateway::ANTHROPIC_API_URL,
             &config.anthropic_api_key,
         )?
-        .with_brains(brains, brain_rollout),
+        .with_brains(brains, brain_rollout)
+        .with_screen_notices(Arc::clone(&screens)),
     )
-    .merge(speech_gateway::router(speech.clone()));
-    let computer_tasks = tokio_util::task::TaskTracker::new();
+    .merge(speech_gateway::router(speech.clone()))
+    .merge(captcha_gateway::router(captcha))
+    .merge(fireworks_gateway::router(fireworks));
     let sign_in_ahead = Arc::new(std::sync::OnceLock::new());
     let runtimes = RuntimeRegistry::with_presence(
         Arc::new(computers::ComputerPresence::new(
@@ -1507,6 +1648,7 @@ pub async fn run() -> anyhow::Result<()> {
                 service_shutdown.clone(),
             )
             .await,
+            config.environment,
             &computer_tasks,
             service_shutdown.clone(),
         );
@@ -1620,8 +1762,7 @@ pub async fn run() -> anyhow::Result<()> {
                 Arc::clone(&tool_approvals),
             ),
             pending_commands,
-            prompt_mentions,
-            // Finished / asking / mentioned reach people through the same
+            // Finished and asking reach people through the same
             // notification ingress channel messages use.
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
         )
@@ -2012,7 +2153,7 @@ pub async fn run() -> anyhow::Result<()> {
         authorization: MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     });
     let gateway_state = RuntimeGatewayState::new(
-        runtimes,
+        Arc::clone(&runtimes),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     // Served to the app by `POST /agent-mode-choice` for the composer's Auto mode.
@@ -2192,6 +2333,27 @@ pub async fn run() -> anyhow::Result<()> {
         feature_flags.clone(),
     )
     .await?;
+    let screen_router = computer_operator.as_ref().map(|operator| {
+        computers::screen::router(computers::screen::ScreenRoutes {
+            screens: Arc::clone(&screens),
+            tunnel: Arc::new(computers::screen::tunnel::FleetTunnel::new(
+                Arc::clone(operator) as _,
+                computer_tasks.clone(),
+            )),
+            waker: Arc::clone(operator) as _,
+            macrod_connection: {
+                let runtimes = Arc::clone(&runtimes);
+                Arc::new(move |harness| runtimes.connection_of(harness))
+            },
+            medias: computers::screen::ScreenMedias {
+                vnc: Arc::new(computers::screen::media::VncMedia),
+            },
+            shutdown: service_shutdown.clone(),
+            authorization_state: MacroAuthorizationState::new(Arc::new(
+                authorization_service.clone(),
+            )),
+        })
+    });
     let http_shutdown = service_shutdown.clone();
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
@@ -2211,10 +2373,12 @@ pub async fn run() -> anyhow::Result<()> {
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
             .with_claude_access(match &computer_operator {
-                Some(operator) => computer_claude.merge(computers::moves::router(
-                    Arc::clone(operator),
-                    MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
-                )),
+                Some(operator) => computer_claude
+                    .merge(computers::moves::router(
+                        Arc::clone(operator),
+                        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                    ))
+                    .merge(screen_router.unwrap_or_default()),
                 None => computer_claude,
             })
             .with_capabilities(capabilities)
@@ -2700,6 +2864,15 @@ pub async fn run() -> anyhow::Result<()> {
     service_shutdown.cancel();
     computer_tasks.close();
     computer_tasks.wait().await;
+    // Solves under way get a while to finish and be recorded; past that
+    // the ledger replays them as unavailable.
+    brain_tasks.close();
+    if tokio::time::timeout(std::time::Duration::from_secs(30), brain_tasks.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!("CAPTCHA solves were still running at shutdown");
+    }
     scheduling_runtime.stop();
     cognition_runtime.stop();
     notification_cancel.cancel();

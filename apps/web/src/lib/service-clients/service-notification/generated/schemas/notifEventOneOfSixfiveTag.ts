@@ -10,5 +10,5 @@ export type NotifEventOneOfSixfiveTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfSixfiveTag = {
-  channel_access_requested: 'channel_access_requested',
+  calendar_event_join_request: 'calendar_event_join_request',
 } as const;

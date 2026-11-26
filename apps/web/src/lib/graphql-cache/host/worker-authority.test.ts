@@ -297,7 +297,7 @@ it('keeps offline reads available before any proof and across a preserved owner 
   const read = () =>
     host.readQuery({ query: '{ user { emailThread { id } } }' });
   await expect(read()).resolves.toMatchObject({ kind: 'hit' });
-  options.onEngineReplaced?.(2, 'opened-existing');
+  options.onEngineReplaced?.(2, 'opened-existing', 'preserved');
   await expect(read()).resolves.toMatchObject({ kind: 'hit' });
 });
 

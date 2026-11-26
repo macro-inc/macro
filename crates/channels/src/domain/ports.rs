@@ -949,6 +949,11 @@ pub trait ChannelSideEffectContext: Send + Sync + 'static {
         &self,
         bot_id: BotId,
     ) -> impl Future<Output = Option<BotSenderProfile>> + Send;
+
+    /// Whether the channel is one user's private conversation with an agent
+    /// persona (an agent DM).
+    fn is_agent_dm(&self, channel_id: Uuid)
+    -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
 /// Handler for durable channel events.
