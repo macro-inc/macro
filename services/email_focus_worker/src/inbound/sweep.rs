@@ -71,6 +71,7 @@ where
                     inboxes_unknown = report.inboxes_unknown,
                     inboxes_left = report.inboxes_left,
                     inboxes_failed = report.inboxes_failed,
+                    inboxes_read_in_full = report.inboxes_read_in_full,
                     candidates = report.candidates,
                     classified = report.classified,
                     redecided = report.redecided,
