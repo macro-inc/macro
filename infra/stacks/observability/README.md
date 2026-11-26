@@ -207,12 +207,16 @@ those. Token counts, models, operations, outcomes, `error.type` and the
 `macro.genai.*` sizes stay. A new attribute that carries content belongs in its
 `ai_content` statements.
 
-It also replaces every email address with its SHA-256, in attributes, log
-bodies, span and event names and status messages (`emails`): user IDs are
-`macro|<address>`. The hash is of the address as written, so a user's logs and
-traces are found by hashing theirs. Values inside lists and maps aren't reached;
-send opaque IDs there, or add the key to the statements that turn
-`presence.user_ids` into text first.
+It also replaces every email address with its SHA-256 (`emails`): in resource,
+scope, log, span, span event and metric datapoint attributes, log bodies, and
+scope, span and event names and status messages. User IDs are
+`macro|<address>`, so they become `macro|<hash>`; a user's logs and traces are
+found by hashing their address as written (`%40` for `@` hashes differently).
+A map or list attribute holding an address is flattened into `key.0`, `key.1.x`
+keys first, and a list or map body holding one becomes its JSON text. What
+stays: addresses in map keys and byte values, and logs and metrics pushed
+straight to Loki and Mimir through the edge (pod logs, the database collector),
+which skip ingest.
 
 ### Pinned exporter limits
 
