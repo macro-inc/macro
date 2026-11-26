@@ -128,7 +128,9 @@ impl SyncRepository for PgSyncRepository {
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (user_id) DO UPDATE SET id = EXCLUDED.id, account_id = EXCLUDED.account_id,
                 scope = EXCLUDED.scope, started_at = EXCLUDED.started_at, enabled = false,
-                endpoint_id = NULL, signing_secret = NULL, last_error = NULL, last_synced_at = NULL
+                endpoint_id = NULL, signing_secret = NULL, last_error = NULL, last_synced_at = NULL,
+                backfill_cursor = NULL, backfill_completed_at = NULL, backfill_available_at = now(),
+                backfill_lease_id = NULL, backfill_attempts = 0
             WHERE granola_sync_connections.endpoint_id IS NOT NULL
                 OR granola_sync_connections.last_error IS NOT NULL
                 OR granola_sync_connections.started_at < now() - interval '2 minutes'
@@ -253,6 +255,66 @@ impl SyncRepository for PgSyncRepository {
         sqlx::query!("DELETE FROM granola_sync_events WHERE connection_id = $1 AND completed_at < now() - interval '7 days'", job.connection.id)
             .execute(tx.as_mut()).await?;
         tx.commit().await?;
+        Ok(())
+    }
+    async fn claim_backfill(&self) -> Result<Option<BackfillJob>> {
+        let lease = macro_uuid::generate_uuid_v7();
+        let row = sqlx::query!(
+            r#"WITH candidate AS (
+                SELECT id FROM granola_sync_connections
+                WHERE enabled AND backfill_completed_at IS NULL AND backfill_available_at <= now()
+                ORDER BY backfill_available_at LIMIT 1 FOR UPDATE SKIP LOCKED
+            )
+            UPDATE granola_sync_connections c SET backfill_lease_id = $1,
+                backfill_attempts = c.backfill_attempts + 1,
+                backfill_available_at = now() + interval '10 minutes'
+            FROM candidate WHERE c.id = candidate.id
+            RETURNING c.id, c.backfill_cursor, c.backfill_attempts"#,
+            lease
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let Some(connection) = self.by_id(row.id).await? else {
+            return Ok(None);
+        };
+        Ok(Some(BackfillJob {
+            connection,
+            cursor: row.backfill_cursor,
+            lease_id: lease,
+            attempts: row.backfill_attempts,
+        }))
+    }
+    async fn finish_backfill(&self, job: &BackfillJob, step: BackfillStep) -> Result<()> {
+        // A failed page waits 30 s, doubling per attempt, up to an hour.
+        let (next_cursor, done, retry_seconds) = match step {
+            BackfillStep::Next(cursor) => (Some(cursor), false, None),
+            BackfillStep::Done => (None, true, None),
+            BackfillStep::Retry => {
+                let seconds = 30_i32
+                    .saturating_mul(2_i32.saturating_pow(job.attempts.clamp(1, 8) as u32 - 1))
+                    .min(3600);
+                (None, false, Some(f64::from(seconds)))
+            }
+        };
+        sqlx::query!(
+            r#"UPDATE granola_sync_connections SET
+                backfill_cursor = COALESCE($3, backfill_cursor),
+                backfill_completed_at = CASE WHEN $4 THEN now() ELSE NULL END,
+                backfill_attempts = CASE WHEN $5::double precision IS NULL THEN 0 ELSE backfill_attempts END,
+                backfill_available_at = now() + make_interval(secs => COALESCE($5::double precision, 0)),
+                backfill_lease_id = NULL
+            WHERE id = $1 AND backfill_lease_id = $2"#,
+            job.connection.id,
+            job.lease_id,
+            next_cursor,
+            done,
+            retry_seconds
+        )
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 }

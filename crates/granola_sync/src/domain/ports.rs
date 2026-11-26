@@ -20,6 +20,10 @@ pub trait SyncRepository: Send + Sync {
     async fn enqueue(&self, id: Uuid, event: Event) -> Result<()>;
     async fn claim(&self) -> Result<Option<Job>>;
     async fn finish(&self, job: &Job, success: bool) -> Result<()>;
+    /// Lease the next page of an enabled connection's unfinished backfill.
+    async fn claim_backfill(&self) -> Result<Option<BackfillJob>>;
+    /// Save where the backfill continues. A stale lease changes nothing.
+    async fn finish_backfill(&self, job: &BackfillJob, step: BackfillStep) -> Result<()>;
 }
 
 /// Provider I/O goes through the user's Granola connection.
@@ -34,6 +38,8 @@ pub trait Granola: Send + Sync {
     async fn unregister(&self, connection: &Connection) -> Result<()>;
     async fn meeting(&self, connection: &Connection, note: &NoteId)
     -> Result<Option<ImportedCall>>;
+    /// One page of the notes the connection's key can see, newest first.
+    async fn notes(&self, connection: &Connection, cursor: Option<&str>) -> Result<NotesPage>;
 }
 
 /// Whose Granola sync may run: a user whose Granola connection gives API

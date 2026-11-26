@@ -100,8 +100,15 @@ pub async fn run_worker(service: Arc<dyn SyncService>) {
                 }
             }
         }
-        let result =
-            tokio::time::timeout(std::time::Duration::from_secs(300), service.tick()).await;
+        // Webhook deliveries go first; history is imported while none wait.
+        let work = async {
+            if service.tick().await? {
+                return Ok(true);
+            }
+            service.backfill().await
+        };
+        let result: Result<crate::domain::ports::Result<bool>, _> =
+            tokio::time::timeout(std::time::Duration::from_secs(300), work).await;
         match result {
             Ok(Ok(true)) => tokio::time::sleep(std::time::Duration::from_millis(500)).await,
             Ok(Ok(false)) => tokio::time::sleep(std::time::Duration::from_secs(2)).await,

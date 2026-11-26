@@ -196,3 +196,70 @@ async fn absent_transcript_still_imports_a_meeting() {
     assert!(meeting.transcript.is_none());
     assert_eq!(meeting.title.as_deref(), Some("Review"));
 }
+
+fn listed(id: &str, deleted_at: Value) -> Value {
+    json!({"id": id, "object": "note", "title": "Listed", "owner": {"email": "owner@example.com"},
+        "created_at": "2026-09-01T10:00:00Z", "updated_at": "2026-09-01T11:00:00Z",
+        "deleted_at": deleted_at})
+}
+
+#[tokio::test]
+async fn notes_are_listed_a_page_at_a_time_with_opaque_cursors() {
+    let (fake, adapter) = adapter(vec![
+        (
+            200,
+            json!({"notes": [listed("not_aaaaaaaaaaaaaa", Value::Null),
+                listed("not_bbbbbbbbbbbbbb", json!("2026-09-02T00:00:00Z"))],
+                "hasMore": true, "cursor": "next/&?"}),
+        ),
+        (200, json!({"notes": [], "hasMore": false, "cursor": null})),
+    ]);
+
+    let first = adapter.notes(&connection(), None).await.unwrap();
+    let last = adapter.notes(&connection(), Some("next/&?")).await.unwrap();
+
+    assert_eq!(
+        first,
+        NotesPage {
+            notes: vec![
+                ListedNote {
+                    id: NoteId("not_aaaaaaaaaaaaaa".into()),
+                    deleted: false,
+                },
+                ListedNote {
+                    id: NoteId("not_bbbbbbbbbbbbbb".into()),
+                    deleted: true,
+                },
+            ],
+            next: Some("next/&?".into()),
+        }
+    );
+    assert_eq!(
+        last,
+        NotesPage {
+            notes: vec![],
+            next: None,
+        }
+    );
+    let urls = urls(&fake);
+    assert_eq!(
+        urls[0],
+        "https://public-api.granola.ai/v1/notes?page_size=30"
+    );
+    assert_eq!(
+        urls[1],
+        "https://public-api.granola.ai/v1/notes?page_size=30&cursor=next%2F%26%3F"
+    );
+}
+
+#[tokio::test]
+async fn a_failed_or_unterminated_list_page_is_an_error() {
+    for (status, body) in [
+        (429, json!({"code": "RATE_LIMITED"})),
+        (404, Value::Null),
+        (200, json!({"notes": [], "hasMore": true, "cursor": null})),
+    ] {
+        let (_, adapter) = adapter(vec![(status, body)]);
+        assert!(adapter.notes(&connection(), None).await.is_err());
+    }
+}

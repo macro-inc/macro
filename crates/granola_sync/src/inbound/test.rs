@@ -33,6 +33,9 @@ impl SyncService for Connected {
         let _ = self.0.send(user);
         Ok(())
     }
+    async fn backfill(&self) -> Result<bool> {
+        Ok(false)
+    }
 }
 
 #[tokio::test]

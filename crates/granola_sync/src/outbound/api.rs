@@ -19,6 +19,8 @@ pub struct GranolaApi<S>(pub Arc<S>);
 
 /// Granola's public API origin.
 const GRANOLA_API_URL: &str = "https://public-api.granola.ai/v1";
+/// Granola's largest page of listed notes.
+const NOTES_PAGE_SIZE: &str = "30";
 
 /// Granola's answer, whatever its status. Never log the body: registration
 /// returns the webhook secret.
@@ -240,6 +242,42 @@ impl<S: ApiConnectionsService> Granola for GranolaApi<S> {
         }
         Ok(Some(map_meeting(connection, note, transcript)?))
     }
+    async fn notes(&self, connection: &Connection, cursor: Option<&str>) -> Result<NotesPage> {
+        let handle = self.handle(connection).await?;
+        let path = {
+            let mut query = url::form_urlencoded::Serializer::new(String::new());
+            query.append_pair("page_size", NOTES_PAGE_SIZE);
+            if let Some(cursor) = cursor {
+                query.append_pair("cursor", cursor);
+            }
+            format!("/notes?{}", query.finish())
+        };
+        let body = self
+            .request(&handle, Method::GET, &path, None)
+            .await?
+            .ok_or_else(|| rootcause::report!("Granola note listing is unavailable"))?;
+        let page: ListPage = serde_json::from_value(body)?;
+        let next = if page.has_more {
+            let cursor = page
+                .cursor
+                .filter(|c| !c.is_empty())
+                .ok_or_else(|| rootcause::report!("Granola note listing has no next cursor"))?;
+            Some(cursor)
+        } else {
+            None
+        };
+        Ok(NotesPage {
+            notes: page
+                .notes
+                .into_iter()
+                .map(|note| ListedNote {
+                    id: note.id,
+                    deleted: note.deleted_at.is_some(),
+                })
+                .collect(),
+            next,
+        })
+    }
 }
 
 #[derive(Deserialize)]
@@ -260,6 +298,19 @@ struct Note {
     attendees: Vec<Person>,
     summary_markdown: Option<String>,
     summary_text: Option<String>,
+}
+/// A page of `GET /notes`; list items are summaries without content.
+#[derive(Deserialize)]
+struct ListPage {
+    notes: Vec<ListedSummary>,
+    #[serde(rename = "hasMore")]
+    has_more: bool,
+    cursor: Option<String>,
+}
+#[derive(Deserialize)]
+struct ListedSummary {
+    id: NoteId,
+    deleted_at: Option<DateTime<Utc>>,
 }
 #[derive(Deserialize)]
 struct TranscriptPage {

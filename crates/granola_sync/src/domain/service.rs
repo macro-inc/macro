@@ -14,6 +14,12 @@ const RECONCILE_BATCH: usize = 20;
 const SETUP_RETRY: chrono::Duration = chrono::Duration::hours(1);
 /// Matches the reservation window in which another instance owns setup.
 const SETUP_LEASE: chrono::Duration = chrono::Duration::minutes(2);
+/// Attempts at one backfill page before notes that still fail are skipped,
+/// so one bad note cannot hold back the rest of the history.
+pub(crate) const BACKFILL_PAGE_ATTEMPTS: i32 = 5;
+/// Spacing between backfilled notes, keeping well under Granola's sustained
+/// five requests a second; each note costs at least two requests.
+const BACKFILL_NOTE_PACING: std::time::Duration = std::time::Duration::from_millis(250);
 
 #[derive(Debug, Default, PartialEq)]
 pub(crate) struct Plan {
@@ -72,6 +78,9 @@ pub trait SyncService: Send + Sync {
     /// so without this a reconnect to a different account would keep the
     /// old account's webhook.
     async fn connected(&self, user: MacroUserIdStr<'static>) -> Result<()>;
+    /// Import one page of a connection's note history. Returns whether there
+    /// was a page to work on.
+    async fn backfill(&self) -> Result<bool>;
 }
 
 pub struct Service<R, G, A, V> {
@@ -156,6 +165,70 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> Service<R,
         tracing::Span::current().record("scope", scope.as_ref());
         tracing::info!("Granola meeting sync started");
         Ok(())
+    }
+
+    /// Import one listed page and decide where the backfill goes next.
+    /// Notes are fetched with the same adapter and mapper as webhook
+    /// deliveries, so both paths import a note identically.
+    async fn backfill_page(&self, job: &BackfillJob) -> Result<BackfillStep> {
+        if !self.is_current(&job.connection).await? {
+            return Ok(BackfillStep::Retry);
+        }
+        let page = self
+            .granola
+            .notes(&job.connection, job.cursor.as_deref())
+            .await?;
+        let span = tracing::Span::current();
+        span.record("listed", page.notes.len());
+        span.record("has_more", page.next.is_some());
+
+        let mut meetings = Vec::new();
+        let (mut deleted, mut missing, mut failed) = (0_usize, 0_usize, 0_usize);
+        for note in page.notes {
+            if note.deleted {
+                deleted += 1;
+                continue;
+            }
+            tokio::time::sleep(BACKFILL_NOTE_PACING).await;
+            match self.granola.meeting(&job.connection, &note.id).await {
+                Ok(Some(meeting)) => meetings.push(meeting),
+                Ok(None) => missing += 1,
+                Err(error) => {
+                    failed += 1;
+                    tracing::warn!(error = ?error, note_id = note.id.as_ref(), "could not fetch a Granola note for backfill");
+                }
+            }
+        }
+
+        // The connection may have gone while notes were fetched.
+        let Some(current) = self.repo.by_id(job.connection.id).await? else {
+            return Ok(BackfillStep::Retry);
+        };
+        if !self.is_current(&current).await? {
+            return Ok(BackfillStep::Retry);
+        }
+        let mut imported = 0_usize;
+        for meeting in meetings {
+            match self.calls.ingest(meeting).await {
+                Ok(_) => imported += 1,
+                Err(error) => {
+                    failed += 1;
+                    tracing::warn!(error = ?error, "could not import a backfilled Granola note");
+                }
+            }
+        }
+        span.record("deleted", deleted);
+        span.record("missing", missing);
+        span.record("imported", imported);
+        span.record("failed", failed);
+
+        if failed > 0 && job.attempts < BACKFILL_PAGE_ATTEMPTS {
+            return Ok(BackfillStep::Retry);
+        }
+        Ok(match page.next {
+            Some(cursor) => BackfillStep::Next(cursor),
+            None => BackfillStep::Done,
+        })
     }
 
     async fn stop(&self, id: Uuid) -> Result<()> {
@@ -293,6 +366,40 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> SyncServic
             Ok(()) | Err(SyncError::Conflict) => Ok(()),
             Err(error) => Err(rootcause::report!("{error}")),
         }
+    }
+
+    async fn backfill(&self) -> Result<bool> {
+        let Some(job) = self.repo.claim_backfill().await? else {
+            return Ok(false);
+        };
+        let span = tracing::info_span!(
+            "granola.backfill_page",
+            connection_id = %job.connection.id,
+            first_page = job.cursor.is_none(),
+            attempts = job.attempts,
+            listed = tracing::field::Empty,
+            deleted = tracing::field::Empty,
+            missing = tracing::field::Empty,
+            imported = tracing::field::Empty,
+            failed = tracing::field::Empty,
+            has_more = tracing::field::Empty,
+            step = tracing::field::Empty,
+        );
+        let step = match self.backfill_page(&job).instrument(span.clone()).await {
+            Ok(step) => step,
+            Err(error) => {
+                tracing::warn!(parent: &span, error = ?error, "Granola backfill page will retry");
+                BackfillStep::Retry
+            }
+        };
+        let outcome = match &step {
+            BackfillStep::Next(_) => "next",
+            BackfillStep::Done => "done",
+            BackfillStep::Retry => "retry",
+        };
+        span.record("step", outcome);
+        self.repo.finish_backfill(&job, step).await?;
+        Ok(true)
     }
 }
 

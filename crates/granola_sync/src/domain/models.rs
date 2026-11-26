@@ -103,6 +103,43 @@ pub struct Job {
     pub attempts: i32,
 }
 
+/// A note as Granola lists it: enough to decide whether to fetch it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedNote {
+    pub id: NoteId,
+    /// Deleted notes are listed only to keys that can see the whole workspace.
+    pub deleted: bool,
+}
+
+/// One page of the user's notes, newest first.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NotesPage {
+    pub notes: Vec<ListedNote>,
+    /// Where the next page starts; `None` on the last page.
+    pub next: Option<String>,
+}
+
+/// A leased page of a connection's history backfill. Completion is fenced by
+/// `lease_id`; `cursor` is `None` for the first page.
+pub struct BackfillJob {
+    pub connection: Connection,
+    pub cursor: Option<String>,
+    pub lease_id: Uuid,
+    /// Attempts at this page, including this one.
+    pub attempts: i32,
+}
+
+/// How a backfill page ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BackfillStep {
+    /// The page was imported; continue from this cursor.
+    Next(String),
+    /// The last page was imported.
+    Done,
+    /// The page failed; retry it after a backoff from its saved cursor.
+    Retry,
+}
+
 /// Why a sync is not healthy, stored as the connection's `last_error`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::EnumString)]
 pub enum SyncIssue {

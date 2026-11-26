@@ -264,3 +264,92 @@ async fn users_on_macro_connect_get_no_granola_sync(pool: PgPool) {
     assert!(service.repo.by_user(&user).await.unwrap().is_none());
     assert!(fake.api_calls().is_empty());
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn backfill_pages_are_leased_resumed_and_restarted_on_connect(pool: PgPool) {
+    let repo = PgSyncRepository::new(pool.clone(), &[7; 32]);
+    let webhook = || Webhook {
+        id: "whe_test".into(),
+        secret: SigningSecret("secret".into()),
+    };
+    let connection = connection();
+    assert!(repo.reserve(&connection).await.unwrap());
+    // A reservation still being set up has nothing to backfill yet.
+    assert!(repo.claim_backfill().await.unwrap().is_none());
+    assert!(
+        repo.activate(connection.id, webhook(), Scope::All)
+            .await
+            .unwrap()
+    );
+
+    let first = repo.claim_backfill().await.unwrap().unwrap();
+    assert_eq!(first.connection.id, connection.id);
+    assert_eq!(first.cursor, None);
+    assert_eq!(first.attempts, 1);
+    assert!(repo.claim_backfill().await.unwrap().is_none());
+
+    repo.finish_backfill(&first, BackfillStep::Next("page-2".into()))
+        .await
+        .unwrap();
+    let second = repo.claim_backfill().await.unwrap().unwrap();
+    assert_eq!(second.cursor.as_deref(), Some("page-2"));
+    assert_eq!(second.attempts, 1);
+
+    // An expired worker's lease cannot move the backfill.
+    repo.finish_backfill(&first, BackfillStep::Done)
+        .await
+        .unwrap();
+    repo.finish_backfill(&second, BackfillStep::Retry)
+        .await
+        .unwrap();
+    // A failed page waits out its backoff before it is retried.
+    assert!(repo.claim_backfill().await.unwrap().is_none());
+    sqlx::query!(
+        "UPDATE granola_sync_connections SET backfill_available_at = now() WHERE id = $1",
+        connection.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let retry = repo.claim_backfill().await.unwrap().unwrap();
+    assert_eq!(retry.cursor.as_deref(), Some("page-2"));
+    assert_eq!(retry.attempts, 2);
+
+    repo.finish_backfill(&retry, BackfillStep::Done)
+        .await
+        .unwrap();
+    assert!(repo.claim_backfill().await.unwrap().is_none());
+
+    // Connecting Granola again starts history over on the new connection.
+    let reconnected = Connection {
+        id: macro_uuid::generate_uuid_v7(),
+        ..connection.clone()
+    };
+    assert!(repo.reserve(&reconnected).await.unwrap());
+    assert!(
+        repo.activate(reconnected.id, webhook(), Scope::All)
+            .await
+            .unwrap()
+    );
+    let restarted = repo.claim_backfill().await.unwrap().unwrap();
+    assert_eq!(restarted.connection.id, reconnected.id);
+    assert_eq!(restarted.cursor, None);
+    assert_eq!(restarted.attempts, 1);
+
+    // A stopped sync is not backfilled.
+    repo.finish_backfill(&restarted, BackfillStep::Retry)
+        .await
+        .unwrap();
+    repo.stop(reconnected.id).await.unwrap();
+    sqlx::query!(
+        "UPDATE granola_sync_connections SET backfill_available_at = now() WHERE id = $1",
+        reconnected.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(repo.claim_backfill().await.unwrap().is_none());
+}

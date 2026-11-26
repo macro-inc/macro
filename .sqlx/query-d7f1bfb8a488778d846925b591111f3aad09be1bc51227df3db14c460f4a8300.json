@@ -57,6 +57,31 @@
         "ordinal": 10,
         "name": "namespace",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "backfill_cursor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "backfill_completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "backfill_available_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "backfill_lease_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 15,
+        "name": "backfill_attempts",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -74,6 +99,11 @@
       true,
       false,
       true,
+      true,
+      false,
+      true,
+      true,
+      false,
       true,
       false
     ]
