@@ -30,57 +30,55 @@ submit it with `DecideReview` (the review route refuses every program run, so
 code mode has no start). The plan route refuses Slack and HubSpot; HubSpot
 plans with `ImportFromHubspot`, which stays visible in code mode. `plan`
 returns after a short wait (`PLAN_WAIT`), usually while the run is still
-`running`, and the agent presents the review at once: the harness ties the staged rows and the
-`running` run (`import_run.review_id`) to the review, so rows staged later
-take it too. Only a `running` or `ready` run takes a review: the harness checks
-the report before saving one, and `attach_review` refuses a run that is
-failed, being written, finished, cancelled or missing
-(`ImportError::RunNotReviewable`, a typed `UnreviewableRun` carrying the kind, never the raw error), so a failed plan never shows as an empty
-review. The first review presenting a plan, while it is planned or once it is
-ready, holds it (`import_run.review_id`); any other is refused
-(`PresentedElsewhere`) until the holder is dismissed (`release_review` frees
-the run and its staged rows). Writing starts only through
-`start_reviewed_write`: one statement moves the run from `ready` to
-`importing` while that review holds it (or, for plans presented before the
-run recorded reviews, its staged rows do). It records the review it admitted
-(`import_run.write_review_id`, cleared when a new plan starts), so a write
-that failed may be started again from `failed` by that same review once the
-earlier writer's lease has expired, with its adoptions reset; any other
+`running`, and the agent presents the review at once: the harness ties the
+staged rows and the `running` run (`import_run.review_id`) to the review, so
+rows staged later take it too. Only a `running` or `ready` run takes a review:
+the harness checks the report before saving one, and `attach_review` refuses a
+run that is failed, being written, finished, cancelled or missing
+(`ImportError::RunNotReviewable`, a typed `UnreviewableRun` carrying the kind,
+never the raw error), so a failed plan never shows as an empty review. The
+first review presenting a plan, while it is planned or once it is ready, holds
+it (`import_run.review_id`); any other is refused (`PresentedElsewhere`) until
+the holder is dismissed (`release_review` frees the run and its staged rows).
+Writing starts only through `start_reviewed_write`: one statement moves the run
+from `ready` to `importing` while that review holds it (or, for plans presented
+before the run recorded reviews, its staged rows do). It records the review it
+admitted (`import_run.write_review_id`, cleared when a new plan starts), so a
+write that failed may be started again from `failed` by that same review once
+the earlier writer's lease has expired, with its adoptions reset; any other
 review of a failed run must replan. Otherwise it refuses typed
-(`StillPlanning`, `PresentedElsewhere`, `NothingLeft`, failed, finished)
-before anything about the plan changes, and returns the status it started
-from; the owner's sharing choices are written only once it has started. A
-failure before the write is held (or after `reopen_plan` put it back to that
-status) is `ImportError::NotStarted`, safe to
-approve again; once the write is spawned, the returned report is read
-without failing the call. `SETTLED` only
-says which runs a new plan may replace. A failed plan or write records its
-`RunErrorKind` (`import_run.error_kind`, from `failure_kind`; `Interrupted`
-when a run is given up on); the report and runs carry it, and the agent's
-messages (`explain_failure`, `UnreviewableRun::describe`) and the web
-copy are written from the kind. For workspace imports (Notion, Linear and
-Jira runs and their rows), a run's and a row's error text is `failure_text`
-(a sentence from the kind) and the import settlement carries `error_kind`;
-their raw error is only logged, and the report never serializes `error`. The
-single-page `ImportNotionPage` path and tracker inventory warnings still
-carry raw text (bead mac-il0j). A stored kind this build does not know reads as `Internal`.
-The imports tray lists a failed run until it is dismissed or a week has
-passed since it last changed, and one that finished with failures (it needs
-action) until it is dismissed; `/import/state` itself lists every run.
-Planning stages the whole tree as soon as the inventory is read,
-each row without a `decision` yet, then writes each decision-model batch's
-verdicts onto its rows as it lands (`update_plan_rows`); the report counts
-undecided rows as `deciding`, and the write cannot start until the run is
-`ready`. A resumed plan stages the tree again, which is idempotent. On
-approval the harness starts the write:
-folders mirroring the page tree, documents, databases with rows, row bodies and
+(`StillPlanning`, `PresentedElsewhere`, `NothingLeft`, failed, finished) before
+anything about the plan changes, and returns the status it started from; the
+owner's sharing choices are written only once it has started. A failure before
+the write is held (or after `reopen_plan` put it back to that status) is
+`ImportError::NotStarted`, safe to approve again; once the write is spawned,
+the returned report is read without failing the call. `SETTLED` only says which
+runs a new plan may replace. A failed plan or write records its `RunErrorKind`
+(`import_run.error_kind`, from `failure_kind`; `Interrupted` when a run is
+given up on); the report and runs carry it, and the agent's messages
+(`explain_failure`, `UnreviewableRun::describe`) and the web copy are written
+from the kind. For workspace imports (Notion, Linear and Jira runs and their
+rows), a run's and a row's error text is `failure_text` (a sentence from the
+kind) and the import settlement carries `error_kind`; their raw error is only
+logged, and the report never serializes `error`. The single-page
+`ImportNotionPage` path and tracker inventory warnings still carry raw text
+(bead mac-il0j). A stored kind this build does not know reads as `Internal`.
+The imports tray lists a failed run until it is dismissed or a week has passed
+since it last changed, and one that finished with failures (it needs action)
+until it is dismissed; `/import/state` itself lists every run. Planning stages
+the whole tree as soon as the inventory is read, each row without a `decision`
+yet, then writes each decision-model batch's verdicts onto its rows as it lands
+(`update_plan_rows`); the report counts undecided rows as `deciding`, and the
+write cannot start until the run is `ready`. A resumed plan stages the tree
+again, which is idempotent. On approval the harness starts the write: folders
+mirroring the page tree, documents, databases with rows, row bodies and
 relations, and task lists as Macro tasks. Each page, row body and task is
 created with its Notion page's created and last-edited times (`SourceDates`),
 and folders are created dated by what is written into them
-(`ProjectService::create_project_dated_by_contents`), so an import of old
-pages stays out of Home, which lists documents and folders by `updatedAt`.
-The Notion run row tracks it
-(`running` → `ready` → `importing` → `completed`/`failed`/`dismissed`).
+(`ProjectService::create_project_dated_by_contents`), so an import of old pages
+stays out of Home, which lists documents and folders by `updatedAt`. The Notion
+run row tracks it (`running` → `ready` → `importing` →
+`completed`/`failed`/`dismissed`).
 
 Every plan carries the user's `sharing` (`team`, `personal`, or `ai`, where
 the decision model also answers `shared` per object), stored on the run so an
