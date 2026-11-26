@@ -57,5 +57,5 @@ auth, infrastructure, and release changes are approved.
 `src/brain-email-reader.ts` defines the scoped, read-only inbox and thread
 port. `src/brain-email.tsx` supplies the Email view and mailbox identity
 slot. Pass the same mailbox accessor to both after validating the current
-viewer, team, and agent. Open `/teams/sample-team/bots/finch/email` in the
-local fixture preview for the synthetic Finch mailbox.
+viewer, team, and agent. In the local fixture preview, open Finch's Hub from
+Fleet and select Email for the synthetic mailbox.

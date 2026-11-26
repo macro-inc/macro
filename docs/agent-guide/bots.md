@@ -17,8 +17,8 @@ After reload, that synthetic receipt is unavailable. Unknown teams, bots and
 inaccessible details display Unavailable. Use Tab to reach a tab and
 Enter to open it.
 
-Open `/teams/sample-team/bots/finch/email` in the local fixture preview for
-Finch's read-only inbox. The header labels its synthetic address as a sample
+In the local fixture preview, open Finch's Hub from Fleet and select Email for
+the read-only inbox. The header labels its synthetic address as a sample
 mailbox. Filter by sender or subject. Use Up and Down to move between inbox
 rows, then Enter to open the focused thread. On narrow screens, the inbox
 scrolls above the thread. A bot that is Setting up shows mailbox setup in

@@ -7,6 +7,50 @@ import {
   filterBrainEmailThreads,
   selectBrainEmailThread,
 } from './brain-email-reader';
+import { admitBrainFixture, readBrainFixture } from './brain-fixture';
+import { readFleetRoster } from './fleet-data';
+import { fleetFixture } from './fleet-fixture';
+
+test('the scoped Fleet roster links to the Finch mailbox identity', async () => {
+  const fleet = fleetFixture('');
+  if (!fleet) throw new Error('Fleet unavailable');
+
+  const roster = await readFleetRoster(fleet.reads, fleet.viewer);
+  if (roster.status !== 'ready') throw new Error('Fleet roster unavailable');
+
+  expect(
+    roster.agents
+      .filter(({ status }) => status !== 'provisioning')
+      .map(({ userId }) => userId)
+  ).toEqual(['sable', 'quill', 'atlas', 'ledger', 'scout', 'finch']);
+  const finch = roster.agents.find(({ userId }) => userId === 'finch');
+  if (!finch) throw new Error('Finch is absent from Fleet');
+
+  const portrait = fleet.portraits.get(finch.userId);
+  if (!portrait) throw new Error('Finch portrait is absent from Fleet');
+
+  const scope = {
+    viewer: fleet.viewer.viewerId,
+    team: finch.teamId,
+    agent: finch.userId,
+  };
+  expect(admitBrainFixture(scope)).toBe(true);
+  expect(await readBrainFixture(scope)).toMatchObject({
+    status: 'ready',
+    snapshot: {
+      scope,
+      name: finch.name,
+      role: finch.jobDescription,
+      portrait: portrait.src,
+    },
+  });
+  expect(
+    await createFixtureBrainEmailReader().readInbox(
+      scope,
+      new AbortController().signal
+    )
+  ).toMatchObject({ status: 'provisioned', source: 'fixture' });
+});
 
 describe('Brain Email fixture reader', () => {
   test('returns 18 distinct inbox entries with separately readable message bodies', async () => {

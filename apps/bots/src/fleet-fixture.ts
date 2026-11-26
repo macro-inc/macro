@@ -1,6 +1,6 @@
 import type { ComputerStatus, TeamAgent } from '@macro-inc/sdk/generated/auth';
 import atlas from './assets/atlas.svg';
-import echo from './assets/echo.svg';
+import echoPreset from './assets/echo.svg';
 import ledger from './assets/ledger.svg';
 import quill from './assets/quill.svg';
 import sable from './assets/sable.svg';
@@ -64,11 +64,11 @@ export const fleetBots: readonly {
     status: 'failed',
   },
   {
-    id: 'echo',
-    name: 'Echo',
-    role: 'Team follow-ups',
-    portrait: echo,
-    status: 'released',
+    id: 'finch',
+    name: 'Finch',
+    role: 'Release & handoff assistant',
+    portrait: echoPreset,
+    status: 'running',
   },
 ];
 
