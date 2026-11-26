@@ -645,8 +645,10 @@ pub async fn build(
             call::outbound::pg_imported_call_repo::PgImportedCallRepository::new(db.clone()),
             macro_event_broker.clone(),
         ));
-    // One instance for the sync and the import, so both pace each user's
-    // Notion connection together and a `Retry-After` holds them both.
+    // One instance for the syncs and this service's import, so those two
+    // pace each user's Notion connection together and a `Retry-After` holds
+    // both. Imports started from sessions or MCP build their own instance in
+    // ai_tools and are paced apart.
     let notion_connections = Arc::new(import_notion::outbound::connected::ConnectedNotion::new(
         Arc::clone(&connections),
     ));

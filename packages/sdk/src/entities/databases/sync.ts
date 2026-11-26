@@ -2,6 +2,7 @@ import { match } from 'ts-pattern';
 import type {
   DatabaseSyncDetachReason,
   DatabaseSyncField,
+  DatabaseSyncNotionDataSource,
   DatabaseSync as DatabaseSyncRecord,
   DatabaseSyncSource as DatabaseSyncSourceRecord,
   DatabaseSyncStatus,
@@ -12,6 +13,12 @@ import { User } from '../users/user';
 import { DatabaseColumn } from './column';
 import type { Database } from './database';
 import { DatabaseTable } from './table';
+
+/** The source record of a sync that mirrors a Notion data source. */
+type NotionSyncSourceRecord = Extract<
+  DatabaseSyncSourceRecord,
+  { kind: 'notion_data_source' }
+>;
 
 /**
  * A Notion data source (one table of a Notion database) that the caller's
@@ -26,9 +33,16 @@ export class NotionDataSource {
     readonly title: string | undefined,
   ) {}
 
-  /** @internal A handle from what an API answered. */
-  static of(id: string, title: string | undefined): NotionDataSource {
-    return new NotionDataSource(id, title);
+  /**
+   * @internal A handle from an already-fetched record: a listed data source,
+   * or the source a sync mirrors (which carries no title).
+   */
+  static from(
+    record: DatabaseSyncNotionDataSource | NotionSyncSourceRecord,
+  ): NotionDataSource {
+    return 'dataSourceId' in record
+      ? new NotionDataSource(record.dataSourceId, undefined)
+      : new NotionDataSource(record.id, record.title);
   }
 
   /** This data source as plain JSON. */
@@ -87,9 +101,9 @@ function sourceOf(record: DatabaseSyncSourceRecord): DatabaseSyncSource {
     .with({ kind: 'granola_meetings' }, () => ({
       kind: 'granola_meetings' as const,
     }))
-    .with({ kind: 'notion_data_source' }, ({ dataSourceId }) => ({
+    .with({ kind: 'notion_data_source' }, (notion) => ({
       kind: 'notion_data_source' as const,
-      dataSource: NotionDataSource.of(dataSourceId, undefined),
+      dataSource: NotionDataSource.from(notion),
     }))
     .exhaustive();
 }

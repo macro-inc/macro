@@ -32,8 +32,8 @@ On touch devices the split header is the title, the access badge, Share and Info
 Tap the title for its menu, a sheet that starts with the whole name and holds
 everything else the desktop header offers: **Ask Macro** (the desktop **AI**
 button), **Rename** (a dialog), Copy Link, Copy ID, Favorite, Change icon,
-Duplicate, Move to folder, Import CSV, Webhooks, **Download table as CSV** and
-Delete. A column's arrow opens a sheet too; **Change type** there shows the
+Duplicate, Move to folder, Import CSV, Webhooks, Sync from…, **Download table
+as CSV** and Delete. A column's arrow opens a sheet too; **Change type** there shows the
 column's current type and opens the list of types in the same sheet, with **Back**.
 
 On touch devices the page's first row holds the **New** button for records and

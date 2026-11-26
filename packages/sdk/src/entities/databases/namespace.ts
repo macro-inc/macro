@@ -156,8 +156,8 @@ export class DatabaseNamespace {
       granola,
       notion: {
         connected: notion.connected,
-        dataSources: notion.dataSources.map(({ id, title }) =>
-          NotionDataSource.of(id, title),
+        dataSources: notion.dataSources.map((dataSource) =>
+          NotionDataSource.from(dataSource),
         ),
       },
     };

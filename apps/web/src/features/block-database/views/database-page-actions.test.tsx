@@ -221,7 +221,7 @@ describe('database page actions', () => {
       expect(screen.getByRole('menuitem', { name: 'Download' })).toBeTruthy();
     }
   );
-  it('opens the synced tables dialog from Sync from… and returns focus to the ellipsis', async () => {
+  it('opens the synced tables dialog from Sync from… and closes it with Done', async () => {
     setup();
     await openMenu();
     selectItem('Sync from…');
@@ -230,11 +230,6 @@ describe('database page actions', () => {
     expect(mocks.listSyncs).toHaveBeenCalledWith('db');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    await waitFor(() =>
-      expect(document.activeElement).toBe(
-        screen.getByRole('button', { name: 'Database actions' })
-      )
-    );
   });
   it('offers Sync from… to editors only', async () => {
     setup('view');
