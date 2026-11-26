@@ -148,12 +148,80 @@ async fn seed(pool: &PgPool) {
             break;
         }
     }
+    if unmarked != Some(0) {
+        // SCRATCH (attio vacuum bisect, do not merge): who holds the horizon.
+        eprintln!("HORIZON DUMP\n{}", horizon_dump(pool).await);
+    }
     assert_eq!(
         unmarked,
         Some(0),
         "VACUUM left seeded pages out of the visibility map after 10 tries, so \
          index-only scans would fetch heap tuples and overrun the block budgets"
     );
+}
+
+/// SCRATCH diagnostic: every horizon holder this connection can see.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "scratch diagnostic, never merged"
+)]
+async fn horizon_dump(pool: &PgPool) -> String {
+    let queries = [
+        (
+            "current_database",
+            "SELECT json_build_object('db', current_database(), 'snapshot', txid_current_snapshot()::text, 'xid', txid_current_if_assigned())::text",
+        ),
+        (
+            "pg_stat_activity",
+            "SELECT coalesce(json_agg(a ORDER BY a.xmin_age DESC NULLS LAST), '[]')::text FROM (SELECT datname, pid, state, backend_type, backend_xid::text, backend_xmin::text, age(backend_xmin) AS xmin_age, xact_start, wait_event_type, wait_event, left(query, 120) AS query FROM pg_stat_activity WHERE backend_xmin IS NOT NULL OR backend_xid IS NOT NULL) a",
+        ),
+        (
+            "pg_prepared_xacts",
+            "SELECT coalesce(json_agg(p), '[]')::text FROM (SELECT transaction::text, gid, database, prepared FROM pg_prepared_xacts) p",
+        ),
+        (
+            "pg_replication_slots",
+            "SELECT coalesce(json_agg(r), '[]')::text FROM (SELECT slot_name, database, xmin::text, catalog_xmin::text, active FROM pg_replication_slots) r",
+        ),
+        (
+            "settings",
+            "SELECT json_object_agg(name, setting)::text FROM pg_settings WHERE name IN ('synchronous_commit','fsync','wal_writer_delay','autovacuum','vacuum_defer_cleanup_age','old_snapshot_threshold','hot_standby_feedback')",
+        ),
+        (
+            "pg_visibility_ext",
+            "CREATE EXTENSION IF NOT EXISTS pg_visibility",
+        ),
+        (
+            "pg_visibility",
+            "SELECT json_agg(v)::text FROM (SELECT c.relname, c.relpages, c.relallvisible, (SELECT count(*) FROM pg_visibility_map(c.oid) m WHERE m.all_visible) AS vm_all_visible, (SELECT count(*) FROM pg_visibility_map(c.oid) m WHERE m.all_frozen) AS vm_all_frozen, (SELECT count(*) FROM pg_visibility(c.oid) m WHERE m.pd_all_visible) AS pd_all_visible FROM pg_class c WHERE c.relname IN ('contact_list_members','contact_inbox_members','team_user')) v",
+        ),
+        (
+            "wal",
+            "SELECT json_build_object('insert', pg_current_wal_insert_lsn()::text, 'write', pg_current_wal_lsn()::text, 'flush', pg_current_wal_flush_lsn()::text)::text",
+        ),
+        (
+            "pageinspect_ext",
+            "CREATE EXTENSION IF NOT EXISTS pageinspect",
+        ),
+        (
+            "hint_bits_page0",
+            "SELECT json_build_object('tuples', count(*), 'xmin_committed_hint', count(*) FILTER (WHERE (t_infomask & 256) <> 0), 'xmin_frozen', count(*) FILTER (WHERE (t_infomask & 768) = 768))::text FROM heap_page_items(get_raw_page('contact_inbox_members', 0))",
+        ),
+        (
+            "xmin_sample",
+            "SELECT json_agg(t)::text FROM (SELECT xmin::text, count(*) AS rows FROM contact_inbox_members GROUP BY 1 ORDER BY 2 DESC LIMIT 5) t",
+        ),
+    ];
+    let mut out = String::new();
+    for (name, sql) in queries {
+        let row: Result<Option<String>, sqlx::Error> = if name.ends_with("_ext") {
+            sqlx::query(sql).execute(pool).await.map(|_| None)
+        } else {
+            sqlx::query_scalar(sql).fetch_one(pool).await
+        };
+        out.push_str(&format!("{name}: {row:?}\n"));
+    }
+    out
 }
 
 async fn hosted_planner(connection: &mut PgConnection) {
