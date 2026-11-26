@@ -302,6 +302,11 @@ impl<'a> Exec<'a> {
         let value = match outcome {
             Ok(mut value) => {
                 self.mask_broad(index, &mut value);
+                // How long the command waited for the engine and held it,
+                // which differs on every run.
+                if let Some(fields) = value.as_object_mut() {
+                    fields.remove("engine");
+                }
                 value
             }
             Err(error) => {
