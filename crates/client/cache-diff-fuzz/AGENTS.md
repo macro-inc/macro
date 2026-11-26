@@ -6,7 +6,8 @@ A differential fuzzer for the client GraphQL cache. Two builds of it, one per
 version of the cache (before and after a change), run the same seeded operation
 sequences through the native host engine. Every response and every table left on
 disk after a reopen must come out the same, apart from what a mode below masks on
-purpose (it says what).
+purpose (it says what). Every run leaves out the `engine` lock wait and hold
+timings of enqueue and commit answers, which differ from run to run.
 
 ## How it works
 
