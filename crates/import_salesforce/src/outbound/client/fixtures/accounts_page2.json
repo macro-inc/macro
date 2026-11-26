@@ -1,0 +1,7 @@
+{
+  "totalSize": 3,
+  "done": true,
+  "records": [
+    {"attributes": {"type": "Account", "url": "/services/data/v62.0/sobjects/Account/not-an-id"}, "Id": "not/an-id", "Name": "Broken Example", "Website": null, "OwnerId": null}
+  ]
+}

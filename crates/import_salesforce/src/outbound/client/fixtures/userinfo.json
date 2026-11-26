@@ -1,0 +1,26 @@
+{
+  "sub": "https://login.salesforce.com/id/00D5g000004ExAmEAC/0055g00000ExAmPAA1",
+  "user_id": "0055g00000ExAmPAA1",
+  "organization_id": "00D5g000004ExAmEAC",
+  "preferred_username": "importer@example.com",
+  "nickname": "importer",
+  "name": "Import User",
+  "email": "importer@example.com",
+  "email_verified": true,
+  "zoneinfo": "America/Los_Angeles",
+  "locale": "en_US",
+  "language": "en_US",
+  "active": true,
+  "user_type": "STANDARD",
+  "is_lightning_login_user": false,
+  "urls": {
+    "enterprise": "https://acme-dev-ed.my.salesforce.com/services/Soap/c/{version}/00D5g000004ExAm",
+    "metadata": "https://acme-dev-ed.my.salesforce.com/services/Soap/m/{version}/00D5g000004ExAm",
+    "rest": "https://acme-dev-ed.my.salesforce.com/services/data/v{version}/",
+    "sobjects": "https://acme-dev-ed.my.salesforce.com/services/data/v{version}/sobjects/",
+    "query": "https://acme-dev-ed.my.salesforce.com/services/data/v{version}/query/",
+    "profile": "https://acme-dev-ed.my.salesforce.com/0055g00000ExAmPAA1",
+    "custom_domain": "https://acme-dev-ed.my.salesforce.com"
+  },
+  "updated_at": "2026-01-05T18:20:11Z"
+}

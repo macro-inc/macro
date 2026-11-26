@@ -1,0 +1,9 @@
+{
+  "totalSize": 3,
+  "done": true,
+  "records": [
+    {"attributes": {"type": "OpportunityStage", "url": "/services/data/v62.0/sobjects/OpportunityStage/01J5g00000ExAm1EAA"}, "ApiName": "Prospecting", "MasterLabel": "Prospecting", "SortOrder": 1, "IsClosed": false, "IsWon": false, "DefaultProbability": 10.0},
+    {"attributes": {"type": "OpportunityStage", "url": "/services/data/v62.0/sobjects/OpportunityStage/01J5g00000ExAm2EAA"}, "ApiName": "Closed_Won", "MasterLabel": "Closed Won", "SortOrder": 9, "IsClosed": true, "IsWon": true, "DefaultProbability": 100.0},
+    {"attributes": {"type": "OpportunityStage", "url": "/services/data/v62.0/sobjects/OpportunityStage/01J5g00000ExAm3EAA"}, "ApiName": "Closed Lost", "MasterLabel": "Closed Lost", "SortOrder": 10, "IsClosed": true, "IsWon": false, "DefaultProbability": null}
+  ]
+}

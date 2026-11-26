@@ -1,0 +1,10 @@
+{
+  "totalSize": 1,
+  "done": true,
+  "records": [
+    {
+      "attributes": {"type": "Organization", "url": "/services/data/v62.0/sobjects/Organization/00D5g000004ExAmEAC"},
+      "DefaultCurrencyIsoCode": "USD"
+    }
+  ]
+}
