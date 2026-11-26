@@ -26,6 +26,8 @@ mod bots_directory;
 #[cfg(feature = "brain-bench")]
 pub mod brain_bench;
 pub mod brain_jobs;
+#[cfg(test)]
+mod brain_journal;
 mod captcha_gateway;
 mod code_mode;
 mod coding_agent;
