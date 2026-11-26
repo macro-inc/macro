@@ -13,7 +13,7 @@
 - `report` joins the records the `crates/email_e2e` scenarios leave
   (`evidence.json`) and nextest's `junit.xml` with the ledger, and says
   which functions of email are proved, claimed or only performed on Gmail
-  and on Outlook and which entry points are reached. `crates/email_e2e/AGENTS.md` (Coverage) explains
+  on Outlook and on IMAP and which entry points are reached. `crates/email_e2e/AGENTS.md` (Coverage) explains
   the ledger files.
 
 ## Start here
@@ -110,8 +110,7 @@
   `#[ignore]` there must have such a reason: the report fails otherwise,
   with or without `--enforce`. A `bug` line left behind would keep its
   function out of the gaps for good.
-- A proof naming an unknown function, a provider other than `gmail` or
-  `outlook`, or a scenario not in the results is broken (always fails); one
+- A proof naming an unknown function, a provider other than `gmail`, `outlook` or `imap`, or a scenario not in the results is broken (always fails); one
   whose scenario no longer performs and checks the function is stale.
 - Deferred is not waived: a function with `outside` in `functions.toml` and
   an entry point under `[[deferred]]` in `waivers.toml` wait for the
@@ -132,3 +131,11 @@
   passed in. A log directory that keeps records of earlier runs therefore
   adds nothing, and a `junit.xml` without a run id is refused. A scenario that linked no
   inbox counts for both providers, and so does one that linked both.
+
+- Preserve `both` as the historical Gmail and Outlook applicability. New IMAP
+  routes use `imap`; add explicit `imap` atoms to a function mapping to declare
+  its IMAP coverage without changing the shared browser ledger columns. Define
+  IMAP-only capabilities in `crates/email_e2e/coverage/imap-functions.tsv`; load
+  rejects ids repeated in the shared index or missing explicit IMAP mappings. IMAP
+  claims, mutation proofs and gaps are evaluated independently and rendered in
+  the report. A Gmail or Outlook scenario cannot prove an IMAP function.

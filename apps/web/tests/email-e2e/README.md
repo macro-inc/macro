@@ -19,6 +19,10 @@ just email-e2e-browser reply           # arguments go to Playwright
 just apps/web/test-email-e2e-browser   # only the run, when everything is built
 ```
 
+Before Chromium starts, the harness checks the bundle's same-origin gateway
+marker. Rebuild with `just build-email-e2e` from `apps/web`, or rebuild the local
+stack's bundle for the full-stack tier, if it rejects the bundle.
+
 It needs what `just email-e2e` needs (`crates/email_e2e/AGENTS.md`: Postgres,
 Redis, an ElasticMQ and a Kafka broker in `EMAIL_E2E_*`), the repository's
 `bun install`, and Chromium (`bunx playwright install chromium`, or
@@ -61,10 +65,15 @@ the app's disconnected paths.
 - The bundle is built by `just apps/web/build-email-e2e`: every service on the
   page's own origin, with the inbox re-sync control switched on
   (`VITE_ENABLE_INBOX_RESYNC`), which is off in a normal build.
+- Pull-to-refresh cases silence Soup and gateway live updates while answering
+  gateway heartbeats, so only the gesture can bring the next row. Settings
+  recovery cases keep the list fault active until Retry requests it, then allow
+  automatic recovery after releasing the fault.
 - The connection gateway is not run. The fixture answers the browser's gateway
-  socket and passes on what the email services ask the gateway to send the user.
+  socket, answers `ping` with `pong` as the real gateway does, and passes on
+  what the email services ask the gateway to send the user. Missing heartbeat
+  replies would create artificial reconnect refreshes during long tests.
 - Not in the stack: the notification, search, contacts and calendar services.
-  New mail does not appear in an open list by itself; sync, then open.
 - The bundle has unified notifications on (`enable-unified-notifications` is
   on in dev), so the navigation's unread marks, the Mail badge among them,
   follow the server's count of unread notification rows, which only the
@@ -75,6 +84,9 @@ the app's disconnected paths.
 thread reads and draft autosaves against the real services. Its Soup frames are
 protocol fixtures: the stack's HTTP recording proxy cannot relay WebSocket
 upgrades. Those counts measure client frame handling, not live Kafka delivery.
+
+Use `mailbox.emitRefresh` on the per-test tier to send synthetic refresh frames.
+Silence live updates when testing pull-to-refresh or a scheduled Undo failure.
 
 ## Writing a test
 
@@ -196,7 +208,9 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   test names its script with `scriptName`. `modelRequests(name)` answers
   what the assistant sent, tool declarations included.
   `full-stack-assistant.spec.ts` drafts an email for review and reads mail
-  through scripted tool calls this way.
+  through scripted tool calls this way. Type the entry point of each scripted
+  ExecuteCode program with the ambient `CodeContext` so the real checker can
+  validate the SDK calls before execution.
 - The tier writes its evidence to `ledger-results/full-stack/`, and the
   report counts it together with the per-test run's. What only the tier
   covers is listed in `ledger/full-stack-only.tsv` (`ledger/README.md`):
@@ -304,3 +318,23 @@ apps/web/test-email-fixtures-browser` runs the ones that cover an email or
 calendar bug class; the recipe lists them. The CI job runs it beside this
 suite. `src/features/calendar/browser-test` mounts the calendar over scripted
 `/calendar` routes until `calendar_service` is part of the stack.
+
+### IMAP and SMTP
+
+Run `just imap-e2e-browser` for the desktop and phone IMAP enrollment and reply
+cases. This tier uses the authenticated local stack, a Dovecot IMAP and
+submission server, and Mailpit. The independent test client appends the inbound
+message over IMAP and reads the resulting SMTP reply through Mailpit. The
+full-stack CI job requires both layouts to save and reopen folder settings,
+reconnect the same account, and record the visible confirmations and real
+browser API requests in the coverage ledger.
+
+To inspect enrollment in local Tempo, run the same no-Doppler stack with
+`--traces lgtm` and build the full-stack web bundle with
+`VITE_ENABLE_BROWSER_OTEL=true`, `VITE_OTEL_ENV=local` and
+`VITE_OTEL_EXPORTER_URL=/i/otlp/v1/traces`. Run
+`just apps/web/test-email-e2e-full-stack imap-mail full-stack-imap`.
+Each case records its enrollment trace ID in the Playwright JSON report's
+`imap-enrollment-trace` attachment. Look up that ID in local Tempo to follow
+the browser request through the email and IMAP services. Playwright's network
+trace stays off because the enrollment request contains the lab password.

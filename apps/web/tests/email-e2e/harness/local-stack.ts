@@ -217,7 +217,8 @@ export class LocalStack implements EmailStack {
    * `ada@example.com`. The test's people keep their names and share a domain.
    */
   address(address: string): string {
-    return `${address.split('@')[0]}@${this.domain}`;
+    const [name] = address.split('@');
+    return `${name}@${this.domain}`;
   }
 
   private emulator(provider: Provider): string {

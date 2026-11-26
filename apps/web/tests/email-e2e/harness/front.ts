@@ -18,9 +18,14 @@ import { connect } from 'node:net';
 import { extname, join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { connect as connectSecurely } from 'node:tls';
+import { fileURLToPath } from 'node:url';
 import type { CatalogPage } from '../../../src/lib/service-clients/service-cognition/generated/schemas/catalogPage';
 import type { Connector } from '../../../src/lib/service-clients/service-cognition/generated/schemas/connector';
 import { developmentAuthority, STACK_ADDRESS_FAMILY, send } from './http';
+
+export const DIST =
+  process.env.EMAIL_E2E_DIST ??
+  fileURLToPath(new URL('../../../dist', import.meta.url));
 
 export type SignedInUser = {
   email: string;

@@ -9,9 +9,12 @@ bundle_log="$RUNNER_TEMP/email-e2e-bundle.log"
 web=$!
 trap 'kill "$web" 2>/dev/null || true; tail -n 40 "$bundle_log" || true' ERR
 
+# Prepare verified TLS for the real IMAP/SMTP sidecars of this stack.
+bash docker/imap-lab/prepare.sh
+
 # Builds every service, starts the stack and returns once it answers.
 started=$(date +%s)
-just run_local --no-doppler --instance "$EMAIL_E2E_INSTANCE" --no-frontend --traces off --no-computers
+just run_local --no-doppler --instance "$EMAIL_E2E_INSTANCE" --no-frontend --traces off --no-computers --env-file docker/imap-lab/browser-profile
 echo "Local stack up: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
 trap - ERR
 

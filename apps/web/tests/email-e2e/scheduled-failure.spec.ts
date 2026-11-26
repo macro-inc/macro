@@ -12,8 +12,7 @@ import { threadMessages } from './harness/thread';
 import { confirmed, did, saw } from './ledger/record';
 
 const GRACE = 'grace@example.com';
-const REJECTED =
-  'Your mail provider rejected this send. You can retry after correcting the problem in your mailbox.';
+const REJECTED = 'This message was not submitted. Try sending again.';
 
 type Scheduled = {
   db_id: string;

@@ -15,6 +15,8 @@ use crate::Kind;
 
 /// The functions of email, shared with the web app's suite.
 pub(crate) const FUNCTIONS_PATH: &str = "apps/web/tests/email-e2e/ledger/functions.tsv";
+/// Backend IMAP capabilities, separate from the browser's paired-provider index.
+pub(crate) const IMAP_FUNCTIONS_PATH: &str = "crates/email_e2e/coverage/imap-functions.tsv";
 /// How the backend carries each function out.
 pub(crate) const MAP_PATH: &str = "crates/email_e2e/coverage/functions.toml";
 /// The scenarios that check a function's result.
@@ -55,6 +57,8 @@ struct RawMapping {
     #[serde(default)]
     outlook: Vec<String>,
     #[serde(default)]
+    imap: Vec<String>,
+    #[serde(default)]
     also: Vec<String>,
     ui: Option<String>,
     outside: Option<String>,
@@ -71,6 +75,8 @@ pub(crate) struct Mapping {
     pub(crate) gmail: Vec<Atom>,
     /// And, on an Outlook inbox, all of these.
     pub(crate) outlook: Vec<Atom>,
+    /// Provider-specific proof atoms also declare IMAP applicability.
+    pub(crate) imap: Vec<Atom>,
     /// Entry points that take part without proving anything.
     pub(crate) also: Vec<Atom>,
     /// Why the backend has no part in the function, when it has none.
@@ -91,6 +97,7 @@ impl Mapping {
             .iter()
             .chain(&self.gmail)
             .chain(&self.outlook)
+            .chain(&self.imap)
             .chain(&self.also)
     }
 
@@ -98,8 +105,10 @@ impl Mapping {
     pub(crate) fn on(&self, provider: &str) -> &[Atom] {
         if provider == super::GMAIL {
             &self.gmail
-        } else {
+        } else if provider == super::OUTLOOK {
             &self.outlook
+        } else {
+            &self.imap
         }
     }
 }
@@ -248,7 +257,7 @@ pub(crate) struct IntermittentBug {
 pub(crate) struct EntryWaiver {
     /// `kind key`, as in the list.
     pub(crate) entry: String,
-    /// `gmail` or `outlook`; both when absent.
+    /// `gmail`, `outlook` or `imap`; all applicable providers when absent.
     pub(crate) provider: Option<String>,
     pub(crate) reason: String,
 }
@@ -269,7 +278,7 @@ pub(crate) struct DeadCode {
 pub(crate) struct Owned {
     /// `kind key`, as in the list.
     pub(crate) entry: String,
-    /// `gmail` or `outlook`; both when absent.
+    /// `gmail`, `outlook` or `imap`; all applicable providers when absent.
     pub(crate) provider: Option<String>,
     /// Whose functions it is counted with: `calendar`.
     pub(crate) owner: String,
@@ -291,7 +300,7 @@ pub(crate) struct Proof {
 #[serde(deny_unknown_fields)]
 pub(crate) struct FunctionWaiver {
     pub(crate) id: String,
-    /// `gmail` or `outlook`; both when absent.
+    /// `gmail`, `outlook` or `imap`; all applicable providers when absent.
     pub(crate) provider: Option<String>,
     pub(crate) reason: String,
 }
@@ -310,9 +319,30 @@ pub(crate) struct Ledger {
 impl Ledger {
     /// Reads the ledger of the repository at `root`.
     pub(crate) fn load(root: &Path) -> Result<Self, Report> {
+        let mut listed = functions(&read(root, FUNCTIONS_PATH)?)?;
+        let mappings = map(&read(root, MAP_PATH)?)?;
+        for function in imap_functions(&read(root, IMAP_FUNCTIONS_PATH)?)? {
+            if listed.iter().any(|existing| existing.id == function.id) {
+                bail!(
+                    "{IMAP_FUNCTIONS_PATH}: {} also exists in {FUNCTIONS_PATH}",
+                    function.id
+                );
+            }
+            if mappings
+                .functions
+                .get(&function.id)
+                .is_none_or(|mapping| mapping.imap.is_empty())
+            {
+                bail!(
+                    "{IMAP_FUNCTIONS_PATH}: {} requires an explicit nonempty imap mapping in {MAP_PATH}",
+                    function.id
+                );
+            }
+            listed.push(function);
+        }
         Ok(Self {
-            functions: functions(&read(root, FUNCTIONS_PATH)?)?,
-            map: map(&read(root, MAP_PATH)?)?,
+            functions: listed,
+            map: mappings,
             checks: checks(&read(root, CHECKS_PATH)?)?,
             proofs: proofs(&read(root, PROOFS_PATH)?)?,
             waivers: toml::from_str(&read(root, WAIVERS_PATH)?)
@@ -334,6 +364,35 @@ fn rows<'a>(text: &'a str, header: &str, path: &str) -> Result<Vec<Vec<&'a str>>
         bail!("{path}: the first line is not the column header `{header}`");
     }
     Ok(lines.map(|line| line.split('\t').collect()).collect())
+}
+
+/// IMAP capabilities are indexed separately until the browser harness supports that provider.
+pub(crate) fn imap_functions(text: &str) -> Result<Vec<Function>, Report> {
+    let mut ids = std::collections::BTreeSet::new();
+    rows(text, "id\tarea\tfunction", IMAP_FUNCTIONS_PATH)?
+        .into_iter()
+        .map(|columns| {
+            let [id, area, wording] = columns[..] else {
+                bail!("{IMAP_FUNCTIONS_PATH}: expected 3 columns");
+            };
+            if id.len() != 5
+                || !id.starts_with("F-")
+                || !id.as_bytes()[2..].iter().all(u8::is_ascii_digit)
+                || area.is_empty()
+                || wording.is_empty()
+                || !ids.insert(id)
+            {
+                bail!("{IMAP_FUNCTIONS_PATH}: invalid or duplicate function {id}");
+            }
+            Ok(Function {
+                id: id.into(),
+                area: area.into(),
+                wording: wording.into(),
+                gmail: false,
+                outlook: false,
+            })
+        })
+        .collect()
 }
 
 pub(crate) fn functions(text: &str) -> Result<Vec<Function>, Report> {
@@ -392,6 +451,7 @@ pub(crate) fn map(text: &str) -> Result<Map, Report> {
             by: atoms(&raw.by)?,
             gmail: atoms(&raw.gmail)?,
             outlook: atoms(&raw.outlook)?,
+            imap: atoms(&raw.imap)?,
             also: atoms(&raw.also)?,
             ui: raw.ui,
             outside: raw.outside,
@@ -399,10 +459,10 @@ pub(crate) fn map(text: &str) -> Result<Map, Report> {
             bug_on: raw.bug_on,
         };
         if let Some(provider) = &mapping.bug_on
-            && (mapping.bug.is_none() || !["gmail", "outlook"].contains(&provider.as_str()))
+            && (mapping.bug.is_none() || !["gmail", "outlook", "imap"].contains(&provider.as_str()))
         {
             bail!(
-                "{MAP_PATH}: [{name}] bug_on is `{provider}`: it names gmail or outlook, next to a bug"
+                "{MAP_PATH}: [{name}] bug_on is `{provider}`: it names gmail, outlook or imap, next to a bug"
             );
         }
         map.functions.insert(name, mapping);

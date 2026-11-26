@@ -3,12 +3,14 @@
 // from an alias and a reply on a thread someone else shared. The same on a
 // Gmail and an Outlook inbox (an alias is a Gmail thing).
 
+import type { SendEmailMessageMutationVariables } from '../../src/lib/service-clients/service-storage/graphql/generated/graphql';
 import {
   body,
   composeNew,
   graphqlOperation,
   loadAppSteadily,
   routeDraftId,
+  sendLease,
 } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
 import { header } from './harness/provider';
@@ -186,8 +188,31 @@ for (const provider of PROVIDERS) {
       await mailbox.open(`/app/mail/${thread.id}`);
       await page.getByText('Reply...').click();
       await replyEditor(page).pressSequentially('Works for me.');
-      await page.getByRole('button', { name: 'Send email' }).click();
+      const [aborted] = await Promise.all([
+        page.waitForEvent('requestfailed', {
+          predicate: (request) =>
+            graphqlOperation(request) === 'SendEmailMessage',
+          timeout: 30_000,
+        }),
+        page.getByRole('button', { name: 'Send email' }).click(),
+      ]);
       await expect.poll(() => sentSubjects(mailbox)).toEqual(['Re: Lunch?']);
+      const { variables } = aborted.postDataJSON() as {
+        variables: SendEmailMessageMutationVariables;
+      };
+      // Reload after the lost response has settled its local dispatch lease.
+      // Reloading an active dispatch instead leaves a 60 s lease (mac-atvo),
+      // a separate recovery case from this test's unanswered send.
+      await expect
+        .poll(
+          () => sendLease(page, String(variables.input.attempt.attemptId)),
+          {
+            message:
+              'The aborted submit must release its journal dispatch lease before reload',
+            timeout: 30_000,
+          }
+        )
+        .toBe(0);
       reloaded = true;
       await page.reload();
 
@@ -290,9 +315,7 @@ for (const provider of PROVIDERS) {
 
       // Outlook says why in the thread and offers to send again.
       await expect(
-        page.getByText(
-          'Your mail provider rejected this send. You can retry after correcting the problem in your mailbox.'
-        )
+        page.getByText('This message was not submitted. Try sending again.')
       ).toBeVisible();
       saw('STL-086', 'F-140');
       await expect(

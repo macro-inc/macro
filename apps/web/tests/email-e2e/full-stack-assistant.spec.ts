@@ -209,7 +209,7 @@ for (const provider of PROVIDERS) {
                   acting_as: 'requester',
                   turn_id: '{{turn}}',
                   source: [
-                    'export async function main({macro}) {',
+                    'export async function main({macro}: CodeContext) {',
                     '  const inboxes = await macro.email.links();',
                     '  const labels = await macro.email.labels();',
                     `  const thread = macro.email.byId('${thread.id}');`,

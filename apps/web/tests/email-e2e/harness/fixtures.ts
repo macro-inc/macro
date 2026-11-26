@@ -1,22 +1,24 @@
 // A test's world: its own email stack, one signed-in user with one linked
 // mailbox, and the built web app in the browser talking to that stack.
 
-import { fileURLToPath } from 'node:url';
 import {
   test as base,
   expect,
   type Page,
   type WebSocketRoute,
 } from '@playwright/test';
+import type { RefreshEmailEvent } from '../../../src/lib/service-clients/service-email/generated/schemas';
 import { record } from '../ledger/record';
 import { keepCalendarPromptsClosed } from './calendar-prompt';
 import {
   bundleFile,
+  DIST,
   FROM_TEST,
   type Front,
   type SignedInUser,
   startFront,
 } from './front';
+import { silenceGateway } from './gateway';
 import { LocalStack, localStackAddresses } from './local-stack';
 import {
   type EmailStack,
@@ -27,10 +29,6 @@ import {
   type ProviderMessage,
   Stack,
 } from './stack';
-
-const DIST =
-  process.env.EMAIL_E2E_DIST ??
-  fileURLToPath(new URL('../../../dist', import.meta.url));
 
 /** A thread as the email service lists it. */
 export type ThreadPreview = {
@@ -48,6 +46,8 @@ export type Mailbox = {
   deliver(mail: Mail): Promise<ProviderMessage>;
   /** What the provider holds. */
   providerMessages(): Promise<ProviderMessage[]>;
+  /** Emits a typed refresh through the per-test gateway stand-in only. */
+  emitRefresh(event: RefreshEmailEvent): Promise<void>;
   /** Calls the email service as the signed-in user: `api('/email/threads/..')`. */
   api(path: string, init?: RequestInit): Promise<Response>;
   /**
@@ -81,9 +81,12 @@ async function relayGateway(
   page: Page,
   stack: EmailStack,
   user: SignedInUser
-): Promise<() => Promise<void>> {
+): Promise<{
+  emitRefresh(event: RefreshEmailEvent): Promise<void>;
+  stop(): Promise<void>;
+}> {
   const sockets = new Set<WebSocketRoute>();
-  await page.routeWebSocket(/\/connection-gateway(\/|\?|$)/, (socket) => {
+  await silenceGateway(page, (socket) => {
     sockets.add(socket);
     socket.onClose(() => sockets.delete(socket));
   });
@@ -119,9 +122,23 @@ async function relayGateway(
     }
   };
   const passing = pass();
-  return async () => {
-    stopped = true;
-    await passing;
+  return {
+    async emitRefresh(event) {
+      await expect
+        .poll(() => sockets.size, {
+          message: 'No active fixture gateway socket',
+        })
+        .toBeGreaterThan(0);
+      const frame = JSON.stringify({
+        type: 'refresh_email',
+        data: JSON.stringify(event),
+      });
+      for (const socket of sockets) socket.send(frame);
+    },
+    async stop() {
+      stopped = true;
+      await passing;
+    },
   };
 }
 
@@ -221,9 +238,8 @@ export const test = base.extend<
           }
         );
         // The local stack runs the gateway; the front pipes its socket.
-        const stopRelay = local
-          ? async () => undefined
-          : await relayGateway(page, stack, user);
+        const relay = local ? undefined : await relayGateway(page, stack, user);
+        const stopRelay = relay?.stop ?? (async () => undefined);
 
         const api = (path: string, init?: RequestInit) =>
           fetch(`${front.origin}${path}`, {
@@ -242,6 +258,11 @@ export const test = base.extend<
           front,
           deliver: (mail) => stack.deliver(inbox.email, mail),
           providerMessages: () => stack.providerMessages(inbox.email),
+          emitRefresh: async (event) => {
+            if (!relay)
+              throw new Error('Synthetic refreshes require a per-test gateway');
+            await relay.emitRefresh(event);
+          },
           api,
           synced: async (subject) => {
             let found: ThreadPreview | undefined;

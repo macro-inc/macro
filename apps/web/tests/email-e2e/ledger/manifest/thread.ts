@@ -1409,7 +1409,7 @@ export const thread = {
       surface: 'SL-44',
       fn: ['F-120', 'F-140'],
       state:
-        'operation descriptions, e.g. "This draft changed in your mailbox. Choose which version to keep…", "Delivery could not be confirmed…", "Your mail provider rejected this send…"',
+        'operation descriptions, e.g. "This draft changed in your mailbox. Choose which version to keep…", "Delivery could not be confirmed…", "This message was not submitted. Try sending again."',
       trigger: 'per operation state and issue',
       source: ['src/features/email-message/core/message-operation.ts'],
     },

@@ -13,6 +13,7 @@ import {
   toasts,
 } from './derive';
 import type { RunResult, Test } from './evidence';
+import { type ImapEvidence, imapEvidence } from './imap';
 import { GROUPS } from './manifest';
 import {
   type EmailFunction,
@@ -22,6 +23,7 @@ import {
   WAIVERS,
   type Waiver,
 } from './manifest/functions';
+import { IMAP_CONFIRMATION } from './manifest/imap';
 import { GRAPHQL, OPERATIONS, REST } from './manifest/network';
 import {
   type Action,
@@ -231,7 +233,7 @@ export function functionRows(
 
 export type OperationRow = Operation & {
   status: Status | 'stubbed' | 'failed';
-  providers: Provider[];
+  providers: (Provider | 'imap')[];
   viewports: Viewport[];
   /** How often a service answered it. */
   count: number;
@@ -287,6 +289,7 @@ export type Drift = {
 };
 
 export type Ledger = {
+  imap: ImapEvidence[];
   functions: FunctionRow[];
   rows: Row[];
   operations: OperationRow[];
@@ -653,7 +656,12 @@ function manifestDrift(): Drift[] {
     ...difference(
       'Toasts',
       toasts().map((each) => each.key),
-      [...new Set(states.flatMap((row) => row.toasts ?? []))],
+      [
+        ...new Set([
+          ...states.flatMap((row) => row.toasts ?? []),
+          IMAP_CONFIRMATION.source,
+        ]),
+      ],
       {
         missing: 'raised in the source, on no state row',
         stale: 'on a state row, no longer raised',
@@ -709,7 +717,7 @@ export function buildLedger(
     real: number;
     stubbed: number;
     failed: number;
-    providers: Set<Provider>;
+    providers: Set<Provider | 'imap'>;
     viewports: Set<Viewport>;
   };
   const seen = new Map<string, Seen>();
@@ -759,6 +767,22 @@ export function buildLedger(
       }
     }
   }
+  const imap = imapEvidence(gating.tests);
+  for (const evidence of imap) {
+    for (const id of evidence.operations) {
+      const entry: Seen = seen.get(id) ?? {
+        real: 0,
+        failed: 0,
+        stubbed: 0,
+        providers: new Set(),
+        viewports: new Set(),
+      };
+      entry.real += 1;
+      entry.providers.add('imap');
+      entry.viewports.add(evidence.viewport);
+      seen.set(id, entry);
+    }
+  }
   const operations = OPERATIONS.map((operation): OperationRow => {
     const entry = seen.get(operation.id);
     const status: OperationRow['status'] = entry?.real
@@ -796,6 +820,7 @@ export function buildLedger(
     WORST.find((status) => runs.some((test) => test.status === status));
   const counted = runsOf.flat();
   return {
+    imap,
     functions: functionRows(FUNCTIONS, gating.evidence, rows, proofs, LIMITS),
     rows,
     operations,

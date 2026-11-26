@@ -60,7 +60,9 @@ pub enum Providers {
     Gmail,
     /// Outlook inboxes only.
     Outlook,
-    /// Inboxes of either provider.
+    /// IMAP inboxes only.
+    Imap,
+    /// Gmail and Outlook inboxes (the original paired coverage tier).
     Both,
 }
 

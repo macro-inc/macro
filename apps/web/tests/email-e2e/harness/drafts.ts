@@ -1,3 +1,4 @@
+import type { EmailSendIntent } from '../../../src/lib/queries/email/send-intent';
 // The composer as a user drives it, and what Macro holds of its drafts.
 
 import {
@@ -180,4 +181,39 @@ export async function loadAppSteadily(page: Page): Promise<void> {
       }
     }
   );
+}
+
+/** The dispatch lease held by the send journal, or null before it exists. */
+export function sendLease(page: Page, attemptId: string) {
+  return page.evaluate(async (attemptId) => {
+    const name = 'macro-email-working-copies-v1';
+    if (!(await indexedDB.databases()).some((db) => db.name === name))
+      return null;
+    return new Promise<number | null>((resolve, reject) => {
+      const open = indexedDB.open(name);
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        const tx = db.transaction('sends', 'readonly');
+        const request = tx.objectStore('sends').get(attemptId);
+        let leaseUntil: number | null = null;
+        request.onsuccess = () => {
+          const intent = request.result as EmailSendIntent | undefined;
+          leaseUntil = intent?.dispatch?.leaseUntil ?? null;
+        };
+        tx.oncomplete = () => {
+          db.close();
+          resolve(leaseUntil);
+        };
+        tx.onerror = () => {
+          db.close();
+          reject(tx.error);
+        };
+        tx.onabort = () => {
+          db.close();
+          reject(tx.error);
+        };
+      };
+    });
+  }, attemptId);
 }

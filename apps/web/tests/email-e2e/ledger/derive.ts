@@ -33,7 +33,7 @@ export const EMAIL_FILES_ELSEWHERE = [
   'src/features/crm/views/contact-emails-section.tsx',
   'src/features/crm/views/email-privacy.tsx',
   'src/features/entity/composed/list-entity/email.tsx',
-  'src/features/inbox/AddInboxDialog.tsx',
+  'src/features/inbox/AddInboxFlow.tsx',
   'src/features/inbox/AdminConsentRequiredDialog.tsx',
   'src/features/inbox/ShareInboxConflictDialog.tsx',
   'src/features/next-soup/actions/make-block-sender-action.ts',
@@ -270,18 +270,30 @@ function template(path: string): string {
 export function restCalls(): DerivedOperation[] {
   const file = parse(EMAIL_CLIENT);
   const found = new Map<string, DerivedOperation>();
-  for (const call of calls(file, /^(emailFetch|fetchWithToken)$/)) {
+  for (const call of calls(
+    file,
+    /^(emailFetch|emailRequest|fetchWithToken)$/
+  )) {
     const [url, init] = call.arguments;
     if (!url) continue;
     let scope: ts.Node = call;
-    while (scope.parent && !ts.isFunctionLike(scope)) scope = scope.parent;
-    // `emailFetch` itself passes its argument on: not a call of its own.
-    if (ts.isFunctionDeclaration(scope) && scope.name?.text === 'emailFetch') {
+    while (
+      scope.parent &&
+      !ts.isFunctionDeclaration(scope) &&
+      !ts.isMethodDeclaration(scope)
+    )
+      scope = scope.parent;
+    // These wrappers only forward URLs to the transport.
+    if (
+      ts.isFunctionDeclaration(scope) &&
+      (scope.name?.text === 'emailFetch' || scope.name?.text === 'emailRequest')
+    ) {
       continue;
     }
     const method = property(init, 'method');
     const verb = method && ts.isStringLiteralLike(method) ? method.text : 'GET';
-    const prefix = call.expression.getText() === 'emailFetch' ? '/email' : '';
+    const prefix =
+      call.expression.getText() === 'fetchWithToken' ? '' : '/email';
     for (const path of new Set(paths(url, scope).map(template))) {
       const id = `${verb} ${prefix}${path}`;
       found.set(id, { id, kind: 'rest', file: EMAIL_CLIENT });

@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { stripVTControlCharacters } from 'node:util';
 import { coveredItems, fullStackOnly, STACK, violations } from './enforce';
 import { readGatingRuns, readRun } from './evidence';
+import { missingImapEvidence } from './imap';
 import {
   buildLedger,
   type FunctionRow,
@@ -109,6 +110,7 @@ const OPERATIONS_HEAD = [
   'With every provider',
   'Gmail',
   'Outlook',
+  'IMAP',
   'Desktop',
   'Phone',
   'Deferred',
@@ -127,6 +129,7 @@ function operationsRow(
     operations.filter((each) => each.status === 'covered').length,
     real.filter((each) => each.providers.includes('gmail')).length,
     real.filter((each) => each.providers.includes('outlook')).length,
+    real.filter((each) => each.providers.includes('imap')).length,
     real.filter((each) => each.viewports.includes('desktop')).length,
     real.filter((each) => each.viewports.includes('phone')).length,
     operations.filter((each) => each.status === 'deferred').length,
@@ -520,12 +523,24 @@ function render(
       )
       .join('\n\n');
 
+  const imapLine = ledger.imap.length
+    ? 'IMAP and SMTP browser evidence. ' +
+      ledger.imap
+        .map(
+          (entry) =>
+            `${entry.viewport} observed ${entry.states.join(' and ')} and ${new Set(entry.operations).size} API operations`
+        )
+        .join('. ') +
+      '.'
+    : 'IMAP and SMTP browser evidence is recorded by the full-stack job. This report contains no passing IMAP observations.';
   const summary = [
     '## Email UI coverage',
     '',
     testsLine,
     '',
     fromLine,
+    '',
+    imapLine,
     '',
     '### Functions',
     '',
@@ -614,6 +629,7 @@ summary{cursor:pointer;margin:10px 0;color:var(--acc)}
 <p class="mut">The email browser suite (<code>apps/web/tests/email-e2e</code>) against the list of what a user does with email, and the manifest of every way to do it in the web app. Evidence is what the tests recorded while they ran.</p>
 <p>${escapeHtml(testsLine)}</p>
 <p>${escapeHtml(fromLine)}</p>
+<p>${escapeHtml(imapLine)}</p>
 <h2>Functions</h2>
 <p>${escapeHtml(functionsLine)}</p>
 ${html(functionsHeadline)}
@@ -710,6 +726,9 @@ function report(mode: Mode): void {
     return;
   }
   const failures = [
+    ...(process.env.IMAP_LAB_REQUIRED === 'true'
+      ? missingImapEvidence(ledger.imap)
+      : []),
     ...violations({
       functions: FUNCTIONS,
       rows: ledger.rows.map((row) => row.id),
@@ -750,6 +769,7 @@ function report(mode: Mode): void {
         states: totals(ledger.rows.filter((row) => row.kind === 'state')),
         rows: ledger.rows,
         operations: ledger.operations,
+        imap: ledger.imap,
         unlisted: ledger.unlisted,
         drift: ledger.drift,
         droppedEvidence: gating.dropped,

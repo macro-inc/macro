@@ -1176,3 +1176,107 @@ fn a_record_of_another_run_is_not_counted() {
     assert_eq!(recorded(None).recorded, 0);
     assert_eq!(recorded(Some("new")).recorded, 1);
 }
+
+#[test]
+fn imap_claims_require_imap_evidence_and_mutation_proof() {
+    let rows = parse_tsv(
+        "kind\tkey\tproviders\tmatch\tsource\nhttp\tPOST /email/links/imap\timap\t\ta.rs:1\n",
+        "rows",
+    )
+    .unwrap();
+    let sources = Sources::load(&repo()).unwrap();
+    let schema = Schema::load(&repo()).unwrap();
+    let reader = Reader {
+        rows: &rows,
+        sources: &sources,
+        schema: &schema,
+    };
+    let mut ledger=Ledger {functions:functions("id\tarea\tfunction\tgmail\toutlook\tui\tresult_checked_at\nF-198\taccounts\tConnect IMAP\tno\tno\tyes\tservice\n").unwrap(),map:map("[F-198]\nimap = ['http POST /email/links/imap']\n").unwrap(),checks:checks("function\tscenario\nF-198\timap connect\n").unwrap(),proofs:Vec::new(),waivers:Waivers::default()};
+    let record = |provider| {
+        serde_json::from_value(json!(
+        {
+            "version": 1,
+            "binary": "imap",
+            "test": "connect",
+            "providers": [
+                provider
+            ],
+            "http": [
+                {
+                    "service": "email_service",
+                    "method": "POST",
+                    "path": "/email/links/imap",
+                    "status": 200
+                }
+            ]
+        }
+        ))
+        .unwrap()
+    };
+    let wrong = build(&reader, &ledger, vec![record("gmail")], &Results::default());
+    assert_eq!(
+        wrong.functions[0].imap.as_ref().unwrap().status,
+        Status::Open
+    );
+    let claimed = build(&reader, &ledger, vec![record("imap")], &Results::default());
+    assert!(claimed.broken.is_empty(), "{:?}", claimed.broken);
+    assert!(claimed.functions[0].gmail.is_none());
+    assert!(claimed.functions[0].outlook.is_none());
+    assert_eq!(
+        claimed.functions[0].imap.as_ref().unwrap().status,
+        Status::Claimed
+    );
+    assert!(
+        claimed
+            .gaps
+            .iter()
+            .any(|g| g.contains("not proved on imap"))
+    );
+    assert!(claimed.entry_rows[0].gmail.is_none());
+    assert!(claimed.entry_rows[0].outlook.is_none());
+    assert_eq!(
+        claimed.entry_rows[0].imap.as_ref().unwrap().status,
+        Status::Covered
+    );
+    ledger.proofs=proofs("function\tprovider\tscenario\tbreak\nF-198\timap\timap connect\tReject verified mailbox connection before promotion\n").unwrap();
+    let proved = build(&reader, &ledger, vec![record("imap")], &Results::default());
+    assert!(proved.broken.is_empty(), "{:?}", proved.broken);
+    assert!(proved.gaps.is_empty(), "{:?}", proved.gaps);
+    assert_eq!(proved.functions_imap.proved, 1);
+    assert_eq!(proved.entry_points[0].imap.covered, 1);
+    assert!(render::markdown(&proved).contains("### IMAP coverage"));
+    assert!(render::html(&proved).contains("IMAP coverage"));
+}
+
+#[test]
+fn dedicated_imap_index_is_explicit_and_rejects_duplicate_or_malformed_rows() {
+    let functions =
+        super::ledger::imap_functions("id\tarea\tfunction\nF-198\taccounts\tConnect IMAP\n")
+            .unwrap();
+    assert_eq!(functions.len(), 1);
+    assert!(!functions[0].gmail && !functions[0].outlook);
+    assert!(
+        super::ledger::imap_functions(
+            "id\tarea\tfunction\nF-198\taccounts\tConnect\nF-198\taccounts\tDuplicate\n"
+        )
+        .is_err()
+    );
+    assert!(
+        super::ledger::imap_functions("id\tarea\tfunction\nnot-an-id\taccounts\tConnect\n")
+            .is_err()
+    );
+}
+
+#[test]
+fn repository_ledger_keeps_imap_only_capabilities_in_a_validated_index() {
+    let ledger = Ledger::load(&repo()).unwrap();
+    for id in ["F-198", "F-199"] {
+        let function = ledger
+            .functions
+            .iter()
+            .find(|function| function.id == id)
+            .unwrap();
+        assert!(!function.gmail && !function.outlook);
+        assert!(!ledger.map.functions[id].imap.is_empty());
+    }
+}

@@ -3,7 +3,7 @@
 // Load More again once that page failed; and what Next item says on the last
 // thread of a page whose next page fails.
 
-import { loadAppSteadily } from './harness/drafts';
+import { graphqlOperation, loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
 import { focusedRowId } from './harness/list';
 import type { Mail } from './harness/stack';
@@ -63,11 +63,27 @@ test.describe('the end of a long list of a Gmail inbox', () => {
     });
     const button = more.getByRole('button');
 
-    await mailbox.open();
-    await expect.poll(() => focusedRowId(page)).toBeDefined();
+    // A browser without SharedWorker pages this list from the service. A
+    // completed local backfill can instead answer End from its own index.
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'SharedWorker', { value: undefined });
+    });
     const nextPage = await holdOperation(page, 'Soup', (body) =>
       body.includes('"continuation"')
     );
+    const [firstPage] = await Promise.all([
+      page.waitForResponse((response) => {
+        const request = response.request();
+        return (
+          graphqlOperation(request) === 'Soup' &&
+          request.postDataJSON().variables.input.initial?.emailView === 'INBOX'
+        );
+      }),
+      mailbox.open(),
+    ]);
+    expect(firstPage.ok()).toBe(true);
+    await firstPage.finished();
+    await expect.poll(() => focusedRowId(page)).toBeDefined();
     // The cursor near the end of the list asks for the next page.
     await page.keyboard.press('End');
     await expect.poll(() => nextPage.count()).toBeGreaterThan(0);

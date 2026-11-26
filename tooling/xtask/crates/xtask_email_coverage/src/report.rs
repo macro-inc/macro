@@ -35,7 +35,8 @@ use crate::{ENTRYPOINTS_PATH, Kind, Providers, Row, Sources, read_tsv};
 
 pub(crate) const GMAIL: &str = "gmail";
 pub(crate) const OUTLOOK: &str = "outlook";
-const PROVIDERS: [&str; 2] = [GMAIL, OUTLOOK];
+pub(crate) const IMAP: &str = "imap";
+const PROVIDERS: [&str; 3] = [GMAIL, OUTLOOK, IMAP];
 /// The name of a results file nextest writes.
 const JUNIT_NAME: &str = "junit.xml";
 /// How many scenarios a cell names.
@@ -157,6 +158,8 @@ pub(crate) struct FunctionRow {
     pub(crate) bug: Option<String>,
     pub(crate) gmail: Option<Cell>,
     pub(crate) outlook: Option<Cell>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) imap: Option<Cell>,
 }
 
 #[derive(Debug, Serialize)]
@@ -168,6 +171,8 @@ pub(crate) struct EntryRow {
     pub(crate) functions: Vec<String>,
     pub(crate) gmail: Option<Cell>,
     pub(crate) outlook: Option<Cell>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) imap: Option<Cell>,
 }
 
 /// An entry point nothing in the repository calls.
@@ -189,6 +194,8 @@ pub(crate) struct OwnedRow {
     /// not owned there.
     pub(crate) gmail: Option<bool>,
     pub(crate) outlook: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) imap: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -196,6 +203,7 @@ pub(crate) struct KindTotals {
     pub(crate) kind: String,
     pub(crate) gmail: Tally,
     pub(crate) outlook: Tally,
+    pub(crate) imap: Tally,
 }
 
 #[derive(Debug, Serialize)]
@@ -218,7 +226,7 @@ pub(crate) struct Suite {
     pub(crate) failed: Vec<String>,
     /// Scenarios that passed and left no record.
     pub(crate) unrecorded: Vec<String>,
-    /// Scenarios that linked no inbox: they count for both providers.
+    /// Scenarios that linked no inbox: they count for each provider.
     pub(crate) no_inbox: Vec<String>,
     /// Scenarios with inboxes of both providers: they count for both.
     pub(crate) both_providers: Vec<String>,
@@ -241,6 +249,7 @@ pub(crate) struct Model {
     pub(crate) functions_deferred: usize,
     pub(crate) functions_gmail: Tally,
     pub(crate) functions_outlook: Tally,
+    pub(crate) functions_imap: Tally,
     pub(crate) functions: Vec<FunctionRow>,
     pub(crate) entry_points: Vec<KindTotals>,
     pub(crate) entry_rows: Vec<EntryRow>,
@@ -454,7 +463,7 @@ pub(crate) fn build(
         }
         if let Some(provider) = unknown_provider(waiver.provider.as_deref()) {
             broken.push(format!(
-                "{}: a waiver names the provider `{provider}`, which is neither {GMAIL} nor {OUTLOOK}",
+                "{}: a waiver names the provider `{provider}`, which is not {GMAIL}, {OUTLOOK} or {IMAP}",
                 ledger::WAIVERS_PATH
             ));
         }
@@ -493,7 +502,7 @@ pub(crate) fn build(
         }
         if let Some(provider) = unknown_provider(deferral.provider.as_deref()) {
             broken.push(format!(
-                "{}: a deferral names the provider `{provider}`, which is neither {GMAIL} nor {OUTLOOK}",
+                "{}: a deferral names the provider `{provider}`, which is not {GMAIL}, {OUTLOOK} or {IMAP}",
                 ledger::WAIVERS_PATH
             ));
         }
@@ -522,7 +531,7 @@ pub(crate) fn build(
         }
         if let Some(provider) = unknown_provider(own.provider.as_deref()) {
             broken.push(format!(
-                "{}: [[owned]] names the provider `{provider}`, which is neither {GMAIL} nor {OUTLOOK}",
+                "{}: [[owned]] names the provider `{provider}`, which is not {GMAIL}, {OUTLOOK} or {IMAP}",
                 ledger::WAIVERS_PATH
             ));
         }
@@ -578,9 +587,10 @@ pub(crate) fn build(
         }
         let mut cell = |provider: &'static str| {
             let applies = match row.providers {
-                Providers::Both => true,
+                Providers::Both => provider == GMAIL || provider == OUTLOOK,
                 Providers::Gmail => provider == GMAIL,
                 Providers::Outlook => provider == OUTLOOK,
+                Providers::Imap => provider == IMAP,
             };
             applies.then(|| {
                 let by: Vec<String> = scenarios
@@ -621,16 +631,18 @@ pub(crate) fn build(
                 }
             })
         };
-        let (gmail, outlook) = (cell(GMAIL), cell(OUTLOOK));
+        let (gmail, outlook, imap) = (cell(GMAIL), cell(OUTLOOK), cell(IMAP));
         let totals = entry_totals
             .entry(row.kind.to_string())
             .or_insert_with(|| KindTotals {
                 kind: row.kind.to_string(),
                 gmail: Tally::default(),
                 outlook: Tally::default(),
+                imap: Tally::default(),
             });
         totals.gmail.add(gmail.as_ref());
         totals.outlook.add(outlook.as_ref());
+        totals.imap.add(imap.as_ref());
         let owner = PROVIDERS
             .iter()
             .find_map(|provider| owned_entries.get(&(name.clone(), *provider)));
@@ -646,6 +658,7 @@ pub(crate) fn build(
                 owner: (*owner).to_owned(),
                 gmail: reached(&gmail),
                 outlook: reached(&outlook),
+                imap: reached(&imap),
             });
         }
         entry_rows.push(EntryRow {
@@ -655,6 +668,7 @@ pub(crate) fn build(
             functions: functions_of.get(&name).cloned().unwrap_or_default(),
             gmail,
             outlook,
+            imap,
         });
     }
 
@@ -699,7 +713,7 @@ pub(crate) fn build(
         }
         if !PROVIDERS.contains(&proof.provider.as_str()) {
             wrong.push(format!(
-                "the provider `{}` is neither {GMAIL} nor {OUTLOOK}",
+                "the provider `{}` is not {GMAIL}, {OUTLOOK} or {IMAP}",
                 proof.provider
             ));
         }
@@ -741,7 +755,7 @@ pub(crate) fn build(
         }
         if let Some(provider) = unknown_provider(waiver.provider.as_deref()) {
             broken.push(format!(
-                "{}: a waiver names the provider `{provider}`, which is neither {GMAIL} nor {OUTLOOK}",
+                "{}: a waiver names the provider `{provider}`, which is not {GMAIL}, {OUTLOOK} or {IMAP}",
                 ledger::WAIVERS_PATH
             ));
         }
@@ -753,6 +767,7 @@ pub(crate) fn build(
     let empty = Mapping::default();
     let mut function_rows = Vec::new();
     let (mut functions_gmail, mut functions_outlook) = (Tally::default(), Tally::default());
+    let mut functions_imap = Tally::default();
     let mut functions_ui_only = 0;
     let mut functions_deferred = 0;
     for function in &ledger.functions {
@@ -783,6 +798,7 @@ pub(crate) fn build(
                 bug: None,
                 gmail: None,
                 outlook: None,
+                imap: None,
             });
             continue;
         }
@@ -868,8 +884,10 @@ pub(crate) fn build(
         };
         let gmail = cell(GMAIL, function.gmail);
         let outlook = cell(OUTLOOK, function.outlook);
+        let imap = cell(IMAP, !mapping.imap.is_empty());
         functions_gmail.add(gmail.as_ref());
         functions_outlook.add(outlook.as_ref());
+        functions_imap.add(imap.as_ref());
         function_rows.push(FunctionRow {
             id: function.id.clone(),
             area: function.area.clone(),
@@ -879,6 +897,7 @@ pub(crate) fn build(
             bug: mapping.bug.clone(),
             gmail,
             outlook,
+            imap,
         });
     }
     // What is said of a function a known bug keeps open is not looked at.
@@ -942,6 +961,7 @@ pub(crate) fn build(
         functions_deferred,
         functions_gmail,
         functions_outlook,
+        functions_imap,
         functions: function_rows,
         entry_points: entry_totals.into_values().collect(),
         entry_rows,
@@ -970,7 +990,7 @@ fn applies(provider: Option<&str>) -> Vec<&'static str> {
         .collect()
 }
 
-/// A waiver for a provider that is neither of the two applies to nothing.
+/// A waiver for an unknown provider applies to nothing.
 fn unknown_provider(provider: Option<&str>) -> Option<&str> {
     provider.filter(|provider| !PROVIDERS.contains(provider))
 }

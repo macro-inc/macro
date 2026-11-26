@@ -139,3 +139,19 @@ fn later(map: Map) {
         assert!(why.contains("no route registration"), "{path}: {why}");
     }
 }
+
+#[test]
+fn imap_routes_and_sources_do_not_claim_gmail_or_outlook_coverage() {
+    assert_eq!(
+        super::default_providers("POST /email/links/imap", "api.rs"),
+        crate::Providers::Imap
+    );
+    assert_eq!(
+        super::default_providers("GET /email/links/suggestion", "api/imap.rs"),
+        crate::Providers::Imap
+    );
+    assert_eq!(
+        super::default_providers("POST /email/init", "api.rs"),
+        crate::Providers::Both
+    );
+}

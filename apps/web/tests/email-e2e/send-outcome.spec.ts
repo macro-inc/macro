@@ -40,6 +40,9 @@ test.describe('a send the provider refuses', () => {
     saw('STC-026');
     await expect(page.getByText('Email sent', { exact: true })).toHaveCount(0);
     await expect(sending).toHaveCount(0);
+    await expect(
+      page.getByText('Delivery unconfirmed', { exact: true })
+    ).toHaveCount(0);
     // The reply is still there to recover, and the thread is back in the inbox.
     await expect(
       page.getByText(

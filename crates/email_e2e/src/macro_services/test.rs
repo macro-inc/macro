@@ -8,7 +8,7 @@ use super::MacroServices;
 async fn stopping_lets_a_held_request_go() {
     // Nothing listens here; the request is held before anything is passed on.
     let nowhere = "http://127.0.0.1:1";
-    let services = MacroServices::start(nowhere, nowhere, nowhere)
+    let services = MacroServices::start(nowhere, nowhere, nowhere, false)
         .await
         .unwrap();
     let mut held = services.hold_next("contacts", "GET", "/held");

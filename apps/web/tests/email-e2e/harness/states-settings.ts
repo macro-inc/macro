@@ -10,6 +10,7 @@ import {
   type WebSocketRoute,
 } from '@playwright/test';
 import type { Mailbox } from './fixtures';
+import { silenceGateway } from './gateway';
 import { emulatorUrl } from './journeys';
 import { MAIL_SCOPE } from './ways-settings-more';
 
@@ -30,7 +31,7 @@ export type Hold = {
   /** Lets the held requests, and every later one, reach the service. */
   release(): void;
   /** Answers the held requests, and every later one, with this status. */
-  fail(status?: number): void;
+  fail(status?: number, recoverWhen?: () => Promise<boolean>): void;
 };
 
 /**
@@ -48,11 +49,13 @@ export async function holdRequests(
     wake = resolve;
   });
   let seen = 0;
+  let recoverWhen: (() => Promise<boolean>) | undefined;
   await page.route(url, async (route) => {
     if (route.request().method() !== method) return route.fallback();
     seen += 1;
     while (mode === 'hold') await woken;
     try {
+      if (typeof mode === 'number' && (await recoverWhen?.())) settle('pass');
       if (mode === 'pass') await route.fallback();
       else await route.fulfill({ status: mode, json: {} });
     } catch {
@@ -69,7 +72,10 @@ export async function holdRequests(
   return {
     seen: () => seen,
     release: () => settle('pass'),
-    fail: (status = 500) => settle(status),
+    fail: (status = 500, when) => {
+      recoverWhen = when;
+      settle(status);
+    },
   };
 }
 
@@ -113,10 +119,8 @@ export async function providerFault(
 /**
  * Answers the app's connection-gateway socket in place of the fixture's
  * relay, for a test that waits on what the email services tell the app.
- * The fixture's socket leaves the app's pings unanswered, so the app drops
- * it every few seconds and reconnects a second later; what is sent in that
- * second never arrives. This one answers each ping, and passes on what is
- * sent to the user once the page first connects (not what was sent before,
+ * Like the default relay, it answers each heartbeat. It passes on only what
+ * is sent to the user once the page first connects (not what was sent before,
  * such as the end of the first backfill, which would raise its notice
  * again). Call it before the page opens. Answers what stops it; it also
  * stops when the page closes.
@@ -136,11 +140,8 @@ export async function steadyGateway(
   let passed: number | undefined;
   let connected = false;
   const sockets = new Set<WebSocketRoute>();
-  await page.routeWebSocket(/\/connection-gateway(\/|\?|$)/, (socket) => {
+  await silenceGateway(page, (socket) => {
     sockets.add(socket);
-    socket.onMessage((message) => {
-      if (message === 'ping') socket.send('pong');
-    });
     socket.onClose(() => sockets.delete(socket));
     connected = true;
   });

@@ -5,6 +5,7 @@
 import { devices, type Page, type Request } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
+import { silenceGateway } from './harness/gateway';
 import { catchUpFinished, focusedRowId, rowIds } from './harness/list';
 import { anInbox, PROVIDERS } from './harness/providers';
 import type { Mail } from './harness/stack';
@@ -212,12 +213,56 @@ for (const provider of PROVIDERS) {
       });
 
       await mailbox.open();
+      // Startup catch-up hydrates its own page chain. Measure hints only
+      // after those existing lanes have settled, as the live-update tests do.
+      await expect
+        .poll(() => catchUpFinished(page), { timeout: 60_000 })
+        .toBe(true);
       await expect.poll(() => focusedRowId(page)).toBeDefined();
       const [top] = await rowIds(page);
-      // The cursor goes to the last thread the list holds, and a step on.
-      await page.keyboard.press('End');
-      await expect.poll(() => focusedRowId(page)).not.toBe(top);
-      await page.keyboard.press('j');
+      let releasePage!: () => void;
+      const heldPage = new Promise<void>((resolve) => {
+        releasePage = resolve;
+      });
+      let heldContinuation = false;
+      await page.route('**/dss/items/soup/graphql', async (route) => {
+        const input = route.request().postDataJSON()?.variables?.input;
+        if (!heldContinuation && input?.continuation?.emailView) {
+          heldContinuation = true;
+          await heldPage;
+        }
+        await route.fallback();
+      });
+      // Register before End: reaching the last row can itself start prefetch.
+      const nextPageStarted = page.waitForRequest(
+        (request) => {
+          if (!listQuery(request, 'continuation')) return false;
+          return Boolean(
+            request.postDataJSON()?.variables?.input?.continuation?.emailView
+          );
+        },
+        { timeout: 30_000 }
+      );
+      try {
+        // The cursor goes to the last thread the list holds, and a step on.
+        await page.keyboard.press('End');
+        await expect.poll(() => focusedRowId(page)).not.toBe(top);
+        await page.keyboard.press('j');
+        await nextPageStarted;
+        // Exercise a real burst while the next page is in flight. The refresh
+        // scheduler's unit test checks coalescing without timing the browser.
+        for (let hint = 0; hint < 5; hint += 1) {
+          await mailbox.emitRefresh({
+            event: 'backfill_progress',
+            link_id: mailbox.inbox.linkId,
+            status: 'complete',
+            completed_threads: LONG_LIST,
+            total_threads: LONG_LIST,
+          });
+        }
+      } finally {
+        releasePage();
+      }
       did('AL-057');
       await expect(more).toHaveCount(0);
       await page.keyboard.press('Home');
@@ -225,9 +270,8 @@ for (const provider of PROVIDERS) {
       await moveCursor(page, 'End');
       const all = await walkUp(page, top);
       expect(all).toHaveLength(LONG_LIST);
-      // The threads of the next page come after those of the first.
-      expect(all.toReversed().slice(100).toSorted()).toEqual(
-        second.items.map((item) => item.id).toSorted()
+      expect(all.toReversed()).toEqual(
+        [...first.items, ...second.items].map((item) => item.id)
       );
       saw('STL-979');
 
@@ -235,9 +279,6 @@ for (const provider of PROVIDERS) {
       expect(first.items).toHaveLength(100);
       expect(second.items).toHaveLength(LONG_LIST - 100);
       expect(second.next_cursor).toBeNull();
-      expect(all.toSorted()).toEqual(
-        [...first.items, ...second.items].map((item) => item.id).toSorted()
-      );
       confirmed('F-036');
     });
 
@@ -290,6 +331,9 @@ for (const provider of PROVIDERS) {
     }) => {
       // Without the live updates, so that only the pull can bring mail in.
       await page.routeWebSocket(/\/dss\/items\/soup\/graphql\/ws/, () => {});
+      // Gateway hints also refresh the list. Keep its heartbeat alive while
+      // withholding those hints, so a reconnect cannot bring the mail in either.
+      await silenceGateway(page);
       await mailbox.deliver({
         from: 'Grace <grace@example.com>',
         subject: 'Agenda',

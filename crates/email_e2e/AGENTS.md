@@ -51,13 +51,27 @@ scenarios.
   Redis, SQS, Kafka, and OpenSearch for search).
 - The services are the binaries in `target/debug` (or `EMAIL_E2E_BIN_DIR`),
   started with an environment the harness builds (`src/stack/environment.rs`)
-  and nothing else. Build them before running; `just email-e2e` does.
+  and the dev shell’s native `LD_LIBRARY_PATH` for dynamically linked Nix
+  binaries. No other parent service settings are inherited. Build them before running; `just email-e2e` does.
 - Each scenario's service logs are in
   `target/debug/email-e2e/<test>-<id>/{email_service,pubsub_workers,calendar_service,document_storage_service,search_processing_service,email_focus_worker}.log`,
   with `<handler>.log` for each Lambda the scenario ran.
   A failing scenario prints the directory and the end of the logs.
 
 ## Writing a scenario
+
+Real IMAP scenarios set `StackOptions { imap: true, .. }`. Prepare and start
+`docker/imap-lab` first, and build `imap_service` alongside the email binaries.
+`user.link_imap()` signs a synthetic personal session for the connection API
+and returns the link UUID. Use `user.submit_imap_connection()` to exercise a
+specific settings payload or a typed refusal with the same session.
+`stack.imap_lab()` controls Dovecot through an independent Python IMAP
+client and reads Mailpit; it never uses the engine's index as its provider
+oracle. Each unique user has a separate real mailbox. The existing `Provider`
+helpers remain specific to the Gmail/Outlook emulators.
+
+Run `cargo test -p email_e2e --test imap` with the infrastructure settings below.
+The optional engine is stopped before the scenario database is released.
 
 ```rust
 use email_e2e::{Mail, Report, Stack};
@@ -351,6 +365,10 @@ shared with the web app's suite) and backend entry points second.
 ## Start here
 
 - `tests/gmail.rs`, `tests/outlook.rs`: one worked scenario per provider.
+- `tests/sync_parked_work_recovery.rs`: simulated old-binary activation in the
+  scenario database, real sweep recovery of projection, folder stream and
+  reconciliation retry work, and one MessageReceived publication;
+  no reconnect or inline unpark. PG unit cases cover bounds and lock edge cases.
 - `tests/journey_*.rs`: whole user journeys (compose, organise, read,
   account, sender rules, agent, provider parity, connect, follow-up),
   each for Gmail and Outlook where the product has both.

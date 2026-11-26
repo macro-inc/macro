@@ -35,6 +35,7 @@ pub struct User {
     db: PgPool,
     gmail: gmail_emulator::GmailEmulator,
     outlook: outlook_emulator::OutlookEmulator,
+    imap: Option<crate::ImapLab>,
     /// Where `calendar_service` and the calendar read routes answer, when
     /// the stack runs calendar.
     calendar_urls: Option<(String, String)>,
@@ -76,6 +77,7 @@ impl User {
             db,
             gmail: stack.gmail().clone(),
             outlook: stack.outlook().clone(),
+            imap: stack.imap_lab().ok(),
             calendar_urls: stack.calendar_urls(),
         };
         // Everyone a scenario makes is using Macro, as a person with the app
@@ -148,6 +150,31 @@ impl User {
     /// the scenario seeded it already.
     pub async fn link_outlook(&self) -> Result<Inbox, Report> {
         self.link(Provider::Outlook, &self.email).await
+    }
+
+    /// Connect this verified synthetic address through the public IMAP API.
+    /// Real-server scenarios use the lab directly as their independent oracle;
+    /// existing Gmail/Outlook emulator scenarios retain their provider helpers.
+    pub async fn link_imap(&self) -> Result<Uuid, Report> {
+        let lab = self
+            .imap
+            .as_ref()
+            .ok_or_else(|| report!("link_imap needs StackOptions.imap"))?;
+        let response = self
+            .submit_imap_connection(&lab.connect_request(&self.email))
+            .await?
+            .ok()?;
+        response["linkId"]
+            .as_str()
+            .and_then(|id| id.parse().ok())
+            .ok_or_else(|| report!("IMAP connect returned no linkId"))
+    }
+
+    /// Submits server settings as this user's personal session, including requests expected to fail.
+    pub async fn submit_imap_connection(&self, request: &Value) -> Result<ApiResponse, Report> {
+        self.api
+            .post_as_session(&self.email, "/email/links/imap", request)
+            .await
     }
 
     /// Links the Gmail mailbox with the user's own address, consenting to

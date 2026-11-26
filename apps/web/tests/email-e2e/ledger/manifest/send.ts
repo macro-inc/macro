@@ -545,7 +545,7 @@ export const send = {
         'src/features/email-compose/primitives/queued-send-notice.ts',
         'src/features/email-compose/compose-adapter.ts',
       ],
-      toasts: ['src/features/email-compose/compose-adapter.ts#message'],
+      toasts: ['src/features/email-compose/compose-toast-feedback.ts#message'],
     },
     {
       id: 'STC-402',
@@ -568,14 +568,14 @@ export const send = {
       surface: 'SC-18',
       fn: ['F-135'],
       state:
-        'persistent toast: Email failed to send — Open its conversation or Drafts and choose Cancel to recover the draft. (dismiss: Maybe later)',
+        'persistent toast: Email failed to send — Open its conversation or Drafts to recover the draft. (dismiss: Maybe later, close or swipe)',
       trigger: 'send attempt failed',
       source: [
         'src/features/email-compose/primitives/queued-send-notice.ts',
-        'src/features/email-compose/compose-adapter.ts',
+        'src/features/email-compose/compose-toast-feedback.ts',
       ],
       toasts: [
-        'src/features/email-compose/compose-adapter.ts#common.maybeLater',
+        'src/features/email-compose/compose-toast-feedback.ts#common.maybeLater',
       ],
     },
     {
@@ -1777,7 +1777,7 @@ export const send = {
       surface: 'SC-09',
       fn: ['F-147'],
       state:
-        'the composer of a scheduled message says: Your mail provider rejected this send. You can retry after correcting the problem in your mailbox. (Retry send)',
+        'the composer of a scheduled message says: This message was not submitted. Try sending again. (Retry send)',
       trigger: 'the provider rejected a scheduled Outlook send when it was due',
       source: ['src/features/email-message/core/message-operation.ts'],
       providers: ['outlook'],

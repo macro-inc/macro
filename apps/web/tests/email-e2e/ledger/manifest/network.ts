@@ -1,3 +1,4 @@
+import { IMAP_OPERATIONS } from './imap';
 // The requests the web app's email pages can make. The first two lists hold
 // every operation of email's own that the source defines (`scope: 'email'`,
 // `emailOwned` in `../derive.ts`; the check fails when the two differ) and
@@ -71,6 +72,21 @@ export const REST: readonly Operation[] = [
   { id: 'DELETE /email/email/filters/{}', kind: 'rest', scope: 'email' },
   { id: 'POST /email/email/init', kind: 'rest', scope: 'email' },
   { id: 'GET /email/email/labels', kind: 'rest', scope: 'email' },
+  ...IMAP_OPERATIONS.map(
+    (id): Operation => ({
+      id,
+      kind: 'rest',
+      scope: 'email',
+      appliesTo:
+        id === 'GET /email/email/links/suggestion'
+          ? ['gmail', 'outlook', 'imap']
+          : ['imap'],
+      needs:
+        id === 'GET /email/email/links/suggestion'
+          ? undefined
+          : 'the real IMAP and SMTP browser tier',
+    })
+  ),
   { id: 'GET /email/email/links', kind: 'rest', scope: 'email' },
   { id: 'DELETE /email/email/links/{}', kind: 'rest', scope: 'email' },
   { id: 'DELETE /email/email/links/{}/calendar', kind: 'rest', scope: 'email' },
