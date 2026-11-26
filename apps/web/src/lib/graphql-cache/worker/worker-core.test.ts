@@ -1536,10 +1536,11 @@ describe('CacheWorkerCore', () => {
       'rows:GraphqlSoupDocument:typed-after-network-write',
       'read:visible',
       'generation',
-      'rows:GraphqlSoupDocument:plain',
-      'teardown',
+      // An operation's teardown orders only requests about that operation.
       'write',
       'local-change',
+      'rows:GraphqlSoupDocument:plain',
+      'teardown',
       'generation',
       'read:later',
       'rows:GraphqlSoupDocument:typed-after-local-change',
@@ -1979,9 +1980,10 @@ describe('CacheWorkerCore', () => {
 
     expect(order).toEqual([
       'read:client:blocker',
+      // The local change concerns no operation, so the teardown doesn't hold it.
+      'enqueue',
       'read:client:group-soup',
       'teardown:client:group-soup',
-      'enqueue',
       'read:client:group-soup',
     ]);
     expect(
@@ -4010,7 +4012,7 @@ describe('CacheWorkerCore', () => {
       expect(messages.filter((message) => !message.ok)).toEqual([]);
     });
 
-    it('lets no request that writes, and no read behind a fence, run between', async () => {
+    it("lets no request that writes, and no read behind a fence or its operation's teardown, run between", async () => {
       const order: string[] = [];
       const { engine, prepareStarted, release } = splitEngine(order);
       const { core, port } = await start(engine);
@@ -4049,7 +4051,7 @@ describe('CacheWorkerCore', () => {
           kind: 'teardown',
           opId: 'client:gone',
         }),
-        second.core.handleRequest(second.port, read(4, 'client:remount'))
+        second.core.handleRequest(second.port, read(4, 'client:gone'))
       );
       fenced.release();
       await Promise.all(sentAgain);
@@ -4058,7 +4060,7 @@ describe('CacheWorkerCore', () => {
         'read:client:before',
         'commit',
         'teardown',
-        'read:client:remount',
+        'read:client:gone',
       ]);
     });
 

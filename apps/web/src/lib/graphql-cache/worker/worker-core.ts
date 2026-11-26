@@ -45,6 +45,7 @@ import {
   type CacheQueueState,
   cacheDatabaseIdentity,
 } from './coordinator-protocol';
+import { lastTeardownOf, runnableIndexes } from './operation-order';
 import {
   type CacheEngine,
   type CacheEngineHydrationResult,
@@ -172,14 +173,17 @@ const USER_VISIBLE_READ_PRIORITY = 1;
 const TYPED_SEARCH_PRIORITY = 2;
 const CACHE_WRITE_PRIORITY = 3;
 
-/** Reads may reorder while they overlap, but never across lifecycle barriers. */
+/**
+ * Reads may reorder while they overlap, but never across lifecycle barriers.
+ * An operation's teardown orders only the requests about that operation
+ * (`operation-order.ts`).
+ */
 function isOrderingBarrier(request: CacheRequest): boolean {
   return (
     request.kind === 'current-authority' ||
     request.kind === 'transition-authority' ||
     request.kind === 'init' ||
     request.kind === 'current-storage-generation' ||
-    request.kind === 'teardown' ||
     request.kind === 'clear'
   );
 }
@@ -510,8 +514,9 @@ export class CacheWorkerCore {
       const priority = this.arrivalPriority(request);
       const signature = readSignature(request);
 
-      // Coalesce only within the current lifecycle segment. In particular, a
-      // remount after teardown must perform a fresh read to re-register deps.
+      // Coalesce only within the current lifecycle segment, and never with a
+      // read queued before this operation's teardown: a remount must perform
+      // a fresh read to re-register deps.
       if (signature !== undefined) {
         let segmentStart = 0;
         for (let i = this.queue.length - 1; i >= 0; i -= 1) {
@@ -520,6 +525,12 @@ export class CacheWorkerCore {
             segmentStart = i + 1;
             break;
           }
+        }
+        if (request.kind === 'read' && request.opId !== undefined) {
+          segmentStart = Math.max(
+            segmentStart,
+            lastTeardownOf(this.queue, request.opId) + 1
+          );
         }
         const duplicate = this.queue
           .slice(segmentStart)
@@ -559,31 +570,26 @@ export class CacheWorkerCore {
     const firstAuthoritativeWrite = this.queue
       .slice(0, segmentEnd)
       .findIndex((queued) => isAuthoritativeWrite(queued.request));
+    const priorities = this.runnablePriorities(segmentEnd);
+    const priorityOf = (i: number) =>
+      priorities.get(i) ?? this.queue[i]?.priority ?? Number.NEGATIVE_INFINITY;
     let index = 0;
-    if (segmentEnd > 0) {
-      for (let i = 1; i < segmentEnd; i += 1) {
-        const candidate = this.queue[i];
-        const selected = this.queue[index];
-        const preservesWriteOrder =
-          !candidate ||
-          !isAuthoritativeWrite(candidate.request) ||
-          i === firstAuthoritativeWrite;
-        if (
-          candidate &&
-          selected &&
-          preservesWriteOrder &&
-          candidate.priority > selected.priority
-        ) {
-          index = i;
-        }
+    for (let i = 1; i < segmentEnd; i += 1) {
+      const candidate = this.queue[i];
+      const preservesWriteOrder =
+        !candidate ||
+        !isAuthoritativeWrite(candidate.request) ||
+        i === firstAuthoritativeWrite;
+      if (
+        priorities.has(i) &&
+        preservesWriteOrder &&
+        priorityOf(i) > priorityOf(index)
+      ) {
+        index = i;
       }
     }
 
-    index = this.pickPastFences(
-      index,
-      this.queue[index]?.priority ?? Number.NEGATIVE_INFINITY,
-      segmentEnd
-    );
+    index = this.pickPastFences(index, priorityOf(index), segmentEnd);
 
     const [queued] = this.queue.splice(index, 1);
     if (!queued) return;
@@ -720,8 +726,25 @@ export class CacheWorkerCore {
   }
 
   /**
+   * The priority each of the first `segmentEnd` queued requests runs at, for
+   * those an operation's teardown does not hold back: its own, or that of a
+   * request queued behind it that waits for it. A held-back request has none.
+   */
+  private runnablePriorities(segmentEnd: number): Map<number, number> {
+    const priorities = new Map<number, number>();
+    runnableIndexes(this.queue, segmentEnd).forEach((runnable, i) => {
+      const priority = this.queue[i]?.priority ?? Number.NEGATIVE_INFINITY;
+      priorities.set(
+        runnable,
+        Math.max(priorities.get(runnable) ?? Number.NEGATIVE_INFINITY, priority)
+      );
+    });
+    return priorities;
+  }
+
+  /**
    * A typed search registers nothing and writes nothing, so the generation
-   * checks and operation teardowns that fence other reads do not order it.
+   * checks that fence other reads do not order it.
    * After an engine restart those fences sit between it and the head of the
    * replayed backlog. It can then run before a write queued ahead of it:
    * its rows are only older, and that write's cache change refreshes them.
@@ -764,17 +787,20 @@ export class CacheWorkerCore {
       isOrderingBarrier(queued.request)
     );
     if (segmentEnd === -1) segmentEnd = this.queue.length;
+    const priorities = this.runnablePriorities(segmentEnd);
     let index = -1;
     let priority = BACKGROUND_HYDRATION_PRIORITY;
     for (let i = 0; i < segmentEnd; i += 1) {
       const candidate = this.queue[i];
+      const candidatePriority = priorities.get(i);
       if (
         candidate &&
+        candidatePriority !== undefined &&
         !isAuthoritativeWrite(candidate.request) &&
-        candidate.priority > priority
+        candidatePriority > priority
       ) {
         index = i;
-        priority = candidate.priority;
+        priority = candidatePriority;
       }
     }
     index = this.pickPastFences(index, priority, segmentEnd);
