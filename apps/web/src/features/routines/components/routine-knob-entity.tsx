@@ -7,7 +7,7 @@ import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button, InputGroup, RadioGroup } from '@ui';
+import { Button, cn, InputGroup, RadioGroup } from '@ui';
 import { createMemo, createSignal, Show, Suspense } from 'solid-js';
 import { Virtualizer } from 'virtua/solid';
 import {
@@ -25,11 +25,26 @@ function pickerTypes(knob: EntityKnob): EntityType[] {
 }
 
 /** The picked item's icon and name, as the step's sentence shows it. */
-export function KnobEntityValue(props: { knob: EntityKnob }) {
+export function KnobEntityValue(props: {
+  knob: EntityKnob;
+  /** In a sentence, which keeps the comma or stop after it on its line. */
+  inSentence?: boolean;
+}) {
   return (
     <Show when={props.knob.value} keyed>
       {(value) => (
-        <span class="inline-flex max-w-full items-center gap-1 align-bottom">
+        // A grid, whose name column can shrink to nothing: a flex row is
+        // always as wide as its whole name, which pushed the sentence and its
+        // card's edge aside. A long name ends in an ellipsis at the line's
+        // width, less the value's padding and the punctuation after it.
+        <span
+          class={cn(
+            'inline-grid grid-cols-[auto_minmax(0,max-content)] items-center gap-1 align-bottom',
+            props.inSentence
+              ? 'max-w-[calc(100%-1em)]'
+              : 'max-w-[calc(100%-4px)]'
+          )}
+        >
           <Show
             when={knobPickerType(value.type)}
             keyed

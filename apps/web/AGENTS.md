@@ -349,6 +349,15 @@ backend-free regression mounts the real message body on desktop, a narrow
 split, and phone:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts contact-mention.browser.e2e.ts`.
 
+A routine step's entity knobs (the real `RoutineSteps` and a `SuggestionCard`,
+with stand-ins for the picked items' names) have a backend-free desktop/phone
+regression: every picked item stays inside its card, a sentence of many items
+wraps with short names whole, a long item ends in an ellipsis with the comma
+after it on its line, and a long value under Settings leaves its label room.
+Keep `KnobEntityValue` an inline grid whose name column can shrink to 0: an
+inline flex row is as wide as its whole name, which pushed the card's edge aside:
+`bunx playwright test --config src/features/routines/browser-test/playwright.config.ts knob-overflow.browser.e2e.ts`.
+
 Pinch zoom on opened image files (Drive details and image splits) has a
 backend-free phone and tablet regression:
 `bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`.

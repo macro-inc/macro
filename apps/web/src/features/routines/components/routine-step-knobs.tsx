@@ -96,6 +96,7 @@ function SentencePiece(props: {
           <KnobControl
             knob={part().knob}
             compact={props.compact}
+            inSentence
             unusable={props.unusable}
             onChange={(value) => props.onKnob(part().knob.name, value)}
           />
@@ -113,7 +114,8 @@ export function KnobSettings(props: {
   unusable?: readonly UnusableItem[];
 }) {
   return (
-    <dl class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 text-sm">
+    // A long value takes at most 60% of the row, so its label keeps the rest.
+    <dl class="grid min-w-0 grid-cols-[minmax(0,1fr)_fit-content(60%)] items-center gap-x-4 gap-y-2 text-sm">
       <For each={props.knobs}>
         {(knob) => (
           <>
@@ -145,6 +147,8 @@ function KnobControl(props: {
   knob: Knob;
   /** In a card's smaller sentence: a thinner, closer underline. */
   compact?: boolean;
+  /** In a sentence, rather than beside its label under Settings. */
+  inSentence?: boolean;
   /** What a knob with no value shows; its label by default. */
   emptyText?: string;
   unusableText?: string;
@@ -158,6 +162,7 @@ function KnobControl(props: {
         <KnobPopover
           knob={props.knob}
           compact={props.compact}
+          inSentence={props.inSentence}
           emptyText={props.emptyText}
           unusableText={props.unusableText}
           unusable={unusableReason(props.knob, props.unusable ?? [])}
@@ -212,6 +217,7 @@ function entityDraft(value: Knob['value']) {
 function KnobPopover(props: {
   knob: Knob;
   compact?: boolean;
+  inSentence?: boolean;
   emptyText?: string;
   /** Why its picked item needs a new pick, when it does. */
   unusable?: string;
@@ -310,7 +316,9 @@ function KnobPopover(props: {
             {props.unusableText ?? props.knob.label}
           </Match>
           <Match when={props.knob.type === 'entity' && props.knob}>
-            {(knob) => <KnobEntityValue knob={knob()} />}
+            {(knob) => (
+              <KnobEntityValue knob={knob()} inSentence={props.inSentence} />
+            )}
           </Match>
         </Switch>
       </Popover.Trigger>
