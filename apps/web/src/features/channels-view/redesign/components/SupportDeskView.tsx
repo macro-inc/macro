@@ -51,6 +51,8 @@ function senderPrefix(role: SupportSenderRole): string | undefined {
   }
 }
 
+const SUPPORT_BUCKET_PAGE_SIZE = 25;
+
 function SupportBucket(props: {
   bucketKey: SupportChannelState;
   title: string;
@@ -60,6 +62,10 @@ function SupportBucket(props: {
   tone?: 'warning' | 'accent' | 'neutral' | 'muted';
   focusedKey?: string;
 }) {
+  const [limit, setLimit] = createSignal(SUPPORT_BUCKET_PAGE_SIZE);
+  const visibleItems = () => props.items.slice(0, limit());
+  const overflow = () => Math.max(0, props.items.length - limit());
+
   return (
     <Show when={props.items.length > 0}>
       <section
@@ -106,7 +112,7 @@ function SupportBucket(props: {
 
         <Show when={!props.collapsed}>
           <div class="flex flex-col gap-0.5">
-            <For each={props.items}>
+            <For each={visibleItems()}>
               {(item) => (
                 <SidebarRow
                   channel={item.channel}
@@ -122,6 +128,20 @@ function SupportBucket(props: {
                 />
               )}
             </For>
+            <Show when={overflow() > 0}>
+              <button
+                type="button"
+                data-support-bucket-more={props.bucketKey}
+                class="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink"
+                onClick={() =>
+                  setLimit((current) => current + SUPPORT_BUCKET_PAGE_SIZE)
+                }
+              >
+                <span>
+                  {t('channelSidebar.sectionShowMore', { count: overflow() })}
+                </span>
+              </button>
+            </Show>
           </div>
         </Show>
       </section>
@@ -291,6 +311,17 @@ export function SupportDeskView(props: { focusedKey?: string }) {
             tone="muted"
             focusedKey={props.focusedKey}
           />
+
+          <Show when={ws.supportHasMoreWindow?.() && ws.loadMoreSupport}>
+            <button
+              type="button"
+              data-support-load-more-window=""
+              class="mt-1 flex h-7 items-center justify-center rounded-md border border-edge-muted px-2 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink"
+              onClick={() => ws.loadMoreSupport?.()}
+            >
+              {t('channelSidebar.sectionShowMore', { count: 25 })}
+            </button>
+          </Show>
         </Show>
       </div>
     </div>

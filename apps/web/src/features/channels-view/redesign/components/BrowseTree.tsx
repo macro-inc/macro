@@ -382,7 +382,13 @@ function PlacedSectionBlock(props: {
               type="button"
               data-section-show-more={section().id}
               class="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink"
-              onClick={() => ws.prefs.toggleLargeSectionExpanded(section().id)}
+              onClick={() => {
+                if (ws.loadMoreSection) {
+                  ws.loadMoreSection(section().id);
+                } else {
+                  ws.prefs.toggleLargeSectionExpanded(section().id);
+                }
+              }}
             >
               <span>
                 {t('channelSidebar.sectionShowMore', {
@@ -394,16 +400,22 @@ function PlacedSectionBlock(props: {
 
           <Show
             when={
-              expandedLarge() &&
-              props.placed.allChannels.length > 8 &&
-              props.placed.overflowCount === 0
+              (expandedLarge() ||
+                (ws.sectionWindowLimit?.(section().id) ?? 0) > 8) &&
+              props.placed.visibleChannels.length > 8
             }
           >
             <button
               type="button"
               data-section-show-less={section().id}
               class="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink"
-              onClick={() => ws.prefs.toggleLargeSectionExpanded(section().id)}
+              onClick={() => {
+                if (ws.collapseSectionWindow) {
+                  ws.collapseSectionWindow(section().id);
+                } else {
+                  ws.prefs.toggleLargeSectionExpanded(section().id);
+                }
+              }}
             >
               <span>{t('channelSidebar.sectionShowLess')}</span>
             </button>
@@ -679,13 +691,22 @@ function DirectMessagesSection(props: { focusedKey?: string }) {
   );
 }
 
+const UNGROUPED_WINDOW_STEP = 25;
+
 export function BrowseTree(props: BrowseTreeProps) {
   const ws = useSidebarWorkspace();
   const dndCtx = useDragDropContext();
   const [dndState] = dndCtx ?? [];
   const [hiddenDrawerOpen, setHiddenDrawerOpen] = createSignal(false);
+  const [ungroupedLimit, setUngroupedLimit] = createSignal(
+    UNGROUPED_WINDOW_STEP
+  );
 
   const placement = () => ws.placement();
+  const visibleUngrouped = () =>
+    placement().ungroupedChannels.slice(0, ungroupedLimit());
+  const ungroupedOverflow = () =>
+    Math.max(0, placement().ungroupedChannels.length - ungroupedLimit());
 
   const favoriteChannels = (): SidebarChannel[] =>
     ws
@@ -1016,7 +1037,7 @@ export function BrowseTree(props: BrowseTreeProps) {
                       </p>
                     }
                   >
-                    <For each={placement().ungroupedChannels}>
+                    <For each={visibleUngrouped()}>
                       {(channel) => (
                         <SidebarRow
                           channel={channel}
@@ -1026,6 +1047,40 @@ export function BrowseTree(props: BrowseTreeProps) {
                         />
                       )}
                     </For>
+                    <Show when={ungroupedOverflow() > 0}>
+                      <button
+                        type="button"
+                        data-ungrouped-show-more=""
+                        class="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink"
+                        onClick={() =>
+                          setUngroupedLimit(
+                            (current) => current + UNGROUPED_WINDOW_STEP
+                          )
+                        }
+                      >
+                        <span>
+                          {t('channelSidebar.sectionShowMore', {
+                            count: ungroupedOverflow(),
+                          })}
+                        </span>
+                      </button>
+                    </Show>
+                    <Show
+                      when={
+                        ungroupedLimit() > UNGROUPED_WINDOW_STEP &&
+                        placement().ungroupedChannels.length >
+                          UNGROUPED_WINDOW_STEP
+                      }
+                    >
+                      <button
+                        type="button"
+                        data-ungrouped-show-less=""
+                        class="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink"
+                        onClick={() => setUngroupedLimit(UNGROUPED_WINDOW_STEP)}
+                      >
+                        <span>{t('channelSidebar.sectionShowLess')}</span>
+                      </button>
+                    </Show>
                   </Show>
                 </div>
               </Show>
