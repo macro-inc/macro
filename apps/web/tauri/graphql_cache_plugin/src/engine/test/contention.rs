@@ -259,7 +259,7 @@ impl Lane {
     }
 
     /// Replays Soup pages, warming (`hydrate`) or as refetched responses
-    /// (`write`, which takes a turn as a person's write does).
+    /// (`write`, persisted in the background as the webview persists them).
     async fn soup(self, pages: Vec<Op>, label: &'static str, write: bool) {
         for round in 1.. {
             for page in &pages {
@@ -279,7 +279,7 @@ impl Lane {
                     .run(label, async move {
                         if write {
                             handle
-                                .write(WriteRequest {
+                                .write_in_background(WriteRequest {
                                     origin_op_id: None,
                                     registration: None,
                                     query,
