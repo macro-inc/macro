@@ -98,7 +98,11 @@ function ItemName(props: { name: string }) {
         {props.name}
       </Tooltip.Trigger>
       <Tooltip.Portal>
-        <Tooltip.Content>{props.name}</Tooltip.Content>
+        <Tooltip.Content>
+          {/* A name with nowhere to break, such as a file's, still wraps
+              inside the tooltip rather than running out of it. */}
+          <span class="min-w-0 wrap-anywhere">{props.name}</span>
+        </Tooltip.Content>
       </Tooltip.Portal>
     </Tooltip.Root>
   );

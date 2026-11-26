@@ -12,4 +12,6 @@ export const ENTITY_NAMES: Record<string, string> = {
   'contact-jordan': 'Jordan Lee',
   'initiative-time': 'Time tracking',
   'database-feedback': 'Customer feedback tracker',
+  'document-export':
+    'launch_recap_hiring_plan_senior_designer_2026_q4_final_draft_v12_reviewed_by_design_and_finance.pdf',
 };

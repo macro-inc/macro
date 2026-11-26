@@ -56,6 +56,19 @@ function textLines(locator: Locator) {
   });
 }
 
+/** How far an element's text runs past its edges, in pixels. */
+function textOutside(locator: Locator) {
+  return locator.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const past = [...range.getClientRects()].map((rect) =>
+      Math.max(box.left - rect.left, rect.right - box.right, 0)
+    );
+    return Math.round(Math.max(0, ...past));
+  });
+}
+
 /** Every value a step's sentence or settings show, with what it reads. */
 async function knobBoxes(card: Locator) {
   return card.locator('p [aria-label], dd [aria-label]').evaluateAll((values) =>
@@ -229,22 +242,28 @@ for (const width of WIDTHS) {
 
     test('a cut name shows in full on hover', async ({ page }) => {
       test.skip(width.touch, 'Touch devices have no tooltips.');
+      // The tooltip opens after a delay; the clock stands in for waiting.
+      await page.clock.install();
       await open(page);
-      const card = page.getByRole('group', { name: 'Summarize the alert' });
-      await card.locator('p').getByText(ALERT).hover();
-      await expect(page.getByRole('tooltip')).toHaveText(
-        ENTITY_NAMES['thread-alert']
-      );
+      const tooltip = page.getByRole('tooltip');
+      const summarize = page.getByRole('group', {
+        name: 'Summarize the alert',
+      });
+      await summarize.locator('p').getByText(ALERT).hover();
+      await expect(tooltip).toHaveText(ENTITY_NAMES['thread-alert']);
+      // A name with nowhere to break wraps inside the tooltip.
+      const echo = page
+        .getByRole('group', { name: 'Echo entity knobs' })
+        .locator('p');
+      await echo.getByText(/^launch_recap_/).hover();
+      await expect(tooltip).toHaveText(ENTITY_NAMES['document-export']);
+      expect(await textOutside(tooltip)).toBe(0);
       // A name that fits has nothing more to show.
       await page.mouse.move(0, 0);
-      await expect(page.getByRole('tooltip')).toHaveCount(0);
-      const short = page
-        .getByRole('group', { name: 'Echo entity knobs' })
-        .locator('p')
-        .getByText('Shared assets');
-      await short.hover();
-      await page.waitForTimeout(1000);
-      await expect(page.getByRole('tooltip')).toHaveCount(0);
+      await expect(tooltip).toHaveCount(0);
+      await echo.getByText('Shared assets').hover();
+      await page.clock.runFor(2000);
+      await expect(tooltip).toHaveCount(0);
     });
 
     test('a suggestion card keeps a long item inside', async ({ page }) => {
