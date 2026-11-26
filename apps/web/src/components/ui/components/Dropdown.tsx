@@ -392,6 +392,13 @@ function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
     'ref',
     'closeOnSelect',
   ]);
+  // A plain function, not a JSX ternary: Solid compiles a ternary prop into a
+  // getter that creates a memo, and Kobalte reads it in its select handler,
+  // outside any owner.
+  const closeOnSelect = () =>
+    local.closeOnSelect === 'unless-shift'
+      ? selection.shouldClose()
+      : local.closeOnSelect;
   return (
     <KobalteDropdownMenu.CheckboxItem
       class={cn(ROW_CLASS, local.class)}
@@ -400,11 +407,7 @@ function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
         selection.track(element);
         callRef(local.ref, element);
       }}
-      closeOnSelect={
-        local.closeOnSelect === 'unless-shift'
-          ? selection.shouldClose()
-          : local.closeOnSelect
-      }
+      closeOnSelect={closeOnSelect()}
     >
       {local.indicator ?? (
         <div class={CHECKBOX_ITEM_BOX_CLASS}>
@@ -505,6 +508,13 @@ function DropdownItem(props: DropdownItemProps) {
     'closeOnSelect',
     'disabledReason',
   ]);
+  // A plain function, not a JSX ternary: Solid compiles a ternary prop into a
+  // getter that creates a memo, and Kobalte reads it in its select handler,
+  // outside any owner.
+  const closeOnSelect = () =>
+    local.closeOnSelect === 'unless-shift'
+      ? selection.shouldClose()
+      : local.closeOnSelect;
   return (
     <Show
       when={local.disabledReason}
@@ -516,11 +526,7 @@ function DropdownItem(props: DropdownItemProps) {
             selection.track(element);
             callRef(local.ref, element);
           }}
-          closeOnSelect={
-            local.closeOnSelect === 'unless-shift'
-              ? selection.shouldClose()
-              : local.closeOnSelect
-          }
+          closeOnSelect={closeOnSelect()}
         />
       }
     >
