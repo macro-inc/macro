@@ -213,9 +213,9 @@ scope, span and event names and status messages. User IDs are
 `macro|<address>`, so they become `macro|<hash>`; a user's logs and traces are
 found by hashing their address as written (`%40` for `@` hashes differently).
 An attribute map with an address in a nested list or map is flattened into
-`key.0`, `key.1.x` keys, every nested value of it, and a log's is then cut to
-100 keys for Loki's limit of 128; a list or map body holding one becomes its
-JSON text. What stays: addresses in map keys and byte values, a repeated key's
+`key.0`, `key.1.x` keys, every nested value of it, and then cut to fit Loki's
+128 metadata entries a line and Mimir's 30 labels a series; a list or map body
+holding one becomes its JSON text. What stays: addresses in map keys and byte values, a repeated key's
 earlier values (malformed OTLP), and logs and metrics pushed straight to Loki
 and Mimir through the edge (pod logs, the database collector), which skip
 ingest.
