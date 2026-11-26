@@ -2203,9 +2203,16 @@ from **navigation** and **personal organization** from **shared team structure**
   any time without mutating or deleting the section for teammates.
 - **Optional Jev triage and Smart Organize**: deterministic local rules render
   immediately at zero cost; when enabled, `cognition-service` `POST /decisions`
-  (Jev yes/no classifier) progressively refines urgency, resolution, and FYI
-  noise on changed messages, cached per `(channelId, latestMessageId)` with
-  bounded concurrency and automatic fallback when offline or unavailable.
+  (Jev yes/no classifier) runs only while a triage surface (`Focus`, `Support`,
+  or an expanded support section) is active, skipping read support channels
+  older than 7 days, cached per `(channelId, latestMessageId)` with bounded
+  concurrency (`3`), burst (`15`), and per-session (`50`) caps, and automatic
+  fallback when offline or unavailable.
+- **Windowed loading on large workspaces**: collapsed and hidden sections
+  resolve zero rows (displaying counts from the bounded unread projection and
+  section metadata), expanded sections and triage buckets page progressively in
+  bounded windows (`+25`), and full-directory lookup runs lazily only while
+  Quick Switch (`⌘J`) or mobile search is active.
 - **Quick Switch (`⌘J`)**: fuzzy-matches channels (including stripped customer
   names), DMs, and sections, ranking `Unread & mentions` → `Your conversations`
   → `Sections & views` → `Join team channels` with inline Join.

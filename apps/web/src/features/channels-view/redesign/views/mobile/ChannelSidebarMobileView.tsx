@@ -16,7 +16,15 @@ import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
-import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { formatPreviewSnippet } from '../../components/SidebarRow';
 import { useSidebarWorkspace } from '../../context/sidebar-workspace-context';
 import type { FocusItem } from '../../core/focus-triage';
@@ -201,6 +209,8 @@ function MobileTouchRow(props: {
  * Uses the exact same pure triage, deduplication, DM smart-window, and Jev
  * workspace context as desktop without importing desktop layout components.
  */
+const MOBILE_LIST_PAGE_SIZE = 25;
+
 export function ChannelSidebarMobileView() {
   const ws = useSidebarWorkspace();
   const [selectedTab, setSelectedTab] = createSignal<MobileTabKey>('all');
@@ -208,6 +218,35 @@ export function ChannelSidebarMobileView() {
   const [supportQuery, setSupportQuery] = createSignal('');
   const [fyiExpanded, setFyiExpanded] = createSignal(false);
   const [resolvedExpanded, setResolvedExpanded] = createSignal(false);
+  const [sectionRenderLimit, setSectionRenderLimit] = createSignal(
+    MOBILE_LIST_PAGE_SIZE
+  );
+  const [ungroupedRenderLimit, setUngroupedRenderLimit] = createSignal(
+    MOBILE_LIST_PAGE_SIZE
+  );
+
+  // Drive lazy directory discovery strictly while mobile inline search has text.
+  createEffect(() => {
+    const q = searchQuery();
+    ws.setQuickSwitchState?.(q.trim().length > 0, q);
+  });
+
+  // Sync active mobile pill tab with the workspace lens/section windowing so
+  // Support/Focus/Section views only resolve & triage what is currently shown.
+  createEffect(() => {
+    const tab = selectedTab();
+    setSectionRenderLimit(MOBILE_LIST_PAGE_SIZE);
+    if (tab === 'support') {
+      ws.prefs.setActiveLens('support');
+    } else if (tab === 'focus') {
+      ws.prefs.setActiveLens('focus');
+    } else {
+      ws.prefs.setActiveLens('browse');
+      if (tab.startsWith('section:')) {
+        ws.setSectionOpen(tab.slice('section:'.length), true);
+      }
+    }
+  });
 
   const hasSupport = () => ws.supportDesk().items.length > 0;
   const focusCount = () => ws.focusModel().actionableCount;
@@ -304,9 +343,23 @@ export function ChannelSidebarMobileView() {
   const searchResults = createMemo(() => {
     const q = searchQuery().trim();
     if (!q) return [];
+    const base = ws.channels();
+    const extra = ws.discoverableChannels?.() ?? [];
+    let combined: readonly SidebarChannel[] = base;
+    if (extra.length > 0) {
+      const seen = new Set(base.map((ch) => ch.id));
+      const merged = [...base];
+      for (const ch of extra) {
+        if (!seen.has(ch.id)) {
+          seen.add(ch.id);
+          merged.push(ch);
+        }
+      }
+      combined = merged;
+    }
     return buildQuickSwitchResults({
       query: q,
-      channels: ws.channels(),
+      channels: combined,
       sections: ws.sections(),
       unreadIds: ws.unreadIds(),
       unreadOrMentionedIds: ws.unreadOrMentionedIds(),
@@ -931,7 +984,9 @@ export function ChannelSidebarMobileView() {
                       </div>
                     </div>
 
-                    <For each={sec().allChannels}>
+                    <For
+                      each={sec().allChannels.slice(0, sectionRenderLimit())}
+                    >
                       {(entry) => (
                         <MobileTouchRow
                           channel={entry.channel}
@@ -939,6 +994,31 @@ export function ChannelSidebarMobileView() {
                         />
                       )}
                     </For>
+                    <Show
+                      when={
+                        sec().allChannels.length > sectionRenderLimit() ||
+                        sec().unresolvedCount > 0
+                      }
+                    >
+                      <button
+                        type="button"
+                        data-mobile-section-show-more={sec().section.id}
+                        class="mx-2 min-h-10 rounded-lg bg-surface-2 px-3 text-left text-xs font-medium text-ink-muted"
+                        onClick={() => {
+                          setSectionRenderLimit(
+                            (current) => current + MOBILE_LIST_PAGE_SIZE
+                          );
+                          ws.loadMoreSection?.(sec().section.id);
+                        }}
+                      >
+                        {t('channelSidebar.sectionShowMore', {
+                          count: Math.max(
+                            sec().allChannels.length - sectionRenderLimit(),
+                            sec().unresolvedCount
+                          ),
+                        })}
+                      </button>
+                    </Show>
                   </div>
                 )}
               </Match>
@@ -1057,11 +1137,15 @@ export function ChannelSidebarMobileView() {
                               <button
                                 type="button"
                                 class="mx-2 min-h-10 rounded-lg bg-surface-2 px-3 text-left text-xs font-medium text-ink-muted"
-                                onClick={() =>
-                                  ws.prefs.toggleLargeSectionExpanded(
-                                    sec.section.id
-                                  )
-                                }
+                                onClick={() => {
+                                  if (ws.loadMoreSection) {
+                                    ws.loadMoreSection(sec.section.id);
+                                  } else {
+                                    ws.prefs.toggleLargeSectionExpanded(
+                                      sec.section.id
+                                    );
+                                  }
+                                }}
                               >
                                 {t('channelSidebar.sectionShowMore', {
                                   count: sec.overflowCount,
@@ -1156,9 +1240,36 @@ export function ChannelSidebarMobileView() {
                       <div class="px-2 text-[11px] font-semibold tracking-wide text-ink-extra-muted uppercase">
                         {t('channelSidebar.ungroupedChannels')}
                       </div>
-                      <For each={ws.placement().ungroupedChannels}>
+                      <For
+                        each={ws
+                          .placement()
+                          .ungroupedChannels.slice(0, ungroupedRenderLimit())}
+                      >
                         {(channel) => <MobileTouchRow channel={channel} />}
                       </For>
+                      <Show
+                        when={
+                          ws.placement().ungroupedChannels.length >
+                          ungroupedRenderLimit()
+                        }
+                      >
+                        <button
+                          type="button"
+                          data-mobile-ungrouped-show-more=""
+                          class="mx-2 min-h-10 rounded-lg bg-surface-2 px-3 text-left text-xs font-medium text-ink-muted"
+                          onClick={() =>
+                            setUngroupedRenderLimit(
+                              (current) => current + MOBILE_LIST_PAGE_SIZE
+                            )
+                          }
+                        >
+                          {t('channelSidebar.sectionShowMore', {
+                            count:
+                              ws.placement().ungroupedChannels.length -
+                              ungroupedRenderLimit(),
+                          })}
+                        </button>
+                      </Show>
                     </section>
                   </Show>
                 </div>
