@@ -4,6 +4,7 @@ use ai_toolset::actor::ToolActor;
 use entity_access::domain::models::EntityType;
 use macro_user_id::cowlike::CowLike;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 struct Store(Mutex<Option<ExecutionRecord>>);
 
@@ -336,18 +337,37 @@ async fn a_search_ranks_tools_across_apps_and_reports_apps_it_could_not_read() {
     );
 }
 
-/// [`Apps`], plus a third app whose server never answers a tool listing.
+/// Sets its flag when dropped.
+struct SetOnDrop(Arc<AtomicBool>);
+
+impl Drop for SetOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+}
+
+/// [`Apps`], plus an app whose server answers a tool listing after 10 s and
+/// one whose server never answers.
 #[derive(Default)]
-struct OneAppNeverAnswers(Apps);
+struct SlowApps {
+    apps: Apps,
+    late_listing_finished: Arc<AtomicBool>,
+    hung_listing_dropped: Arc<AtomicBool>,
+}
 
 #[async_trait]
-impl ConnectedAppTools for OneAppNeverAnswers {
+impl ConnectedAppTools for SlowApps {
     async fn accounts(&self, session: AgentSessionId) -> Result<SessionAccounts, CodeModeError> {
-        self.0.accounts(session).await
+        self.apps.accounts(session).await
     }
 
     async fn apps(&self, usage: &ConnectedAppUse) -> Result<Vec<ConnectedApp>, CodeModeError> {
-        let mut apps = self.0.apps(usage).await?;
+        let mut apps = self.apps.apps(usage).await?;
+        apps.push(ConnectedApp {
+            kind: ConnectedAppKind::Custom,
+            key: "0123456789abcdef".into(),
+            name: "Sales reports".into(),
+        });
         apps.push(ConnectedApp {
             kind: ConnectedAppKind::Custom,
             key: "fedcba9876543210".into(),
@@ -361,10 +381,18 @@ impl ConnectedAppTools for OneAppNeverAnswers {
         usage: &ConnectedAppUse,
         app: &ConnectedAppRef,
     ) -> Result<Vec<ConnectedTool>, CodeModeError> {
-        if app.key == "fedcba9876543210" {
-            return std::future::pending().await;
+        match app.key.as_str() {
+            "0123456789abcdef" => {
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                self.late_listing_finished.store(true, Ordering::SeqCst);
+                Ok(Vec::new())
+            }
+            "fedcba9876543210" => {
+                let _dropped = SetOnDrop(Arc::clone(&self.hung_listing_dropped));
+                std::future::pending().await
+            }
+            _ => self.apps.tools(usage, app).await,
         }
-        self.0.tools(usage, app).await
     }
 
     async fn call(
@@ -373,7 +401,7 @@ impl ConnectedAppTools for OneAppNeverAnswers {
         app: &ConnectedAppRef,
         call: CallConnectedTool,
     ) -> Result<ConnectedToolResult, CodeModeError> {
-        self.0.call(usage, app, call).await
+        self.apps.call(usage, app, call).await
     }
 
     async fn discover(
@@ -381,7 +409,7 @@ impl ConnectedAppTools for OneAppNeverAnswers {
         usage: &ConnectedAppUse,
         request: DiscoveryRequest,
     ) -> Result<DiscoverConnectorsResponse, CodeModeError> {
-        self.0.discover(usage, request).await
+        self.apps.discover(usage, request).await
     }
 
     async fn add_server(
@@ -389,12 +417,13 @@ impl ConnectedAppTools for OneAppNeverAnswers {
         usage: &ConnectedAppUse,
         server: ConnectMcpServer,
     ) -> Result<ConnectMcpServerResponse, CodeModeError> {
-        self.0.add_server(usage, server).await
+        self.apps.add_server(usage, server).await
     }
 }
 
 #[tokio::test(start_paused = true)]
 async fn a_search_does_not_wait_past_its_deadline_for_a_slow_app() {
+    let apps = Arc::new(SlowApps::default());
     let session = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(7));
     let execution = ExecutionId::mint();
     let caller = MacroUserIdStr::parse_from_str("macro|owner@example.com")
@@ -414,7 +443,7 @@ async fn a_search_does_not_wait_past_its_deadline_for_a_slow_app() {
             activity_truncated: false,
         })))),
         Arc::new(Turns(Some(macro_uuid::Uuid::from_u128(1)))),
-        Arc::new(OneAppNeverAnswers::default()),
+        Arc::clone(&apps) as Arc<dyn ConnectedAppTools>,
     );
     let access = EntityAccessReceipt::<EditAccessLevel>::dangerously_assert_authenticated_user(
         caller.clone(),
@@ -446,6 +475,18 @@ async fn a_search_does_not_wait_past_its_deadline_for_a_slow_app() {
             .iter()
             .map(|app| app.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["Internal wiki", "Ads reports"]
+        vec!["Internal wiki", "Sales reports", "Ads reports"]
+    );
+
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    assert!(
+        apps.late_listing_finished.load(Ordering::SeqCst),
+        "a listing past the deadline finishes after the search"
+    );
+    assert!(!apps.hung_listing_dropped.load(Ordering::SeqCst));
+    tokio::time::sleep(LATE_TOOL_LISTING_LIMIT).await;
+    assert!(
+        apps.hung_listing_dropped.load(Ordering::SeqCst),
+        "a listing that never answers is given up"
     );
 }

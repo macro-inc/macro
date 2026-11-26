@@ -98,6 +98,11 @@ pub const MAX_TOOL_MATCHES: usize = 20;
 /// search; it is reported unsearched, and `app.tools()` still reads it.
 pub const TOOL_LISTING_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
 
+/// How long a listing the search stopped waiting for may keep running. A
+/// server that never answers would otherwise hold one of its app's call slots
+/// for as long as the transport's own timeout.
+pub const LATE_TOOL_LISTING_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// Call one tool of a connected app.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -323,9 +328,15 @@ impl ConnectedAppService {
                 key: app.key.clone(),
             };
             // Spawned so a listing past the deadline still finishes: dropping
-            // it could lose a rotated OAuth token before it is saved.
+            // it could lose a rotated OAuth token before it is saved. Only a
+            // listing past the much longer limit is given up.
             let listing = tokio::spawn(
-                async move { tools.tools(&usage, &reference).await }.in_current_span(),
+                async move {
+                    tokio::time::timeout(LATE_TOOL_LISTING_LIMIT, tools.tools(&usage, &reference))
+                        .await
+                        .unwrap_or(Err(CodeModeError::Unavailable))
+                }
+                .in_current_span(),
             );
             let key = app.key.clone();
             async move {
