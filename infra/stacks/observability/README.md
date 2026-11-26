@@ -212,11 +212,13 @@ scope, log, span, span event and metric datapoint attributes, log bodies, and
 scope, span and event names and status messages. User IDs are
 `macro|<address>`, so they become `macro|<hash>`; a user's logs and traces are
 found by hashing their address as written (`%40` for `@` hashes differently).
-A map or list attribute holding an address is flattened into `key.0`, `key.1.x`
-keys first, and a list or map body holding one becomes its JSON text. What
-stays: addresses in map keys and byte values, and logs and metrics pushed
-straight to Loki and Mimir through the edge (pod logs, the database collector),
-which skip ingest.
+An attribute map with an address in a nested list or map is flattened into
+`key.0`, `key.1.x` keys, every nested value of it, and a log's is then cut to
+100 keys for Loki's limit of 128; a list or map body holding one becomes its
+JSON text. What stays: addresses in map keys and byte values, a repeated key's
+earlier values (malformed OTLP), and logs and metrics pushed straight to Loki
+and Mimir through the edge (pod logs, the database collector), which skip
+ingest.
 
 ### Pinned exporter limits
 
