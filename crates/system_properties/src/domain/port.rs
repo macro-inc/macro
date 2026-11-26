@@ -47,6 +47,12 @@ pub trait SystemPropertiesRepository: Clone + Send + Sync + 'static {
         limit: Option<u32>,
     ) -> impl Future<Output = Result<Vec<String>, SystemPropertyError>> + Send;
 
+    /// Existing, non-trashed tasks whose Project property names `project_id`, in id order.
+    fn live_project_task_ids(
+        &self,
+        project_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<String>, SystemPropertyError>> + Send;
+
     /// The project each listed task's Project property names, as raw ids;
     /// tasks without a project are absent.
     fn task_projects(

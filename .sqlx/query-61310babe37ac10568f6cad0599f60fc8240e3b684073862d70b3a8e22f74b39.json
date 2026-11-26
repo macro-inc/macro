@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT ep.entity_id\n            FROM entity_properties ep\n            JOIN \"Document\" task ON task.id = ep.entity_id AND task.\"deletedAt\" IS NULL\n            WHERE ep.property_definition_id = '00000001-0000-0000-0000-000000000014'\n              AND ep.entity_type = 'TASK'\n              AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object(\n                  'entity_id', $1::text, 'entity_type', 'INITIATIVE'\n              ))\n            ORDER BY ep.entity_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "61310babe37ac10568f6cad0599f60fc8240e3b684073862d70b3a8e22f74b39"
+}

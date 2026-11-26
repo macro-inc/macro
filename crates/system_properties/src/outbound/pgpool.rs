@@ -324,6 +324,36 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         Ok(rows)
     }
 
+    async fn live_project_task_ids(
+        &self,
+        project_id: Uuid,
+    ) -> Result<Vec<String>, SystemPropertyError> {
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *transaction)
+            .await?;
+        // Keep the Project definition literal so generic plans can use
+        // idx_ep_project_value_gin before looking up each task's trash state.
+        let rows = sqlx::query_scalar!(
+            r#"
+            SELECT ep.entity_id
+            FROM entity_properties ep
+            JOIN "Document" task ON task.id = ep.entity_id AND task."deletedAt" IS NULL
+            WHERE ep.property_definition_id = '00000001-0000-0000-0000-000000000014'
+              AND ep.entity_type = 'TASK'
+              AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object(
+                  'entity_id', $1::text, 'entity_type', 'INITIATIVE'
+              ))
+            ORDER BY ep.entity_id
+            "#,
+            project_id.to_string(),
+        )
+        .fetch_all(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(rows)
+    }
+
     async fn task_projects(
         &self,
         task_ids: &[String],
