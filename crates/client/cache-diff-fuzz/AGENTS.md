@@ -23,6 +23,9 @@ purpose (it says what).
   op hydrates every core page and filters for a few documents past the first window: the
   window has to extend past the rows it rejects. It invalidates nothing, since any incomplete
   document in a query's partitions answers it as incomplete before a window runs.
+  An `id-list` op filters a channel, document or chat partition on 2 to 500 ids (some uncached,
+  sometimes one twice) as a balanced `or`, as the channel list does: storage reads a short
+  list from its keys instead of a window, and both must agree.
   Mail filters often use the app's mail tabs (`assets/mail-tabs.json`), and some of those
   with the tab's tree reshaped: `not(not(tree))`, or joined by `or` or `and` to a random tree or,
   half the time, to one literal the cache compiles (read, inbox visibility, thread, owner). A
