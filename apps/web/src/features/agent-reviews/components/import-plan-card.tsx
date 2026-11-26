@@ -611,7 +611,7 @@ function PlanContents(
             Dismiss
           </Button>
           <Button
-            variant="primary"
+            variant={props.full ? 'primary' : 'secondary'}
             size="sm"
             disabled={!props.editable || props.count === 0}
             onClick={() => props.onApprove()}
@@ -675,7 +675,7 @@ export function ImportPlanCard(props: ImportPlanCardProps) {
   const [full, setFull] = createSignal(false);
   return (
     <>
-      <Card class="my-3 flex min-w-0 flex-col gap-3 p-3">
+      <Card variant="filled" depth={3} class="my-3 gap-3 p-3">
         <PlanContents
           {...props}
           full={false}

@@ -1,4 +1,5 @@
 import ShieldCheck from '@icon/system/regular/shield-check.svg';
+import { Card, Item } from '@ui';
 import { Show } from 'solid-js';
 import {
   PermissionOptions,
@@ -14,25 +15,30 @@ export function PermissionCard(
   }
 ) {
   return (
-    <section
+    <Card
+      variant="filled"
+      depth={3}
+      role="region"
       aria-label="Permission request"
-      class="min-w-0 overflow-hidden rounded-xl border border-edge-muted bg-panel text-ink"
+      class="overflow-hidden"
     >
-      <div class="flex items-start gap-3 px-4 pt-4">
-        <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-bg text-accent">
-          <ShieldCheck class="size-4" />
-        </div>
-        <div class="min-w-0 flex-1">
-          <div class="text-sm font-medium">Approval needed</div>
-          <p class="mt-0.5 text-xs leading-5 text-ink-muted">
-            {props.canAnswer
-              ? 'Review this action before the agent continues.'
-              : 'Waiting for a session editor to approve this action.'}
-          </p>
-        </div>
-      </div>
+      <Card.Header>
+        <Item class="items-start gap-3 border-0 p-0">
+          <Item.Media>
+            <ShieldCheck />
+          </Item.Media>
+          <Item.Content class="gap-0.5">
+            <Card.Title>Approval needed</Card.Title>
+            <Card.Description class="leading-5">
+              {props.canAnswer
+                ? 'Review this action before the agent continues.'
+                : 'Waiting for a session editor to approve this action.'}
+            </Card.Description>
+          </Item.Content>
+        </Item>
+      </Card.Header>
       <Show when={props.action || props.detail}>
-        <div class="mx-4 mt-3 rounded-lg bg-surface px-3 py-2.5">
+        <Card variant="filled" offset={1} class="mx-3 px-3 py-2.5">
           <Show when={props.action}>
             <div class="text-xs font-medium text-ink-muted [overflow-wrap:anywhere]">
               {props.action}
@@ -43,7 +49,7 @@ export function PermissionCard(
               {props.detail}
             </pre>
           </Show>
-        </div>
+        </Card>
       </Show>
       <div class="p-3">
         <Show when={props.canAnswer}>
@@ -54,6 +60,6 @@ export function PermissionCard(
           />
         </Show>
       </div>
-    </section>
+    </Card>
   );
 }
