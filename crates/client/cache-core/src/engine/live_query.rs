@@ -411,11 +411,15 @@ impl<S: PredicateIndexStorage> Engine<S> {
                                     value: row.record.clone(),
                                 }),
                             }
-                            patches.push(LiveRowPatch {
-                                record_key: key.clone(),
-                                fields,
-                                identity: row.identity.clone(),
-                            });
+                            // Text can differ where the records are equal (`-0.0` and
+                            // `0.0`); only a field or identity change is sent.
+                            if !fields.is_empty() || previous.identity != row.identity {
+                                patches.push(LiveRowPatch {
+                                    record_key: key.clone(),
+                                    fields,
+                                    identity: row.identity.clone(),
+                                });
+                            }
                         }
                         let new = previous.is_none();
                         if !unchanged {
