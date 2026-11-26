@@ -42,8 +42,9 @@ scheduler's spec.
   names one, or null. Which topics
   there are and what belongs to them is the session's call alone: the brief
   groups suggestions by the result they end at, not by a shared sender,
-  company or kind of work, and moves the rows of an earlier topic that fails
-  that test to the topic they share, or to none. A routine
+  company or kind of work, and moves each row of an earlier topic that
+  doesn't end at its result to the topic of the result it does, or to none,
+  retiring a key that names no result. A routine
   suggestion has none. `review` and the feed return the topics of the
   open suggestions they list (`review`, of its closed ones too), in the order
   those first appear, each with how many are open; a topic is never deleted but with its person, so the key keeps its
