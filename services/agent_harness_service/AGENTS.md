@@ -207,6 +207,16 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   retention handling that preserves the no-replay fence. The writer must still
   check current permissions and the job fence at the effect boundary after the
   database lock is released.
+- `src/brain_journal.rs` is an unmounted journal proof under `cfg(test)`.
+  A trusted test extension injects the signed-in viewer and Axum exercises the
+  read against real disposable Postgres team membership, exact teammate lookup
+  and document View receipts. The proof policy admits team admins and owners
+  and filters live sources by current View access before projection. Observations
+  use stable event identities and a per-agent in-memory cap. The proof emits
+  completion timestamps only. Before service exposure, agree on the human viewer
+  policy and authorization consistency, compose auth and rollout, review durable
+  storage and a trusted producer, and generate the OpenAPI and SDK read contract.
+  Mail address comes from the separate authorized mailbox surface.
 - `src/voice_gateway.rs`: `GET /voices` and `GET /voices/{model}/sample` for
   team admins behind `enable-agent-teammates` (`team_agents::domain::voice`).
   The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's
