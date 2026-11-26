@@ -215,6 +215,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   sender. A downstream writer still needs its own fence. The handler awaits
   `UsageTracking`, keeps dispatch and observation failures separate, and exposes
   only scoped outcome and usage evidence. No provider or funding service is wired.
+  The test-only Billing reader exercises synthetic human owner access, exact
+  job/run attribution, and half-open civil-day reporting over the in-memory
+  journal. It reports token observations and coverage without billing amounts.
 - `src/voice_gateway.rs`: `GET /voices` and `GET /voices/{model}/sample` for
   team admins behind `enable-agent-teammates` (`team_agents::domain::voice`).
   The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's
