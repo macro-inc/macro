@@ -10,10 +10,10 @@ use std::mem::size_of;
 use std::num::NonZeroUsize;
 
 /// Heap bytes the hot tier may hold, estimated by [`record_bytes`]. In a
-/// replay of a 6,500-channel chat sidebar its records average about 51 KB, so
-/// the budget holds about 1,200 of them; most other records are far smaller,
-/// and the host's record cap bounds those. The estimate leaves out allocator
-/// overhead: in that replay, freeing an estimated 293 MB freed 420 MB of RSS.
+/// replay of a 6,500-channel chat sidebar its records average about 65 KB, so
+/// the budget holds about 900 of them; most other records are far smaller,
+/// and the host's record cap bounds those. In that replay, holding an
+/// estimated 63 MB instead of 460 MB lowered peak RSS by about 436 MiB.
 pub const HOT_BYTE_BUDGET: usize = 64 << 20;
 
 /// Entries a `BTreeMap` node has room for (std's `CAPACITY`). Every node
