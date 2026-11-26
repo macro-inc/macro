@@ -1,5 +1,5 @@
 {
-  "include": ["src", "scripts", "vite.config.ts"],
+  "include": ["src", "scripts", "vite.config.ts", "vite.local-auth.config.ts"],
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -13,7 +13,7 @@
     "types": ["vite/client", "bun"],
     "paths": {
       "@macro-inc/sdk/generated/auth": [
-        "../../packages/sdk/generated/auth/types.gen.ts"
+        "../../packages/sdk/generated/auth/index.ts"
       ]
     }
   }

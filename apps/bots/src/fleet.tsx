@@ -26,7 +26,9 @@ export default function Fleet() {
         when={__BOTS_FIXTURES__}
         fallback={
           <p class="notice">
-            Fleet is unavailable until Macro sign-in is connected.
+            {__BOTS_LOCAL_AUTH__
+              ? 'The team-agent roster is unavailable in local auth review.'
+              : 'Fleet is unavailable until Macro sign-in is connected.'}
           </p>
         }
       >

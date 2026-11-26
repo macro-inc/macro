@@ -21,7 +21,10 @@ const Fleet = lazy(() => import('./fleet'));
 
 function Shell(props: ParentProps) {
   const location = useLocation();
-  const [identity] = createResource(() => session.getSession());
+  const [identity] = createResource(
+    () => (__BOTS_LOCAL_AUTH__ ? location.pathname : true),
+    () => session.getSession()
+  );
 
   return (
     <>
@@ -34,6 +37,9 @@ function Shell(props: ParentProps) {
           <span class="fixture">Local fixture</span>
         </Show>
         <nav aria-label="Main">
+          <Show when={identity()?.status === 'signed-in'}>
+            <span>Local reviewer</span>
+          </Show>
           <A href="/" end>
             Creator
           </A>
