@@ -122,6 +122,9 @@ pub(in crate::domain::service) struct CrmDeal {
     pub pipeline: Option<String>,
     /// Its stage's id in that pipeline.
     pub stage: Option<String>,
+    /// How it closed, when the source records that apart from its stage;
+    /// otherwise its stage decides.
+    pub outcome: Option<DealOutcome>,
     /// Amount.
     pub amount: Option<f64>,
     /// ISO 4217 code.
@@ -134,6 +137,16 @@ pub(in crate::domain::service) struct CrmDeal {
     pub owner: Option<String>,
     /// What the source conversion already found lost.
     pub losses: Vec<CrmLoss>,
+}
+
+/// The host of a website URL, as a domain candidate.
+pub(in crate::domain::service) fn website_host(website: &str) -> Option<&str> {
+    let rest = website.split_once("://").map_or(website, |(_, rest)| rest);
+    let host = rest.split(['/', '?', '#']).next()?;
+    let host = host.rsplit_once('@').map_or(host, |(_, host)| host);
+    let host = host.split(':').next()?;
+    let host = host.strip_prefix("www.").unwrap_or(host);
+    (!host.is_empty()).then_some(host)
 }
 
 fn title(value: &str) -> String {
@@ -445,6 +458,7 @@ fn deal_row<'a>(
         .map_or((None, DealOutcome::Open), |(label, outcome)| {
             (Some(label), outcome)
         });
+    let outcome = deal.outcome.unwrap_or(outcome);
     let currency = deal
         .currency
         .clone()

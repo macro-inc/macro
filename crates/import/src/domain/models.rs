@@ -66,6 +66,9 @@ pub enum ImportSource {
     Slack,
     /// HubSpot CRM companies, contacts, deals and deal pipelines.
     Hubspot,
+    /// Salesforce accounts, contacts and opportunities, with the
+    /// opportunity stages as a pipeline.
+    Salesforce,
 }
 
 impl ImportSource {
@@ -77,17 +80,32 @@ impl ImportSource {
             Self::Notion => "Notion",
             Self::Slack => "Slack",
             Self::Hubspot => "HubSpot",
+            Self::Salesforce => "Salesforce",
+        }
+    }
+
+    /// Whether this source imports into the team's Macro CRM: its records
+    /// belong to the team, its plan is fully decided, and the shared CRM
+    /// plan and write handle it.
+    pub fn is_crm(self) -> bool {
+        match self {
+            ImportSource::Hubspot | ImportSource::Salesforce => true,
+            ImportSource::Linear
+            | ImportSource::Jira
+            | ImportSource::Notion
+            | ImportSource::Slack => false,
         }
     }
 
     /// All import sources.
-    pub fn all() -> [ImportSource; 5] {
+    pub fn all() -> [ImportSource; 6] {
         [
             ImportSource::Linear,
             ImportSource::Jira,
             ImportSource::Notion,
             ImportSource::Slack,
             ImportSource::Hubspot,
+            ImportSource::Salesforce,
         ]
     }
 
@@ -101,6 +119,7 @@ impl ImportSource {
             ImportSource::Notion => "notion",
             ImportSource::Slack => "slack",
             ImportSource::Hubspot => "hubspot",
+            ImportSource::Salesforce => "salesforce_rest_api",
         })
     }
 
@@ -113,6 +132,7 @@ impl ImportSource {
             ImportSource::Notion => ImportKind::Page,
             ImportSource::Slack => ImportKind::Channel,
             ImportSource::Hubspot => ImportKind::HubspotCompany,
+            ImportSource::Salesforce => ImportKind::SalesforceCompany,
         }
     }
 
@@ -125,7 +145,7 @@ impl ImportSource {
             ImportSource::Slack => "channel",
             // Companies are the bulk of a CRM import; each written row records
             // its own kind's entity type.
-            ImportSource::Hubspot => "crm_company",
+            ImportSource::Hubspot | ImportSource::Salesforce => "crm_company",
         }
     }
 
@@ -139,7 +159,10 @@ impl ImportSource {
             return None;
         }
         Some(match self {
-            ImportSource::Linear | ImportSource::Jira | ImportSource::Hubspot => raw.to_string(),
+            ImportSource::Linear
+            | ImportSource::Jira
+            | ImportSource::Hubspot
+            | ImportSource::Salesforce => raw.to_string(),
             // Page ids survive renames; URLs don't. Accept either and store
             // the id whenever one is present.
             ImportSource::Notion => notion_page_id(raw).unwrap_or_else(|| raw.to_string()),
@@ -209,6 +232,14 @@ pub enum ImportKind {
     HubspotContact,
     /// A HubSpot deal.
     HubspotDeal,
+    /// The Salesforce opportunity stages, as one pipeline.
+    SalesforcePipeline,
+    /// A Salesforce account.
+    SalesforceCompany,
+    /// A Salesforce contact.
+    SalesforceContact,
+    /// A Salesforce opportunity.
+    SalesforceDeal,
 }
 
 impl ImportKind {
@@ -227,6 +258,10 @@ impl ImportKind {
             | ImportKind::HubspotCompany
             | ImportKind::HubspotContact
             | ImportKind::HubspotDeal => ImportSource::Hubspot,
+            ImportKind::SalesforcePipeline
+            | ImportKind::SalesforceCompany
+            | ImportKind::SalesforceContact
+            | ImportKind::SalesforceDeal => ImportSource::Salesforce,
         }
     }
 }
@@ -852,6 +887,9 @@ pub fn validate_metadata(
         ImportSource::Hubspot => Err(serde::de::Error::custom(
             "HubSpot rows are staged only by the HubSpot importer",
         )),
+        ImportSource::Salesforce => Err(serde::de::Error::custom(
+            "Salesforce rows are staged only by the Salesforce importer",
+        )),
     }
 }
 
@@ -862,7 +900,8 @@ pub fn metadata_label(source: ImportSource, metadata: &serde_json::Value) -> Str
         ImportSource::Linear
         | ImportSource::Jira
         | ImportSource::Notion
-        | ImportSource::Hubspot => "title",
+        | ImportSource::Hubspot
+        | ImportSource::Salesforce => "title",
         ImportSource::Slack => "name",
     };
     metadata
@@ -1075,6 +1114,9 @@ pub enum CrmLoss {
     /// A contact whose company was left out of the import; it is created
     /// without one.
     ContactWithoutCompany,
+    /// A deal in a stage the source archived or no longer uses; it is
+    /// imported without a stage.
+    ArchivedStage,
 }
 
 /// How many records lost one thing.
@@ -1232,4 +1274,7 @@ pub struct NotionImportReport {
     /// A HubSpot plan's counts, owners and losses.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hubspot: Option<CrmReport>,
+    /// A Salesforce plan's counts, owners and losses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub salesforce: Option<CrmReport>,
 }

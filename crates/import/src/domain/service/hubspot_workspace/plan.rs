@@ -7,6 +7,7 @@ use crate::domain::models::CrmLoss;
 use crate::domain::ports::DealOutcome;
 use crate::domain::service::crm_workspace::plan::{
     CrmCompany, CrmCompanyLink, CrmContact, CrmDeal, CrmInventory, CrmPipeline, CrmStage,
+    website_host,
 };
 
 /// Said once per plan: what a HubSpot import never reads.
@@ -40,16 +41,6 @@ fn record_url(inventory: &Inventory, object: ObjectType, id: &RecordId) -> Strin
         object.type_id(),
         id.as_str()
     )
-}
-
-/// The host of a website URL, as a domain candidate.
-fn website_host(website: &str) -> Option<&str> {
-    let rest = website.split_once("://").map_or(website, |(_, rest)| rest);
-    let host = rest.split(['/', '?', '#']).next()?;
-    let host = host.rsplit_once('@').map_or(host, |(_, host)| host);
-    let host = host.split(':').next()?;
-    let host = host.strip_prefix("www.").unwrap_or(host);
-    (!host.is_empty()).then_some(host)
 }
 
 fn stage_outcome(stage: &Stage) -> DealOutcome {
@@ -150,6 +141,7 @@ pub(in crate::domain::service) fn inventory(inventory: &Inventory) -> CrmInvento
                     .as_ref()
                     .map(|id| key(portal, "pipeline", id.as_str())),
                 stage: deal.stage.as_ref().map(|id| id.as_str().to_owned()),
+                outcome: None,
                 amount: deal.amount,
                 currency: deal.currency.clone(),
                 close_date: deal.close_date.clone(),

@@ -36,6 +36,7 @@ mod crm_workspace;
 mod hubspot_workspace;
 pub(crate) mod lifecycle;
 mod notion_workspace;
+mod salesforce_workspace;
 pub use notion_workspace::failure_kind;
 mod tracker_workspace;
 mod workspace;
@@ -321,6 +322,7 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections
         Arc<dyn import_tracker::domain::model::TrackerConnections>,
     >,
     hubspot: Option<Arc<dyn import_hubspot::domain::HubspotConnections>>,
+    salesforce: Option<Arc<dyn import_salesforce::domain::SalesforceConnections>>,
     crm_writer: Option<Arc<dyn crate::domain::ports::CrmImportWriter>>,
     slack_source: Arc<W>,
     mcp_tools: Arc<S>,
@@ -369,6 +371,7 @@ impl<R: Clone, S, C, W: SlackWorkspaceSource, N> Clone for ImportServiceImpl<R, 
             workspace_source: self.workspace_source,
             trackers: self.trackers.clone(),
             hubspot: self.hubspot.clone(),
+            salesforce: self.salesforce.clone(),
             crm_writer: self.crm_writer.clone(),
             slack_source: self.slack_source.clone(),
             mcp_tools: self.mcp_tools.clone(),
@@ -397,6 +400,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
             workspace_source: ImportSource::Notion,
             trackers: Default::default(),
             hubspot: None,
+            salesforce: None,
             crm_writer: None,
             slack_source: Arc::new(NoSlackSource),
             mcp_tools,
@@ -423,6 +427,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             workspace_source: self.workspace_source,
             trackers: self.trackers,
             hubspot: self.hubspot,
+            salesforce: self.salesforce,
             crm_writer: self.crm_writer,
             mcp_tools: self.mcp_tools,
             creator: self.creator,
@@ -454,6 +459,16 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
         reader: Arc<dyn import_hubspot::domain::HubspotConnections>,
     ) -> Self {
         self.hubspot = Some(reader);
+        self
+    }
+
+    /// Read Salesforce orgs through `reader`. Hosts without it report
+    /// Salesforce as unavailable.
+    pub fn with_salesforce(
+        mut self,
+        reader: Arc<dyn import_salesforce::domain::SalesforceConnections>,
+    ) -> Self {
+        self.salesforce = Some(reader);
         self
     }
 
@@ -500,6 +515,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             workspace_source: self.workspace_source,
             trackers: self.trackers,
             hubspot: self.hubspot,
+            salesforce: self.salesforce,
             crm_writer: self.crm_writer,
             mcp_tools: self.mcp_tools,
             creator: self.creator,
@@ -766,7 +782,10 @@ where
             }
             // Notion rows go through the agent session, never here; Jira and
             // HubSpot rows only through their reviewed workspace writes.
-            ImportSource::Notion | ImportSource::Jira | ImportSource::Hubspot => return,
+            ImportSource::Notion
+            | ImportSource::Jira
+            | ImportSource::Hubspot
+            | ImportSource::Salesforce => return,
         };
 
         let persisted = match created {
@@ -1408,6 +1427,11 @@ where
             ImportSource::Hubspot => {
                 return Err(ImportError::NotReady(
                     "HubSpot imports require an approved workspace review.",
+                ));
+            }
+            ImportSource::Salesforce => {
+                return Err(ImportError::NotReady(
+                    "Salesforce imports require an approved workspace review.",
                 ));
             }
             ImportSource::Slack => {

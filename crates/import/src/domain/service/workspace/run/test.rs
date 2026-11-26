@@ -1093,6 +1093,7 @@ mod inline;
 mod reimport;
 /// The session events the import produces, in order.
 mod root;
+mod salesforce;
 mod tracker;
 
 mod dates;

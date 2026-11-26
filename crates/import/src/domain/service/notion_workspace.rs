@@ -195,7 +195,7 @@ where
         sharing: Option<NotionSharing>,
         wait: Duration,
     ) -> Result<NotionImportReport> {
-        let sharing = if self.workspace_source == ImportSource::Hubspot {
+        let sharing = if self.workspace_source.is_crm() {
             // CRM records belong to the team; there is no personal copy.
             self.check_crm_access(user).await?;
             NotionSharing::Team
@@ -588,7 +588,7 @@ where
         } else {
             match &outcome {
                 Ok(0) => (RunStatus::Completed, None, None),
-                Ok(failed) if self.workspace_source == ImportSource::Hubspot => (
+                Ok(failed) if self.workspace_source.is_crm() => (
                     RunStatus::Completed,
                     Some(format!(
                         "{failed} objects could not be imported. Plan again to retry them."
@@ -968,6 +968,7 @@ pub fn failure_kind(error: &ImportError) -> RunErrorKind {
         },
         ImportError::Tracker(error) => tracker_failure_kind(error),
         ImportError::Hubspot(error) => hubspot_failure_kind(error),
+        ImportError::Salesforce(error) => salesforce_failure_kind(error),
         ImportError::NotionNotConnected => RunErrorKind::NotConnected,
         ImportError::Admission(_) => RunErrorKind::UsageRefused,
         ImportError::UnsupportedDiscovery(_)
@@ -1015,6 +1016,21 @@ fn hubspot_failure_kind(error: &import_hubspot::domain::HubspotError) -> RunErro
             RunErrorKind::Unreachable
         }
         HubspotError::Decode(_) => RunErrorKind::Internal,
+    }
+}
+
+fn salesforce_failure_kind(error: &import_salesforce::domain::SalesforceError) -> RunErrorKind {
+    use import_salesforce::domain::SalesforceError;
+    match error {
+        SalesforceError::NotConnected => RunErrorKind::NotConnected,
+        SalesforceError::Upstream { status: 401, .. } => RunErrorKind::AccessLost,
+        SalesforceError::Upstream { status: 403, .. } => RunErrorKind::Forbidden,
+        SalesforceError::Upstream { status: 404, .. } => RunErrorKind::NotFound,
+        SalesforceError::Upstream { status: 429, .. } => RunErrorKind::RateLimited,
+        SalesforceError::Unavailable
+        | SalesforceError::Upstream { .. }
+        | SalesforceError::Transport(_) => RunErrorKind::Unreachable,
+        SalesforceError::Decode(_) => RunErrorKind::Internal,
     }
 }
 

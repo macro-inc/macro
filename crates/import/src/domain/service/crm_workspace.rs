@@ -1,5 +1,6 @@
-//! CRM planning and writes, shared by every CRM importer (HubSpot first). Each
-//! source reads its own inventory and converts it into a [`plan::CrmInventory`];
+//! CRM planning and writes, shared by every CRM importer (HubSpot,
+//! Salesforce). Each source reads its own inventory and converts it into a
+//! [`plan::CrmInventory`];
 //! from there planning and writing are the same. Deterministic: there is no
 //! decision model; every object Macro CRM can hold is copied, and what it
 //! cannot hold is counted as a loss. The shared workspace engine owns jobs,
@@ -47,6 +48,14 @@ impl CrmKinds {
         company: ImportKind::HubspotCompany,
         contact: ImportKind::HubspotContact,
         deal: ImportKind::HubspotDeal,
+    };
+
+    pub(in crate::domain::service) const SALESFORCE: Self = Self {
+        source: ImportSource::Salesforce,
+        pipeline: ImportKind::SalesforcePipeline,
+        company: ImportKind::SalesforceCompany,
+        contact: ImportKind::SalesforceContact,
+        deal: ImportKind::SalesforceDeal,
     };
 
     /// Kinds in write order: what a later kind links to is written first.
@@ -190,6 +199,7 @@ where
             .ok_or(ImportError::CrmAccessRequired)?;
         match self.workspace_source {
             ImportSource::Hubspot => self.check_hubspot_connected(user).await,
+            ImportSource::Salesforce => self.check_salesforce_connected(user).await,
             ImportSource::Linear
             | ImportSource::Jira
             | ImportSource::Notion
