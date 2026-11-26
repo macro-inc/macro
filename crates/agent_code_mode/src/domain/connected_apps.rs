@@ -334,7 +334,10 @@ impl ConnectedAppService {
                 async move {
                     tokio::time::timeout(LATE_TOOL_LISTING_LIMIT, tools.tools(&usage, &reference))
                         .await
-                        .unwrap_or(Err(CodeModeError::Unavailable))
+                        .unwrap_or_else(|_| {
+                            tracing::warn!(app = %reference.key, "gave up a connected app's late tool listing");
+                            Err(CodeModeError::Unavailable)
+                        })
                 }
                 .in_current_span(),
             );
