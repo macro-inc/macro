@@ -142,12 +142,23 @@ pub(super) struct Changes {
     pub projections: BTreeSet<PredicateRecordKey>,
 }
 
-/// A row as the view last sent it, kept to diff the next read against. Compact
-/// JSON holds a channel row in about a fifth of the memory of its `Json` tree.
-/// `serde_json` maps are ordered, so equal records serialize to equal text.
+/// A row as the view last sent it, kept to diff the next read against and to
+/// send again on a reset. Compact JSON holds a channel row in about a fifth of
+/// the memory of its `Json` tree.
 struct RetainedRow {
     identity: identity::IdentityStatus,
     record: Box<str>,
+}
+
+impl RetainedRow {
+    /// The record as it was sent. The text is `serde_json`'s own output of a
+    /// `Json`, so it parses back to an equal value; the depth limit is off
+    /// because a row can nest deeper than `serde_json` reads by default.
+    fn record<E: std::error::Error + 'static>(&self) -> Result<Json, EngineError<E>> {
+        let mut text = serde_json::Deserializer::from_str(&self.record);
+        text.disable_recursion_limit();
+        Json::deserialize(&mut text).map_err(EngineError::RetainedRow)
+    }
 }
 
 struct View {
@@ -362,10 +373,6 @@ impl<S: PredicateIndexStorage> Engine<S> {
         } else {
             dirty.extend(keys.iter().cloned());
         }
-        // A reset sends every row whole, read again rather than parsed back.
-        if reset {
-            dirty.extend(keys.iter().cloned());
-        }
         dirty.retain(|key| keys.contains(key));
         let removed_members: Vec<_> = view
             .dependencies
@@ -382,6 +389,8 @@ impl<S: PredicateIndexStorage> Engine<S> {
         }
         let mut upserts = Vec::new();
         let mut patches = Vec::new();
+        // On a reset, rows read here that are now exactly what the view retains.
+        let mut read_rows = BTreeMap::new();
         let dirty: Vec<_> = dirty.into_iter().collect();
         for chunk in dirty.chunks(MAX_RECORD_SELECTION_KEYS) {
             let (selected, mut tracked) = self.read_records_tracked(&spec.selection, chunk).await?;
@@ -394,38 +403,42 @@ impl<S: PredicateIndexStorage> Engine<S> {
                 match selected.remove(key) {
                     Some(row) => {
                         let record: Box<str> = row.record.to_string().into();
-                        let previous = view.rows.get(key);
-                        let unchanged = previous.is_some_and(|previous| {
-                            previous.identity == row.identity && previous.record == record
-                        });
-                        if !unchanged
-                            && !reset
-                            && let Some(previous) = previous
-                        {
-                            let mut fields = Vec::new();
-                            match serde_json::from_str::<Json>(&previous.record) {
-                                Ok(before) => {
-                                    diff_fields(&before, &row.record, &mut Vec::new(), &mut fields)
+                        // A reset sends every retained row after the loop, so it
+                        // only brings them up to date here.
+                        let mut same_text = false;
+                        let (changed, fields) = match view.rows.get(key) {
+                            None => {
+                                if !reset {
+                                    upserts.push(row.clone());
                                 }
-                                // Unreadable retained text (deeper than the parser
-                                // allows): replace the whole record.
-                                Err(_) => fields.push(LiveFieldPatch {
-                                    path: Vec::new(),
-                                    value: row.record.clone(),
-                                }),
+                                (true, None)
                             }
-                            // Text can differ where the records are equal (`-0.0` and
-                            // `0.0`); only a field or identity change is sent.
-                            if !fields.is_empty() || previous.identity != row.identity {
+                            // Equal text is an equal record; most rows end here.
+                            Some(previous) if previous.record == record => {
+                                same_text = true;
+                                (previous.identity != row.identity, Some(Vec::new()))
+                            }
+                            // Unequal text can still be an equal record (`-0.0` and
+                            // `0.0`), which, as before, is neither sent nor retained.
+                            Some(previous) => {
+                                let before = previous.record()?;
+                                let mut fields = Vec::new();
+                                if !reset {
+                                    diff_fields(&before, &row.record, &mut Vec::new(), &mut fields);
+                                }
+                                let changed =
+                                    before != row.record || previous.identity != row.identity;
+                                (changed, Some(fields))
+                            }
+                        };
+                        if changed {
+                            if !reset && let Some(fields) = fields {
                                 patches.push(LiveRowPatch {
                                     record_key: key.clone(),
                                     fields,
                                     identity: row.identity.clone(),
                                 });
                             }
-                        }
-                        let new = previous.is_none();
-                        if !unchanged {
                             view.rows.insert(
                                 key.clone(),
                                 RetainedRow {
@@ -434,8 +447,8 @@ impl<S: PredicateIndexStorage> Engine<S> {
                                 },
                             );
                         }
-                        if reset || new {
-                            upserts.push(row);
+                        if reset && (changed || same_text) {
+                            read_rows.insert(key.clone(), row);
                         }
                     }
                     None => {
@@ -447,6 +460,20 @@ impl<S: PredicateIndexStorage> Engine<S> {
             }
         }
         if reset {
+            // Rows not read again, or read as an equal record written
+            // differently, go out as the view retains them.
+            upserts = view
+                .rows
+                .iter()
+                .map(|(key, row)| match read_rows.remove(key) {
+                    Some(read) => Ok(read),
+                    None => Ok(SelectedRecord {
+                        identity: row.identity.clone(),
+                        record_key: key.clone(),
+                        record: row.record()?,
+                    }),
+                })
+                .collect::<Result<_, EngineError<S::Error>>>()?;
             removed.clear();
         }
         let observation_id = self

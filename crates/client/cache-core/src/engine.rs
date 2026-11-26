@@ -145,6 +145,10 @@ pub enum EngineError<S: std::error::Error + 'static> {
     /// schema was installed; normalize it again.
     #[error("response was normalized under a schema that has since changed")]
     StaleNormalization,
+    /// A live view's retained row did not parse back; the view is dropped and
+    /// its next read registers it again.
+    #[error("live view row cannot be read back: {0}")]
+    RetainedRow(#[source] serde_json::Error),
 }
 
 /// Result of a cache read.

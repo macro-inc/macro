@@ -900,3 +900,118 @@ fn a_view_drops_its_old_observation_after_many_other_views_read() {
         assert!(!unchanged.contains(&first.observation_id));
     });
 }
+
+fn set_read(value: CacheValue) -> Vec<(EntityKey<'static>, Record)> {
+    vec![(
+        key("1"),
+        Record {
+            fields: BTreeMap::from([("isRead".into(), value)]),
+        },
+    )]
+}
+
+/// An opaque JSON scalar nested as deep as `serde_json` parses one, inside the
+/// row's own object: one level deeper than its default limit.
+fn deep(leaf: u8) -> CacheValue {
+    CacheValue::Opaque(format!("{}{leaf}{}", "[".repeat(127), "]".repeat(127)))
+}
+
+#[test]
+fn a_row_deeper_than_the_parser_limit_still_gets_a_leaf_patch_and_a_reset() {
+    block_on(async {
+        let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
+        seed(&mut engine, "1", 1).await;
+        engine
+            .put_records_with_projections(None, set_read(deep(1)), vec![])
+            .await
+            .unwrap();
+        let first = engine.read_live_query("a", spec(), None).await.unwrap();
+        engine
+            .put_records_with_projections(None, set_read(deep(2)), vec![])
+            .await
+            .unwrap();
+        let update = engine
+            .read_live_query("a", spec(), Some(first.revision.parse().unwrap()))
+            .await
+            .unwrap();
+        assert_eq!(update.patches.len(), 1);
+        let fields = &update.patches[0].fields;
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].path.len(), 128, "a leaf patch, not the whole row");
+        assert_eq!(fields[0].value, json!(2));
+        let reset = engine.read_live_query("a", spec(), None).await.unwrap();
+        assert!(reset.reset);
+        assert_eq!(reset.upserts.len(), 1);
+        assert_eq!(
+            reset.upserts[0].record.to_string(),
+            update_record(&update, &first)
+        );
+    });
+}
+
+fn update_record(update: &LiveQueryUpdate, first: &LiveQueryUpdate) -> String {
+    let mut record = first.upserts[0].record.clone();
+    for field in &update.patches[0].fields {
+        let mut at = &mut record;
+        for segment in &field.path {
+            at = match segment {
+                ResponsePathSegment::Field(name) => &mut at[name.as_str()],
+                ResponsePathSegment::Index(index) => &mut at[*index],
+            };
+        }
+        *at = field.value.clone();
+    }
+    record.to_string()
+}
+
+#[test]
+fn a_reset_of_a_retained_view_sends_its_rows_without_reading_them() {
+    block_on(async {
+        let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
+        for id in 0..30 {
+            seed(&mut engine, &id.to_string(), id).await;
+        }
+        let first = engine.read_live_query("a", spec(), None).await.unwrap();
+        let read_count = engine.storage().record_get_count();
+        let reset = engine.read_live_query("a", spec(), None).await.unwrap();
+        assert!(reset.reset);
+        assert!(reset.patches.is_empty());
+        assert_eq!(
+            serde_json::to_value(&reset.upserts).unwrap(),
+            serde_json::to_value(&first.upserts).unwrap()
+        );
+        assert_eq!(engine.storage().record_get_count(), read_count);
+    });
+}
+
+#[test]
+fn an_equal_record_written_differently_is_neither_sent_nor_retained() {
+    block_on(async {
+        let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
+        seed(&mut engine, "1", 1).await;
+        // Opaque text, so the write lands: as numbers the two are equal and the
+        // engine would skip it.
+        let number = |value: &str| set_read(CacheValue::Opaque(value.into()));
+        engine
+            .put_records_with_projections(None, number("-0.0"), vec![])
+            .await
+            .unwrap();
+        let first = engine.read_live_query("a", spec(), None).await.unwrap();
+        engine
+            .put_records_with_projections(None, number("0.0"), vec![])
+            .await
+            .unwrap();
+        let update = engine
+            .read_live_query("a", spec(), Some(first.revision.parse().unwrap()))
+            .await
+            .unwrap();
+        assert!(update.upserts.is_empty());
+        assert!(update.patches.is_empty(), "{:?}", update.patches);
+        // The reader still shows -0.0, and a reset sends it what it shows.
+        let reset = engine.read_live_query("a", spec(), None).await.unwrap();
+        assert_eq!(
+            reset.upserts[0].record.to_string(),
+            first.upserts[0].record.to_string()
+        );
+    });
+}
