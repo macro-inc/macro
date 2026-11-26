@@ -1,31 +1,53 @@
-import type {
-  GetUserInfoResponse,
-  GetUserTeamsResponse,
-  SsoLoginData,
-} from '@macro-inc/sdk/generated/auth';
+type SessionStatus =
+  | 'unavailable'
+  | 'signed-out'
+  | 'team-unresolved'
+  | 'rejected'
+  | 'signed-in';
 
-type SessionResult =
-  | { status: 'unavailable' | 'signed-out' | 'team-unresolved' }
-  | {
-      status: 'signed-in';
-      user: GetUserInfoResponse;
-      team: GetUserTeamsResponse[number];
-    };
+export type SessionResult = { status: SessionStatus };
 
-type SessionContract = {
-  getSession(): Promise<SessionResult>;
-  startSignIn(
-    query: Pick<SsoLoginData['query'], 'original_url'>
-  ): Promise<SessionResult>;
-};
+async function localStatus(
+  suffix = '',
+  options?: RequestInit
+): Promise<SessionStatus | 'code-sent'> {
+  try {
+    const response = await fetch(__BOTS_LOCAL_AUTH__ + suffix, options);
+    const body: unknown = await response.json();
+    if (body && typeof body === 'object' && 'status' in body) {
+      switch (body.status) {
+        case 'unavailable':
+        case 'signed-out':
+        case 'team-unresolved':
+        case 'rejected':
+        case 'signed-in':
+        case 'code-sent':
+          return body.status;
+      }
+    }
+  } catch {
+    // A stopped or unreachable local server never grants a session.
+  }
+  return 'unavailable';
+}
 
-// The gateway adapter belongs to the local integration. This implementation
-// cannot fetch, redirect to an auth host, or establish a session.
-export const session: SessionContract = {
-  async getSession() {
-    return { status: 'signed-out' };
+export const session = {
+  async getSession(): Promise<SessionResult> {
+    if (!__BOTS_LOCAL_AUTH__) return { status: 'signed-out' };
+    const status = await localStatus();
+    return { status: status === 'code-sent' ? 'unavailable' : status };
   },
-  async startSignIn() {
-    return { status: 'unavailable' };
+  async begin(): Promise<boolean> {
+    if (!__BOTS_LOCAL_AUTH__) return false;
+    return (await localStatus('/begin', { method: 'POST' })) === 'code-sent';
+  },
+  async complete(code: string): Promise<SessionResult> {
+    if (!__BOTS_LOCAL_AUTH__) return { status: 'unavailable' };
+    const status = await localStatus('/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: code,
+    });
+    return { status: status === 'code-sent' ? 'unavailable' : status };
   },
 };
