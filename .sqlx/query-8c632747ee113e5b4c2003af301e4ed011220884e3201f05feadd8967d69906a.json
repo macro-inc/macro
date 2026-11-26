@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_brain_action_receipt receipt SET confirmed_at = clock_timestamp()\n            FROM agent_brain_job job\n            WHERE job.team_id = $1 AND job.user_id = $2 AND job.id = $3\n              AND job.lease_until > clock_timestamp()\n              AND receipt.action_id = job.action_id AND receipt.confirmed_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8c632747ee113e5b4c2003af301e4ed011220884e3201f05feadd8967d69906a"
+}

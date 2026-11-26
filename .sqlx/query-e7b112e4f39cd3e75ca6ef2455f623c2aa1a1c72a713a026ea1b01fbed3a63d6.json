@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_brain_job (\n                team_id, user_id, id, action_id, task_id, work_date, minutes,\n                repo_head_sha, charter_sha256, task_pack_id, task_pack_revision, deadline_at, lease_until\n            )\n            SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, statement_timestamp()\n            WHERE $12 > statement_timestamp()\n            ON CONFLICT DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Date",
+        "Int2",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e7b112e4f39cd3e75ca6ef2455f623c2aa1a1c72a713a026ea1b01fbed3a63d6"
+}

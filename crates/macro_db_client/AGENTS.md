@@ -60,6 +60,11 @@ foreign key: the contacts worker removes them on account deletion.
 Firecracker teammate. Unfinished rows hold the computer and keep the
 presigned download URL, which is cleared when an outcome is written.
 
+`agent_brain_job` and `agent_brain_action_receipt` are unwired tables
+owned by `agent_harness_service`. Receipts survive job revocation and expiry
+and do not cascade from agent, task, or time-entry deletion. Any future purge
+must preserve the admission/action fence before dropping either record.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,

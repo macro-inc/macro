@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH tick AS MATERIALIZED (SELECT clock_timestamp() AS now)\n            UPDATE agent_brain_job job\n            SET lease_holder = CASE WHEN deadline_at > tick.now THEN $4::uuid END,\n                lease_epoch = lease_epoch + 1,\n                lease_until = LEAST(deadline_at, tick.now + $5::bigint * interval '1 second'),\n                outcome = CASE WHEN deadline_at <= tick.now THEN\n                    CASE WHEN EXISTS (\n                        SELECT 1 FROM agent_brain_action_receipt\n                        WHERE action_id = job.action_id AND confirmed_at IS NULL\n                    ) THEN 'unknown_outcome' ELSE 'timed_out' END\n                END\n            FROM tick\n            WHERE team_id = $1 AND user_id = $2 AND id = $3\n            RETURNING action_id, task_id, work_date, minutes, repo_head_sha,\n                      charter_sha256, task_pack_id, task_pack_revision, deadline_at, lease_epoch, outcome\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "action_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "task_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "work_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 3,
+        "name": "minutes",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "repo_head_sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "charter_sha256",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "task_pack_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "task_pack_revision",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "deadline_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "lease_epoch",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "outcome",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "1a2423f4e2aa47e7079d4466ba52e2850f850ba8ef29d2b2fba956fe9c97d81e"
+}

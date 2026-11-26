@@ -193,6 +193,20 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `capsolver_live_contract` (ignored) solves the Turnstile and reCAPTCHA v2
   test keys once each through the real adapter, and fails when
   `CAPSOLVER_API_KEY` is unset or blank.
+- `src/brain_jobs.rs` and `src/brain_jobs/pg.rs` define an unwired MacroDB
+  store for a trusted parent. Admissions pin one task-time intent and its
+  prompt revisions and deadline to a team and teammate. Claims use a 30-second
+  DB-clock lease, capped by the deadline, with a holder and increasing epoch.
+  Reserving the action commits an unknown receipt before issuing a one-use
+  dispatch grant. Takeover can confirm a matching entry under fresh
+  authorization. Missing, deleted, or ambiguous entries leave the receipt
+  unknown, including at revocation and expiry. Use the time-tracking owner
+  for authorized lookup and write when the runtime is wired.
+  Applying the schema in a deployed environment and activating a caller are
+  separate rollout decisions. Before activation, define account deletion and
+  retention handling that preserves the no-replay fence. The writer must still
+  check current permissions and the job fence at the effect boundary after the
+  database lock is released.
 - `src/voice_gateway.rs`: `GET /voices` and `GET /voices/{model}/sample` for
   team admins behind `enable-agent-teammates` (`team_agents::domain::voice`).
   The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's
