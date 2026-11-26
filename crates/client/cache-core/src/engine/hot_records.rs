@@ -20,16 +20,28 @@ pub const HOT_BYTE_BUDGET: usize = 64 << 20;
 /// allocates all of them, so a map of one entry costs a whole node.
 const BTREE_NODE_SLOTS: usize = 11;
 
-/// Entries a node holds on average once a map grows past one node.
-/// Inserting in key order, as decoding does, splits nodes about half full:
-/// measured with a counting allocator, 100 entries take 15 leaves and 2
-/// internal nodes, and 500 take 72 and 11.
+/// Entries a node holds on average once a map grows past one node. A map
+/// built by inserting in key order, as merges do, leaves nodes about half
+/// full: measured with a counting allocator, 100 entries take 14 leaves and
+/// 3 internal nodes, and 500 take 71 and 11. Decoding collects sorted fields,
+/// which packs nodes fuller (500 entries: 42 and 5), so this overcounts wide
+/// decoded maps; in the chat replay the estimate still stays below RSS.
 const BTREE_ENTRIES_PER_NODE: usize = 7;
 
 /// A leaf's parent pointer, its index in the parent and its length, before
 /// its key and value slots.
-const BTREE_LEAF_HEADER: usize =
-    (size_of::<usize>() + 2 * size_of::<u16>()).next_multiple_of(align_of::<usize>());
+const BTREE_LEAF_HEADER: usize = size_of::<usize>() + 2 * size_of::<u16>();
+
+/// A node's alignment, to which its size rounds up: on wasm32 a
+/// `CacheValue` aligns to 8 while a pointer takes 4.
+const BTREE_NODE_ALIGN: usize = max(
+    align_of::<usize>(),
+    max(align_of::<String>(), align_of::<CacheValue>()),
+);
+
+const fn max(a: usize, b: usize) -> usize {
+    if a > b { a } else { b }
+}
 
 struct HotRecord {
     record: Record,
@@ -123,15 +135,16 @@ pub struct HotTierSize {
 /// lengths, not their spare capacity, which a decoded record rarely has, and
 /// leaves out what the allocator adds to each allocation.
 pub fn record_bytes(key: &EntityKey<'_>, record: &Record) -> usize {
-    key.0.len() + fields_bytes(&record.fields)
+    key.0.len().saturating_add(fields_bytes(&record.fields))
 }
 
+// The sums saturate: a record too large to count is larger than the budget,
+// so the tier does not keep it.
 fn fields_bytes(fields: &BTreeMap<String, CacheValue>) -> usize {
-    map_nodes_bytes(fields.len())
-        + fields
-            .iter()
-            .map(|(name, value)| name.len() + value_bytes(value))
-            .sum::<usize>()
+    fields
+        .iter()
+        .map(|(name, value)| name.len().saturating_add(value_bytes(value)))
+        .fold(map_nodes_bytes(fields.len()), usize::saturating_add)
 }
 
 /// The nodes of a `BTreeMap<String, CacheValue>` holding `entries`.
@@ -139,15 +152,18 @@ fn map_nodes_bytes(entries: usize) -> usize {
     if entries == 0 {
         return 0;
     }
-    let leaf =
-        BTREE_LEAF_HEADER + BTREE_NODE_SLOTS * (size_of::<String>() + size_of::<CacheValue>());
+    let slots = BTREE_NODE_SLOTS * (size_of::<String>() + size_of::<CacheValue>());
+    let leaf = (BTREE_LEAF_HEADER + slots).next_multiple_of(BTREE_NODE_ALIGN);
     if entries <= BTREE_NODE_SLOTS {
         return leaf;
     }
-    let internal = leaf + (BTREE_NODE_SLOTS + 1) * size_of::<usize>();
+    let internal = (BTREE_LEAF_HEADER + slots + (BTREE_NODE_SLOTS + 1) * size_of::<usize>())
+        .next_multiple_of(BTREE_NODE_ALIGN);
     let leaves = entries.div_ceil(BTREE_ENTRIES_PER_NODE);
     let internals = (leaves - 1).div_ceil(BTREE_ENTRIES_PER_NODE);
-    leaves * leaf + internals * internal
+    leaves
+        .saturating_mul(leaf)
+        .saturating_add(internals.saturating_mul(internal))
 }
 
 fn value_bytes(value: &CacheValue) -> usize {
@@ -158,8 +174,8 @@ fn value_bytes(value: &CacheValue) -> usize {
         CacheValue::Object(fields) => fields_bytes(fields),
         CacheValue::List(items) => items
             .iter()
-            .map(|item| size_of::<CacheValue>() + value_bytes(item))
-            .sum(),
+            .map(|item| size_of::<CacheValue>().saturating_add(value_bytes(item)))
+            .fold(0, usize::saturating_add),
     }
 }
 

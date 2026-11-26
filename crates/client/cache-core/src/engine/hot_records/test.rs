@@ -113,7 +113,23 @@ fn a_map_costs_whole_nodes() {
     assert!(leaf >= 11 * (size_of::<String>() + size_of::<CacheValue>()));
     assert_eq!(map_nodes_bytes(0), 0);
     assert_eq!(map_nodes_bytes(11), leaf);
-    // Past one node: two leaves under an internal node holding their edges.
-    assert_eq!(map_nodes_bytes(12), 3 * leaf + 12 * size_of::<usize>());
-    assert!(map_nodes_bytes(500) > 70 * leaf);
+    assert!(
+        map_nodes_bytes(12) > 2 * leaf,
+        "two leaves under an internal node"
+    );
+}
+
+/// A counting allocator measured, on a 64-bit target, 632 bytes for a map
+/// of 1 to 11 entries and 1,992 for 12, and for keys inserted in order 11,032
+/// for 100 and 52,880 for 500. A change to `CacheValue`'s size moves these.
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn the_node_estimate_matches_what_a_map_allocates() {
+    const LEAF: usize = 632;
+    assert_eq!(size_of::<CacheValue>(), 32, "measure the nodes again");
+    assert_eq!(map_nodes_bytes(1), LEAF);
+    assert_eq!(map_nodes_bytes(11), LEAF);
+    assert_eq!(map_nodes_bytes(12), 1_992);
+    assert_eq!(map_nodes_bytes(100), 10_936);
+    assert_eq!(map_nodes_bytes(500), 53_512);
 }
