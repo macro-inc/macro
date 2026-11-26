@@ -26,6 +26,8 @@ describe('AI provider icons', () => {
     ['muse-glimmer-30b', 'muse'],
     ['google/gemini-3.8-flash', 'google'],
     ['gemini-3.8-flash', 'google'],
+    ['google/gemini-4-hydrogen', 'google'],
+    ['gemini-4-hydrogen', 'google'],
   ])('recognizes %s as %s', (model, provider) => {
     expect(modelProvider(model)).toBe(provider);
   });

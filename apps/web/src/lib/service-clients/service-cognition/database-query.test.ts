@@ -35,10 +35,10 @@ describe('database question transport', () => {
     generate.mockResolvedValue(ok(proposal));
     const result = await generateDatabaseQuery(
       input,
-      'google/gemini-3.8-flash'
+      'google/gemini-4-hydrogen'
     );
     expect(generate).toHaveBeenCalledWith({
-      model: 'google/gemini-3.8-flash',
+      model: 'google/gemini-4-hydrogen',
       ...input,
     });
     expect(result._unsafeUnwrap()).toEqual(proposal);
@@ -49,7 +49,7 @@ describe('database question transport', () => {
     generate.mockResolvedValue(ok(proposal));
     await generateDatabaseQuery(
       { ...input, sql: 'SELECT bad FROM Tickets', error: 'Unknown column bad' },
-      'google/gemini-3.8-flash'
+      'google/gemini-4-hydrogen'
     );
     expect(generate.mock.calls[0][0].error).toBe('Unknown column bad');
     expect(generate.mock.calls[0][0].sql).toBe('SELECT bad FROM Tickets');
@@ -61,7 +61,7 @@ describe('database question transport', () => {
     generate.mockResolvedValue(err(errors));
     const result = await generateDatabaseQuery(
       input,
-      'google/gemini-3.8-flash'
+      'google/gemini-4-hydrogen'
     );
     expect(result._unsafeUnwrapErr()).toEqual({ kind: 'service', errors });
   });
