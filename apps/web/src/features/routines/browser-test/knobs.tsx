@@ -5,11 +5,7 @@ import { render } from 'solid-js/web';
 import { SuggestionCard } from '../../routine-suggestions/components/suggestion-card';
 import { RoutineSteps } from '../components/routine-step-editor';
 import type { RoutineStepSlots } from '../components/routine-steps';
-import {
-  type Knob,
-  type KnobEntityType,
-  withKnobValue,
-} from '../core/knobs';
+import { type Knob, type KnobEntityType, withKnobValue } from '../core/knobs';
 import type { StepDraft } from '../core/routine-steps';
 
 const SOURCE = 'export async function main(macro, knobs) {\n  return knobs;\n}';
@@ -20,7 +16,13 @@ function entity(
   type: KnobEntityType,
   id: string
 ): Knob {
-  return { type: 'entity', name, label, entity_types: [type], value: { type, id } };
+  return {
+    type: 'entity',
+    name,
+    label,
+    entity_types: [type],
+    value: { type, id },
+  };
 }
 
 const ALERT = entity('alert', 'Alert thread', 'email_thread', 'thread-alert');
@@ -108,8 +110,15 @@ function Fixture() {
             title: 'Summarize alert threads',
             look: 'email',
             surface: 'email',
-            chain: { trigger: 'Every morning', action: 'Summarize', actionAi: false },
-            sentence: { sentence: 'Summarize {alert} every morning.', knobs: knobs() },
+            chain: {
+              trigger: 'Every morning',
+              action: 'Summarize',
+              actionAi: false,
+            },
+            sentence: {
+              sentence: 'Summarize {alert} every morning.',
+              knobs: knobs(),
+            },
             summary: '',
             action: 'use',
             status: { kind: 'idle' },
@@ -119,7 +128,9 @@ function Fixture() {
           }}
           onOpen={() => {}}
           onTurnOn={() => {}}
-          onKnob={(name, value) => setKnobs(withKnobValue(knobs(), name, value))}
+          onKnob={(name, value) =>
+            setKnobs(withKnobValue(knobs(), name, value))
+          }
         />
       </ul>
     </div>
