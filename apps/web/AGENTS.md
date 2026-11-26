@@ -1220,7 +1220,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   uncertain enqueues. Space failed coordinator registrations with bounded,
   cancelable waits; a missing startup frame is not proof of untouched storage.
   A coordinator that ends without a word is noticed through the Web Lock it
-  holds, or an unanswered `ping`, and handled the same way.
+  holds, or an unanswered `ping`, and handled the same way. One that never
+  answers is replaced under a new name (`CoordinatorGenerations`).
 - Nothing but a newer build ends a browser cache for the page: bound retries in
   rate, never in number, and never quarantine a scope over a handoff, drain,
   timeout or transport failure. While nothing can open the database the host is
