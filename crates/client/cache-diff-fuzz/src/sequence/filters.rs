@@ -105,15 +105,18 @@ impl Gen<'_> {
     /// holds. Storage reads a short list from its keys rather than walking the
     /// sort index, so both reads must agree on rows, ties, order and limit.
     pub(super) fn id_list(&mut self) {
-        let (partition, field, lane) = *pick(
-            &mut self.rng,
-            &[
-                ("channelFilter", "channelId", "channels"),
-                ("channelFilter", "channelId", "channels"),
-                ("documentFilter", "id", "core-entities"),
-                ("chatFilter", "chatId", "core-entities"),
-            ],
-        );
+        // Half of them channels, which is what sends these lists.
+        let (partition, field, lane) = if self.rng.chance(0.5) {
+            ("channelFilter", "channelId", "channels")
+        } else {
+            *pick(
+                &mut self.rng,
+                &[
+                    ("documentFilter", "id", "core-entities"),
+                    ("chatFilter", "chatId", "core-entities"),
+                ],
+            )
+        };
         let typename = match partition {
             "channelFilter" => "GraphqlSoupChannel",
             "documentFilter" => "GraphqlSoupDocument",
