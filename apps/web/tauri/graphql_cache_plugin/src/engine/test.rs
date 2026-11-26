@@ -4,6 +4,7 @@ use pollster::block_on;
 mod authority;
 mod bench;
 mod calendar;
+mod channels;
 mod contention;
 mod people;
 mod soup;
