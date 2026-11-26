@@ -25,7 +25,8 @@ page of `GET /notes` at a time while no delivery waits, fetches each live note
 through the same adapter and mapper as a delivery, ingests it, and saves the
 next cursor. A failed page retries from its saved cursor with backoff; after
 `BACKFILL_PAGE_ATTEMPTS` the notes that still fail are skipped so history is
-not blocked. Restarting sync (a connect) starts the backfill over.
+not blocked. A 429 (`RateLimited`) is not a failure: the page stops, waits a
+minute and keeps its attempt. Restarting sync (a connect) starts the backfill over.
 
 ## Start here
 
@@ -60,7 +61,8 @@ not blocked. Restarting sync (a connect) starts the backfill over.
   `namespace` and the note ID, so the call import upserts one call. Deleted
   notes are skipped and private scratch notes are never imported, on both paths.
 - Granola lists only notes with a generated summary, newest first, at most 30
-  per page, and allows 5 requests a second; backfill paces notes at 250 ms.
+  per page, and allows 5 requests a second; backfill paces notes at 500 ms
+  (two or more requests each).
 - Sync is off for users on Macro Connect: Connect holds Granola as MCP only, so
   their connection gives no API access and they are not holders.
 - The connectors services name no account, so reconcile cannot see a

@@ -138,7 +138,15 @@ pub enum BackfillStep {
     Done,
     /// The page failed; retry it after a backoff from its saved cursor.
     Retry,
+    /// Granola rate-limited the page; retry it shortly without spending one
+    /// of its attempts, so throttling never causes notes to be skipped.
+    Throttled,
 }
+
+/// Granola answered 429: the key's request allowance is spent for now.
+#[derive(Debug, thiserror::Error)]
+#[error("Granola rate-limited the request")]
+pub struct RateLimited;
 
 /// Why a sync is not healthy, stored as the connection's `last_error`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::EnumString)]

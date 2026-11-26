@@ -91,6 +91,7 @@ fn checked(response: Reply) -> Result<Option<Value>> {
     match response.status {
         200..=299 => Ok(Some(response.body)),
         404 => Ok(None),
+        429 => Err(rootcause::report!(RateLimited).into()),
         status => Err(rootcause::report!(
             "Granola API returned HTTP {status}: {}",
             error_reason(&response.body)

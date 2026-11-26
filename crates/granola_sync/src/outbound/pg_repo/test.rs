@@ -318,6 +318,22 @@ async fn backfill_pages_are_leased_resumed_and_restarted_on_connect(pool: PgPool
     assert_eq!(retry.cursor.as_deref(), Some("page-2"));
     assert_eq!(retry.attempts, 2);
 
+    // A throttled page waits briefly and does not spend its attempt.
+    repo.finish_backfill(&retry, BackfillStep::Throttled)
+        .await
+        .unwrap();
+    assert!(repo.claim_backfill().await.unwrap().is_none());
+    sqlx::query!(
+        "UPDATE granola_sync_connections SET backfill_available_at = now() WHERE id = $1",
+        connection.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let retry = repo.claim_backfill().await.unwrap().unwrap();
+    assert_eq!(retry.cursor.as_deref(), Some("page-2"));
+    assert_eq!(retry.attempts, 2);
+
     repo.finish_backfill(&retry, BackfillStep::Done)
         .await
         .unwrap();

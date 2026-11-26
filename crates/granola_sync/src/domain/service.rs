@@ -17,9 +17,14 @@ const SETUP_LEASE: chrono::Duration = chrono::Duration::minutes(2);
 /// Attempts at one backfill page before notes that still fail are skipped,
 /// so one bad note cannot hold back the rest of the history.
 pub(crate) const BACKFILL_PAGE_ATTEMPTS: i32 = 5;
-/// Spacing between backfilled notes, keeping well under Granola's sustained
-/// five requests a second; each note costs at least two requests.
-const BACKFILL_NOTE_PACING: std::time::Duration = std::time::Duration::from_millis(250);
+/// Spacing between backfilled notes. A note costs at least two requests (the
+/// note and its transcript), so this keeps backfill near four requests a
+/// second, under Granola's sustained five.
+const BACKFILL_NOTE_PACING: std::time::Duration = std::time::Duration::from_millis(500);
+
+fn rate_limited(error: &rootcause::Report) -> bool {
+    error.downcast_current_context::<RateLimited>().is_some()
+}
 
 #[derive(Debug, Default, PartialEq)]
 pub(crate) struct Plan {
@@ -174,16 +179,22 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> Service<R,
         if !self.is_current(&job.connection).await? {
             return Ok(BackfillStep::Retry);
         }
-        let page = self
+        let page = match self
             .granola
             .notes(&job.connection, job.cursor.as_deref())
-            .await?;
+            .await
+        {
+            Ok(page) => page,
+            Err(error) if rate_limited(&error) => return Ok(BackfillStep::Throttled),
+            Err(error) => return Err(error),
+        };
         let span = tracing::Span::current();
         span.record("listed", page.notes.len());
         span.record("has_more", page.next.is_some());
 
         let mut meetings = Vec::new();
         let (mut deleted, mut missing, mut failed) = (0_usize, 0_usize, 0_usize);
+        let mut throttled = false;
         for note in page.notes {
             if note.deleted {
                 deleted += 1;
@@ -193,6 +204,11 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> Service<R,
             match self.granola.meeting(&job.connection, &note.id).await {
                 Ok(Some(meeting)) => meetings.push(meeting),
                 Ok(None) => missing += 1,
+                // Stop here; the page is retried once the allowance recovers.
+                Err(error) if rate_limited(&error) => {
+                    throttled = true;
+                    break;
+                }
                 Err(error) => {
                     failed += 1;
                     tracing::warn!(error = ?error, note_id = note.id.as_ref(), "could not fetch a Granola note for backfill");
@@ -222,6 +238,9 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> Service<R,
         span.record("imported", imported);
         span.record("failed", failed);
 
+        if throttled {
+            return Ok(BackfillStep::Throttled);
+        }
         if failed > 0 && job.attempts < BACKFILL_PAGE_ATTEMPTS {
             return Ok(BackfillStep::Retry);
         }
@@ -396,6 +415,7 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> SyncServic
             BackfillStep::Next(_) => "next",
             BackfillStep::Done => "done",
             BackfillStep::Retry => "retry",
+            BackfillStep::Throttled => "throttled",
         };
         span.record("step", outcome);
         self.repo.finish_backfill(&job, step).await?;

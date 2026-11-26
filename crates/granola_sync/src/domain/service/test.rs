@@ -231,6 +231,7 @@ impl SyncRepository for FakeRepo {
                 backfill.attempts = 0;
             }
             BackfillStep::Retry => {}
+            BackfillStep::Throttled => backfill.attempts -= 1,
         }
         self.steps.lock().unwrap().push(step);
         Ok(())
@@ -684,4 +685,46 @@ async fn backfill_without_api_access_imports_nothing() {
         *service.repo.steps.lock().unwrap(),
         vec![BackfillStep::Retry]
     );
+}
+
+/// Rate limiting is not a failing note: the page stops, waits, and keeps
+/// its attempts, so no note is skipped because Granola throttled the key.
+#[tokio::test(start_paused = true)]
+async fn a_rate_limited_page_waits_without_skipping_notes() {
+    let (fake, calls, service) = scripted(vec![
+        page(
+            &[
+                "not_aaaaaaaaaaaaaa",
+                "not_cccccccccccccc",
+                "not_dddddddddddddd",
+            ],
+            None,
+        ),
+        note("not_aaaaaaaaaaaaaa"),
+        no_transcript(),
+        (429, json!({"code": "RATE_LIMITED"})),
+    ]);
+    service.repo.backfill.lock().unwrap().attempts = BACKFILL_PAGE_ATTEMPTS - 1;
+
+    assert!(service.backfill().await.unwrap());
+
+    assert_eq!(
+        *service.repo.steps.lock().unwrap(),
+        vec![BackfillStep::Throttled]
+    );
+    assert_eq!(
+        service.repo.backfill.lock().unwrap().attempts,
+        BACKFILL_PAGE_ATTEMPTS - 1
+    );
+    assert_eq!(imported_ids(&calls), vec!["not_aaaaaaaaaaaaaa"]);
+    // The page stopped at the throttled note instead of fetching the rest.
+    assert_eq!(fake.api_calls().len(), 4);
+
+    let (_, calls, service) = scripted(vec![(429, json!({"code": "RATE_LIMITED"}))]);
+    assert!(service.backfill().await.unwrap());
+    assert_eq!(
+        *service.repo.steps.lock().unwrap(),
+        vec![BackfillStep::Throttled]
+    );
+    assert!(calls.0.lock().unwrap().is_empty());
 }

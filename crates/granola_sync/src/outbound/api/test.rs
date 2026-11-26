@@ -263,3 +263,14 @@ async fn a_failed_or_unterminated_list_page_is_an_error() {
         assert!(adapter.notes(&connection(), None).await.is_err());
     }
 }
+
+#[tokio::test]
+async fn a_rate_limited_request_is_reported_as_such() {
+    let (_, limited) = adapter(vec![(429, json!({"code": "RATE_LIMITED"}))]);
+    let error = limited.notes(&connection(), None).await.unwrap_err();
+    assert!(error.downcast_current_context::<RateLimited>().is_some());
+
+    let (_, failing) = adapter(vec![(500, json!({"code": "INTERNAL_ERROR"}))]);
+    let error = failing.notes(&connection(), None).await.unwrap_err();
+    assert!(error.downcast_current_context::<RateLimited>().is_none());
+}
