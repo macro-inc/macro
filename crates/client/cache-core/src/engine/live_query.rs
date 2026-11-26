@@ -398,7 +398,10 @@ impl<S: PredicateIndexStorage> Engine<S> {
                         let unchanged = previous.is_some_and(|previous| {
                             previous.identity == row.identity && previous.record == record
                         });
-                        if !unchanged && !reset && let Some(previous) = previous {
+                        if !unchanged
+                            && !reset
+                            && let Some(previous) = previous
+                        {
                             let mut fields = Vec::new();
                             match serde_json::from_str::<Json>(&previous.record) {
                                 Ok(before) => {

@@ -331,9 +331,7 @@ fn run(seed: u64, trace: &mut String) -> (usize, usize) {
     write(&handle, fuzz.items(&first));
     let mut views: Vec<View> = (0..4)
         .map(|view| {
-            let mut members: Vec<u16> = (1..=CHANNELS)
-                .filter(|_| fuzz.rng.below(3) == 0)
-                .collect();
+            let mut members: Vec<u16> = (1..=CHANNELS).filter(|_| fuzz.rng.below(3) == 0).collect();
             if members.is_empty() {
                 members.push(1);
             }
