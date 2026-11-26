@@ -187,7 +187,7 @@ fn map_error(error: import::domain::ports::ImportError) -> rootcause::Report<Imp
         | LedgerError::Hubspot(_)
         | LedgerError::CrmAccessRequired
         | LedgerError::NotionNotConnected
-        | LedgerError::NotionSharingRequired
+        | LedgerError::SharingRequired
         | LedgerError::EntityNotAccessible(_)
         | LedgerError::NotReady(_)
         | LedgerError::RunNotReviewable(_)

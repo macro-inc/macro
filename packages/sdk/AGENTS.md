@@ -384,8 +384,13 @@ the existing gateway prefixes.
   old edit.
 - SQL result schemas are dynamic typed-cell unions; inspect `truncatedTables` before interpreting aggregates. Queries can write and are never retried automatically.
 
-- Workspace-import report/cancel endpoints remain app-only review plumbing,
-  explicitly classified alongside the existing Notion routes in coverage skips.
+- `macro.imports` plans, reports and cancels Notion, Linear and Jira
+  workspace imports through the per-source `/import/workspaces/{source}`
+  routes; the older Notion-only report/cancel routes stay app-only review
+  plumbing in coverage skips. There is no `start`: the review route refuses
+  every program run (`is_program_run`), so only a person approves an import
+  review, on its card or through `DecideReview`. HubSpot has no `macro.imports`
+  namespace yet; agents plan it with `ImportFromHubspot`.
   Regenerate cognition types when plan-row metadata changes: `dependencyOf` and
   `inlineOn` describe linked and inline sources without expanding the import draft.
 

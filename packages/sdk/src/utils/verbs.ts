@@ -149,6 +149,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     read: `
       getUsageHandler getChatHistoryHandler getChat fetchWebPage
       getChatPermissions getUserActivity readExplicitMemory readMyActivity readSkill
+      workspaceReportHandler
     `,
     searched: 'searchWeb',
     queried: 'decisions structuredCompletion',
@@ -163,6 +164,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     sent: 'sendConfirmedEmail sendChatMessage',
     generated: 'generateImage',
     stopped: 'stopChatStream',
+    cancelled: 'cancelWorkspaceHandler',
+    requested: 'planWorkspaceHandler',
   },
   contacts: { searched: 'searchPeople', listed: 'listContactListMembers' },
   email: {

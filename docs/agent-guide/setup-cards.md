@@ -22,7 +22,7 @@ the server says its connection can be imported from (`importAvailable`),
 
 - Every **Import** closes the dialog and opens an agent chat beside the current
   view with an unsent prompt. Notion, Linear and Jira open workspace importers
-  (`ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`) with “Import my
+  (`macro.imports.notion`, `.linear`, `.jira`) with “Import my
   <Provider> workspace into Macro.” They read only, ask who should see the import
   when needed, and present a review before creating anything. HubSpot opens
   the CRM importer (`ImportFromHubspot`) with “Import my HubSpot CRM into

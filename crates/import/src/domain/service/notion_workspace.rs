@@ -203,7 +203,7 @@ where
             match (sharing, self.repo.user_team_id(user).await?) {
                 (Some(sharing), _) => sharing,
                 (None, None) => NotionSharing::Personal,
-                (None, Some(_)) => return Err(ImportError::NotionSharingRequired),
+                (None, Some(_)) => return Err(ImportError::SharingRequired),
             }
         };
         self.reap_stale_runs(user).await;
@@ -977,7 +977,7 @@ pub fn failure_kind(error: &ImportError) -> RunErrorKind {
         | ImportError::SourceMismatch
         | ImportError::TargetConflict
         | ImportError::TargetNotReserved
-        | ImportError::NotionSharingRequired
+        | ImportError::SharingRequired
         | ImportError::NotReady(_)
         | ImportError::EntityNotAccessible(_)
         | ImportError::ImportRunning
