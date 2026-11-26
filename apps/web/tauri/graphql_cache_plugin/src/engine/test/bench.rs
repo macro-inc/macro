@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
-const SCOPE: &str = "cache-bench";
+pub(super) const SCOPE: &str = "cache-bench";
 const NIL: &str = "00000000-0000-0000-0000-000000000000";
 
 #[derive(Clone)]
@@ -27,9 +27,9 @@ pub(super) struct Op {
     pub(super) operation_name: String,
     pub(super) variables: Variables,
     pub(super) data: serde_json::Value,
-    bytes: usize,
+    pub(super) bytes: usize,
     /// Foreground ops come in variants; run `n` writes variant `n % count`.
-    variant: u64,
+    pub(super) variant: u64,
 }
 
 pub(super) fn ops(path: &Path) -> Vec<Op> {
@@ -101,7 +101,7 @@ impl Io {
 }
 
 /// A `/proc/self/status` memory field in kB (`VmRSS`, `VmHWM`).
-fn memory_kb(field: &str) -> u64 {
+pub(super) fn memory_kb(field: &str) -> u64 {
     std::fs::read_to_string("/proc/self/status")
         .unwrap_or_default()
         .lines()
@@ -112,13 +112,13 @@ fn memory_kb(field: &str) -> u64 {
 
 /// When a step started, and the IO counters then.
 #[derive(Clone, Copy)]
-struct Mark {
+pub(super) struct Mark {
     at: Instant,
     io: Io,
 }
 
 impl Mark {
-    fn now() -> Self {
+    pub(super) fn now() -> Self {
         // Read the counters first, so the timed span leaves their read out.
         let io = Io::now();
         Self {
@@ -129,13 +129,13 @@ impl Mark {
 }
 
 #[derive(Default)]
-struct Samples {
+pub(super) struct Samples {
     ms: BTreeMap<String, Vec<f64>>,
     io: BTreeMap<String, (u64, Io)>,
 }
 
 impl Samples {
-    fn record(&mut self, name: &str, started: Mark) -> f64 {
+    pub(super) fn record(&mut self, name: &str, started: Mark) -> f64 {
         let ms = started.at.elapsed().as_secs_f64() * 1000.0;
         let io = Io::now().since(started.io);
         self.ms.entry(name.to_owned()).or_default().push(ms);
@@ -146,7 +146,7 @@ impl Samples {
     }
 
     /// Mean IO per call of each step.
-    fn io_summary(&self) -> serde_json::Value {
+    pub(super) fn io_summary(&self) -> serde_json::Value {
         self.io
             .iter()
             .map(|(name, (calls, io))| {
@@ -166,7 +166,7 @@ impl Samples {
             .into()
     }
 
-    fn summary(&self) -> serde_json::Value {
+    pub(super) fn summary(&self) -> serde_json::Value {
         let quantile = |sorted: &[f64], q: f64| {
             let position = (sorted.len() - 1) as f64 * q;
             let (low, high) = (position.floor() as usize, position.ceil() as usize);
@@ -281,7 +281,12 @@ pub(super) async fn stamped(handle: &EngineHandle, identity: &str) -> EngineHand
     handle.clone().with_generation(Some(authority.generation))
 }
 
-async fn apply(handle: &EngineHandle, docs: &BTreeMap<String, String>, op: &Op, identity: &str) {
+pub(super) async fn apply(
+    handle: &EngineHandle,
+    docs: &BTreeMap<String, String>,
+    op: &Op,
+    identity: &str,
+) {
     let handle = stamped(handle, identity).await;
     let query = docs[&op.doc].clone();
     let result = if op.write {

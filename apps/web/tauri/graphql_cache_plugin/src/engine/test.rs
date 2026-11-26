@@ -5,6 +5,7 @@ mod authority;
 mod background_writes;
 mod bench;
 mod calendar;
+mod channels;
 mod contention;
 mod people;
 mod soup;
