@@ -44,9 +44,9 @@ describe('Brain Email fixture reader', () => {
     const reader = createFixtureBrainEmailReader();
     const { signal } = new AbortController();
     const deniedScopes = [
-      { viewer: 'another-viewer', team: 'sample-team', agent: 'finch' },
-      { viewer: 'sample-viewer', team: 'another-team', agent: 'finch' },
-      { viewer: 'sample-viewer', team: 'sample-team', agent: 'sable' },
+      { viewer: 'sample-viewer', team: 'sample-team', agent: 'finch' },
+      { viewer: 'hire-fixture-account', team: 'another-team', agent: 'finch' },
+      { viewer: 'hire-fixture-account', team: 'sample-team', agent: 'sable' },
     ];
 
     for (const scope of deniedScopes) {

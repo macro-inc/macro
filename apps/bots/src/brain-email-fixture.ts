@@ -7,7 +7,7 @@ import type {
 const address = 'finch@example.com';
 
 export const brainEmailFixtureScope: BrainEmailScope = {
-  viewer: 'sample-viewer',
+  viewer: 'hire-fixture-account',
   team: 'sample-team',
   agent: 'finch',
 };
