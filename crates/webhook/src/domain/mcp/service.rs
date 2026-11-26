@@ -7,9 +7,10 @@ mod test;
 
 use super::live_subscribers::McpLiveSubscribers;
 use super::models::{
-    MAX_ARGUMENTS_BYTES, MAX_FAILED_VERIFICATIONS, MAX_SUBSCRIPTIONS_PER_USER, McpDeliveryOutcome,
-    McpEventOccurrence, McpEventQueueMessage, McpSubscribeRequest, McpSubscribeResult,
-    McpSubscriptionKey,
+    MAX_ARGUMENTS_BYTES, MAX_DELIVERY_BYTES, MAX_FAILED_VERIFICATIONS, MAX_SUBSCRIPTIONS_PER_USER,
+    McpDeliveryOutcome, McpDeliveryProfile, McpEventOccurrence, McpEventQueueMessage,
+    McpEventSubscription, McpPreviousSecret, McpSubscribeRequest, McpSubscribeResult,
+    McpSubscriptionKey, SECRET_ROTATION_WINDOW,
 };
 use super::ports::{
     McpEndpointClient, McpEndpointVerifyError, McpEventDeliveryService, McpEventEnqueuer,
@@ -20,11 +21,12 @@ use crate::domain::delivery::{MAX_HTTP_ATTEMPTS, retry_delay};
 use crate::domain::models::{
     NormalizedWebhookEvent, WEBHOOK_EVENT_NAMES, WebhookWorkerDisposition,
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use futures::StreamExt as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::time::Duration;
 use uuid::Uuid;
+use webhook_signature::standard::SigningSecret;
 
 /// Redelivery delay after a failure that is ours, not the endpoint's.
 const INTERNAL_RETRY_DELAY: Duration = Duration::from_secs(30);
@@ -38,6 +40,10 @@ pub const AUDIENCE_CHUNK: usize = 100;
 pub const SWEEP_BATCH: u32 = 500;
 /// Most queue sends in flight for one event's fan-out.
 const MAX_CONCURRENT_ENQUEUES: usize = 16;
+
+/// Most times a subscribe re-reads its row after a concurrent refresh of it
+/// changed the row first.
+const STORE_ATTEMPTS: usize = 3;
 
 /// Most sweep statements in one round; the next round continues.
 pub const SWEEP_MAX_BATCHES: u32 = 20;
@@ -86,27 +92,70 @@ fn holds_nul(value: &serde_json::Value) -> bool {
 
 /// Subscribe and unsubscribe.
 #[derive(Clone)]
-pub struct McpEventSubscriptionServiceImpl<R, E, L> {
+pub struct McpEventSubscriptionServiceImpl<R, E, X, L> {
     repo: R,
     endpoint: E,
+    cipher: X,
     verifications: L,
 }
 
-impl<R, E, L> McpEventSubscriptionServiceImpl<R, E, L> {
-    /// Create the service.
-    pub fn new(repo: R, endpoint: E, verifications: L) -> Self {
+impl<R, E, X, L> McpEventSubscriptionServiceImpl<R, E, X, L> {
+    /// Create the service. `cipher` opens a refreshed subscription's stored
+    /// secret, to tell whether the refresh replaces it; `verifications`
+    /// limits each user's failed callback verifications.
+    pub fn new(repo: R, endpoint: E, cipher: X, verifications: L) -> Self {
         Self {
             repo,
             endpoint,
+            cipher,
             verifications,
         }
     }
 }
 
-impl<R, E, L> McpEventSubscriptionService for McpEventSubscriptionServiceImpl<R, E, L>
+impl<R, E, X, L> McpEventSubscriptionServiceImpl<R, E, X, L>
+where
+    X: McpSecretCipher,
+{
+    /// The secret deliveries are also signed with after `row` is refreshed
+    /// with `secret`: its current one when the refresh replaces it, else any
+    /// earlier replaced one whose window is still open. A stored secret that
+    /// cannot be opened fails the refresh, which the client retries, rather
+    /// than drop the overlap a receiver still on it relies on.
+    async fn previous_secret(
+        &self,
+        row: &McpEventSubscription,
+        secret: &SigningSecret,
+        now: DateTime<Utc>,
+    ) -> Result<(Option<McpPreviousSecret>, bool), McpSubscriptionError> {
+        let stored = self
+            .cipher
+            .decrypt(&row.user_id, &row.secret)
+            .await
+            .map_err(McpSubscriptionError::internal)?;
+        if stored.same_key(secret) {
+            return Ok((
+                row.previous_secret
+                    .clone()
+                    .filter(|previous| previous.expires_at > now),
+                false,
+            ));
+        }
+        Ok((
+            Some(McpPreviousSecret {
+                secret: row.secret.clone(),
+                expires_at: now + SECRET_ROTATION_WINDOW,
+            }),
+            true,
+        ))
+    }
+}
+
+impl<R, E, X, L> McpEventSubscriptionService for McpEventSubscriptionServiceImpl<R, E, X, L>
 where
     R: McpSubscriptionRepo,
     E: McpEndpointClient,
+    X: McpSecretCipher,
     L: McpVerificationLimiter,
 {
     #[tracing::instrument(
@@ -114,9 +163,11 @@ where
         skip_all,
         fields(
             event_type = recorded_event_type(&request.event_type),
+            profile = %request.profile,
             subscription_id = tracing::field::Empty,
             verified = tracing::field::Empty,
             refreshed = tracing::field::Empty,
+            secret_rotated = tracing::field::Empty,
         ),
         err
     )]
@@ -134,15 +185,6 @@ where
         let subscription_id = key.id();
         let span = tracing::Span::current();
         span.record("subscription_id", subscription_id.as_str());
-
-        let now = Utc::now();
-        let existing = self
-            .repo
-            .get(&key.user_id, &subscription_id)
-            .await
-            .map_err(McpSubscriptionError::internal)?;
-        let refreshed = existing.is_some_and(|row| row.is_live(now));
-        span.record("refreshed", refreshed);
 
         let filter = request.filter;
         filter
@@ -196,35 +238,91 @@ where
             })?;
         }
 
-        // The quota is checked again where the row is written, under a
-        // per-user lock, so concurrent subscribes cannot pass it together.
-        let stored = self
-            .repo
-            .store_within_quota(
-                McpSubscriptionUpsert {
-                    id: Uuid::now_v7(),
-                    key,
-                    subscription_id,
-                    filter,
-                    secret: request.secret_ciphertext,
-                    expires_at: request.ttl.grant(now),
-                },
-                MAX_SUBSCRIPTIONS_PER_USER,
-            )
-            .await
-            .map_err(McpSubscriptionError::internal)?;
-        let row = match stored {
-            McpStoreOutcome::Stored(row) => *row,
-            McpStoreOutcome::QuotaExceeded => {
-                return Err(McpSubscriptionError::ResourceExhausted {
-                    max: MAX_SUBSCRIPTIONS_PER_USER,
-                });
+        // A refresh may replace the secret; deliveries then carry both
+        // signatures for a while, so a receiver still on the old one accepts
+        // them. Which secret that is depends on the row as read, so the write
+        // is refused if a concurrent refresh changed the row first, and the
+        // row is read again.
+        let mut refreshed = false;
+        let mut rotated = false;
+        let mut stored = None;
+        for _ in 0..STORE_ATTEMPTS {
+            let now = Utc::now();
+            let existing = self
+                .repo
+                .get(&key.user_id, &subscription_id)
+                .await
+                .map_err(McpSubscriptionError::internal)?;
+            // One subscription delivers in one way; ChatGPT's redacts people.
+            if existing
+                .as_ref()
+                .is_some_and(|row| row.profile != request.profile)
+            {
+                return Err(McpSubscriptionError::InvalidParams(
+                    "this subscription is held under another delivery profile; unsubscribe it first"
+                        .to_owned(),
+                ));
             }
+            let read_secret = existing.as_ref().map(|row| row.secret.ciphertext.clone());
+            let live = existing.filter(|row| row.is_live(now));
+            refreshed = live.is_some();
+            let previous_secret = match &live {
+                Some(row) => {
+                    let (previous, replaced) =
+                        self.previous_secret(row, &request.secret, now).await?;
+                    rotated = replaced;
+                    previous
+                }
+                None => {
+                    rotated = false;
+                    None
+                }
+            };
+            // The quota is checked again where the row is written, under a
+            // per-user lock, so concurrent subscribes cannot pass it together.
+            let outcome = self
+                .repo
+                .store_within_quota(
+                    McpSubscriptionUpsert {
+                        id: Uuid::now_v7(),
+                        key: key.clone(),
+                        subscription_id: subscription_id.clone(),
+                        filter: filter.clone(),
+                        secret: request.secret_ciphertext.clone(),
+                        read_secret,
+                        previous_secret,
+                        profile: request.profile,
+                        expires_at: request.ttl.grant(now),
+                    },
+                    MAX_SUBSCRIPTIONS_PER_USER,
+                )
+                .await
+                .map_err(McpSubscriptionError::internal)?;
+            match outcome {
+                McpStoreOutcome::Stored(row) => {
+                    stored = Some(*row);
+                    break;
+                }
+                McpStoreOutcome::QuotaExceeded => {
+                    return Err(McpSubscriptionError::ResourceExhausted {
+                        max: MAX_SUBSCRIPTIONS_PER_USER,
+                    });
+                }
+                McpStoreOutcome::Changed => {}
+            }
+        }
+        span.record("refreshed", refreshed);
+        span.record("secret_rotated", rotated);
+        let Some(row) = stored else {
+            return Err(McpSubscriptionError::internal(std::io::Error::other(
+                "the subscription kept changing under concurrent refreshes",
+            )));
         };
         Ok(McpSubscribeResult {
             id: row.subscription_id,
             refresh_before: row.expires_at,
             filter: row.filter,
+            profile: row.profile,
         })
     }
 
@@ -437,6 +535,9 @@ where
             event_name = %message.event.event_name,
             attempt = receive_count,
             outcome = tracing::field::Empty,
+            profile = tracing::field::Empty,
+            dual_signed = tracing::field::Empty,
+            body_bytes = tracing::field::Empty,
         )
     )]
     async fn deliver(
@@ -504,7 +605,29 @@ where
                 return Attempt::Retry(INTERNAL_RETRY_DELAY);
             }
         };
-        let occurrence = McpEventOccurrence::new(&subscription.event_type, &message.event);
+        // During a rotation the previous secret signs too; one that cannot
+        // be opened is left out, as the new one is what the client sent last.
+        let previous = match subscription.signing_previous_secret(Utc::now()) {
+            Some(previous) => self
+                .cipher
+                .decrypt(&subscription.user_id, previous)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(error = ?error, "failed to decrypt mcp subscription's previous secret");
+                })
+                .ok(),
+            None => None,
+        };
+        let span = tracing::Span::current();
+        span.record("profile", subscription.profile.as_ref());
+        span.record("dual_signed", previous.is_some());
+        let occurrence = McpEventOccurrence::new(
+            &subscription.event_type,
+            &message.event,
+            subscription.profile,
+            &message.webhook_message_id,
+            &subscription.user_id,
+        );
         let body = match serde_json::to_vec(&occurrence) {
             Ok(body) => body,
             Err(error) => {
@@ -512,11 +635,21 @@ where
                 return Attempt::Permanent;
             }
         };
+        span.record("body_bytes", body.len());
+        // ChatGPT refuses a larger body with a 413, which is not retried.
+        if subscription.profile == McpDeliveryProfile::Chatgpt && body.len() > MAX_DELIVERY_BYTES {
+            tracing::warn!(
+                body_bytes = body.len(),
+                "mcp event delivery is too large to send"
+            );
+            return Attempt::Permanent;
+        }
         match self
             .endpoint
             .deliver(
                 &subscription.endpoint_url,
                 &secret,
+                previous.as_ref(),
                 &subscription.subscription_id,
                 &message.webhook_message_id,
                 body,

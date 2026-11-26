@@ -367,5 +367,373 @@ describe('createHandler', () => {
         parseConfig({ ...withoutKey, MACRO_ENV: 'local' })
       ).not.toThrow();
     });
+
+    test('a token in event arguments reaches Macro as the id it replaced', async () => {
+      const seen = stubMacro('macro|viewer@example.com', (url) =>
+        url === 'https://auth.test/mcp'
+          ? {
+              jsonrpc: '2.0',
+              id: 1,
+              result: {
+                id: 'sub-1',
+                refreshBefore: '2027-01-01T00:00:00Z',
+                cursor: null,
+                truncated: false,
+                _meta: { 'com.macro/eventsProfile': 'chatgpt' },
+              },
+            }
+          : { owner_id: 'macro|someone@example.com' }
+      );
+      const handle = createHandler(parseConfig(BINDINGS));
+      const { owner_id } = (await call(handle, 'documents_read', PERMISSION))
+        .structuredContent.result;
+
+      seen.length = 0;
+      const response = await handle(
+        rpc(
+          'events/subscribe',
+          {
+            name: 'message.posted',
+            arguments: { actor: owner_id },
+            delivery: {
+              mode: 'webhook',
+              url: 'https://chatgpt.test/hook',
+              secret: 'whsec_secret',
+            },
+            cursor: null,
+          },
+          'user-token'
+        )
+      );
+
+      expect((await response.json()).result.id).toBe('sub-1');
+      const sent = seen.find(({ url }) => url === 'https://auth.test/mcp');
+      expect(sent?.body).toMatchObject({
+        method: 'com.macro/chatgpt/events/subscribe',
+        params: { arguments: { actor: 'macro|someone@example.com' } },
+      });
+    });
+  });
+});
+
+describe('MCP Events', () => {
+  type Forwarded = { headers: Headers; body: unknown };
+
+  /** The public MCP server, answering every forwarded request with `answer`. */
+  function stubPublicMcp(answer: () => Response) {
+    const forwarded: Forwarded[] = [];
+    vi.stubGlobal(
+      'fetch',
+      async (input: Request | string, init?: RequestInit) => {
+        const request = new Request(input, init);
+        expect(request.url).toBe('https://auth.test/mcp');
+        forwarded.push({
+          headers: request.headers,
+          body: await request.json(),
+        });
+        return answer();
+      }
+    );
+    return forwarded;
+  }
+
+  /** What the public MCP server adds to a result answered in ChatGPT's profile. */
+  const PROFILE_META = { _meta: { 'com.macro/eventsProfile': 'chatgpt' } };
+
+  const LISTED = {
+    events: [
+      {
+        name: 'message.mentioned',
+        description: 'Someone mentioned a person or group in a message.',
+        delivery: ['webhook'],
+        inputSchema: { type: 'object' },
+        payloadSchema: { type: 'object' },
+      },
+    ],
+  };
+
+  test('initialize advertises the events capability at the top level', async () => {
+    const handle = createHandler(parseConfig(BINDINGS));
+
+    const response = await handle(
+      rpc(
+        'initialize',
+        {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'openai-mcp', version: '1.0.0' },
+        },
+        'user-token'
+      )
+    );
+
+    expect((await response.json()).result.capabilities).toMatchObject({
+      tools: {},
+      events: {},
+    });
+  });
+
+  test('events/list is answered by the public MCP server as the bearer, in the ChatGPT profile', async () => {
+    const forwarded = stubPublicMcp(() =>
+      Response.json({
+        jsonrpc: '2.0',
+        id: 1,
+        result: { ...LISTED, ...PROFILE_META },
+      })
+    );
+    const handle = createHandler(parseConfig(BINDINGS));
+
+    const response = await handle(
+      rpc('events/list', { _meta: { 'openai/locale': 'en' } }, 'user-token')
+    );
+
+    // The profile marker is checked and removed.
+    expect((await response.json()).result).toEqual(LISTED);
+    expect(forwarded).toHaveLength(1);
+    const { headers, body } = forwarded[0] ?? {};
+    expect(headers?.get('authorization')).toBe('Bearer user-token');
+    expect(headers?.get('mcp-protocol-version')).toBe('2026-07-28');
+    expect(headers?.get('mcp-method')).toBe('com.macro/chatgpt/events/list');
+    expect(headers?.has('mcp-name')).toBe(false);
+    // ChatGPT's own _meta stays here; the request carries the 2026-07-28
+    // metadata the public MCP server requires in place of initialize.
+    expect(body).toEqual({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'com.macro/chatgpt/events/list',
+      params: {
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientCapabilities': {
+            extensions: { 'io.modelcontextprotocol/events': {} },
+          },
+        },
+      },
+    });
+  });
+
+  test('a refusal keeps its code, message and data', async () => {
+    stubPublicMcp(() =>
+      Response.json({
+        jsonrpc: '2.0',
+        id: 1,
+        error: {
+          code: -32015,
+          message: 'The callback did not echo the challenge',
+          data: { reason: 'challenge_failed' },
+        },
+      })
+    );
+    const handle = createHandler(parseConfig(BINDINGS));
+
+    const response = await handle(
+      rpc(
+        'events/subscribe',
+        {
+          name: 'message.posted',
+          arguments: {},
+          delivery: {
+            mode: 'webhook',
+            url: 'https://chatgpt.test/hook',
+            secret: 'whsec_secret',
+          },
+          cursor: null,
+        },
+        'user-token'
+      )
+    );
+
+    expect((await response.json()).error).toEqual({
+      code: -32015,
+      message: 'The callback did not echo the challenge',
+      data: { reason: 'challenge_failed' },
+    });
+  });
+
+  test('unsubscribe relays the empty result', async () => {
+    const forwarded = stubPublicMcp(() =>
+      Response.json({ jsonrpc: '2.0', id: 1, result: { ...PROFILE_META } })
+    );
+    const handle = createHandler(parseConfig(BINDINGS));
+
+    const response = await handle(
+      rpc(
+        'events/unsubscribe',
+        {
+          name: 'message.posted',
+          arguments: {},
+          delivery: { url: 'https://chatgpt.test/hook' },
+        },
+        'user-token'
+      )
+    );
+
+    expect((await response.json()).result).toEqual({});
+    const { headers } = forwarded[0] ?? {};
+    expect(headers?.get('mcp-method')).toBe(
+      'com.macro/chatgpt/events/unsubscribe'
+    );
+    expect(headers?.get('mcp-name')).toBe('message.posted');
+  });
+
+  test('an answer without the ChatGPT profile is refused, not relayed', async () => {
+    // The second guard: an answer that does not name ChatGPT's profile is
+    // not relayed, whatever answered it.
+    stubPublicMcp(() =>
+      Response.json({
+        jsonrpc: '2.0',
+        id: 1,
+        result: {
+          resultType: 'complete',
+          id: 'sub-1',
+          refreshBefore: '2027-01-01T00:00:00Z',
+          cursor: null,
+          truncated: false,
+        },
+      })
+    );
+    const handle = createHandler(parseConfig(BINDINGS));
+
+    const response = await handle(
+      rpc(
+        'events/subscribe',
+        {
+          name: 'message.posted',
+          arguments: {},
+          delivery: {
+            mode: 'webhook',
+            url: 'https://chatgpt.test/hook',
+            secret: 'whsec_secret',
+          },
+          cursor: null,
+        },
+        'user-token'
+      )
+    );
+
+    const body = await response.json();
+    expect(body.result).toBeUndefined();
+    expect(body.error.code).toBe(-32603);
+  });
+
+  test('the callback URL and secret are forwarded as sent, even when token-shaped', async () => {
+    const forwarded = stubPublicMcp(() =>
+      Response.json({
+        jsonrpc: '2.0',
+        id: 1,
+        result: {
+          id: 'sub-1',
+          refreshBefore: '2027-01-01T00:00:00Z',
+          cursor: null,
+          truncated: false,
+          ...PROFILE_META,
+        },
+      })
+    );
+    const handle = createHandler(parseConfig(BINDINGS));
+    // A path segment shaped like a person token this server never issued.
+    const url = `https://chatgpt.test/hook/person_u_${'A'.repeat(40)}`;
+
+    const response = await handle(
+      rpc(
+        'events/subscribe',
+        {
+          name: 'message.posted',
+          arguments: {},
+          delivery: { mode: 'webhook', url, secret: 'whsec_secret' },
+          cursor: null,
+        },
+        'user-token'
+      )
+    );
+
+    expect((await response.json()).result.id).toBe('sub-1');
+    expect(forwarded[0]?.body).toMatchObject({
+      params: {
+        delivery: { mode: 'webhook', url, secret: 'whsec_secret' },
+      },
+    });
+  });
+
+  test('a bearer the public MCP server refuses is answered with a 401', async () => {
+    const forwarded = stubPublicMcp(
+      () =>
+        new Response(JSON.stringify({ error: 'invalid_token' }), {
+          status: 401,
+          headers: { 'www-authenticate': 'Bearer error="invalid_token"' },
+        })
+    );
+    const handle = createHandler(parseConfig(BINDINGS));
+
+    for (const [method, params] of [
+      ['events/list', {}],
+      [
+        'events/subscribe',
+        {
+          name: 'message.posted',
+          arguments: {},
+          delivery: {
+            mode: 'webhook',
+            url: 'https://chatgpt.test/hook',
+            secret: 'whsec_secret',
+          },
+        },
+      ],
+    ] as const) {
+      const response = await handle(rpc(method, params, 'expired-token'));
+
+      expect(response.status).toBe(401);
+      expect(response.headers.get('www-authenticate')).toBe(
+        'Bearer resource_metadata="https://mcp-chatgpt.test/.well-known/oauth-protected-resource/mcp"'
+      );
+    }
+    expect(forwarded).toHaveLength(2);
+  });
+
+  test('a bearer Macro refuses while opening a person token is answered with a 401', async () => {
+    const asked: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      async (input: Request | string, init?: RequestInit) => {
+        const request = new Request(input, init);
+        asked.push(new URL(request.url).pathname);
+        return new Response(JSON.stringify({ error: 'invalid_token' }), {
+          status: 401,
+        });
+      }
+    );
+    const handle = createHandler(parseConfig(BINDINGS));
+
+    const response = await handle(
+      rpc(
+        'events/subscribe',
+        {
+          name: 'message.mentioned',
+          arguments: { ids: [`person_u_${'A'.repeat(40)}`] },
+          delivery: {
+            mode: 'webhook',
+            url: 'https://chatgpt.test/hook',
+            secret: 'whsec_secret',
+          },
+        },
+        'expired-token'
+      )
+    );
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('www-authenticate')).toBe(
+      'Bearer resource_metadata="https://mcp-chatgpt.test/.well-known/oauth-protected-resource/mcp"'
+    );
+    // Refused while looking up the viewer, before anything reached /mcp.
+    expect(asked).toEqual(['/user/me']);
+  });
+
+  test('an answer that is not JSON-RPC is an internal error', async () => {
+    stubPublicMcp(() => new Response('bad gateway', { status: 502 }));
+    const handle = createHandler(parseConfig(BINDINGS));
+
+    const response = await handle(rpc('events/list', {}, 'user-token'));
+
+    expect((await response.json()).error.code).toBe(-32603);
   });
 });

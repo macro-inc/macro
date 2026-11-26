@@ -15,6 +15,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::fmt;
+use subtle::ConstantTimeEq as _;
 use zeroize::Zeroizing;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -87,6 +88,32 @@ impl SigningSecret {
         exposed.push_str(SECRET_PREFIX);
         exposed.push_str(&encoded);
         exposed
+    }
+
+    /// Whether `other` is the same key, compared in constant time.
+    #[must_use]
+    pub fn same_key(&self, other: &Self) -> bool {
+        bool::from(self.0.as_slice().ct_eq(other.0.as_slice()))
+    }
+
+    /// The `webhook-signature` header for a message signed with each of
+    /// `secrets`: their entries, space-separated, as during a rotation.
+    /// `None` when any cannot sign (see [`Self::sign`]) or none is given.
+    #[must_use]
+    pub fn sign_all(
+        secrets: &[&Self],
+        message_id: &str,
+        timestamp: i64,
+        body: &[u8],
+    ) -> Option<String> {
+        if secrets.is_empty() {
+            return None;
+        }
+        secrets
+            .iter()
+            .map(|secret| secret.sign(message_id, timestamp, body))
+            .collect::<Option<Vec<_>>>()
+            .map(|entries| entries.join(" "))
     }
 
     fn mac(&self, message_id: &str, timestamp: i64, body: &[u8]) -> Option<HmacSha256> {

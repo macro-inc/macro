@@ -4,8 +4,8 @@ use crate::domain::mcp::filter::{
     McpFilterValue,
 };
 use crate::domain::mcp::models::{
-    McpEndpointFailure, McpEventSubscription, McpMatchCandidate, McpSecretCiphertext,
-    McpSubscriptionId, McpTtlRequest,
+    McpDeliveryProfile, McpEndpointFailure, McpEventSubscription, McpMatchCandidate,
+    McpPreviousSecret, McpSecretCiphertext, McpSubscriptionId, McpTtlRequest,
 };
 use crate::domain::mcp::ports::McpLiveStanding;
 use chrono::{DateTime, Utc};
@@ -16,6 +16,8 @@ const ME: &str = "macro|me@example.com";
 const OTHER: &str = "macro|other@example.com";
 const URL: &str = "https://hooks.example.com/mcp";
 const SECRET: &str = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+/// The secret a refresh rotates to.
+const NEW_SECRET: &str = "whsec_C2FVsBQIhrscChlQIMV+b5sSYspob7oD";
 
 #[derive(Debug, thiserror::Error)]
 #[error("fake failure")]
@@ -28,6 +30,9 @@ struct FakeRepo {
     match_calls: Arc<Mutex<Vec<usize>>>,
     /// Whether reading the live subscribers fails.
     live_ids_fail: Arc<std::sync::atomic::AtomicBool>,
+    /// A secret another refresh writes just before the next store, as if it
+    /// had won a race with it.
+    racing_secret: Arc<Mutex<Option<McpSecretCiphertext>>>,
 }
 
 impl FakeRepo {
@@ -84,10 +89,24 @@ impl McpSubscriptionRepo for FakeRepo {
         if let Some(row) = rows.iter_mut().find(|row| {
             row.user_id == upsert.key.user_id && row.subscription_id == upsert.subscription_id
         }) {
+            if let Some(racing) = self.racing_secret.lock().expect("lock").take() {
+                row.previous_secret = None;
+                row.secret = racing;
+            }
+            if upsert.read_secret.as_ref() != Some(&row.secret.ciphertext)
+                || row.profile != upsert.profile
+            {
+                return Ok(McpStoreOutcome::Changed);
+            }
             row.filter = upsert.filter;
             row.secret = upsert.secret;
+            row.previous_secret = upsert.previous_secret;
+            row.profile = upsert.profile;
             row.expires_at = upsert.expires_at;
             return Ok(McpStoreOutcome::Stored(Box::new(row.clone())));
+        }
+        if upsert.read_secret.is_some() {
+            return Ok(McpStoreOutcome::Changed);
         }
         let row = McpEventSubscription {
             id: upsert.id,
@@ -98,6 +117,8 @@ impl McpSubscriptionRepo for FakeRepo {
             filter: upsert.filter,
             endpoint_url: upsert.key.endpoint_url,
             secret: upsert.secret,
+            previous_secret: upsert.previous_secret,
+            profile: upsert.profile,
             expires_at: upsert.expires_at,
         };
         rows.push(row.clone());
@@ -203,6 +224,8 @@ struct FakeEndpoint {
     deliver: McpDeliveryOutcome,
     verified: Arc<Mutex<Vec<String>>>,
     delivered: Deliveries,
+    /// Whether each delivery was also signed with a previous secret.
+    dual_signed: Arc<Mutex<Vec<bool>>>,
 }
 
 impl FakeEndpoint {
@@ -212,6 +235,7 @@ impl FakeEndpoint {
             deliver: McpDeliveryOutcome::Delivered,
             verified: Arc::default(),
             delivered: Arc::default(),
+            dual_signed: Arc::default(),
         }
     }
 
@@ -238,10 +262,15 @@ impl McpEndpointClient for FakeEndpoint {
         &self,
         _endpoint_url: &str,
         _secret: &SigningSecret,
+        previous: Option<&SigningSecret>,
         subscription_id: &McpSubscriptionId,
         message_id: &str,
         body: Vec<u8>,
     ) -> McpDeliveryOutcome {
+        self.dual_signed
+            .lock()
+            .expect("lock")
+            .push(previous.is_some());
         self.delivered.lock().expect("lock").push((
             subscription_id.to_string(),
             message_id.to_owned(),
@@ -292,20 +321,23 @@ impl McpSecretCipher for FakeCipher {
     async fn encrypt(
         &self,
         _user_id: &MacroUserIdStr<'static>,
+        _profile: McpDeliveryProfile,
         _secret: &SigningSecret,
     ) -> Result<McpSecretCiphertext, FakeError> {
         Ok(ciphertext())
     }
 
+    /// Opens the fake ciphertexts [`ciphertext_of`] makes.
     async fn decrypt(
         &self,
         _user_id: &MacroUserIdStr<'static>,
-        _ciphertext: &McpSecretCiphertext,
+        ciphertext: &McpSecretCiphertext,
     ) -> Result<SigningSecret, FakeError> {
         if self.fail {
             return Err(FakeError);
         }
-        Ok(secret())
+        let text = std::str::from_utf8(&ciphertext.ciphertext).map_err(|_| FakeError)?;
+        SigningSecret::parse(text).map_err(|_| FakeError)
     }
 }
 
@@ -332,8 +364,13 @@ fn secret() -> SigningSecret {
 }
 
 fn ciphertext() -> McpSecretCiphertext {
+    ciphertext_of(SECRET)
+}
+
+/// A fake ciphertext of `secret`, which [`FakeCipher`] opens.
+fn ciphertext_of(secret: &str) -> McpSecretCiphertext {
     McpSecretCiphertext {
-        ciphertext: vec![1, 2, 3],
+        ciphertext: secret.as_bytes().to_vec(),
         kms_key_id: "alias/test".to_owned(),
         encryption_version: 1,
     }
@@ -369,14 +406,29 @@ fn request(query: &str, filter: McpEventFilter) -> McpSubscribeRequest {
         secret: secret(),
         secret_ciphertext: ciphertext(),
         ttl: McpTtlRequest::Default,
+        profile: McpDeliveryProfile::Mcp,
+    }
+}
+
+/// `request` refreshed with [`NEW_SECRET`].
+fn rotating(request: McpSubscribeRequest) -> McpSubscribeRequest {
+    McpSubscribeRequest {
+        secret: SigningSecret::parse(NEW_SECRET).expect("valid secret"),
+        secret_ciphertext: ciphertext_of(NEW_SECRET),
+        ..request
     }
 }
 
 fn service(
     repo: &FakeRepo,
     endpoint: &FakeEndpoint,
-) -> McpEventSubscriptionServiceImpl<FakeRepo, FakeEndpoint, FakeLimiter> {
-    McpEventSubscriptionServiceImpl::new(repo.clone(), endpoint.clone(), FakeLimiter::default())
+) -> McpEventSubscriptionServiceImpl<FakeRepo, FakeEndpoint, FakeCipher, FakeLimiter> {
+    McpEventSubscriptionServiceImpl::new(
+        repo.clone(),
+        endpoint.clone(),
+        FakeCipher { fail: false },
+        FakeLimiter::default(),
+    )
 }
 
 fn at(url: &str, query: &str) -> McpSubscribeRequest {
@@ -530,8 +582,12 @@ async fn failed_verifications_are_limited_and_passed_ones_are_not_counted() {
     let accepting = FakeEndpoint::accepting();
     let limiter = FakeLimiter::default();
     // Endpoints that agree cost nothing, however many there are.
-    let agreeing =
-        McpEventSubscriptionServiceImpl::new(repo.clone(), accepting.clone(), limiter.clone());
+    let agreeing = McpEventSubscriptionServiceImpl::new(
+        repo.clone(),
+        accepting.clone(),
+        FakeCipher { fail: false },
+        limiter.clone(),
+    );
     for index in 0..MAX_FAILED_VERIFICATIONS + 5 {
         agreeing
             .subscribe(
@@ -548,6 +604,7 @@ async fn failed_verifications_are_limited_and_passed_ones_are_not_counted() {
             verify: Err(McpEndpointVerifyError::InvalidUrl("not https")),
             ..FakeEndpoint::accepting()
         },
+        FakeCipher { fail: false },
         limiter.clone(),
     );
     for _ in 0..MAX_FAILED_VERIFICATIONS + 5 {
@@ -564,7 +621,12 @@ async fn failed_verifications_are_limited_and_passed_ones_are_not_counted() {
         verify: Err(McpEndpointVerifyError::Failed(McpEndpointFailure::Http4xx)),
         ..FakeEndpoint::accepting()
     };
-    let failing = McpEventSubscriptionServiceImpl::new(repo.clone(), unwilling.clone(), limiter);
+    let failing = McpEventSubscriptionServiceImpl::new(
+        repo.clone(),
+        unwilling.clone(),
+        FakeCipher { fail: false },
+        limiter,
+    );
     for index in 0..MAX_FAILED_VERIFICATIONS {
         let failed = failing
             .subscribe(
@@ -818,6 +880,8 @@ async fn the_sweeper_deletes_expired_rows_in_bounded_rounds() {
                 filter: mentions_of_me_in_channels(),
                 endpoint_url: URL.to_owned(),
                 secret: ciphertext(),
+                previous_secret: None,
+                profile: McpDeliveryProfile::Mcp,
                 expires_at: Utc::now() - chrono::Duration::minutes(1),
             });
         }
@@ -1136,6 +1200,8 @@ async fn too_many_subscriptions_fall_back_to_matching_every_member() {
                 filter: mentions_of_me_in_channels(),
                 endpoint_url: URL.to_owned(),
                 secret: ciphertext(),
+                previous_secret: None,
+                profile: McpDeliveryProfile::Mcp,
                 expires_at: Utc::now() + chrono::Duration::minutes(5),
             });
         }
@@ -1153,4 +1219,205 @@ async fn too_many_subscriptions_fall_back_to_matching_every_member() {
         vec![1],
         "the set is unknown, so the member is queried"
     );
+}
+
+#[tokio::test]
+async fn a_refresh_with_the_same_secret_keeps_no_previous_one() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let service = service(&repo, &endpoint);
+    for _ in 0..2 {
+        service
+            .subscribe(user(ME), request("mentions", mentions_of_me_in_channels()))
+            .await
+            .expect("subscribed");
+    }
+    assert_eq!(repo.rows()[0].previous_secret, None);
+}
+
+#[tokio::test]
+async fn a_refresh_with_a_new_secret_signs_with_both_for_the_window() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let service = service(&repo, &endpoint);
+    service
+        .subscribe(user(ME), request("mentions", mentions_of_me_in_channels()))
+        .await
+        .expect("subscribed");
+    let before = Utc::now();
+    service
+        .subscribe(
+            user(ME),
+            rotating(request("mentions", mentions_of_me_in_channels())),
+        )
+        .await
+        .expect("refreshed");
+    assert_eq!(endpoint.verify_count(), 1, "a refresh is not challenged");
+
+    let row = repo.rows().remove(0);
+    assert_eq!(row.secret, ciphertext_of(NEW_SECRET));
+    let previous = row.previous_secret.clone().expect("the old secret is kept");
+    assert_eq!(previous.secret, ciphertext());
+    assert!(previous.expires_at >= before + SECRET_ROTATION_WINDOW);
+    assert!(previous.expires_at <= Utc::now() + SECRET_ROTATION_WINDOW);
+
+    // A second refresh with the new secret keeps the open window.
+    service
+        .subscribe(
+            user(ME),
+            rotating(request("mentions", mentions_of_me_in_channels())),
+        )
+        .await
+        .expect("refreshed");
+    assert_eq!(repo.rows()[0].previous_secret, Some(previous));
+
+    let message = McpEventQueueMessage::new(row.id, mentioned_event("channel", ME));
+    delivery(&repo, &endpoint, false).deliver(message, 1).await;
+    assert_eq!(*endpoint.dual_signed.lock().expect("lock"), vec![true]);
+}
+
+#[tokio::test]
+async fn a_closed_window_signs_with_the_current_secret_alone() {
+    let repo = FakeRepo::default();
+    let row = subscribed(&repo).await;
+    repo.rows.lock().expect("lock")[0].previous_secret = Some(McpPreviousSecret {
+        secret: ciphertext_of(NEW_SECRET),
+        expires_at: Utc::now() - chrono::Duration::seconds(1),
+    });
+    let endpoint = FakeEndpoint::accepting();
+    delivery(&repo, &endpoint, false)
+        .deliver(
+            McpEventQueueMessage::new(row.id, mentioned_event("channel", ME)),
+            1,
+        )
+        .await;
+    assert_eq!(*endpoint.dual_signed.lock().expect("lock"), vec![false]);
+}
+
+#[tokio::test]
+async fn a_stored_secret_that_cannot_be_opened_fails_the_refresh() {
+    let repo = FakeRepo::default();
+    subscribed(&repo).await;
+    repo.rows.lock().expect("lock")[0].secret.ciphertext = vec![0xff];
+    let refreshed = service(&repo, &FakeEndpoint::accepting())
+        .subscribe(
+            user(ME),
+            rotating(request("mentions", mentions_of_me_in_channels())),
+        )
+        .await;
+    assert!(
+        matches!(refreshed, Err(McpSubscriptionError::Internal(_))),
+        "the client retries rather than lose the overlap: {refreshed:?}"
+    );
+    assert_eq!(
+        repo.rows()[0].secret.ciphertext,
+        vec![0xff],
+        "the row is unchanged"
+    );
+}
+
+#[tokio::test]
+async fn a_refresh_that_lost_a_race_keeps_the_secret_that_won_it() {
+    // Two refreshes read the row on the old secret; one rotates to
+    // `RACING` and commits first, then the other, rotating to
+    // `NEW_SECRET`, must keep `RACING` (which its client may have
+    // adopted), not the old secret it read.
+    const RACING: &str = "whsec_dGhlIHJhY2luZyByZWZyZXNoIHNlY3JldA==";
+    let repo = FakeRepo::default();
+    subscribed(&repo).await;
+    *repo.racing_secret.lock().expect("lock") = Some(ciphertext_of(RACING));
+    service(&repo, &FakeEndpoint::accepting())
+        .subscribe(
+            user(ME),
+            rotating(request("mentions", mentions_of_me_in_channels())),
+        )
+        .await
+        .expect("refreshed after reading the row again");
+    let row = repo.rows().remove(0);
+    assert_eq!(row.secret, ciphertext_of(NEW_SECRET));
+    assert_eq!(
+        row.previous_secret.map(|previous| previous.secret),
+        Some(ciphertext_of(RACING))
+    );
+}
+
+#[tokio::test]
+async fn a_subscription_held_under_another_profile_is_refused() {
+    let repo = FakeRepo::default();
+    subscribed(&repo).await;
+    let error = service(&repo, &FakeEndpoint::accepting())
+        .subscribe(
+            user(ME),
+            McpSubscribeRequest {
+                profile: McpDeliveryProfile::Chatgpt,
+                ..request("mentions", mentions_of_me_in_channels())
+            },
+        )
+        .await
+        .expect_err("refused");
+    assert!(
+        matches!(error, McpSubscriptionError::InvalidParams(_)),
+        "{error:?}"
+    );
+    assert_eq!(repo.rows().remove(0).profile, McpDeliveryProfile::Mcp);
+}
+
+#[tokio::test]
+async fn a_chatgpt_subscription_delivers_its_message_id_as_the_event_id() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    service(&repo, &endpoint)
+        .subscribe(
+            user(ME),
+            McpSubscribeRequest {
+                profile: McpDeliveryProfile::Chatgpt,
+                ..request("mentions", mentions_of_me_in_channels())
+            },
+        )
+        .await
+        .expect("subscribed");
+    let row = repo.rows().remove(0);
+    assert_eq!(row.profile, McpDeliveryProfile::Chatgpt);
+
+    let message = McpEventQueueMessage::new(row.id, mentioned_event("channel", ME));
+    delivery(&repo, &endpoint, false)
+        .deliver(message.clone(), 1)
+        .await;
+    let delivered = endpoint.delivered.lock().expect("lock").clone();
+    let (_, message_id, body) = &delivered[0];
+    assert_eq!(message_id, &message.webhook_message_id);
+    let body: serde_json::Value = serde_json::from_slice(body).expect("json body");
+    assert_eq!(body["eventId"], message.webhook_message_id.as_str());
+    assert_eq!(body["data"]["metadata"]["sender"], "someone");
+    assert_eq!(body["data"]["metadata"]["mentioned"]["entity_id"], "me");
+}
+
+#[tokio::test]
+async fn a_chatgpt_delivery_over_the_size_limit_is_dropped() {
+    let repo = FakeRepo::default();
+    let row = subscribed(&repo).await;
+    repo.rows.lock().expect("lock")[0].profile = McpDeliveryProfile::Chatgpt;
+    let endpoint = FakeEndpoint::accepting();
+    let mut event = mentioned_event("channel", ME);
+    event.broker_envelope["metadata"]["content"] =
+        serde_json::Value::String("x".repeat(MAX_DELIVERY_BYTES));
+    let disposition = delivery(&repo, &endpoint, false)
+        .deliver(McpEventQueueMessage::new(row.id, event), 1)
+        .await;
+    assert_eq!(disposition, WebhookWorkerDisposition::Acknowledge);
+    assert!(endpoint.delivered.lock().expect("lock").is_empty());
+}
+
+#[tokio::test]
+async fn an_mcp_delivery_over_chatgpts_size_limit_is_still_sent() {
+    let repo = FakeRepo::default();
+    let row = subscribed(&repo).await;
+    let endpoint = FakeEndpoint::accepting();
+    let mut event = mentioned_event("channel", ME);
+    event.broker_envelope["metadata"]["content"] =
+        serde_json::Value::String("x".repeat(MAX_DELIVERY_BYTES));
+    delivery(&repo, &endpoint, false)
+        .deliver(McpEventQueueMessage::new(row.id, event), 1)
+        .await;
+    assert_eq!(endpoint.delivered.lock().expect("lock").len(), 1);
 }

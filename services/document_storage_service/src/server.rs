@@ -1241,10 +1241,16 @@ async fn run_server() -> anyhow::Result<()> {
     // delivers, decrypting with the key id the ciphertext names.
     let mcp_subscription_repository =
         webhook::outbound::PgMcpSubscriptionRepository::new(db.clone());
+    let mcp_secret_cipher = webhook::outbound::KmsMcpSecretCipher::new(
+        cursor_api_key::cipher::AwsKmsCiphertexts::decrypting(aws_sdk_kms::Client::new(
+            &aws_config,
+        )),
+    );
     let mcp_subscription_state = webhook::inbound::mcp_router::McpSubscriptionRouterState::new(
         webhook::domain::mcp::service::McpEventSubscriptionServiceImpl::new(
             mcp_subscription_repository.clone(),
             webhook_http_client.clone(),
+            mcp_secret_cipher.clone(),
             webhook::outbound::RateLimitedMcpVerifications(RateLimitServiceImpl {
                 repo: RedisRateLimitAdapter {
                     redis: redis_client.clone(),
@@ -1256,11 +1262,7 @@ async fn run_server() -> anyhow::Result<()> {
     let mcp_event_delivery_service =
         webhook::domain::mcp::service::McpEventDeliveryServiceImpl::new(
             mcp_subscription_repository.clone(),
-            webhook::outbound::KmsMcpSecretCipher::new(
-                cursor_api_key::cipher::AwsKmsCiphertexts::decrypting(aws_sdk_kms::Client::new(
-                    &aws_config,
-                )),
-            ),
+            mcp_secret_cipher,
             webhook_http_client.clone(),
         );
     let mcp_live_subscribers =

@@ -20,10 +20,29 @@ own permission checks and agent attribution apply.
   operation (`op` in `entity` grouping), and `runOperation` validates, calls
   the SDK and shapes the result. One `mcp_chatgpt.tool_call` span per call
   records tool, operation, hint and outcome.
+- MCP Events (OpenAI's `events/list`, `events/subscribe`,
+  `events/unsubscribe`; the `events` capability in `initialize`): each
+  request is forwarded as the bearer to the public MCP server at
+  `AUTHORIZATION_SERVER_URL` + `/mcp`, under ChatGPT's method prefix
+  (`com.macro/chatgpt/events/subscribe`, also in `Mcp-Method`): the server
+  keeps the subscription, answers in the draft ChatGPT follows, and has
+  document storage deliver to ChatGPT's webhook (see
+  `services/agent_harness_service`'s AGENTS.md). Person tokens in
+  `arguments` are revealed first (only there: the callback URL and secret
+  go as sent). A public MCP server from before ChatGPT's profile has no such
+  methods and answers method-not-found, so it never stores a subscription
+  that would deliver unredacted. A result must also name the profile in
+  `_meta["com.macro/eventsProfile"]`, which is removed; one without it is
+  refused with an internal error. A 401 from the public MCP server or from
+  the viewer lookup that opens a person token (an expired or revoked
+  bearer) is answered with this server's own 401 and
+  `WWW-Authenticate`, so the client signs in again. Otherwise the answer, or
+  its error with code, message and data, is relayed as is, its people
+  sealed. Span: `mcp_chatgpt.events` (method, outcome).
 
 ## Start here
 
-- `src/app.ts`: routes, auth challenge and the MCP handlers.
+- `src/app.ts`: routes, auth challenge and the MCP handlers, events included.
 - `src/config.ts`: bindings, parsed with Zod; a missing value fails loudly.
 - `wrangler.jsonc`: per-environment vars and hosts (dev and prod on workers.dev).
 

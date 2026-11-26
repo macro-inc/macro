@@ -119,3 +119,35 @@ fn debug_redacts_the_key() {
     let debug = format!("{:?}", reference_secret());
     assert_eq!(debug, "SigningSecret([REDACTED])");
 }
+
+#[test]
+fn same_key_compares_the_decoded_key() {
+    let other =
+        SigningSecret::parse(&format!("{SECRET_PREFIX}{}", BASE64.encode([7u8; 32]))).unwrap();
+    assert!(reference_secret().same_key(&reference_secret()));
+    assert!(!reference_secret().same_key(&other));
+}
+
+#[test]
+fn sign_all_carries_one_entry_per_secret_and_each_verifies() {
+    let new = reference_secret();
+    let old =
+        SigningSecret::parse(&format!("{SECRET_PREFIX}{}", BASE64.encode([7u8; 32]))).unwrap();
+    let header = SigningSecret::sign_all(
+        &[&new, &old],
+        REFERENCE_ID,
+        REFERENCE_TIMESTAMP,
+        REFERENCE_BODY,
+    )
+    .unwrap();
+    let entries: Vec<&str> = header.split(' ').collect();
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0], REFERENCE_SIGNATURE);
+    // A receiver holding either key accepts it.
+    assert!(new.verify(REFERENCE_ID, REFERENCE_TIMESTAMP, REFERENCE_BODY, &header));
+    assert!(old.verify(REFERENCE_ID, REFERENCE_TIMESTAMP, REFERENCE_BODY, &header));
+    assert_eq!(
+        SigningSecret::sign_all(&[], REFERENCE_ID, REFERENCE_TIMESTAMP, REFERENCE_BODY),
+        None
+    );
+}

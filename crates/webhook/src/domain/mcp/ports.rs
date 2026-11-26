@@ -2,9 +2,9 @@
 
 use super::filter::McpEventFilter;
 use super::models::{
-    McpDeliveryOutcome, McpEndpointFailure, McpEventQueueMessage, McpEventSubscription,
-    McpMatchCandidate, McpSecretCiphertext, McpSubscribeRequest, McpSubscribeResult,
-    McpSubscriptionId, McpSubscriptionKey,
+    McpDeliveryOutcome, McpDeliveryProfile, McpEndpointFailure, McpEventQueueMessage,
+    McpEventSubscription, McpMatchCandidate, McpPreviousSecret, McpSecretCiphertext,
+    McpSubscribeRequest, McpSubscribeResult, McpSubscriptionId, McpSubscriptionKey,
 };
 use crate::domain::models::{NormalizedWebhookEvent, WebhookWorkerDisposition};
 use chrono::{DateTime, Utc};
@@ -27,6 +27,15 @@ pub struct McpSubscriptionUpsert {
     pub filter: McpEventFilter,
     /// The new encrypted secret.
     pub secret: McpSecretCiphertext,
+    /// The stored secret's ciphertext when the row was read, `None` when
+    /// there was no row: the refresh was decided against that row, so it is
+    /// not written over a row that has changed since.
+    pub read_secret: Option<Vec<u8>>,
+    /// The secret this refresh replaced, or the one an earlier refresh
+    /// replaced while its window lasts.
+    pub previous_secret: Option<McpPreviousSecret>,
+    /// Whose conventions its deliveries follow.
+    pub profile: McpDeliveryProfile,
     /// The granted expiry.
     pub expires_at: DateTime<Utc>,
 }
@@ -38,6 +47,9 @@ pub enum McpStoreOutcome {
     Stored(Box<McpEventSubscription>),
     /// The user already holds the most subscriptions allowed.
     QuotaExceeded,
+    /// The row is no longer the one read: another refresh wrote it first,
+    /// it was deleted, or it is kept under another profile.
+    Changed,
 }
 
 /// What a user already holds, read before a subscribe calls their endpoint.
@@ -67,7 +79,9 @@ pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
         id: Uuid,
     ) -> impl Future<Output = Result<Option<McpEventSubscription>, Self::Err>> + Send;
 
-    /// Insert, or refresh the secret, filter and expiry of the existing row,
+    /// Insert if there was no row and still is none, or refresh the secrets,
+    /// filter and expiry of the existing row if it still holds
+    /// `upsert.read_secret` and `upsert.profile`,
     /// unless the user would then hold more than `max` live subscriptions.
     /// Expired rows do not count. Serialized per user, so
     /// concurrent subscribes cannot pass the limit together.
@@ -138,10 +152,11 @@ pub trait McpSecretCipher: Clone + Send + Sync + 'static {
     /// Cipher error.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Encrypt `secret` so only `user_id`'s rows decrypt it.
+    /// Encrypt `secret` so only `user_id`'s rows of `profile` decrypt it.
     fn encrypt(
         &self,
         user_id: &MacroUserIdStr<'static>,
+        profile: McpDeliveryProfile,
         secret: &SigningSecret,
     ) -> impl Future<Output = Result<McpSecretCiphertext, Self::Err>> + Send;
 
@@ -165,11 +180,13 @@ pub trait McpEndpointClient: Clone + Send + Sync + 'static {
         subscription_id: &McpSubscriptionId,
     ) -> impl Future<Output = Result<(), McpEndpointVerifyError>> + Send;
 
-    /// POST one signed delivery.
+    /// POST one delivery, signed with `secret` and, during a rotation, also
+    /// with `previous` (Standard Webhooks' space-separated signatures).
     fn deliver(
         &self,
         endpoint_url: &str,
         secret: &SigningSecret,
+        previous: Option<&SigningSecret>,
         subscription_id: &McpSubscriptionId,
         message_id: &str,
         body: Vec<u8>,

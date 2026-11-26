@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::mcp::models::McpSubscriptionKey;
+use crate::domain::mcp::models::{McpDeliveryProfile, McpPreviousSecret, McpSubscriptionKey};
 use crate::domain::mcp::service::SWEEP_BATCH;
 use chrono::Duration;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -7,6 +7,8 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 const ME: &str = "macro|mcp-subscriber@example.com";
 const OTHER: &str = "macro|mcp-other@example.com";
 const URL: &str = "https://hooks.example.com/events";
+/// The encryption version `KmsMcpSecretCipher` seals ChatGPT secrets under.
+const CHATGPT_ENCRYPTION_VERSION: i16 = 2;
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_owned()).expect("valid user id")
@@ -63,19 +65,27 @@ fn upsert(
             kms_key_id: "alias/key".to_owned(),
             encryption_version: 1,
         },
+        read_secret: None,
+        previous_secret: None,
+        profile: McpDeliveryProfile::Mcp,
         expires_at: Utc::now() + expires_in,
     }
 }
 
 const MAX: u32 = 50;
 
+/// Store `upsert` as the service does: decided against the row as read now.
 async fn store(
     repo: &PgMcpSubscriptionRepository,
-    upsert: McpSubscriptionUpsert,
+    mut upsert: McpSubscriptionUpsert,
 ) -> anyhow::Result<McpEventSubscription> {
+    upsert.read_secret = repo
+        .get(&upsert.key.user_id, &upsert.subscription_id)
+        .await?
+        .map(|row| row.secret.ciphertext);
     match repo.store_within_quota(upsert, MAX).await? {
         McpStoreOutcome::Stored(row) => Ok(*row),
-        McpStoreOutcome::QuotaExceeded => anyhow::bail!("unexpected quota refusal"),
+        outcome => anyhow::bail!("unexpected {outcome:?}"),
     }
 }
 
@@ -106,13 +116,15 @@ async fn index_rows(pool: &PgPool) -> anyhow::Result<i64> {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn store_inserts_then_refreshes_in_place(pool: PgPool) -> anyhow::Result<()> {
     let repo = setup(&pool).await?;
-    let first = upsert(
+    let mut first = upsert(
         ME,
         URL,
         "mentions",
         &["message.mentioned"],
         Duration::hours(1),
     );
+    first.profile = McpDeliveryProfile::Chatgpt;
+    first.secret.encryption_version = CHATGPT_ENCRYPTION_VERSION;
     let stored = store(&repo, first.clone()).await?;
     assert_eq!(stored.id, first.id);
     assert_eq!(stored.subscription_id, first.subscription_id);
@@ -128,9 +140,22 @@ async fn store_inserts_then_refreshes_in_place(pool: PgPool) -> anyhow::Result<(
     refresh.secret.ciphertext = vec![9];
     refresh.filter = McpEventFilter::for_events(vec!["message.posted".to_owned()], None);
     refresh.expires_at = Utc::now() + Duration::hours(2);
+    let previous = McpPreviousSecret {
+        secret: first.secret.clone(),
+        expires_at: Utc::now() + Duration::minutes(10),
+    };
+    refresh.previous_secret = Some(previous.clone());
     let refreshed = store(&repo, refresh.clone()).await?;
     assert_eq!(refreshed.id, first.id, "the row keeps its id");
     assert_eq!(refreshed.secret.ciphertext, vec![9]);
+    assert_eq!(refreshed.profile, McpDeliveryProfile::Chatgpt);
+    let stored_previous = refreshed.previous_secret.clone().expect("kept");
+    assert_eq!(stored_previous.secret, previous.secret);
+    assert_eq!(
+        stored_previous.expires_at.timestamp_micros(),
+        previous.expires_at.timestamp_micros()
+    );
+    assert_eq!(repo.get_live(first.id).await?, Some(refreshed.clone()));
     assert_eq!(refreshed.filter, refresh.filter);
     assert!(refreshed.expires_at > stored.expires_at);
 
@@ -298,8 +323,10 @@ async fn the_quota_counts_live_rows_but_not_a_refresh(pool: PgPool) -> anyhow::R
         .await?,
         McpStoreOutcome::QuotaExceeded
     );
+    let mut refresh = first.clone();
+    refresh.read_secret = Some(first.secret.ciphertext.clone());
     assert!(matches!(
-        repo.store_within_quota(first, 2).await?,
+        repo.store_within_quota(refresh, 2).await?,
         McpStoreOutcome::Stored(_)
     ));
     assert!(
@@ -535,5 +562,122 @@ async fn live_subscribers_are_the_owners_of_live_rows(pool: PgPool) -> anyhow::R
     let mut owners = repo.list_live_subscriber_ids().await?;
     owners.sort();
     assert_eq!(owners, vec![ME.to_owned(), ME.to_owned()]);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_refresh_decided_against_a_changed_row_is_not_written(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let repo = setup(&pool).await?;
+    let first = upsert(
+        ME,
+        URL,
+        "mentions",
+        &["message.mentioned"],
+        Duration::hours(1),
+    );
+    store(&repo, first.clone()).await?;
+    let mut won = first.clone();
+    won.secret.ciphertext = vec![7];
+    let won = store(&repo, won).await?;
+
+    // Read before `won` committed: it names the first secret.
+    let mut lost = first.clone();
+    lost.secret.ciphertext = vec![8];
+    lost.read_secret = Some(first.secret.ciphertext.clone());
+    assert_eq!(
+        repo.store_within_quota(lost, MAX).await?,
+        McpStoreOutcome::Changed
+    );
+    assert_eq!(
+        repo.get(&user(ME), &first.subscription_id).await?,
+        Some(won),
+        "the row is the winner's"
+    );
+
+    // A first subscribe that raced another one finds the row there.
+    let mut late = first.clone();
+    late.read_secret = None;
+    assert_eq!(
+        repo.store_within_quota(late, MAX).await?,
+        McpStoreOutcome::Changed
+    );
+
+    // A write under another profile than the row's is not one.
+    let mut other_profile = first.clone();
+    other_profile.read_secret = Some(vec![7]);
+    other_profile.profile = McpDeliveryProfile::Chatgpt;
+    assert_eq!(
+        repo.store_within_quota(other_profile, MAX).await?,
+        McpStoreOutcome::Changed
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_refresh_of_a_row_deleted_since_it_was_read_is_not_written(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let repo = setup(&pool).await?;
+    let first = upsert(
+        ME,
+        URL,
+        "mentions",
+        &["message.mentioned"],
+        Duration::hours(1),
+    );
+    store(&repo, first.clone()).await?;
+    // Read, then unsubscribed before the refresh writes.
+    let mut refresh = first.clone();
+    refresh.secret.ciphertext = vec![8];
+    refresh.read_secret = Some(first.secret.ciphertext.clone());
+    assert!(repo.delete(&user(ME), &first.subscription_id).await?);
+    assert_eq!(
+        repo.store_within_quota(refresh, MAX).await?,
+        McpStoreOutcome::Changed
+    );
+    assert_eq!(
+        repo.get(&user(ME), &first.subscription_id).await?,
+        None,
+        "the deleted row does not come back with the old secret's overlap"
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_chatgpt_row_never_holds_a_secret_older_builds_can_open(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let repo = setup(&pool).await?;
+    let mut chatgpt = upsert(ME, URL, "mentions", &["message.posted"], Duration::hours(1));
+    chatgpt.profile = McpDeliveryProfile::Chatgpt;
+    assert!(
+        repo.store_within_quota(chatgpt.clone(), MAX).await.is_err(),
+        "a version 1 secret on a ChatGPT row"
+    );
+    chatgpt.secret.encryption_version = CHATGPT_ENCRYPTION_VERSION;
+    store(&repo, chatgpt.clone()).await?;
+
+    // A refresh by a build from before delivery profiles: a version 1
+    // secret, the profile left as it is.
+    let refreshed = sqlx::query!(
+        r#"
+        UPDATE mcp_event_subscription
+        SET secret_ciphertext = '\x01', secret_encryption_version = 1
+        WHERE user_id = $1 AND subscription_id = $2
+        "#,
+        ME,
+        chatgpt.subscription_id.as_str(),
+    )
+    .execute(&pool)
+    .await;
+    assert!(refreshed.is_err(), "the constraint refuses it");
+    assert_eq!(
+        repo.get(&user(ME), &chatgpt.subscription_id)
+            .await?
+            .map(|row| row.secret.encryption_version),
+        Some(CHATGPT_ENCRYPTION_VERSION)
+    );
     Ok(())
 }

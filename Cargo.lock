@@ -13348,7 +13348,9 @@ dependencies = [
  "serde",
  "sqlx",
  "tokio",
+ "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 
@@ -23406,6 +23408,7 @@ dependencies = [
  "genai_telemetry",
  "hex",
  "kafka_util",
+ "lazy-regex",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
@@ -23453,6 +23456,7 @@ dependencies = [
  "hex",
  "hmac 0.12.1",
  "sha2 0.10.9",
+ "subtle",
  "thiserror 2.0.18",
  "workspace-hack",
  "zeroize",

@@ -22,8 +22,10 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 import { match } from 'ts-pattern';
+import { z } from 'zod';
 import { HOSTS, type ServiceName } from '../../../packages/sdk/src/config';
 import { Macro } from '../../../packages/sdk/src/macro';
+import { MacroApiError } from '../../../packages/sdk/src/utils/unwrap';
 import type { Config } from './config';
 import {
   keyBytes,
@@ -40,10 +42,90 @@ export const OPENAI_APPS_CHALLENGE_PATH = '/.well-known/openai-apps-challenge';
 
 const SERVER_INFO = { name: 'macro', title: 'Macro', version: '1.0.0' };
 
+/**
+ * Tools, and MCP Events as ChatGPT looks for it: a top-level `events`
+ * capability, which the SDK's capability type doesn't name yet (a variable,
+ * so the extra key is allowed).
+ */
+const CAPABILITIES = { tools: {}, events: {} };
+
 /** The tool that turns person tokens back into names and emails. */
 export const PEOPLE_TOOL = 'people_read';
 
 const MAX_PEOPLE = 20;
+
+/**
+ * The MCP Events methods ChatGPT calls (developers.openai.com/plugins/build/mcp-events),
+ * answered by the public MCP server, which keeps the subscriptions.
+ */
+export const EVENTS_METHODS = [
+  'events/list',
+  'events/subscribe',
+  'events/unsubscribe',
+] as const;
+
+type EventsMethod = (typeof EVENTS_METHODS)[number];
+
+/**
+ * The events methods are forwarded under this prefix
+ * (`com.macro/chatgpt/events/subscribe`), which tells the public MCP server
+ * to answer in the draft ChatGPT follows and deliver to it as such. It grants
+ * nothing. A server from before ChatGPT's profile has no such methods and
+ * answers method-not-found, so it never stores a subscription that would
+ * deliver unredacted.
+ */
+export const EVENTS_METHOD_PREFIX = 'com.macro/chatgpt/';
+
+/** The MCP revision whose events methods the public MCP server serves. */
+const EVENTS_PROTOCOL_VERSION = '2026-07-28';
+
+/**
+ * What a stateless 2026-07-28 request carries in `params._meta` in place of
+ * an `initialize` handshake: its revision and that this client speaks the
+ * events extension. The public MCP server refuses a request without them.
+ */
+const EVENTS_REQUEST_META = {
+  'io.modelcontextprotocol/protocolVersion': EVENTS_PROTOCOL_VERSION,
+  'io.modelcontextprotocol/clientCapabilities': {
+    extensions: { 'io.modelcontextprotocol/events': {} },
+  },
+};
+
+/**
+ * Where the public MCP server names the profile it answered under. An answer
+ * without it is refused, as a second guard behind the method prefix.
+ */
+const EVENTS_PROFILE_META = 'com.macro/eventsProfile';
+
+/** A JSON-RPC error relayed with its code, message and data as the public MCP server sent them. */
+class RelayedError extends Error {
+  constructor(
+    readonly code: number,
+    message: string,
+    readonly data: unknown
+  ) {
+    super(message);
+    this.name = 'RelayedError';
+  }
+}
+
+const RELAYED = z.union([
+  z.object({ result: z.record(z.string(), z.unknown()) }),
+  z.object({
+    error: z.object({
+      code: z.number().int(),
+      message: z.string(),
+      data: z.unknown().optional(),
+    }),
+  }),
+]);
+
+function eventsRequestSchema(method: EventsMethod) {
+  return z.object({
+    method: z.literal(method),
+    params: z.record(z.string(), z.unknown()).optional(),
+  });
+}
 
 const PEOPLE_LISTED = {
   name: PEOPLE_TOOL,
@@ -122,6 +204,27 @@ function protectedResourceMetadata(config: Config) {
     bearer_methods_supported: ['header'],
     resource_name: 'Macro',
   };
+}
+
+/** Whether the public MCP server refused this request's bearer. */
+type Upstream = { unauthorized: boolean };
+
+/**
+ * Marks `upstream` for a bearer Macro refused, so the HTTP request is answered
+ * with a 401: only that sends the client back to sign in, a JSON-RPC error
+ * would not. Returns the error to throw.
+ */
+function signIn(
+  span: { setAttr(key: string, value: string): void },
+  upstream: Upstream
+): RelayedError {
+  upstream.unauthorized = true;
+  span.setAttr('mcp.outcome', 'unauthorized');
+  return new RelayedError(
+    ErrorCode.InternalError,
+    'Sign in to Macro.',
+    undefined
+  );
 }
 
 /** The 401 that sends an MCP client to the authorization server (RFC 9728). */
@@ -312,8 +415,150 @@ export function createHandler(config: Config) {
     });
   }
 
-  function mcpServer(token: string) {
-    const server = new Server(SERVER_INFO, { capabilities: { tools: {} } });
+  const eventsUrl = new URL('/mcp', config.AUTHORIZATION_SERVER_URL).href;
+
+  /**
+   * An MCP Events request, answered by the public MCP server as the bearer's
+   * user. Person tokens in its arguments go back to the ids they replaced
+   * (only there: the callback URL and secret are forwarded as sent), and any
+   * that come back are sealed again. A bearer the public MCP server refuses
+   * marks `upstream`, so the HTTP request is answered with a 401.
+   */
+  async function forwardEvents(
+    method: EventsMethod,
+    params: Record<string, unknown> | undefined,
+    token: string,
+    upstream: Upstream
+  ): Promise<Record<string, unknown>> {
+    return Telemetry.span('mcp_chatgpt.events', async (span) => {
+      span.setAttr('mcp.method', method);
+      // No event name here: the name is the caller's text until the MCP
+      // server checks it, and its span records it only then.
+      const people = personTokens(token);
+      // ChatGPT's own `_meta` is for this server; the public MCP server gets
+      // the 2026-07-28 request metadata in its place.
+      const { _meta: _chatgptMeta, ...ownParams } = params ?? {};
+      let revealed: Record<string, unknown>;
+      try {
+        revealed = {
+          ...ownParams,
+          ...('arguments' in ownParams
+            ? { arguments: await people.reveal(ownParams.arguments) }
+            : {}),
+          _meta: EVENTS_REQUEST_META,
+        };
+      } catch (error) {
+        // Opening a person token asks Macro who the viewer is, and a refused
+        // bearer is refused there first.
+        if (error instanceof MacroApiError && error.status === 401)
+          throw signIn(span, upstream);
+        span.setAttr('mcp.outcome', 'invalid');
+        if (error instanceof PersonTokenError)
+          throw new RelayedError(
+            ErrorCode.InvalidParams,
+            error.message,
+            undefined
+          );
+        throw error;
+      }
+      const forwardedMethod = `${EVENTS_METHOD_PREFIX}${method}`;
+      const headers: Record<string, string> = {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        'mcp-protocol-version': EVENTS_PROTOCOL_VERSION,
+        // The 2026-07-28 HTTP transport routes by these, and refuses a
+        // request without Mcp-Method or with an Mcp-Name that isn't the
+        // body's name.
+        'mcp-method': forwardedMethod,
+        ...(typeof params?.name === 'string'
+          ? { 'mcp-name': params.name }
+          : {}),
+      };
+      span.injectTraceHeaders(headers);
+      const response = await fetch(eventsUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: forwardedMethod,
+          params: revealed,
+        }),
+      });
+      span.setAttr('http.response.status_code', response.status);
+      if (response.status === 401) {
+        // The bearer expired or was revoked.
+        const refused = signIn(span, upstream);
+        await response.body?.cancel().catch(() => undefined);
+        throw refused;
+      }
+      const relayed = RELAYED.safeParse(
+        await response.json().catch(() => undefined)
+      );
+      if (!relayed.success) {
+        span.setAttr('mcp.outcome', 'upstream');
+        throw new RelayedError(
+          ErrorCode.InternalError,
+          "Macro couldn't answer the events request.",
+          undefined
+        );
+      }
+      if ('error' in relayed.data) {
+        const { code, message, data } = relayed.data.error;
+        const concealed = await concealAnswer(span, upstream, people, {
+          message,
+          data,
+        });
+        span.setAttr('mcp.outcome', String(code));
+        throw new RelayedError(code, String(concealed.message), concealed.data);
+      }
+      const { _meta: meta, ...result } = relayed.data.result;
+      if (
+        typeof meta !== 'object' ||
+        meta === null ||
+        (meta as Record<string, unknown>)[EVENTS_PROFILE_META] !== 'chatgpt'
+      ) {
+        span.setAttr('mcp.outcome', 'profile_ignored');
+        throw new RelayedError(
+          ErrorCode.InternalError,
+          "Macro's events service isn't ready for ChatGPT yet.",
+          undefined
+        );
+      }
+      const concealed = await concealAnswer(span, upstream, people, result);
+      span.setAttr('mcp.outcome', 'ok');
+      return concealed as Record<string, unknown>;
+    });
+  }
+
+  /** `answer` with its people sealed, or an internal error if they can't be. */
+  async function concealAnswer<T>(
+    span: { setAttr(key: string, value: string): void },
+    upstream: Upstream,
+    people: ReturnType<typeof personTokens>,
+    answer: T
+  ): Promise<T> {
+    try {
+      return (await people.conceal(answer)) as T;
+    } catch (error) {
+      if (error instanceof MacroApiError && error.status === 401)
+        throw signIn(span, upstream);
+      span.setAttr('mcp.outcome', 'internal');
+      throw new RelayedError(
+        ErrorCode.InternalError,
+        "Couldn't protect people in the answer.",
+        undefined
+      );
+    }
+  }
+
+  function mcpServer(token: string, upstream: Upstream) {
+    const server = new Server(SERVER_INFO, { capabilities: CAPABILITIES });
+    for (const method of EVENTS_METHODS)
+      server.setRequestHandler(eventsRequestSchema(method), (request) =>
+        forwardEvents(method, request.params, token, upstream)
+      );
     server.setRequestHandler(ListToolsRequestSchema, () => ({
       tools: [...listed, PEOPLE_LISTED],
     }));
@@ -349,14 +594,18 @@ export function createHandler(config: Config) {
     const token = bearerToken(request);
     if (!token) return unauthorized(config);
 
-    const server = mcpServer(token);
+    const upstream: Upstream = { unauthorized: false };
+    const server = mcpServer(token, upstream);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
     await server.connect(transport);
-    return match(request.method)
+    const response = await match(request.method)
       .with('POST', 'GET', 'DELETE', () => transport.handleRequest(request))
       .otherwise(() => new Response('Method not allowed', { status: 405 }));
+    // JSON responses are built after every handler ran, so a refused bearer
+    // is known here.
+    return upstream.unauthorized ? unauthorized(config) : response;
   };
 }

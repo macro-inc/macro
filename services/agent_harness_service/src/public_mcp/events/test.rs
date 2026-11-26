@@ -1,10 +1,12 @@
-use super::catalog::{EVENT_TYPES, MAX_QUERY_CHARS, QUERY_EVENT, selection};
+use super::catalog::{CHATGPT_EVENT_TYPES, EVENT_TYPES, MAX_QUERY_CHARS, QUERY_EVENT, selection};
 use super::compiler::{CompileError, FilterCompiler, parse_outcome};
 use super::dss::{
     EventSource, SourceError, SourceEvent, SourceItem, SourceStream, StoreError, SubscriptionStore,
     source_item,
 };
-use super::protocol::{FILTER_META, INTERPRETATION_META, RequestScope, handle};
+use super::protocol::{
+    CHATGPT_METHOD_PREFIX, FILTER_META, INTERPRETATION_META, PROFILE_META, RequestScope, handle,
+};
 use super::stream::{NotificationSink, SUBSCRIPTION_ID_META, SinkClosed};
 use super::{
     Compiled, MAX_STREAMS_PER_USER, MAX_SUBSCRIBES_PER_WINDOW, McpEvents, SecretSealer, Selection,
@@ -24,9 +26,9 @@ use webhook::domain::mcp::filter::{
     McpEventFilter, McpFieldCondition, McpFilterClause, McpFilterField, McpFilterValue,
 };
 use webhook::domain::mcp::models::{
-    MAX_FILTER_BYTES, McpEndpointFailure, McpSecretCiphertext, McpSubscribeRequest,
-    McpSubscribeResult, McpSubscriptionErrorBody, McpSubscriptionId, McpTtlRequest,
-    McpUnsubscribeRequest,
+    MAX_FILTER_BYTES, McpDeliveryProfile, McpEndpointFailure, McpSecretCiphertext,
+    McpSubscribeRequest, McpSubscribeResult, McpSubscriptionErrorBody, McpSubscriptionId,
+    McpTtlRequest, McpUnsubscribeRequest,
 };
 use webhook::domain::models::{WEBHOOK_EVENT_NAMES, WebhookFilter};
 use webhook_signature::standard::SigningSecret;
@@ -143,6 +145,9 @@ struct FakeStore {
     subscribes: Mutex<Vec<McpSubscribeRequest>>,
     unsubscribes: Mutex<Vec<McpUnsubscribeRequest>>,
     refuse: Mutex<Option<McpSubscriptionErrorBody>>,
+    /// The profile it stores, whatever was asked: set it to play storage
+    /// that predates profiles.
+    stored_profile: Mutex<Option<McpDeliveryProfile>>,
 }
 
 fn key(event_type: &str, arguments: &Value, url: &str) -> (String, String, String) {
@@ -171,6 +176,11 @@ impl SubscriptionStore for FakeStore {
             id: McpSubscriptionId::from_stored("sub_1".to_owned()),
             refresh_before: chrono::DateTime::from_timestamp(1_800_000_000, 0).unwrap(),
             filter,
+            profile: *self
+                .stored_profile
+                .lock()
+                .unwrap()
+                .get_or_insert(request.profile),
         })
     }
 
@@ -263,6 +273,7 @@ impl SecretSealer for FakeSealer {
     async fn seal(
         &self,
         _: &MacroUserIdStr<'static>,
+        _: McpDeliveryProfile,
         _: &SigningSecret,
     ) -> Result<McpSecretCiphertext, rootcause::Report> {
         *self.sealed.lock().unwrap() += 1;
@@ -409,14 +420,16 @@ fn a_named_type_takes_optional_ids() {
         selection("message.posted", &json!({})).unwrap(),
         Selection::Event {
             name: "message.posted",
-            ids: None
+            ids: None,
+            conditions: Vec::new(),
         }
     );
     assert_eq!(
         selection("message.posted", &json!({"ids": [CHANNEL]})).unwrap(),
         Selection::Event {
             name: "message.posted",
-            ids: Some(vec![CHANNEL.to_owned()])
+            ids: Some(vec![CHANNEL.to_owned()]),
+            conditions: Vec::new(),
         }
     );
     assert!(selection("message.posted", &json!({"ids": []})).is_err());
@@ -1151,6 +1164,31 @@ fn the_reading_names_the_sender_only_where_the_actor_is_the_sender() {
 }
 
 #[test]
+fn a_choice_of_values_beside_another_condition_is_bracketed() {
+    let filter = McpEventFilter {
+        any_of: vec![McpFilterClause {
+            events: vec!["message.mentioned".to_owned()],
+            ids: None,
+            all_of: vec![
+                McpFieldCondition {
+                    field: McpFilterField::Actor,
+                    one_of: vec![literal("a"), literal("b")],
+                },
+                McpFieldCondition {
+                    field: McpFilterField::MentionedId,
+                    one_of: vec![McpFilterValue::Me],
+                },
+            ],
+        }],
+    };
+    assert_eq!(
+        super::describe::describe(&filter),
+        "`message.mentioned` events where (the sender is `\"a\"` or `\"b\"`) and the \
+         mentioned item is you."
+    );
+}
+
+#[test]
 fn a_value_reads_exactly_as_one_value() {
     let in_parent = |values: &[&str]| McpEventFilter {
         any_of: vec![McpFilterClause {
@@ -1680,29 +1718,296 @@ pub(crate) fn fake_events() -> Arc<McpEvents> {
     Arc::new(fixture().events)
 }
 
+// --- structured arguments --------------------------------------------------
+
 #[test]
-fn a_choice_of_values_beside_another_condition_is_bracketed() {
-    let filter = McpEventFilter {
-        any_of: vec![McpFilterClause {
-            events: vec!["message.mentioned".to_owned()],
-            ids: None,
-            all_of: vec![
-                McpFieldCondition {
-                    field: McpFilterField::Actor,
-                    one_of: vec![literal("a"), literal("b")],
-                },
-                McpFieldCondition {
-                    field: McpFilterField::MentionedId,
-                    one_of: vec![McpFilterValue::Me],
-                },
-            ],
-        }],
+fn a_named_type_narrows_by_the_fields_it_carries() {
+    let selected = selection(
+        "message.mentioned",
+        &json!({"parent_type": "channel", "mentioned_id": "me", "actor": OTHER}),
+    )
+    .unwrap();
+    let Selection::Event { conditions, .. } = &selected else {
+        panic!("a named type");
+    };
+    let mut conditions = conditions.clone();
+    conditions.sort_by_key(|condition| condition.field.to_string());
+    assert_eq!(
+        conditions,
+        vec![
+            McpFieldCondition {
+                field: McpFilterField::Actor,
+                one_of: vec![literal(OTHER)],
+            },
+            McpFieldCondition {
+                field: McpFilterField::MentionedId,
+                one_of: vec![McpFilterValue::Me],
+            },
+            McpFieldCondition {
+                field: McpFilterField::ParentType,
+                one_of: vec![literal("channel")],
+            },
+        ]
+    );
+    // Written back as given, so the same arguments name the same subscription.
+    assert_eq!(
+        selected.arguments(),
+        json!({"parent_type": "channel", "mentioned_id": "me", "actor": OTHER})
+    );
+
+    // Only fields the event carries, as text.
+    assert!(selection("message.posted", &json!({"mentioned_id": "me"})).is_err());
+    assert!(selection("document.created", &json!({"parent_type": "channel"})).is_err());
+    assert!(selection("message.posted", &json!({"parent_id": CHANNEL})).is_err());
+    assert!(selection("message.posted", &json!({"actor": 1})).is_err());
+    assert!(selection("message.posted", &json!({"actor": ""})).is_err());
+    assert!(selection("message.posted", &json!([])).is_err());
+}
+
+#[tokio::test]
+async fn structured_arguments_subscribe_to_the_filter_they_spell() {
+    let fixture = fixture();
+    call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params(
+            "message.mentioned",
+            json!({"parent_type": "channel", "mentioned_id": "me"}),
+        ),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+    let subscribes = fixture.store.subscribes.lock().unwrap();
+    assert_eq!(subscribes[0].filter, channel_mentions());
+    assert!(fixture.compiler.queries.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn every_named_type_lists_the_fields_it_can_narrow_by() {
+    let types = &*EVENT_TYPES;
+    let properties = |name: &str| -> Vec<String> {
+        let entry = types.iter().find(|entry| entry["name"] == name).unwrap();
+        let mut keys: Vec<String> = entry["inputSchema"]["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        keys.sort();
+        keys
     };
     assert_eq!(
-        super::describe::describe(&filter),
-        "`message.mentioned` events where (the sender is `\"a\"` or `\"b\"`) and the \
-         mentioned item is you."
+        properties("message.mentioned"),
+        [
+            "actor",
+            "ids",
+            "mentioned_id",
+            "mentioned_type",
+            "parent_type"
+        ]
     );
+    assert_eq!(
+        properties("message.posted"),
+        ["actor", "ids", "parent_type"]
+    );
+    assert_eq!(properties("document.created"), ["ids"]);
+}
+
+// --- ChatGPT ---------------------------------------------------------------
+
+/// `method` as the ChatGPT MCP Worker forwards it.
+fn chatgpt(method: &str) -> String {
+    format!("{CHATGPT_METHOD_PREFIX}{method}")
+}
+
+#[tokio::test]
+async fn chatgpt_lists_every_named_type_for_webhooks_only() {
+    let fixture = fixture();
+    let CustomResult(listed) = call(
+        &fixture.events,
+        &chatgpt("events/list"),
+        json!({}),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+    // ChatGPT's documented shape: the entries alone, and the profile it was
+    // answered under, which the Worker checks and removes.
+    assert_eq!(listed.as_object().unwrap().len(), 2);
+    assert_eq!(listed["_meta"], json!({ PROFILE_META: "chatgpt" }));
+    let types = listed["events"].as_array().unwrap();
+    assert_eq!(types, &*CHATGPT_EVENT_TYPES);
+    assert_eq!(types.len(), WEBHOOK_EVENT_NAMES.len());
+    for entry in types {
+        assert_ne!(entry["name"], QUERY_EVENT);
+        assert_eq!(entry["delivery"], json!(["webhook"]));
+        assert_eq!(entry["inputSchema"]["type"], "object");
+        assert_eq!(entry["inputSchema"]["additionalProperties"], false);
+        assert!(
+            entry["payloadSchema"]["properties"]["metadata"]["description"]
+                .as_str()
+                .unwrap()
+                .contains("someone")
+        );
+    }
+}
+
+#[tokio::test]
+async fn chatgpt_subscribes_with_its_profile_and_gets_the_documented_result() {
+    let fixture = fixture();
+    let mut params = subscribe_params("message.mentioned", json!({"mentioned_id": "me"}));
+    params["cursor"] = Value::Null;
+    let CustomResult(result) = call(
+        &fixture.events,
+        &chatgpt("events/subscribe"),
+        params,
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        result,
+        json!({
+            "id": "sub_1",
+            "refreshBefore": "2027-01-15T08:00:00Z",
+            "cursor": null,
+            "truncated": false,
+            "_meta": { PROFILE_META: "chatgpt" },
+        })
+    );
+    let subscribes = fixture.store.subscribes.lock().unwrap();
+    assert_eq!(subscribes[0].profile, McpDeliveryProfile::Chatgpt);
+}
+
+#[tokio::test]
+async fn a_chatgpt_subscription_stored_without_its_profile_is_refused() {
+    // Document storage from before profiles stores what MCP's would.
+    let fixture = fixture();
+    *fixture.store.stored_profile.lock().unwrap() = Some(McpDeliveryProfile::Mcp);
+    let error = call(
+        &fixture.events,
+        &chatgpt("events/subscribe"),
+        subscribe_params("message.mentioned", json!({"mentioned_id": "me"})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
+}
+
+#[tokio::test]
+async fn other_clients_subscribe_with_the_mcp_profile() {
+    let fixture = fixture();
+    call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params("message.posted", json!({})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        fixture.store.subscribes.lock().unwrap()[0].profile,
+        McpDeliveryProfile::Mcp
+    );
+}
+
+#[tokio::test]
+async fn chatgpt_unsubscribes_idempotently() {
+    let fixture = fixture();
+    call(
+        &fixture.events,
+        &chatgpt("events/subscribe"),
+        subscribe_params("message.posted", json!({})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(fixture.store.stored.lock().unwrap().len(), 1);
+    let params = json!({
+        "name": "message.posted",
+        "arguments": {},
+        "delivery": {"mode": "webhook", "url": "https://agent.example/hook"},
+    });
+    // The first removes the subscription; the second finds none and still
+    // answers as the first did.
+    for _ in 0..2 {
+        let CustomResult(result) = call(
+            &fixture.events,
+            &chatgpt("events/unsubscribe"),
+            params.clone(),
+            &no_extensions(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result, json!({ "_meta": { PROFILE_META: "chatgpt" } }));
+        assert!(fixture.store.stored.lock().unwrap().is_empty());
+    }
+    assert_eq!(fixture.store.unsubscribes.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn chatgpt_gets_the_error_codes_of_the_draft_it_follows() {
+    let fixture = fixture();
+    let unknown = call(
+        &fixture.events,
+        &chatgpt("events/subscribe"),
+        subscribe_params("message.teleported", json!({})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(unknown.code.0, -32011);
+    // Words are not offered to ChatGPT.
+    let words = call(
+        &fixture.events,
+        &chatgpt("events/subscribe"),
+        subscribe_params(QUERY_EVENT, json!({"query": MENTIONS})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(words.code.0, -32011);
+    assert!(fixture.compiler.queries.lock().unwrap().is_empty());
+
+    *fixture.store.refuse.lock().unwrap() = Some(McpSubscriptionErrorBody::CallbackEndpointError {
+        reason: McpEndpointFailure::ChallengeFailed,
+    });
+    let callback = call(
+        &fixture.events,
+        &chatgpt("events/subscribe"),
+        subscribe_params("message.posted", json!({})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(callback.code.0, -32015);
+    assert_eq!(callback.data.unwrap()["reason"], "challenge_failed");
+
+    let stream = call(
+        &fixture.events,
+        &chatgpt("events/stream"),
+        json!({"name": "message.posted"}),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(stream.code.0, -32014);
+}
+
+#[tokio::test]
+async fn an_unknown_profile_is_an_unknown_method() {
+    let fixture = fixture();
+    let error = call(
+        &fixture.events,
+        "com.macro/claude/events/list",
+        json!({}),
+        &no_extensions(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code, rmcp::model::ErrorCode::METHOD_NOT_FOUND);
 }
 
 /// A client that stops reading after its first notification: every later

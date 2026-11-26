@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT secret_ciphertext, delivery_profile\n            FROM mcp_event_subscription\n            WHERE user_id = $1 AND subscription_id = $2\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "secret_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 1,
+        "name": "delivery_profile",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "027e1acb45ff21fe64e2bed35043a7f39c3e4fa58faf391a55901b56af8e0852"
+}

@@ -371,7 +371,7 @@ encrypts the secret before calling it.
 - **Storage.** `mcp_event_subscription`, one row per (user, endpoint URL,
   event type, canonical arguments). The MCP subscription id (`sub_…`) is a
   digest of that key, so subscribing again refreshes the row in place: a new
-  expiry and secret, the same filter. Rows expire (`expires_at`; default 1 h,
+  expiry, secret and delivery profile, the same filter. Rows expire (`expires_at`; default 1 h,
   1 min to 24 h) and are deleted outright on unsubscribe. Expired rows stop
   matching at once (a delivery still queued when the same key subscribes
   again, before the sweep deletes the row, is sent) and are deleted
@@ -442,7 +442,9 @@ encrypts the secret before calling it.
   webhooks again. The webhook
   worker tells the two message kinds apart by shape. Each POST is a Standard
   Webhooks signed `{eventId, name, timestamp, data, cursor: null}` with
-  `X-MCP-Subscription-Id`, `data` being the envelope webhooks deliver. Attempts follow the
+  `X-MCP-Subscription-Id`, `data` being the envelope webhooks deliver. A `chatgpt`
+  body over 256 KiB (ChatGPT's limit) is dropped with a warning; `mcp`
+  bodies have no cap here. Attempts follow the
   webhook retry schedule, counted by SQS's receive count (5 attempts; a later receipt is acknowledged
   without a POST). A receipt that fails inside this service (the database or
   KMS) counts too, since nothing is stored per delivery: an outage longer than
@@ -457,7 +459,37 @@ encrypts the secret before calling it.
   ingested event.
 - **Secret.** The client supplies the `whsec_` secret. The MCP server
   encrypts it with its KMS key (purpose `mcp-event-subscription-secret`,
-  bound to the user); this service only decrypts it, per delivery.
+  bound to the user and to an encryption version: 1 for `mcp` rows, 2 for
+  `chatgpt` rows, which a build from before delivery profiles refuses to
+  open, so it cannot send a ChatGPT row's events unredacted, and a check
+  constraint refuses a version 1 secret on a ChatGPT row, which that
+  build's refresh would write); this service
+  only decrypts it: per delivery, and on a refresh to tell whether the
+  secret changed. A refresh with a new secret
+  keeps the old one in `previous_secret_*` for 10 minutes
+  (`SECRET_ROTATION_WINDOW`), and deliveries in that window carry both
+  signatures (space-separated in `webhook-signature`), so a receiver still
+  holding the old secret accepts them. A stored secret that cannot be
+  decrypted fails the refresh, which the client retries. Which secret is
+  kept depends on the row as read, so the write locks the row and goes
+  ahead only if it is still the one read: still absent, or still holding
+  the secret read (`read_secret`) and the same profile. Otherwise (a
+  concurrent refresh, an unsubscribe, the expiry sweep) it reads the row
+  again, up to three times, so a deleted row never comes back carrying the
+  old secret's overlap.
+- **Delivery profiles.** `delivery_profile` says whose conventions a row's
+  deliveries follow; the subscribe body names it (`profile`, left out for
+  the default). `mcp`, the default, follows the MCP Events specification:
+  `webhook-id` is the delivery's `msg_…` id and `eventId` the event's.
+  `chatgpt` is set by the MCP server for ChatGPT, whose integration follows
+  an earlier draft: `eventId` equals `webhook-id` (the event's own id stays
+  in `data.event_id`), and `data` names no person: every `macro|<email>`
+  user id and email address in its keys and string values becomes `me` (the
+  subscriber) or `someone`, and so does a `<who>_name` beside a user id
+  in `<who>_id` (`requester_name`) (`McpEventOccurrence::new`,
+  `without_people`), as ChatGPT's tools never show people's emails. The
+  subscribe result names the profile stored, so a caller can tell storage
+  that predates profiles (and ignored it) from one that stored it.
 - **Stream mode.** `events/stream` stores nothing here: the MCP server reads
   this service's live event stream (`POST /webhook/events/stream`, scope
   `user`, the filter in the body so its ids stay out of access logs) as the
@@ -470,13 +502,63 @@ encrypts the secret before calling it.
   Every subscribe carries its filter, which the MCP server derives from the
   arguments (a `macro.events` filter is one the caller confirmed and sent
   back), so a refresh sends the same one.
-- **Rolling deploys.** A worker from before this change acknowledges an MCP
+- **Rolling deploys.** The subscribe body carries `profile` only when it is
+  `chatgpt`, and the internal route refuses unknown fields, so roll this
+  service out before the MCP server sends ChatGPT subscriptions. A worker from before this change acknowledges an MCP
   queue message as malformed and deletes it. Rows are created only through the
   internal subscribe call, whose one caller is the MCP server, so roll this
   service out to every task before the MCP server: until a row exists, fan-out
   queues nothing. Rolling this service back loses MCP deliveries queued while
   old and new tasks overlap, including ones the remaining new tasks publish
   during it; ordinary webhook messages are unaffected.
+- **ChatGPT rollout and rollback.** Roll out this service (with the
+  migration), then the MCP server, then `mcp-chatgpt-worker`. No build from
+  before the profile can store a ChatGPT subscription: this service's
+  internal route refuses the unknown `profile` field, and the MCP server
+  takes ChatGPT's profile only from methods under `com.macro/chatgpt/`,
+  which an older server answers with method-not-found. Each hop also checks
+  the answer (the profile the subscribe result names; the
+  `com.macro/eventsProfile` in `_meta`). A row keeps the profile it was
+  created with: a subscribe under another one is refused.
+  A worker from before profiles reads every row as `mcp`, so before rolling
+  this service back past this change, fence ChatGPT rows off in the database:
+
+  1. Roll back the MCP server (agent harness), not only the Worker: any MCP
+     client can call the prefixed methods, and the MCP server is the only
+     caller of this service's subscribe route.
+  2. Add the fence, on its own. Once it commits, no build can write a
+     ChatGPT row, including a subscribe this service is still finishing
+     after its caller gave up. Run it alone, so its exclusive lock is held
+     only for the catalog change; if it gives up behind a lock, run it again
+     until it succeeds. `-X` skips local psql settings, so each command
+     commits on its own.
+
+     ```sh
+     psql -X -v ON_ERROR_STOP=1 -c "SET lock_timeout = '5s'" -c "
+       ALTER TABLE mcp_event_subscription
+           ADD CONSTRAINT mcp_event_subscription_no_chatgpt
+           CHECK (delivery_profile <> 'chatgpt') NOT VALID"
+     ```
+
+  3. Only after step 2 succeeded, delete every ChatGPT row written before it,
+     and check none is left. The DELETE reads the table once (0.4 s at 1.75M
+     rows) and locks only the rows it deletes; deliveries already queued for
+     them find no row and are dropped.
+
+     ```sh
+     psql -X -v ON_ERROR_STOP=1 \
+       -c "DELETE FROM mcp_event_subscription WHERE delivery_profile = 'chatgpt'" \
+       -c "SELECT count(*) FROM mcp_event_subscription WHERE delivery_profile = 'chatgpt'"
+     ```
+
+  4. Only once the count is 0, roll this service back. The migration's
+     down drops the constraint with the column; to roll forward again
+     without it, drop the constraint before the MCP server takes ChatGPT
+     subscriptions again.
+
+  Rolling back only the MCP server or the Worker leaves stored rows
+  delivering correctly and makes ChatGPT's refreshes fail, so its
+  subscriptions lapse at `refreshBefore`.
 
 ## Operations
 

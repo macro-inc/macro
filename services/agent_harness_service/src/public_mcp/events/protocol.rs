@@ -1,7 +1,7 @@
 //! The `events/*` requests on the wire: parsing params, the results, and the
 //! extension's error codes.
 
-use super::catalog::{EVENT_TYPES, QUERY_EVENT, selection};
+use super::catalog::{CHATGPT_EVENT_TYPES, EVENT_TYPES, QUERY_EVENT, selection};
 use super::stream::{
     DEFAULT_HEARTBEAT, MAX_HEARTBEAT, MIN_HEARTBEAT, NotificationSink, SUBSCRIPTION_ID_META,
     StreamPlan,
@@ -15,7 +15,7 @@ use serde_json::{Map, Value, json};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
-use webhook::domain::mcp::models::McpTtlRequest;
+use webhook::domain::mcp::models::{McpDeliveryProfile, McpTtlRequest};
 use webhook::domain::models::WEBHOOK_EVENT_NAMES;
 use webhook_signature::standard::SigningSecret;
 
@@ -38,6 +38,17 @@ const MCP_NAME_HEADER: &str = "mcp-name";
 /// Sent by every request of a client following the HTTP standardization
 /// (SEP-2243), which must then also send `Mcp-Name`.
 const MCP_METHOD_HEADER: &str = "mcp-method";
+/// The ChatGPT MCP Worker sends this extension's methods under this prefix
+/// (`com.macro/chatgpt/events/subscribe`), to be answered and delivered in
+/// the conventions ChatGPT follows. It grants nothing. A server from before
+/// ChatGPT's profile has no such methods and answers method-not-found, so it
+/// can never store a ChatGPT subscription as an MCP one, whose deliveries
+/// name people.
+pub(crate) const CHATGPT_METHOD_PREFIX: &str = "com.macro/chatgpt/";
+/// Where a result answered under a profile other than MCP's names it, so a
+/// caller that asked for one can tell it from a server that ignored the
+/// header (`mcp-chatgpt-worker` checks and removes it).
+pub(crate) const PROFILE_META: &str = "com.macro/eventsProfile";
 /// Where the filter a subscription delivers by is returned.
 pub(crate) const FILTER_META: &str = "com.macro/filter";
 /// Where the reading of that filter in words is returned.
@@ -205,6 +216,27 @@ fn check_name_header(extensions: &rmcp::model::Extensions, name: &str) -> Result
     }
 }
 
+/// The profile a method is called under, and the method without its
+/// profile's prefix ([`CHATGPT_METHOD_PREFIX`]); MCP's when it has none.
+pub(crate) fn split_profile(method: &str) -> (McpDeliveryProfile, &str) {
+    match method.strip_prefix(CHATGPT_METHOD_PREFIX) {
+        Some(method) => (McpDeliveryProfile::Chatgpt, method),
+        None => (McpDeliveryProfile::Mcp, method),
+    }
+}
+
+/// The error code ChatGPT knows for `code`: its integration follows a draft
+/// that numbered the extension's errors from -32011.
+fn chatgpt_code(code: ErrorCode) -> ErrorCode {
+    match code.0 {
+        NOT_FOUND => ErrorCode(-32011),
+        RESOURCE_EXHAUSTED => ErrorCode(-32013),
+        UNSUPPORTED => ErrorCode(-32014),
+        CALLBACK_ENDPOINT_ERROR => ErrorCode(-32015),
+        _ => code,
+    }
+}
+
 /// What a request needs from the transport.
 pub(crate) struct RequestScope<'a, Sink> {
     pub(crate) user: MacroUserIdStr<'static>,
@@ -243,6 +275,7 @@ pub(crate) async fn handle<Sink: NotificationSink>(
     scope: RequestScope<'_, Sink>,
 ) -> Result<CustomResult, McpError> {
     let span = scope.span.clone();
+    let (profile, method) = split_profile(method);
     span.record(
         "mcp.events.method",
         if KNOWN_METHODS.contains(&method) {
@@ -251,20 +284,26 @@ pub(crate) async fn handle<Sink: NotificationSink>(
             UNKNOWN
         },
     );
+    span.record("mcp.events.profile", profile.as_ref());
     let result = async {
-        match method {
-            "events/list" => Ok(CustomResult(json!({
+        match (profile, method) {
+            (McpDeliveryProfile::Mcp, "events/list") => Ok(CustomResult(json!({
                 "resultType": "complete",
                 "events": &*EVENT_TYPES,
             }))),
-            "events/subscribe" => subscribe(events, params, &scope).await,
-            "events/unsubscribe" => unsubscribe(events, params, &scope).await,
-            "events/stream" => stream(events, params, scope).await,
-            "events/poll" => Err(EventsError::Unsupported {
-                feature: "deliveryMode",
-                value: "poll".to_owned(),
+            (McpDeliveryProfile::Chatgpt, "events/list") => Ok(CustomResult(json!({
+                "events": &*CHATGPT_EVENT_TYPES,
+            }))),
+            (_, "events/subscribe") => subscribe(events, params, &scope, profile).await,
+            (_, "events/unsubscribe") => unsubscribe(events, params, &scope, profile).await,
+            (McpDeliveryProfile::Mcp, "events/stream") => stream(events, params, scope).await,
+            (McpDeliveryProfile::Chatgpt, "events/stream") | (_, "events/poll") => {
+                Err(EventsError::Unsupported {
+                    feature: "deliveryMode",
+                    value: method.trim_start_matches(METHOD_PREFIX).to_owned(),
+                }
+                .into())
             }
-            .into()),
             _ => Err(McpError::new(
                 ErrorCode::METHOD_NOT_FOUND,
                 method.to_owned(),
@@ -274,6 +313,20 @@ pub(crate) async fn handle<Sink: NotificationSink>(
     }
     .instrument(span.clone())
     .await;
+    let result = match profile {
+        McpDeliveryProfile::Mcp => result,
+        McpDeliveryProfile::Chatgpt => result
+            .map(|CustomResult(mut value)| {
+                if let Some(fields) = value.as_object_mut() {
+                    fields.insert("_meta".to_owned(), json!({ PROFILE_META: profile }));
+                }
+                CustomResult(value)
+            })
+            .map_err(|mut error| {
+                error.code = chatgpt_code(error.code);
+                error
+            }),
+    };
     span.record(
         "mcp.outcome",
         match &result {
@@ -288,6 +341,15 @@ pub(crate) async fn handle<Sink: NotificationSink>(
     result
 }
 
+/// Refuses a type the profile's `events/list` does not offer: ChatGPT is
+/// not offered the request in words, so it never reaches the compiler.
+fn refuse_unlisted(name: &str, profile: McpDeliveryProfile) -> Result<(), McpError> {
+    match profile {
+        McpDeliveryProfile::Chatgpt if name == QUERY_EVENT => Err(EventsError::UnknownEvent.into()),
+        McpDeliveryProfile::Mcp | McpDeliveryProfile::Chatgpt => Ok(()),
+    }
+}
+
 /// Whether an error asks the caller to confirm a compiled filter.
 fn is_confirmation(error: &McpError) -> bool {
     error
@@ -300,6 +362,7 @@ async fn subscribe<Sink>(
     events: &McpEvents,
     params: Option<Value>,
     scope: &RequestScope<'_, Sink>,
+    profile: McpDeliveryProfile,
 ) -> Result<CustomResult, McpError> {
     let ttl = ttl(params.as_ref())?;
     let SubscribeParams {
@@ -309,6 +372,7 @@ async fn subscribe<Sink>(
     } = parse(params)?;
     check_name_header(scope.extensions, &name)?;
     record_event_name(&name);
+    refuse_unlisted(&name, profile)?;
     if delivery.mode != "webhook" {
         return Err(EventsError::Unsupported {
             feature: "deliveryMode",
@@ -332,9 +396,19 @@ async fn subscribe<Sink>(
                 url: delivery.url,
                 secret,
                 ttl,
+                profile,
             },
         )
         .await?;
+    if profile == McpDeliveryProfile::Chatgpt {
+        // Exactly the fields ChatGPT's documentation names.
+        return Ok(CustomResult(json!({
+            "id": subscribed.result.id,
+            "refreshBefore": subscribed.result.refresh_before,
+            "cursor": null,
+            "truncated": false,
+        })));
+    }
     Ok(CustomResult(json!({
         "resultType": "complete",
         "id": subscribed.result.id,
@@ -352,6 +426,7 @@ async fn unsubscribe<Sink>(
     events: &McpEvents,
     params: Option<Value>,
     scope: &RequestScope<'_, Sink>,
+    profile: McpDeliveryProfile,
 ) -> Result<CustomResult, McpError> {
     let UnsubscribeParams {
         name,
@@ -360,7 +435,7 @@ async fn unsubscribe<Sink>(
     } = parse(params)?;
     check_name_header(scope.extensions, &name)?;
     record_event_name(&name);
-    events
+    let removed = events
         .unsubscribe(
             &scope.user,
             Unsubscribe {
@@ -369,8 +444,19 @@ async fn unsubscribe<Sink>(
                 url: delivery.url,
             },
         )
-        .await?;
-    Ok(CustomResult(json!({"resultType": "complete"})))
+        .await;
+    match (profile, removed) {
+        (McpDeliveryProfile::Mcp, removed) => {
+            removed?;
+            Ok(CustomResult(json!({"resultType": "complete"})))
+        }
+        // ChatGPT expects unsubscribing to be idempotent: one already gone
+        // is the same empty result.
+        (McpDeliveryProfile::Chatgpt, Ok(()) | Err(EventsError::UnknownSubscription)) => {
+            Ok(CustomResult(json!({})))
+        }
+        (McpDeliveryProfile::Chatgpt, Err(error)) => Err(error.into()),
+    }
 }
 
 async fn stream<Sink: NotificationSink>(

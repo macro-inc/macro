@@ -6,7 +6,8 @@ mod test;
 use crate::domain::mcp::filter::McpEventFilter;
 use crate::domain::mcp::live_subscribers::LIVE_SUBSCRIBERS_MAX_ROWS;
 use crate::domain::mcp::models::{
-    McpEventSubscription, McpMatchCandidate, McpSecretCiphertext, McpSubscriptionId,
+    McpDeliveryProfile, McpEventSubscription, McpMatchCandidate, McpPreviousSecret,
+    McpSecretCiphertext, McpSubscriptionId,
 };
 use crate::domain::mcp::ports::{
     McpLiveStanding, McpStoreOutcome, McpSubscriptionRepo, McpSubscriptionUpsert,
@@ -45,6 +46,11 @@ struct SubscriptionRow {
     secret_ciphertext: Vec<u8>,
     secret_kms_key_id: String,
     secret_encryption_version: i16,
+    previous_secret_ciphertext: Option<Vec<u8>>,
+    previous_secret_kms_key_id: Option<String>,
+    previous_secret_encryption_version: Option<i16>,
+    previous_secret_expires_at: Option<DateTime<Utc>>,
+    delivery_profile: String,
     expires_at: DateTime<Utc>,
 }
 
@@ -66,6 +72,30 @@ impl TryFrom<SubscriptionRow> for McpEventSubscription {
             .map_err(|error| decode_error("user_id", error))?;
         let filter = serde_json::from_value::<McpEventFilter>(row.filter)
             .map_err(|error| decode_error("filter", error))?;
+        let profile = row
+            .delivery_profile
+            .parse::<McpDeliveryProfile>()
+            .map_err(|error| decode_error("delivery_profile", error))?;
+        // The four columns are written together; a row missing any part
+        // has no previous secret.
+        let previous_secret = match (
+            row.previous_secret_ciphertext,
+            row.previous_secret_kms_key_id,
+            row.previous_secret_encryption_version,
+            row.previous_secret_expires_at,
+        ) {
+            (Some(ciphertext), Some(kms_key_id), Some(encryption_version), Some(expires_at)) => {
+                Some(McpPreviousSecret {
+                    secret: McpSecretCiphertext {
+                        ciphertext,
+                        kms_key_id,
+                        encryption_version,
+                    },
+                    expires_at,
+                })
+            }
+            _ => None,
+        };
         Ok(Self {
             id: row.id,
             user_id,
@@ -79,6 +109,8 @@ impl TryFrom<SubscriptionRow> for McpEventSubscription {
                 kms_key_id: row.secret_kms_key_id,
                 encryption_version: row.secret_encryption_version,
             },
+            previous_secret,
+            profile,
             expires_at: row.expires_at,
         })
     }
@@ -98,7 +130,9 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
             r#"
             SELECT id, user_id, subscription_id, event_type, arguments, filter,
                 endpoint_url, secret_ciphertext, secret_kms_key_id,
-                secret_encryption_version, expires_at
+                secret_encryption_version, previous_secret_ciphertext,
+                previous_secret_kms_key_id, previous_secret_encryption_version,
+                previous_secret_expires_at, delivery_profile, expires_at
             FROM mcp_event_subscription
             WHERE user_id = $1 AND subscription_id = $2
             "#,
@@ -118,7 +152,9 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
             r#"
             SELECT id, user_id, subscription_id, event_type, arguments, filter,
                 endpoint_url, secret_ciphertext, secret_kms_key_id,
-                secret_encryption_version, expires_at
+                secret_encryption_version, previous_secret_ciphertext,
+                previous_secret_kms_key_id, previous_secret_encryption_version,
+                previous_secret_expires_at, delivery_profile, expires_at
             FROM mcp_event_subscription
             WHERE id = $1 AND expires_at > now()
             "#,
@@ -140,6 +176,7 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
             .map_err(|error| sqlx::Error::Encode(Box::new(error)))?;
         let events = upsert.filter.event_names();
         let user_id = upsert.key.user_id.as_ref();
+        let previous = upsert.previous_secret.as_ref();
         let mut transaction = self.pool.begin().await?;
         sqlx::query!("SET LOCAL statement_timeout = '5s'")
             .execute(&mut *transaction)
@@ -172,27 +209,67 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
             transaction.rollback().await?;
             return Ok(McpStoreOutcome::QuotaExceeded);
         }
+        // The row as this write finds it, locked until commit, so neither a
+        // refresh nor an unsubscribe or the expiry sweep can change it before
+        // the write below. The write was decided against the row as read: if
+        // it has since been replaced, deleted or kept under another profile,
+        // nothing is written and the service reads again. A deleted row must
+        // not come back carrying the old secret's overlap.
+        let current = sqlx::query!(
+            r#"
+            SELECT secret_ciphertext, delivery_profile
+            FROM mcp_event_subscription
+            WHERE user_id = $1 AND subscription_id = $2
+            FOR UPDATE
+            "#,
+            user_id,
+            upsert.subscription_id.as_str(),
+        )
+        .fetch_optional(&mut *transaction)
+        .await?;
+        let unchanged = match (&current, &upsert.read_secret) {
+            (None, None) => true,
+            (Some(row), Some(read)) => {
+                row.secret_ciphertext == *read && row.delivery_profile == upsert.profile.as_ref()
+            }
+            (Some(_), None) | (None, Some(_)) => false,
+        };
+        if !unchanged {
+            transaction.rollback().await?;
+            return Ok(McpStoreOutcome::Changed);
+        }
         // The key parts (user, URL, event type, arguments) are what the id is
-        // derived from, so a conflict only refreshes the rest.
+        // derived from, so a conflict only refreshes the rest. The row is
+        // locked and checked above; the condition repeats that check.
         let row = sqlx::query_as!(
             SubscriptionRow,
             r#"
             INSERT INTO mcp_event_subscription (
                 id, user_id, subscription_id, event_type, arguments, filter,
                 endpoint_url, secret_ciphertext, secret_kms_key_id,
-                secret_encryption_version, expires_at
+                secret_encryption_version, previous_secret_ciphertext,
+                previous_secret_kms_key_id, previous_secret_encryption_version,
+                previous_secret_expires_at, delivery_profile, expires_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             ON CONFLICT (user_id, subscription_id) DO UPDATE SET
                 filter = EXCLUDED.filter,
                 secret_ciphertext = EXCLUDED.secret_ciphertext,
                 secret_kms_key_id = EXCLUDED.secret_kms_key_id,
                 secret_encryption_version = EXCLUDED.secret_encryption_version,
+                previous_secret_ciphertext = EXCLUDED.previous_secret_ciphertext,
+                previous_secret_kms_key_id = EXCLUDED.previous_secret_kms_key_id,
+                previous_secret_encryption_version = EXCLUDED.previous_secret_encryption_version,
+                previous_secret_expires_at = EXCLUDED.previous_secret_expires_at,
+                delivery_profile = EXCLUDED.delivery_profile,
                 expires_at = EXCLUDED.expires_at,
                 updated_at = now()
+            WHERE mcp_event_subscription.secret_ciphertext IS NOT DISTINCT FROM $17
             RETURNING id, user_id, subscription_id, event_type, arguments, filter,
                 endpoint_url, secret_ciphertext, secret_kms_key_id,
-                secret_encryption_version, expires_at
+                secret_encryption_version, previous_secret_ciphertext,
+                previous_secret_kms_key_id, previous_secret_encryption_version,
+                previous_secret_expires_at, delivery_profile, expires_at
             "#,
             upsert.id,
             user_id,
@@ -204,10 +281,22 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
             upsert.secret.ciphertext,
             upsert.secret.kms_key_id,
             upsert.secret.encryption_version,
+            previous.map(|previous| previous.secret.ciphertext.as_slice()),
+            previous.map(|previous| previous.secret.kms_key_id.as_str()),
+            previous.map(|previous| previous.secret.encryption_version),
+            previous.map(|previous| previous.expires_at),
+            upsert.profile.as_ref(),
             upsert.expires_at,
+            upsert.read_secret.as_deref(),
         )
-        .fetch_one(&mut *transaction)
+        .fetch_optional(&mut *transaction)
         .await?;
+        // A conflicting row that no longer holds the secret this refresh read
+        // was written by another refresh in between.
+        let Some(row) = row else {
+            transaction.rollback().await?;
+            return Ok(McpStoreOutcome::Changed);
+        };
         // The event names index the row for matching; a refresh may change
         // the filter and always changes the expiry, so they are rewritten.
         sqlx::query!(

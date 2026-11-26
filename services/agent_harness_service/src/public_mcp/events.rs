@@ -25,7 +25,9 @@ pub(crate) mod test;
 
 pub(crate) use compiler::ModelFilterCompiler;
 pub(crate) use dss::DssEvents;
-pub(crate) use protocol::{EXTENSION_ID, METHOD_PREFIX, RequestScope, handle, is_confirm_step};
+pub(crate) use protocol::{
+    EXTENSION_ID, METHOD_PREFIX, RequestScope, handle, is_confirm_step, split_profile,
+};
 
 use catalog::Selection;
 use compiler::{CompileError, FilterCompiler};
@@ -37,8 +39,9 @@ use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use webhook::domain::mcp::filter::McpEventFilter;
 use webhook::domain::mcp::models::{
-    MAX_ARGUMENTS_BYTES, McpEndpointFailure, McpSecretCiphertext, McpSubscribeRequest,
-    McpSubscribeResult, McpSubscriptionErrorBody, McpTtlRequest, McpUnsubscribeRequest,
+    MAX_ARGUMENTS_BYTES, McpDeliveryProfile, McpEndpointFailure, McpSecretCiphertext,
+    McpSubscribeRequest, McpSubscribeResult, McpSubscriptionErrorBody, McpTtlRequest,
+    McpUnsubscribeRequest,
 };
 use webhook_signature::standard::SigningSecret;
 
@@ -68,6 +71,7 @@ pub(crate) trait SecretSealer: Send + Sync {
     async fn seal(
         &self,
         user: &MacroUserIdStr<'static>,
+        profile: McpDeliveryProfile,
         secret: &SigningSecret,
     ) -> Result<McpSecretCiphertext, rootcause::Report>;
 }
@@ -80,9 +84,10 @@ where
     async fn seal(
         &self,
         user: &MacroUserIdStr<'static>,
+        profile: McpDeliveryProfile,
         secret: &SigningSecret,
     ) -> Result<McpSecretCiphertext, rootcause::Report> {
-        webhook::domain::mcp::ports::McpSecretCipher::encrypt(self, user, secret)
+        webhook::domain::mcp::ports::McpSecretCipher::encrypt(self, user, profile, secret)
             .await
             .map_err(|error| rootcause::Report::new(error).into_dynamic())
     }
@@ -212,6 +217,8 @@ pub(crate) struct Subscribe {
     pub(crate) url: String,
     pub(crate) secret: SigningSecret,
     pub(crate) ttl: McpTtlRequest,
+    /// Whose conventions its deliveries follow.
+    pub(crate) profile: McpDeliveryProfile,
 }
 
 /// An `events/unsubscribe` request, parsed.
@@ -292,9 +299,11 @@ impl McpEvents {
         selection: &Selection,
     ) -> Result<Compiled, EventsError> {
         let filter = match selection {
-            Selection::Event { name, ids } => {
-                McpEventFilter::for_events(vec![(*name).to_owned()], ids.clone())
-            }
+            Selection::Event {
+                name,
+                ids,
+                conditions,
+            } => catalog::event_filter(name, ids.as_deref(), conditions),
             Selection::Query {
                 filter: Some(filter),
                 ..
@@ -367,7 +376,7 @@ impl McpEvents {
         }
         let secret_ciphertext = self
             .sealer
-            .seal(user, &request.secret)
+            .seal(user, request.profile, &request.secret)
             .await
             .map_err(EventsError::Internal)?;
         let body = McpSubscribeRequest {
@@ -378,8 +387,21 @@ impl McpEvents {
             secret: request.secret,
             secret_ciphertext,
             ttl: request.ttl,
+            profile: request.profile,
         };
         let result = self.store.subscribe(user, &body).await?;
+        // Document storage from before delivery profiles refuses the field,
+        // so this is a second guard: a row stored under another profile
+        // would deliver to a ChatGPT endpoint unredacted. Refuse, rather than
+        // answer as if it were ChatGPT's (its secret is sealed for ChatGPT,
+        // which an MCP delivery cannot open).
+        if result.profile != request.profile {
+            return Err(EventsError::Internal(rootcause::report!(
+                "document storage stored delivery profile {} for a {} subscription",
+                result.profile,
+                request.profile
+            )));
+        }
         let compiled = Compiled::new(result.filter.clone());
         Ok(Subscribed { result, compiled })
     }
