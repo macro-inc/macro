@@ -518,6 +518,33 @@ describe('operation teardown order', () => {
     ]);
   });
 
+  it('lends nothing from a write that waits on the write order', async () => {
+    // The second write waits for the first write and for the teardown. It
+    // can't run first either way, so it doesn't hurry the teardown past the
+    // first write.
+    expect(
+      await order([
+        teardown(10, 'client:gone'),
+        {
+          id: 11,
+          generation: TEST_AUTHORITY_GENERATION,
+          kind: 'write',
+          query: 'query W { w }',
+          data: { tag: 11 },
+        },
+        {
+          id: 12,
+          generation: TEST_AUTHORITY_GENERATION,
+          kind: 'write',
+          query: 'query G { g }',
+          data: { tag: 12 },
+          registration: { opId: 'client:gone' },
+        },
+        read(13, 'client:other'),
+      ])
+    ).toEqual(['write', 'teardown:client:gone', 'write', 'read:client:other']);
+  });
+
   it('keeps, for random queues, every request between its operation’s teardowns and lifecycle barriers, and writes in order', async () => {
     await fc.assert(
       fc.asyncProperty(

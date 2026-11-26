@@ -149,15 +149,28 @@ export class OperationIndex<T extends Indexed> {
     return list?.[list.length - 1];
   }
 
-  /** What has to run before `queued` can: its blockers, followed to one that waits for nothing. */
-  rootOf(queued: T): T {
+  /**
+   * What has to run before `queued` can: its blockers, followed to one that
+   * waits for nothing. `roots` remembers them for the rest of a pick, so a
+   * long chain is walked once, not once per request on it.
+   */
+  rootOf(queued: T, roots: Map<T, T> = new Map()): T {
+    const chain: T[] = [];
     let root = queued;
     for (
       let blocker = this.blockerOf(root);
       blocker !== undefined;
       blocker = this.blockerOf(root)
-    )
+    ) {
+      const known = roots.get(blocker);
+      chain.push(root);
+      if (known !== undefined) {
+        root = known;
+        break;
+      }
       root = blocker;
+    }
+    for (const link of chain) roots.set(link, root);
     return root;
   }
 }

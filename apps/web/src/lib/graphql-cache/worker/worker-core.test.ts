@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   TEST_AUTHORITY_GENERATION,
@@ -1548,84 +1549,130 @@ describe('CacheWorkerCore', () => {
   });
 
   it('runs a typed search ahead of writes queued past a teardown, as when the teardown ended the segment', async () => {
-    const order: string[] = [];
-    const blocker = Promise.withResolvers<void>();
-    const started = Promise.withResolvers<void>();
-    const written = { changed: [], affectedOps: [], reset: false };
-    loadCacheWasmMock.mockResolvedValue({
-      openCache: vi.fn().mockResolvedValue({
-        readQuery: async (opId: string) => {
-          order.push(`read:${opId}`);
-          if (opId === 'blocker') {
-            started.resolve();
-            await blocker.promise;
-          }
-          return { kind: 'miss' };
-        },
-        currentStorageGeneration: async () => {
-          order.push('generation');
-          return '00000000-0000-4000-8000-000000000001';
-        },
-        teardownOperation: async () => {
-          order.push('teardown');
-        },
-        writeQuery: async () => {
-          order.push('write');
-          return { ...written, revision: INITIAL_CACHE_REVISION };
-        },
-        readRecordsByKeys: async (
-          _document: string,
-          _fragment: string,
-          keys: string[]
-        ) => {
-          order.push(`rows:${keys[0]}`);
-          return { revision: INITIAL_CACHE_REVISION, records: [] };
-        },
-      }),
-    });
-    const port = { postMessage: vi.fn() };
-    const core = new CacheWorkerCore();
-    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
-    const running = core.handleRequest(port, {
-      id: 2,
-      kind: 'read',
-      opId: 'blocker',
-      query: 'query Blocker { blocker }',
-    });
-    await started.promise;
-    const write = (id: number) =>
-      core.handleRequest(port, {
-        generation: TEST_AUTHORITY_GENERATION,
-        id,
-        kind: 'write',
-        query: 'query Current { document { id } }',
-        data: { document: { id: `doc-${id}` } },
+    type Queued =
+      | 'teardown'
+      | 'write'
+      | 'registering write'
+      | 'generation'
+      | 'search';
+    const run = async (queue: Queued[]) => {
+      const order: string[] = [];
+      const blocker = Promise.withResolvers<void>();
+      const started = Promise.withResolvers<void>();
+      const written = { changed: [], affectedOps: [], reset: false };
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({
+          readQuery: async (opId: string) => {
+            order.push(`read:${opId}`);
+            if (opId === 'blocker') {
+              started.resolve();
+              await blocker.promise;
+            }
+            return { kind: 'miss' };
+          },
+          currentStorageGeneration: async () => {
+            order.push('generation');
+            return '00000000-0000-4000-8000-000000000001';
+          },
+          teardownOperation: async () => {
+            order.push('teardown');
+          },
+          writeQuery: async () => {
+            order.push('write');
+            return { ...written, revision: INITIAL_CACHE_REVISION };
+          },
+          readRecordsByKeys: async (
+            _document: string,
+            _fragment: string,
+            keys: string[]
+          ) => {
+            order.push(`rows:${keys[0]}`);
+            return { revision: INITIAL_CACHE_REVISION, records: [] };
+          },
+        }),
       });
-    const queued = [
-      core.handleRequest(port, { id: 3, kind: 'teardown', opId: 'gone' }),
-      write(4),
-      write(5),
-      write(6),
-      core.handleRequest(port, { id: 7, kind: 'current-storage-generation' }),
-      core.handleRequest(port, {
-        id: 8,
-        kind: 'read-records-by-keys',
-        document: 'fragment Item on GraphqlSoupDocument { id }',
-        fragmentName: 'Item',
-        keys: ['GraphqlSoupDocument:typed'],
-        priority: 'typed-search',
-      }),
-    ];
-    blocker.resolve();
-    await Promise.all([running, ...queued]);
-    expect(order).toEqual([
-      'read:blocker',
+      const port = { postMessage: vi.fn() };
+      const core = new CacheWorkerCore();
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      const running = core.handleRequest(port, {
+        id: 2,
+        kind: 'read',
+        opId: 'blocker',
+        query: 'query Blocker { blocker }',
+      });
+      await started.promise;
+      const write = (id: number) =>
+        core.handleRequest(port, {
+          generation: TEST_AUTHORITY_GENERATION,
+          id,
+          kind: 'write',
+          query: 'query Current { document { id } }',
+          data: { document: { id: `doc-${id}` } },
+        });
+      const queued = queue.map((kind, i) =>
+        match(kind)
+          .with('teardown', () =>
+            core.handleRequest(port, {
+              id: 3 + i,
+              kind: 'teardown',
+              opId: 'gone',
+            })
+          )
+          .with('write', () => write(3 + i))
+          .with('registering write', () =>
+            core.handleRequest(port, {
+              generation: TEST_AUTHORITY_GENERATION,
+              id: 3 + i,
+              kind: 'write',
+              query: 'query Gone { gone }',
+              data: { gone: true },
+              registration: { opId: 'gone' },
+            })
+          )
+          .with('generation', () =>
+            core.handleRequest(port, {
+              id: 3 + i,
+              kind: 'current-storage-generation',
+            })
+          )
+          .with('search', () =>
+            core.handleRequest(port, {
+              id: 3 + i,
+              kind: 'read-records-by-keys',
+              document: 'fragment Item on GraphqlSoupDocument { id }',
+              fragmentName: 'Item',
+              keys: ['GraphqlSoupDocument:typed'],
+              priority: 'typed-search',
+            })
+          )
+          .exhaustive()
+      );
+      blocker.resolve();
+      await Promise.all([running, ...queued]);
+      return order.slice(1);
+    };
+
+    expect(
+      await run(['teardown', 'write', 'write', 'write', 'generation', 'search'])
+    ).toEqual([
       'rows:GraphqlSoupDocument:typed',
       'write',
       'write',
       'write',
       'teardown',
       'generation',
+    ]);
+    // Already first among the requests ahead of the teardown.
+    expect(await run(['search', 'teardown', 'write'])).toEqual([
+      'rows:GraphqlSoupDocument:typed',
+      'write',
+      'teardown',
+    ]);
+    // The write lends the teardown its priority, which the search still beats.
+    expect(await run(['teardown', 'registering write', 'search'])).toEqual([
+      'rows:GraphqlSoupDocument:typed',
+      'teardown',
+      'write',
     ]);
   });
 
@@ -4009,6 +4056,12 @@ describe('CacheWorkerCore', () => {
           order.push('invalidate');
           return written;
         }),
+        readRecordsByKeys: vi.fn(
+          async (_document: string, _fragment: string, keys: string[]) => {
+            order.push(`rows:${keys[0]}`);
+            return { revision: INITIAL_CACHE_REVISION, records: [] };
+          }
+        ),
         teardownOperation: vi.fn(async () => {
           order.push('teardown');
         }),
@@ -4212,6 +4265,75 @@ describe('CacheWorkerCore', () => {
         'commit',
         'teardown',
         'read:client:gone',
+      ]);
+    });
+
+    it('runs a typed search sent during a hydrate ahead of an invalidation queued past a teardown', async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          id: 3,
+          kind: 'teardown',
+          opId: 'client:gone',
+        }),
+        core.handleRequest(port, {
+          generation: TEST_AUTHORITY_GENERATION,
+          id: 4,
+          kind: 'invalidate',
+          keys: ['Document:1'],
+        }),
+        core.handleRequest(port, {
+          id: 5,
+          kind: 'read-records-by-keys',
+          document: 'fragment Item on GraphqlSoupDocument { id }',
+          fragmentName: 'Item',
+          keys: ['GraphqlSoupDocument:typed'],
+          priority: 'typed-search',
+        })
+      );
+      release();
+      await Promise.all(sent);
+      expect(order).toEqual([
+        'prepare:first',
+        'rows:GraphqlSoupDocument:typed',
+        'commit',
+        'invalidate',
+        'teardown',
+      ]);
+    });
+
+    it("runs a read queued past another operation's teardown during a hydrate", async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          id: 3,
+          kind: 'teardown',
+          opId: 'client:gone',
+        }),
+        core.handleRequest(port, {
+          id: 4,
+          kind: 'read',
+          opId: 'client:other',
+          query: 'query Other { other }',
+        })
+      );
+      release();
+      await Promise.all(sent);
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:other',
+        'commit',
+        'teardown',
       ]);
     });
 

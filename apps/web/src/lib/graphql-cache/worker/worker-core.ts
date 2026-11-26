@@ -597,37 +597,33 @@ export class CacheWorkerCore {
     const firstAuthoritativeWrite = this.queue
       .slice(0, segmentEnd)
       .findIndex((queued) => isAuthoritativeWrite(queued.request));
-    const priorityAt = this.runnablePriority(segmentEnd, false);
-    const priorityOf = (i: number) => priorityAt(i) ?? Number.NEGATIVE_INFINITY;
-    // A typed search keeps the place it had when a teardown ended the
-    // segment: ahead of everything queued past the first one.
-    let firstTeardown = segmentEnd;
-    if (this.operations.hasTeardowns) {
-      const at = this.queue
-        .slice(0, segmentEnd)
-        .findIndex((queued) => queued.request.kind === 'teardown');
-      if (at !== -1) firstTeardown = at;
-    }
-    let index = 0;
-    let beforeTeardown = 0;
-    for (let i = 1; i < segmentEnd; i += 1) {
-      const candidate = this.queue[i];
-      const preservesWriteOrder =
-        !candidate ||
-        !isAuthoritativeWrite(candidate.request) ||
-        i === firstAuthoritativeWrite;
-      if (priorityAt(i) === undefined || !preservesWriteOrder) continue;
-      if (priorityOf(i) > priorityOf(index)) index = i;
-      if (i < firstTeardown && priorityOf(i) > priorityOf(beforeTeardown))
-        beforeTeardown = i;
-    }
+    const pick = (
+      end: number,
+      priorityAt: (index: number) => number | undefined
+    ) => {
+      const priorityOf = (i: number) =>
+        priorityAt(i) ?? Number.NEGATIVE_INFINITY;
+      let index = 0;
+      for (let i = 1; i < end; i += 1) {
+        const candidate = this.queue[i];
+        const preservesWriteOrder =
+          !candidate ||
+          !isAuthoritativeWrite(candidate.request) ||
+          i === firstAuthoritativeWrite;
+        if (
+          priorityAt(i) !== undefined &&
+          preservesWriteOrder &&
+          priorityOf(i) > priorityOf(index)
+        ) {
+          index = i;
+        }
+      }
+      return this.pickPastFences(index, priorityOf(index), end);
+    };
 
-    const search = this.pickPastFences(
-      beforeTeardown,
-      priorityOf(beforeTeardown),
-      firstTeardown
-    );
-    if (search !== beforeTeardown) index = search;
+    let index = pick(segmentEnd, this.runnablePriority(segmentEnd, false));
+    const search = this.typedSearchBeforeTeardown(segmentEnd, pick);
+    if (search !== undefined) index = search;
 
     const queued = this.dequeue(index);
     if (!queued) return;
@@ -793,6 +789,7 @@ export class CacheWorkerCore {
 
     const priorities: (number | undefined)[] = [];
     const lent = new Map<QueuedEngineRequest, number>();
+    const roots = new Map<QueuedEngineRequest, QueuedEngineRequest>();
     for (let i = 0; i < segmentEnd; i += 1) {
       const queued = this.queue[i];
       if (!queued) continue;
@@ -801,10 +798,10 @@ export class CacheWorkerCore {
         continue;
       }
       if (writesHeld || waitsOnWriteOrder(queued)) continue;
-      let target = operations.rootOf(queued);
+      let target = operations.rootOf(queued, roots);
       if (waitsOnWriteOrder(target)) {
         if (firstWrite === undefined) continue;
-        target = operations.rootOf(firstWrite);
+        target = operations.rootOf(firstWrite, roots);
       }
       if (queued.priority > (lent.get(target) ?? target.priority))
         lent.set(target, queued.priority);
@@ -815,6 +812,32 @@ export class CacheWorkerCore {
       if (own === undefined || !queued) return own;
       return Math.max(own, lent.get(queued) ?? own);
     };
+  }
+
+  /**
+   * The typed search a picker ran when a teardown still ended the segment,
+   * if it picked one: that picker's choice over the requests queued before
+   * the first teardown, at their own priorities, then past the fences. A
+   * search keeps that lead over everything queued past a teardown, writes
+   * included, which now compete with it.
+   */
+  private typedSearchBeforeTeardown(
+    segmentEnd: number,
+    pick: (
+      end: number,
+      priorityAt: (index: number) => number | undefined
+    ) => number
+  ): number | undefined {
+    if (!this.operations.hasTeardowns) return undefined;
+    let firstTeardown = -1;
+    for (let i = 0; i < segmentEnd && firstTeardown === -1; i += 1) {
+      if (this.queue[i]?.request.kind === 'teardown') firstTeardown = i;
+    }
+    if (firstTeardown === -1) return undefined;
+    const index = pick(firstTeardown, (i) => this.queue[i]?.priority);
+    return this.queue[index]?.priority === TYPED_SEARCH_PRIORITY
+      ? index
+      : undefined;
   }
 
   /**
@@ -862,25 +885,32 @@ export class CacheWorkerCore {
       isOrderingBarrier(queued.request)
     );
     if (segmentEnd === -1) segmentEnd = this.queue.length;
-    const priorityAt = this.runnablePriority(segmentEnd, true);
-    let index = -1;
-    let priority = BACKGROUND_HYDRATION_PRIORITY;
-    for (let i = 0; i < segmentEnd; i += 1) {
-      const candidate = this.queue[i];
-      const candidatePriority = priorityAt(i);
-      if (
-        candidate &&
-        candidatePriority !== undefined &&
-        !isAuthoritativeWrite(candidate.request) &&
-        // A teardown can't run here, and holds back only its own operation.
-        candidate.request.kind !== 'teardown' &&
-        candidatePriority > priority
-      ) {
-        index = i;
-        priority = candidatePriority;
+    const pick = (
+      end: number,
+      priorityAt: (index: number) => number | undefined
+    ) => {
+      let index = -1;
+      let priority = BACKGROUND_HYDRATION_PRIORITY;
+      for (let i = 0; i < end; i += 1) {
+        const candidate = this.queue[i];
+        const candidatePriority = priorityAt(i);
+        if (
+          candidate &&
+          candidatePriority !== undefined &&
+          !isAuthoritativeWrite(candidate.request) &&
+          // A teardown can't run here, and holds back only its own operation.
+          candidate.request.kind !== 'teardown' &&
+          candidatePriority > priority
+        ) {
+          index = i;
+          priority = candidatePriority;
+        }
       }
-    }
-    index = this.pickPastFences(index, priority, segmentEnd);
+      return this.pickPastFences(index, priority, end);
+    };
+    let index = pick(segmentEnd, this.runnablePriority(segmentEnd, true));
+    const search = this.typedSearchBeforeTeardown(segmentEnd, pick);
+    if (search !== undefined) index = search;
     const picked = this.queue[index];
     return picked && isReadOnlyCacheRequest(picked.request.kind)
       ? index
