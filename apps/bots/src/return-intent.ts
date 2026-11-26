@@ -1,0 +1,33 @@
+export type ReturnIntent =
+  | { route: 'creator'; action: 'edit' | 'hire' }
+  | { route: 'fleet' };
+
+export const editIntent: ReturnIntent = { route: 'creator', action: 'edit' };
+export const hireIntent: ReturnIntent = { route: 'creator', action: 'hire' };
+export const fleetIntent: ReturnIntent = { route: 'fleet' };
+
+const returnPaths = new Map<string, ReturnIntent>([
+  ['/', editIntent],
+  ['/?intent=hire', hireIntent],
+  ['/fleet', fleetIntent],
+]);
+
+export function returnPath(intent: ReturnIntent): string {
+  if (intent.route === 'fleet') return '/fleet';
+  return intent.action === 'hire' ? '/?intent=hire' : '/';
+}
+
+export function parseReturnIntent(search: string): ReturnIntent | undefined {
+  // Compare exact decoded values without normalizing attacker-controlled paths.
+  const params = new URLSearchParams(search);
+  const entries = [...params];
+  if (entries.length !== 1 || entries[0][0] !== 'return') return undefined;
+
+  return returnPaths.get(entries[0][1]);
+}
+
+export function buildSignInUrl(intent: ReturnIntent, handoff?: string): string {
+  const search = new URLSearchParams({ return: returnPath(intent) });
+  if (handoff) search.set('handoff', handoff);
+  return `/sign-in?${search}`;
+}

@@ -9,6 +9,7 @@ verified live against a local stack (`just run_local`, which needs no terminal: 
 | --- | --- |
 | [login.md](login.md) | Passwordless login end to end, Mailpit, known crash + recovery |
 | [navigation.md](navigation.md) | Routes, sidebar, command menu, keyboard model, splits |
+| [bots.md](bots.md) | Standalone Bots Creator and Fleet fixture preview |
 | [documents.md](documents.md) | Creating docs, typing in the editor, AI edit, comments, Word (DOCX) editor, PowerPoint presentations, Figma designs, Photoshop and Illustrator editors, Photoshop and Illustrator documents (AI tools, search), side panel |
 | [databases.md](databases.md) | Properties, records, kanban boards, saved views, AI questions, live answers |
 | [forms.md](forms.md) | Forms: create doors, builder (drag and drop, gates), respond route, Responses grid, sharing, polls |

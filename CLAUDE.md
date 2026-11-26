@@ -22,6 +22,7 @@ patterns in older code.
 | Path | Contents |
 | --- | --- |
 | `apps/web/` | Web frontend; its own agent guide covers Bun, UI patterns, and browser verification. |
+| `apps/bots/` | Standalone Vite frontend for the Bots Creator and Fleet. |
 | `apps/`, `packages/` | Other apps and shared frontend packages. |
 | `services/` | Deployable services and workers; Rust package names come from each `Cargo.toml`. |
 | `crates/` | Reusable backend libraries, domain services, and adapters. |
