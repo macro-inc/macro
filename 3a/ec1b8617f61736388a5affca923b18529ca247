@@ -1,0 +1,22 @@
+apps/web/src/components/ui/components/Dropdown.test.tsx
+  s_90120856b1cd15::t_e42bd1026de66e 100-143
+apps/web/src/components/ui/components/Dropdown.tsx
+  s_90120856b1cd15::t_9b4574254b34a7 395-397,399-401,511-513,515-517
+  s_90120856b1cd15::t_7a78300ea96756 398,410,514,529
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3aec1b8617f61736388a5affca923b18529ca247",
+  "prompts": {},
+  "sessions": {
+    "s_90120856b1cd15": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d715a1ab-3749-4df2-938c-db487752ccfd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
