@@ -258,6 +258,7 @@ deny = [
     "harnessd",                  # stdout is the harnessd protocol channel and the computer has no OTLP agent; standalone stderr logging, like macrod
     "hosted_runtimes",           # Provisioning span propagation tests only (dev-dependency)
     "import",                    # Route span no-email tests only (dev-dependency)
+    "import_notion",             # Notion request span and content-leak tests only (dev-dependency)
     "initiative",                # initiative.read span field tests only (dev-dependency)
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
     "loom",                      # External concurrency testing dependency

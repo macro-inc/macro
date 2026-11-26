@@ -1,0 +1,394 @@
+# The root transaction runner. _agent.nix provides its paths and the image
+# runtime. The only remote entry point supplies one JSON request on stdin.
+umask 077
+unit=macro-agent.service
+: "${drain_timeout:=45}" "${ready_timeout:=195}"
+selection=$bundles/current
+journal=$bundles/transaction.json
+fence=$control/fence
+ready=$control/receipts/ready
+drained=$control/receipts/drained
+git_lock=$workspace/state/run/heartbeat/git.lock
+git_metadata=$control/inspection.git
+image_marker=$bundles/image-system
+
+fail() { echo "agent runtime update: $*" >&2; exit 1; }
+property() { systemctl show -P "$1" "$unit"; }
+active_invocation() {
+  [[ $(property ActiveState) == active ]] || return 1
+  property InvocationID
+}
+selected() {
+  if [[ -L $selection ]]; then readlink "$selection"; else echo image; fi
+}
+select_runtime() {
+  if [[ $1 == image ]]; then
+    rm -f "$selection" || return 1
+  else
+    ln -sfn "$1" "$bundles/.current" || return 1
+    mv -Tf "$bundles/.current" "$selection" || return 1
+  fi
+  sync -f "$bundles"
+}
+receipt() {
+  local invocation=$1 runtime=$2 head=$3
+  [[ $invocation =~ ^[0-9a-f]{32}$ && $(active_invocation) == "$invocation" ]] || return 1
+  # shellcheck disable=SC2016 # The variables are bound by jq.
+  read_agent "$ready" | jq -e --arg invocation "$invocation" --arg runtime "$runtime" --arg head "$head" \
+      '.invocation == $invocation and .runtime == $runtime and .head == $head' >/dev/null 2>&1
+}
+drain_receipt() {
+  # shellcheck disable=SC2016 # The variables are bound by jq.
+  read_agent "$drained" | jq -e --arg invocation "$1" --arg token "$2" \
+    '.invocation == $invocation and .token == $token' >/dev/null 2>&1
+}
+wait_for() {
+  local deadline=$((SECONDS + $1))
+  shift
+  until "$@"; do
+    ((SECONDS < deadline)) || return 1
+    sleep 0.2
+  done
+}
+as_agent() (
+  exec 8>&- 9>&-
+  exec systemd-run --quiet --pipe --wait --collect --expand-environment=no \
+    --description="Macro agent runtime inspection" --property=Type=exec "${inspection_properties[@]}" -- \
+    "$(command -v env)" -i PATH="$PATH" HOME=/var/empty GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+      GIT_OPTIONAL_LOCKS=0 GIT_INDEX_FILE="$workspace/.git/index" "$@"
+)
+read_agent() { as_agent timeout 2 python3 "$file_helper" read "$1" 2>/dev/null; }
+git_agent() {
+  # Root supplies a bare view of the agent's refs, objects and index. Git
+  # never opens the checkout's configuration or hooks.
+  as_agent timeout 5 git --no-pager --git-dir="$git_metadata" --work-tree="$workspace" \
+    -c safe.directory="$workspace" -c safe.directory="$git_metadata" \
+    -c core.fsmonitor=false -c core.hooksPath=/dev/null "$@"
+}
+valid_oid() { [[ $1 =~ ^[a-f0-9]{40}$ ]]; }
+head_revision() {
+  local ref
+  ref=$(read_agent "$workspace/.git/HEAD") || return 1
+  if [[ $ref == 'ref: refs/heads/'* ]]; then
+    ref=${ref#ref: }
+    git_agent check-ref-format "$ref" || return 1
+  else
+    valid_oid "$ref" || return 1
+  fi
+  git_agent rev-parse --verify --end-of-options "$ref^{commit}"
+}
+live_behavior() {
+  # The heartbeat commits memory after normal wakes even while this very
+  # invocation is running. Compare behavior separately from persisted state.
+  valid_oid "$1" && valid_oid "$2" &&
+    git_agent diff --quiet --no-ext-diff --no-textconv --ignore-submodules=all "$1" "$2" -- . ':(exclude)state' &&
+    git_agent diff --quiet --no-ext-diff --no-textconv --ignore-submodules=all "$2" -- . ':(exclude)state'
+}
+initialize_image() {
+  local image previous entry
+  image=$(readlink -f "$image_system")
+  previous=$(cat "$image_marker" 2>/dev/null || true)
+  if [[ $image != "$previous" ]]; then
+    # The rootfs changed. No selection from the retired image overrides its
+    # new baked runtime, even if the two runtime package paths are identical.
+    select_runtime image
+    clear_transaction
+    printf '%s\n' "$image" >"$image_marker.new"
+    mv -Tf "$image_marker.new" "$image_marker"
+    sync -f "$bundles"
+  fi
+  install -d -m 755 "$git_metadata"
+  printf 'ref: refs/heads/runtime-inspection\n' >"$git_metadata/HEAD"
+  chmod 644 "$git_metadata/HEAD"
+  for entry in refs packed-refs objects; do
+    ln -sfn "$workspace/.git/$entry" "$git_metadata/$entry"
+  done
+}
+prune_bundles() {
+  local cached
+  # A service-only restart leaves children in the cgroup. Only prune
+  # from the boot unit, with no live process that could still use a bundle.
+  if [[ -e $agent_cgroup/cgroup.events ]]; then
+    grep -qx 'populated 0' "$agent_cgroup/cgroup.events" || return 0
+  fi
+  for cached in "$bundles"/*; do
+    [[ -d $cached && ! -L $cached ]] || continue
+    valid_oid "${cached##*/}" || continue
+    if [[ ${cached##*/} != "$1" ]]; then
+      rm -rf -- "$cached"
+    fi
+  done
+}
+record_transaction() {
+  jq -n --arg previous "$previous" --arg head "$head" --arg invocation "$invocation" \
+    --arg token "$token" --arg phase "$1" \
+    '{previous:$previous,head:$head,invocation:$invocation,token:$token,phase:$phase}' >"$journal.new"
+  mv -Tf "$journal.new" "$journal"
+  sync -f "$bundles"
+}
+baseline_ready() {
+  local identity=$1 head=$2 token=$3
+  local invocation
+  invocation=$(active_invocation) && receipt "$invocation" "$identity" "$head" &&
+    { [[ ! -e $fence ]] || drain_receipt "$invocation" "$token"; }
+}
+runtime_identity() {
+  if [[ $1 == image ]]; then echo image; else cat "$bundles/$1/identity"; fi
+}
+clear_transaction() {
+  # Commit the outcome before releasing queued work. If this process dies in
+  # between, recovery can remove the orphaned in-memory fence.
+  rm -f "$journal" || return 1
+  sync -f "$bundles" || return 1
+  rm -f "$fence"
+}
+reconcile() {
+  local mode=$1 previous head invocation token
+  if [[ ! -f $journal ]]; then
+    rm -f "$fence"
+    return
+  fi
+  previous=$(jq -er '.previous' "$journal")
+  head=$(jq -er '.head' "$journal")
+  invocation=$(jq -er '.invocation' "$journal")
+  token=$(jq -er '.token' "$journal")
+  if [[ $mode == boot ]]; then
+    # A process that was fenced before a guest crash can have a pending
+    # schedule on disk even after this boot has restored the prior runtime.
+    printf '%s\n' "$token" >"$control/replay-schedules"
+    chmod 644 "$control/replay-schedules"
+  fi
+  if [[ $(jq -er '.phase' "$journal") == draining ]] ||
+    [[ $(selected) == "$previous" && $(active_invocation || true) == "$invocation" ]]; then
+    echo "aborting update before restart"
+    clear_transaction
+    return
+  fi
+  select_runtime "$previous" || return 1
+  [[ $(selected) == "$previous" ]] || return 1
+  echo "restored runtime $previous"
+  if [[ $mode == boot ]]; then
+    # The ordered agent unit starts the restored selection after this one.
+    clear_transaction
+    return
+  fi
+  timeout 100 systemctl restart "$unit" || return 1
+  if wait_for "$ready_timeout" baseline_ready "$(runtime_identity "$previous")" "$head" "$token"; then
+    echo "restored runtime $previous is ready"
+    clear_transaction
+  else
+    echo "restored runtime $previous did not become ready" >&2
+    clear_transaction
+    return 1
+  fi
+}
+
+verify_revision() {
+  local revision=$1 runtime_root=$2
+  valid_oid "$revision" || return 1
+  git_agent cat-file blob --end-of-options "$revision:package.json" |
+    jq -e --slurpfile template "$runtime_root/template.json" \
+      --slurpfile muppet "$runtime_root/node_modules/@macro-inc/muppet/package.json" '
+      [ "dependencies", "devDependencies", "optionalDependencies",
+        "peerDependencies", "workspaces", "overrides" ] as $keys |
+      def level: type == "number" and floor == . and . >= 0 and . <= 9007199254740991;
+      . as $behavior |
+      (if has("muppetApi") then .muppetApi else 0 end) as $need |
+      ($need | level) and ($muppet[0].apiLevel | level) and
+      $need <= $muppet[0].apiLevel and
+      all($keys[]; $behavior[.] == $template[0][.])
+      ' >/dev/null
+}
+
+mode=${1:?expected transaction mode}
+case "$mode" in
+  submit)
+    # The fixed transient unit is the concurrency guard at submission. Pass the
+    # URL on stdin so it stays out of argv and systemd's unit definition.
+    exec systemd-run --quiet --pipe --wait --collect \
+      --unit=macro-agent-runtime-update.service \
+      --property=Type=exec --property=RuntimeMaxSec=800 --property=TimeoutStopSec=10 \
+      --property="SuccessExitStatus=1 2 3" \
+      --property="OnFailure=macro-agent-runtime-recover.service" \
+      "$self" apply
+    ;;
+  apply)
+    # systemd-run uses exit 1 both for normal exits and manager failures.
+    # Only a normal worker return produces a definitive outcome.
+    result=0
+    "$self" transact || result=$?
+    case "$result" in
+      0|1|2|3) printf 'macro-agent-runtime-result=%s\n' "$result" ;;
+    esac
+    exit "$result"
+    ;;
+  transact|recover|boot|unfence|status|restore-image) ;;
+  *) fail 'unknown transaction mode' ;;
+esac
+
+exec 9>"$bundles/lock"
+if ! flock -n 9; then
+  if [[ $mode == unfence ]]; then exit 0; fi
+  echo 'agent runtime update: another transaction is in progress' >&2
+  exit 4
+fi
+case "$mode" in
+  boot|recover|transact)
+    find "$bundles" -maxdepth 1 -type d -name '.stage.*' -exec rm -rf -- '{}' +
+    ;;
+esac
+case "$mode" in
+  status)
+    [[ ! -e $journal && ! -e $fence ]] || exit 4
+    exit 0
+    ;;
+  unfence) rm -f "$fence"; exit ;;
+  recover) reconcile "$mode"; exit ;;
+  boot)
+    initialize_image
+    reconcile "$mode"
+    prune_bundles "$(selected)"
+    exit
+    ;;
+  restore-image)
+    # Operator recovery for an unhealthy runtime. Like returning to the
+    # image after a guest reboot, this may interrupt an unhealthy process.
+    [[ ! -e $journal ]] || fail 'runtime recovery is pending'
+    exec 8>"$pause/lock"
+    flock -n 8 || fail 'agent pause or restart is in progress'
+    [[ ! -e $pause/paused ]] || fail 'agent is frozen'
+    select_runtime image
+    timeout 100 systemctl restart "$unit"
+    echo "restarted $unit with image runtime"
+    exit
+    ;;
+esac
+
+
+request=$(head -c 16385)
+[[ ${#request} -le 16384 ]] || fail 'request exceeds size limit'
+jq -e '
+  keys == ["digest", "url", "version"] and
+  (.version | test("^[0-9a-f]{40}$")) and
+  (.digest | test("^[0-9a-f]{64}$")) and
+  (.url | contains("X-Amz-Signature=")) and
+  (.url | test("^https://[a-z0-9.-]+\\.amazonaws\\.com(/[a-z0-9.-]+)?/agent-runtime-bundles/[0-9a-f]{40}/runtime\\.tar\\.zst\\?[^[:space:]]+$"))
+  ' <<<"$request" >/dev/null || fail 'invalid bundle request'
+version=$(jq -r .version <<<"$request")
+digest=$(jq -r .digest <<<"$request")
+url=$(jq -r .url <<<"$request")
+[[ $url == */agent-runtime-bundles/"$version"/runtime.tar.zst\?* ]] ||
+  fail 'URL does not belong to the requested version'
+candidate="$bundles/$version"
+identity="$version:$digest"
+
+[[ ! -f $journal ]] || exit 4
+previous=$(selected)
+previous_identity=$(runtime_identity "$previous")
+invocation=$(active_invocation) || fail 'baseline agent is inactive'
+head=$(head_revision) || fail 'could not resolve the live revision'
+boot_revision=$(read_agent "$boot_head") || fail 'invalid boot revision'
+live_behavior "$boot_revision" "$head" || fail 'the live behavior differs from HEAD'
+receipt "$invocation" "$previous_identity" "$boot_revision" ||
+  fail 'baseline has no matching chat readiness receipt'
+
+staging=
+owns_transaction=no
+cleanup() {
+  local code=$?
+  trap - EXIT
+  if [[ -n $staging ]]; then rm -rf "$staging"; fi
+  if [[ $code != 0 && $owns_transaction == yes && -f $journal ]]; then
+    if [[ $(jq -er '.phase' "$journal") == draining ]]; then
+      reconcile recover || exit 4
+    elif reconcile recover; then
+      code=2
+    elif [[ -e $journal ]]; then
+      # Release the dispatcher even if the guest must retry recovery.
+      rm -f "$fence"
+      exit 4
+    else
+      code=3
+    fi
+  fi
+  exit "$code"
+}
+trap cleanup EXIT
+if [[ -d $candidate ]]; then
+  [[ $(runtime_identity "$version") == "$identity" ]] || fail 'version already staged with a different digest'
+else
+  staging=$(mktemp -d "$bundles/.stage.XXXXXXXX")
+  # Only the authenticated control-plane request can specify an HTTPS S3
+  # origin. Never follow redirects or display the presigned query string.
+  curl --fail --silent --proto '=https' --max-time 100 --max-filesize 536870912 \
+    --output "$staging/archive" -- "$url" || fail 'bundle download failed'
+  printf '%s  %s\n' "$digest" "$staging/archive" | sha256sum --check --status ||
+    fail 'bundle digest mismatch'
+  mkdir "$staging/runtime"
+  zstd -qdc "$staging/archive" | head -c 2147483649 >"$staging/runtime.tar" ||
+    fail 'bundle decompression failed or exceeded the size limit'
+  [[ $(stat -c %s "$staging/runtime.tar") -le 2147483648 ]] || fail 'bundle exceeds the size limit'
+  python3 "$file_helper" extract "$staging/runtime.tar" "$staging/runtime" ||
+    fail 'invalid archive entries'
+  printf '%s\n' "$identity" >"$staging/runtime/identity"
+  chmod -R a+rX,a-w "$staging/runtime"
+  sync -f "$staging/runtime"
+  mv -T "$staging/runtime" "$candidate"
+  sync -f "$bundles"
+fi
+
+verify_revisions() {
+  local revision good
+  good=$(read_agent "$last_good") || fail 'invalid last-good revision'
+  for revision in "$head" "$good"; do
+    if ! verify_revision "$revision" "$candidate" || ! verify_revision "$revision" "$image_runtime"; then
+      fail "behavior revision $revision is incompatible"
+    fi
+  done
+}
+verify_revisions
+if [[ $previous == "$version" ]]; then
+  echo "runtime $identity is already ready"
+  exit 0
+fi
+
+# A land already active can finish and ask the path unit for a restart
+# during the drain. Hold the pause/restart lock only at the switch.
+ensure_not_frozen() {
+  [[ ! -e $pause/paused && $(property FreezerState) == running ]] || fail 'agent is frozen'
+}
+ensure_not_frozen
+restart_before=$(as_agent stat -c '%i:%y' "$restart_marker" 2>/dev/null || true)
+token=$(cat /proc/sys/kernel/random/uuid)
+owns_transaction=yes
+record_transaction draining
+printf '%s\n' "$token" >"$fence.new"
+chgrp macro-agent "$fence.new"
+chmod 440 "$fence.new"
+mv -Tf "$fence.new" "$fence"
+
+wait_for "$drain_timeout" drain_receipt "$invocation" "$token" || fail 'active work did not drain'
+exec 8>"$pause/lock"
+flock -n 8 || fail 'agent pause or restart is in progress'
+ensure_not_frozen
+# The lock path belongs to the agent. A child takes it as that user and
+# holds it until this shell closes the pipe, including if systemd kills us.
+as_agent mkdir -p -- "$(dirname "$git_lock")"
+coproc LAND_LOCK { as_agent flock -n "$git_lock" bash -c 'echo locked; cat >/dev/null'; }
+land_reply=
+read -r -t 5 -u "${LAND_LOCK[0]}" land_reply && [[ $land_reply == locked ]] ||
+  fail 'a land or commit is in progress'
+head=$(head_revision) || fail 'could not resolve the live revision'
+live_behavior "$boot_revision" "$head" || fail 'behavior changed while draining'
+[[ $(as_agent stat -c '%i:%y' "$restart_marker" 2>/dev/null || true) == "$restart_before" ]] ||
+  fail 'agent restart requested while draining'
+receipt "$invocation" "$previous_identity" "$boot_revision" || fail 'baseline changed while draining'
+verify_revisions
+record_transaction swapping
+
+select_runtime "$version"
+echo "restarting $unit with runtime $identity"
+timeout 100 systemctl restart "$unit"
+wait_for "$ready_timeout" baseline_ready "$identity" "$head" "$token" || fail 'candidate did not become ready'
+echo "runtime $identity is ready"
+clear_transaction

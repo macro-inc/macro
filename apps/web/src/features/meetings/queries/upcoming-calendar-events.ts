@@ -3,6 +3,7 @@ import {
   createCalendarOccurrenceQueryRange,
   useCalendarOccurrencesQuery,
 } from '@queries/calendar/occurrences';
+import { queryReadyGate } from '@queries/gate';
 import { type Accessor, createMemo } from 'solid-js';
 import {
   type CalendarEvent,
@@ -31,6 +32,8 @@ type SourceOptions = {
   sourcesReady?: Accessor<boolean>;
   isSourceVisible: (sourceId: string) => boolean;
   now: Accessor<Date>;
+  /** Limit both the returned rows and progressive-window completion to this subset. */
+  includeEvent?: (event: CalendarEvent) => boolean;
 };
 
 type OccurrenceWindow = {
@@ -52,7 +55,9 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
     const previous = windows.slice();
     const enabled = () =>
       Boolean(options.userId()) &&
-      previous.every(({ query }) => query.isSuccess) &&
+      previous.every(
+        ({ query }) => !query.isPlaceholderData && queryReadyGate(query)
+      ) &&
       selectUpcomingCalendarEvents(
         previous.flatMap((window) => window.events()),
         options.now()
@@ -69,7 +74,8 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
       () => ({ enabled: enabled() })
     );
     const calendarEvents = createMemo(() => {
-      if (!query.isSuccess) return [];
+      // A failed refresh retains this account/window's last complete response.
+      if (query.isPlaceholderData || !queryReadyGate(query)) return [];
       const sources = options.sourceById();
       return query.data.items.flatMap((item): CalendarEvent[] => {
         const event = mapCalendarOccurrence(item, {
@@ -90,24 +96,27 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
       });
     });
     const events = createMemo(() =>
-      calendarEvents().map((event): UpcomingCalendarEvent => {
-        const url =
-          calendarMacroCallUrl(event) ?? safeConferenceUrl(event.conferenceUrl);
-        return {
-          id: event.id,
-          title: event.title,
-          color: event.calendar.color,
-          url: url
-            ? conferenceJoinUrl(url, event.calendar.emailAddress)
-            : undefined,
-          start: event.start,
-          end: event.end,
-          allDay: event.allDay,
-          eventId: event.eventId,
-          occurrenceKey: event.occurrenceKey,
-          isMeeting: isMeetingEvent(event, url),
-        };
-      })
+      calendarEvents()
+        .filter((event) => options.includeEvent?.(event) !== false)
+        .map((event): UpcomingCalendarEvent => {
+          const url =
+            calendarMacroCallUrl(event) ??
+            safeConferenceUrl(event.conferenceUrl);
+          return {
+            id: event.id,
+            title: event.title,
+            color: event.calendar.color,
+            url: url
+              ? conferenceJoinUrl(url, event.calendar.emailAddress)
+              : undefined,
+            start: event.start,
+            end: event.end,
+            allDay: event.allDay,
+            eventId: event.eventId,
+            occurrenceKey: event.occurrenceKey,
+            isMeeting: isMeetingEvent(event, url),
+          };
+        })
     );
     windows.push({ query, enabled, events, calendarEvents });
   }
@@ -121,6 +130,7 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
         options.now()
       );
     }),
+    /** Resolve any visible loaded occurrence, including a response still in flight. */
     findEvent: (id: string) =>
       activeWindows()
         .flatMap((window) => window.calendarEvents())

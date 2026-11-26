@@ -30,7 +30,6 @@ export type CanvasDocumentProps = {
   isNested?: boolean;
   view?: CanvasView;
   locationParams?: Record<string, string | string[] | undefined>;
-  onLocationChange?: (location: CanvasView) => void;
   registerMethods?: (methods: Partial<CanvasDocumentMethods>) => void;
   children?: (content: JSX.Element, state: CanvasDocumentChrome) => JSX.Element;
 };

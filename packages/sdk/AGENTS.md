@@ -8,7 +8,13 @@ enforced by the ordinary backend APIs.
 
 ## Start here
 
-- `src/macro.ts`: public exports and namespace registration.
+- `src/macro.ts`: public exports and namespace registration. Export every
+  entity handle class, at least as a type: programs name handles in their own
+  signatures (`import type { Channel } from '@macro-inc/sdk'`) and fail the
+  code-mode type check otherwise. Handles reached only through a namespace
+  (`macro.channels.byId(id)`) are exported as types. `tests/root-exports.test.ts`
+  fails on an `export class` under `src/entities` (namespaces aside) that the
+  root doesn't export.
 - `documents.createCanvas()` creates shared content before returning a Document handle;
   it requires no browser open or upload. `document.canvas()` (`entities/canvases/canvas.ts`, its own code-mode entity)
   reads (`scene`), edits (`apply` code against a revision, `edit` by instructions) and

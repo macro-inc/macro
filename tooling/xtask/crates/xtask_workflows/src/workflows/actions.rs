@@ -3846,6 +3846,33 @@ impl From<CallBuildDmgOnTag> for CallJob {
     }
 }
 
+/// Calls `./.github/workflows/desktop_windows.yml` (Desktop Windows smoke), defined in `workflows/desktop_windows.rs`.
+#[must_use]
+pub struct CallDesktopWindows(CallJob);
+
+impl CallDesktopWindows {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/desktop_windows.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallDesktopWindows> for CallJob {
+    fn from(call: CallDesktopWindows) -> Self {
+        call.0
+    }
+}
+
 /// Calls `./.github/workflows/code_check_infra.yml` (infra code check), defined in `workflows/code_check_infra.rs`.
 #[must_use]
 pub struct CallCodeCheckInfra(CallJob);
@@ -4540,6 +4567,33 @@ impl CallCheckNodeModulesNix {
 
 impl From<CallCheckNodeModulesNix> for CallJob {
     fn from(call: CallCheckNodeModulesNix) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/check_deploy_nix_sources.yml` (check deploy nix sources), defined in `workflows/check_deploy_nix_sources.rs`.
+#[must_use]
+pub struct CallCheckDeployNixSources(CallJob);
+
+impl CallCheckDeployNixSources {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/check_deploy_nix_sources.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallCheckDeployNixSources> for CallJob {
+    fn from(call: CallCheckDeployNixSources) -> Self {
         call.0
     }
 }

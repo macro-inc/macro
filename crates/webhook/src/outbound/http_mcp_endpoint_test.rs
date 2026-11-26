@@ -143,6 +143,37 @@ async fn verification_failures_are_categorised() {
 }
 
 #[tokio::test]
+async fn a_body_that_breaks_off_is_a_transport_failure() {
+    use std::io::{Read as _, Write as _};
+    // Promises a body, sends a byte of it and hangs up.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+    let address = listener.local_addr().expect("address");
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut request = [0_u8; 8192];
+        let _ = stream.read(&mut request);
+        let _ = stream.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 100\r\n\r\n{");
+        // Half-close, then drain until the client gives up, so the hang-up
+        // is a clean end of the body rather than a reset.
+        let _ = stream.shutdown(std::net::Shutdown::Write);
+        while stream.read(&mut request).is_ok_and(|read| read > 0) {}
+    });
+
+    assert_eq!(
+        client()
+            .verify(
+                &format!("http://{address}/hook"),
+                &secret(),
+                &subscription_id()
+            )
+            .await,
+        Err(McpEndpointVerifyError::Failed(
+            McpEndpointFailure::ConnectionRefused
+        ))
+    );
+}
+
+#[tokio::test]
 async fn verification_refuses_urls_the_policy_forbids() {
     let https_only = ReqwestWebhookValidationClient::new().expect("client builds");
     assert!(matches!(

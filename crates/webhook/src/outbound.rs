@@ -15,6 +15,8 @@ pub mod pg_mcp_subscription_repository;
 #[cfg(feature = "outbound")]
 pub mod pg_repository;
 #[cfg(feature = "outbound")]
+pub mod rate_limited_mcp_verifications;
+#[cfg(feature = "outbound")]
 pub mod sqs_queue;
 
 #[cfg(feature = "outbound")]
@@ -27,6 +29,8 @@ pub use pg_delivery_repository::PgWebhookDeliveryRepository;
 pub use pg_mcp_subscription_repository::PgMcpSubscriptionRepository;
 #[cfg(feature = "outbound")]
 pub use pg_repository::PgRepository;
+#[cfg(feature = "outbound")]
+pub use rate_limited_mcp_verifications::RateLimitedMcpVerifications;
 #[cfg(feature = "outbound")]
 pub use sqs_queue::SqsWebhookQueue;
 #[cfg(feature = "kms")]

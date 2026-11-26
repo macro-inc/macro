@@ -61,6 +61,14 @@ export const calendarKeys = createQueryKeys('calendar', {
   joinRequests: (eventId: string) => ({
     queryKey: [eventId],
   }),
+  teamAvailability: (
+    userId: string,
+    start: string | undefined,
+    end: string | undefined,
+    members: readonly string[]
+  ) => ({
+    queryKey: [userId, start, end, members],
+  }),
   availabilityCalendars: (userId: string) => ({
     queryKey: [userId],
   }),

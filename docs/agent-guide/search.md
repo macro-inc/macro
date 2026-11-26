@@ -12,14 +12,27 @@ The field holds the whole search: there is no filter row. Filters are typed as
 operators, the search service's (`type:task`, `status:in_progress`,
 `priority:high`, `assignee:me`, `author:`, `tag:`, `inbox:`, `in:#channel`,
 `from:` beside `type:channel` or `type:call`) and Mail's (`subject:`,
-`is:unread`, `in:inbox`); `OR` between two of the same operator joins them. The
+`is:unread`, `in:inbox`); `OR` between two of the same operator joins them. A
+`tag:` or `in:#` value named by an emoji alone (`tag:🔥`) is an operator, and a
+tag or channel name is typed with its own double quotes left out. The
 field draws every whole operator in the accent colour and offers operator
 names, then their values (types, statuses, priorities, `me` and people, the
-person's tags, inboxes and channels), under it as they are typed: arrow keys
-move, Tab or Enter writes the row, Escape hides them. With words beside them the
+person's tags, inboxes, and channels and DMs, a DM by the other person's name as `in:#"Ana Lima"`), under it as they are typed: arrow keys
+move, Enter or a click writes the row, Escape hides them. As in Mail, a plain word
+offers the filter it stands for first (`tasks` gives `type:task`, also `email`,
+`docs`, `unread`), and a word of three letters or more that starts a person's
+name offers `from:` and `assignee:` them; Enter alone still searches the words.
+Hovering the info button beside the `Search` title lists eight operators with
+what each finds, and pressing it (or `All search operators`) opens the docs'
+`#search-operators` section; on touch, the empty bottom field has an info
+button beside the X that opens the same list as a `Search tips` sheet. With words beside them the
 service reads the operators; operators alone (`assignee:me`) list through the
-view's feed with the filters they set. Opening Search on a tag writes `tag:`, a
-Command K category writes `type:`, the universal input writes its extracted
+view's feed with the filters they set, each tag group (`tag:a OR tag:b tag:c`)
+joined to the feed's query as its own any-of tag filter. A minus before a word or quoted phrase
+(`budget -draft`) leaves out every result holding it, the name matches below
+included; minus words alone wait for a word, as an operator still being typed
+does, unless the search is of email alone. Opening Search on a tag writes
+`tag:`, a Command K category writes `type:`, the universal input writes its extracted
 filters as operators, and clicking a tag on a Search result adds `tag:`.
 
 `Best Matches` are the three best name matches, listed before the search service
@@ -40,11 +53,6 @@ Routines are found by name in a typed `Ctrl+K` **All** query, in touch Search's
 come from the routines list (Quick Access `routine` bucket), not the search
 service, and open the routine in the Agents workspace. They stay out of the
 empty recency list and out of Home, Drive and Tasks searches.
-
-The universal input's search filter chips use one compact control size for
-values, match mode, and clear actions. Labels and controls stay vertically
-centered inside a frame that grows to fit them, rather than clipping taller
-segments.
 
 On touch devices, the dock's **Search** button opens a persistent **Search…**
 input in `/app/search`. It starts with Command Menu-style Quick Access name
@@ -206,7 +214,11 @@ closes. Account changes recreate result sources/scrollers and cannot restore
 another account's anchor or ordering. A failed or empty source cannot revive rows
 from a historical snapshot. A later search
 cannot overwrite an earlier entry. **Close search** ends the
-session; opening Search from the dock starts in All/name mode. Mobile search state
+session; opening Search from the dock starts in All/name mode. Opening it from a
+tag (a mention, **Filter by**, the tags card) or the universal input's search
+starts the session on that text instead, listing full text, with its tags and channels bound by id
+as on desktop, and as a search even when its words would promote it to the
+composer; editing a bound token lets go of it. Mobile search state
 does not modify desktop search state. The dock search row has no Ask AI button.
 If opening a person fails, search stays open with its query and category intact
 so the result can be retried.

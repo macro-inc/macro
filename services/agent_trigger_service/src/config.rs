@@ -22,6 +22,9 @@ pub struct Config {
     /// In-plan AI allowance per Premium seat per period, in cents at provider
     /// cost. Mandatory; set in Doppler.
     pub ai_usage_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// In-plan AI allowance per Business seat per period, in cents at provider
+    /// cost. Mandatory; set in Doppler.
+    pub ai_usage_business_included_allowance_cents: ai_billing::IncludedAllowanceCents,
     /// In-plan AI allowance per Max seat per period, in cents at provider
     /// cost. Mandatory; set in Doppler.
     pub ai_usage_max_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -50,6 +53,7 @@ impl Config {
             ai_billing::PlanAllowances {
                 free: self.ai_usage_free_included_allowance_cents,
                 premium: self.ai_usage_included_allowance_cents,
+                business: self.ai_usage_business_included_allowance_cents,
                 max: self.ai_usage_max_included_allowance_cents,
             },
             self.ai_usage_overage_markup_percent,

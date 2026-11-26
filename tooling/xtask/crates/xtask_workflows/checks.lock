@@ -4,6 +4,9 @@ required-status	CI gate	pr-ci.yml
 required-status	cla	cla.yml
 script-reads-job	pr-ci.yml	Start
 script-reads-job	pr-ci.yml	CI gate
+check	agent-runtime-rollout.yml	validate	Validate the inputs
+check	agent-runtime-rollout.yml	build	Build and publish the runtime
+check	agent-runtime-rollout.yml	roll-out	Activate on the selected dev teammate
 check	alert-native-build-failures.yml	alert	alert
 check	android-apk-on-release.yml	build	Build signed Android APK
 check	android-apk-on-release.yml	publish	Attach the APK to the release
@@ -29,18 +32,23 @@ check	build_desktop_on_tag.yml	resolve-ref	Resolve build ref
 check	build_desktop_on_tag.yml	build-appimage	Build AppImage
 check	build_desktop_on_tag.yml	build-dmg	Build macOS DMG
 check	build_desktop_on_tag.yml	build-dmg-x86_64	Build macOS DMG (Intel)
+check	build_desktop_on_tag.yml	build-windows-frontend	Build Windows frontend
+check	build_desktop_on_tag.yml	build-windows	Build Windows installer
+check	build_desktop_on_tag.yml	launch-windows	Launch Windows installer
 check	build_desktop_on_tag.yml	publish-installers	Publish desktop installers
 check	build_desktop_on_tag.yml	qa-macos	QA macOS release app
 check	build_desktop_on_tag.yml	publish-release	Sign and publish desktop updates
 check	build_dmg_on_tag.yml	build-dmg	Build macOS DMG
 check	build_web_app.yml	build	Build
 check	cancel_stuck_cloud_storage_deploys.yml	cancel-stuck	Cancel runs stuck queued or in_progress past threshold
+check	captcha_vision_lab.yml	lab	CAPTCHA vision lab
 check	cargo_deny.yml	cargo-deny	cargo-deny
 check	cargo_deny_advisories.yml	advisories	cargo deny check advisories
 check	cargo_workspace_dependency_check.yml	dependency-check	dependency-check
 check	cargo_workspace_dependency_check.yml	hakari-and-dep-closures	hakari-and-dep-closures
 check	channels_e2e.yml	suite	Channels end-to-end
 check	channels_e2e.yml	email-e2e-alert	Tell Macro Alerts
+check	check_deploy_nix_sources.yml	check-deploy-nix-sources	check deploy nix sources
 check	check_generated.yml	check-workflows	check-workflows
 check	check_generated.yml	lint-workflows	lint-workflows
 check	check_node_modules_nix.yml	check-linux-node-modules-nix	check Linux node_modules nix
@@ -111,6 +119,9 @@ check	deploy_website.yml	build-deploy	Build and Deploy Website
 check	desktop-release-watch.yml	watch	Alert when a release's desktop installers are missing
 check	desktop_check.yml	test-linux	Test on Linux
 check	desktop_qa_macos.yml	qa-macos	QA on macOS
+check	desktop_windows.yml	build-windows-frontend	Build Windows frontend
+check	desktop_windows.yml	build-windows	Build Windows installer
+check	desktop_windows.yml	launch-windows	Launch Windows installer
 check	email_e2e.yml	email-e2e	Email end-to-end (${{ matrix.partition }}/3)
 check	email_e2e.yml	email-e2e-search	Email end-to-end (search)
 check	email_e2e.yml	email-e2e-known-bugs	Email end-to-end (known bugs)
@@ -167,6 +178,7 @@ check	pr-ci.yml	generated-workflows/check-workflows	Generated workflows / check-
 check	pr-ci.yml	generated-workflows/lint-workflows	Generated workflows / lint-workflows
 check	pr-ci.yml	node-modules-nix/check-linux-node-modules-nix	node_modules nix / check Linux node_modules nix
 check	pr-ci.yml	node-modules-nix/check-darwin-node-modules-nix	node_modules nix / check Darwin node_modules nix
+check	pr-ci.yml	deploy-nix-sources/check-deploy-nix-sources	Deploy nix sources / check deploy nix sources
 check	pr-ci.yml	tauri-lockfiles/check-tauri-lockfiles	Tauri lockfiles / check Tauri lockfiles
 check	pr-ci.yml	tauri-lockfiles/check-tauri-vendoring	Tauri lockfiles / check Tauri vendoring
 check	pr-ci.yml	desktop/test-linux	Desktop app / Test on Linux
@@ -177,6 +189,9 @@ check	pr-ci.yml	observability-cluster/check-manifests	Observability cluster / Ch
 check	pr-ci.yml	macrod-update/linux	macrod update / macrod update (linux)
 check	pr-ci.yml	macrod-update/macos	macrod update / macrod update (macos)
 check	pr-ci.yml	macrod-update/windows	macrod update / macrod update (windows)
+check	pr-ci.yml	desktop-windows/build-windows-frontend	Desktop Windows / Build Windows frontend
+check	pr-ci.yml	desktop-windows/build-windows	Desktop Windows / Build Windows installer
+check	pr-ci.yml	desktop-windows/launch-windows	Desktop Windows / Launch Windows installer
 check	pr-ci.yml	gate	CI gate
 check	pr-privacy-check.yml	check	PR text has no personal or support-channel details
 check	publish-android-play.yml	publish	Upload to internal testing

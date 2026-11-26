@@ -1,38 +1,45 @@
+import { differenceInCalendarDays } from 'date-fns';
 import type { DateValue } from './date';
 
 /**
  * Formats a date string according to relative time rules, eg:
  * - Same day: "Today"
- * - Within last week: "Monday"
+ * - Within the last six days: "Monday"
  * - Same year: "Mar 5"
  * - Different year: "Mar 5, 1992"
  *
  * @param value - Date object or ISO date string to format
+ * @param today - Any moment of the local day the date is read on
  * @returns Formatted date string
  */
-export function formatRelativeDate(value: DateValue): string {
+export function formatRelativeDate(
+  value: DateValue,
+  today: Date = new Date()
+): string {
   const date = value instanceof Date ? value : new Date(value);
-  const now = new Date();
+  const daysAgo = differenceInCalendarDays(today, date);
 
-  // Same day
-  if (isSameDay(date, now)) {
-    return 'Today';
-  }
+  if (daysAgo <= 0) return 'Today';
 
-  // Within last week
-  const weekAgo = new Date(now);
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  if (date > weekAgo) {
+  // Seven days back is the weekday today has, so it is named by its date.
+  if (daysAgo < 7) {
     return `${date.toLocaleDateString('en-US', { weekday: 'long' })}`;
   }
 
   // Same year
-  if (date.getFullYear() === now.getFullYear()) {
+  if (date.getFullYear() === today.getFullYear()) {
     return `${date.toLocaleDateString('en-US', { month: 'short' })} ${date.getDate()}`;
   }
 
   // Different year
   return `${date.toLocaleDateString('en-US', { month: 'short' })} ${date.getDate()}, ${date.getFullYear().toString()}`;
+}
+
+/** Names the day of a conversation, on labels that follow the current day. */
+export function formatConversationDay(value: DateValue, today: Date): string {
+  return differenceInCalendarDays(today, new Date(value)) === 1
+    ? 'Yesterday'
+    : formatRelativeDate(value, today);
 }
 
 /**

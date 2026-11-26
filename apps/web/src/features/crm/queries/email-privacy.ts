@@ -24,6 +24,7 @@ import type {
 } from '../core/email-privacy';
 import type { CrmQueryDependencies } from './dependencies';
 import { crmKeys } from './keys';
+import { listReadsCrmEmail } from './list-refresh';
 
 function consentFromResponse(data: CrmEmailConsentResponse): EmailConsent {
   return {
@@ -208,10 +209,7 @@ export function createEmailPrivacyMutation(
               await refreshActiveGraphqlSoupQueries({
                 where: threadChange
                   ? isContributionEmailRead
-                  : (body) =>
-                      typeof body === 'object' &&
-                      body !== null &&
-                      ('ecd' in body || 'eca' in body || 'crma' in body),
+                  : listReadsCrmEmail,
                 throwOnError: true,
               });
             } catch {
@@ -247,12 +245,17 @@ export function createEmailPrivacyMutation(
           });
           return data;
         }),
-      onError: (error: Error, change: EmailPrivacyChange) =>
+      onError: (error: Error, change: EmailPrivacyChange) => {
+        const archived = isArchivedCompanyRemoval(error, change);
         deps.feedback.failure(
-          isArchivedCompanyRemoval(error, change)
+          archived
             ? t('crm.privacyArchivedCompanyConflict')
             : error.message || t('crm.privacyUpdateFailed')
-        ),
+        );
+        // The list was read before the company was archived: reread it so the
+        // row points at the company instead of offering Remove again.
+        if (archived) deps.client.invalidateQueries({ queryKey: key() });
+      },
     }),
     () => deps.client
   );

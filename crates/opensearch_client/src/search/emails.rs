@@ -189,10 +189,9 @@ pub(crate) struct EmailQueryBuilder {
     importance: Option<bool>,
     /// When true, only search the subject field (for name-only search mode)
     subject_only: bool,
-    /// Tag option ids the thread must carry (definition-agnostic)
-    tag_option_ids: Vec<String>,
-    /// Whether the thread must carry every tag option id instead of any
-    match_all_tags: bool,
+    /// Tag groups the thread must meet, each by any one of its option ids
+    /// (definition-agnostic)
+    tag_groups: Vec<Vec<String>>,
     /// Words or phrases matched against one part of each message
     text_conditions: Vec<EmailTextCondition>,
     /// Tags or labels each hit's thread must, or must not, carry
@@ -222,8 +221,7 @@ impl EmailQueryBuilder {
             exclude_labels: Vec::new(),
             importance: None,
             subject_only: false,
-            tag_option_ids: Vec::new(),
-            match_all_tags: false,
+            tag_groups: Vec::new(),
             text_conditions: Vec::new(),
             label_conditions: Vec::new(),
             exclude_thread_ids: Vec::new(),
@@ -328,13 +326,9 @@ impl EmailQueryBuilder {
         self
     }
 
-    pub fn tag_option_ids(mut self, tag_option_ids: Vec<String>) -> Self {
-        self.tag_option_ids = tag_option_ids;
-        self
-    }
-
-    pub fn match_all_tags(mut self, match_all_tags: bool) -> Self {
-        self.match_all_tags = match_all_tags;
+    /// Tag groups every hit must meet, each by any one of its option ids.
+    pub fn tag_groups(mut self, tag_groups: Vec<Vec<String>>) -> Self {
+        self.tag_groups = tag_groups;
         self
     }
 
@@ -458,7 +452,10 @@ impl EmailQueryBuilder {
             if !condition.labels.is_empty() {
                 carries.should(self.carrying_labels(condition.labels.clone()));
             }
-            if let Some(tags) = build_tag_filter(&condition.tag_option_ids, false) {
+            if !condition.tag_option_ids.is_empty()
+                && let Some(tags) =
+                    build_tag_filter(std::slice::from_ref(&condition.tag_option_ids))
+            {
                 carries.should(tags);
             }
             if condition.exclude {
@@ -528,7 +525,7 @@ impl EmailQueryBuilder {
         // Tag filter: nested clause(s) matching the option ids in
         // `properties.values`. Thread-level properties are denormalized onto
         // every message doc, so filtering per doc filters the thread.
-        if let Some(nested) = build_tag_filter(&self.tag_option_ids, self.match_all_tags) {
+        if let Some(nested) = build_tag_filter(&self.tag_groups) {
             content_bool_query.filter(nested);
         }
 
@@ -655,8 +652,7 @@ pub struct EmailSearchArgs {
     pub collapse: bool,
     pub ids_only: bool,
     pub subject_only: bool,
-    pub tag_option_ids: Vec<String>,
-    pub match_all_tags: bool,
+    pub tag_groups: Vec<Vec<String>>,
     pub text_conditions: Vec<EmailTextCondition>,
     pub label_conditions: Vec<EmailLabelCondition>,
     pub exclude_thread_ids: Vec<String>,
@@ -687,8 +683,7 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .collapse(args.collapse)
             .ids_only(args.ids_only)
             .subject_only(args.subject_only)
-            .tag_option_ids(args.tag_option_ids)
-            .match_all_tags(args.match_all_tags)
+            .tag_groups(args.tag_groups)
             .text_conditions(args.text_conditions)
             .label_conditions(args.label_conditions)
             .exclude_thread_ids(args.exclude_thread_ids)

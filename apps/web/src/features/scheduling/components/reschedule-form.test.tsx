@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { RescheduleRefusedError } from '../core/booking-error';
 import { RescheduleForm } from './reschedule-form';
 
-vi.mock('./TimezoneSelect', () => ({
+vi.mock('@app/components/timezone-select/TimezoneSelect', () => ({
   TimezoneSelect: (props: {
     value: string;
     onChange: (zone: string) => void;

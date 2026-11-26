@@ -6,6 +6,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const sources = vi.hoisted(() => ({
@@ -97,6 +98,16 @@ vi.mock('@app/features/crm/crm-search', async () => {
         },
       };
     },
+  };
+});
+// jsdom has no layout, so the virtualized list would render no rows.
+vi.mock('virtua/solid', async () => {
+  const { For } = await import('solid-js');
+  return {
+    Virtualizer: (props: {
+      data: readonly unknown[];
+      children: (item: unknown, index: () => number) => JSX.Element;
+    }) => <For each={props.data}>{props.children}</For>,
   };
 });
 vi.mock('@app/lib/analytics/posthog', () => ({

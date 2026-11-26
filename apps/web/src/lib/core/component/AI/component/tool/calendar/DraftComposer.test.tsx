@@ -1,4 +1,3 @@
-import type { EventFormProps } from '@app/features/calendar/components/composer/event-form-state';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import type { VisibleCalendar } from '@queries/calendar/calendars';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
@@ -25,6 +24,30 @@ const mocks = vi.hoisted(() => ({
   startAddInbox: vi.fn(),
   execute: vi.fn(),
   guestInvites: (): boolean => true,
+  touch: false,
+}));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => mocks.touch,
+}));
+vi.mock(
+  '@app/features/calendar/views/composer/mobile/MobileAgentComposer',
+  () => ({
+    MobileAgentComposer: (props: {
+      model: { submit: () => void; setTimeZone: (zone: string) => void };
+      children: JSX.Element;
+    }) => (
+      <div data-testid="phone-agent-draft">
+        {props.children}
+        <button onClick={props.model.submit}>Create event</button>
+        <button onClick={() => props.model.setTimeZone('America/New_York')}>
+          Select zone
+        </button>
+      </div>
+    ),
+  })
+);
+vi.mock('@components/app/split-layout/split-router/mention-links', () => ({
+  useMacroMentionLinkResolver: () => () => undefined,
 }));
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarGuestInvitesFlag: () => () => mocks.guestInvites(),
@@ -52,55 +75,78 @@ vi.mock('@core/email-link', () => ({
 vi.mock('@core/user', () => ({
   recipientEntityMapper: () => (value: unknown) => value,
 }));
-vi.mock('@ui', () => ({
-  Layer: (props: { children: JSX.Element }) => props.children,
-  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button {...props} />
-  ),
-}));
-vi.mock('./EventPreview', () => ({ CalendarToolEventPreview: () => null }));
-vi.mock('@app/features/calendar/components/composer/EventForm', () => ({
-  EventForm: (props: EventFormProps) => (
+vi.mock('@ui', async () => {
+  const { cn } = await import('@app/components/ui/utils/classname');
+  return {
+    cn,
+    Layer: (props: { children: JSX.Element }) => props.children,
+    Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
+      <button {...props} />
+    ),
+  };
+});
+vi.mock('./EventPreview', () => ({
+  CalendarToolEventPreview: (props: {
+    timeZone?: string;
+    validationError?: () => string | undefined;
+    submission?: () =>
+      | { time: { kind: string; startsAt?: string } }
+      | undefined;
+  }) => (
     <>
-      <select
-        aria-label="Calendar"
-        value={props.controller.effectiveCalendarId() ?? ''}
-        onChange={(event) =>
-          props.controller.setField('calendarId', event.currentTarget.value)
-        }
-      >
-        <option value="">Choose calendar</option>
-        <For each={props.controller.calendarOptions()}>
-          {(option) => <option value={option.id}>{option.label}</option>}
-        </For>
-      </select>
-      <output aria-label="Macro calls enabled">
-        {String(props.macroCallsEnabled)}
+      <output aria-label="Preview zone">{props.timeZone}</output>
+      <output aria-label="Preview validation">
+        {props.validationError?.()}
       </output>
-      <output aria-label="Time format">{props.timeFormat}</output>
-      <output aria-label="Conference">
-        {props.controller.state().conference}
+      <output aria-label="Preview start">
+        {props.submission?.()?.time.startsAt}
       </output>
-      <button
-        type="button"
-        onClick={() => props.controller.setField('conference', 'macro')}
-      >
-        Pick Macro call
-      </button>
-      <button
-        disabled={
-          !props.controller.canSave() || props.disabled || props.pending
-        }
-        onClick={() => {
-          const values = props.controller.submitValues();
-          if (values) props.onSubmit(values);
-        }}
-      >
-        Create event
-      </button>
     </>
   ),
 }));
+vi.mock('@app/features/calendar/views/composer/AgentComposer', async () => {
+  const { useCalendarComposer } = await import(
+    '@app/features/calendar/context/calendar-composer-context'
+  );
+  return {
+    AgentComposer: () => {
+      const model = useCalendarComposer();
+      const controller = model.controller;
+      return (
+        <>
+          <select
+            aria-label="Calendar"
+            value={controller.effectiveCalendarId() ?? ''}
+            onChange={(event) =>
+              controller.setField('calendarId', event.currentTarget.value)
+            }
+          >
+            <option value="">Choose calendar</option>
+            <For each={controller.calendarOptions()}>
+              {(option) => <option value={option.id}>{option.label}</option>}
+            </For>
+          </select>
+          <output aria-label="Time format">{model.range.timeFormat}</output>
+          <output aria-label="Conference">
+            {controller.state().conference}
+          </output>
+          <button
+            type="button"
+            onClick={() => controller.setField('conference', 'macro')}
+          >
+            Pick Macro call
+          </button>
+          <button
+            disabled={!model.canSave() || model.formIsDisabled()}
+            onClick={model.submit}
+          >
+            Create event
+          </button>
+        </>
+      );
+    },
+  };
+});
 
 import {
   CalendarDraftComposer,
@@ -141,7 +187,8 @@ const calendar = (id: string): VisibleCalendar => ({
 function showDraft(
   calendarId?: string,
   overrides: Partial<CreateCalendarEvent> = {},
-  registerSubmitReader?: CalendarDraftComposerProps['registerSubmitReader']
+  registerSubmitReader?: CalendarDraftComposerProps['registerSubmitReader'],
+  showPreview = false
 ) {
   const draft = {
     title: 'Customer demo',
@@ -158,7 +205,7 @@ function showDraft(
       initialData={draft}
       previewKey="test"
       registerSubmitReader={registerSubmitReader}
-      showPreview={false}
+      showPreview={showPreview}
       sink={{
         canAct: () => true,
         lockedNotice: () => undefined,
@@ -174,6 +221,7 @@ beforeEach(() => {
   mocks.execute.mockResolvedValue(true);
   mocks.startAddInbox.mockResolvedValue(undefined);
   mocks.guestInvites = () => true;
+  mocks.touch = false;
   mocks.calendarError = false;
   mocks.linksError = false;
   mocks.links = [link('personal'), link('work')];
@@ -181,6 +229,140 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it('routes phone drafts through the shared agent model without mounting the desktop form', async () => {
+  mocks.touch = true;
+  showDraft();
+  expect(screen.getByTestId('phone-agent-draft')).not.toBeNull();
+  await fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+  expect(mocks.execute).toHaveBeenCalledWith(
+    expect.objectContaining({
+      title: 'Customer demo',
+      calendarId: 'work-calendar',
+    })
+  );
+});
+
+it('previews the same explicit time zone and instant that a review submits', async () => {
+  mocks.touch = true;
+  let read: (() => Promise<CreateCalendarEvent | undefined>) | undefined;
+  showDraft(
+    undefined,
+    {
+      time: {
+        kind: 'timed',
+        startsAt: '2030-01-01T12:00:00Z',
+        endsAt: '2030-01-01T13:00:00Z',
+        timeZone: 'UTC',
+      },
+    },
+    (reader) => {
+      read = reader;
+    },
+    true
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Select zone' }));
+  const submitted = await read?.();
+  expect(submitted?.time).toMatchObject({
+    kind: 'timed',
+    timeZone: 'America/New_York',
+  });
+  expect(screen.getByLabelText('Preview zone').textContent).toBe(
+    'America/New_York'
+  );
+  if (submitted?.time.kind === 'timed') {
+    expect(screen.getByLabelText('Preview start').textContent).toBe(
+      submitted.time.startsAt
+    );
+  }
+});
+
+it.each([
+  ['', '2030-01-01T13:00:00Z', 'Enter a start date.'],
+  ['2030-01-01T12:00:00Z', '', 'Enter an end date.'],
+])('reports an incomplete range (%s, %s)', (startsAt, endsAt, message) => {
+  mocks.touch = true;
+  showDraft(
+    undefined,
+    { time: { kind: 'timed', startsAt, endsAt } },
+    undefined,
+    true
+  );
+  expect(screen.getByLabelText('Preview validation').textContent).toBe(message);
+});
+
+it('reports the selected-zone DST gap rather than an end-time error', () => {
+  mocks.touch = true;
+  showDraft(
+    undefined,
+    {
+      time: {
+        kind: 'timed',
+        startsAt: '2030-03-10T02:30:00Z',
+        endsAt: '2030-03-10T03:30:00Z',
+        timeZone: 'UTC',
+      },
+    },
+    undefined,
+    true
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Select zone' }));
+  expect(screen.getByLabelText('Preview validation').textContent).toBe(
+    'These times do not form a valid range in the selected time zone.'
+  );
+});
+
+it('reports the blocking draft field to the preview without changing review actions', () => {
+  mocks.touch = true;
+  showDraft(undefined, { title: '' }, undefined, true);
+  expect(screen.getByLabelText('Preview validation').textContent).toContain(
+    'title'
+  );
+  cleanup();
+  showDraft(
+    undefined,
+    {
+      time: {
+        kind: 'timed',
+        startsAt: '2030-01-01T13:00:00Z',
+        endsAt: '2030-01-01T12:00:00Z',
+      },
+    },
+    undefined,
+    true
+  );
+  expect(screen.getByLabelText('Preview validation').textContent).toContain(
+    'End time'
+  );
+  cleanup();
+  showDraft(
+    undefined,
+    {
+      time: {
+        kind: 'timed',
+        startsAt: 'invalid',
+        endsAt: '2030-01-01T12:00:00Z',
+      },
+    },
+    undefined,
+    true
+  );
+  expect(screen.getByLabelText('Preview validation').textContent).toContain(
+    'start date'
+  );
+  cleanup();
+  showDraft(
+    undefined,
+    {
+      time: { kind: 'allDay', startDate: '2030-01-03', endDate: '2030-01-01' },
+    },
+    undefined,
+    true
+  );
+  expect(screen.getByLabelText('Preview validation').textContent).toContain(
+    'End date'
+  );
+  expect(mocks.execute).not.toHaveBeenCalled();
+});
 describe('AI calendar draft account selection', () => {
   it.each([
     { calendarError: true, linksError: false },

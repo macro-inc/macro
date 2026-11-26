@@ -315,3 +315,26 @@ fn legacy_payloads_omit_generation_through_the_invoke_handler() {
         }
     }
 }
+
+#[test]
+fn only_a_well_formed_traceparent_names_an_upstream_trace() {
+    let id = "4bf92f3577b34da6a3ce929d0e0e4736";
+    assert_eq!(
+        super::upstream_trace_id(Some(&format!("00-{id}-00f067aa0ba902b7-01"))),
+        Some(id)
+    );
+    for malformed in [
+        format!("00-{id}-00f067aa0ba902b7-0\0"),
+        format!("00-{id}-00f067aa0ba902b7-0z"),
+        format!("00-{id}-00f067aa0ba902b7"),
+        format!("00-{id}-00f067aa0ba902b7-01-"),
+        "secret text".to_owned(),
+    ] {
+        assert_eq!(
+            super::upstream_trace_id(Some(&malformed)),
+            None,
+            "{malformed:?}"
+        );
+    }
+    assert_eq!(super::upstream_trace_id(None), None);
+}

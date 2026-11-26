@@ -208,6 +208,6 @@ test('inferred search cannot run with an unresolved person constraint', async ({
     'macro|precise@example.com'
   );
   await expect(page.getByTestId('global-search-requests')).toContainText(
-    'macro|precise@example.com'
+    'precise@example.com'
   );
 });

@@ -37,6 +37,7 @@ const STUBBED_FILES: Record<string, string> = {
   [`${src}components/app/GlobalAppState.tsx`]: stub('global-app-state'),
   [`${src}features/agent-screen/screen-user-action.ts`]:
     stub('screen-user-action'),
+  [`${src}lib/core/signal/unfurl.ts`]: stub('unfurl'),
 };
 
 function stubFiles(): Plugin {

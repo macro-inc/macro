@@ -13,7 +13,7 @@ composition root.
 - `src/domain/service.rs`: admission, the type check before a run, and
   cancellation.
 - `src/domain/context.rs`: `CodeContext`, the type of an attended `main`'s
-  argument.
+  argument; ambient, and also importable as a type from `@macro-inc/sdk`.
 - `src/outbound/deno.rs`: process lifecycle, restricted permissions and the
   import map (`NODE_ALLOWED`, `NODE_BUILTINS`; blocked built-ins resolve to
   `deno/unavailable.mjs`).
@@ -98,6 +98,11 @@ The bootstrap replaces a result's `data` larger than `Limits::max_result_bytes`
 with an outline and preview, keeping `reviews`; the frame limit stays the backstop.
 An unattended result is never summarized: later routine steps read it whole, so
 one over the limit fails the run with a message saying so.
+
+A promise that rejects before the program awaits or catches it would end Deno
+with no frame; the bootstrap's `unhandledrejection` listener reports its reason
+as the run's error instead, with how to avoid it and, as `stop()` does, a warning
+that calls already started may have taken effect.
 
 Every Deno child's `code_execution.process` span records how it ended:
 `process.exit_code` or `process.signal`, `process.wall_ms`, `process.cpu_ms`

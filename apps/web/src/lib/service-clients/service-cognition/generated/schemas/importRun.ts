@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ImportRunError } from './importRunError';
+import type { ImportRunErrorKind } from './importRunErrorKind';
 import type { ImportRunReviewId } from './importRunReviewId';
 import type { ImportRunReviewSessionId } from './importRunReviewSessionId';
 import type { ImportRunScanned } from './importRunScanned';
@@ -17,6 +18,7 @@ import type { RunStatus } from './runStatus';
 export interface ImportRun {
   /** Discovery failure detail, when the run failed. */
   error?: ImportRunError;
+  error_kind?: ImportRunErrorKind;
   /** The review presenting the run's plan, once one does. A Notion plan is
 presented while it is still `running`; rows staged after that take it. */
   review_id?: ImportRunReviewId;

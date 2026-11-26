@@ -18,9 +18,7 @@ export function UnifiedModelTrigger(props: {
   const name = () => {
     if (!custom()) return model();
     // An agent with no model of its own reads as its name alone.
-    return state.model
-      ? `${state.agent?.name} · ${model()}`
-      : state.agent?.name;
+    return state.model ? `${state.agent?.name}, ${model()}` : state.agent?.name;
   };
   const effort = () =>
     state.effort?.options.length && state.effort.options.length > 1

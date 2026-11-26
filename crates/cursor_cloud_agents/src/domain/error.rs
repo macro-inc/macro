@@ -77,14 +77,18 @@ impl std::fmt::Display for PromptRefusal {
     }
 }
 
-/// A prompt Cursor refused because the account behind the API key has no
-/// background-agent budget left.
+/// A prompt Cursor refused because the account behind the API key is out of
+/// prepaid credit, or too close to its spend limit, to run it.
 ///
-/// Seen in production as a 400 with code `usage_limit_exceeded`: "You need
-/// to increase your hard limit. Background Agent requires at least $2
-/// remaining until your hard limit." A fact about the person's own Cursor
-/// account, fixed on Cursor's dashboard, so it is the person's to read - not
-/// an internal error, which is how the raw report presented it.
+/// Seen in production with code `usage_limit_exceeded` and one of two
+/// messages, by the account's kind of Cursor plan: "Your prepaid balance is
+/// used up. Add funds or enable auto top-up in your billing settings to keep
+/// going." (prepaid credit, The X Subscription) or "You need to increase your
+/// hard limit. Background Agent requires at least $2 remaining until your hard
+/// limit." (a spend limit, legacy plans). Nothing but the wording tells them
+/// apart, so the notice is true of both. A fact about the person's own Cursor
+/// account, fixed in Cursor's billing settings, so it is the person's to read -
+/// not an internal error, which is how the raw report presented it.
 #[derive(Debug, Error)]
 #[error("cursor refused the prompt ({code}): {detail}")]
 pub struct UsageLimitExceeded {
@@ -95,28 +99,33 @@ pub struct UsageLimitExceeded {
 }
 
 impl UsageLimitExceeded {
-    /// Cursor's error codes for an exhausted budget.
+    /// Cursor's error codes for an account out of credit or near its limit.
     ///
     /// Matched on the structured `error.code`, never the message: Cursor's
     /// wording (and the dollar figure in it) is theirs to change.
     pub const CODES: [&'static str; 1] = ["usage_limit_exceeded"];
 
-    /// Where the limit is raised.
-    pub const DASHBOARD_URL: &'static str = "https://www.cursor.com/dashboard?tab=settings";
+    /// Macro's docs on what to change in Cursor, for each kind of Cursor plan.
+    ///
+    /// Not a Cursor dashboard: where credit and limits live depends on the
+    /// person's plan (grok.com for The X Subscription, cursor.com for legacy
+    /// plans), and the docs say which, so they can follow Cursor's moves
+    /// without a deploy.
+    pub const HELP_URL: &'static str = "https://macro.com/docs/AI/cursor#cursor-usage-and-billing";
 
     /// What to show the person who sent the prompt.
     #[must_use]
     pub fn notice(&self) -> FailureNotice {
         FailureNotice {
             kind: FailureNoticeKind::ProviderUsageLimit,
-            title: "Cursor usage limit reached".to_owned(),
-            body: "Your Cursor account has no background-agent budget left, so this message \
-                   wasn't sent. Raise the spending limit in your Cursor dashboard, then send \
-                   it again."
+            title: "Cursor billing stopped this message".to_owned(),
+            body: "Your Cursor account is out of prepaid credit, or too close to its spend \
+                   limit to start a run. Add credit or raise the limit in Cursor's billing \
+                   settings, then send the message again."
                 .to_owned(),
             link: Some(FailureLink {
-                label: "Manage Cursor usage".to_owned(),
-                url: Self::DASHBOARD_URL.to_owned(),
+                label: "How to fix this".to_owned(),
+                url: Self::HELP_URL.to_owned(),
             }),
         }
     }

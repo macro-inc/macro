@@ -150,6 +150,34 @@
       # pruned sources; only changes when a manifest or the lock changes.
       deployDummySrc = craneLib.mkDummySrc { inherit src; };
 
+      # The [patch.crates-io] crates kept under vendor/, read from the root
+      # manifest so a new one is covered without touching this file.
+      vendoredPatchDirs = builtins.filter (dir: pkgs.lib.hasPrefix "vendor/" dir) (
+        map (patch: patch.path or "") (
+          builtins.attrValues ((builtins.fromTOML (builtins.readFile ../Cargo.toml)).patch.crates-io or { })
+        )
+      );
+      isVendoredPatch =
+        rel:
+        rel == "vendor"
+        || builtins.any (dir: rel == dir || pkgs.lib.hasPrefix (dir + "/") rel) vendoredPatchDirs;
+      vendoredPatchesSrc = pkgs.lib.cleanSourceWith {
+        src = ../.;
+        name = "cloud-storage-vendored-patches";
+        filter = path: _type: isVendoredPatch (pkgs.lib.removePrefix ((toString ../.) + "/") (toString path));
+      };
+
+      # What every buildDepsOnly compiles: mkDummySrc stubs every path crate,
+      # the patched ones under vendor/ too, and crates.io crates compile
+      # against those (sqlx-macros-core uses sqlx-postgres's items), so they
+      # keep their real sources. Only the vendored crates, not rootDepsSrc,
+      # so a .sqlx or asset change leaves the deps artifacts cached.
+      depsDummySrc = pkgs.runCommand "cloud-storage-deps-dummy-src" { } ''
+        cp -rT ${deployDummySrc} $out
+        chmod -R +w $out
+        cp -rfT ${vendoredPatchesSrc} $out
+      '';
+
       # Real sources of one workspace crate dir, same filter as the full tree
       # (keeps per-crate assets: pdfium blobs, .sql migrations, templates).
       crateDirSrc =
@@ -183,11 +211,7 @@
           || (pkgs.lib.hasPrefix ".sqlx/" rel)
           || (rel == "static_assets")
           || (pkgs.lib.hasPrefix "static_assets/" rel)
-          || (rel == "vendor")
-          || (rel == "vendor/utoipa-swagger-ui")
-          || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
-          || (rel == "vendor/chrono-tz")
-          || (pkgs.lib.hasPrefix "vendor/chrono-tz/" rel)
+          || (isVendoredPatch rel)
           || (
             type == "regular"
             && !(pkgs.lib.hasInfix "/" rel)
@@ -330,6 +354,7 @@
       cargoArtifacts = craneLib.buildDepsOnly (
         commonArgs
         // {
+          dummySrc = depsDummySrc;
           cargoExtraArgs = "--locked --all-features";
         }
       );
@@ -609,6 +634,7 @@
       deployCargoArtifacts = craneLib.buildDepsOnly (
         commonArgs
         // {
+          dummySrc = depsDummySrc;
           pname = "cloud-storage-deploy-deps";
           doCheck = false;
           # buildDepsOnly runs a cargo check in buildPhase by default; keep this
@@ -674,6 +700,7 @@
       guestCargoArtifacts = craneLib.buildDepsOnly (
         commonArgs
         // {
+          dummySrc = depsDummySrc;
           pname = "macro-box-guest-deps";
           doCheck = false;
           cargoCheckCommand = "true";
@@ -953,6 +980,7 @@
       lambdaDeployCargoArtifacts = craneLib.buildDepsOnly (
         lambdaCommonArgs
         // {
+          dummySrc = depsDummySrc;
           pname = "cloud-storage-lambda-deps";
           doCheck = false;
           # buildDepsOnly runs a cargo check in buildPhase by default; keep this
@@ -1242,14 +1270,32 @@
       checks = {
         code-mode-assets = codeModeAssets;
         # Deploy builds compile [patch.crates-io] crates from the pruned
-        # source, so their real code (not mkDummySrc's stubs) must be there.
-        pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
-          grep -q "fn write_embed_code" \
-            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
-          grep -q "IANA_TZDB_VERSION" \
-            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/chrono-tz/src/prebuilt/directory.rs
-          touch $out
-        '';
+        # source, and deps-only builds from their dummy source, so their real
+        # code (not mkDummySrc's stubs) must be in both. Each vendored crate
+        # is compared whole, in a pruned source and every deps-only source, so
+        # a new one or a new buildDepsOnly without depsDummySrc fails here,
+        # not in a deploy.
+        pruned-deploy-src-vendored-patches =
+          pkgs.runCommand "cloud-storage-pruned-vendored-patches"
+            { nativeBuildInputs = [ pkgs.diffutils ]; }
+            ''
+              ${pkgs.lib.concatMapStrings
+                (
+                  built:
+                  pkgs.lib.concatMapStrings (dir: ''
+                    diff -r ${vendoredPatchesSrc}/${dir} ${built}/${dir}
+                  '') vendoredPatchDirs
+                )
+                [
+                  (prunedDeploySrc "service-agent-harness-service" "agent_harness_service")
+                  cargoArtifacts.src
+                  deployCargoArtifacts.src
+                  lambdaDeployCargoArtifacts.src
+                  guestCargoArtifacts.src
+                ]
+              }
+              touch $out
+            '';
         pruned-deploy-src-starter-agent =
           pkgs.runCommand "cloud-storage-pruned-starter-agent"
             { nativeBuildInputs = [ pkgs.diffutils ]; }

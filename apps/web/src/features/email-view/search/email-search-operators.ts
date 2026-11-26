@@ -291,13 +291,16 @@ export type EmailSearchOperatorCompletion =
       key: EmailSearchPersonKey;
       exclude: boolean;
       person: EmailSearchPerson;
+      /** Offered for a plain word that names them, not after an operator. */
+      byName?: boolean;
     }
   | {
       kind: 'label';
       key: EmailSearchLabelKey;
       exclude: boolean;
       label: EmailSearchLabel;
-    };
+    }
+  | { kind: 'word'; filter: EmailSearchWordFilter; typed: string };
 
 /** Fewest letters typed before operator names are offered for a word. */
 const MIN_NAME_PREFIX = 2;
@@ -341,7 +344,7 @@ const searchValue = (value: string) =>
 export function emailSearchCompletionText(
   completion: EmailSearchOperatorCompletion
 ): string {
-  const minus = completion.exclude ? '-' : '';
+  const minus = 'exclude' in completion && completion.exclude ? '-' : '';
   return match(completion)
     .with({ kind: 'operator' }, ({ key }) => `${minus}${key}:`)
     .with({ kind: 'value' }, ({ key, value }) => `${minus}${key}:${value} `)
@@ -353,7 +356,54 @@ export function emailSearchCompletionText(
       { kind: 'label' },
       ({ key, label }) => `${minus}${key}:${searchValue(label.name)} `
     )
+    .with({ kind: 'word' }, ({ filter }) => `${filter} `)
     .exhaustive();
+}
+
+/** The filters a plain word can stand for. */
+export type EmailSearchWordFilter =
+  | 'is:unread'
+  | 'is:starred'
+  | 'has:attachment'
+  | 'in:sent'
+  | 'newer_than:1d'
+  | 'newer_than:7d';
+
+/** Plain words, typed whole, and the filter each offers in their place. */
+const WORD_FILTERS: readonly {
+  words: readonly string[];
+  filter: EmailSearchWordFilter;
+}[] = [
+  { words: ['unread'], filter: 'is:unread' },
+  { words: ['starred'], filter: 'is:starred' },
+  {
+    words: ['attachment', 'attachments', 'attached'],
+    filter: 'has:attachment',
+  },
+  { words: ['sent'], filter: 'in:sent' },
+  { words: ['today'], filter: 'newer_than:1d' },
+  { words: ['this week'], filter: 'newer_than:7d' },
+];
+
+/**
+ * The filter the plain words at the end of `text` stand for (`attachment`
+ * offers `has:attachment`, `this week` offers `newer_than:7d`), with those
+ * words as typed. A word inside quotes or after a minus offers none.
+ */
+export function wordFilterAtEnd(
+  text: string
+): { filter: EmailSearchWordFilter; typed: string } | undefined {
+  const lower = text.toLowerCase();
+  for (const { words, filter } of WORD_FILTERS) {
+    for (const word of words) {
+      if (!lower.endsWith(word)) continue;
+      const start = text.length - word.length;
+      if (start > 0 && !/\s/.test(text.charAt(start - 1))) continue;
+      if ((text.slice(0, start).match(/"/g)?.length ?? 0) % 2 === 1) continue;
+      return { filter, typed: text.slice(start) };
+    }
+  }
+  return undefined;
 }
 
 /** Fewest letters typed before a label that only contains them is offered. */

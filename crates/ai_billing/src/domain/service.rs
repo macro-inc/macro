@@ -290,6 +290,7 @@ where
         };
         match read {
             Ok(Some(period)) => {
+                let period = period.month_containing(now);
                 let Some(adopted) = period.adopted(anchor, now) else {
                     tracing::warn!(
                         period_start = %period.start,
@@ -927,6 +928,12 @@ where
         user: &MacroUserIdStr<'_>,
         change: super::plan_change::PlanChange,
     ) -> Result<()> {
+        // History is keyed by the metered period, a month even on an annual
+        // subscription.
+        let change = super::plan_change::PlanChange {
+            period: change.period.month_containing(change.at),
+            ..change
+        };
         if change.is_valid() {
             self.repo
                 .record_plan_change(

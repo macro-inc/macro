@@ -65,3 +65,41 @@ async fn thread_notification_context_excludes_deleted_messages(
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn only_a_direct_agent_conversation_is_an_agent_dm(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let agent_dm = Uuid::from_u128(0xd1);
+    let shared = Uuid::from_u128(0xd2);
+    let people_dm = Uuid::from_u128(0xd3);
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, channel_type, owner_id)
+         VALUES ($1, 'direct_message', $4), ($2, 'private', $4), ($3, 'direct_message', $4)",
+        agent_dm,
+        shared,
+        people_dm,
+        USER_A,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO comms_channel_agents (channel_id, bot_id, kind, user_id)
+         VALUES ($1, $3, 'direct', $4), ($2, $3, 'member', NULL)",
+        agent_dm,
+        shared,
+        Uuid::from_u128(0xb0),
+        USER_A,
+    )
+    .execute(&pool)
+    .await?;
+    let ctx = PgChannelSideEffectContext::new(pool);
+
+    assert!(ctx.is_agent_dm(agent_dm).await?);
+    assert!(
+        !ctx.is_agent_dm(shared).await?,
+        "an agent that is a member of a shared channel does not make it an agent DM"
+    );
+    assert!(!ctx.is_agent_dm(people_dm).await?);
+    Ok(())
+}

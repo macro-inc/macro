@@ -79,6 +79,9 @@ export type EngineOpenOutcome =
   | 'reset-incompatible'
   | 'reset-corrupt'
   | 'reset-storage-uncertain';
+/** `preserved`: every mutation queued before an engine opened is still queued
+ * under its own ID, even if that engine's storage was reset. */
+export type CacheQueueState = 'preserved' | 'reset';
 export type EngineFatalCode = 'storage-reset-required' | 'runtime-failure';
 /** `storage-busy`: another context kept the database files open through the
  * engine's bounded wait. An open changed nothing; a wipe may have removed one
@@ -213,6 +216,7 @@ export type CoordinatorToTabEnvelope =
       ownerEpoch: OwnerEpoch;
       /** Whether this engine reopened durable data or created/reset it. */
       openOutcome: EngineOpenOutcome;
+      queue: CacheQueueState;
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
@@ -328,6 +332,7 @@ export type EngineToCoordinatorEnvelope =
       ownerLockClientId?: string;
       databaseActionProof: DatabaseActionProof;
       openOutcome: EngineOpenOutcome;
+      queue: CacheQueueState;
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
@@ -457,6 +462,9 @@ const isEngineOpenOutcome = (value: unknown): value is EngineOpenOutcome =>
     'reset-corrupt',
     'reset-storage-uncertain',
   ].includes(value);
+
+const isCacheQueueState = (value: unknown): value is CacheQueueState =>
+  value === 'preserved' || value === 'reset';
 
 const isEngineFatalCode = (value: unknown): value is EngineFatalCode =>
   value === 'storage-reset-required' || value === 'runtime-failure';
@@ -1255,9 +1263,11 @@ export function validateCoordinatorToTabEnvelope(
           'kind',
           'ownerEpoch',
           'openOutcome',
+          'queue',
         ]) &&
         isPositiveInteger(value.ownerEpoch) &&
-        isEngineOpenOutcome(value.openOutcome)
+        isEngineOpenOutcome(value.openOutcome) &&
+        isCacheQueueState(value.queue)
       ) {
         return pass(value as CoordinatorToTabEnvelope);
       }
@@ -1462,6 +1472,7 @@ export function validateEngineToCoordinatorEnvelope(
           'ownerLockClientId',
           'databaseActionProof',
           'openOutcome',
+          'queue',
         ]) &&
         isNonEmptyString(value.tabId) &&
         isPositiveInteger(value.ownerEpoch) &&
@@ -1470,7 +1481,8 @@ export function validateEngineToCoordinatorEnvelope(
         (value.ownerLockClientId === undefined ||
           isNonEmptyString(value.ownerLockClientId)) &&
         isDatabaseActionProof(value.databaseActionProof) &&
-        isEngineOpenOutcome(value.openOutcome)
+        isEngineOpenOutcome(value.openOutcome) &&
+        isCacheQueueState(value.queue)
       ) {
         return pass(value as EngineToCoordinatorEnvelope);
       }

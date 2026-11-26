@@ -1,9 +1,18 @@
 import type { AiUsageSnapshot } from '@service-auth/ai-billing-types';
+import type { PlanTier } from '../../paywall/plans';
 import { MIN_RELOAD_CENTS } from '../../usage/core/usage';
 import {
   type BillingSimulation,
   includedCents,
 } from '../core/billing-simulation';
+
+/** Each plan's default member reload limit, as the backend's plan catalog sets it. */
+const PLAN_RELOAD_LIMITS: Record<PlanTier, number | undefined> = {
+  free: undefined,
+  premium: 20_000,
+  business: 40_000,
+  max: 100_000,
+};
 
 /** Adapt local fixture facts to the same decoder used by the live Usage view. */
 export function fixtureSnapshot(state: BillingSimulation): AiUsageSnapshot {
@@ -59,9 +68,7 @@ export function fixtureSnapshot(state: BillingSimulation): AiUsageSnapshot {
             monthly_limit_cents:
               limit ??
               (state.role === 'member'
-                ? state.tier === 'max'
-                  ? 100_000
-                  : 20_000
+                ? (PLAN_RELOAD_LIMITS[state.tier] ?? null)
                 : null),
             committed_cents: state.reloadSpentCents,
             resets_at: new Date(

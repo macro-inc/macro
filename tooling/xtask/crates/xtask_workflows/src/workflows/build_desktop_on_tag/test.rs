@@ -915,6 +915,81 @@ fn download_links_fail_without_the_installer() {
 }
 
 #[test]
+fn windows_failure_leaves_the_macos_and_linux_release_alone() {
+    let yaml = rendered_yaml();
+    let installers = job_yaml(&yaml, "publish-installers");
+    // It waits for Windows, so a published installer ships with the release,
+    // but only macOS and Linux must have succeeded.
+    assert!(installers.contains("- launch-windows"), "{installers}");
+    assert!(installers.contains("!cancelled()"), "{installers}");
+    assert!(
+        installers.contains("needs.build-appimage.result == ''success''")
+            && installers.contains("needs.build-dmg.result == ''success''")
+            && !installers.contains("needs.build-windows.result")
+            && !installers.contains("needs.launch-windows.result"),
+        "{installers}"
+    );
+    let updates = job_yaml(&yaml, "publish-release");
+    assert!(
+        updates.contains("!cancelled()")
+            && updates.contains("needs.publish-installers.result == ''success''")
+            && updates.contains("needs.qa-macos.result == ''success''"),
+        "{updates}"
+    );
+}
+
+#[test]
+fn publish_jobs_take_only_release_artifacts() {
+    let yaml = rendered_yaml();
+    for id in ["publish-installers", "publish-release"] {
+        let publish = job_yaml(&yaml, id);
+        assert!(publish.contains("pattern: macro-*"), "{publish}");
+    }
+    let windows = job_yaml(&yaml, "build-windows");
+    assert!(windows.contains("name: windows-installer-"), "{windows}");
+    assert!(!windows.contains("name: macro-windows-"), "{windows}");
+    // Only an installer that launched and may be published joins the release.
+    let launch = job_yaml(&yaml, "launch-windows");
+    assert!(launch.contains("- build-windows"), "{launch}");
+    assert!(launch.contains("name: windows-installer-"), "{launch}");
+    assert!(
+        launch.contains("if: needs.build-windows.outputs.publish == 'true'")
+            && launch.contains("name: macro-windows-"),
+        "{launch}"
+    );
+    let frontend = job_yaml(&yaml, "build-windows-frontend");
+    assert!(frontend.contains("name: windows-frontend-"), "{frontend}");
+}
+
+#[test]
+fn windows_release_signs_through_its_environment_identity() {
+    let yaml = rendered_yaml();
+    let windows = job_yaml(&yaml, "build-windows");
+    assert!(windows.contains("id-token: write"), "{windows}");
+    assert!(
+        windows.contains("name: desktop-windows-signing"),
+        "{windows}"
+    );
+    assert!(
+        windows.contains("vars.WINDOWS_SIGNING_AZURE_CLIENT_ID"),
+        "{windows}"
+    );
+    assert!(
+        windows.contains("vars.WINDOWS_DESKTOP_RELEASE"),
+        "{windows}"
+    );
+    assert!(
+        windows.contains("SIGN: ${{ startsWith(needs.resolve-ref.outputs.ref, 'refs/tags/v') && 'true' || 'false' }}"),
+        "{windows}"
+    );
+    let frontend = job_yaml(&yaml, "build-windows-frontend");
+    assert!(
+        frontend.contains("REQUIRE_POSTHOG_API_KEY: 'true'"),
+        "{frontend}"
+    );
+}
+
+#[test]
 fn download_links_publish_the_intel_installer_when_the_release_built_it() {
     let fixture = LinksFixture::new(RELEASE_VERSION);
     fs::write(

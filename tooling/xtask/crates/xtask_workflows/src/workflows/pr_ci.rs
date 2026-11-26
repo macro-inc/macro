@@ -32,17 +32,17 @@ use gh_workflow::{
 use xtask_paths::RepoGlob;
 
 use crate::workflows::actions::{
-    CallCargoDeny, CallCargoWorkspaceDependencyCheck, CallCheckGenerated, CallCheckNodeModulesNix,
-    CallCheckTauriLockfiles, CallCodeCheckCloudStorage, CallCodeCheckConventions,
-    CallCodeCheckInfra, CallDesktopCheck, CallObservabilityAws, CallObservabilityCluster,
-    CallObservabilityImage, CallSdkCheck, CallTestMacrodUpdate, CallWebAppCheckMain,
-    DornyPathsFilter,
+    CallCargoDeny, CallCargoWorkspaceDependencyCheck, CallCheckDeployNixSources,
+    CallCheckGenerated, CallCheckNodeModulesNix, CallCheckTauriLockfiles,
+    CallCodeCheckCloudStorage, CallCodeCheckConventions, CallCodeCheckInfra, CallDesktopCheck,
+    CallDesktopWindows, CallObservabilityAws, CallObservabilityCluster, CallObservabilityImage,
+    CallSdkCheck, CallTestMacrodUpdate, CallWebAppCheckMain, DornyPathsFilter,
 };
 use crate::workflows::{
-    cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
-    check_tauri_lockfiles, code_check_conventions, code_check_infra, desktop_check,
-    observability_aws, observability_cluster, observability_image, runners, sdk_check, steps,
-    test_macrod_update,
+    cargo_deny, cargo_workspace_dependency_check, check_deploy_nix_sources, check_generated,
+    check_node_modules_nix, check_tauri_lockfiles, code_check_conventions, code_check_infra,
+    desktop_check, desktop_windows, observability_aws, observability_cluster, observability_image,
+    runners, sdk_check, steps, test_macrod_update,
 };
 
 #[cfg(test)]
@@ -85,6 +85,9 @@ struct Call {
     workflow: fn() -> CallJob,
     /// Files that make it run; `None` runs it on every request.
     paths: Option<&'static [RepoGlob<'static>]>,
+    /// Whether `CI gate` waits for it. A call outside the gate still runs and
+    /// shows its checks on the PR, but cannot block merging.
+    gating: bool,
 }
 
 const CALLS: &[Call] = &[
@@ -93,90 +96,121 @@ const CALLS: &[Call] = &[
         name: "Cloud Storage",
         workflow: || CallCodeCheckCloudStorage::new().job(),
         paths: None,
+        gating: true,
     },
     Call {
         id: "web-app",
         name: "Web App",
         workflow: || CallWebAppCheckMain::new().job(),
         paths: None,
+        gating: true,
     },
     Call {
         id: "infra",
         name: "Infra",
         workflow: || CallCodeCheckInfra::new().job(),
         paths: Some(code_check_infra::PATHS),
+        gating: true,
     },
     Call {
         id: "conventions",
         name: "Conventions",
         workflow: || CallCodeCheckConventions::new().job(),
         paths: Some(code_check_conventions::PATHS),
+        gating: true,
     },
     Call {
         id: "cargo-deny",
         name: "cargo deny",
         workflow: || CallCargoDeny::new().job(),
         paths: Some(cargo_deny::PATHS),
+        gating: true,
     },
     Call {
         id: "workspace-dependencies",
         name: "Workspace dependencies",
         workflow: || CallCargoWorkspaceDependencyCheck::new().job(),
         paths: Some(cargo_workspace_dependency_check::PATHS),
+        gating: true,
     },
     Call {
         id: "generated-workflows",
         name: "Generated workflows",
         workflow: || CallCheckGenerated::new().job(),
         paths: Some(check_generated::PATHS),
+        gating: true,
     },
     Call {
         id: "node-modules-nix",
         name: "node_modules nix",
         workflow: || CallCheckNodeModulesNix::new().job(),
         paths: Some(check_node_modules_nix::PATHS),
+        gating: true,
+    },
+    Call {
+        id: "deploy-nix-sources",
+        name: "Deploy nix sources",
+        workflow: || CallCheckDeployNixSources::new().job(),
+        paths: Some(check_deploy_nix_sources::PATHS),
+        gating: true,
     },
     Call {
         id: "tauri-lockfiles",
         name: "Tauri lockfiles",
         workflow: || CallCheckTauriLockfiles::new().job(),
         paths: Some(check_tauri_lockfiles::PATHS),
+        gating: true,
     },
     Call {
         id: "desktop",
         name: "Desktop app",
         workflow: || CallDesktopCheck::new().job(),
         paths: Some(desktop_check::PATHS),
+        gating: true,
     },
     Call {
         id: "sdk",
         name: "SDK",
         workflow: || CallSdkCheck::new().job(),
         paths: Some(sdk_check::PATHS),
+        gating: true,
     },
     Call {
         id: "observability-aws",
         name: "Observability AWS layer",
         workflow: || CallObservabilityAws::new().job(),
         paths: Some(observability_aws::PATHS),
+        gating: true,
     },
     Call {
         id: "observability-image",
         name: "Observability image",
         workflow: || CallObservabilityImage::new().job(),
         paths: Some(observability_image::PATHS),
+        gating: true,
     },
     Call {
         id: "observability-cluster",
         name: "Observability cluster",
         workflow: || CallObservabilityCluster::new().job(),
         paths: Some(observability_cluster::PATHS),
+        gating: true,
     },
     Call {
         id: "macrod-update",
         name: "macrod update",
         workflow: || CallTestMacrodUpdate::new().job(),
         paths: Some(test_macrod_update::PATHS),
+        gating: true,
+    },
+    // Outside the gate until the Windows runner has a track record: a cold
+    // build takes most of an hour.
+    Call {
+        id: "desktop-windows",
+        name: "Desktop Windows",
+        workflow: || CallDesktopWindows::new().job(),
+        paths: Some(desktop_windows::PATHS),
+        gating: false,
     },
 ];
 
@@ -309,7 +343,7 @@ fn call_job(call: &Call) -> CallJob {
 /// never a request. A skipped call is a path filter that didn't match.
 fn gate() -> Job {
     let needed = std::iter::once(START.id())
-        .chain(CALLS.iter().map(|call| call.id))
+        .chain(CALLS.iter().filter(|call| call.gating).map(|call| call.id))
         .map(str::to_string)
         .collect::<Vec<_>>();
 

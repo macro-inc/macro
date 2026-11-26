@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_runtime_update SET cleared_at = $2\n                   WHERE computer_id = $1 AND outcome = 'needs_operator' AND cleared_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f4affb5c254236e514ca35f485e342b8b7d28980e25e7a9a1a7ff43b02bfebbd"
+}

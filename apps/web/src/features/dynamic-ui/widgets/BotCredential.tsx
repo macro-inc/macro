@@ -1,5 +1,6 @@
 import { MintCredential } from '@channel/Bots/MintCredential';
 import { useBotQuery } from '@queries/bots/bots';
+import { Card } from '@ui';
 import { Show } from 'solid-js';
 import type { WidgetOf } from '../view';
 
@@ -16,20 +17,25 @@ export function BotCredential(props: BotCredentialProps) {
     // Read data only once loaded: a pending read suspends the whole view.
     <Show when={bot.isSuccess && bot.data}>
       {(loaded) => (
-        <section
-          class="flex w-full max-w-2xl min-w-0 flex-col gap-2 rounded-lg border border-edge-muted p-3"
-          aria-label={`Token for ${loaded().name}`}
-        >
-          <h3 class="text-sm font-semibold text-ink">
-            Token for {loaded().name}
-            {props.label ? ` · ${props.label}` : ''}
-          </h3>
-          <MintCredential
-            botId={props.botId}
-            label={props.label}
-            expiresAt={props.expiresAt}
-          />
-        </section>
+        <div class="w-full max-w-2xl min-w-0">
+          <Card
+            variant="filled"
+            depth={3}
+            role="region"
+            class="gap-2 p-3"
+            aria-label={`Token for ${loaded().name}`}
+          >
+            <h3 class="text-sm font-semibold text-ink">
+              Token for {loaded().name}
+              {props.label ? ` · ${props.label}` : ''}
+            </h3>
+            <MintCredential
+              botId={props.botId}
+              label={props.label}
+              expiresAt={props.expiresAt}
+            />
+          </Card>
+        </div>
       )}
     </Show>
   );

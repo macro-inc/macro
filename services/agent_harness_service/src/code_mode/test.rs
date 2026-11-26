@@ -236,6 +236,7 @@ fn the_dry_run_scope_is_every_sdk_read_and_no_write() {
 fn the_generation_scope_matches_the_sdk_catalog() {
     let intended = [
         "scheduled-action.addSuggestion",
+        "scheduled-action.nameSuggestionTopic",
         "scheduled-action.rewriteSuggestion",
         "scheduled-action.retireSuggestion",
         "scheduled-action.attachSuggestionDraft",
@@ -933,7 +934,7 @@ async fn suggestions_brief_programs_type_check() {
         "  // the program's own lines go here and end with: return { data, reviews: [] };\n";
     assert!(shape.contains(marker));
     // What the brief leaves the session to fill in.
-    let session_values = "const docId = '', threadId = '', channelId = '', callId = '', messageId = '', dedupKey = '', title = '', summary = '', prompt = '', subject = '', bodyText = '', reason = '', now = '';\nconst importance = 50;\nconst keys: string[] = [];\n";
+    let session_values = "const docId = '', threadId = '', channelId = '', callId = '', messageId = '', dedupKey = '', title = '', summary = '', prompt = '', subject = '', bodyText = '', reason = '', now = '', topicKey = '', name = '', oneFact = '';\nconst importance = 50;\nconst keys: string[] = [], topicKeys: string[] = [];\n";
     let programs = [
         map.to_owned(),
         documents.to_owned(),

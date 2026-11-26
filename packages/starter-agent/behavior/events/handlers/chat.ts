@@ -5,6 +5,7 @@ import type { ChatContext } from '../../capabilities/chat/context.ts';
 import type { Incoming } from '../../capabilities/chat/entry.ts';
 import { judge, screenAttributes } from '../../capabilities/chat/listen.ts';
 import { replyPrompt, threadOf } from '../../capabilities/chat/prompt.ts';
+import { trackMaintenanceTask } from '../../context/runtime-maintenance.ts';
 import type { chatSources } from '../sources/chat.ts';
 import { millisecondsSince, recordOutcome } from './outcome.ts';
 
@@ -139,75 +140,77 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
         // One span from the reply run's start to its end, in the trace of
         // the screen that queued the conversation's last message; the wake
         // (and every script and Macro call it makes) is its child.
-        void trace(
-          turnSpan,
-          async (span) => {
-            span.set('chat.channel_id', channelId);
-            span.set('chat.message_id', last.id);
-            span.set('chat.turn.dm', last.dm);
-            span.set('chat.turn.in_thread', last.thread !== null);
-            span.set('chat.turn.messages', messages.length);
-            const queued = millisecondsSince(messages[0]?.at, started);
-            if (queued !== undefined) span.set('chat.turn.queued_ms', queued);
-            const woke = await context.wake(request).catch(
-              (error: unknown): Woke => ({
-                kind: 'failed',
+        void trackMaintenanceTask(() =>
+          trace(
+            turnSpan,
+            async (span) => {
+              span.set('chat.channel_id', channelId);
+              span.set('chat.message_id', last.id);
+              span.set('chat.turn.dm', last.dm);
+              span.set('chat.turn.in_thread', last.thread !== null);
+              span.set('chat.turn.messages', messages.length);
+              const queued = millisecondsSince(messages[0]?.at, started);
+              if (queued !== undefined) span.set('chat.turn.queued_ms', queued);
+              const woke = await context.wake(request).catch(
+                (error: unknown): Woke => ({
+                  kind: 'failed',
+                  error: String(error),
+                })
+              );
+              recordOutcome(span, 'chat.turn', woke);
+              await typing.stop(channelId);
+              const first = answered.get(channelId);
+              span.set('chat.turn.answered', first !== undefined);
+              // Whether anything reached the conversation: what a person sees.
+              span.set(
+                'chat.turn.result',
+                first === undefined ? 'not_posted' : 'posted'
+              );
+              span.set(
+                'chat.turn.duration_ms',
+                Math.round(clock.now().since(started).total('milliseconds'))
+              );
+              if (first !== undefined)
+                span.set(
+                  'chat.turn.first_reply_ms',
+                  Math.round(first.since(started).total('milliseconds'))
+                );
+              await log.event(replyLog, {
+                channel: conversation.channel,
+                messages: messages.length,
+                result: woke.kind,
+                ...(woke.kind === 'failed' ? { error: woke.error } : {}),
+                first_reply:
+                  first === undefined
+                    ? 'none'
+                    : `${(first.since(started).total('milliseconds') / 1000).toFixed(1)}s`,
+              });
+              // A run that died before answering must not lose the messages.
+              if (woke.kind === 'failed' && first === undefined)
+                await unanswered.push(conversation);
+              for (const message of messages)
+                await log.event(handledLog, {
+                  ...message,
+                  handled: isoText(clock.now()),
+                });
+              await history.answered(
+                channelId,
+                messages.map(({ id }) => id)
+              );
+            },
+            last.traceparent
+          )
+            // The run is detached: its bookkeeping failing must not become an
+            // unhandled rejection. Logged (log.event never throws), and the
+            // conversation is released either way.
+            .catch((error: unknown) =>
+              log.event(replyLog, {
+                channel: conversation.channel,
+                failed: 'bookkeeping',
                 error: String(error),
               })
-            );
-            recordOutcome(span, 'chat.turn', woke);
-            await typing.stop(channelId);
-            const first = answered.get(channelId);
-            span.set('chat.turn.answered', first !== undefined);
-            // Whether anything reached the conversation: what a person sees.
-            span.set(
-              'chat.turn.result',
-              first === undefined ? 'not_posted' : 'posted'
-            );
-            span.set(
-              'chat.turn.duration_ms',
-              Math.round(clock.now().since(started).total('milliseconds'))
-            );
-            if (first !== undefined)
-              span.set(
-                'chat.turn.first_reply_ms',
-                Math.round(first.since(started).total('milliseconds'))
-              );
-            await log.event(replyLog, {
-              channel: conversation.channel,
-              messages: messages.length,
-              result: woke.kind,
-              ...(woke.kind === 'failed' ? { error: woke.error } : {}),
-              first_reply:
-                first === undefined
-                  ? 'none'
-                  : `${(first.since(started).total('milliseconds') / 1000).toFixed(1)}s`,
-            });
-            // A run that died before answering must not lose the messages.
-            if (woke.kind === 'failed' && first === undefined)
-              await unanswered.push(conversation);
-            for (const message of messages)
-              await log.event(handledLog, {
-                ...message,
-                handled: isoText(clock.now()),
-              });
-            await history.answered(
-              channelId,
-              messages.map(({ id }) => id)
-            );
-          },
-          last.traceparent
-        )
-          // The run is detached: its bookkeeping failing must not become an
-          // unhandled rejection. Logged (log.event never throws), and the
-          // conversation is released either way.
-          .catch((error: unknown) =>
-            log.event(replyLog, {
-              channel: conversation.channel,
-              failed: 'bookkeeping',
-              error: String(error),
-            })
-          )
-          .finally(() => waiting.release(channelId));
+            )
+            .finally(() => waiting.release(channelId))
+        );
       }
     );

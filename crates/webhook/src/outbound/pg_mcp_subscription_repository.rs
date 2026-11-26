@@ -8,7 +8,9 @@ use crate::domain::mcp::live_subscribers::LIVE_SUBSCRIBERS_MAX_ROWS;
 use crate::domain::mcp::models::{
     McpEventSubscription, McpMatchCandidate, McpSecretCiphertext, McpSubscriptionId,
 };
-use crate::domain::mcp::ports::{McpStoreOutcome, McpSubscriptionRepo, McpSubscriptionUpsert};
+use crate::domain::mcp::ports::{
+    McpLiveStanding, McpStoreOutcome, McpSubscriptionRepo, McpSubscriptionUpsert,
+};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value;
@@ -280,24 +282,32 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
     }
 
     #[tracing::instrument(skip_all, err)]
-    async fn has_live_endpoint(
+    async fn live_standing(
         &self,
         user_id: &MacroUserIdStr<'static>,
         endpoint_url: &str,
-    ) -> Result<bool, Self::Err> {
-        sqlx::query_scalar!(
+        subscription_id: &McpSubscriptionId,
+    ) -> Result<McpLiveStanding, Self::Err> {
+        // At most the quota's 50 live rows, through the (user_id, expires_at)
+        // index; the same count `store_within_quota` makes under its lock.
+        let row = sqlx::query!(
             r#"
-            SELECT EXISTS (
-                SELECT 1
-                FROM mcp_event_subscription
-                WHERE user_id = $1 AND endpoint_url = $2 AND expires_at > now()
-            ) AS "exists!"
+            SELECT
+                count(*) FILTER (WHERE subscription_id <> $3) AS "others!",
+                coalesce(bool_or(endpoint_url = $2), false) AS "endpoint_verified!"
+            FROM mcp_event_subscription
+            WHERE user_id = $1 AND expires_at > now()
             "#,
             user_id.as_ref(),
             endpoint_url,
+            subscription_id.as_str(),
         )
         .fetch_one(&self.pool)
-        .await
+        .await?;
+        Ok(McpLiveStanding {
+            others: u32::try_from(row.others).unwrap_or(u32::MAX),
+            endpoint_verified: row.endpoint_verified,
+        })
     }
 
     // Not spanned: it runs every few seconds in every replica, outside any

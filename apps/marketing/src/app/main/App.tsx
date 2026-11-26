@@ -14,7 +14,6 @@ import { isServer } from 'solid-js/web';
 import { Homepage } from '../../features/setup/Homepage';
 import {
   applyPalette,
-  onPaletteChange,
   preferredPalette,
 } from '../../features/setup/sitePalette';
 import '../../styles/dark-theme.css';
@@ -22,10 +21,7 @@ import '../../styles/body-headings.css';
 import '../../features/setup/cream-preview.css';
 import { DemoMentionMenu } from '../../features/marketing/components/DemoMentionMenu';
 import { PageVignette } from '../../features/marketing/components/PageVignette';
-import {
-  applyTheme,
-  systemThemeEffect,
-} from '../../lib/theme/utils/themeUtils';
+import { applyTheme } from '../../lib/theme/utils/themeUtils';
 import { BaseHeader } from '../components/base/BaseHeader';
 import { DialogTheme } from '../components/dialogs/DialogTheme';
 import { UtilWrap } from '../components/utils/UtilWrap';
@@ -219,7 +215,6 @@ const RootLayout: ParentComponent = (props) => {
     void location.pathname;
     if (!isServer) applyPalette(preferredPalette(), location.pathname);
   });
-  onMount(() => onCleanup(onPaletteChange(applyPalette)));
   let scrollRef!: HTMLDivElement;
   const [headerCtaActive, setHeaderCtaActive] = createSignal(false);
 
@@ -326,7 +321,6 @@ export const App: Component<{
 }> = (props) => {
   // The animal clock now starts itself while animate() subscribers exist —
   // no unconditional global rAF loop.
-  systemThemeEffect();
   applyTheme('Macro');
   utilFaviconEffect();
 

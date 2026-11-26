@@ -10,8 +10,8 @@ use import_notion::domain::model::{ImportScope, NotionId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::{ImportToolContext, import_error, tool_error};
-use crate::domain::models::{NotionImportReport, NotionSharing, RunStatus};
+use super::{FAILED_NEXT, ImportToolContext, failure_reason, import_error, tool_error};
+use crate::domain::models::{ImportSource, NotionImportReport, NotionSharing, RunStatus};
 use crate::domain::ports::ImportError;
 use crate::domain::service::NotionWorkspaceImporter;
 
@@ -68,6 +68,20 @@ pub struct ImportFromNotionResponse {
     pub message: String,
 }
 
+impl ImportFromNotionResponse {
+    /// The agent reads why a run failed from `error_kind` and the message;
+    /// the run's report text is for the owner's card.
+    pub(super) fn for_agent(report: NotionImportReport, message: String) -> Self {
+        Self {
+            report: NotionImportReport {
+                error: None,
+                ..report
+            },
+            message,
+        }
+    }
+}
+
 impl ToolAnnotated for ImportFromNotion {
     const ANNOTATIONS: ToolAnnotations =
         ToolAnnotations::additive("Import from Notion").with_open_world();
@@ -114,7 +128,7 @@ impl<T: NotionWorkspaceImporter> AsyncTool<ImportToolContext<T>> for ImportFromN
             other => import_error("Notion import failed", other),
         })?;
         let message = message(self.action, &report);
-        Ok(ImportFromNotionResponse { report, message })
+        Ok(ImportFromNotionResponse::for_agent(report, message))
     }
 }
 
@@ -212,8 +226,8 @@ pub(super) fn message(action: NotionImportAction, report: &NotionImportReport) -
             waiting_on_teammates(report)
         ),
         (_, Some(RunStatus::Failed)) => format!(
-            "The Notion import failed: {}. Fix the cause and plan again.",
-            report.error.as_deref().unwrap_or("unknown error")
+            "The Notion import failed: {}. {FAILED_NEXT}",
+            failure_reason(ImportSource::Notion, report.error_kind)
         ),
         (_, Some(RunStatus::Dismissed)) => "The last Notion import was cancelled.".to_string(),
         (_, None) => "No Notion import has been planned yet. Use action `plan`.".to_string(),

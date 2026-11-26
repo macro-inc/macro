@@ -64,10 +64,10 @@ step.
 | Classifier unavailable or rejecting | under 1% of calls, hourly; the rules wait for 2 failures | Jev's API errors in the worker's `jev.evaluate` spans. Unavailable threads are retried by the next sweep. |
 | Due dates failing | under 5% of asks, hourly; the rules wait for 2 failures | `email_focus.due_date` spans, and the agent harness's `universal_input/thread-due-date` errors and latency. A failed ask stores the thread without a date. |
 | Mail waiting to be classified (p95) | under 2 minutes | `email_focus.queue` spans' `event_age_ms`, the Event stream lag panel, and classifier latency. |
-| Sweep duration | under 30 minutes | The "focus sweep finished" log (`inboxes`, `candidates`, `stopped_early`) and the `sweep` span; the stale-thread read below. |
+| Sweep duration | under 30 minutes | The "focus sweep finished" log (`inboxes`, `inboxes_read_in_full`, `candidates`, `stopped_early`) and the `sweep` span; the stale-thread read below. The first sweep after a start reads every inbox in full and is the slowest; later sweeps read about a twenty-fourth of them in full. |
 | Sweep failures | none | The "focus sweep failed" error log, and "focus sweep left out an inbox" for an inbox whose threads could not be read (the sweep goes on to the others; `inboxes_failed` on "focus sweep finished"). |
 | New inbox backfill time (p95) | under 15 minutes | `email_focus.backfill` spans: `candidates` per pass, and the classifier. Only inboxes that joined the rollout while the worker ran are timed; the inboxes its first look finds after a start are not. |
-| Stale-thread read (p95) | under 500 ms | MacroDB CPU and load on the Prod alerts dashboard; the read's plan for a large inbox. |
+| Stale-thread read (p95) | under 500 ms | MacroDB CPU and load on the Prod alerts dashboard; the read's plan for a large inbox; in database monitoring, the read's time and `shared_blks_read` per call by query signature. Most reads take only mail from the last day; each inbox's daily full read is the slow tail. Compare hours with one sweep: a start's extra sweep adds fast reads that lower the hour's p95. |
 | Worker restarts | at most 3 in 30 minutes | ECS stopped-task reasons for `email-focus-worker`, and the worker's last logs. A start counts only once the worker is up; a worker that fails earlier (configuration, database) shows only in ECS. No data for 30 minutes means the worker isn't publishing, and the rule fires. |
 | Focus tab opened empty | under 5% of opens | PostHog, from the web app's Focus tab events. |
 

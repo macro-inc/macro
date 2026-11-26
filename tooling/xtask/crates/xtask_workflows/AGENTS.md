@@ -25,6 +25,10 @@ to YAML, plus the files derived from them (`checks.lock`,
 - Change an action's or reusable workflow's inputs: run `cargo x workflows`
   once before callers use the new setter (bindings come from the rendered files).
 
+- `agent_runtime_rollout.rs` builds immutable bundles from `main` and submits
+  one dev computer request from the in-VPC migrator, using the image rollout's
+  bucket and database credentials.
+
 ## Checks
 
 - `cargo test -p xtask_workflows -p gh_workflow`

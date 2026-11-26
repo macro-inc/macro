@@ -90,7 +90,10 @@ State ownership, reactivity, and async error handling.
   `query.data` still tracks the result being replaced, which is every update
   of a query without `reconcile`. A query with `reconcile` updates rows in
   place without replacing `data`, so an unwrapped walk would miss them: keep
-  its reads tracked.
+  its reads tracked, or for Soup `LiveQuery` and `createPredicateQuery` rows
+  reconciled in place, read through `readRowSnapshot(record)` from
+  `@graphql-cache/exchange/live-query` to subscribe at row granularity and walk
+  unwrapped records.
 - **FE-52** Read reactive values (feature flags, `isEditable()`, the current
   user) inside a reactive scope, never as a snapshot at mount. A flag that is
   still loading is not "off".
@@ -111,4 +114,12 @@ State ownership, reactivity, and async error handling.
   `@core/util/onElementConnect`, which runs the callback under the caller's
   owner, and register cleanup for setup-time resources (plugins, debounced
   saves) at setup, not in that callback. Enforced by ast-grep
-  `ts-/tsx-no-ownerless-element-connect`, CI error.
+  `ts-/tsx-no-ownerless-element-connect`, CI error. Code after an `await`
+  has no owner either: never call a query or mutation hook (`useMutation`,
+  a `use*Query` or `use*Mutation`) there or in a handler. Its computations
+  and cache subscription are never disposed: the computations can join the
+  reactive graph of views that are mounted, keeping them alive after they
+  close, and its observer keeps the mutation in the cache for the session.
+  Run such a mutation from module-scope options with
+  `queryClient.getMutationCache().build(...).execute(...)`, which leaves no
+  observer behind, as `recordHistoryView` in `queries/history` does.

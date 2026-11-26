@@ -5,12 +5,14 @@ export function agentPickerGroups(roster: readonly RosterAgent[]) {
   const agents = rosterForAgentPicker(roster);
   return [
     {
+      id: 'builtin' as const,
       label: 'Built-in',
       agents: agents.filter(
         (agent) => !agent.unavailableReason && agent.share === 'system'
       ),
     },
     {
+      id: 'personal' as const,
       // A powered-off computer's agent is still one of yours, just off.
       label: 'Your agents',
       agents: agents.filter(
@@ -20,6 +22,7 @@ export function agentPickerGroups(roster: readonly RosterAgent[]) {
       ),
     },
     {
+      id: 'connection' as const,
       label: 'Needs connection',
       agents: agents.filter(
         (agent) => agent.unavailableReason && !agent.poweredOff

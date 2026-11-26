@@ -333,6 +333,36 @@ impl StreamBridge {
         tool_name: &str,
         tool_call_id: Option<&str>,
     ) -> Option<InvalidToolCallAction> {
+        let action = self
+            .recover_invalid_tool_call(tool_name, tool_call_id)
+            .await;
+        if matches!(action, Some(InvalidToolCallAction::Retry { .. })) {
+            self.drop_started_calls();
+        }
+        action
+    }
+
+    /// A retry throws the reply away and asks the model again, so the calls
+    /// it announced never run: drop them now, rather than leave them open
+    /// until the turn ends.
+    fn drop_started_calls(&self) {
+        let Some(streamed) = &self.streamed else {
+            return;
+        };
+        let started =
+            std::mem::take(&mut streamed.lock().expect("streamed calls poisoned").started);
+        for call in started {
+            let _ = self
+                .tx
+                .send(Ok(StreamPart::ToolCallDropped { id: call.id }));
+        }
+    }
+
+    async fn recover_invalid_tool_call(
+        &self,
+        tool_name: &str,
+        tool_call_id: Option<&str>,
+    ) -> Option<InvalidToolCallAction> {
         match self
             .searchable_catalog
             .iter()

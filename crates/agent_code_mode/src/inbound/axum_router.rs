@@ -150,7 +150,12 @@ impl IntoResponse for CodeExecutionApiError {
             CodeModeError::Conflict => {
                 (StatusCode::CONFLICT, "review changed; reload before acting").into_response()
             }
-            CodeModeError::Invalid(message) => (StatusCode::BAD_REQUEST, message).into_response(),
+            // A refused approval is shown to the owner like a draft problem.
+            CodeModeError::Invalid(message)
+            | CodeModeError::Unpresentable(message)
+            | CodeModeError::NotApprovable(message) => {
+                (StatusCode::BAD_REQUEST, message).into_response()
+            }
             error @ CodeModeError::ConnectedAppUnreachable => {
                 (StatusCode::BAD_GATEWAY, error.to_string()).into_response()
             }

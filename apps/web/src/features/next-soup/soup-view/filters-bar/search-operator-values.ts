@@ -14,7 +14,7 @@ export type SearchOperatorPersonTyping = Accessor<string | undefined>;
  * What the Search field offers as operator values: people as the composer's
  * recipient picker finds and ranks them, read only while `person` gives the
  * value being typed after `assignee:`, `author:` or `from:`; the caller's tag
- * names, inbox addresses and named channels.
+ * names, inbox addresses, and channels and DMs by the names they show.
  */
 export function createSearchOperatorValues(
   person: SearchOperatorPersonTyping
@@ -29,7 +29,7 @@ export function createSearchOperatorValues(
   });
   const tags = createTagOptions().options;
   const linksQuery = useMailAccountsQuery();
-  const channels = useQuickAccess().useList('channel').items;
+  const channels = useQuickAccess().useList('channel', 'dm').items;
 
   return createMemo(() => ({
     people: namesPerson() ? toEmailSearchPeople(recipients.items()) : [],

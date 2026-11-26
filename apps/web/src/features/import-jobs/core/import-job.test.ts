@@ -73,7 +73,7 @@ describe('importJob', () => {
       },
       { report: undefined, slackChannelsImporting: 0 }
     );
-    expect(done.phase).toEqual({ kind: 'completed' });
+    expect(done.phase).toEqual({ kind: 'completed', partial: false });
     expect(done.dismissable).toBe(true);
   });
 
@@ -93,6 +93,26 @@ describe('importJob', () => {
     );
     expect(job.phase).toEqual({ kind: 'importingChannels', channels: 4 });
     expect(job.dismissable).toBe(false);
+  });
+
+  it('says why a run failed, by its kind', () => {
+    const failed = importJob(
+      {
+        source: 'notion',
+        status: 'failed',
+        updated_at: '2026-11-06T11:00:00Z',
+        error: 'raw proxy detail',
+        error_kind: 'access_lost',
+      },
+      { report: undefined, slackChannelsImporting: 0 }
+    );
+    expect(failed.phase).toEqual({ kind: 'failed', errorKind: 'access_lost' });
+
+    const unexplained = importJob(
+      { source: 'jira', status: 'failed', updated_at: '2026-11-06T11:00:00Z' },
+      { report: undefined, slackChannelsImporting: 0 }
+    );
+    expect(unexplained.phase).toEqual({ kind: 'failed', errorKind: null });
   });
 });
 

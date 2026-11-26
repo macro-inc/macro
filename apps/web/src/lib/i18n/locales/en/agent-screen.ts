@@ -4,6 +4,7 @@ export default {
   screen: 'Screen',
   desktopTitle: '{{name}}’s desktop',
   screenTitle: '{{name}}’s screen',
+  screenChipUnknown: 'A computer’s screen',
 
   statusConnecting: 'Connecting',
   statusLive: 'Live',

@@ -576,6 +576,7 @@ impl<'a> Gen<'a> {
             ("soup-filter", 14),
             ("live", 6),
             ("deep-window", 2),
+            ("id-list", 3),
             ("mail-filter", 10),
             ("read-keys", 4),
             ("read", 3),
@@ -674,6 +675,7 @@ impl<'a> Gen<'a> {
             }
             "live" => self.live(),
             "deep-window" => self.deep_window(),
+            "id-list" => self.id_list(),
             "mail-filter" => {
                 let request = self.mail_filter();
                 let pages = *pick(&mut self.rng, &[1u8, 2, 3, 8, 40]);

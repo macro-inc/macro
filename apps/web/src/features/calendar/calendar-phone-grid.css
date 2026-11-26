@@ -1,0 +1,98 @@
+@media (max-width: 639px) {
+  html[data-touch-device="true"] .calendar-view-content {
+    --calendar-phone-axis-width: 46px;
+    --calendar-phone-axis-gap: 6px;
+    --calendar-phone-card-radius: 20px;
+    --calendar-phone-card-inset: 8px;
+    --calendar-grid-bottom-gap: 12px;
+    padding-inline: 0 var(--calendar-phone-card-inset);
+  }
+
+  /* The pager moves only day columns. Keep FullCalendar's measured label cells
+     just outside its viewport so one fixed gutter can mirror their geometry. */
+  html[data-touch-device="true"] .calendar-view-content .phone-time-page {
+    width: calc(100% + var(--calendar-phone-axis-width));
+    margin-left: calc(-1 * var(--calendar-phone-axis-width));
+  }
+
+  /* Reserve the same two-lane envelope even when a week has no all-day events. */
+  html[data-touch-device="true"] .calendar-view .fc-timeGridWeek-view {
+    --calendar-all-day-min-height: var(--calendar-all-day-max-height);
+  }
+
+  /* FullCalendar uses half-hour slots: two 32px slots make a 64px hour. */
+  html[data-touch-device="true"] .calendar-view .fc-timeGridThreeDay-view .fc-timegrid-slot {
+    height: 2rem;
+  }
+
+  html[data-touch-device="true"] .calendar-phone-now-line::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 0.625rem;
+    height: 0.75rem;
+    transform: translateY(-50%);
+    background: var(--color-accent);
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc .calendar-now-axis-indicator {
+    visibility: hidden;
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-axis,
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-slot-label,
+  html[data-touch-device="true"] .calendar-view .fc-timegrid colgroup col:first-child {
+    width: var(--calendar-phone-axis-width) !important;
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-scroller-harness-liquid {
+    position: relative;
+    isolation: isolate;
+    clip-path: inset(0 0 0 var(--calendar-phone-axis-width) round var(--calendar-phone-card-radius) var(--calendar-phone-card-radius) 0 0);
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-scroller-harness-liquid::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 var(--calendar-phone-axis-width);
+    z-index: -1;
+    background: var(--color-surface-2);
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-slot-label-cushion,
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-axis-cushion {
+    visibility: hidden;
+  }
+
+  /* The external gutter exposes the centered midnight label above the card. */
+  html[data-touch-device="true"] .calendar-view .fc .fc-timegrid-slots tbody tr:first-child .fc-timegrid-slot-label-cushion {
+    transform: translateY(-50%);
+  }
+
+  /* Geometry still comes from FullCalendar; the phone overlay spans every column. */
+  html[data-touch-device="true"] .calendar-view .fc-timegrid-now-indicator-line::before {
+    background: transparent;
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .calendar-day-header-weekday {
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .calendar-day-header-date {
+    width: 28px;
+    height: 28px;
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timeGridDay-view .fc-col-header-cell {
+    text-align: left;
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timeGridDay-view .fc-col-header-cell-cushion {
+    width: 48px;
+  }
+}

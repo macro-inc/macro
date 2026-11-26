@@ -157,7 +157,7 @@ where
     Inner: McpCredentials,
     Tokens: MacroApiTokens,
 {
-    #[tracing::instrument(skip_all, err, fields(%owner, %agent, ?destination))]
+    #[tracing::instrument(skip_all, err, fields(%agent, ?destination))]
     async fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
