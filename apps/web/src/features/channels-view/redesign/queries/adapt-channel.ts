@@ -1,6 +1,7 @@
 import type { ChannelEntity } from '@entity';
 import type { DirectoryChannel } from '@queries/channel/directory-core';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
+import { unwrap } from 'solid-js/store';
 import {
   type SidebarChannel,
   type SidebarSection,
@@ -9,11 +10,21 @@ import {
 
 const BOT_PRINCIPAL_PREFIX = 'bot|';
 
-/** Adapt a combined ChannelEntity + optional DirectoryChannel record into a pure SidebarChannel. */
+/**
+ * Adapt a combined `ChannelEntity` + optional `DirectoryChannel` into a pure
+ * `SidebarChannel`. Unwraps store proxies up front so reading nested arrays
+ * like `participantIds` or `participants` inside a tracked scope never
+ * allocates per-element Solid signals.
+ */
 export function toSidebarChannel(
-  channel: ChannelEntity,
-  directoryRecord?: DirectoryChannel
+  rawChannel: ChannelEntity,
+  rawDirectoryRecord?: DirectoryChannel
 ): SidebarChannel {
+  const channel = unwrap(rawChannel);
+  const directoryRecord = rawDirectoryRecord
+    ? unwrap(rawDirectoryRecord)
+    : undefined;
+
   const rawParticipants = channel.participantIds ?? [];
   const participantIds = directoryRecord
     ? directoryRecord.participants
@@ -44,6 +55,12 @@ export function toSidebarChannel(
         }
       : undefined);
 
+  const isAgentDm =
+    directoryRecord !== undefined
+      ? Boolean(directoryRecord.agentDm)
+      : channel.channelType === 'direct_message' &&
+        botParticipantIds.length > 0;
+
   return {
     id: channel.id,
     name: directoryRecord?.agentDm?.name ?? channel.name,
@@ -57,7 +74,7 @@ export function toSidebarChannel(
     frecencyScore: directoryRecord?.frecencyScore ?? 0,
     participantIds,
     botParticipantIds,
-    isAgentDm: Boolean(directoryRecord?.agentDm),
+    isAgentDm,
     latestMessage: latest
       ? {
           messageId: latest.messageId,
@@ -66,6 +83,46 @@ export function toSidebarChannel(
           createdAtMs: toEpochMs(latest.createdAt),
           threadId: latest.threadId ?? undefined,
           mentions: latest.mentions ?? [],
+        }
+      : undefined,
+  };
+}
+
+/**
+ * Adapt a single `DirectoryChannel` record into a `SidebarChannel` without
+ * allocating reactive store signals. Intended ONLY for small lazy top-K
+ * Quick Switch hits, never for eagerly mapping the full directory.
+ */
+export function toSidebarChannelFromDirectory(
+  rawRecord: DirectoryChannel
+): SidebarChannel {
+  const record = unwrap(rawRecord);
+  const latest = record.latestNonThreadMessage;
+  return {
+    id: record.id,
+    name: record.agentDm?.name ?? record.name ?? 'Unnamed channel',
+    channelType: record.channelType,
+    teamId: record.teamId ?? undefined,
+    isParticipant: record.isParticipant,
+    updatedAtMs: toEpochMs(record.updatedAt),
+    viewedAtMs: toEpochMs(record.viewedAt),
+    createdAtMs: toEpochMs(record.createdAt),
+    frecencyScore: record.frecencyScore ?? 0,
+    participantIds: record.participants
+      .filter((participant) => participant.leftAt === null)
+      .map((participant) => participant.userId),
+    botParticipantIds: record.botParticipants
+      .filter((participant) => participant.leftAt === null)
+      .map((participant) => participant.botId),
+    isAgentDm: Boolean(record.agentDm),
+    latestMessage: latest
+      ? {
+          messageId: latest.messageId,
+          senderId: latest.senderId,
+          content: latest.content,
+          createdAtMs: toEpochMs(latest.createdAt),
+          threadId: latest.threadId ?? undefined,
+          mentions: latest.mentions,
         }
       : undefined,
   };

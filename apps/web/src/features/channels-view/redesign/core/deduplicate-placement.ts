@@ -35,6 +35,10 @@ export type PlacedSection = {
   commonPrefix?: string;
   allChannels: PlacedSectionChannel[];
   visibleChannels: PlacedSectionChannel[];
+  /** Total claimed member IDs in this section (including not-yet-windowed IDs). */
+  totalMemberCount: number;
+  /** Number of claimed member IDs not yet fetched into the current window. */
+  unresolvedCount: number;
   overflowCount: number;
   unreadCount: number;
   mentionCount: number;
@@ -123,6 +127,8 @@ export function buildBrowsePlacement(options: {
   sectionOrder: readonly string[];
   hiddenTeamSectionIds: ReadonlySet<string>;
   expandedLargeSectionIds: ReadonlySet<string>;
+  /** Per-section visible window limits (progressive +25 paging on large sections). */
+  sectionWindowLimits?: ReadonlyMap<string, number>;
   sectionSortById?: ReadonlyMap<
     string,
     'smart' | 'name' | 'updated_at' | 'viewed_at' | 'created_at'
@@ -155,29 +161,33 @@ export function buildBrowsePlacement(options: {
 
   const placeSection = (section: SidebarSection): PlacedSection => {
     const rawMembers: SidebarChannel[] = [];
+    let totalMemberCount = 0;
+    let unreadCount = 0;
+    let mentionCount = 0;
+
     for (const id of section.channelIds) {
       if (claimed.has(id)) continue;
       const channel = channelsById.get(id);
-      if (!channel) continue;
-      // Personal sections are strictly participant-only.
-      if (section.scope === 'personal' && !channel.isParticipant) continue;
+      // Personal sections are strictly participant-only when resolved.
+      if (channel && section.scope === 'personal' && !channel.isParticipant) {
+        continue;
+      }
       claimed.add(id);
-      rawMembers.push(channel);
+      totalMemberCount += 1;
+      if (options.unreadIds.has(id)) unreadCount += 1;
+      mentionCount += options.mentionCounts.get(id) ?? 0;
+      if (channel) {
+        rawMembers.push(channel);
+      }
     }
 
     const commonPrefix = detectCommonSectionPrefix(
       rawMembers.map((channel) => channel.name)
     );
-    const isLarge = rawMembers.length > LARGE_SECTION_SMART_LIMIT;
+    const isLarge =
+      Math.max(rawMembers.length, totalMemberCount) > LARGE_SECTION_SMART_LIMIT;
     const sortMode =
       options.sectionSortById?.get(section.id) ?? (isLarge ? 'smart' : 'name');
-
-    let unreadCount = 0;
-    let mentionCount = 0;
-    for (const channel of rawMembers) {
-      if (options.unreadIds.has(channel.id)) unreadCount += 1;
-      mentionCount += options.mentionCounts.get(channel.id) ?? 0;
-    }
 
     const filtered = rawMembers.filter((channel) => {
       const isUnread = options.unreadOrMentionedIds.has(channel.id);
@@ -205,13 +215,19 @@ export function buildBrowsePlacement(options: {
       displayName: stripCommonPrefix(channel.name, commonPrefix),
     }));
 
+    const explicitWindow = options.sectionWindowLimits?.get(section.id);
     const expandAll =
-      options.expandedLargeSectionIds.has(section.id) ||
-      options.unreadOnly ||
-      allPlaced.length <= LARGE_SECTION_SMART_LIMIT;
+      explicitWindow === undefined &&
+      (options.expandedLargeSectionIds.has(section.id) ||
+        options.unreadOnly ||
+        allPlaced.length <= LARGE_SECTION_SMART_LIMIT);
+
+    const effectiveCap =
+      explicitWindow ??
+      (expandAll ? allPlaced.length : LARGE_SECTION_SMART_LIMIT);
 
     let visibleChannels: PlacedSectionChannel[];
-    if (expandAll) {
+    if (expandAll || allPlaced.length <= effectiveCap) {
       visibleChannels = allPlaced;
     } else {
       const kept: PlacedSectionChannel[] = [];
@@ -226,7 +242,7 @@ export function buildBrowsePlacement(options: {
         }
       }
       for (const entry of allPlaced) {
-        if (kept.length >= LARGE_SECTION_SMART_LIMIT) break;
+        if (kept.length >= effectiveCap) break;
         if (seen.has(entry.channel.id)) continue;
         kept.push(entry);
         seen.add(entry.channel.id);
@@ -234,13 +250,21 @@ export function buildBrowsePlacement(options: {
       visibleChannels = kept;
     }
 
+    const unresolvedCount = Math.max(0, totalMemberCount - rawMembers.length);
+    const effectiveTotal =
+      options.unreadOnly || options.hideMuted
+        ? allPlaced.length
+        : Math.max(allPlaced.length, totalMemberCount);
+
     return {
       section,
       isSupport: isSupportSection(section),
       commonPrefix,
       allChannels: allPlaced,
       visibleChannels,
-      overflowCount: Math.max(0, allPlaced.length - visibleChannels.length),
+      totalMemberCount,
+      unresolvedCount,
+      overflowCount: Math.max(0, effectiveTotal - visibleChannels.length),
       unreadCount,
       mentionCount,
     };
@@ -258,7 +282,7 @@ export function buildBrowsePlacement(options: {
     if (options.hiddenTeamSectionIds.has(section.id)) {
       hiddenTeamSections.push(section);
       for (const id of section.channelIds) {
-        if (channelsById.has(id)) claimed.add(id);
+        claimed.add(id);
       }
       continue;
     }
