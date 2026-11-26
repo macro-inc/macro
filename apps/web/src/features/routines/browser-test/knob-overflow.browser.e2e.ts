@@ -252,16 +252,21 @@ for (const width of WIDTHS) {
       await summarize.locator('p').getByText(ALERT).hover();
       await expect(tooltip).toHaveText(ENTITY_NAMES['thread-alert']);
       // A name with nowhere to break wraps inside the tooltip.
-      const echo = page
-        .getByRole('group', { name: 'Echo entity knobs' })
-        .locator('p');
-      await echo.getByText(/^launch_recap_/).hover();
+      await page
+        .getByRole('group', { name: 'Post a digest' })
+        .locator('p')
+        .getByText(/^launch_recap_/)
+        .hover();
       await expect(tooltip).toHaveText(ENTITY_NAMES['document-export']);
       expect(await textOutside(tooltip)).toBe(0);
       // A name that fits has nothing more to show.
       await page.mouse.move(0, 0);
       await expect(tooltip).toHaveCount(0);
-      await echo.getByText('Shared assets').hover();
+      await page
+        .getByRole('group', { name: 'Echo entity knobs' })
+        .locator('p')
+        .getByText('Shared assets')
+        .hover();
       await page.clock.runFor(2000);
       await expect(tooltip).toHaveCount(0);
     });

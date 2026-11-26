@@ -29,10 +29,10 @@ const ALERT = entity('alert', 'Alert thread', 'email_thread', 'thread-alert');
 
 /**
  * The routine page's steps with every kind of item a knob can name: one step
- * whose sentence lists them all, a file name with nowhere to break among
- * them, one whose sentence holds a single long subject, and one that lists
- * that subject, a short item and a link with nowhere to break under Settings.
- * A suggestion card puts the same subject in its smaller sentence.
+ * whose sentence lists them all, one whose sentence holds a single long
+ * subject, and one whose sentence holds a file name with nowhere to break and
+ * that lists the subject, a short item and a link with nowhere to break under
+ * Settings. A suggestion card puts the same subject in its smaller sentence.
  */
 const STEPS: StepDraft[] = [
   {
@@ -42,7 +42,7 @@ const STEPS: StepDraft[] = [
     summary: 'Reads each picked item.',
     source: SOURCE,
     sentence:
-      'Read {channel}, {document}, {folder}, {person}, {task}, {alert}, {chat}, {company}, {contact}, {project}, {database}, {file}, {again}, and return what each points to.',
+      'Read {channel}, {document}, {folder}, {person}, {task}, {alert}, {chat}, {company}, {contact}, {project}, {database}, {again}, and return what each points to.',
     knobs: [
       entity('channel', 'Channel', 'channel', 'channel-launch'),
       entity('document', 'Document', 'document', 'document-plan'),
@@ -55,7 +55,6 @@ const STEPS: StepDraft[] = [
       entity('contact', 'Contact', 'crm_contact', 'contact-jordan'),
       entity('project', 'Project', 'initiative', 'initiative-time'),
       entity('database', 'Database', 'database', 'database-feedback'),
-      entity('file', 'File', 'document', 'document-export'),
       entity('again', 'Channel again', 'channel', 'channel-launch'),
     ],
   },
@@ -74,9 +73,10 @@ const STEPS: StepDraft[] = [
     title: 'Post a digest',
     summary: 'Posts a digest.',
     source: SOURCE,
-    sentence: 'Post a digest in {channel}.',
+    sentence: 'Post a digest in {channel} with {file}.',
     knobs: [
       entity('channel', 'Channel', 'channel', 'channel-launch'),
+      entity('file', 'File', 'document', 'document-export'),
       ALERT,
       entity('folder', 'Folder', 'project', 'folder-assets'),
       {
