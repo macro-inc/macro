@@ -4,32 +4,38 @@ use rig_core::providers::gemini::completion::gemini_api_types::AdditionalParamet
 
 #[test]
 fn thinking_params_ask_for_thought_summaries() {
-    let model = Model::try_from("google/gemini-3.8-flash").expect("routable id");
-    let client = gemini::Client::builder()
-        .api_key("test-google-key")
-        .build()
-        .expect("gemini client");
-    let gemini = GeminiModel::new(model, Arc::new(client));
-    let params = gemini.thinking_params().expect("thinking params");
+    for (model, include_thoughts) in [
+        ("google/gemini-3.8-flash", true),
+        (GEMINI_4_NEON, false),
+        (GEMINI_4_CARBON, false),
+    ] {
+        let model = Model::try_from(model).expect("routable id");
+        let client = gemini::Client::builder()
+            .api_key("test-google-key")
+            .build()
+            .expect("gemini client");
+        let gemini = GeminiModel::new(model, Arc::new(client));
+        let params = gemini.thinking_params().expect("thinking params");
 
-    // Rig parses this JSON into AdditionalParameters before it builds the
-    // GenerateContent body. Snake_case keys do not land in generationConfig,
-    // so includeThoughts and the max-token copy both disappear.
-    let parsed: AdditionalParameters =
-        serde_json::from_value(params).expect("thinking params are gemini additional params");
-    let config = parsed
-        .generation_config
-        .expect("generationConfig is recognized");
-    let thinking = config
-        .thinking_config
-        .expect("thinkingConfig is recognized");
-    assert_eq!(thinking.include_thoughts, Some(true));
-    let leftover = parsed.additional_params.unwrap_or(serde_json::json!({}));
-    assert_eq!(
-        leftover,
-        serde_json::json!({}),
-        "unparsed keys would be sent as unknown Gemini fields"
-    );
+        // Rig parses this JSON into AdditionalParameters before it builds the
+        // GenerateContent body. Snake_case keys do not land in generationConfig,
+        // so includeThoughts and the max-token copy both disappear.
+        let parsed: AdditionalParameters =
+            serde_json::from_value(params).expect("thinking params are gemini additional params");
+        let config = parsed
+            .generation_config
+            .expect("generationConfig is recognized");
+        let thinking = config
+            .thinking_config
+            .expect("thinkingConfig is recognized");
+        assert_eq!(thinking.include_thoughts, Some(include_thoughts));
+        let leftover = parsed.additional_params.unwrap_or(serde_json::json!({}));
+        assert_eq!(
+            leftover,
+            serde_json::json!({}),
+            "unparsed keys would be sent as unknown Gemini fields"
+        );
+    }
 }
 
 use bytes::Bytes;
@@ -358,4 +364,31 @@ async fn structured_completion_replays_tool_names_with_no_tools() {
 #[tokio::test]
 async fn streaming_replays_tool_names_with_no_tools() {
     assert_replayed_tool_names(true).await;
+}
+
+#[tokio::test]
+async fn gemini_4_blocks_the_sdk_request_dump_when_trace_is_enabled() {
+    use tracing::instrument::WithSubscriber;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let transport = CaptureTransport::default();
+    let client = gemini::Client::builder()
+        .api_key("fixture-key")
+        .http_client(transport.clone())
+        .build()
+        .unwrap();
+    let model = GeminiModel::new(Model::try_from(GEMINI_4_NEON).unwrap(), Arc::new(client));
+    let subscriber =
+        tracing_subscriber::registry().with(tracing_subscriber::filter::LevelFilter::TRACE);
+    let result = async {
+        model
+            .completion()
+            .completion_request("private fixture")
+            .stream()
+            .await
+    }
+    .with_subscriber(subscriber)
+    .await;
+    assert!(matches!(result, Err(error) if error.to_string().contains("provider request tracing")));
+    assert!(transport.0.lock().unwrap().is_empty());
 }

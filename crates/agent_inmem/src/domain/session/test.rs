@@ -247,6 +247,7 @@ fn a_summary_replaces_its_entries_and_the_earlier_summary_among_them() {
                 HistoryEntry::User { prompt, .. } => prompt.text.clone(),
                 HistoryEntry::Summary(summary) => format!("[{summary}]"),
                 HistoryEntry::Assistant(_) => "assistant".to_owned(),
+                HistoryEntry::Gemini4Replay(_) => "replay".to_owned(),
             })
             .collect()
     };

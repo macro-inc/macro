@@ -30,6 +30,22 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `agent_harness`).
 - `src/model_providers/`: per-harness runtime adapters — `cursor.rs`,
   `macrod.rs`, `in_memory.rs`.
+- The paid Macro Gemini 4 catalog is off by default. Its startup inputs are
+  `ENABLE_GEMINI_4_MODELS` and `GOOGLE_GEMINI_FRONTIER_API_KEY`. Stage
+  `agent-harness-service/dev` before considering `agent-harness-service/prd`.
+  The service evaluates Carbon's December 1, 2026 UTC cutoff at startup.
+  A process started before the cutoff needs a restart afterward to offer
+  Carbon. Keep both models gated until persisted signature replay,
+  entitlement, and effective Developer API billing are verified in that
+  environment. The frontier runtime keeps native signatures outside the ACP
+  log and refuses inference while `rig::streaming` TRACE would log requests.
+- Gemini 4 uses the existing per-attempt `ai_usage_observation` journal and
+  session-level `ai_usage` recorder. The offline authorization fixture
+  injects activated mode for its test run. The pricing
+  seed is visible to the existing recorder through `ai_effective_pricing` on
+  subsequent writes after the migration commits. Verify each model, owner,
+  and prompt, candidate, and thought token evidence in the existing recorder
+  in dev first and then in production before enabling customer access.
 - `src/containers.rs`: Daytona sandbox lifecycle; local Docker opt-in.
 - `src/runtime_gauges.rs`: one task recording, every minute, what the process
   holds per session as OTel gauges (`ahs.harness.workers`,

@@ -37,7 +37,7 @@ use tracing::Instrument as _;
 
 use super::anthropic::{AnthropicModel, DeferredTools, LaidOutModel, SessionLayout};
 use super::anthropic_prompt_layout::AnthropicPromptLayout;
-use super::gemini::{GeminiCompletionModel, GeminiModel};
+use super::gemini::{GeminiCompletionModel, GeminiModel, requires_gemini_4_client};
 use super::metering::{MeteringContext, WireProtocol};
 use super::metering_http::MeteredHttpClient;
 use super::openai::{CompatibleCompletionModel, OpenAiChatCompletionsModel, OpenAiResponsesModel};
@@ -253,6 +253,8 @@ pub(crate) enum ProviderAgent<
     OpenAiChatCompletions(Agent<TracedModel<CompatibleCompletionModel<H>>>),
     /// An agent over the OpenAI Responses model.
     OpenAiResponses(Agent<TracedModel<openai::responses_api::ResponsesCompletionModel<H>>>),
+    /// No provisioned client serves the requested model.
+    Unavailable,
     /// A test-only agent over an arbitrary completion model (e.g. a scripted
     /// fake), type-erased so arbitrary model types do not enter this enum.
     #[cfg(test)]
@@ -276,6 +278,9 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ProviderAge
         telemetry: GenAiContext,
     ) -> ChatCompletionStream<'static> {
         match self {
+            ProviderAgent::Unavailable => Box::pin(futures::stream::once(async move {
+                Err(AgentError::UnknownModel(model))
+            })),
             ProviderAgent::Anthropic(anthropic) => {
                 // After the agent's preamble, before the conversation: the
                 // second system block.
@@ -388,6 +393,8 @@ pub struct ModelRouter<H = ReqwestClient> {
     anthropic: Arc<anthropic::Client<AnthropicPromptLayout<H>>>,
     openai: Arc<openai::Client<H>>,
     gemini: Option<Arc<gemini::Client<H>>>,
+    gemini_4: Option<Arc<gemini::Client<H>>>,
+    gemini_4_models: &'static [&'static str],
     openai_compatible: HashMap<String, Arc<openai::CompletionsClient<H>>>,
 }
 
@@ -403,6 +410,8 @@ impl<H: HttpClientExt + Clone + 'static> ModelRouter<H> {
             anthropic: Arc::new(anthropic),
             openai: Arc::new(openai),
             gemini: None,
+            gemini_4: None,
+            gemini_4_models: &[],
             openai_compatible: HashMap::new(),
         }
     }
@@ -467,10 +476,8 @@ impl ModelRouter {
 
     /// The process-wide full router, built from the environment on first use.
     ///
-    /// This is the only router the crate uses — every entry point routes through
-    /// the same fully-populated instance, so a model id resolves identically
-    /// everywhere. Register additional OpenAI-compatible providers here as they
-    /// are added.
+    /// Entry points use this instance unless the loop binds a separately
+    /// provisioned client. Register shared providers here as they are added.
     pub(crate) fn shared() -> Result<&'static ModelRouter<MeteredHttpClient>, AgentError> {
         static ROUTER: OnceLock<ModelRouter<MeteredHttpClient>> = OnceLock::new();
         if let Some(router) = ROUTER.get() {
@@ -482,9 +489,20 @@ impl ModelRouter {
 }
 
 impl<H: HttpClientExt + Clone + 'static> ModelRouter<H> {
-    /// Bind the native Gemini GenerateContent client. Google ids route here.
+    /// Bind the shared native Gemini GenerateContent client.
     pub fn with_gemini_client(mut self, client: gemini::Client<H>) -> Self {
         self.gemini = Some(Arc::new(client));
+        self
+    }
+
+    /// Bind the separate native client used exclusively by the Gemini 4 catalog.
+    pub(crate) fn with_gemini_4_client(
+        mut self,
+        client: gemini::Client<H>,
+        models: &'static [&'static str],
+    ) -> Self {
+        self.gemini_4 = Some(Arc::new(client));
+        self.gemini_4_models = models;
         self
     }
 
@@ -602,7 +620,25 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ModelRouter
             )));
         }
         if parsed.provider() == GOOGLE_PROVIDER {
-            let Some(client) = &self.gemini else {
+            // A model name becomes a path segment on GenerateContent. Reject
+            // paths and escapes before the HTTP client normalizes the URL.
+            if parsed.name().is_empty()
+                || !parsed
+                    .name()
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'))
+            {
+                return Err(AgentError::UnknownModel(model.to_owned()));
+            }
+            let client = if requires_gemini_4_client(model) {
+                if !self.gemini_4_models.contains(&model.trim()) {
+                    return Err(AgentError::UnknownModel(model.to_owned()));
+                }
+                &self.gemini_4
+            } else {
+                &self.gemini
+            };
+            let Some(client) = client else {
                 return Err(AgentError::UnknownModel(model.to_string()));
             };
             return Ok(RoutedModel::Gemini(GeminiModel::new(
@@ -619,9 +655,16 @@ impl<H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static> ModelRouter
         Err(AgentError::UnknownModel(model.to_string()))
     }
 
-    /// Route `model`, falling back to the default model on an unroutable id.
-    pub(crate) fn route_or_default<'a>(&self, model: &'a str) -> RoutedModel<'a, H> {
-        self.route(model).unwrap_or_else(|_| self.default_model())
+    /// Route a model. Only the legacy catalog allows an unavailable model to
+    /// fall back to the default.
+    pub(crate) fn route_or_default<'a>(
+        &self,
+        model: &'a str,
+    ) -> Result<RoutedModel<'a, H>, AgentError> {
+        if requires_gemini_4_client(model) {
+            return self.route(model);
+        }
+        Ok(self.route(model).unwrap_or_else(|_| self.default_model()))
     }
 
     /// The fallback model: native Anthropic serving [`PredefinedModel::Smart`].

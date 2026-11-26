@@ -53,9 +53,9 @@ pub struct AgentLoop {
     genai_telemetry: bool,
     /// See [`Self::with_streamed_tool_calls`].
     stream_tool_calls: bool,
-    /// The router this loop's model calls use instead of the shared one, when
-    /// a caller-supplied key pays for them (see [`Self::with_provider_api_key`]).
+    /// A router bound to the agent's own key or the dedicated Gemini 4 client.
     router: Option<ModelRouter<MeteredHttpClient>>,
+    gemini_4_replay: Option<crate::Gemini4ReplaySession>,
 }
 
 impl AgentLoop {
@@ -82,6 +82,7 @@ impl AgentLoop {
             genai_telemetry: true,
             stream_tool_calls: false,
             router: None,
+            gemini_4_replay: None,
         }
     }
 
@@ -98,6 +99,25 @@ impl AgentLoop {
         let router = ModelRouter::shared()?.with_provider_api_key(&provider, api_key)?;
         router.route(&self.model)?;
         self.router = Some(router);
+        Ok(self)
+    }
+
+    /// Run a Gemini 4 model on its separately provisioned Developer API client.
+    /// Call after selecting the model.
+    pub fn with_gemini_4_client(
+        mut self,
+        client: &crate::Gemini4Client,
+        replay: crate::Gemini4ReplaySession,
+    ) -> Result<Self, AgentError> {
+        if !client.models().contains(&self.model.as_str()) {
+            return Err(AgentError::UnknownModel(self.model));
+        }
+        let router = ModelRouter::shared()?
+            .clone()
+            .with_gemini_4_client(client.bind(replay.clone())?, client.models());
+        router.route(&self.model)?;
+        self.router = Some(router);
+        self.gemini_4_replay = Some(replay);
         Ok(self)
     }
 
@@ -234,8 +254,8 @@ impl AgentLoop {
         Context: Clone + Send + Sync + 'static,
     {
         // The frontend selects the model by api id; route it to the provider
-        // that serves it (falling back to the default on unknown / unavailable
-        // ids). The router owns provider-specific agent construction.
+        // that serves it. The router decides when fallback is allowed and
+        // owns provider-specific agent construction.
         self.session_with(
             toolset,
             context,
@@ -246,7 +266,9 @@ impl AgentLoop {
                     Some(router) => router,
                     None => ModelRouter::shared().expect("failed to initialize model router"),
                 };
-                let routed = router.route_or_default(&self.model);
+                let Ok(routed) = router.route_or_default(&self.model) else {
+                    return ProviderAgent::Unavailable;
+                };
                 telemetry.set_model(routed.provider(), routed.model_name());
                 routed.into_agent(
                     self.reasoning_effort,
@@ -457,6 +479,7 @@ impl AgentLoop {
                 user_tool_finisher: self.user_tool_finisher.clone(),
                 stream_tool_calls: self.stream_tool_calls,
                 result_limit: self.result_limit.clone(),
+                gemini_4_replay: self.gemini_4_replay.clone(),
             },
             recorder: self.recorder.clone(),
             usage_ctx,
@@ -465,6 +488,12 @@ impl AgentLoop {
             telemetry,
             financial_context,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_with_gemini_4_replay(mut self, replay: crate::Gemini4ReplaySession) -> Self {
+        self.gemini_4_replay = Some(replay);
+        self
     }
 
     /// Start a session backed by a caller-supplied (fake) completion model
@@ -531,7 +560,9 @@ impl AgentLoop {
             system_prompt,
             usage_ctx,
             |handle, prompt, tool_search, max_turns, max_tokens, telemetry| {
-                let routed = router.route_or_default(&self.model);
+                let Ok(routed) = router.route_or_default(&self.model) else {
+                    return ProviderAgent::Unavailable;
+                };
                 telemetry.set_model(routed.provider(), routed.model_name());
                 ProviderAgent::Test(Box::new(routed.into_agent(
                     self.reasoning_effort,

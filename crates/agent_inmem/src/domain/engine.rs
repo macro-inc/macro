@@ -35,6 +35,8 @@ pub struct AgentIdentity {
 
 /// Everything one conversational turn needs.
 pub struct TurnRequest {
+    /// Native signed history for a Gemini 4 turn.
+    pub gemini_4_replay: Option<agent::Gemini4ReplaySession>,
     /// Whether the turn answers the user or condenses their conversation.
     pub purpose: TurnPurpose,
     /// How the session's reader receives the reply.

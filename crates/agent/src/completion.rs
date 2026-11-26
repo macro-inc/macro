@@ -41,7 +41,7 @@ pub async fn complete<M: ToString>(
     let metering = MeteringContext::for_operation(recorder, &ctx);
     MeteringContext::carry(metering, async {
         let model = model.to_string();
-        let routed = ModelRouter::shared()?.route_or_default(&model);
+        let routed = ModelRouter::shared()?.route_or_default(&model)?;
         let telemetry = telemetry_for(&ctx, &routed);
         let protocol = routed.protocol();
         let response = match routed {
@@ -121,7 +121,7 @@ pub async fn complete_with_history_and_params<M: ToString>(
     let metering = MeteringContext::for_operation(recorder, &ctx);
     MeteringContext::carry(metering, async {
         let model = model.to_string();
-        let routed = ModelRouter::shared()?.route_or_default(&model);
+        let routed = ModelRouter::shared()?.route_or_default(&model)?;
         let telemetry = telemetry_for(&ctx, &routed);
         let protocol = routed.protocol();
         let response = match routed {

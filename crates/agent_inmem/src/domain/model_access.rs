@@ -79,10 +79,14 @@ impl SessionModels {
     /// upgraded to its replacement. Without a key, an
     /// inaccessible one becomes the free model; with one, a model from
     /// another provider (saved before the key) becomes the first `supported`
-    /// model the key can run.
+    /// model the key can run. Keep a saved Gemini 4 selection until the user
+    /// can change it explicitly, since its history is provider-specific.
     #[must_use]
     pub fn default_model<'a>(self, configured: &'a str, supported: &[&'a str]) -> &'a str {
         let configured = current_model(configured);
+        if agent::requires_gemini_4_client(configured) {
+            return configured;
+        }
         match self.agent_key {
             Some(_) if self.allows(configured) => configured,
             Some(_) => supported

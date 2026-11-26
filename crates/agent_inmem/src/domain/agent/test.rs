@@ -177,6 +177,7 @@ async fn record<Engine: TurnEngine, Out>(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        gemini_4_replays: None,
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
@@ -1938,6 +1939,7 @@ async fn serve_with_mcp(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        gemini_4_replays: None,
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
@@ -1998,6 +2000,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        gemini_4_replays: None,
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
@@ -2091,6 +2094,7 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        gemini_4_replays: None,
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
@@ -2199,6 +2203,7 @@ where
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        gemini_4_replays: None,
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
@@ -2899,6 +2904,156 @@ async fn effort_is_validated_and_model_changes_return_complete_options() {
 }
 
 #[tokio::test]
+async fn gemini_4_turns_require_the_paid_enabled_catalog_and_replayable_history() {
+    use crate::domain::model_access::ModelAccess;
+
+    struct CatalogEngine(ScriptedEngine, Vec<&'static str>);
+
+    impl TurnEngine for CatalogEngine {
+        fn supported_models(&self) -> &[&str] {
+            &self.1
+        }
+
+        fn run_turn(
+            &self,
+            request: TurnRequest,
+        ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+            self.0.run_turn(request)
+        }
+    }
+
+    for (enabled, plan) in [
+        (false, ModelAccess::Paid),
+        (true, ModelAccess::Free),
+        (true, ModelAccess::Paid),
+    ] {
+        let engine = Arc::new(CatalogEngine(
+            ScriptedEngine::new(vec![StreamPart::Content("ok".into())]),
+            crate::domain::models::advertised_models(if enabled {
+                &[agent::GEMINI_4_NEON, agent::GEMINI_4_CARBON]
+            } else {
+                &[]
+            }),
+        ));
+        let allowed = enabled && plan == ModelAccess::Paid;
+        let access = Arc::new(crate::testing::TestModelAccess::new(plan));
+        let (_, config, ()) = with_model_access(
+            engine.clone(),
+            Arc::new(DisabledAiAdmissionService),
+            access.clone(),
+            async |connection, session, state| {
+                let summary_cancel = CancellationToken::new();
+                let (_running_summary, settled) = tokio::sync::watch::channel(());
+                state
+                    .store
+                    .get_mut(&state.session_id)
+                    .unwrap()
+                    .summarizing
+                    .pending = Some(crate::domain::session::PendingSummary {
+                    cancel: summary_cancel.clone(),
+                    settled,
+                });
+                let selection = connection
+                    .send_request(SetSessionConfigOptionRequest::new(
+                        session.clone(),
+                        MODEL_CONFIG_ID,
+                        SessionConfigValueId::new(agent::GEMINI_4_NEON),
+                    ))
+                    .block_task()
+                    .await;
+                assert_eq!(selection.is_ok(), allowed);
+                assert_eq!(summary_cancel.is_cancelled(), allowed);
+                if allowed {
+                    state
+                        .store
+                        .get_mut(&state.session_id)
+                        .unwrap()
+                        .history
+                        .push(HistoryEntry::Summary("A prior Flash summary".to_owned()));
+                    let compacted = connection
+                        .send_request(text_prompt(&session, "prior compacted history"))
+                        .block_task()
+                        .await;
+                    assert!(compacted.is_err());
+                    assert!(engine.0.requests().is_empty());
+                    state
+                        .store
+                        .get_mut(&state.session_id)
+                        .unwrap()
+                        .history
+                        .clear();
+
+                    let incomplete = connection
+                        .send_request(text_prompt(
+                            &session,
+                            "text-only response missing its capture",
+                        ))
+                        .block_task()
+                        .await
+                        .unwrap_err();
+                    assert!(format!("{incomplete:?}").contains("Unable to capture Gemini 4"));
+                    assert_eq!(engine.0.requests()[0].model, agent::GEMINI_4_NEON);
+                } else {
+                    // A cold attach can restore a previously selected model.
+                    state.store.get_mut(&state.session_id).unwrap().model =
+                        agent::GEMINI_4_NEON.to_owned();
+                }
+                let result = connection
+                    .send_request(text_prompt(&session, "refused"))
+                    .block_task()
+                    .await;
+                assert!(result.is_err());
+                assert_eq!(engine.0.requests().len(), usize::from(allowed));
+                if allowed {
+                    *access.result.lock().unwrap() = Ok(ModelAccess::Free);
+                    let resumed = connection
+                        .send_request(ResumeSessionRequest::new(session.clone(), "/"))
+                        .block_task()
+                        .await
+                        .unwrap();
+                    let selection = agent_fold::domain::model_selection::model_selection(
+                        resumed.config_options.as_deref().unwrap(),
+                    )
+                    .unwrap();
+                    assert_eq!(selection.current, agent::GEMINI_4_NEON);
+                    assert_eq!(selection.options.len(), 1);
+                    assert_eq!(selection.options[0].id, chat::domain::models::FREE_MODEL);
+                    let refused = connection
+                        .send_request(text_prompt(&session, "after downgrade"))
+                        .block_task()
+                        .await;
+                    assert!(refused.is_err());
+                    assert_eq!(engine.0.requests().len(), 1);
+
+                    connection
+                        .send_request(SetSessionConfigOptionRequest::new(
+                            session.clone(),
+                            MODEL_CONFIG_ID,
+                            SessionConfigValueId::new(chat::domain::models::FREE_MODEL),
+                        ))
+                        .block_task()
+                        .await
+                        .unwrap();
+                    prompt(&connection, &session, "explicitly changed").await;
+                    assert_eq!(
+                        engine.0.requests()[1].model,
+                        chat::domain::models::FREE_MODEL
+                    );
+                }
+            },
+        )
+        .await;
+        let options = agent_fold::domain::model_selection::model_selection(&config).unwrap();
+        for id in [agent::GEMINI_4_NEON, agent::GEMINI_4_CARBON] {
+            assert_eq!(
+                options.options.iter().any(|option| option.id == id),
+                allowed
+            );
+        }
+    }
+}
+
+#[tokio::test]
 async fn free_session_defaults_to_gemini_and_rejects_paid_model_changes() {
     use crate::domain::model_access::ModelAccess;
     use chat::domain::models::FREE_MODEL;
@@ -3234,6 +3389,7 @@ async fn turns_redial_a_session_whose_connect_lacks_code_mode_tools() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        gemini_4_replays: None,
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,

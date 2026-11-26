@@ -229,6 +229,7 @@ fn a_retired_models_settings_carry_over_to_its_replacement() {
                 ..facts(AgentSessionId::new())
             },
             frames.clone(),
+            Default::default(),
         )
     };
 

@@ -1,6 +1,45 @@
 use super::*;
 use std::sync::Arc;
 
+#[test]
+fn gemini_4_catalog_requires_explicit_enablement_and_a_dedicated_key() {
+    let mut values = config_values();
+    values["ENABLE_GEMINI_4_MODELS"] = serde_json::json!(true);
+    let config: Config = serde_json::from_value(values.clone()).unwrap();
+    assert!(config.gemini_4_api_key().is_none());
+
+    values["GOOGLE_GEMINI_FRONTIER_API_KEY"] = serde_json::json!(" ");
+    let config: Config = serde_json::from_value(values.clone()).unwrap();
+    assert!(config.gemini_4_api_key().is_none());
+
+    values["GOOGLE_GEMINI_FRONTIER_API_KEY"] = serde_json::json!("fixture-frontier");
+    for env in ["dev", "prod"] {
+        values["ENVIRONMENT"] = serde_json::json!(env);
+        let config: Config = serde_json::from_value(values.clone()).unwrap();
+        assert_eq!(config.gemini_4_api_key(), Some("fixture-frontier"));
+    }
+
+    values["ENVIRONMENT"] = serde_json::json!("local");
+    let config: Config = serde_json::from_value(values.clone()).unwrap();
+    assert!(config.gemini_4_api_key().is_none());
+
+    values["ENVIRONMENT"] = serde_json::json!("prod");
+    values
+        .as_object_mut()
+        .unwrap()
+        .remove("ENABLE_GEMINI_4_MODELS");
+    let config: Config = serde_json::from_value(values).unwrap();
+    assert!(config.gemini_4_api_key().is_none());
+}
+
+#[test]
+fn gemini_4_carbon_stays_unavailable_until_its_seeded_rate_is_effective() {
+    let november = chrono::NaiveDate::from_ymd_opt(2026, 11, 30).unwrap();
+    let december = chrono::NaiveDate::from_ymd_opt(2026, 12, 1).unwrap();
+    assert!(!Config::gemini_4_carbon_standard_rate_started(november));
+    assert!(Config::gemini_4_carbon_standard_rate_started(december));
+}
+
 pub(crate) struct TestSecretManager;
 
 impl secretsmanager_client::SecretManager for TestSecretManager {

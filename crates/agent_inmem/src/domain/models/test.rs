@@ -1,9 +1,10 @@
 use super::{AUTO_MODEL, ROUTED_MODELS, advertised_models, display_name, resolve};
+use agent::{GEMINI_4_CARBON, GEMINI_4_NEON};
 use chat::domain::models::CHAT_MODELS;
 
 #[test]
 fn advertised_models_lead_with_auto_then_chat_then_routed() {
-    let models = advertised_models();
+    let models = advertised_models(&[]);
     assert_eq!(
         models
             .iter()
@@ -22,6 +23,25 @@ fn advertised_models_lead_with_auto_then_chat_then_routed() {
             .collect::<Vec<_>>()
             .as_slice()
     );
+}
+
+#[test]
+fn gemini_4_discovery_requires_a_client_and_paid_access() {
+    use crate::domain::model_access::ModelAccess;
+    let disabled = advertised_models(&[]);
+    let neon_only = advertised_models(&[GEMINI_4_NEON]);
+    let enabled = advertised_models(&[GEMINI_4_NEON, GEMINI_4_CARBON]);
+    assert_eq!(&neon_only[disabled.len()..], &[GEMINI_4_NEON]);
+    assert_eq!(&enabled[..disabled.len()], disabled);
+    assert_eq!(
+        &enabled[disabled.len()..],
+        &[GEMINI_4_NEON, GEMINI_4_CARBON]
+    );
+    assert_eq!(
+        ModelAccess::Free.models(&enabled),
+        ["google/gemini-3.8-flash"]
+    );
+    assert_eq!(ModelAccess::Paid.models(&enabled), enabled);
 }
 
 #[test]
@@ -73,7 +93,7 @@ fn routed_models_use_known_providers() {
 
 #[test]
 fn every_advertised_model_has_an_explicit_image_capability() {
-    for model in advertised_models() {
+    for model in advertised_models(&[GEMINI_4_NEON, GEMINI_4_CARBON]) {
         assert!(
             super::supports_images(model).is_some(),
             "missing capability: {model}"
@@ -85,7 +105,7 @@ fn every_advertised_model_has_an_explicit_image_capability() {
 /// would be summarized against a guess.
 #[test]
 fn every_advertised_model_has_a_context_window() {
-    for model in advertised_models() {
+    for model in advertised_models(&[GEMINI_4_NEON, GEMINI_4_CARBON]) {
         assert!(
             super::context_window(model).is_some(),
             "missing context window: {model}"

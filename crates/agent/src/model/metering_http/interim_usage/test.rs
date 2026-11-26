@@ -131,3 +131,72 @@ fn usage_sent_without_candidates_is_not_overwritten_by_a_replay() {
     );
     assert!(filter.finish().is_empty());
 }
+
+#[test]
+fn gemini_4_capture_never_exposes_signatures_to_rig() {
+    use crate::GEMINI_4_NEON;
+    use crate::Gemini4ReplaySession;
+    use crate::model::gemini_replay::Capture;
+
+    let replay = Gemini4ReplaySession::new(GEMINI_4_NEON, vec![]).unwrap();
+    let mut filter = InterimUsageFilter {
+        capture: Some(Capture::new(replay.clone())),
+        ..Default::default()
+    };
+    let output = filter.push(
+        concat!(
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"answer\",",
+            "\"thoughtSignature\":\"cHJpdmF0ZQ==\"},",
+            "{\"functionCall\":{\"id\":\"native-call-id\",\"name\":\"lookup\",\"args\":{}},",
+            "\"thoughtSignature\":\"dG9vbA==\"}]},\"finishReason\":\"STOP\"}]}\n\n",
+        )
+        .as_bytes(),
+    );
+    let output = std::str::from_utf8(&output).unwrap();
+    assert!(output.contains("answer"));
+    assert!(!output.contains("thoughtSignature"));
+    assert!(!output.contains("cHJpdmF0ZQ=="));
+    assert!(!output.contains("native-call-id"));
+    assert!(output.contains("gemini-call-"));
+    assert!(
+        serde_json::to_string(&replay.complete().unwrap())
+            .unwrap()
+            .contains("cHJpdmF0ZQ==")
+    );
+}
+
+#[test]
+fn gemini_4_capture_drops_invalid_and_unsupported_events_before_rig() {
+    use crate::GEMINI_4_NEON;
+    use crate::Gemini4ReplaySession;
+    use crate::model::gemini_replay::Capture;
+
+    for rejected in [
+        "not-json private-marker",
+        r#"{"candidates":[{"content":{"parts":[{"text":{"hint":"private-marker"}}]}}]}"#,
+        r#"{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"private-marker"}}]}}]}"#,
+        r#"{"error":{"message":"private-marker"}}"#,
+    ] {
+        let replay = Gemini4ReplaySession::new(GEMINI_4_NEON, vec![]).unwrap();
+        let mut filter = InterimUsageFilter {
+            capture: Some(Capture::new(replay.clone())),
+            ..Default::default()
+        };
+        let rejected = filter.push(format!("data: {rejected}\n\n").as_bytes());
+        assert!(rejected.is_empty());
+        let output = filter.push(
+            concat!(
+                "data: {\"responseId\":\"private-marker\",\"candidates\":[{",
+                "\"content\":{\"parts\":[{\"text\":\"answer\"}]},",
+                "\"finishReason\":\"STOP\",\"finishMessage\":\"private-marker\"}]}\n\n"
+            )
+            .as_bytes(),
+        );
+        assert!(
+            !std::str::from_utf8(&output)
+                .unwrap()
+                .contains("private-marker")
+        );
+        assert!(replay.complete().is_none());
+    }
+}

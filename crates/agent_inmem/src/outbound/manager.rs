@@ -21,8 +21,12 @@ use model_owner::Owner;
 
 use crate::domain::agent::{AgentState, serve};
 use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine};
+use crate::domain::gemini_replay::Gemini4ReplayStore;
 use crate::domain::mcp::DynMcpToolConnector;
-use crate::domain::replay::{FrameSource, replay_history, replay_reasoning_effort, replay_speed};
+use crate::domain::replay::{
+    FrameSource, has_gemini_4_selection, replay_history_with_gemini_4, replay_reasoning_effort,
+    replay_request_ids, replay_speed,
+};
 use crate::domain::session::{HistoryEntry, SessionState, SessionStore, Summarizing};
 
 #[cfg(test)]
@@ -79,6 +83,7 @@ pub struct InMemAgentManager {
     agent_keys: Arc<dyn AgentKeys>,
     model_access: Arc<dyn crate::domain::model_access::InMemModelAccess>,
     frames: Arc<dyn FrameSource>,
+    gemini_4_replays: Option<Arc<dyn Gemini4ReplayStore>>,
     mcp: Arc<dyn DynMcpToolConnector>,
     enable_dev_commands: bool,
     store: Arc<SessionStore>,
@@ -106,6 +111,7 @@ impl InMemAgentManager {
             admission: Arc::new(DisabledAiAdmissionService),
             agent_keys: Arc::new(NoAgentKeys),
             frames,
+            gemini_4_replays: None,
             mcp,
             enable_dev_commands: false,
             store: Arc::new(SessionStore::new()),
@@ -128,6 +134,35 @@ impl InMemAgentManager {
     pub fn with_agent_keys(mut self, agent_keys: Arc<dyn AgentKeys>) -> Self {
         self.agent_keys = agent_keys;
         self
+    }
+
+    /// Store native Gemini 4 replay state privately alongside the session log.
+    #[must_use]
+    pub fn with_gemini_4_replays(mut self, replays: Arc<dyn Gemini4ReplayStore>) -> Self {
+        self.gemini_4_replays = Some(replays);
+        self
+    }
+
+    async fn rebuild(
+        &self,
+        facts: &SessionFacts,
+    ) -> agent_session::domain::error::Result<SessionState> {
+        let frames = self.frames.frames(facts.id).await?;
+        let replays = if let Some(store) = self.gemini_4_replays.as_ref()
+            && (agent::requires_gemini_4_client(&facts.model) || has_gemini_4_selection(&frames))
+        {
+            let request_ids = replay_request_ids(&frames);
+            store
+                .load(facts.id, &facts.owner, &request_ids)
+                .await
+                .unwrap_or_else(|_| {
+                    tracing::warn!("Could not read private Gemini 4 conversation replay state");
+                    Default::default()
+                })
+        } else {
+            Default::default()
+        };
+        Ok(rebuilt_state(facts, frames, replays))
     }
 
     /// How many sessions' conversations this process holds.
@@ -181,8 +216,7 @@ impl InMemAgentManager {
         if !self.store.contains_key(&facts.id) {
             // Loaded before taking the entry so the read never blocks the
             // map; `or_insert_with` still wins any race to create it.
-            let frames = self.frames.frames(facts.id).await?;
-            let rebuilt = rebuilt_state(&facts, frames);
+            let rebuilt = self.rebuild(&facts).await?;
             self.store.entry(facts.id).or_insert(rebuilt);
         }
 
@@ -207,6 +241,7 @@ impl InMemAgentManager {
             admission: Arc::clone(&self.admission),
             agent_keys: Arc::clone(&self.agent_keys),
             model_access: Arc::clone(&self.model_access),
+            gemini_4_replays: self.gemini_4_replays.clone(),
             store: Arc::clone(&self.store),
             active_cancel: std::sync::Mutex::new(Vec::new()),
             turn_lock: tokio::sync::Mutex::new(()),
@@ -264,7 +299,7 @@ impl InMemAgentManager {
             }
         }
 
-        let rebuilt = rebuilt_state(facts, self.frames.frames(facts.id).await?);
+        let rebuilt = self.rebuild(facts).await?;
         let Some(live) = self.store.get(&facts.id) else {
             return Ok(true);
         };
@@ -294,6 +329,10 @@ impl InMemAgentManager {
 fn rebuilt_state(
     facts: &SessionFacts,
     frames: Vec<agent_session::domain::model::Message>,
+    replays: std::collections::HashMap<
+        agent_client_protocol::schema::v1::RequestId,
+        agent::Gemini4Replay,
+    >,
 ) -> SessionState {
     // The session resumes on this model, so its settings carry over to it.
     let model = current_model(&facts.model);
@@ -316,7 +355,7 @@ fn rebuilt_state(
         speed,
         identity: facts.identity.clone(),
         instructions: facts.instructions.clone(),
-        history: replay_history(frames),
+        history: replay_history_with_gemini_4(frames, replays),
         summarizing: Summarizing::default(),
     }
 }

@@ -28,6 +28,10 @@ queries used across Rust services.
 notification frames have their own log direction. Session deletion cascades
 outbox rows, and migrations retain compatibility with prior table writers.
 
+`agent_session_gemini_4_replay` stores bounded, private native state scoped to
+one session and prompt. It follows full session deletion by foreign-key
+cascade and stays outside the session frame log.
+
 The agent-session notification migration backfills legacy review outcomes and
 bridges old-producer writes during rollout; keep that bridge until legacy
 review producers have retired. Encode empty legacy item lists as JSON arrays so

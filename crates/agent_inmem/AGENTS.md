@@ -133,6 +133,11 @@ MCP catalog lacks any `mcp__macro_internal__` code tool fails
   Opus 5.5 (hard), GPT-6.2 Sol (mid) or Gemini 3.8 Flash (simple, and
   whenever Jev is unavailable). Capability lookups go through
   `models::resolve`.
+- Gemini 4 Neon and Carbon appear in the paid catalog only when the
+  runtime has a dedicated client. While signature persistence is incomplete,
+  the runtime requires complete private same-model replay metadata for each
+  prior assistant turn and rejects compacted or incompatible histories. The
+  native runtime skips Flash compaction while Gemini 4 is selected.
 - Owners with the `auto-skills` flag route each turn's request to their skills
   (`skills::domain::selection`, Jev, 1 s). Loaded skills are appended to the
   user message that loaded them in the model's copy only, and remembered per

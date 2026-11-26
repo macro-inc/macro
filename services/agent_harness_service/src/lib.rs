@@ -1027,6 +1027,13 @@ pub async fn run() -> anyhow::Result<()> {
 
     let mut inmem_engine =
         RigTurnEngine::new(pool.clone(), tool_context.clone()).with_gate(owner_tool_gate);
+    let gemini_4_key = config.gemini_4_api_key();
+    if let Some(key) = gemini_4_key {
+        let carbon_enabled =
+            Config::gemini_4_carbon_standard_rate_started(chrono::Utc::now().date_naive());
+        inmem_engine =
+            inmem_engine.with_gemini_4_client(agent::Gemini4Client::new(key, carbon_enabled)?);
+    }
     // `auto-skills` decides, per user, whether a turn loads the user's skills
     // its request needs, and whether code-mode turns load the SDK areas a
     // request needs instead of carrying every area's guidance.
@@ -1085,17 +1092,21 @@ pub async fn run() -> anyhow::Result<()> {
                 ai_billing::composition::pg_entitlement_source(pool.clone()),
             ),
         ));
-    let inmem_manager = Arc::new(
-        InMemAgentManager::new(
-            Arc::clone(&inmem_model_engine),
-            frames,
-            mcp_connector,
-            Arc::clone(&inmem_model_access),
-        )
-        .with_admission(admission.clone())
-        .with_agent_keys(Arc::clone(&agent_keys))
-        .with_dev_commands(enable_dev_commands),
-    );
+    let mut inmem_manager = InMemAgentManager::new(
+        Arc::clone(&inmem_model_engine),
+        frames,
+        mcp_connector,
+        Arc::clone(&inmem_model_access),
+    )
+    .with_admission(admission.clone())
+    .with_agent_keys(Arc::clone(&agent_keys))
+    .with_dev_commands(enable_dev_commands);
+    if gemini_4_key.is_some() {
+        inmem_manager = inmem_manager.with_gemini_4_replays(Arc::new(
+            agent_inmem::outbound::gemini_replay::PgGemini4ReplayStore(pool.clone()),
+        ));
+    }
+    let inmem_manager = Arc::new(inmem_manager);
     let inmem = InMemRuntime {
         manager: Arc::clone(&inmem_manager),
     };

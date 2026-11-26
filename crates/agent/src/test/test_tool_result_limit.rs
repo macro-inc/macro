@@ -33,6 +33,7 @@ fn limited_bridge(
             user_tool_finisher: None,
             stream_tool_calls: false,
             result_limit: Some(limit.clone()),
+            gemini_4_replay: None,
         },
         Arc::new(vec![]),
         CancellationToken::new(),

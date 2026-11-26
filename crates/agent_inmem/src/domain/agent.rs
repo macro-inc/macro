@@ -54,7 +54,9 @@ use crate::domain::engine::{
 };
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers, has_code_mode_tools};
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
-use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
+use crate::domain::session::{
+    HistoryEntry, SessionStore, UserPrompt, gemini_4_history, gemini_4_messages, messages_for_turn,
+};
 use crate::domain::tool_stream::StreamingCalls;
 use crate::domain::user_input::{
     SharedUserInputRequester, UserInputError, UserInputOutcome, UserInputRequest,
@@ -130,6 +132,7 @@ struct TurnInput {
     identity: Option<AgentIdentity>,
     /// The session's instructions, for the engine's system prompt.
     instructions: Option<String>,
+    gemini_4_replay: Option<agent::Gemini4ReplaySession>,
 }
 
 /// Everything one agent task serves its session from.
@@ -148,6 +151,8 @@ pub struct AgentState {
     pub admission: Arc<dyn AiAdmissionService>,
     /// Current model permissions for the trusted session owner.
     pub model_access: Arc<dyn InMemModelAccess>,
+    /// Private native replay storage for a provisioned Gemini 4 client.
+    pub gemini_4_replays: Option<Arc<dyn crate::domain::gemini_replay::Gemini4ReplayStore>>,
     /// Agents' own API keys, which the session's agent's turns run on
     /// instead of the owner's Macro allowance when it has a usable one.
     pub agent_keys: Arc<dyn AgentKeys>,
@@ -290,6 +295,11 @@ impl AgentState {
 
     fn set_model(&self, model: String) {
         if let Some(mut state) = self.store.get_mut(&self.session_id) {
+            if agent::requires_gemini_4_client(&model)
+                && let Some(summary) = state.summarizing.pending.take()
+            {
+                summary.cancel.cancel();
+            }
             if !ReasoningEffort::supported(&model).contains(&state.reasoning_effort) {
                 state.reasoning_effort = ReasoningEffort::default();
             }
@@ -393,14 +403,34 @@ impl AgentState {
                 speed: ModelSpeed::Standard,
                 identity: None,
                 instructions: None,
+                gemini_4_replay: None,
             },
-            |state| TurnInput {
-                messages: messages_for_turn(&state.history, prompt),
-                model: state.model.clone(),
-                reasoning_effort: state.reasoning_effort,
-                speed: state.speed,
-                identity: state.identity.clone(),
-                instructions: state.instructions.clone(),
+            |state| {
+                let frontier = agent::requires_gemini_4_client(&state.model);
+                let messages = if frontier {
+                    gemini_4_messages(&state.history, prompt)
+                } else {
+                    Some(messages_for_turn(&state.history, prompt))
+                };
+                let gemini_4_replay = if frontier && messages.is_some() {
+                    gemini_4_history(&state.history, &state.model).and_then(|history| {
+                        agent::Gemini4ReplaySession::new(
+                            &state.model,
+                            history.into_iter().cloned().collect(),
+                        )
+                    })
+                } else {
+                    None
+                };
+                TurnInput {
+                    messages: messages.unwrap_or_default(),
+                    model: state.model.clone(),
+                    reasoning_effort: state.reasoning_effort,
+                    speed: state.speed,
+                    identity: state.identity.clone(),
+                    instructions: state.instructions.clone(),
+                    gemini_4_replay,
+                }
             },
         )
     }
@@ -412,6 +442,7 @@ impl AgentState {
         request_id: RequestId,
         prompt: UserPrompt,
         parts: Vec<AssistantMessagePart>,
+        gemini_4_replay: Option<agent::Gemini4Replay>,
     ) {
         if let Some(mut state) = self.store.get_mut(&self.session_id) {
             state
@@ -419,6 +450,9 @@ impl AgentState {
                 .push(HistoryEntry::User { prompt, request_id });
             if !parts.is_empty() {
                 state.history.push(HistoryEntry::Assistant(parts));
+                state
+                    .history
+                    .extend(gemini_4_replay.map(HistoryEntry::Gemini4Replay));
             }
         }
     }
@@ -985,11 +1019,42 @@ async fn run_turn(
     let span = tracing::Span::current();
     span.record("agent.turn.lock_wait_ms", elapsed_ms(started));
     let admission_started = Instant::now();
-    let session_model = state
-        .store
-        .get(&state.session_id)
-        .map(|session| session.model.clone())
-        .unwrap_or_default();
+    let session_model = if let Some(session) = state.store.get(&state.session_id) {
+        if agent::requires_gemini_4_client(&session.model)
+            && !state
+                .engine
+                .supported_models()
+                .contains(&session.model.as_str())
+        {
+            return Err(AcpError::invalid_params().data("This model is unavailable."));
+        }
+        session.model.clone()
+    } else {
+        String::new()
+    };
+    let frontier_input = if agent::requires_gemini_4_client(&session_model) {
+        let input = state.turn_input(&prompt);
+        if input.model != session_model || input.gemini_4_replay.is_none() {
+            return Err(AcpError::invalid_params()
+                .data("Gemini 4 conversation history cannot be replayed safely"));
+        }
+        Some(input)
+    } else {
+        None
+    };
+    let frontier_plan = if agent::requires_gemini_4_client(&session_model) {
+        let access = tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+            result = state.model_access.access(&state.owner) => result.map_err(model_access_error)?,
+        };
+        if !access.allows(&session_model) {
+            return Err(model_access_error(ModelAccessError::Forbidden));
+        }
+        Some(access)
+    } else {
+        None
+    };
     // An agent with its own usable key runs every turn on it, never on the
     // owner's allowance; one without runs on Macro usage.
     let agent_key = tokio::select! {
@@ -1035,6 +1100,15 @@ async fn run_turn(
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
         tools = state.mcp_tools_for_turn() => tools,
     };
+    let expected_model = frontier_input.as_ref().map(|input| input.model.as_str());
+    if let Some(expected_model) = expected_model
+        && state
+            .store
+            .get(&state.session_id)
+            .is_none_or(|session| session.model != expected_model)
+    {
+        return Err(AcpError::invalid_params().data("The model changed. Send the message again."));
+    }
     let TurnInput {
         messages,
         model,
@@ -1042,17 +1116,23 @@ async fn run_turn(
         speed,
         identity,
         instructions,
-    } = state.turn_input(&prompt);
+        gemini_4_replay,
+    } = frontier_input.unwrap_or_else(|| state.turn_input(&prompt));
+    if agent::requires_gemini_4_client(&model) && model != session_model {
+        return Err(AcpError::invalid_params().data("The model changed. Send the message again."));
+    }
     // The turn already holds the key, so its provider decides the models
     // without asking for the key again.
-    let access = tokio::select! {
-        biased;
-        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        result = state.model_access.access(&state.owner) => SessionModels::new(
-            result.map_err(model_access_error)?,
-            agent_key.as_ref().map(|key| key.key.provider()),
-        ),
+    let plan = if let Some(plan) = frontier_plan {
+        plan
+    } else {
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+            result = state.model_access.access(&state.owner) => result.map_err(model_access_error)?,
+        }
     };
+    let access = SessionModels::new(plan, agent_key.as_ref().map(|key| key.key.provider()));
     if !access.allows(&model) {
         return Err(model_access_error(ModelAccessError::Forbidden));
     }
@@ -1078,6 +1158,7 @@ async fn run_turn(
     let awaiting = Arc::new(AwaitingUser::default());
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
+        gemini_4_replay: gemini_4_replay.clone(),
         purpose: TurnPurpose::Conversation,
         delivery: state.delivery,
         session_id: state.session_id,
@@ -1144,8 +1225,10 @@ async fn run_turn(
                 accumulator.push(part);
             }
             Ok(Some(Err(error))) => {
-                if error.was_cancelled() {
+                if error.was_cancelled() && (gemini_4_replay.is_none() || cancel.is_cancelled()) {
                     was_cancelled = true;
+                } else if gemini_4_replay.is_some() {
+                    failure = Some("Gemini 4 could not complete the turn safely".into());
                 } else if genai_telemetry::content_withheld() {
                     failure = Some(WITHHELD_TURN_FAILURE.to_owned());
                 } else {
@@ -1185,6 +1268,40 @@ async fn run_turn(
             )),
         ));
     }
+    let replay = if failure.is_none() && !was_cancelled && !cancel.is_cancelled() {
+        gemini_4_replay.and_then(|replay| {
+            let completed = replay
+                .complete()
+                .filter(|saved| saved.assistant_rounds(&turn_parts).is_some());
+            if completed.is_none() || turn_parts.is_empty() {
+                failure = Some("Unable to capture Gemini 4 conversation replay state".into());
+                return None;
+            }
+            completed
+        })
+    } else {
+        None
+    };
+    let replay = if let Some(replay) = replay {
+        let saved = match state.gemini_4_replays.as_ref() {
+            Some(store) => tokio::select! {
+                biased;
+                _ = cancel.cancelled() => None,
+                result = store.save(state.session_id, &state.owner, &request_id, &replay) => Some(result.is_ok()),
+            },
+            None => Some(false),
+        };
+        match saved {
+            Some(true) => Some(replay),
+            Some(false) => {
+                failure = Some("Unable to save Gemini 4 conversation replay state".into());
+                None
+            }
+            None => None,
+        }
+    } else {
+        None
+    };
     // The turn's text is the reply a channel thread reads, so it says the
     // turn failed and leaves why to the prompt's error.
     if failure.is_some() {
@@ -1203,8 +1320,6 @@ async fn run_turn(
             SessionUpdate::AgentMessageChunk(ContentChunk::new(reply.into())),
         ));
     }
-    state.push_turn(request_id, prompt, turn_parts);
-
     // A failure first: the idle timeout cancels the stream itself, and a turn
     // it stopped failed rather than being stopped by the user.
     let result = if let Some(failure) = failure {
@@ -1215,6 +1330,8 @@ async fn run_turn(
         Ok(StopReason::EndTurn)
     };
     output.record(&span, &result);
+    let replay = replay.filter(|_| matches!(result, Ok(StopReason::EndTurn)));
+    state.push_turn(request_id, prompt, turn_parts, replay);
     result
 }
 
@@ -1339,6 +1456,7 @@ async fn run_ask(
             request_id,
             prompt,
             vec![AssistantMessagePart::Text { text }],
+            None,
         );
         return StopReason::EndTurn;
     }
@@ -1362,6 +1480,7 @@ async fn run_ask(
         request_id,
         prompt,
         vec![AssistantMessagePart::Text { text }],
+        None,
     );
 
     if cancel.is_cancelled() {

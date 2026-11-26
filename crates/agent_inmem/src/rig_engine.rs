@@ -24,7 +24,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use agent::{
-    AgentError, AgentLoop, PromptSection, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit,
+    AgentError, AgentLoop, Gemini4Client, PromptSection, ReadToolResult, StreamPart, SystemPrompt,
+    ToolResultLimit, requires_gemini_4_client,
 };
 use ai_tools::user_tool_review::{ReviewError, UserToolAuthorizer, authorized_user_tool_finisher};
 use ai_tools::{DeferredToolSet, ToolServiceContext};
@@ -86,6 +87,8 @@ pub struct RigTurnEngine {
     entity_routing: Arc<dyn EntityRoutingPolicy>,
     tool_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
+    gemini_4_client: Option<Gemini4Client>,
+    supported_models: Vec<&'static str>,
 }
 
 impl RigTurnEngine {
@@ -110,6 +113,8 @@ impl RigTurnEngine {
             entity_routing: Arc::new(NoEntityRouting),
             tool_context,
             gate: Arc::new(UngatedNativeTools),
+            gemini_4_client: None,
+            supported_models: crate::domain::models::advertised_models(&[]),
         }
     }
 
@@ -117,6 +122,14 @@ impl RigTurnEngine {
     #[must_use]
     pub fn with_gate(mut self, gate: Arc<dyn NativeToolGate>) -> Self {
         self.gate = gate;
+        self
+    }
+
+    /// Offer Gemini 4 in the paid Macro model catalog using its dedicated client.
+    #[must_use]
+    pub fn with_gemini_4_client(mut self, client: Gemini4Client) -> Self {
+        self.supported_models = crate::domain::models::advertised_models(client.models());
+        self.gemini_4_client = Some(client);
         self
     }
 
@@ -413,7 +426,7 @@ impl NativeTools {
 
 impl TurnEngine for RigTurnEngine {
     fn supported_models(&self) -> &[&str] {
-        crate::domain::models::advertised_models()
+        &self.supported_models
     }
 
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {
@@ -427,6 +440,7 @@ impl TurnEngine for RigTurnEngine {
         let entity_routing = Arc::clone(&self.entity_routing);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
+        let gemini_4_client = self.gemini_4_client.clone();
         let metering = agent::MeteringContext::current();
         // A turn whose content is withheld keeps it withheld in its task.
         let withheld = genai_telemetry::content_withheld();
@@ -438,6 +452,14 @@ impl TurnEngine for RigTurnEngine {
                     return;
                 };
                 request.model = model;
+                if requires_gemini_4_client(&request.model) && request.gemini_4_replay.is_none() {
+                    let _ = parts
+                        .send(Err(AgentError::Other(anyhow::anyhow!(
+                            "Gemini 4 conversation history cannot be replayed safely"
+                        ))))
+                        .await;
+                    return;
+                }
                 let (routes, entities_routed) = tokio::join!(
                     routes_skills(skill_routing.as_ref(), &request),
                     routes_entities(entity_routing.as_ref(), &request),
@@ -454,6 +476,7 @@ impl TurnEngine for RigTurnEngine {
                     sessions: &session_skills,
                     docs: &session_docs,
                     entities: entities_routed,
+                    gemini_4_client: gemini_4_client.as_ref(),
                 };
                 let turn = Box::pin(drive_turn(
                     &memory,
@@ -538,6 +561,7 @@ async fn routes_entities(policy: &dyn EntityRoutingPolicy, request: &TurnRequest
 /// What a turn loads on its own: the user's skills (and what its session has
 /// loaded already), and the SDK areas its request needs.
 struct TurnRouting<'a> {
+    gemini_4_client: Option<&'a Gemini4Client>,
     routes: bool,
     sessions: &'a SessionSkills,
     docs: &'a SessionDocs,
@@ -592,6 +616,7 @@ async fn drive_turn(
     parts: &mpsc::Sender<Result<StreamPart, AgentError>>,
 ) -> Result<(), AgentError> {
     let TurnRequest {
+        gemini_4_replay,
         purpose,
         delivery,
         session_id,
@@ -645,7 +670,10 @@ async fn drive_turn(
     // The opening line runs on Macro's own fast model, so a turn the agent's
     // key pays for goes without one; so does a reply read only once it is
     // finished, which gains nothing from it.
-    let opening = !summarizing && agent_key.is_none() && delivery == ReplyDelivery::Streamed;
+    let frontier = requires_gemini_4_client(&model);
+    // An opener's text is not part of Gemini's signed native response.
+    let opening =
+        !summarizing && !frontier && agent_key.is_none() && delivery == ReplyDelivery::Streamed;
 
     // Started before anything else so its line is out before the turn's
     // model has a first token.
@@ -826,6 +854,14 @@ async fn drive_turn(
         .with_genai_telemetry(false)
         .with_streamed_tool_calls()
         .with_tool_result_limit(tool_results.clone());
+    if requires_gemini_4_client(&model) {
+        let client = routing
+            .gemini_4_client
+            .ok_or_else(|| AgentError::UnknownModel(model.clone()))?;
+        let replay = gemini_4_replay
+            .ok_or_else(|| anyhow::anyhow!("Gemini 4 replay state is unavailable"))?;
+        agent_loop = agent_loop.with_gemini_4_client(client, replay)?;
+    }
     // Only the loop's own model calls run on the agent's key, so only they are
     // recorded against it; tools keep `usage_ctx`, since they call models on
     // Macro's keys.

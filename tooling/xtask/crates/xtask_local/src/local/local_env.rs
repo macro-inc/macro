@@ -740,6 +740,8 @@ impl BootStubEnv {
         // The worker is opt-in and ships paused; an explicit env-file can enable it.
         env.insert("SLACK_IMPORT_ENABLED".into(), "false".into());
         env.insert("SLACK_IMPORT_CONCURRENCY".into(), "1".into());
+        env.insert("ENABLE_GEMINI_4_MODELS".into(), "false".into());
+        env.insert("GOOGLE_GEMINI_FRONTIER_API_KEY".into(), String::new());
         // connection_gateway config reads `REDIS_HOST` (a Redis URL, not a
         // hostname — see `redis::Client::open`).
         env.insert("REDIS_HOST".into(), "redis://redis:6379".into());

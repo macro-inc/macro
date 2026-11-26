@@ -18,10 +18,11 @@ use bytes::Bytes;
 use futures::StreamExt;
 use genai_telemetry::{GenAiSpanExt as _, attr};
 use rig_core::http_client::{
-    self, HttpClientExt, LazyBody, MultipartForm, Request, Response, StreamingResponse,
+    self, HeaderValue, HttpClientExt, LazyBody, MultipartForm, Request, Response, StreamingResponse,
 };
 use serde_json::Value;
 
+use super::gemini_replay::{Capture as GeminiReplayCapture, Gemini4ReplaySession};
 use super::metering::{Attempt, MeteringContext, MeteringError, WireProtocol};
 
 mod interim_usage;
@@ -43,6 +44,8 @@ pub struct MeteredHttpClient<H = http_client::ReqwestClient> {
     /// Whether the key is Macro's own, so a suspended or out-of-credit
     /// response is a Macro outage worth alerting on.
     macro_account: bool,
+    gemini_4: Option<(HeaderValue, &'static [&'static str])>,
+    gemini_4_replay: Option<Gemini4ReplaySession>,
 }
 
 /// Puts the tier and effort the provider actually receives on the model-call
@@ -89,6 +92,8 @@ impl<H> MeteredHttpClient<H> {
             provider: provider.into(),
             protocol,
             macro_account: true,
+            gemini_4: None,
+            gemini_4_replay: None,
         }
     }
 
@@ -96,6 +101,18 @@ impl<H> MeteredHttpClient<H> {
     /// failures are the agent owner's billing, not a Macro outage.
     pub fn with_agent_api_key(mut self) -> Self {
         self.macro_account = false;
+        self
+    }
+
+    /// Restrict this Gemini transport to Neon and Carbon, using header auth.
+    pub(super) fn with_gemini_4_key(
+        mut self,
+        key: HeaderValue,
+        models: &'static [&'static str],
+        replay: Option<Gemini4ReplaySession>,
+    ) -> Self {
+        self.gemini_4 = Some((key, models));
+        self.gemini_4_replay = replay;
         self
     }
 
@@ -115,11 +132,34 @@ impl<H> MeteredHttpClient<H> {
         }
     }
 
+    fn private_error(&self, error: http_client::Error) -> http_client::Error {
+        if self.gemini_4.is_none() {
+            return error;
+        }
+        sanitize_gemini_4_error(error)
+    }
+
     async fn prepare(
         &self,
         mut request: Request<Bytes>,
     ) -> http_client::Result<(Request<Bytes>, Option<Attempt>)> {
-        let sent = serde_json::from_slice::<Value>(request.body()).ok();
+        if let Some((key, models)) = &self.gemini_4 {
+            super::gemini::authorize_gemini_4_request(&mut request, key, models)
+                .ok_or_else(|| http_error(MeteringError::Unsupported))?;
+        }
+        let mut sent = serde_json::from_slice::<Value>(request.body()).ok();
+        if let Some(replay) = &self.gemini_4_replay {
+            let body = sent
+                .as_mut()
+                .ok_or_else(|| http_error(MeteringError::Unsupported))?;
+            replay
+                .apply(body)
+                .ok_or_else(|| http_error(MeteringError::Unsupported))?;
+            *request.body_mut() = serde_json::to_vec(body)
+                .map_err(|_| http_error(MeteringError::Unsupported))?
+                .into();
+            request.headers_mut().remove("content-length");
+        }
         if let Some(body) = &sent {
             record_request_settings(&tracing::Span::current(), self.protocol, body);
         }
@@ -197,6 +237,26 @@ impl<H> MeteredHttpClient<H> {
 
 fn http_error(error: MeteringError) -> http_client::Error {
     http_client::Error::Instance(Box::new(error))
+}
+
+fn sanitize_gemini_4_error(error: http_client::Error) -> http_client::Error {
+    match error {
+        http_client::Error::InvalidStatusCode(status)
+        | http_client::Error::InvalidStatusCodeWithMessage(status, _) => {
+            http_client::Error::InvalidStatusCode(status)
+        }
+        http_client::Error::StreamEnded => http_client::Error::StreamEnded,
+        http_client::Error::Instance(error) => error.downcast::<MeteringError>().map_or_else(
+            |_| http_error(MeteringError::Stopped),
+            |error| http_client::Error::Instance(error),
+        ),
+        _ => http_error(MeteringError::Stopped),
+    }
+}
+
+fn gemini_4_finish_reason_is_known(reason: &str) -> bool {
+    use rig_core::providers::gemini::completion::gemini_api_types::FinishReason;
+    serde_json::from_value::<FinishReason>(Value::from(reason)).is_ok()
 }
 
 fn request_id(headers: &http_client::HeaderMap) -> Option<ProviderRequestId> {
@@ -278,7 +338,7 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
             })
             .await;
             reporter.report_account_failure(&result);
-            result
+            result.map_err(|error| reporter.private_error(error))
         }
     }
 
@@ -296,7 +356,7 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
         }
         let client = self.clone();
         async move {
-            if activated {
+            if activated || client.gemini_4.is_some() {
                 return Err(http_error(MeteringError::Unsupported));
             }
             let result = client.inner.send_multipart(request).await;
@@ -311,7 +371,7 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
     {
         let result = self.send_streaming_without_interim_usage(request).await;
         self.report_account_failure(&result);
-        result
+        result.map_err(|error| self.private_error(error))
     }
 }
 
@@ -327,10 +387,30 @@ impl<H: HttpClientExt + Clone + 'static> MeteredHttpClient<H> {
         if self.protocol != WireProtocol::Gemini || !response.status().is_success() {
             return Ok(response);
         }
-        let (parts, body) = response.into_parts();
+        if self.gemini_4.is_some()
+            && response
+                .headers()
+                .get("content-type")
+                .and_then(|header| header.to_str().ok())
+                .is_none_or(|value| {
+                    value.split(';').next().map(str::trim) != Some("text/event-stream")
+                })
+        {
+            return Err(http_error(MeteringError::Stopped));
+        }
+        let (mut parts, body) = response.into_parts();
+        if self.gemini_4.is_some() {
+            parts.headers.insert(
+                "content-type",
+                http_client::HeaderValue::from_static("text/event-stream"),
+            );
+        }
         Ok(Response::from_parts(
             parts,
-            interim_usage::without_interim_usage(body),
+            interim_usage::without_interim_usage(
+                body,
+                self.gemini_4_replay.clone().map(GeminiReplayCapture::new),
+            ),
         ))
     }
 
@@ -348,6 +428,7 @@ impl<H: HttpClientExt + Clone + 'static> MeteredHttpClient<H> {
         let Some(attempt) = attempt else {
             return self.inner.send_streaming(request).await;
         };
+        let private = self.gemini_4.is_some();
         let inner = self.inner.clone();
         // Keep connection establishment alive too: a timeout after provider
         // execution is unresolved evidence, not permission to release the hold.
@@ -388,11 +469,11 @@ impl<H: HttpClientExt + Clone + 'static> MeteredHttpClient<H> {
                                 if facts.terminal
                                     && let Some(attempt) = attempt.take()
                                 {
-                                    if let Some(reason) = &facts.stop_reason {
-                                        call_span.set_str_array(
-                                            attr::RESPONSE_FINISH_REASONS,
-                                            [reason.as_str()],
-                                        );
+                                    if let Some(reason) = facts.stop_reason.as_deref()
+                                        && (!private || gemini_4_finish_reason_is_known(reason))
+                                    {
+                                        call_span
+                                            .set_str_array(attr::RESPONSE_FINISH_REASONS, [reason]);
                                     }
                                     let pricing = attempt
                                         .record_cost(facts.evidence(), facts.delivered_speed());

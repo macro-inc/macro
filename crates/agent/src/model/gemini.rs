@@ -1,12 +1,144 @@
+use super::gemini_replay::Gemini4ReplaySession;
 use crate::model::types::Model;
 use rig_core::completion::{
     CompletionError, CompletionModel, CompletionRequest, CompletionResponse,
 };
 use rig_core::message::{AssistantContent, Message, UserContent};
 use rig_core::streaming::StreamingCompletionResponse;
-use rig_core::{client::CompletionClient, http_client::HttpClientExt, providers::gemini};
+use rig_core::{
+    client::CompletionClient,
+    http_client::{HeaderValue, HttpClientExt, Method, Request, Uri},
+    providers::gemini,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
+
+/// Routed ID for Gemini 4 Neon on the dedicated Gemini Developer API client.
+pub const GEMINI_4_NEON: &str = "google/gemini-4-neon";
+/// Routed ID for Gemini 4 Carbon on the dedicated Gemini Developer API client.
+pub const GEMINI_4_CARBON: &str = "google/gemini-4-carbon";
+
+/// Whether this model requires a dedicated Gemini 4 client.
+pub fn requires_gemini_4_client(model: &str) -> bool {
+    matches!(model.trim(), GEMINI_4_NEON | GEMINI_4_CARBON)
+}
+
+/// Native Gemini client provisioned for the restricted Gemini 4 catalog.
+#[derive(Clone)]
+pub struct Gemini4Client {
+    http: reqwest::Client,
+    key: HeaderValue,
+    models: &'static [&'static str],
+}
+
+impl Gemini4Client {
+    /// Build a metered Developer API client with a separate key for Neon and Carbon.
+    pub fn new(api_key: &str, carbon_enabled: bool) -> Result<Self, crate::AgentError> {
+        let http = reqwest::Client::builder()
+            .retry(reqwest::retry::never())
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|error| rig_core::http_client::Error::Instance(Box::new(error)))?;
+        let models: &'static [&'static str] = if carbon_enabled {
+            &[GEMINI_4_NEON, GEMINI_4_CARBON]
+        } else {
+            &[GEMINI_4_NEON]
+        };
+        Ok(Self {
+            http,
+            key: gemini_4_key(api_key)?,
+            models,
+        })
+    }
+
+    pub(crate) fn bind(
+        &self,
+        replay: Gemini4ReplaySession,
+    ) -> Result<gemini::Client<super::metering_http::MeteredHttpClient>, crate::AgentError> {
+        gemini_4_client(
+            self.http.clone(),
+            self.key.clone(),
+            self.models,
+            Some(replay),
+        )
+    }
+
+    /// The models this client is provisioned to serve.
+    pub fn models(&self) -> &'static [&'static str] {
+        self.models
+    }
+}
+
+pub(super) fn gemini_4_key(value: &str) -> Result<HeaderValue, crate::AgentError> {
+    let mut key = HeaderValue::from_str(value)
+        .ok()
+        .filter(|key| !key.as_bytes().is_empty())
+        .ok_or_else(|| anyhow::anyhow!("invalid Gemini 4 API key"))?;
+    key.set_sensitive(true);
+    Ok(key)
+}
+
+pub(super) fn gemini_4_client<H: HttpClientExt + Clone + 'static>(
+    http: H,
+    key: HeaderValue,
+    models: &'static [&'static str],
+    replay: Option<Gemini4ReplaySession>,
+) -> Result<gemini::Client<super::metering_http::MeteredHttpClient<H>>, crate::AgentError> {
+    use super::metering::WireProtocol;
+    use super::metering_http::MeteredHttpClient;
+
+    // The shared Gemini override may point at the Flash emulator.
+    let base_url = macro_service_urls::GoogleGenerativeAiApiUrl::dev();
+    let transport = MeteredHttpClient::new(http, "google", WireProtocol::Gemini)
+        .with_gemini_4_key(key, models, replay);
+    Ok(gemini::Client::builder()
+        // Rig puts this literal in the URL. The transport removes it and sends
+        // the dedicated credential as a sensitive header.
+        .api_key("header")
+        .base_url(base_url.as_str())
+        .http_client(transport)
+        .build()?)
+}
+
+pub(super) fn authorize_gemini_4_request<T>(
+    request: &mut Request<T>,
+    key: &HeaderValue,
+    models: &[&str],
+) -> Option<()> {
+    if request.method() != Method::POST {
+        return None;
+    }
+    let uri = request.uri();
+    let origin = macro_service_urls::GoogleGenerativeAiApiUrl::dev();
+    let authority = origin.as_str().strip_prefix("https://")?;
+    if uri.scheme_str() != Some("https") || uri.authority()?.as_str() != authority {
+        return None;
+    }
+    let (model, operation) = uri
+        .path()
+        .strip_prefix("/v1beta/models/")?
+        .split_once(':')?;
+    let id = match model {
+        "gemini-4-neon" => GEMINI_4_NEON,
+        "gemini-4-carbon" => GEMINI_4_CARBON,
+        _ => return None,
+    };
+    if !models.contains(&id) {
+        return None;
+    }
+    let path_and_query = match (operation, uri.query()) {
+        ("streamGenerateContent", Some("alt=sse&key=header")) => {
+            format!("{}?alt=sse", uri.path())
+        }
+        ("generateContent", Some("key=header")) => uri.path().to_owned(),
+        _ => return None,
+    };
+    let mut parts = uri.clone().into_parts();
+    parts.path_and_query = Some(path_and_query.parse().ok()?);
+    *request.uri_mut() = Uri::from_parts(parts).ok()?;
+    request.headers_mut().insert("x-goog-api-key", key.clone());
+    Some(())
+}
 
 /// A Gemini model bound to the native GenerateContent client that serves it.
 ///
@@ -37,8 +169,9 @@ impl<'a, H: HttpClientExt + Clone + 'static> GeminiModel<'a, H> {
     }
 
     /// Ask Gemini to include thought summaries so reasoning deltas reach the
-    /// stream. Thinking itself is on by default for Gemini 3; this only asks
-    /// for the summarized thoughts, not a thinking-level override.
+    /// stream for Flash. The dedicated Gemini 4 route skips thought summaries
+    /// because those can carry private signed content. Thinking itself still
+    /// uses the provider default.
     ///
     /// Keys are the camelCase names rig deserializes into
     /// `AdditionalParameters`. A snake_case `generation_config` is not that
@@ -51,7 +184,7 @@ impl<'a, H: HttpClientExt + Clone + 'static> GeminiModel<'a, H> {
         Some(serde_json::json!({
             "generationConfig": {
                 "thinkingConfig": {
-                    "includeThoughts": true
+                    "includeThoughts": !requires_gemini_4_client(&self.model.to_string())
                 }
             }
         }))
@@ -86,6 +219,16 @@ impl<H: HttpClientExt + Clone + 'static> CompletionModel for GeminiCompletionMod
         &self,
         request: CompletionRequest,
     ) -> Result<StreamingCompletionResponse<Self::StreamingResponse>, CompletionError> {
+        let model = request.model.as_deref().unwrap_or(&self.0.model);
+        if matches!(
+            model.strip_prefix("models/").unwrap_or(model),
+            "gemini-4-neon" | "gemini-4-carbon"
+        ) && tracing::event_enabled!(target: "rig::streaming", tracing::Level::TRACE)
+        {
+            return Err(CompletionError::RequestError(
+                "Gemini 4 requires provider request tracing to be disabled".into(),
+            ));
+        }
         self.0.stream(prepare_request(request)?).await
     }
 }
