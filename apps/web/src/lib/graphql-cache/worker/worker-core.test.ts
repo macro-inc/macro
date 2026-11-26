@@ -4337,6 +4337,42 @@ describe('CacheWorkerCore', () => {
       ]);
     });
 
+    it("doesn't let a remount hurry its operation's older read during a hydrate", async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          id: 3,
+          kind: 'read',
+          opId: 'client:x',
+          query: 'query X { x }',
+        }),
+        core.handleRequest(port, read(4, 'client:y')),
+        core.handleRequest(port, {
+          id: 5,
+          kind: 'teardown',
+          opId: 'client:x',
+        }),
+        // It waits for the teardown, which can't run before the commit, so
+        // lending it to the older read would only delay the visible one.
+        core.handleRequest(port, read(6, 'client:x'))
+      );
+      release();
+      await Promise.all(sent);
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:y',
+        'read:client:x',
+        'commit',
+        'teardown',
+        'read:client:x',
+      ]);
+    });
+
     it('stamps the hydrate notice with its authority after a read between fails', async () => {
       const order: string[] = [];
       const { engine, prepareStarted, release } = splitEngine(order);
