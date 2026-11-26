@@ -14,13 +14,12 @@ pub(super) struct WindowObservation {
     dependencies: BTreeSet<EntityKey<'static>>,
     bound: BTreeSet<EntityKey<'static>>,
     fields: BTreeMap<(EntityKey<'static>, String), Option<CacheValue>>,
+    /// The live view whose latest read this is; a later read of it replaces it.
+    view: Option<String>,
 }
 
 pub(super) struct WindowObservations {
     windows: LruCache<String, WindowObservation>,
-    /// The one observation each live view holds: its last read. A read
-    /// replaces it, so a reader that ignores proofs leaves no token behind.
-    by_view: LruCache<String, String>,
     next_id: u64,
     instance: Uuid,
 }
@@ -29,7 +28,6 @@ impl Default for WindowObservations {
     fn default() -> Self {
         Self {
             windows: LruCache::new(NonZeroUsize::new(64).expect("nonzero observation capacity")),
-            by_view: LruCache::new(NonZeroUsize::new(256).expect("nonzero view capacity")),
             next_id: 0,
             instance: Uuid::new_v4(),
         }
@@ -67,12 +65,20 @@ impl<S: Storage> Engine<S> {
         }
     }
 
-    /// Drops the observation of a live view's previous read. Its reader holds
+    /// Drops the observation of a live view's previous read. The view is kept
+    /// on the observation, so the two leave the LRU together. Its reader holds
     /// the new token once the read returns; a proof that no longer lists the
     /// old one only makes a reader that still holds it read again.
     pub(super) fn forget_view_observation(&mut self, view: &str) {
-        if let Some(previous) = self.window_observations.by_view.pop(view) {
-            self.window_observations.windows.pop(&previous);
+        let previous: Vec<_> = self
+            .window_observations
+            .windows
+            .iter()
+            .filter(|(_, window)| window.view.as_deref() == Some(view))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in previous {
+            self.window_observations.windows.pop(&id);
         }
     }
 
@@ -105,6 +111,7 @@ impl<S: Storage> Engine<S> {
                 boundary,
                 dependencies,
                 fields: BTreeMap::new(),
+                view: None,
                 bound: if bound {
                     keys.iter()
                         .map(|key| EntityKey(key.as_str().to_owned().into()))
@@ -320,9 +327,9 @@ impl<S: PredicateIndexStorage> Engine<S> {
                 .collect(),
             true,
         );
-        self.window_observations
-            .by_view
-            .put(view.to_owned(), id.clone());
+        if let Some(window) = self.window_observations.windows.peek_mut(&id) {
+            window.view = Some(view.to_owned());
+        }
         Ok(id)
     }
 }
