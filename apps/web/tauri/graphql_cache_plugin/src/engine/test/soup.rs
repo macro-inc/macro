@@ -208,6 +208,47 @@ fn native_live_query_returns_field_deltas_from_the_shared_engine() {
 }
 
 #[test]
+fn a_native_write_reports_the_live_views_it_left_unchanged() {
+    let handle = spawn_handle();
+    let project = |n: u16, favorite: bool| {
+        json!({"user": {"id": VIEWER, "soup": {
+            "items": [{"__typename": "GraphqlSoupProject", "id": id(n), "cacheProjection": null,
+                "ownerId": VIEWER, "parentId": null, "createdAt": TIMESTAMP, "updatedAt": TIMESTAMP,
+                "notifications": [], "properties": [], "isFavorited": favorite}],
+        }}})
+    };
+    let query = include_str!("project.graphql");
+    write_data(&handle, query, project(100, false), Some(VIEWER));
+    write_data(&handle, query, project(101, false), Some(VIEWER));
+    let mut filters = filters();
+    filters["emailFilter"] = json!({"tree": {"literal": {"threadId": id(0)}}});
+    filters["projectFilter"] = json!({"literal": {"projectIdSelf": id(100)}});
+    let view = evaluate(
+        &handle,
+        serde_json::from_value(json!({
+            "filters": filters, "sortMethod": "UPDATED_AT", "sortDirection": "DESC", "limit": 20,
+            "baseline": [{"key": format!("GraphqlSoupProject:{}", id(100)), "sortTimestamp": TIMESTAMP}],
+            "liveQuery": { "id": "native-live", "document": "fragment Item on GraphqlSoupProject { id favorite: isFavorited }", "fragmentName": "Item" },
+        }))
+        .unwrap(),
+    );
+    let observation = view["observationId"].as_str().unwrap().to_owned();
+
+    // Another project changed: the view is proven as it was.
+    let other = write_data(&handle, query, project(101, true), Some(VIEWER));
+    assert!(other.revision_advanced);
+    assert_eq!(other.unchanged_views, Some(vec![observation.clone()]));
+    // Its own project changed: the view is left to read again.
+    let own = write_data(&handle, query, project(100, true), Some(VIEWER));
+    assert!(own.revision_advanced);
+    assert_eq!(own.unchanged_views, Some(Vec::new()));
+    // Nothing changed: no push, and no proof to send with it.
+    let same = write_data(&handle, query, project(100, true), Some(VIEWER));
+    assert!(!same.revision_advanced);
+    assert_eq!(same.unchanged_views, None);
+}
+
+#[test]
 fn native_live_query_resume_finishes_interrupted_retirement() {
     let handle = spawn_handle();
     hydrate(&handle);

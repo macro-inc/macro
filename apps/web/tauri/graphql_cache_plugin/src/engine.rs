@@ -919,7 +919,14 @@ impl EngineHandle {
         };
         self.commits.settle(commits, || stored);
         self.publish_bound_generation(engine);
-        Ok(wire_write_result(ops, result))
+        let mut wire = wire_write_result(ops, result);
+        // The live views this write left as they were, which a hydrate
+        // already reports, so their readers skip a read. Optional: a failed
+        // proof leaves every view to read again.
+        if wire.revision_advanced && !wire.reset {
+            wire.unchanged_views = engine.unchanged_observed_windows().await.ok();
+        }
+        Ok(wire)
     }
 
     /// Stores a query response nobody waits for, as a background command: in
