@@ -11,12 +11,12 @@ import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { CalendarEmbed } from '../components/CalendarEmbed';
 import { useCalendarOccurrenceData } from '../hooks/use-calendar-occurrence-data';
-import type { CalendarPeriodView } from '../types';
+import type { CalendarGridPeriodView } from '../types';
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
 const params = new URLSearchParams(location.search);
-const VIEW: CalendarPeriodView =
+const VIEW: CalendarGridPeriodView =
   params.get('view') === 'month' ? 'dayGridMonth' : 'timeGridWeek';
 
 /**

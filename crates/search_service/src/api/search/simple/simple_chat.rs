@@ -112,8 +112,7 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
     filter_chat_response: &FilterChatResponse,
     term: String,
     excluded_terms: &[String],
-    tag_option_ids: &[String],
-    match_all_tags: bool,
+    tag_groups: &[Vec<String>],
     limit: u32,
     cursor: models_search_cursor::SearchCursorOption,
 ) -> Result<(Vec<SearchHit>, models_search_cursor::SearchCursorOption), SearchError> {
@@ -138,8 +137,7 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
         term,
         excluded_terms,
         filter_chat_response.ids_only,
-        tag_option_ids,
-        match_all_tags,
+        tag_groups,
         limit,
         inner_cursor,
     )

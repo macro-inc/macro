@@ -25,6 +25,12 @@ const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 mod download;
 #[cfg(test)]
 mod test;
+#[cfg(any(windows, test))]
+mod windows_installer;
+
+/// Whether the platform installer reopens the app itself. On Windows the app
+/// only starts the NSIS installer and exits; `/R` asks it to reopen Macro.
+const INSTALLER_REOPENS_APP: bool = cfg!(windows);
 
 #[derive(Default, Deserialize)]
 struct Config {
@@ -178,7 +184,11 @@ pub fn setup<R: Runtime>(
         .transpose()?
         .unwrap_or_default();
     let enabled = config.enabled
-        && cfg!(any(target_os = "macos", target_os = "linux"))
+        && cfg!(any(
+            target_os = "macos",
+            target_os = "linux",
+            target_os = "windows"
+        ))
         && !cfg!(debug_assertions)
         && cfg!(feature = "auto_apply_update")
         && !recording;
@@ -626,11 +636,17 @@ pub fn on_exit_requested<R: Runtime>(app: &AppHandle<R>, api: &ExitRequestApi) {
             failure: None,
         };
         let record = pending_install_path(&app);
+        // Windows cannot replace an executable while it runs.
+        #[cfg(windows)]
+        if let Some(macrod) = app.try_state::<crate::desktop::macrod::MacrodState>() {
+            crate::desktop::macrod::stop_for_install(&macrod).await;
+        }
         let result = tauri::async_runtime::spawn_blocking(move || {
             install(&install_app, download, pending, record.as_deref())
         })
         .await;
-        if !matches!(&result, Ok(Ok(()))) {
+        let installed = matches!(&result, Ok(Ok(())));
+        if !installed {
             tracing::error!(error=?result, restart, "native update installation failed");
         }
         coordinator
@@ -641,8 +657,9 @@ pub fn on_exit_requested<R: Runtime>(app: &AppHandle<R>, api: &ExitRequestApi) {
         // Restart to update relaunches whichever version is installed now: the
         // update, or after a failure the version the person had, whose launch
         // reads the install record, reports the failure and offers to try
-        // again. A quit stays quit either way; the person asked to quit.
-        if restart {
+        // again. A quit stays quit either way; the person asked to quit. On
+        // Windows a started installer reopens Macro itself once it finishes.
+        if restart && !(installed && INSTALLER_REOPENS_APP) {
             app.restart();
         } else {
             app.exit(0);
@@ -650,6 +667,32 @@ pub fn on_exit_requested<R: Runtime>(app: &AppHandle<R>, api: &ExitRequestApi) {
             std::future::pending::<()>().await;
         }
     });
+}
+
+/// Installs the verified download in place.
+#[cfg(not(windows))]
+fn hand_to_installer(
+    update: &tauri_plugin_updater::Update,
+    bytes: &[u8],
+    _trigger: Trigger,
+) -> Result<(), Failure> {
+    update.install(bytes).map_err(|error| {
+        tracing::error!(error=?error, "native update install failed");
+        Failure::from(&error)
+    })
+}
+
+/// Starts the verified NSIS installer; the caller then quits so it can run.
+#[cfg(windows)]
+fn hand_to_installer(
+    update: &tauri_plugin_updater::Update,
+    bytes: &[u8],
+    trigger: Trigger,
+) -> Result<(), Failure> {
+    windows_installer::launch(&update.version, bytes, matches!(trigger, Trigger::Restart))
+        .inspect_err(
+            |failure| tracing::error!(failure=?failure, "native update installer did not start"),
+        )
 }
 
 /// Installs a verified download, leaving a record of the attempt for the
@@ -683,10 +726,7 @@ fn install<R: Runtime>(
                 Failure::new(FailureKind::CacheShutdown)
             })?;
         }
-        download.update.install(bytes).map_err(|error| {
-            tracing::error!(error=?error, "native update install failed");
-            Failure::from(&error)
-        })?;
+        hand_to_installer(&download.update, &bytes, pending.trigger)?;
         download
             .store
             .remove()

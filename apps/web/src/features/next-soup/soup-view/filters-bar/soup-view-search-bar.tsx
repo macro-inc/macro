@@ -77,6 +77,14 @@ const variantStyles: Record<SearchbarVariant, string> = {
 export const searchTextOf = (markdown: string) =>
   markdownToSearchText(markdown).replace(/\\([!-/:-@[-`{-~])/g, '$1');
 
+/**
+ * A plain query as the editor's markdown. Its addresses stay text: imported,
+ * `from:ana@example.com` or `<ana@example.com>` would become a mail link that
+ * swallows the space typed after it. The field only ever imports plain text,
+ * never mention markup, so every `@` is escaped.
+ */
+const queryMarkdown = (query: string) => query.replaceAll('@', '\\@');
+
 /** Split-owned history, focus shortcuts and navigation around the shared search input. */
 export function SoupSearchbar(props: SoupSearchbarProps) {
   const {
@@ -121,7 +129,7 @@ export function SoupSearchbar(props: SoupSearchbarProps) {
         applyOverrides: ({ query, bindings, filters, clientFilters }) => {
           batch(() => {
             setSearchBindings(bindings ?? []);
-            controls?.setMarkdown(query);
+            controls?.setMarkdown(queryMarkdown(query));
             controls?.getLexical().update(() => $getRoot().selectEnd());
             controls?.blur();
             setSearchText(query);
@@ -171,7 +179,7 @@ export function SearchbarInput(
 ) {
   // Keep rich editor markup separate from the plain query acknowledged by the host.
   const [markdown, setMarkdown] = createSignal(
-    untrack(() => props.initialValue ?? props.value)
+    untrack(() => queryMarkdown(props.initialValue ?? props.value))
   );
   let acknowledgedQuery = searchTextOf(props.value).trim();
 
@@ -224,7 +232,7 @@ export function SearchbarInput(
         const query = searchTextOf(value).trim();
         if (query === acknowledgedQuery) return;
         acknowledgedQuery = query;
-        setMarkdown(value);
+        setMarkdown(queryMarkdown(value));
       }
     )
   );
@@ -306,7 +314,9 @@ export function SearchbarInput(
           selection.deleteCharacter(true);
         }
       }
-      selection.insertText(row.insert);
+      // A whole operator is followed by a space, so the next word starts, as
+      // in Mail's field; an operator's name waits for its value.
+      selection.insertText(row.kind === 'name' ? row.insert : `${row.insert} `);
     });
   };
   const hasContent = () => !!markdown().trim();
@@ -375,7 +385,7 @@ export function SearchbarInput(
         <SearchIcon class="size-4 shrink-0" />
         <div
           data-soup-search
-          class="flex-1 min-w-0 whitespace-nowrap overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-nowrap **:[[contenteditable]]:min-h-lh [&_p]:my-0 [&_p]:whitespace-nowrap"
+          class="flex-1 min-w-0 whitespace-pre overflow-hidden **:[[contenteditable]]:outline-none **:[[contenteditable]]:p-0 **:[[contenteditable]]:whitespace-pre **:[[contenteditable]]:min-h-lh [&_p]:my-0 [&_p]:whitespace-pre"
         >
           <MarkdownShell
             config={editor}

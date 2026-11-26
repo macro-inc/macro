@@ -15,6 +15,8 @@ use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite};
 use tokio_util::task::TaskTracker;
 use tracing::Instrument as _;
 
+use super::telemetry::{RelayProgress, RelayStage};
+
 #[cfg(test)]
 mod test;
 
@@ -53,10 +55,29 @@ pub enum TunnelError {
     /// The fleet could not run the tunnel.
     #[error("could not reach the computer: {0}")]
     Unreachable(String),
-    /// The tunnel ran but didn't start (its program missing, say); the
-    /// fleet's output, for the log only.
-    #[error("the screen tunnel did not start: {0}")]
-    Failed(String),
+    /// No shell marker arrived.
+    #[error("the screen tunnel did not start")]
+    MissingMarker,
+    /// The guest did not send its shell marker before the deadline.
+    #[error("the screen tunnel did not start in time")]
+    Timeout,
+}
+
+/// Why the tunnel was opened.
+pub enum TunnelRole {
+    /// Relays VNC traffic between the guest and a viewer.
+    Relay(Arc<RelayProgress>),
+    /// Sends typed input to the guest through a separate RFB connection.
+    Input,
+}
+
+impl TunnelRole {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Relay(_) => "relay",
+            Self::Input => "input",
+        }
+    }
 }
 
 /// Opens [`GuestStream`]s. Object-safe (`Arc<dyn GuestTunnel>`), hence the
@@ -67,6 +88,7 @@ pub trait GuestTunnel: Send + Sync + 'static {
         &self,
         computer: ComputerId,
         port: GuestPort,
+        role: TunnelRole,
     ) -> Pin<Box<dyn Future<Output = Result<GuestStream, TunnelError>> + Send + '_>>;
 }
 
@@ -161,8 +183,6 @@ const READY_PREFIX: &[u8] = b"macro-screen-tunnel-ready ";
 const READY_LINE_MAX: usize = 48;
 /// How long the guest may take to start the tunnel.
 const READY_TIMEOUT: Duration = Duration::from_secs(20);
-/// The most of a failed tunnel's output kept for the log.
-const FAILURE_OUTPUT_BYTES: usize = 512;
 /// How long a closed tunnel may take to exit on its own before it is
 /// killed: socat stops `-t 1` after its stdin ends, when the fleet passes
 /// that end on.
@@ -173,30 +193,26 @@ const KILL_TIMEOUT: Duration = Duration::from_secs(10);
 /// pid the guest reused in the meantime belongs to another program, whose
 /// command line differs.
 const KILL_SCRIPT: &str = r#"[ "$(tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null)" = "socat -t 1 STDIO TCP:127.0.0.1:$2,nodelay " ] && kill "$1""#;
-/// The tunnel: say it runs and its pid (`exec` keeps it), then become
-/// `socat` to the port in `$1`. nodelay: input is many tiny writes, which
-/// Nagle would hold back.
-const TUNNEL_SCRIPT: &str = r#"printf 'macro-screen-tunnel-ready %s\n' "$$" && exec socat -t 1 STDIO "TCP:127.0.0.1:$1,nodelay""#;
+/// Before RFB, report the shell marker. Only the fixed refusal status may
+/// leave the stderr filter. The helper keeps the reported pid for the reaper.
+const TUNNEL_SCRIPT: &str = include_str!("tunnel/relay.sh");
 
-/// How a tunnel that was open stopped short: `socat` exited with an error
-/// (the port refused it), or the fleet lost the program.
+/// Reserved exit status from the script's stderr classifier.
+const CONNECT_REFUSED: i32 = 111;
+
 #[derive(Debug, thiserror::Error)]
-pub enum TunnelExited {
-    /// `socat` exited with this code.
+pub(super) enum TunnelExited {
+    #[error("the screen port refused the connection")]
+    ConnectRefused,
     #[error("the screen tunnel exited with {0}")]
     Code(i32),
-    /// The fleet couldn't say how it ended.
-    #[error("the screen tunnel failed: {0}")]
-    Failed(String),
+    #[error("the screen tunnel exit status is unknown")]
+    Failed,
 }
 
 impl TunnelExited {
-    /// Whether `error` (from reading a [`GuestStream`]) is a tunnel that
-    /// stopped short rather than its guest port closing.
-    pub fn is(error: &std::io::Error) -> bool {
-        error
-            .get_ref()
-            .is_some_and(|inner| inner.is::<TunnelExited>())
+    pub(super) fn from_io(error: &std::io::Error) -> Option<&Self> {
+        error.get_ref()?.downcast_ref()
     }
 }
 
@@ -249,7 +265,7 @@ impl Reaper {
         .await;
         match killed {
             Ok(Ok(())) => {}
-            Ok(Err(error)) => tracing::warn!(error = %error, "could not end a screen tunnel"),
+            Ok(Err(_)) => tracing::warn!("could not end a screen tunnel"),
             Err(_) => tracing::warn!("ending a screen tunnel timed out"),
         }
         if !exited && tokio::time::timeout(EXIT_GRACE, exit).await.is_err() {
@@ -284,8 +300,9 @@ impl AsyncRead for ExitChecked {
         this.exit = None;
         Poll::Ready(match code {
             Ok(0) => Ok(()),
+            Ok(CONNECT_REFUSED) => Err(std::io::Error::other(TunnelExited::ConnectRefused)),
             Ok(code) => Err(std::io::Error::other(TunnelExited::Code(code))),
-            Err(error) => Err(std::io::Error::other(TunnelExited::Failed(error))),
+            Err(_) => Err(std::io::Error::other(TunnelExited::Failed)),
         })
     }
 }
@@ -304,7 +321,7 @@ impl Drop for ExitChecked {
 }
 
 /// Read the tunnel's ready line from `stdout` and return the program's
-/// pid; whatever came instead, up to [`FAILURE_OUTPUT_BYTES`], is the error.
+/// pid. Anything else is discarded without tracing process output.
 async fn ready(stdout: &mut Pin<Box<dyn AsyncRead + Send>>) -> Result<u32, TunnelError> {
     let mut seen = Vec::with_capacity(READY_LINE_MAX);
     let read = async {
@@ -321,9 +338,7 @@ async fn ready(stdout: &mut Pin<Box<dyn AsyncRead + Send>>) -> Result<u32, Tunne
         }
     };
     if tokio::time::timeout(READY_TIMEOUT, read).await.is_err() {
-        return Err(TunnelError::Failed(
-            "the tunnel did not start in time".to_owned(),
-        ));
+        return Err(TunnelError::Timeout);
     }
     if let Some(pid) = seen
         .strip_prefix(READY_PREFIX)
@@ -333,16 +348,7 @@ async fn ready(stdout: &mut Pin<Box<dyn AsyncRead + Send>>) -> Result<u32, Tunne
     {
         return Ok(pid);
     }
-    // Keep a little more of what the fleet said, for the log only.
-    let mut rest = vec![0u8; FAILURE_OUTPUT_BYTES.saturating_sub(seen.len())];
-    if let Ok(Ok(read)) =
-        tokio::time::timeout(Duration::from_millis(200), stdout.read(&mut rest)).await
-    {
-        seen.extend_from_slice(rest.get(..read).unwrap_or_default());
-    }
-    Err(TunnelError::Failed(
-        String::from_utf8_lossy(&seen).trim().to_owned(),
-    ))
+    Err(TunnelError::MissingMarker)
 }
 
 impl GuestTunnel for FleetTunnel {
@@ -350,11 +356,14 @@ impl GuestTunnel for FleetTunnel {
         &self,
         computer: ComputerId,
         port: GuestPort,
+        role: TunnelRole,
     ) -> Pin<Box<dyn Future<Output = Result<GuestStream, TunnelError>> + Send + '_>> {
         let span = tracing::info_span!(
             "computer.screen.tunnel",
             computer.id = %computer,
             computer.screen.port = port.name(),
+            screen.role = role.name(),
+            computer.guest.image = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
         );
         Box::pin(
@@ -364,18 +373,20 @@ impl GuestTunnel for FleetTunnel {
                     .exec
                     .exec(
                         computer,
-                        &["sh", "-c", TUNNEL_SCRIPT, "sh", port_number.as_str()],
+                        &["bash", "-c", TUNNEL_SCRIPT, "bash", port_number.as_str()],
                     )
-                    .await?;
-                // Nothing reaches the viewer until the tunnel says it runs.
-                let pid = match ready(&mut process.stdout).await {
-                    Ok(pid) => pid,
-                    Err(error) => {
+                    .await
+                    .inspect_err(|_| {
                         tracing::Span::current().record("otel.status_code", "ERROR");
-                        tracing::warn!(error = %error, "the screen tunnel did not start");
-                        return Err(error);
-                    }
-                };
+                    })?;
+                if let TunnelRole::Relay(progress) = &role {
+                    progress.advance(RelayStage::WaitingForShellMarker);
+                }
+                // Nothing reaches the viewer until the tunnel says it runs.
+                let pid = ready(&mut process.stdout).await.inspect_err(|_| {
+                    tracing::Span::current().record("otel.status_code", "ERROR");
+                })?;
+                tracing::info!("computer.screen.shell_marker");
                 let stdout: Pin<Box<dyn AsyncRead + Send>> = Box::pin(ExitChecked {
                     stdout: process.stdout,
                     exit: Some(process.exit),

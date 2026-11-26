@@ -31,7 +31,7 @@ timeline exposes the same state and also offers **Cancel scheduled change**.
 
 ## Other states and actions
 
-The 20 presets cover Free/Pro/Max, a scheduled cancellation, exhausted
+The 20 presets cover Free/Pro/Max (Business shares Max's code paths), a scheduled cancellation, exhausted
 allowances, prepaid credits, paused reloads, spending limits, payment failures,
 team members and owners, unlimited access, loading, errors, and pre-launch UI.
 Controls advance time, change the usage percentage and credit balance, and

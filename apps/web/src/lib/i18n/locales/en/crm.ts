@@ -393,6 +393,7 @@ export default {
   mergeSearchLabel: 'Search companies',
   mergeSearchPlaceholder: 'Search by name or domain',
   mergeNoMatches: 'No other companies match.',
+  mergeSearchFailed: 'Couldn’t search companies.',
   mergeTooMany: { other: 'A merge takes at most {{count}} companies.' },
   mergeKeepTitle: 'Merge companies',
   mergeKeepDescription:
@@ -476,4 +477,50 @@ export default {
     other: '{{names}} are now part of {{name}}.',
   },
   mergeOpen: 'Open',
+  mergePeople: 'Merge people',
+  mergePeoplePickTitle: 'Merge with another person',
+  mergePeoplePickDescription: 'Choose the people who are the same as {{name}}.',
+  mergePeopleSearchLabel: 'Search people',
+  mergePeopleSearchPlaceholder: 'Search by name or email',
+  mergePeopleNoMatches: 'No other people match.',
+  mergePeopleSearchFailed: 'Couldn’t search people.',
+  mergePeopleTooMany: { other: 'A merge takes at most {{count}} people.' },
+  mergePeopleKeepTitle: 'Merge people',
+  mergePeopleKeepDescription:
+    'Choose the person to keep. They keep their name, company, primary address and values. Everything else moves to them.',
+  mergePeopleKeepLabel: 'Person to keep',
+  mergePeopleReviewDescription: {
+    one: '{{names}} goes away. Links to them open {{name}}.',
+    other: '{{names}} go away. Links to them open {{name}}.',
+  },
+  mergeAddresses: 'Addresses',
+  mergePeopleMovesNothing: 'Nothing else is attached to them.',
+  mergePeopleSharingDescription: {
+    one: '{{count}} teammate shares mail from a person being merged.',
+    other: '{{count}} teammates share mail from a person being merged.',
+  },
+  mergePeopleConfirm: {
+    one: 'Merge {{count}} person',
+    other: 'Merge {{count}} people',
+  },
+  mergeDifferentCompaniesTitle:
+    'Some of these people are under other companies',
+  mergeDifferentCompaniesBody:
+    'Someone under another company with a work address, or no address, can’t change company in a merge. Merge their companies first, or keep someone filed under theirs.',
+  mergeDifferentCompaniesPerson: '{{name}} in {{company}}',
+  mergePeopleBlockedTitle: 'These people can’t be merged yet',
+  mergePeopleRefusePermission: 'Only team admins and owners can merge people.',
+  mergePeopleRefuseUnavailable:
+    'Merging people isn’t available for your team yet.',
+  mergePeopleRefuseMissing: 'One of these people no longer exists.',
+  mergePeopleRefuseArchived:
+    'One of these people is archived. Restore them first.',
+  mergePeopleRefuseMerged:
+    'One of these people was already merged into someone else.',
+  mergePeopleRefuseGeneric: 'These people couldn’t be merged.',
+  mergePeopleDone: 'People merged',
+  mergePeopleDoneDetail: {
+    one: '{{names}} is merged into {{name}}.',
+    other: '{{names}} are merged into {{name}}.',
+  },
 };

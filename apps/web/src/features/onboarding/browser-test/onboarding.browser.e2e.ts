@@ -148,7 +148,7 @@ test('an unknown step link starts at welcome', async ({ page }) => {
   await expect(heading(page, 'Create your workspace')).toBeVisible();
 });
 
-test('Free, Pro, and Max appear below the unchanged trial offer', async ({
+test('Free, Pro, Business, and Max appear below the unchanged trial offer', async ({
   page,
 }) => {
   await openFixture(page, '/?view=flow&next=/md/notes');
@@ -165,12 +165,12 @@ test('Free, Pro, and Max appear below the unchanged trial offer', async ({
     page.getByRole('button', { name: 'Start 30 day trial' })
   ).toBeInViewport();
   const comparison = page.getByRole('table', {
-    name: 'Compare Free, Pro, and Max plans',
+    name: 'Compare Free, Pro, Business, and Max plans',
   });
   await expect(comparison).not.toBeInViewport();
   await page.getByRole('button', { name: 'See more' }).click();
   await expect(comparison).toBeInViewport();
-  for (const name of ['Free', 'Pro', 'Max']) {
+  for (const name of ['Free', 'Pro', 'Business', 'Max']) {
     await expect(
       comparison.getByRole('columnheader', { name: new RegExp(`^${name}`) })
     ).toBeVisible();
@@ -209,6 +209,13 @@ test('Max checkout returns with a licensed account and no trial', async ({
   });
   await page.reload();
   await page.getByRole('button', { name: 'Continue with Max' }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Choose billing cycle for Max' })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('radio', { name: /Billed annually/ })
+  ).toBeChecked();
+  await page.getByRole('button', { name: 'Continue to checkout' }).click();
   await expectLanded(page, 'Entered Macro at /home');
   expect((await fakeWorld(page)).viewer).toMatchObject({
     tutorialComplete: true,

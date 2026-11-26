@@ -25,6 +25,9 @@ persona/model to run later.
 - `CreateRoutine` tells agents to use `m-document-mention` with the routine ID,
   name, and `blockName: "routine"` in replies.
 - `src/outbound.rs`: the HTTP client to the owning scheduled-action service.
+  Distinguishes 402 `routine_limit_reached` (tells the agent to explain the
+  plan cap without pausing or deleting routines unasked) from AI allowance
+  402s.
 
 The tools reach the scheduler with the internal key, not a session's
 credential, so a routine `CreateRoutine` makes is always top-level, and

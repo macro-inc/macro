@@ -257,8 +257,9 @@ and distinct icons, keyboard focus staying on a status as the tabs switch, and
 list/board switches:
 `bunx playwright test --config src/features/reviews-view/browser-test/playwright.config.ts`.
 
-Search facet chip sizing, text alignment, and filter interactions have a backend-free
-regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
+The universal input's search (operators written into **Search for**, unresolved
+people holding the search, typing in place) has a backend-free regression:
+`bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
 
 Agent image attachments preserve external and inline image URLs; only configured
 static-file endpoints receive thumbnail sizing. The backend-free regression is
@@ -992,6 +993,13 @@ A composer renders paragraphs with the spacing its sent message renders with,
 so a draft reads as what it will send; drop only the draft's first and last
 margins, which the compact single-row layout measures.
 
+AI composers register their whole surface with
+`lib/core/component/AI/primitives/create-composer-item-drop.ts` for app-item
+drags. Item drops add mention context without moving the source; native file
+uploads remain separate. `components/app/item-drag-sensor.ts` owns item-drag
+termination, including cancellation and errors; do not restore the default
+mouseup-only sensor.
+
 - Reuse `src/components/WorkspaceTexture.tsx` for the onboarding and Create
   detail panel grain; pass the surface accent and a unique SVG filter ID.
 - Keep shared database card rendering in `features/database`; CRM supplies
@@ -1032,6 +1040,9 @@ not to account-wide paired machine count; a user can pair several computers.
 - Keep selection controls on shared `Checkbox`, `ToggleSwitch`, and `RadioGroup`;
   preserve their native input semantics and use root sizing instead of internal
   control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
+
+- Reuse `components/timezone-select/` for searchable time-zone fields; retain an
+  unlisted current zone, scope nested popups locally, and close on permission loss.
 
 - Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
 
@@ -2069,6 +2080,12 @@ phone, and tablet, and checks Space playback on opening and reopening the viewer
 See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files).
 
 ## Macro computers
+
+The VNC viewer's `computer.screen.connect` span ends once on the first decoded
+frame or an earlier terminal outcome. Its viewer journey id persists across
+reconnects, and the attempt number advances when each ticket request starts.
+Run the sandboxed noVNC regression with
+`bunx playwright test --config src/features/agent-screen/browser-test/playwright.config.ts`.
 
 ### Claude access
 

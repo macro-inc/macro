@@ -1,3 +1,4 @@
+mod agent_dm;
 mod interactions;
 mod mention_fallback;
 
@@ -22,6 +23,7 @@ struct FakeContext {
     bot_profile: Option<BotSenderProfile>,
     bot_profile_lookup_count: Arc<Mutex<usize>>,
     thread_context: ThreadNotificationContext,
+    agent_dm: bool,
 }
 
 impl Default for FakeContext {
@@ -37,6 +39,7 @@ impl Default for FakeContext {
             }),
             bot_profile_lookup_count: Arc::new(Mutex::new(0)),
             thread_context: ThreadNotificationContext::default(),
+            agent_dm: false,
         }
     }
 }
@@ -86,6 +89,9 @@ impl ChannelSideEffectContext for FakeContext {
     async fn get_bot_sender_profile(&self, _bot_id: BotId) -> Option<BotSenderProfile> {
         *self.bot_profile_lookup_count.lock().unwrap() += 1;
         self.bot_profile.clone()
+    }
+    async fn is_agent_dm(&self, _channel_id: Uuid) -> Result<bool, Self::Err> {
+        Ok(self.agent_dm)
     }
 }
 
