@@ -8,7 +8,7 @@
 //!   --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin --lib -- --ignored \
 //!   --nocapture --exact engine::test::channels::native_channel_batches_bench
 //! ```
-use super::bench::{Mark, Op, Samples, apply, memory_kb, open, ops};
+use super::bench::{Mark, Op, Samples, apply, memory_kb, open, ops, stamped};
 use super::*;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -150,6 +150,28 @@ fn by_ids_response(seed: &[Op], batch: usize, ids: &[(String, String)]) -> Op {
     }
 }
 
+/// One write as the app sends it, with what it replies.
+async fn write(
+    handle: &EngineHandle,
+    docs: &BTreeMap<String, String>,
+    op: &Op,
+    identity: &str,
+) -> WriteResultWire {
+    stamped(handle, identity)
+        .await
+        .write(WriteRequest {
+            origin_op_id: None,
+            registration: None,
+            query: docs[&op.doc].clone(),
+            operation_name: Some(op.operation_name.clone()),
+            variables: op.variables.clone(),
+            data: op.data.clone(),
+            identity: Some(identity.to_owned()),
+        })
+        .await
+        .unwrap()
+}
+
 /// One channel page written again with one channel renamed: a channel list
 /// refetch that changed one row.
 fn one_channel_changed(seed: &[Op], round: usize) -> Op {
@@ -274,37 +296,35 @@ fn native_channel_batches_bench() {
 
         let mut proven = BTreeMap::<&str, Vec<usize>>::new();
         let mut reread_rows = BTreeMap::<&str, Vec<usize>>::new();
+        let mut views_read = BTreeMap::<&str, Vec<usize>>::new();
         for round in 0..rounds {
             for step in ["unrelated", "one_channel"] {
                 let op = match step {
                     "unrelated" => unrelated[round % unrelated.len()].clone(),
                     _ => one_channel_changed(&seed, round),
                 };
+                // As the page does on the push that follows: the write says which
+                // views it left as they were, and every other view reads again.
+                // A write that changed nothing sends no push.
+                let push_started = Mark::now();
                 let started = Mark::now();
-                apply(&handle, &docs, &op, &identity).await;
+                let written = write(&handle, &docs, &op, &identity).await;
                 samples.record(&format!("write.{step}"), started);
-                // What a hydrate pays for its proof, and what a write would.
-                let started = Mark::now();
-                let unchanged = handle
-                    .inner
-                    .lock()
-                    .await
-                    .engine
-                    .unchanged_observed_windows()
-                    .await
-                    .unwrap();
-                samples.record(&format!("proof.{step}"), started);
+                let unchanged = written.unchanged_views.unwrap_or_default();
                 proven.entry(step).or_default().push(
                     observations
                         .iter()
                         .filter(|id| unchanged.contains(id))
                         .count(),
                 );
-                // Without a proof every view reads again, as each does on a
-                // cache-changed push that carries no unchangedViews.
                 let all_started = Mark::now();
                 let mut rows = 0;
+                let mut reads = 0;
                 for (batch, ids) in batches.iter().enumerate() {
+                    if !written.revision_advanced || unchanged.contains(&observations[batch]) {
+                        continue;
+                    }
+                    reads += 1;
                     let started = Mark::now();
                     let result = handle
                         .entity_filter(request(batch, ids, &docs, Some(Some(&revisions[batch]))))
@@ -318,8 +338,10 @@ fn native_channel_batches_bench() {
                     revisions[batch] = result["revision"].as_str().unwrap().to_owned();
                     observations[batch] = result["observationId"].as_str().unwrap().to_owned();
                 }
-                samples.record(&format!("channels.live.reread_all.{step}"), all_started);
+                samples.record(&format!("push.reads.{step}"), all_started);
+                samples.record(&format!("push.total.{step}"), push_started);
                 reread_rows.entry(step).or_default().push(rows);
+                views_read.entry(step).or_default().push(reads);
             }
         }
         // A second set of views under other ids: what each retained view holds.
@@ -345,6 +367,7 @@ fn native_channel_batches_bench() {
                 "io": samples.io_summary(),
                 "viewsProvenUnchanged": proven,
                 "rowsChangedOnReread": reread_rows,
+                "viewsRead": views_read,
                 "memory": {
                     "rssOpenKb": rss_open,
                     "rssBeforeViewsKb": rss_before_views,
