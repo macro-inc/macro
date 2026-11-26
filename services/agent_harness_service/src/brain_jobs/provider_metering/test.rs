@@ -21,6 +21,8 @@ use crate::{
     brain_jobs::{Job, JobScope, PromptPins, TaskTimeIntent},
 };
 
+mod reader;
+
 const TEAM: Uuid = Uuid::from_u128(1);
 const JOB: Uuid = Uuid::from_u128(2);
 const HOLDER: Uuid = Uuid::from_u128(3);
