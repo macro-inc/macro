@@ -2,7 +2,7 @@ import { propertyValueLabel } from '@app/features/activity/queries/property-valu
 import { useCreateContext } from '@app/features/command/context/create-context';
 import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
 import { composeEmail } from '@app/features/email-view/compose-email';
-import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
+import { openAddInboxFlow } from '@app/features/inbox/AddInboxFlow';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -245,7 +245,7 @@ export function createAppCrmContext(): CrmContext {
         userId
       );
     },
-    connectMailbox: () => openAddInboxDialog(),
+    connectMailbox: () => openAddInboxFlow(),
     createEmailPrivacy: () => {
       const team = useCurrentTeamQuery();
       return createEmailPrivacySource(

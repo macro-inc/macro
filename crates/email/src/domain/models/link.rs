@@ -5,20 +5,73 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
+/// Whether this email link needs a provider calendar grant.
+#[cfg(any(feature = "mailbox", feature = "outbound"))]
+pub(crate) fn calendar_permission_required(
+    provider: models_email::service::link::UserProvider,
+    granted_scopes: &[String],
+    disabled: bool,
+) -> bool {
+    use models_email::service::link::UserProvider;
+
+    match provider {
+        UserProvider::Gmail => {
+            disabled
+                || !calendar_events::domain::models::GoogleScopeSet::from_scopes(
+                    granted_scopes.iter().cloned(),
+                )
+                .has_calendar_capability()
+        }
+        UserProvider::Outlook => {
+            disabled
+                || !granted_scopes.iter().any(|scope| {
+                    scope
+                        .rsplit('/')
+                        .next()
+                        .is_some_and(|scope| scope.eq_ignore_ascii_case("Calendars.ReadWrite"))
+                })
+        }
+        UserProvider::Imap => false,
+    }
+}
+
 /// The provider of this email
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, strum::EnumString,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum UserProvider {
     Gmail,
     /// Microsoft Outlook and Microsoft 365.
     Outlook,
+    /// An inbox connected through IMAP and SMTP.
+    Imap,
 }
 
 impl UserProvider {
+    /// Maximum combined attachment bytes admitted when editing or moving drafts.
+    pub const fn max_message_bytes(self) -> u32 {
+        match self {
+            Self::Gmail => 18_000_000,
+            Self::Outlook => 150_000_000,
+            Self::Imap => 25_000_000,
+        }
+    }
+
+    /// Whether this provider uses durable folder streams, drafts and commands.
+    pub fn uses_mailbox_framework(self) -> bool {
+        match self {
+            Self::Gmail => false,
+            Self::Outlook | Self::Imap => true,
+        }
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             UserProvider::Gmail => "GMAIL",
             UserProvider::Outlook => "OUTLOOK",
+            UserProvider::Imap => "IMAP",
         }
     }
 }

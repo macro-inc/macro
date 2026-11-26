@@ -23,6 +23,7 @@ impl Mailbox {
             .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
             .await
             .unwrap()
+            .into_lease()
             .unwrap();
         sync.commit_page(&stream, &page(), POLL_INTERVALS)
             .await
@@ -31,6 +32,7 @@ impl Mailbox {
             .claim_message(macro_uuid::generate_uuid_v7())
             .await
             .unwrap()
+            .into_lease()
             .unwrap();
         lease.is_import = false;
         Self {
@@ -204,6 +206,7 @@ async fn macros_own_category_is_gained_when_accepted_and_never_echoed(db: PgPool
         .claim_command(Uuid::now_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let target = mailbox
         .sync

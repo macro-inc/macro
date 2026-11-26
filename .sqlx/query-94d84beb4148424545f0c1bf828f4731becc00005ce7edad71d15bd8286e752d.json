@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE owned AS MATERIALIZED (\n            SELECT id\n            FROM email_links\n            WHERE macro_id = $1\n            LIMIT $2\n        ), delegated (id, seen) AS (\n            SELECT NULL::uuid, ARRAY[]::uuid[]\n            UNION ALL\n            SELECT candidate.id, array_append(delegated.seen, candidate.id)\n            FROM delegated\n            CROSS JOIN LATERAL (\n                SELECT link_id AS id\n                FROM macro_user_links\n                WHERE primary_macro_id = $1\n                    AND link_id <> ALL (delegated.seen)\n                ORDER BY child_macro_id, link_id\n                LIMIT 1\n            ) candidate\n            WHERE cardinality(delegated.seen) < $2\n        )\n        SELECT\n            EXISTS (\n                SELECT 1\n                FROM \"RolesOnUsers\" ru\n                JOIN \"RolesOnPermissions\" rp ON rp.\"roleId\" = ru.\"roleId\"\n                WHERE ru.\"userId\" = $1\n                    AND rp.\"permissionId\" = 'read:professional_features'\n            ) AS \"professional!\",\n            (\n                SELECT count(*)\n                FROM (\n                    SELECT id FROM owned\n                    UNION\n                    SELECT id FROM delegated WHERE id IS NOT NULL\n                ) AS inboxes\n            ) AS \"inboxes!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "professional!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "inboxes!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "94d84beb4148424545f0c1bf828f4731becc00005ce7edad71d15bd8286e752d"
+}

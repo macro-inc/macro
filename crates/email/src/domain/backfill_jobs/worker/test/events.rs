@@ -14,15 +14,17 @@ impl Write for Output {
         Ok(())
     }
 }
-pub(super) fn subscriber(output: &Output) -> impl tracing::Subscriber + Send + Sync + 'static {
+pub(super) fn subscriber(output: &Output) -> tracing::Dispatch {
     let output = output.clone();
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
-        .without_time()
-        .with_ansi(false)
-        .with_target(false)
-        .with_writer(move || output.clone())
-        .finish()
+    crate::telemetry_capture::capture_dispatch(
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::TRACE)
+            .without_time()
+            .with_ansi(false)
+            .with_target(false)
+            .with_writer(move || output.clone())
+            .finish(),
+    )
 }
 pub(super) fn lines(output: &Output) -> String {
     String::from_utf8(output.0.lock().unwrap().clone()).unwrap()

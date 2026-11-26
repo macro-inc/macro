@@ -42,10 +42,13 @@ describe('nestLabels', () => {
     ]);
   });
 
-  test('keeps an Outlook category with a slash whole', () => {
-    expect(paths(named('Board', 'Board/Minutes'), 'OUTLOOK')).toEqual([
-      'Board',
-      'Board/Minutes',
-    ]);
-  });
+  test.each(['OUTLOOK', 'IMAP'] as const)(
+    'keeps a %s label with a slash whole',
+    (provider) => {
+      expect(paths(named('Board', 'Board/Minutes'), provider)).toEqual([
+        'Board',
+        'Board/Minutes',
+      ]);
+    }
+  );
 });

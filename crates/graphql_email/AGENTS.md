@@ -10,12 +10,15 @@ types, the `EmailThread` edge resolvers, and draft mutations.
 - `src/objects.rs`: `GraphqlSoupEmailMessage`, `GraphqlMailPreviewMessage`, and
   the loaders that fetch message bodies vs. previews.
 - `src/send.rs`: idempotent send/cancel/status plus actor/inbox-scoped pending-send pagination.
+- `src/operation.rs`: optional typed send-failure detail; preserve existing issue
+  enum values and old queries when adding recovery information.
 - `src/mutation.rs`: `GraphqlEmailMutation` (save/delete draft, mark seen/unread,
   update label).
 - `src/loaders.rs`: DataLoader batching for thread metadata, mail projection,
   and content, keyed by thread/message id.
 - `src/user_query.rs` / `src/user_objects.rs`: viewer-scoped email settings
   (labels, links, sync status) separate from message content.
+- `GraphqlEmailProvider` includes IMAP; account credentials never enter GraphQL objects.
 
 ## Scope
 
@@ -44,3 +47,7 @@ types, the `EmailThread` edge resolvers, and draft mutations.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+Optional send_refusal exposes typed phase/class and a recipient position, never
+an additional address. Regenerate SDL after extending these fields and keep
+older operation queries valid; legacy checkpoints project no refusal detail.

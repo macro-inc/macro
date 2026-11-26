@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE\n            email_links\n        SET\n            is_sync_active = false,\n            sync_generation = sync_generation + 1,\n            disconnect_requested_at = now()\n        WHERE\n            id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "887745194eaa52ff0b45472f525bc5d2f042aaeba3e99cdbd065b550edb52523"
+}

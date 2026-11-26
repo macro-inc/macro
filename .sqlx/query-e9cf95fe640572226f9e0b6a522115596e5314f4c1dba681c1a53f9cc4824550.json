@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            l.provider IN ('OUTLOOK', 'IMAP') AS \"stable!\"\n        FROM\n            email_messages m\n            JOIN email_links l ON l.id = m.link_id\n        WHERE\n            m.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "stable!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e9cf95fe640572226f9e0b6a522115596e5314f4c1dba681c1a53f9cc4824550"
+}

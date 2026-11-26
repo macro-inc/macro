@@ -1,0 +1,142 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            l.id as \"id!\",\n            l.macro_id as \"macro_id!\",\n            l.email_address as \"email_address!\",\n            l.provider as \"provider!: _\",\n            l.is_sync_active as \"is_sync_active!\",\n            l.needs_reauth as \"needs_reauth!\",\n            l.mailbox_unavailable_at IS NOT NULL as \"mailbox_unavailable!\",\n            l.is_primary as \"is_primary!\",\n            l.created_at as \"created_at!\",\n            l.updated_at as \"updated_at!\",\n            s.signature_on_replies_forwards as \"signature_on_replies_forwards?\",\n            s.signature,\n            CASE WHEN l.provider IN ('OUTLOOK', 'IMAP') THEN\n                CASE WHEN NOT EXISTS (\n                    SELECT\n                        1\n                    FROM\n                        email_sync_streams ss\n                    WHERE\n                        ss.link_id = l.id\n                        AND ss.generation = l.sync_generation\n                        AND ss.kind IN ('folder_catalog', 'mail_folder')) THEN\n                    'Init'::email_backfill_job_status\n                WHEN EXISTS (\n                    SELECT\n                        1\n                    FROM\n                        email_sync_streams ss\n                    WHERE\n                        ss.link_id = l.id\n                        AND ss.generation = l.sync_generation\n                        AND ss.kind IN ('folder_catalog', 'mail_folder')\n                        AND NOT ss.initial_complete)\n                    OR EXISTS (\n                        SELECT\n                            1\n                        FROM\n                            email_message_reconciliation mr\n                        WHERE\n                            mr.link_id = l.id\n                            AND mr.generation = l.sync_generation\n                            AND mr.is_import\n                            AND mr.available_at <> 'infinity') THEN\n                    'InProgress'::email_backfill_job_status\n                ELSE\n                    'Complete'::email_backfill_job_status\n                END\n            ELSE\n                bj.status\n            END as \"latest_backfill_status?: _\",\n            c.sfs_photo_url as \"photo_url?\",\n            COALESCE(g.granted_scopes, '{}') AS \"google_granted_scopes!\",\n            (g.calendar_disabled_at IS NOT NULL) AS \"calendar_disabled!\",\n            EXISTS (\n                SELECT\n                    1\n                FROM\n                    calendar_accounts ca\n                WHERE\n                    ca.email_link_id = l.id) AS \"has_calendar_data!\"\n        FROM (\n            SELECT\n                el.id,\n                el.macro_id,\n                el.email_address,\n                el.provider,\n                el.is_sync_active,\n                el.needs_reauth,\n                el.is_primary,\n                el.created_at,\n                el.updated_at,\n                el.sync_generation,\n                el.mailbox_unavailable_at\n            FROM\n                email_links el\n            WHERE\n                el.macro_id = $1\n            UNION\n            SELECT\n                el.id,\n                el.macro_id,\n                el.email_address,\n                el.provider,\n                el.is_sync_active,\n                el.needs_reauth,\n                el.is_primary,\n                el.created_at,\n                el.updated_at,\n                el.sync_generation,\n                el.mailbox_unavailable_at\n            FROM\n                email_links el\n                JOIN macro_user_links mul ON el.id = mul.link_id\n            WHERE\n                mul.primary_macro_id = $1) l\n            LEFT JOIN email_link_google_scopes g ON g.link_id = l.id\n            LEFT JOIN email_settings s ON s.link_id = l.id\n            LEFT JOIN LATERAL (\n                SELECT\n                    status\n                FROM\n                    email_backfill_jobs\n                WHERE\n                    link_id = l.id\n                ORDER BY\n                    created_at DESC\n                LIMIT 1) bj ON true\n            LEFT JOIN email_contacts c ON c.link_id = l.id\n                AND LOWER(c.email_address) = LOWER(l.email_address)\n            ORDER BY\n                l.created_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email_address!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "provider!: _",
+        "type_info": {
+          "Custom": {
+            "name": "email_user_provider_enum",
+            "kind": {
+              "Enum": [
+                "GMAIL",
+                "OUTLOOK",
+                "IMAP"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "is_sync_active!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "needs_reauth!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "mailbox_unavailable!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_primary!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "signature_on_replies_forwards?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "signature",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "latest_backfill_status?: _",
+        "type_info": {
+          "Custom": {
+            "name": "email_backfill_job_status",
+            "kind": {
+              "Enum": [
+                "Init",
+                "InProgress",
+                "Complete",
+                "Cancelled",
+                "Failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "photo_url?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "google_granted_scopes!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 15,
+        "name": "calendar_disabled!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 16,
+        "name": "has_calendar_data!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      false,
+      true,
+      null,
+      true,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "6d0619e9a496ed51eb0203c2e194d35620cdc1d003678295ca888d474bd00b29"
+}

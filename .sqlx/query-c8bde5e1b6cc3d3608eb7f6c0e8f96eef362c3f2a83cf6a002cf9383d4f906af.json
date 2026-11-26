@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH available AS (\n                SELECT\n                    id\n                FROM\n                    email_imap_host_catchup\n                WHERE\n                    id = 1\n                    AND available_at <= now()\n                    AND (lease_id IS NULL OR lease_until < now())\n                FOR UPDATE SKIP LOCKED\n            )\n            UPDATE\n                email_imap_host_catchup j\n            SET\n                lease_id = $1,\n                lease_until = now() + make_interval(secs => $2),\n                mode = CASE WHEN startup_requested_at IS NOT NULL THEN 'startup' ELSE mode END,\n                stream_after = CASE WHEN mode = 'pending' AND startup_requested_at IS NOT NULL\n                    THEN '00000000-0000-0000-0000-000000000000'::uuid ELSE stream_after END,\n                cycle_started_at = CASE WHEN stream_after = '00000000-0000-0000-0000-000000000000'::uuid\n                    OR (mode = 'pending' AND startup_requested_at IS NOT NULL)\n                    THEN clock_timestamp() ELSE cycle_started_at END\n            FROM\n                available a\n            WHERE\n                j.id = a.id\n            RETURNING\n                j.stream_after,\n                j.mode\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "stream_after",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "mode",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "c8bde5e1b6cc3d3608eb7f6c0e8f96eef362c3f2a83cf6a002cf9383d4f906af"
+}

@@ -25,6 +25,7 @@ import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import entityIcons from './en/entity-icons';
 import githubConnect from './en/github-connect';
+import imap from './en/imap';
 import importJobs from './en/import-jobs';
 import localRuntime from './en/local-runtime';
 import markdownEditor from './en/markdown-editor';
@@ -89,6 +90,7 @@ export default {
   entityActions,
   entityIcons,
   importJobs,
+  imap,
   suggestions,
   localRuntime,
   markdownEditor,

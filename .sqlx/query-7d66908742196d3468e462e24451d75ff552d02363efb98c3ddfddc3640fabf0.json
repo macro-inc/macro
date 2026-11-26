@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- One page of the viewer's IMAP list, deduplicated across their inboxes.\n-- $1 viewer, $2 exclusive cursor (NULL on the first page), $3 page size + 1.\n-- The literal list key selects contact_inbox_members_imap_idx.\nSELECT DISTINCT contact_user_id AS \"contact!\"\nFROM contact_inbox_members\nWHERE list_key = 'imap'\n  AND user_id = $1\n  AND contact_user_id > COALESCE($2::text, '')\nORDER BY contact_user_id\nLIMIT $3\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7d66908742196d3468e462e24451d75ff552d02363efb98c3ddfddc3640fabf0"
+}

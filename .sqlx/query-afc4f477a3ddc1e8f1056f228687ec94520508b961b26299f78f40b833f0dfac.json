@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_message_reconciliation (link_id, generation, provider_id, is_import)\n        VALUES ($1, 1, 'legacy-00000000', false)\n        ON CONFLICT (link_id, generation, provider_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "afc4f477a3ddc1e8f1056f228687ec94520508b961b26299f78f40b833f0dfac"
+}

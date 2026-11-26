@@ -6,6 +6,11 @@ use crate::outbound::mailbox_pg::test::{fixture, page, snapshot};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 
+mod action_groups;
+mod fifo;
+mod target_budget;
+mod target_facts;
+
 async fn setup(
     db: &PgPool,
 ) -> (
@@ -14,11 +19,24 @@ async fn setup(
     MessageLease,
     Uuid,
 ) {
-    let (sync, link) = fixture(db).await;
+    setup_for_provider(db, crate::domain::models::UserProvider::Outlook).await
+}
+
+async fn setup_for_provider(
+    db: &PgPool,
+    provider: crate::domain::models::UserProvider,
+) -> (
+    PgMailboxSync,
+    crate::outbound::EmailPgRepo,
+    MessageLease,
+    Uuid,
+) {
+    let (sync, link) = super::super::test::fixture_for_provider(db, provider).await;
     let stream = sync
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sync.commit_page(&stream, &page(), POLL_INTERVALS)
         .await
@@ -27,6 +45,7 @@ async fn setup(
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sync.ingest(
         &work,
@@ -54,6 +73,40 @@ fn owner() -> MacroUserIdStr<'static> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_old_binary_command_lease_is_not_claimed_again_after_its_commit(db: PgPool) {
+    let (sync, repo, work, thread) = setup(&db).await;
+    let messages = repo
+        .mailbox_action_messages(work.mailbox.link_id, thread)
+        .await
+        .unwrap();
+    let id = repo
+        .enqueue_mailbox_action(
+            work.mailbox.link_id,
+            owner(),
+            &MailboxAction::Read(true),
+            &MailboxAction::Read(true).targets(&messages),
+        )
+        .await
+        .unwrap();
+    let mut old = db.begin().await.unwrap();
+    sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
+        .fetch_one(&mut *old).await.unwrap();
+    // Main's lease write holds the command row as well as its legacy key.
+    sqlx::query!("UPDATE email_mailbox_commands SET status='running',lease_id=$2,lease_until=now()+interval '3 minutes' WHERE id=$1",id,Uuid::now_v7())
+        .execute(&mut *old).await.unwrap();
+    // The held-key probe tests establish exclusion. Once the old lease
+    // commits, a new claimer must respect it rather than lease it again.
+    old.commit().await.unwrap();
+    assert!(
+        sync.claim_command(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn newer_intent_survives_sync_and_ack_of_an_older_command(db: PgPool) {
     let (sync, repo, work, thread) = setup(&db).await;
     let messages = repo
@@ -74,6 +127,7 @@ async fn newer_intent_survives_sync_and_ack_of_an_older_command(db: PgPool) {
         .claim_command(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(lease.id, first);
     let context = sync.command_context(&lease).await.unwrap();
@@ -135,6 +189,7 @@ async fn newer_intent_survives_sync_and_ack_of_an_older_command(db: PgPool) {
         sync.claim_command(macro_uuid::generate_uuid_v7())
             .await
             .unwrap()
+            .into_lease()
             .unwrap()
             .id,
         second
@@ -178,6 +233,7 @@ async fn acceptance_rechecks_access_and_expired_worker_cannot_confirm(db: PgPool
         .claim_command(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let target = sync.command_context(&old).await.unwrap().target.unwrap();
     sqlx::query!(
@@ -191,6 +247,7 @@ async fn acceptance_rechecks_access_and_expired_worker_cannot_confirm(db: PgPool
         .claim_command(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_ne!(old.lease_id, new.lease_id);
     assert!(matches!(
@@ -423,7 +480,12 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
             .iter()
             .any(|label| label.provider_label_id == "Projects")
     );
-    let first = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let first = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let target = sync.command_context(&first).await.unwrap().target.unwrap();
     let remove = MailboxAction::Category {
         name: "Projects".into(),
@@ -450,7 +512,12 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
                 .iter()
                 .any(|label| label.provider_label_id == "Projects"))
     );
-    let second = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let second = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let target = sync.command_context(&second).await.unwrap().target.unwrap();
     // Failure removes only its overlay, revealing the confirmed provider fact.
     sync.fail_target(&second, &target, false).await.unwrap();
@@ -502,7 +569,12 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
             .unwrap()
             .is_none()
     );
-    let last = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let last = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let target = sync.command_context(&last).await.unwrap().target.unwrap();
     sync.confirm_target(&last, &target, None).await.unwrap();
     sync.finish_command(&last, CommandCompletion::Succeeded)
@@ -514,7 +586,7 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
             .unwrap()
             .unwrap()
             .kind,
-        "delete_label"
+        crate::domain::mailbox::settings::SettingsWorkKind::DeleteLabel
     );
 }
 
@@ -556,9 +628,20 @@ async fn acceptance_order_wins_over_transaction_start_order(db: PgPool) {
     .execute(&db)
     .await
     .unwrap();
-    let lease = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let lease = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     assert_eq!(lease.id, first);
-    assert!(sync.claim_command(Uuid::now_v7()).await.unwrap().is_none());
+    assert!(
+        sync.claim_command(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none()
+    );
     let target = sync.command_context(&lease).await.unwrap().target.unwrap();
     sync.confirm_target(&lease, &target, None).await.unwrap();
     sync.finish_command(&lease, CommandCompletion::Succeeded)
@@ -568,6 +651,7 @@ async fn acceptance_order_wins_over_transaction_start_order(db: PgPool) {
         sync.claim_command(Uuid::now_v7())
             .await
             .unwrap()
+            .into_lease()
             .unwrap()
             .id,
         second
@@ -629,7 +713,13 @@ async fn unresumable_commands_are_not_reported_as_pending(db: PgPool) {
     .execute(&db)
     .await
     .unwrap();
-    assert!(sync.claim_command(Uuid::now_v7()).await.unwrap().is_none());
+    assert!(
+        sync.claim_command(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none()
+    );
     assert!(
         repo.thread_mailbox_operations(link, thread)
             .await
@@ -639,27 +729,110 @@ async fn unresumable_commands_are_not_reported_as_pending(db: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_corrupt_command_does_not_roll_back_the_next_claim(db: PgPool) {
+    let (sync, repo, work, thread) = setup(&db).await;
+    let link = work.mailbox.link_id;
+    let messages = repo.mailbox_action_messages(link, thread).await.unwrap();
+    let first = MailboxAction::Read(true);
+    let next = MailboxAction::Flagged(true);
+    let corrupt = repo
+        .enqueue_mailbox_action(link, owner(), &first, &first.targets(&messages))
+        .await
+        .unwrap();
+    let healthy = repo
+        .enqueue_mailbox_action(link, owner(), &next, &next.targets(&messages))
+        .await
+        .unwrap();
+    sqlx::query!(
+        r#"UPDATE email_mailbox_commands
+        SET intent='{"kind":"read","value":"invalid"}', available_at=now()-interval '1 minute'
+        WHERE id=$1"#,
+        corrupt
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    assert!(matches!(
+        sync.claim_command(Uuid::now_v7()).await.unwrap(),
+        SyncClaim::Progress
+    ));
+    let lease = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
+    assert_eq!(lease.id, healthy);
+    let state = sqlx::query!(
+        "SELECT status, lease_id FROM email_mailbox_commands WHERE id=$1",
+        corrupt
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(state.status, "failed");
+    assert!(state.lease_id.is_none());
+
+    let mut overlay_lock = db.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT message_id FROM email_pending_mailbox_state WHERE command_id=$1 FOR UPDATE",
+        corrupt
+    )
+    .fetch_one(&mut *overlay_lock)
+    .await
+    .unwrap();
+    sync.cleanup_command_quarantine().await.unwrap();
+    let quarantine = sqlx::query!(
+        "SELECT reason,cleanup_at>now() AS deferred FROM email_mailbox_work_quarantine WHERE work='commands' AND work_id=$1",
+        corrupt
+    ).fetch_one(&db).await.unwrap();
+    assert_eq!(quarantine.reason, "decode");
+    assert_eq!(quarantine.deferred, Some(true));
+    overlay_lock.rollback().await.unwrap();
+    sqlx::query!(
+        "UPDATE email_mailbox_work_quarantine SET cleanup_at=now() WHERE work='commands' AND work_id=$1",
+        corrupt
+    ).execute(&db).await.unwrap();
+    let (first, second) = tokio::join!(
+        sync.cleanup_command_quarantine(),
+        sync.cleanup_command_quarantine(),
+    );
+    first.unwrap();
+    second.unwrap();
+    let overlays = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM email_pending_mailbox_state WHERE command_id=$1"#,
+        corrupt,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(overlays, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_claim_behind_a_stuck_claim_lock_fails_fast(db: PgPool) {
     let (sync, _) = fixture(&db).await;
 
     let mut claim = db.begin().await.unwrap();
-    sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
+    sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.mailbox.mutation-claims:OUTLOOK',0))")
         .fetch_one(&mut *claim)
         .await
         .unwrap();
 
     let blocked = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
+        std::time::Duration::from_secs(3),
         sync.claim_command(macro_uuid::generate_uuid_v7()),
     )
-    .await;
+    .await
+    .expect("a command claim must return before the five-second link writer timeout");
     assert!(
         matches!(
             &blocked,
-            Ok(Err(MailboxError::Database(DatabaseFailure::Sqlstate(code)))) if code == "55P03"
+            Err(MailboxError::Database(DatabaseFailure::DeadlineExceeded))
         ),
         "{:?}",
-        blocked.as_ref().map(|result| result.as_ref().err())
+        blocked.as_ref().err()
     );
 
     claim.rollback().await.unwrap();
@@ -667,6 +840,7 @@ async fn a_claim_behind_a_stuck_claim_lock_fails_fast(db: PgPool) {
         sync.claim_command(macro_uuid::generate_uuid_v7())
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
 }

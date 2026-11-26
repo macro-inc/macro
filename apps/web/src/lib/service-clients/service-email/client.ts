@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import {
   type FetchWithTokenErrorCode,
@@ -5,7 +6,8 @@ import {
 } from '@core/util/fetchWithToken';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
-import type { Span } from '@macro-inc/observability';
+import { sleep } from '@core/util/sleep';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type {
   CalendarEvent,
   CalendarEventProviderUrl,
@@ -26,16 +28,21 @@ import { CalendarMutationErrorCode } from '@service-calendar/generated/schemas/c
 import type { TeamCalendarSharingBody } from '@service-calendar/generated/schemas/teamCalendarSharingBody';
 import type { Result } from 'neverthrow';
 import type {
+  AccountMailSettings,
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
   ApiMessageOperation,
   ApiPaginatedThreadCursor,
   CreateDraftRequest,
   CreateDraftResponse,
+  Discovery,
   GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
   GetScheduledResponse,
   GetThreadResponse,
+  ImapConnectRequest,
+  ImapConnectResponse,
+  ImapSuggestion,
   InitConflictResponse,
   InitResponse,
   ListBackfillJobsResponse,
@@ -55,6 +62,7 @@ import type {
   TransferDraftRequest,
   TransferDraftResponse,
   TransferRecoveryResponse,
+  UpdateFolderSettings,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
@@ -68,7 +76,9 @@ import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import { ForwardCalendarEventErrorCode } from './generated/schemas/forwardCalendarEventErrorCode';
 import type { ForwardCalendarEventRequest } from './generated/schemas/forwardCalendarEventRequest';
 import type { ForwardCalendarEventResponse } from './generated/schemas/forwardCalendarEventResponse';
+import { ImapConnectionErrorCode } from './generated/schemas/imapConnectionErrorCode';
 import type { InvitationResolution } from './generated/schemas/invitationResolution';
+import { isImapRefusalCode } from './imap-refusal-code';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
 const calendarHost: string = SERVER_HOSTS['calendar-service'];
@@ -135,6 +145,67 @@ async function forwardCalendarEventErrorHandler(response: Response) {
   };
 }
 
+async function imapConnectionError(response: Response) {
+  const body: unknown = await response.json().catch(() => null);
+  const code =
+    typeof body === 'object' && body !== null && 'code' in body
+      ? body.code
+      : undefined;
+
+  return {
+    code: isImapRefusalCode(code)
+      ? code
+      : ImapConnectionErrorCode.connection_unavailable,
+    message: 'IMAP connection refused',
+  };
+}
+
+async function messageDownloadError(response: Response) {
+  if (response.status !== 413) return;
+  return {
+    code: 'HTTP_ERROR' as const,
+    message: t('imap.messageTooLarge'),
+  };
+}
+
+/** Surface mailbox contention and replay only explicitly fixed-state requests. */
+async function emailRequest<T extends ObjectLike | Uint8Array>(
+  url: string,
+  init?: SafeFetchInit,
+  replay: 'never' | 'fixed_state' = 'never'
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>> {
+  let retryAfter: number | undefined;
+  const parentSpan = init?.trace?.parentSpan ?? Telemetry.captureContext();
+  const request = () =>
+    fetchWithToken<T>(`${emailHost}${url}`, {
+      ...init,
+      trace: { ...init?.trace, parentSpan },
+      errorResponseFilter: async (response) => {
+        if (response.status === 429) {
+          const seconds = Number(response.headers.get('Retry-After') ?? '1');
+          retryAfter = Number.isFinite(seconds)
+            ? Math.min(5, Math.max(0, seconds))
+            : 1;
+          return {
+            code: 'HTTP_ERROR' as const,
+            message: t('imap.mailboxBusy'),
+          };
+        }
+        // Let the shared fetch preserve its status classification and retry policy.
+        return init?.errorResponseFilter?.(response);
+      },
+    });
+  const result = await request();
+  // Mutations require an explicit fixed-state contract before a busy response
+  // can be replayed. A send or operation resolution has no such contract.
+  const retryable = replay === 'fixed_state';
+  if (result.isErr() && retryAfter !== undefined && retryable) {
+    await sleep(retryAfter * 1000);
+    if (!init?.signal?.aborted) return request();
+  }
+  return result;
+}
+
 function emailFetch(
   url: string,
   init?: SafeFetchInit
@@ -149,7 +220,7 @@ function emailFetch<T extends ObjectLike = never>(
 ):
   | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
-  return fetchWithToken<T>(`${emailHost}${url}`, init);
+  return emailRequest<T>(url, init);
 }
 
 /**
@@ -356,9 +427,9 @@ export const emailClient = {
   },
   /** The message's original source as `.eml` bytes. */
   async getMessageEml(args: { message_id: string }) {
-    return fetchWithToken<Uint8Array<ArrayBuffer>>(
-      `${emailHost}/email/messages/${args.message_id}/eml`,
-      { method: 'GET' }
+    return emailRequest<Uint8Array<ArrayBuffer>>(
+      `/email/messages/${args.message_id}/eml`,
+      { method: 'GET', errorResponseFilter: messageDownloadError }
     );
   },
   async getUserLabels() {
@@ -397,10 +468,14 @@ export const emailClient = {
   async updateMessageLabelBatch(args: UpdateLabelBatchRequest) {
     const { message_ids, label_id, value } = args;
     return (
-      await emailFetch<UpdateLabelBatchResponse>(`/email/messages/labels`, {
-        method: 'PATCH',
-        body: JSON.stringify({ value, label_id, message_ids }),
-      })
+      await emailRequest<UpdateLabelBatchResponse>(
+        `/email/messages/labels`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ value, label_id, message_ids }),
+        },
+        'fixed_state'
+      )
     ).map((result) => result);
   },
   async messageOperation(messageId: string) {
@@ -515,6 +590,73 @@ export const emailClient = {
       {
         method: 'GET',
         headers: emailLinkHeaders(linkId),
+      }
+    );
+  },
+
+  imapSuggestion(signal: AbortSignal) {
+    return emailFetch<ImapSuggestion>('/email/links/suggestion', { signal });
+  },
+
+  imapDiscover(signal: AbortSignal, parentSpan?: Span) {
+    return fetchWithToken<Discovery, ImapConnectionErrorCode>(
+      `${emailHost}/email/links/imap/discover`,
+      {
+        errorResponseHandler: imapConnectionError,
+        method: 'POST',
+        signal,
+        trace: { parentSpan },
+      }
+    );
+  },
+
+  getImapMailboxSettings(
+    linkId: string,
+    signal: AbortSignal,
+    parentSpan?: Span
+  ) {
+    return fetchWithToken<AccountMailSettings, ImapConnectionErrorCode>(
+      `${emailHost}/email/links/${encodeURIComponent(linkId)}/imap/settings`,
+      {
+        signal,
+        trace: { parentSpan },
+        errorResponseHandler: imapConnectionError,
+      }
+    );
+  },
+
+  updateImapMailboxSettings(
+    linkId: string,
+    change: UpdateFolderSettings,
+    signal: AbortSignal,
+    parentSpan?: Span
+  ) {
+    return fetchWithToken<AccountMailSettings, ImapConnectionErrorCode>(
+      `${emailHost}/email/links/${encodeURIComponent(linkId)}/imap/settings`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(change),
+        signal,
+        trace: { parentSpan },
+        errorResponseHandler: imapConnectionError,
+      }
+    );
+  },
+
+  imapConnect(
+    request: ImapConnectRequest,
+    signal: AbortSignal,
+    parentSpan?: Span
+  ) {
+    return fetchWithToken<ImapConnectResponse, ImapConnectionErrorCode>(
+      `${emailHost}/email/links/imap`,
+      {
+        method: 'POST',
+        personalSession: true,
+        body: JSON.stringify(request),
+        signal,
+        trace: { parentSpan },
+        errorResponseHandler: imapConnectionError,
       }
     );
   },
@@ -634,6 +776,7 @@ export const emailClient = {
     return (
       await emailFetch<GetAttachmentResponse>(`/email/attachments/${id}`, {
         method: 'GET',
+        errorResponseFilter: messageDownloadError,
       })
     ).map((result) => result);
   },

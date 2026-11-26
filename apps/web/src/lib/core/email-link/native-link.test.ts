@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   choose: vi.fn(),
+  openImap: vi.fn(),
   start: vi.fn(),
   startOutlook: vi.fn(),
   authenticate: vi.fn(),
@@ -43,9 +44,14 @@ vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
 }));
 vi.mock('@core/util/platform', () => ({
   isPlatform: () => mocks.desktop,
+  isTauri: () => mocks.mobile || mocks.desktop,
 }));
 vi.mock('@queries/auth', () => ({
   useInitGmailLink: () => ({ mutateAsync: mocks.start }),
+}));
+vi.mock('@queries/auth/account-scope', () => ({
+  currentQueryAccount: () => ({ userId: 'test-user', session: 1 }),
+  isCurrentQueryAccount: () => true,
 }));
 vi.mock('@queries/auth/outlook-link', () => ({
   useInitOutlookLink: () => ({ mutateAsync: mocks.startOutlook }),
@@ -71,6 +77,7 @@ vi.mock('@service-email/client', () => ({
 vi.mock('./share-conflict', () => ({ requestShareInboxConfirmation: vi.fn() }));
 
 vi.mock('./ProviderDialog', () => ({ selectEmailProvider: mocks.choose }));
+vi.mock('./ImapConnectDialog', () => ({ openImapConnection: mocks.openImap }));
 
 import { useAddInboxFlow } from './index';
 import { consumeInboxLinkReturn } from './return-layout';
@@ -116,6 +123,50 @@ describe('desktop account linking', () => {
   beforeEach(() => {
     mocks.mobile = false;
     mocks.desktop = true;
+  });
+
+  it('uses the address returned by IMAP setup for the OAuth login hint', async () => {
+    mocks.openImap.mockResolvedValueOnce({
+      type: 'oauth',
+      provider: 'GMAIL',
+      emailAddress: 'entered@example.com',
+    });
+
+    await useAddInboxFlow()({
+      provider: 'IMAP',
+      emailAddress: 'initial@example.com',
+    });
+
+    expect(mocks.openDesktop).toHaveBeenCalledExactlyOnceWith(
+      'https://accounts.google.com/authorize?login_hint=entered%40example.com'
+    );
+  });
+
+  it('retains duplicate-inbox detection when IMAP suggests a provider', async () => {
+    mocks.links = [
+      {
+        id: 'pending-link',
+        email_address: 'entered@example.com',
+        provider: 'GMAIL',
+      },
+    ];
+    mocks.openImap.mockResolvedValueOnce({
+      type: 'oauth',
+      provider: 'GMAIL',
+      emailAddress: 'entered@example.com',
+    });
+
+    await useAddInboxFlow()({ provider: 'IMAP' });
+
+    expect(consumeInboxLinkReturn('pending-link')?.addition).toEqual({
+      provider: 'GMAIL',
+      connectedInboxes: [
+        { id: 'pending-link', emailAddress: 'entered@example.com' },
+      ],
+    });
+    expect(mocks.openDesktop).toHaveBeenCalledExactlyOnceWith(
+      'https://accounts.google.com/authorize?login_hint=entered%40example.com'
+    );
   });
 
   it.each(['gmail', 'calendar', 'gmail_and_calendar'] as const)(

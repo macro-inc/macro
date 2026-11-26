@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_commands c\n            SET status='failed', lease_id=NULL, lease_until=NULL, updated_at=now()\n            WHERE c.id=$1 RETURNING c.link_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "43a280c595d4d65502b78d46b520b9b5b57b040b28a713e089cf485ec1a83336"
+}

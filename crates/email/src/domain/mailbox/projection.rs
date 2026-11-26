@@ -27,8 +27,11 @@ mod test;
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ProjectionEvent {
     LinkChanged,
+    ImportCompleted,
     AttachmentRecheck {
         message_id: Uuid,
+        #[serde(default)]
+        thread_id: Option<Uuid>,
     },
     ReauthorizationRequired,
     ContactsChanged {
@@ -85,6 +88,19 @@ pub enum ProjectionEvent {
 }
 
 impl ProjectionEvent {
+    pub(crate) fn entity_key(&self) -> String {
+        match self {
+            Self::Message { thread_id, .. }
+            | Self::Absent { thread_id, .. }
+            | Self::Organization { thread_id, .. } => thread_id.to_string(),
+            Self::AttachmentRecheck {
+                message_id,
+                thread_id,
+            } => thread_id.unwrap_or(*message_id).to_string(),
+            event => event.kind().to_owned(),
+        }
+    }
+
     fn agent_correlation_id(&self) -> Option<Uuid> {
         match self {
             Self::Message {
@@ -128,6 +144,21 @@ pub struct ProjectionLease {
     /// Claims in a row before this one that ended without recording an
     /// outcome: their worker stopped while it held the lease.
     pub unfinished_claims: i32,
+}
+
+#[derive(strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum ProjectionClaim {
+    Acquired(Box<ProjectionLease>),
+    Progress,
+    Idle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProjectionTick {
+    Projected,
+    Progress,
+    Idle,
 }
 
 pub struct ProjectedMessage {
@@ -184,7 +215,7 @@ pub trait MailboxProjectionRepository: Send + Sync + 'static {
     fn claim_projection(
         &self,
         lease_id: Uuid,
-    ) -> impl Future<Output = Result<Option<ProjectionLease>, MailboxError>> + Send;
+    ) -> impl Future<Output = Result<ProjectionClaim, MailboxError>> + Send;
     fn projection_context(
         &self,
         lease: &ProjectionLease,
@@ -227,6 +258,11 @@ pub trait MailboxProjectionEffects: Send + Sync + 'static {
         link_id: Uuid,
         viewers: &HashSet<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    fn import_completed(
+        &self,
+        link_id: Uuid,
+        viewers: &HashSet<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
     fn notify(
         &self,
         notification: MailboxNotification,
@@ -252,6 +288,7 @@ pub trait MailboxProjectionEffects: Send + Sync + 'static {
 pub trait MailboxAttachmentAccess: Send + Sync + 'static {
     fn download(
         &self,
+        provider: models_email::service::link::UserProvider,
         mailbox: MailboxKey,
         message_id: &str,
         attachment_id: &str,
@@ -306,14 +343,16 @@ impl<R, E> MailboxProjectionService<R, E> {
     }
 }
 impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProjectionService<R, E> {
-    pub async fn project_once(&self) -> Result<bool, MailboxError> {
-        let Some(lease) = self
+    pub async fn project_once(&self) -> Result<ProjectionTick, MailboxError> {
+        let lease = match self
             .repo
             .claim_projection(macro_uuid::generate_uuid_v7())
             .await
             .map_err(|error| claim_failed("project", error))?
-        else {
-            return Ok(false);
+        {
+            ProjectionClaim::Acquired(lease) => lease,
+            ProjectionClaim::Progress => return Ok(ProjectionTick::Progress),
+            ProjectionClaim::Idle => return Ok(ProjectionTick::Idle),
         };
         let span = tracing::info_span!(
             "outlook.sync.project",
@@ -339,13 +378,18 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
             ..Default::default()
         };
         if lease.unfinished_claims >= UNFINISHED_CLAIM_LIMIT {
-            return self.abandon_unfinished(&lease).instrument(span).await;
+            return self
+                .abandon_unfinished(&lease)
+                .instrument(span)
+                .await
+                .map(|_| ProjectionTick::Projected);
         }
         agent_correlation::context::scope_attribution(
             attribution,
             self.project_leased(&lease).instrument(span),
         )
         .await
+        .map(|_| ProjectionTick::Projected)
     }
 
     /// Gives up on an event without projecting it, since projecting it is the
@@ -427,6 +471,14 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
         };
         match &lease.event {
             ProjectionEvent::LinkChanged => {}
+            ProjectionEvent::ImportCompleted => {
+                if lease.from_current_generation {
+                    self.effects
+                        .import_completed(context.link.id, &context.viewers)
+                        .await?;
+                    effects.refreshes += 1;
+                }
+            }
             ProjectionEvent::ReauthorizationRequired => {
                 // A reconnect can obsolete a queued warning before delivery.
                 if lease.from_current_generation && context.link.needs_reauth {
@@ -556,6 +608,18 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                 };
                 let message = &current.message;
                 let import = *is_import || !lease.from_current_generation;
+                // Persisted mail is already readable. List freshness must not
+                // wait for notification policy, CRM or attachment side effects.
+                match self
+                    .effects
+                    .refresh(context.link.id, &context.viewers)
+                    .await
+                {
+                    Ok(()) => effects.refreshes += 1,
+                    Err(error) => {
+                        tracing::warn!(link_id = %context.link.id, %error, "Mailbox list refresh deferred to the next client read")
+                    }
+                }
                 if current.is_present {
                     if !message.is_draft {
                         if version == &current.version {
@@ -600,10 +664,6 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                     }
                 }
                 self.reindex(&context.link, *thread_id, effects).await?;
-                self.effects
-                    .refresh(context.link.id, &context.viewers)
-                    .await?;
-                effects.refreshes += 1;
                 if current.is_present {
                     let started = Instant::now();
                     self.effects
@@ -685,6 +745,7 @@ impl ProjectionEvent {
     fn kind(&self) -> &'static str {
         match self {
             Self::LinkChanged => "link_changed",
+            Self::ImportCompleted => "import_completed",
             Self::AttachmentRecheck { .. } => "attachment_recheck",
             Self::ReauthorizationRequired => "reauthorization_required",
             Self::ContactsChanged { .. } => "contacts_changed",

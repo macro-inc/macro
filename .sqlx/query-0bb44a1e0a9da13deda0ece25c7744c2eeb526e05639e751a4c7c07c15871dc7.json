@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            count(*) AS \"count!\"\n        FROM\n            email_message_reconciliation\n        WHERE\n            link_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0bb44a1e0a9da13deda0ece25c7744c2eeb526e05639e751a4c7c07c15871dc7"
+}

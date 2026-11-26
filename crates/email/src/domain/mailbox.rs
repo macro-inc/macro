@@ -20,8 +20,9 @@ use tracing::{Instrument, Span};
 use uuid::Uuid;
 
 pub mod calendar_disconnect;
-pub mod catalog;
 pub mod claim;
+pub use claim::SyncClaim;
+pub mod catalog;
 pub mod commands;
 pub mod connection;
 pub mod contacts;
@@ -30,6 +31,10 @@ pub mod drafts;
 pub mod gmail_history;
 pub mod gmail_push;
 pub mod health;
+pub mod imap_catchup;
+pub mod imap_connection;
+pub mod imap_notifications;
+pub mod imap_settings;
 /// Per-delivery Gmail inbox admission and reconciliation.
 pub mod inbox_sync;
 pub mod initialization;
@@ -37,6 +42,7 @@ pub mod lifecycle;
 /// Link-maintenance queue decisions and reconnect notification selection.
 pub mod link_manager;
 pub mod live_pass;
+pub mod parked_work_recovery;
 pub mod progress;
 pub mod projection;
 pub mod reimport;
@@ -167,6 +173,8 @@ pub enum DatabaseFailure {
     Connection,
     /// A returned value could not be decoded.
     Decode,
+    /// The bounded claim evaluation exceeded its application deadline.
+    DeadlineExceeded,
     /// Any other driver failure.
     Other,
 }
@@ -178,6 +186,7 @@ impl std::fmt::Display for DatabaseFailure {
             Self::PoolTimedOut => f.write_str("connection pool timed out"),
             Self::Connection => f.write_str("connection failed"),
             Self::Decode => f.write_str("decode failed"),
+            Self::DeadlineExceeded => f.write_str("claim evaluation deadline exceeded"),
             Self::Other => f.write_str("driver error"),
         }
     }
@@ -273,13 +282,48 @@ pub enum SyncLease<'a> {
     Message(&'a MessageLease),
 }
 
+/// Provider pacing is a durable floor; local failures may yield to newer mail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncRetry {
+    Local(u32),
+    Provider(u32),
+}
+
+impl SyncRetry {
+    fn for_error(error: &MailboxError, seconds: u32) -> Self {
+        use email_api_client::domain::models::RateLimitOrigin;
+        match error {
+            MailboxError::Provider(EmailApiError::RateLimited { origin, .. }) => match origin {
+                RateLimitOrigin::Local => Self::Local(seconds),
+                RateLimitOrigin::Gate(_) | RateLimitOrigin::Provider { .. } => {
+                    Self::Provider(seconds)
+                }
+            },
+            _ => Self::Local(seconds),
+        }
+    }
+
+    pub fn seconds(self) -> u32 {
+        match self {
+            Self::Local(seconds) | Self::Provider(seconds) => seconds,
+        }
+    }
+
+    pub fn is_provider(self) -> bool {
+        match self {
+            Self::Local(_) => false,
+            Self::Provider(_) => true,
+        }
+    }
+}
+
 pub trait MailboxSyncRepository: Send + Sync + 'static {
     /// Extend only a still-current lease while a provider operation is in flight.
     fn renew(&self, lease: SyncLease<'_>) -> impl Future<Output = Result<(), MailboxError>> + Send;
     fn claim_catalog(
         &self,
         lease_id: Uuid,
-    ) -> impl Future<Output = Result<Option<CatalogLease>, MailboxError>> + Send;
+    ) -> impl Future<Output = Result<SyncClaim<CatalogLease>, MailboxError>> + Send;
     /// Replaces a complete catalog only under its lease fence. Missing folders
     /// trigger message reconciliation, never deletion based on a partial scan.
     fn commit_catalog(
@@ -290,7 +334,7 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
     fn release_catalog(
         &self,
         lease: &CatalogLease,
-        retry_after_seconds: u32,
+        retry: SyncRetry,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
     /// Marks the lease's link as having no mailbox the provider will serve,
     /// unless it already is, and answers how many seconds it has been
@@ -305,7 +349,7 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         &self,
         lease_id: Uuid,
         claim: StreamClaim,
-    ) -> impl Future<Output = Result<Option<StreamLease>, MailboxError>> + Send;
+    ) -> impl Future<Output = Result<SyncClaim<StreamLease>, MailboxError>> + Send;
     /// Atomically records every changed/removed ID and advances the opaque
     /// cursor only while this generation and lease fence are still current.
     /// A checkpoint schedules the next poll by `polls`, unless a notification
@@ -338,7 +382,7 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
     fn release_stream(
         &self,
         lease: &StreamLease,
-        retry_after_seconds: u32,
+        retry: SyncRetry,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
     /// Puts the stream back for `retry_after_seconds`, unread, while its
     /// mailbox has at least `queued` import messages due. Returns whether it
@@ -352,7 +396,7 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
     fn claim_message(
         &self,
         lease_id: Uuid,
-    ) -> impl Future<Output = Result<Option<MessageLease>, MailboxError>> + Send;
+    ) -> impl Future<Output = Result<SyncClaim<MessageLease>, MailboxError>> + Send;
     fn folders(
         &self,
         mailbox: MailboxKey,
@@ -407,9 +451,29 @@ pub trait MailboxGateway: Send + Sync + 'static {
     fn admitted_requests(&self, mailbox: MailboxKey) -> impl Future<Output = Option<u64>> + Send;
 }
 
+/// Recoverable destination for a sender Macro blocks on protocols without rules.
+#[derive(Clone, Copy)]
+pub enum BlockedSenderDestination {
+    Junk,
+    Trash,
+}
+
 /// The shared ingestion path writes content, normalized state and a projection
 /// outbox atomically. Import work must not generate incoming-mail notifications.
 pub trait MailboxIngest: Send + Sync + 'static {
+    /// Persisted user intent, scoped to this exact mailbox binding.
+    fn sender_blocked(
+        &self,
+        mailbox: MailboxKey,
+        sender: &str,
+    ) -> impl Future<Output = Result<bool, MailboxError>> + Send;
+    /// Ingest plus a durable organization command commit together.
+    fn ingest_blocked(
+        &self,
+        lease: &MessageLease,
+        snapshot: MailboxMessage,
+        destination: BlockedSenderDestination,
+    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
     fn ingest(
         &self,
         lease: &MessageLease,
@@ -476,13 +540,15 @@ impl<R, P, I> MailboxSyncService<R, P, I> {
 
 impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncService<R, P, I> {
     pub async fn discover_once(&self) -> Result<bool, MailboxError> {
-        let Some(lease) = self
+        let lease = match self
             .repo
             .claim_catalog(macro_uuid::generate_uuid_v7())
             .await
             .map_err(|error| claim_failed("discover", error))?
-        else {
-            return Ok(false);
+        {
+            SyncClaim::Acquired(lease) => lease,
+            SyncClaim::Progress => return Ok(true),
+            SyncClaim::Idle => return Ok(false),
         };
         let span = tracing::info_span!(
             "outlook.sync.discover",
@@ -534,7 +600,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                 };
                 let error = MailboxError::from(error);
                 self.repo
-                    .release_catalog(lease, delay)
+                    .release_catalog(lease, SyncRetry::for_error(&error, delay))
                     .await
                     .inspect_err(|release| {
                         record_failed(&span, lease.mailbox.link_id, release);
@@ -575,7 +641,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let delay =
             marked_seconds.clamp(NO_MAILBOX_FIRST_PROBE_SECONDS, NO_MAILBOX_PROBE_MAX_SECONDS);
         self.repo
-            .release_catalog(lease, delay)
+            .release_catalog(lease, SyncRetry::Local(delay))
             .await
             .inspect_err(|error| record_failed(&span, link_id, error))?;
         let error = MailboxError::NoMailbox;
@@ -600,12 +666,14 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         // retries, so a live pass doesn't use up an import-first turn.
         let mut folder_claim = None;
         for _ in 0..PACED_CLAIMS_PER_TURN {
-            let Some((lease, claim)) = self
+            let (lease, claim) = match self
                 .claim_folder_stream(&mut folder_claim)
                 .await
                 .map_err(|error| claim_failed("enumerate", error))?
-            else {
-                return Ok(false);
+            {
+                SyncClaim::Acquired(lease) => lease,
+                SyncClaim::Progress => return Ok(true),
+                SyncClaim::Idle => return Ok(false),
             };
             let span = enumerate_span(&lease, claim);
             adopt_notification_trace(&span, lease.notification.as_ref());
@@ -621,21 +689,32 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
     async fn claim_folder_stream(
         &self,
         folder_claim: &mut Option<StreamClaim>,
-    ) -> Result<Option<(StreamLease, StreamClaim)>, MailboxError> {
-        if self.live_pass.enabled()
-            && let Some(lease) = self
+    ) -> Result<SyncClaim<(StreamLease, StreamClaim)>, MailboxError> {
+        if self.live_pass.enabled() {
+            match self
                 .repo
                 .claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LivePass)
                 .await?
-        {
-            return Ok(Some((lease, StreamClaim::LivePass)));
+            {
+                SyncClaim::Acquired(lease) => {
+                    return Ok(SyncClaim::Acquired((lease, StreamClaim::LivePass)));
+                }
+                SyncClaim::Progress => return Ok(SyncClaim::Progress),
+                SyncClaim::Idle => {}
+            }
         }
         let claim = *folder_claim.get_or_insert_with(|| self.turns.next());
-        Ok(self
-            .repo
-            .claim_stream(macro_uuid::generate_uuid_v7(), claim)
-            .await?
-            .map(|lease| (lease, claim)))
+        Ok(
+            match self
+                .repo
+                .claim_stream(macro_uuid::generate_uuid_v7(), claim)
+                .await?
+            {
+                SyncClaim::Acquired(lease) => SyncClaim::Acquired((lease, claim)),
+                SyncClaim::Progress => SyncClaim::Progress,
+                SyncClaim::Idle => SyncClaim::Idle,
+            },
+        )
     }
 
     /// A failure leaves the folder as it was before the switch: its new mail
@@ -737,7 +816,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                 };
                 record_stream(&span, delta_advanced, folder_initial_complete, cursor_reset);
                 self.repo
-                    .release_stream(lease, delay)
+                    .release_stream(lease, SyncRetry::for_error(&error, delay))
                     .await
                     .inspect_err(|release| {
                         record_failed(&span, lease.mailbox.link_id, release);
@@ -767,13 +846,15 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
     }
 
     pub async fn reconcile_once(&self) -> Result<bool, MailboxError> {
-        let Some(lease) = self
+        let lease = match self
             .repo
             .claim_message(macro_uuid::generate_uuid_v7())
             .await
             .map_err(|error| claim_failed("reconcile", error))?
-        else {
-            return Ok(false);
+        {
+            SyncClaim::Acquired(lease) => lease,
+            SyncClaim::Progress => return Ok(true),
+            SyncClaim::Idle => return Ok(false),
         };
         let span = tracing::info_span!(
             "outlook.sync.reconcile",
@@ -862,7 +943,42 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                             "outlook invitation imported without calendar parts"
                         );
                     }
-                    self.ingest.ingest(lease, snapshot).await?;
+                    let block_destination = if snapshot.state.in_inbox
+                        && !snapshot.state.is_draft
+                        && !snapshot.content.message.is_sent
+                    {
+                        if let Some(sender) = snapshot.content.message.from.as_ref()
+                            && self
+                                .ingest
+                                .sender_blocked(lease.mailbox, &sender.email)
+                                .await?
+                            && !self.ingest.stored(lease).await?
+                        {
+                            if folders.iter().any(|folder| {
+                                folder.role == email_api_client::domain::models::FolderRole::Junk
+                            }) {
+                                Some(BlockedSenderDestination::Junk)
+                            } else if folders.iter().any(|folder| {
+                                folder.role == email_api_client::domain::models::FolderRole::Trash
+                            }) {
+                                Some(BlockedSenderDestination::Trash)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    match block_destination {
+                        Some(destination) => {
+                            self.ingest
+                                .ingest_blocked(lease, snapshot, destination)
+                                .await?
+                        }
+                        None => self.ingest.ingest(lease, snapshot).await?,
+                    }
                     "imported"
                 }
                 // Live work follows a change Graph or Macro just made, which

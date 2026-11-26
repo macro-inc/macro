@@ -2,9 +2,18 @@ import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigat
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
-import type { Accessor, JSX, Ref, Setter, ValidComponent } from 'solid-js';
+import type {
+  Accessor,
+  ComponentProps,
+  JSX,
+  Ref,
+  Setter,
+  ValidComponent,
+} from 'solid-js';
 import {
+  children,
   createContext,
   createEffect,
   createSignal,
@@ -14,6 +23,7 @@ import {
   useContext,
 } from 'solid-js';
 import { cn } from '../utils/classname';
+import { Panel } from './Panel';
 
 const DIALOG_HANDOFF_WINDOW_MS = 180;
 
@@ -23,6 +33,7 @@ let lastAllDialogsClosedAt = Number.NEGATIVE_INFINITY;
 const DialogDrawerContext = createContext<{
   setTitleId: Setter<Accessor<string | undefined> | undefined>;
   setDescriptionId: Setter<Accessor<string | undefined> | undefined>;
+  setFooter: Setter<Accessor<JSX.Element> | undefined>;
 }>();
 
 export type DialogProps = {
@@ -49,6 +60,12 @@ export type DialogProps = {
   keepOpenOnNavigation?: boolean;
 };
 
+/**
+ * Responsive dialog with shared focus, labels and dismissal behavior.
+ * @do Use Dialog.Title and Dialog.Description to name the surface.
+ * @do Put fixed form actions in one Dialog.Footer inside the owning dialog.
+ * @dont Make actions sticky inside the scrolling body or force phones fullscreen.
+ */
 export function Dialog(props: DialogProps) {
   return (
     <Show
@@ -65,11 +82,15 @@ export function Dialog(props: DialogProps) {
 }
 
 function DialogDrawer(props: DialogProps) {
+  const [footer, setFooter] = createSignal<Accessor<JSX.Element>>();
+  const footerContent = () => footer()?.();
   const [titleId, setTitleId] = createSignal<Accessor<string | undefined>>();
   const [descriptionId, setDescriptionId] =
     createSignal<Accessor<string | undefined>>();
   return (
-    <DialogDrawerContext.Provider value={{ setTitleId, setDescriptionId }}>
+    <DialogDrawerContext.Provider
+      value={{ setTitleId, setDescriptionId, setFooter }}
+    >
       <MobileDrawer
         labelId={titleId()?.()}
         descriptionId={descriptionId()?.()}
@@ -94,13 +115,26 @@ function DialogDrawer(props: DialogProps) {
             class={cn('mx-auto max-w-[calc(100vw-16px)]', props.class)}
           >
             <MobileDrawer.Handle aria-hidden="true" />
-            <MobileDrawer.ScrollBody>
+            <MobileDrawer.ScrollBody
+              class={footerContent() ? 'pb-0 rounded-b-none' : undefined}
+            >
               {/* Give desktop surfaces their natural height so their size-full
                   and overflow-clip styles cannot clip the drawer's scroll body. */}
               <div class="shrink-0 [&>[data-layer]>[data-surface]]:border-0! [&>[data-layer]>[data-surface]]:rounded-none [&>[data-layer]>[data-surface]]:bg-transparent">
                 {props.children}
               </div>
             </MobileDrawer.ScrollBody>
+            <Show when={footerContent()}>
+              <MobileDrawer.KeyboardFooter
+                class={
+                  virtualKeyboardVisible()
+                    ? 'pb-4'
+                    : 'pb-[max(16px,var(--mobile-sheet-safe-padding))]'
+                }
+              >
+                {footerContent()}
+              </MobileDrawer.KeyboardFooter>
+            </Show>
           </MobileDrawer.Content>
         </MobileDrawer.Portal>
       </MobileDrawer>
@@ -208,6 +242,31 @@ function DesktopDialog(props: DialogProps) {
   );
 }
 
+export type DialogFooterProps = ComponentProps<typeof Panel.Footer>;
+
+/**
+ * Fixed desktop panel actions, moved outside the phone drawer's scroll body.
+ * Solid ownership stays with the dialog; phone DOM paints on the drawer glass.
+ * @do Use exactly one footer per dialog, inside the desktop Panel grid.
+ * @do Give a submit button form={id} when its form is in the body.
+ * @do On phones unset desktop dialog width and Panel max-height; let the drawer scroll with Panel.Body scroll={!isMobile()}.
+ * @dont Depend on a Panel ancestor's CSS depth for phone footer materials.
+ * @dont Move the footer outside its dialog's ownership tree.
+ */
+function DialogFooter(props: DialogFooterProps) {
+  const drawer = useContext(DialogDrawerContext);
+  const content = children(() => <Panel.Footer {...props} />);
+  if (drawer) {
+    const footer = () => content();
+    drawer.setFooter(() => footer);
+    onCleanup(() =>
+      drawer.setFooter((current) => (current === footer ? undefined : current))
+    );
+    return null;
+  }
+  return content();
+}
+
 const DialogCloseButton: typeof KobalteDialog.CloseButton = (props) => {
   if (useContext(DialogDrawerContext)) return null;
   return <KobalteDialog.CloseButton {...props} />;
@@ -233,5 +292,6 @@ const DialogTitle: typeof KobalteDialog.Title = (props) => {
 };
 
 Dialog.CloseButton = DialogCloseButton;
+Dialog.Footer = DialogFooter;
 Dialog.Description = DialogDescription;
 Dialog.Title = DialogTitle;

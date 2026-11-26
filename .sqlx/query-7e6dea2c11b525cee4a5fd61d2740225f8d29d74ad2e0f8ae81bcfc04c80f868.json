@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH due AS MATERIALIZED (\n                SELECT o.id, o.link_id, o.available_at, o.lease_until,\n                    GREATEST(o.available_at, COALESCE(o.blocked_until, '-infinity'::timestamptz)) AS eligible_at\n                FROM email_projection_outbox o\n                WHERE o.id=ANY($2::uuid[])\n            ), ordered AS MATERIALIZED (\n                SELECT d.*, first.id AS first_id\n                FROM due d\n                CROSS JOIN LATERAL (\n                    SELECT earlier.id\n                    FROM email_projection_outbox earlier\n                    WHERE earlier.link_id = d.link_id\n                    ORDER BY earlier.seq NULLS FIRST, earlier.id\n                    LIMIT 1\n                ) first\n            ), links AS MATERIALIZED (\n                SELECT l.id, l.is_sync_active\n                FROM email_links l\n                JOIN (SELECT DISTINCT link_id FROM due) d ON d.link_id = l.id\n            ), inactive AS MATERIALIZED (\n                SELECT l.id\n                FROM email_links l\n                JOIN (SELECT DISTINCT link_id FROM due) d ON d.link_id = l.id\n                WHERE NOT l.is_sync_active\n                FOR SHARE OF l SKIP LOCKED\n            ), deferred AS (\n                UPDATE email_projection_outbox o\n                SET parked_at = CASE WHEN inactive.id IS NOT NULL THEN clock_timestamp() ELSE o.parked_at END,\n                    blocked_until = CASE WHEN d.first_id <> d.id THEN now() + interval '1 hour' * (1 + random())\n                        WHEN d.lease_until > now() THEN d.lease_until\n                        ELSE now() + interval '1 second' END\n                FROM ordered d JOIN links l ON l.id = d.link_id\n                    LEFT JOIN inactive ON inactive.id = d.link_id\n                WHERE o.id = d.id\n                    AND (NOT l.is_sync_active OR d.lease_until > now() OR d.first_id <> d.id)\n                RETURNING o.id\n            ), candidate AS (\n                SELECT d.id\n                FROM ordered d JOIN links l ON l.id = d.link_id\n                WHERE l.is_sync_active\n                    AND (d.lease_until IS NULL OR d.lease_until <= now())\n                    AND d.id = d.first_id\n                ORDER BY d.eligible_at, d.id\n                LIMIT 1\n            )\n            , claimed AS (\n            -- Every recorded outcome deletes the entry or clears its lease, so a\n            -- lease still set here expired under a worker that stopped.\n            UPDATE\n                email_projection_outbox o\n            SET\n                lease_id = $1,\n                lease_until = now() + interval '3 minutes',\n                blocked_until = now() + interval '3 minutes',\n                attempts = attempts + 1,\n                unfinished_claims = CASE WHEN o.lease_id IS NULL THEN\n                    0\n                ELSE\n                    o.unfinished_claims + 1\n                END\n            FROM\n                candidate c,\n                email_links l\n            WHERE\n                o.id = c.id\n                AND l.id = o.link_id\n            RETURNING\n                o.id,\n                o.link_id,\n                o.generation,\n                o.payload,\n                o.attempts,\n                o.unfinished_claims,\n                l.sync_generation,\n                l.grant_generation\n            )\n            SELECT\n                claimed.id AS \"id?\", claimed.link_id AS \"link_id?\",\n                claimed.generation AS \"generation?\", claimed.payload AS \"payload?\",\n                claimed.attempts AS \"attempts?\", claimed.unfinished_claims AS \"unfinished_claims?\",\n                claimed.sync_generation AS \"sync_generation?\", claimed.grant_generation AS \"grant_generation?\",\n                (SELECT count(*) FROM deferred) AS \"deferred!\"\n            FROM (VALUES (1)) anchor(value)\n            LEFT JOIN claimed ON true\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "generation?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "payload?",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "attempts?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "unfinished_claims?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "sync_generation?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "grant_generation?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "deferred!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "7e6dea2c11b525cee4a5fd61d2740225f8d29d74ad2e0f8ae81bcfc04c80f868"
+}

@@ -1,6 +1,6 @@
 //! Durable desired-state commands. Unknown writes are read back before retrying.
 
-use super::{MailboxError, MailboxGateway, MailboxKey};
+use super::{MailboxError, MailboxGateway, MailboxKey, SyncClaim};
 use crate::domain::models::mailbox_action::{MailboxAction, PendingMailboxState};
 use email_api_client::domain::models::{
     EmailApiError, FolderRole, MailFolder, MailboxOrganization, MessageAction, ProviderId,
@@ -44,7 +44,7 @@ pub trait MailboxCommandRepository: Send + Sync + 'static {
     fn claim_command(
         &self,
         lease_id: Uuid,
-    ) -> impl Future<Output = Result<Option<CommandLease>, MailboxError>> + Send;
+    ) -> impl Future<Output = Result<SyncClaim<CommandLease>, MailboxError>> + Send;
     fn renew_command(
         &self,
         lease: &CommandLease,
@@ -97,6 +97,16 @@ pub trait MailboxCommandGateway: MailboxGateway {
         folders: &[MailFolder],
     ) -> impl Future<Output = Result<Option<MailboxOrganization>, EmailApiError>> + Send;
 
+    /// Fresh provider facts used once per target before a conditional command write.
+    fn live_organization(
+        &self,
+        mailbox: MailboxKey,
+        message: &ProviderId,
+        folders: &[MailFolder],
+    ) -> impl Future<Output = Result<Option<MailboxOrganization>, EmailApiError>> + Send {
+        self.organization(mailbox, message, folders)
+    }
+
     fn apply(
         &self,
         mailbox: MailboxKey,
@@ -119,13 +129,15 @@ impl<R, G> MailboxCommandService<R, G> {
 }
 impl<R: MailboxCommandRepository, G: MailboxCommandGateway> MailboxCommandService<R, G> {
     pub async fn execute_once(&self) -> Result<bool, MailboxError> {
-        let Some(lease) = self
+        let lease = match self
             .repo
             .claim_command(macro_uuid::generate_uuid_v7())
             .await
             .map_err(|error| super::telemetry::claim_failed("commands", error))?
-        else {
-            return Ok(false);
+        {
+            SyncClaim::Acquired(lease) => lease,
+            SyncClaim::Progress => return Ok(true),
+            SyncClaim::Idle => return Ok(false),
         };
         let link_id = lease.mailbox.link_id;
         async {
@@ -214,7 +226,7 @@ impl<R: MailboxCommandRepository, G: MailboxCommandGateway> MailboxCommandServic
         };
         let snapshot = self
             .provider
-            .organization(lease.mailbox, id, folders)
+            .live_organization(lease.mailbox, id, folders)
             .await?
             .ok_or(EmailApiError::NotFound)?;
         if let Some(action) = provider_action(&lease.action, &snapshot, folders)? {

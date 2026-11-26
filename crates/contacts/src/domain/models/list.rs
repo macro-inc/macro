@@ -34,16 +34,21 @@ pub enum ContactList {
     Gmail,
     /// Known through one of the owner's Outlook inboxes.
     Outlook,
+    /// Known through an IMAP inbox.
+    Imap,
 }
 
 /// The provider of a connected inbox, which names the list its contacts join.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize, strum::EnumString)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 pub enum InboxProvider {
     /// A Gmail inbox.
     Gmail,
     /// An Outlook inbox.
     Outlook,
+    /// Known through an IMAP inbox.
+    Imap,
 }
 
 impl From<InboxProvider> for ContactList {
@@ -51,6 +56,7 @@ impl From<InboxProvider> for ContactList {
         match provider {
             InboxProvider::Gmail => ContactList::Gmail,
             InboxProvider::Outlook => ContactList::Outlook,
+            InboxProvider::Imap => ContactList::Imap,
         }
     }
 }

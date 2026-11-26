@@ -252,10 +252,14 @@ impl World {
     /// Runs the draft worker until it has nothing due, skipping its waits.
     async fn work(&self) {
         for _ in 0..20 {
-            sqlx::query!("UPDATE email_mailbox_drafts SET available_at = now()")
-                .execute(&self.db)
-                .await
-                .unwrap();
+            // Only skip real waits: rewriting a due settled row's available_at
+            // fires the rearm trigger (20261123181255), which reopens it every turn.
+            sqlx::query!(
+                "UPDATE email_mailbox_drafts SET available_at = now() WHERE available_at > now()"
+            )
+            .execute(&self.db)
+            .await
+            .unwrap();
             if !self.service.execute_once().await.unwrap() {
                 return;
             }
@@ -327,6 +331,7 @@ impl World {
             .claim_message(Uuid::now_v7())
             .await
             .unwrap()
+            .into_lease()
             .unwrap();
         let mailbox = MailboxKey {
             link_id: self.link,

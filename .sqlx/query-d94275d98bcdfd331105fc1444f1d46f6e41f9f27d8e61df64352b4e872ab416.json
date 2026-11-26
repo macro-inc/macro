@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH parked AS MATERIALIZED (\n            SELECT o.id FROM email_projection_outbox o\n            WHERE o.link_id=$1 AND o.parked_at IS NOT NULL\n                AND EXISTS (SELECT 1 FROM email_links l WHERE l.id=$1 AND l.is_sync_active)\n            ORDER BY o.seq NULLS FIRST,o.id LIMIT $2\n            FOR UPDATE OF o SKIP LOCKED\n        )\n        UPDATE email_projection_outbox o SET parked_at=NULL\n        FROM parked p WHERE o.id=p.id\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d94275d98bcdfd331105fc1444f1d46f6e41f9f27d8e61df64352b4e872ab416"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE\n                email_sync_streams\n            SET\n                next_run_at = now()\n            WHERE\n                link_id = $1\n                AND kind = 'folder_catalog'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b5fa4e5fc8c206c4ee6e71f28b3e1c080b048a4c240d7c0822ec5109c6b45808"
+}

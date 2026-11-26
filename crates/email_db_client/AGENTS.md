@@ -19,7 +19,7 @@ backfill — plus legacy storage/workflow helpers that remain to be separated.
 - Owns: email-table statements, relational predicates and transaction-scoped
   storage operations. The schema lives in `crates/macro_db_client/migrations/`.
 - Put new workflow policy in `crates/email` and provider protocol implementations
-  in `email_api_client`. Preserve SQL guards and lock order when extracting
+  in `email_api_client` or `imap_engine`. Preserve SQL guards and lock order when extracting
   existing Rust decisions into domain services.
 - Purge batching/cursors/pacing, pending-label folding/restoration and scheduled
   claim/identity/deletion decisions now live in the email domain. Legacy
@@ -52,6 +52,10 @@ backfill — plus legacy storage/workflow helpers that remain to be separated.
 Parsed message responses expose the draft generation captured in the same SQL snapshot as their content.
 
 ## Gotchas
+
+- Decode all three provider variants explicitly; IMAP uses mailbox facts and
+  durable stream progress like Outlook, while Gmail retains label/history
+  semantics. Native attachment identities stay stable for both stream providers.
 
 - Thread attachment flags (`has_calendar_attachment`, `has_pdf_attachment`,
   `has_image_attachment`, `has_document_attachment`) back the CalendarOnly and
@@ -143,3 +147,10 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 
 - Scheduled-message reads and upserts preserve nullable agent correlation across delivery claims and retries.
 - Delivery, sent-identity and retained-deletion queries expose facts and statement outcomes to `email::domain::scheduled_delivery`; call that domain for claim, completion, adoption and deletion decisions. Keep SQL predicates and lock order in these query files; dormant legacy attachment mutation and schedule helpers remain unchanged.
+
+Accessible inbox details include the nullable mailbox_issue and mailbox_retry_at projections, decoding unknown future codes to generic health rather than failing the catalog.
+
+Order recipient reads by message, recipient_type and contact_id (omitting the
+message prefix for a single message), matching the frozen draft aggregates.
+The composite recipient primary key makes that order total within each type;
+no typed-entry ordering is stored. SMTP refusal positions rely on this contract.

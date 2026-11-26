@@ -104,10 +104,14 @@ where
 {
     async fn download(
         &self,
+        provider: models_email::service::link::UserProvider,
         mailbox: MailboxKey,
         message_id: &str,
         attachment_id: &str,
     ) -> Result<Vec<u8>, email::domain::mailbox::MailboxError> {
+        if provider != models_email::service::link::UserProvider::Outlook {
+            return Err(email::domain::mailbox::MailboxError::Stale);
+        }
         Ok(self
             .0
             .attachment(

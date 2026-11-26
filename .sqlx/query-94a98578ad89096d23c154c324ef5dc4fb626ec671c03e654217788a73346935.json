@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE\n            email_message_reconciliation\n        SET\n            provider = 'GMAIL'\n        WHERE\n            link_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "94a98578ad89096d23c154c324ef5dc4fb626ec671c03e654217788a73346935"
+}

@@ -1382,6 +1382,14 @@ type EmailMessageOperation {
 	The reason the operation needs attention, when one is available.
 	"""
 	issue: EmailMessageOperationIssue
+	"""
+	Optional definite failure detail; old rows retain an unknown reason.
+	"""
+	sendRejectionReason: EmailSendRejectionReason
+	"""
+	Optional pre-body SMTP command refusal, with a recipient position rather than an address.
+	"""
+	sendRefusal: EmailSubmissionRefusal
 }
 
 """
@@ -1551,6 +1559,20 @@ type EmailSendAttemptPayload {
 }
 
 """
+Definite non-submission evidence, without changing existing issue enum values.
+"""
+enum EmailSendRejectionReason {
+	"""
+	The provider explicitly refused the transaction before message data.
+	"""
+	PROVIDER_REJECTED
+	"""
+	No message data was submitted after the bounded connection retry.
+	"""
+	CONNECTION_UNAVAILABLE
+}
+
+"""
 Authoritative delivery state; acceptance is not proof of provider delivery.
 """
 enum EmailSendStatus {
@@ -1578,6 +1600,56 @@ enum EmailSendStatus {
 	This attempt cannot deliver.
 	"""
 	CANCELLED
+}
+
+"""
+Optional command detail that older clients can ignore.
+"""
+type EmailSubmissionRefusal {
+	"""
+	Command whose reply refused submission.
+	"""
+	phase: EmailSubmissionRefusalPhase!
+	"""
+	Zero-based position in the message's To, Cc, then Bcc envelope.
+	"""
+	recipientIndex: Int
+	"""
+	SMTP reply class, absent for a local capability failure.
+	"""
+	replyClass: EmailSubmissionRefusalClass
+}
+
+"""
+Sanitized refusal class; automatic resubmission remains forbidden.
+"""
+enum EmailSubmissionRefusalClass {
+	"""
+	Temporary refusal.
+	"""
+	TEMPORARY
+	"""
+	Permanent refusal.
+	"""
+	PERMANENT
+}
+
+"""
+SMTP command that refused the envelope before message data.
+"""
+enum EmailSubmissionRefusalPhase {
+	"""
+	MAIL FROM was refused.
+	"""
+	SENDER
+	"""
+	A RCPT TO was refused; the entire envelope was abandoned.
+	"""
+	RECIPIENT
+	"""
+	DATA or the advertised message capabilities refused the body.
+	"""
+	MESSAGE
 }
 
 """
@@ -4188,7 +4260,7 @@ type GraphqlContact {
 	name: String
 	"""
 	Keys of the viewer's lists this person is in (`teammates`, `interacted`,
-	`invited`, `gmail`, `outlook`; more may be added), each once. Empty for
+	`invited`, `gmail`, `outlook`, `imap`; more may be added), each once. Empty for
 	the viewer, and for a person in no list.
 	"""
 	lists: [String!]!
@@ -5208,6 +5280,10 @@ enum GraphqlEmailProvider {
 	Microsoft Outlook and Microsoft 365.
 	"""
 	OUTLOOK
+	"""
+	A mailbox connected over IMAP and SMTP.
+	"""
+	IMAP
 }
 
 """

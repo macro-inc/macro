@@ -73,7 +73,7 @@ pub async fn list_links_handler(
                 email::domain::models::EmailSyncStatus::Inactive => api::link::SyncStatus::Inactive,
             };
             let inbox = entry.facts;
-            api::link::Link::new(
+            let mut link = api::link::Link::new(
                 inbox.link,
                 api::settings::Settings::from(inbox.settings),
                 sync_status,
@@ -81,7 +81,10 @@ pub async fn list_links_handler(
                 entry.needs_calendar_permission,
                 inbox.calendar_disabled,
                 inbox.has_calendar_data,
-            )
+            );
+            link.mailbox_issue = inbox.mailbox_issue;
+            link.mailbox_retry_at = inbox.mailbox_retry_at;
+            link
         })
         .collect();
 

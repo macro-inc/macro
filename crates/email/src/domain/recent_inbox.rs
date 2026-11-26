@@ -7,7 +7,9 @@ use std::future::Future;
 use chrono::{DateTime, Duration, Utc};
 use email_api_client::domain::models::EmailApiError;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::message::RecentInboxMessage;
+use models_email::email::service::message::{
+    RecentInboxMessage, UnreadableMailbox, UnreadableMailboxReason,
+};
 use models_email::service::link::UserProvider;
 use tracing::{Instrument, Span};
 
@@ -82,6 +84,17 @@ pub trait RecentInboxMailboxes: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<RecentInboxMailbox>, MailboxError>> + Send;
 }
 
+/// A recent-mail read failure, distinguished before best-effort aggregation.
+#[derive(Debug, thiserror::Error)]
+pub enum RecentInboxReadError {
+    /// The provider cannot fulfill this read shape.
+    #[error("the requested recent-mail window is unsupported")]
+    Unsupported,
+    /// An attempted provider read failed.
+    #[error(transparent)]
+    Provider(#[from] EmailApiError),
+}
+
 pub trait RecentInboxReader: Send + Sync + 'static {
     /// Up to `read.limit` messages from `read.folder`, newest first,
     /// dated no earlier than `read.since` when it is given.
@@ -89,7 +102,7 @@ pub trait RecentInboxReader: Send + Sync + 'static {
         &self,
         mailbox: &RecentInboxMailbox,
         read: RecentRead,
-    ) -> impl Future<Output = Result<Vec<RecentInboxMessage>, EmailApiError>> + Send;
+    ) -> impl Future<Output = Result<Vec<RecentInboxMessage>, RecentInboxReadError>> + Send;
 }
 
 /// What the service reads, past its callers' clamps.
@@ -102,6 +115,15 @@ struct Read {
     since: Option<DateTime<Utc>>,
     texts: u16,
     snippet_chars: u16,
+}
+
+/// Best-effort mail with the mailboxes omitted from this requested context.
+#[derive(Debug)]
+pub struct RecentInboxResult {
+    /// Healthy mailboxes’ messages, ordered and capped for the request.
+    pub messages: Vec<RecentInboxMessage>,
+    /// Typed omissions; an empty messages list alone does not imply empty mail.
+    pub unreadable_mailboxes: Vec<UnreadableMailbox>,
 }
 
 pub struct RecentInboxService<R, P> {
@@ -126,7 +148,7 @@ impl<R: RecentInboxMailboxes, P: RecentInboxReader> RecentInboxService<R, P> {
         actor: &MacroUserIdStr<'_>,
         limit: u16,
         snippet_chars: u16,
-    ) -> Result<Vec<RecentInboxMessage>, MailboxError> {
+    ) -> Result<RecentInboxResult, MailboxError> {
         let limit = limit.clamp(1, MAX_RECENT_MESSAGES);
         self.read_messages(
             actor,
@@ -152,7 +174,7 @@ impl<R: RecentInboxMailboxes, P: RecentInboxReader> RecentInboxService<R, P> {
         actor: &MacroUserIdStr<'_>,
         window: WindowRead,
         now: DateTime<Utc>,
-    ) -> Result<Vec<RecentInboxMessage>, MailboxError> {
+    ) -> Result<RecentInboxResult, MailboxError> {
         let days = window.days.clamp(1, MAX_WINDOW_DAYS);
         let limit = window.limit.clamp(1, MAX_WINDOW_MESSAGES);
         self.read_messages(
@@ -180,6 +202,7 @@ impl<R: RecentInboxMailboxes, P: RecentInboxReader> RecentInboxService<R, P> {
             texts = i64::from(read.texts),
             inbox_count = tracing::field::Empty,
             failed_inbox_count = tracing::field::Empty,
+            unsupported_inbox_count = tracing::field::Empty,
             message_count = tracing::field::Empty,
         ),
         err
@@ -188,7 +211,7 @@ impl<R: RecentInboxMailboxes, P: RecentInboxReader> RecentInboxService<R, P> {
         &self,
         actor: &MacroUserIdStr<'_>,
         read: Read,
-    ) -> Result<Vec<RecentInboxMessage>, MailboxError> {
+    ) -> Result<RecentInboxResult, MailboxError> {
         let snippet_chars = usize::from(read.snippet_chars.clamp(1, MAX_SNIPPET_CHARS));
         let inboxes = self.repository.readable_owned_inboxes(actor).await?;
         let span = Span::current();
@@ -207,11 +230,11 @@ impl<R: RecentInboxMailboxes, P: RecentInboxReader> RecentInboxService<R, P> {
         .await;
 
         let mut messages = Vec::new();
-        let mut failed = 0usize;
+        let mut unreadable_mailboxes = Vec::new();
         for read in reads {
             match read {
-                Some(read) => messages.extend(read),
-                None => failed += 1,
+                Ok(read) => messages.extend(read),
+                Err(unreadable) => unreadable_mailboxes.push(unreadable),
             }
         }
 
@@ -239,24 +262,36 @@ impl<R: RecentInboxMailboxes, P: RecentInboxReader> RecentInboxService<R, P> {
             cap(&mut message.snippet, snippet_chars);
         }
 
+        let failed = unreadable_mailboxes
+            .iter()
+            .filter(|mailbox| mailbox.reason == UnreadableMailboxReason::ProviderError)
+            .count();
         span.record("failed_inbox_count", span_count(failed));
+        span.record(
+            "unsupported_inbox_count",
+            span_count(unreadable_mailboxes.len() - failed),
+        );
         span.record("message_count", span_count(messages.len()));
-        Ok(messages)
+        Ok(RecentInboxResult {
+            messages,
+            unreadable_mailboxes,
+        })
     }
 
-    /// One inbox's newest messages, or `None` when the provider read failed.
+    /// One inbox's messages or its typed omission from the requested context.
     async fn read_inbox(
         &self,
         inbox: &RecentInboxMailbox,
         read: RecentRead,
         parent: &Span,
-    ) -> Option<Vec<RecentInboxMessage>> {
+    ) -> Result<Vec<RecentInboxMessage>, UnreadableMailbox> {
         let span = tracing::info_span!(
             parent: parent,
             "email.recent_inbox.inbox",
             link_id = %inbox.key.link_id,
             provider = ?inbox.provider,
             message_count = tracing::field::Empty,
+            unreadable_reason = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
         );
 
@@ -268,18 +303,28 @@ impl<R: RecentInboxMailboxes, P: RecentInboxReader> RecentInboxService<R, P> {
         {
             Ok(messages) => {
                 span.record("message_count", span_count(messages.len()));
-                Some(messages)
+                Ok(messages)
             }
             Err(error) => {
-                span.record("otel.status_code", "ERROR");
-                tracing::warn!(
-                    parent: &span,
-                    link_id = %inbox.key.link_id,
-                    provider = ?inbox.provider,
-                    error = %error,
-                    "could not read recent messages; skipping the mailbox"
-                );
-                None
+                let reason = match error {
+                    RecentInboxReadError::Unsupported => UnreadableMailboxReason::Unsupported,
+                    RecentInboxReadError::Provider(error) => {
+                        span.record("otel.status_code", "ERROR");
+                        tracing::warn!(
+                            parent: &span,
+                            link_id = %inbox.key.link_id,
+                            provider = ?inbox.provider,
+                            error = %error,
+                            "could not read recent messages; skipping the mailbox"
+                        );
+                        UnreadableMailboxReason::ProviderError
+                    }
+                };
+                span.record("unreadable_reason", tracing::field::debug(reason));
+                Err(UnreadableMailbox {
+                    link_id: inbox.key.link_id,
+                    reason,
+                })
             }
         }
     }

@@ -179,7 +179,7 @@ where
 
         // Outlook has no system labels: archive, read, flag, trash and junk
         // are mailbox states there, so set the state instead.
-        if link.provider == UserProvider::Outlook
+        if link.provider.uses_mailbox_framework()
             && let LabelSelector::Name(name) = selector
             && let Some(state) = outlook_mailbox_state(name, self.add)
         {

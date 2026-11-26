@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            l.sync_generation\n        FROM\n            email_links l\n        WHERE\n            l.id = $1\n            AND l.provider IN ('OUTLOOK', 'IMAP')\n            AND l.is_sync_active\n            AND (l.macro_id = $2\n                OR EXISTS (\n                    SELECT\n                        1\n                    FROM\n                        macro_user_links u\n                    WHERE\n                        u.link_id = l.id\n                        AND u.primary_macro_id = $2))\n        FOR UPDATE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "db01ec232bc6b33860cc713a13aaf1e7716f389da3f6d27f6bc2db253afcc60a"
+}

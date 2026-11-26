@@ -1,4 +1,5 @@
 import { ROUTER_BASE_CONCAT, toBaseRelative } from '@app/constants/routerBase';
+import { t } from '@app/lib/i18n';
 import { updateUserAuth } from '@core/auth';
 import {
   createNativeAuthSession,
@@ -11,6 +12,11 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { Telemetry } from '@macro-inc/observability';
 import { useInitGmailLink } from '@queries/auth';
+import {
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  type QueryAccount,
+} from '@queries/auth/account-scope';
 import { useInitOutlookLink } from '@queries/auth/outlook-link';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
@@ -28,10 +34,13 @@ import {
 import type {
   ListLinksResponse,
   ResyncResponse,
+  UserProvider,
 } from '@service-email/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
+import type { DialogHandle } from '@ui';
 import { err, okAsync, ResultAsync } from 'neverthrow';
-import { createMemo, createSignal, getOwner } from 'solid-js';
+import { batch, createMemo, createSignal, getOwner } from 'solid-js';
+import { match } from 'ts-pattern';
 import { inboxAuthorizationUrl } from './consent';
 import {
   announceAlreadyConnected,
@@ -255,7 +264,7 @@ const TOO_MANY_PENDING_LINKS_MESSAGE =
 
 type AddInboxOptions = {
   scopes?: ConsentScopes;
-  provider?: 'GMAIL' | 'OUTLOOK';
+  provider?: UserProvider;
   reconnectLinkId?: string;
   emailAddress?: string;
 };
@@ -413,18 +422,92 @@ export function useAddInboxFlow() {
     };
   };
 
-  return async (options?: AddInboxOptions) => {
+  const reconnectingImap = new Set<string>();
+  const connectImap = async (
+    viewer: QueryAccount | undefined,
+    options?: AddInboxOptions,
+    chooser?: DialogHandle
+  ): Promise<void> => {
+    const linkId = options?.reconnectLinkId;
+    if (linkId && reconnectingImap.has(linkId)) {
+      chooser?.close();
+      return;
+    }
+    if (linkId) reconnectingImap.add(linkId);
+    try {
+      const { openImapConnection } = await import('./ImapConnectDialog');
+      if (!isCurrentQueryAccount(viewer) || (chooser && !chooser.isOpen()))
+        return;
+      // Keep the chooser's scrim until the lazy form is ready, then change both
+      // entries in one commit so the background never becomes undimmed.
+      const connection = batch(() => {
+        const pending = openImapConnection(
+          owner,
+          options?.emailAddress,
+          linkId
+        );
+        chooser?.close();
+        return pending;
+      });
+      const result = await connection;
+      if (!isCurrentQueryAccount(viewer) || !result) return;
+      await match(result)
+        .with({ type: 'payment_required' }, () => {
+          showPaywall(PaywallKey.MULTI_INBOX);
+        })
+        .with({ type: 'connected' }, async () => {
+          invalidateEmailLinks();
+          await invalidateUserInfo();
+          toast.success(
+            t(linkId ? 'imap.inboxReconnected' : 'imap.inboxConnected')
+          );
+        })
+        .with({ type: 'oauth' }, ({ provider, emailAddress }) =>
+          connectInbox(
+            { provider, emailAddress: options?.emailAddress },
+            emailAddress
+          )
+        )
+        .exhaustive();
+    } finally {
+      if (linkId) reconnectingImap.delete(linkId);
+      chooser?.close();
+    }
+  };
+
+  const connectInbox = async (
+    options?: AddInboxOptions,
+    setupLoginHint?: string
+  ): Promise<void> => {
+    const viewer = currentQueryAccount();
     const scopes = options?.scopes ?? 'gmail';
-    const provider = options?.provider ?? (await selectEmailProvider(owner));
+    let connectingImap: Promise<void> | undefined;
+    const provider =
+      options?.provider ??
+      (await selectEmailProvider(
+        owner,
+        scopes === 'gmail',
+        (provider, chooser) => {
+          if (provider === 'IMAP') {
+            connectingImap = connectImap(viewer, options, chooser);
+          } else {
+            chooser.close();
+          }
+        }
+      ));
     if (!provider) return;
+    if (provider === 'IMAP')
+      return connectingImap ?? connectImap(viewer, options);
     const addition = await plainAddition(provider, scopes, options);
+    // The form can suggest a sign-in address without targeting an existing inbox.
+    const loginHint = setupLoginHint ?? options?.emailAddress;
     if (isNativeMobilePlatform()) {
       await startNativeFlow(
         scopes,
         provider,
         addition,
         options?.reconnectLinkId,
-        options?.emailAddress
+        loginHint
       );
       return;
     }
@@ -449,7 +532,7 @@ export function useAddInboxFlow() {
       });
       const authorizationUrl = inboxAuthorizationUrl(
         result.value.authorization_url,
-        options?.emailAddress
+        loginHint
       );
       if (desktop) {
         await Telemetry.span('email.link.open_browser', async (span) => {
@@ -473,6 +556,7 @@ export function useAddInboxFlow() {
       toast.failure('Failed to start inbox connection');
     }
   };
+  return (options?: AddInboxOptions) => connectInbox(options);
 }
 
 /**

@@ -32,6 +32,7 @@ pub struct GetAttachmentResponse {
             (status = 403, body=ErrorResponse),
             (status = 404, body=ErrorResponse),
             (status = 409, body=ErrorResponse),
+            (status = 413, body=crate::api::email::provider_error::ContentTooLargeResponse),
             (status = 429, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )

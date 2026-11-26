@@ -2,6 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
+pub use models_email::service::message::{
+    SendRejectionReason, SubmissionRefusal, SubmissionRefusalClass, SubmissionRefusalPhase,
+};
+
 #[cfg(test)]
 mod test;
 
@@ -19,7 +23,9 @@ pub enum StoredOperationState {
     Failed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::IntoStaticStr)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::AsRefStr, strum::IntoStaticStr,
+)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum DraftStage {
@@ -65,6 +71,22 @@ pub enum MessageOperationState {
     Failed,
 }
 
+/// Definite non-submission details. Legacy checkpoints may carry either field.
+#[derive(Debug, Clone, Copy)]
+pub struct SendRejection {
+    pub reason: Option<SendRejectionReason>,
+    pub refusal: Option<SubmissionRefusal>,
+}
+
+impl SendRejection {
+    pub fn from_parts(
+        reason: Option<SendRejectionReason>,
+        refusal: Option<SubmissionRefusal>,
+    ) -> Option<Self> {
+        (reason.is_some() || refusal.is_some()).then_some(Self { reason, refusal })
+    }
+}
+
 /// Facts loaded only with an authorized message. Opaque versions are compared,
 /// never interpreted as provider labels or provider-specific state on the client.
 #[derive(Debug, Clone)]
@@ -74,6 +96,7 @@ pub struct MessageOperationFacts {
     pub revision: i64,
     pub remote_version: Option<String>,
     pub issue: Option<MessageOperationIssue>,
+    pub send_rejection: Option<SendRejection>,
 }
 
 #[derive(Debug, Clone)]
@@ -82,6 +105,7 @@ pub struct MessageOperationStatus {
     pub revision: i64,
     pub remote_version: Option<String>,
     pub issue: Option<MessageOperationIssue>,
+    pub send_rejection: Option<SendRejection>,
 }
 
 impl From<MessageOperationFacts> for MessageOperationStatus {
@@ -112,6 +136,13 @@ impl From<MessageOperationFacts> for MessageOperationStatus {
             revision: facts.revision,
             remote_version: facts.remote_version,
             issue: facts.issue,
+            // A deliberate retry or a later failure can retain an old checkpoint.
+            // Only the current rejection issue makes that reason actionable.
+            send_rejection: if facts.issue == Some(MessageOperationIssue::SendRejected) {
+                facts.send_rejection
+            } else {
+                None
+            },
         }
     }
 }

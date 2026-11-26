@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Visibility stays scoped to a current-generation action on this thread.\n-- Once a group is visible, retained terminal chunks from a previous generation\n-- still contribute to its outcome; reconnect must not erase an early failure.\nWITH latest AS MATERIALIZED (\n    SELECT DISTINCT ON(c.intent->>'kind',c.intent->'value'->>'name')\n        c.id,c.action_id,c.intent,c.updated_at\n    FROM email_mailbox_commands c JOIN email_links l\n        ON l.id=c.link_id AND l.sync_generation=c.generation\n    WHERE c.link_id=$1 AND EXISTS (\n        SELECT 1 FROM email_mailbox_command_targets t\n        JOIN email_messages m ON m.id=t.message_id\n        WHERE t.command_id=c.id AND m.thread_id=$2 AND m.link_id=$1\n    )\n    ORDER BY c.intent->>'kind',c.intent->'value'->>'name',c.accepted_order DESC\n    LIMIT 100\n)\nSELECT COALESCE(l.action_id,l.id) AS \"id!\",l.intent AS \"intent!\",\n    CASE WHEN states.pending THEN 'pending'\n        WHEN states.cancelled THEN 'cancelled'\n        WHEN states.failed THEN 'failed'\n        WHEN states.succeeded THEN 'succeeded'\n        ELSE NULL END AS \"status!\",\n    COALESCE(states.updated_at,l.updated_at) AS \"updated_at!\"\nFROM latest l CROSS JOIN LATERAL (\n    SELECT bool_or(member.status IN ('pending','running','confirming')) AS pending,\n        bool_or(member.status IN ('cancelled','unknown')) AS cancelled,\n        bool_or(member.status IN ('failed','conflict')) AS failed,\n        bool_and(member.status='succeeded') AS succeeded,\n        max(member.updated_at) AS updated_at\n    FROM (\n        SELECT status,updated_at FROM email_mailbox_commands\n        WHERE link_id=$1 AND action_id=l.action_id\n        UNION ALL\n        SELECT status,updated_at FROM email_mailbox_commands\n        WHERE id=l.id AND l.action_id IS NULL\n    ) member\n) states\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "intent!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "889e52aa5c56193a7451c4a11a3ac7b40b18a5de185c6e54f49fb64bed7987c7"
+}

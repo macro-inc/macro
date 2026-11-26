@@ -1,36 +1,113 @@
 use super::*;
 use email_api_client::domain::models::FolderRole;
+use tracing::Instrument;
 
 impl PgMailboxSync {
     pub(super) async fn claim_catalog_lease(
         &self,
         lease_id: Uuid,
-    ) -> Result<Option<CatalogLease>, MailboxError> {
-        // Unlike every other sync claim, discovery takes a link flagged
-        // `needs_reauth`: it is the probe that asks for a token again, and the
-        // token that works clears the flag and resumes the others.
-        let row = sqlx::query!(r#"
-            WITH candidate AS (
-                SELECT s.id FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
-                WHERE l.is_sync_active AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
-                    AND s.kind = 'folder_catalog' AND s.next_run_at <= now()
-                    AND (s.lease_until IS NULL OR s.lease_until < now())
-                ORDER BY s.next_run_at, s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
+    ) -> Result<SyncClaim<CatalogLease>, MailboxError> {
+        let mut tx = self.begin_claim().await?;
+        let window = self
+            .lock_stream_window(&mut tx, super::claims::StreamWork::Catalog)
+            .await?;
+        if window.ids.is_empty() {
+            tx.commit().await.map_err(db_error)?;
+            return Ok(SyncClaim::Idle);
+        }
+        // Empty polls have no span; a nonempty maintained window is work
+        // even when it does not produce a provider lease.
+        let claim_span = tracing::info_span!(
+            "email.mailbox.claim",
+            mailbox.provider = self.provider.as_str(),
+            mailbox.work = "folder_catalog",
+            mailbox.window_rows =
+                i64::try_from(window.ids.len()).map_err(|_| MailboxError::Persistence)?,
+            mailbox.window_maintained = window.maintained,
+            mailbox.link_id = tracing::field::Empty,
+            mailbox.outcome = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        );
+        let result: Result<SyncClaim<CatalogLease>, MailboxError> = async {
+            let row = sqlx::query!(
+                r#"
+            WITH keys AS MATERIALIZED (
+                SELECT unnest($1::uuid[]) AS id
+            ), candidate AS MATERIALIZED (
+                SELECT s.id FROM keys k
+                -- Keep one PK probe per held key, never a whole due-index scan.
+                CROSS JOIN LATERAL (
+                    SELECT s.id, s.next_run_at, s.provider_retry_at, s.lease_until
+                    FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
+                    WHERE s.id = k.id AND s.kind = 'folder_catalog'
+                    AND s.parked_at IS NULL
+                    AND s.provider = $3::text::email_user_provider_enum
+                    AND l.provider = s.provider AND l.sync_generation = s.generation
+                    -- Outlook discovery takes a link flagged `needs_reauth`: it
+                    -- is the probe that asks for a token again, and the token
+                    -- that works clears the flag and resumes the others. IMAP
+                    -- waits for a reconnect instead of retrying a rejected login.
+                    AND l.is_sync_active AND (NOT l.needs_reauth OR s.provider = 'OUTLOOK')
+                    AND GREATEST(s.next_run_at,
+                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
+                        COALESCE(s.lease_until, '-infinity'::timestamptz)) <= now()
+                    LIMIT 1
+                ) s
+                ORDER BY GREATEST(s.next_run_at,
+                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
+                        COALESCE(s.lease_until, '-infinity'::timestamptz)), s.id
+                LIMIT 1
             )
-            UPDATE email_sync_streams s SET lease_id = $1, lease_until = now() + interval '3 minutes', lease_started_at = clock_timestamp(), fence = fence + 1
+            UPDATE email_sync_streams s
+            SET lease_id = $2, lease_until = now() + interval '3 minutes',
+                lease_started_at = clock_timestamp(),
+                leased_notification_revision = s.notification_revision,
+                provider_retry_at = NULL, fence = s.fence + 1
             FROM candidate c, email_links l WHERE s.id = c.id AND l.id = s.link_id
-            RETURNING s.id,s.link_id,s.generation,l.grant_generation,s.fence
-        "#,lease_id).fetch_optional(&self.db).await.map_err(db_error)?;
-        Ok(row.map(|row| CatalogLease {
-            id: row.id,
-            mailbox: MailboxKey {
-                link_id: row.link_id,
-                sync_generation: row.generation,
-                grant_generation: row.grant_generation,
-            },
-            lease_id,
-            fence: row.fence,
-        }))
+            RETURNING s.id, s.link_id, s.generation, l.grant_generation, s.fence
+            "#,
+                &window.ids,
+                lease_id,
+                self.provider.as_str(),
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_error)?;
+            tx.commit().await.map_err(db_error)?;
+            Ok(match row {
+                Some(row) => SyncClaim::Acquired(CatalogLease {
+                    id: row.id,
+                    mailbox: MailboxKey {
+                        link_id: row.link_id,
+                        sync_generation: row.generation,
+                        grant_generation: row.grant_generation,
+                    },
+                    lease_id,
+                    fence: row.fence,
+                }),
+                None if window.maintained > 0 => SyncClaim::Progress,
+                None => SyncClaim::Idle,
+            })
+        }
+        .instrument(claim_span.clone())
+        .await;
+        let outcome = match &result {
+            Ok(SyncClaim::Acquired(lease)) => {
+                claim_span.record(
+                    "mailbox.link_id",
+                    tracing::field::display(lease.mailbox.link_id),
+                );
+                "acquired"
+            }
+            Ok(SyncClaim::Progress) => "progress",
+            Ok(SyncClaim::Idle) => "idle",
+            Err(_) => {
+                claim_span.record("otel.status_code", "ERROR");
+                "failed"
+            }
+        };
+        claim_span.record("mailbox.outcome", outcome);
+        result
     }
 
     pub(super) async fn commit_catalog_lease(
@@ -57,16 +134,32 @@ impl PgMailboxSync {
         }
         let advanced = sqlx::query!(
             r#"
-            UPDATE email_sync_streams s SET initial_complete = true,last_completed_at = now(),
-                next_run_at = CASE WHEN notified_at > lease_started_at THEN now() ELSE now() + interval '5 minutes' END,lease_id = NULL,lease_until = NULL
-            FROM email_links l WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3
+            UPDATE
+                email_sync_streams s
+            SET
+                initial_complete = true,
+                last_completed_at = now(),
+                next_run_at = CASE
+                    WHEN s.provider = 'IMAP' THEN CASE
+                        WHEN s.notification_revision > s.leased_notification_revision THEN now()
+                        ELSE now() + interval '5 minutes'
+                    END
+                    WHEN notified_at > lease_started_at THEN now()
+                    ELSE now() + interval '5 minutes'
+                END,
+                lease_id = NULL,
+                lease_until = NULL
+            FROM
+                email_links l
+            WHERE
+                s.id = $1 AND s.lease_id = $2 AND s.fence = $3
                 AND s.lease_until > now() AND l.id = s.link_id AND s.generation = l.sync_generation
                 AND l.is_sync_active AND l.grant_generation = $4
         "#,
             lease.id,
             lease.lease_id,
             lease.fence,
-            lease.mailbox.grant_generation
+            lease.mailbox.grant_generation,
         )
         .execute(&mut *tx)
         .await
@@ -104,29 +197,48 @@ impl PgMailboxSync {
         .await
         .map_err(db_error)?;
         for folder in folders {
-            sqlx::query!(r#"
-                INSERT INTO email_mailbox_folders (link_id,provider_id,parent_id,display_name,role,catalog_generation,total_item_count)
-                VALUES ($1,$2,$3,$4,$5,$6,$7)
-                ON CONFLICT (link_id,provider_id) DO UPDATE SET parent_id = EXCLUDED.parent_id,
-                    display_name = EXCLUDED.display_name,role = EXCLUDED.role,catalog_generation = EXCLUDED.catalog_generation,deleted_at = NULL,
-                    total_item_count = EXCLUDED.total_item_count
-            "#,lease.mailbox.link_id,folder.id.as_str(),folder.parent_id.as_ref().map(ProviderId::as_str),folder.name,role_name(folder.role),lease.fence,folder.total_items.map(i64::from))
-                .execute(&mut *tx).await.map_err(db_error)?;
             sqlx::query!(
                 r#"
-                INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,next_run_at)
-                VALUES ($1,$2,$3,'mail_folder',$4,now() - make_interval(secs => $5))
-                ON CONFLICT (link_id,generation,kind,scope_id) DO NOTHING
-            "#,
-                macro_uuid::generate_uuid_v7(),
+                INSERT INTO email_mailbox_folders (link_id, provider_id, parent_id, display_name, role, catalog_generation, total_item_count, sync_enabled)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ON CONFLICT (link_id, provider_id)
+                    DO UPDATE SET
+                        parent_id = EXCLUDED.parent_id,
+                        display_name = EXCLUDED.display_name,
+                        role = EXCLUDED.role,
+                        catalog_generation = EXCLUDED.catalog_generation,
+                        deleted_at = NULL,
+                        total_item_count = EXCLUDED.total_item_count,
+                        sync_enabled = EXCLUDED.sync_enabled
+                "#,
                 lease.mailbox.link_id,
-                lease.mailbox.sync_generation,
                 folder.id.as_str(),
-                f64::from(import_round_lead_seconds(folder.role))
+                folder.parent_id.as_ref().map(ProviderId::as_str),
+                folder.name,
+                role_name(folder.role),
+                lease.fence,
+                folder.total_items.map(i64::from),
+                folder.sync_enabled,
             )
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
+                .execute(&mut *tx).await.map_err(db_error)?;
+            if folder.sync_enabled {
+                sqlx::query!(
+                    r#"
+                    INSERT INTO email_sync_streams (id, link_id, generation, kind, scope_id, next_run_at)
+                        VALUES ($1, $2, $3, 'mail_folder', $4, now() - make_interval(secs => $5))
+                    ON CONFLICT (link_id, generation, kind, scope_id)
+                        DO NOTHING
+                    "#,
+                    macro_uuid::generate_uuid_v7(),
+                    lease.mailbox.link_id,
+                    lease.mailbox.sync_generation,
+                    folder.id.as_str(),
+                    f64::from(import_round_lead_seconds(folder.role)),
+                )
+                .execute(&mut *tx)
+                .await
+                .map_err(db_error)?;
+            }
         }
         let deleted = sqlx::query_scalar!(
             r#"
@@ -151,14 +263,26 @@ impl PgMailboxSync {
             WHERE link_id = $1 AND provider_folder_id = ANY($3) AND provider_id IS NOT NULL
             ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET revision = email_message_reconciliation.revision + 1,available_at = now(),is_import = false
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation,&rechecked).execute(&mut *tx).await.map_err(db_error)?;
-        // Stop polling folders that no longer exist, and their live passes;
+        // Stop polling missing or explicitly paused folders, and their live passes;
         // retained messages are handled by mailbox-wide reconciliation above,
         // not cascaded from folder deletion.
-        sqlx::query!(r#"
+        sqlx::query!(
+            r#"
             DELETE FROM email_sync_streams s USING email_mailbox_folders f
-            WHERE s.link_id = $1 AND s.generation = $2 AND s.kind IN ('mail_folder','mail_folder_live')
-                AND f.link_id = s.link_id AND f.provider_id = s.scope_id AND f.deleted_at IS NOT NULL
-        "#,lease.mailbox.link_id,lease.mailbox.sync_generation).execute(&mut *tx).await.map_err(db_error)?;
+            WHERE s.link_id = $1
+                AND s.generation = $2
+                AND s.kind IN ('mail_folder', 'mail_folder_live')
+                AND f.link_id = s.link_id
+                AND f.provider_id = s.scope_id
+                AND (f.deleted_at IS NOT NULL
+                    OR NOT f.sync_enabled)
+            "#,
+            lease.mailbox.link_id,
+            lease.mailbox.sync_generation,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
         // A link marked as having no mailbox has one again: the work its
         // claims skipped meanwhile is due at once.
         let found_mailbox = sqlx::query!(
@@ -171,10 +295,20 @@ impl PgMailboxSync {
         .rows_affected()
             == 1;
         if found_mailbox {
+            super::parked_work_recovery::unpark_link_page(&mut tx, lease.mailbox.link_id, 64)
+                .await
+                .map_err(db_error)?;
             sqlx::query!(
-                "UPDATE email_sync_streams SET next_run_at = now() WHERE link_id = $1 AND generation = $2 AND kind <> 'folder_catalog' AND next_run_at > now()",
+                r#"
+                UPDATE
+                    email_sync_streams
+                SET
+                    next_run_at = GREATEST(now(), provider_retry_at)
+                WHERE
+                    link_id = $1 AND generation = $2 AND kind <> 'folder_catalog' AND next_run_at > now()
+                "#,
                 lease.mailbox.link_id,
-                lease.mailbox.sync_generation
+                lease.mailbox.sync_generation,
             )
             .execute(&mut *tx)
             .await
@@ -196,6 +330,9 @@ impl PgMailboxSync {
         }
         let import_completed = Self::settle_import(&mut tx, lease.mailbox).await?;
         tx.commit().await.map_err(db_error)?;
+        if found_mailbox {
+            super::parked_work_recovery::resume_link(&self.db, lease.mailbox.link_id).await;
+        }
         Ok(import_completed)
     }
 
@@ -227,18 +364,6 @@ impl PgMailboxSync {
         .ok_or(MailboxError::Stale)?;
         tx.commit().await.map_err(db_error)?;
         Ok(u32::try_from(marked_seconds.max(0)).unwrap_or(u32::MAX))
-    }
-
-    pub(super) async fn release_catalog_lease(
-        &self,
-        lease: &CatalogLease,
-        delay: u32,
-    ) -> Result<(), MailboxError> {
-        sqlx::query!(r#"
-            UPDATE email_sync_streams SET lease_id = NULL,lease_until = NULL,next_run_at = now() + make_interval(secs => $4)
-            WHERE id = $1 AND lease_id = $2 AND fence = $3
-        "#,lease.id,lease.lease_id,lease.fence,f64::from(delay)).execute(&self.db).await.map_err(db_error)?;
-        Ok(())
     }
 }
 

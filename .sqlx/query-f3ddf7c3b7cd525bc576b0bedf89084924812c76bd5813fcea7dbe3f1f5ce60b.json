@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE\n            email_scheduled_messages\n        SET\n            delivery_started_at = now()\n        WHERE\n            message_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f3ddf7c3b7cd525bc576b0bedf89084924812c76bd5813fcea7dbe3f1f5ce60b"
+}

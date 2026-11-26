@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            count(*) AS \"count!\"\n        FROM\n            email_sync_streams\n        WHERE\n            link_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "46c68ee37917fed6ee27cfc34e1e4cbf94f40f9698d75ebf5a79501816003fb3"
+}

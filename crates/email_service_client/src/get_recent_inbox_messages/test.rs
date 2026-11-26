@@ -168,3 +168,42 @@ async fn a_sent_window_adds_its_folder_to_the_query() {
         Some("days=30&limit=500&texts=100&snippet_chars=500&folder=sent")
     );
 }
+
+#[tokio::test]
+async fn partial_context_keeps_typed_unsupported_mailboxes() {
+    use models_email::email::service::message::UnreadableMailboxReason;
+    let server = MockServer::start().await;
+    let link_id = "00000000-0000-0000-0000-000000000001";
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "messages": [],
+            "unreadable_mailboxes": [{"link_id": link_id, "reason": "unsupported"}]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let client = EmailServiceClient::new("internal-key".to_owned(), server.uri());
+    let response = client
+        .get_inbox_window(
+            "macro|owner@example.com",
+            InboxWindow {
+                folder: RecentMailFolder::Sent,
+                days: 30,
+                limit: 100,
+                texts: 100,
+                snippet_chars: 300,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(response.messages.is_empty());
+    assert_eq!(response.unreadable_mailboxes.len(), 1);
+    assert_eq!(
+        response.unreadable_mailboxes[0].link_id.to_string(),
+        link_id
+    );
+    assert_eq!(
+        response.unreadable_mailboxes[0].reason,
+        UnreadableMailboxReason::Unsupported
+    );
+}

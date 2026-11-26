@@ -58,6 +58,8 @@ pub(crate) struct ApiDependencies {
     pub event_broker_tracker: TaskTracker,
     /// Set from `enable-outlook-notified-message-reads` by the server.
     pub notified_message_reads: email::domain::mailbox::watches::NotifiedMessageReads,
+    /// Default-off grouped-command rollout, shared with every API action writer.
+    pub mailbox_action_chunks: email::domain::models::mailbox_action::MailboxActionChunking,
 }
 
 /// Wires the services for the production listener.
@@ -79,6 +81,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         macro_event_broker,
         event_broker_tracker,
         notified_message_reads,
+        mailbox_action_chunks,
     } = deps;
     let gmail_api_repository = GmailApiClientRepository::new(gmail_client.clone());
 
@@ -107,9 +110,11 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
     );
     let email_service = EmailRouterState::new(
         EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
-                crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
-            )),
+            EmailPgRepo::new(db.clone())
+                .with_rule_discovery(Arc::new(
+                    crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+                ))
+                .with_action_chunking(mailbox_action_chunks.clone()),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             (*sqs_client).clone(),
             crm_service,
@@ -203,6 +208,8 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         )
         .with_outlook_writes_enabled(config.outlook_writes_enabled),
     );
+    let imap_gateway =
+        crate::composition::imap_gateway(db.clone(), config.internal_api_key.as_ref())?;
     let outlook_api: crate::api::context::OutlookApi =
         email_api_client::domain::service::mailbox::MailboxApiService::new(
             email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
@@ -212,7 +219,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
                 ),
             ))?,
             crate::api::context::MicrosoftTokens::new(
-                email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+                email::outbound::mailbox_pg::PgMailboxSync::new(
+                    db.clone(),
+                    email::domain::models::UserProvider::Outlook,
+                ),
                 crate::outbound::email_api::MicrosoftCredentialsClient(
                     auth_service_client.as_ref().clone(),
                 ),
@@ -224,9 +234,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             repository: EmailPgRepo::new(db.clone()),
             bytes: crate::outbound::mailbox_drafts::MailboxDraftContent {
                 provider: crate::outbound::attachment_access::ProviderAttachmentBytes {
+                    imap: imap_gateway.clone(),
                     s3: s3_client.clone(),
                     bucket: config.attachment_bucket.to_string(),
-                    gmail: email_api.clone(),
+                    gmail: crate::outbound::email_api::GmailAttachmentGateway(email_api.clone()),
                     outlook: crate::outbound::email_api::ProviderMailboxGateway(
                         outlook_api.clone(),
                     ),
@@ -280,7 +291,25 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         identity: crate::outbound::inbox_connection::LoginEmailIdentity,
         failure_observer: crate::api::context::InitFailureObserver,
     });
+    let imap_connections = Arc::new(
+        email::domain::mailbox::imap_connection::ImapConnectionService {
+            repository: crate::outbound::imap_connection::PgImapConnections(db.clone()),
+            gateway: crate::outbound::imap_connection::ImapConnectionClient::new(
+                imap_gateway.client.clone(),
+            ),
+            enrollment: crate::composition::imap_enrollment(&config)?,
+        },
+    );
     Ok(ApiContext {
+        imap_notifications: Arc::new(
+            email::domain::mailbox::imap_notifications::ImapNotificationService(
+                email::outbound::mailbox_pg::PgMailboxSync::new(
+                    db.clone(),
+                    email::domain::models::UserProvider::Imap,
+                ),
+            ),
+        ),
+        imap_connections,
         gmail_push: Arc::new(email::domain::mailbox::gmail_push::GmailPushService {
             authentication: email::domain::mailbox::gmail_push::GooglePushAuthentication {
                 cache: crate::outbound::gmail_push::GooglePushKeyCache(redis_client.clone()),
@@ -334,7 +363,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         message_labels: Arc::new(email::domain::message_labels::MessageLabelService {
             repository: crate::outbound::message_labels::PgMessageLabels(
                 db.clone(),
-                EmailPgRepo::new(db.clone()),
+                EmailPgRepo::new(db.clone()).with_action_chunking(mailbox_action_chunks),
             ),
             enqueuer: sqs_client.as_ref().clone(),
             broker: macro_event_broker.clone(),
@@ -351,6 +380,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             },
         }),
         inbox_lifecycle: Arc::new(crate::composition::inbox_lifecycle(
+            imap_gateway.client.clone(),
             email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
                 crate::outbound::email_api::RedisMicrosoftRequestGate::new(
                     redis_conn.clone(),
@@ -364,8 +394,13 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         )),
         mailbox_settings: Arc::new(
             email::domain::mailbox::settings::MailboxSettingsService::new(
-                email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+                email::outbound::mailbox_pg::PgMailboxSync::new(
+                    db.clone(),
+                    email::domain::models::UserProvider::Outlook,
+                ),
                 crate::outbound::mailbox_settings::ProviderMailboxSettings {
+                    db: db.clone(),
+                    imap: imap_gateway.clone(),
                     gmail: email_api.clone(),
                     outlook: outlook_api.clone(),
                 },
@@ -373,23 +408,30 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         ),
         mailbox_notifications: Arc::new(
             email::domain::mailbox::watches::MailboxWatchNotifications::new(
-                email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+                email::outbound::mailbox_pg::PgMailboxSync::new(
+                    db.clone(),
+                    email::domain::models::UserProvider::Outlook,
+                ),
             )
             .with_message_reads(notified_message_reads),
         ),
         inbox_catalog,
         inbox_health: Arc::new(crate::composition::inbox_health(
-            db.clone(),
+            crate::outbound::inbox_health::PgInboxHealth {
+                db: db.clone(),
+                redis: redis_client.as_ref().clone(),
+                queue: sqs_client.as_ref().clone(),
+            },
+            imap_gateway.clone(),
             email_api.clone(),
             auth_service_client.as_ref().clone(),
-            redis_client.as_ref().clone(),
-            sqs_client.as_ref().clone(),
             macro_event_broker.clone(),
             contacts_ingress,
         )),
         recent_inbox: Arc::new(email::domain::recent_inbox::RecentInboxService::new(
             crate::outbound::recent_inbox::PgRecentInboxes(db.clone()),
             crate::outbound::recent_inbox::ProviderRecentInbox {
+                imap: imap_gateway.clone(),
                 gmail: email_api.clone(),
                 gmail_window,
                 outlook: outlook_api.clone(),
@@ -398,6 +440,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         message_sources: Arc::new(email::domain::message_source::MessageSourceService {
             repository: EmailPgRepo::new(db.clone()),
             provider: crate::outbound::message_source::ProviderMessageSource {
+                imap: imap_gateway.clone(),
                 gmail: email_api.clone(),
                 outlook: outlook_api.clone(),
             },
@@ -406,9 +449,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         attachment_reads: Arc::new(email::domain::attachment_access::AttachmentReadService {
             repository: EmailPgRepo::new(db.clone()),
             provider: crate::outbound::attachment_access::ProviderAttachmentBytes {
+                imap: imap_gateway.clone(),
                 s3: s3_client.clone(),
                 bucket: config.attachment_bucket.to_string(),
-                gmail: email_api.clone(),
+                gmail: crate::outbound::email_api::GmailAttachmentGateway(email_api.clone()),
                 outlook: crate::outbound::email_api::ProviderMailboxGateway(outlook_api),
             },
             files: crate::outbound::attachment_access::MailAttachmentFiles {

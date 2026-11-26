@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            next_run_at <= now() AS \"due!\"\n        FROM\n            email_sync_streams\n        WHERE\n            link_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "due!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4a1972498c9dc8c8b80af74091af3fd98a0fd26864cc88faea05d5cb0f57f945"
+}

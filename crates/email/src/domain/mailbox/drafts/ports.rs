@@ -1,5 +1,5 @@
 use super::{
-    super::{MailboxError, MailboxKey},
+    super::{MailboxError, MailboxKey, SyncClaim},
     models::*,
 };
 use email_api_client::domain::models::*;
@@ -11,7 +11,7 @@ pub trait DraftRepository: Send + Sync + 'static {
         &self,
         lease_id: Uuid,
         mode: DraftClaimMode,
-    ) -> impl Future<Output = Result<Option<DraftLease>, MailboxError>> + Send;
+    ) -> impl Future<Output = Result<SyncClaim<DraftLease>, MailboxError>> + Send;
     fn renew_draft(
         &self,
         lease: &DraftLease,
@@ -52,6 +52,14 @@ pub trait DraftRepository: Send + Sync + 'static {
         lease: &DraftLease,
         checkpoint: &DraftCheckpoint,
     ) -> impl Future<Output = Result<DeliveryStart, MailboxError>> + Send;
+    /// Undo delivery admission only after typed local contention proves no provider IO began.
+    /// Save the Ready checkpoint and clear schedule processing/start markers atomically,
+    /// retaining the current command lease for its normal bounded retry release.
+    fn defer_unsubmitted_delivery(
+        &self,
+        lease: &DraftLease,
+        checkpoint: &DraftCheckpoint,
+    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
     /// Commits the sent identity, schedule and event outbox together.
     fn confirm_sent(
         &self,
@@ -142,6 +150,8 @@ pub trait DraftGateway: Send + Sync + 'static {
         total: u64,
         bytes: &[u8],
     ) -> impl Future<Output = Result<UploadProgress, EmailApiError>> + Send;
+    /// RateLimited with Local origin is permitted only before this call performs
+    /// provider IO; the coordinator may then undo admission and retry safely.
     fn submit_draft(
         &self,
         mailbox: MailboxKey,

@@ -54,3 +54,5 @@ preview endpoint.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+Recent-mail responses carry typed `unreadable_mailboxes`; callers must retain or record the partial-context signal while keeping healthy messages. Missing fields from older services default to an empty list.

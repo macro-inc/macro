@@ -14,12 +14,18 @@ fn maps_provider_errors_to_api_statuses() {
             },
             StatusCode::TOO_MANY_REQUESTS,
         ),
+        (
+            EmailApiError::ContentTooLarge,
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ),
         (EmailApiError::AuthRequired, StatusCode::UNAUTHORIZED),
         (EmailApiError::Forbidden, StatusCode::FORBIDDEN),
         (EmailApiError::NotFound, StatusCode::NOT_FOUND),
         (EmailApiError::Conflict, StatusCode::CONFLICT),
         (
             EmailApiError::SendRejected {
+                reason: email_api_client::domain::models::SendRejectionReason::ProviderRejected,
+                refusal: None,
                 message: "message exceeds provider size limit".to_string(),
             },
             StatusCode::BAD_REQUEST,

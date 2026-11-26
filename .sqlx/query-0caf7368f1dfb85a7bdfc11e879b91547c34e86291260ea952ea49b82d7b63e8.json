@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE\n                    email_links\n                SET\n                    mailbox_issue = $2,\n                    mailbox_retry_at = $3,\n                    updated_at = now()\n                WHERE\n                    id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0caf7368f1dfb85a7bdfc11e879b91547c34e86291260ea952ea49b82d7b63e8"
+}

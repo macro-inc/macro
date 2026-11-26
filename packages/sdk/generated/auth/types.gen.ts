@@ -760,6 +760,10 @@ export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'o
 export type EmailConnectionProviders = {
     gmail: boolean;
     /**
+     * Whether the user may connect a mailbox with IMAP and SMTP.
+     */
+    imap: boolean;
+    /**
      * Whether this user may start a new Outlook connection: the deployment
      * switch and their `enable-outlook` flag.
      */

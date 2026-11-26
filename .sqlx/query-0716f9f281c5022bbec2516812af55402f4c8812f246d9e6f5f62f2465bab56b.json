@@ -1,0 +1,87 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Inspect one due candidate before target work. The caller shares one target\n-- budget across candidates and stops at its first lease or an exhausted budget.\nWITH keys AS MATERIALIZED (SELECT $3::uuid AS id),\neligible AS MATERIALIZED (\n    SELECT c.*, parent.grant_generation\n    FROM keys k CROSS JOIN LATERAL (\n        SELECT * FROM email_mailbox_commands c WHERE c.id=k.id LIMIT 1\n    ) c CROSS JOIN LATERAL (\n        SELECT l.grant_generation FROM email_links l\n        WHERE l.id=c.link_id AND l.sync_generation=c.generation\n            AND l.is_sync_active AND l.mailbox_unavailable_at IS NULL\n            AND l.provider=$2::text::email_user_provider_enum\n            AND l.provider=c.provider LIMIT 1\n    ) parent\n    WHERE c.status IN ('pending','running')\n        AND c.intent->>'kind' IN ('read','flagged','archived','trashed','junk','category')\n        AND c.parked_at IS NULL\n        AND GREATEST(c.available_at,COALESCE(c.lease_until,'-infinity'::timestamptz),COALESCE(c.blocked_until,'-infinity'::timestamptz))<=now()\n        AND (c.lease_until IS NULL OR c.lease_until<now())\n),\ncandidate AS MATERIALIZED (\n    SELECT * FROM eligible c\n    ORDER BY GREATEST(c.available_at,COALESCE(c.lease_until,'-infinity'::timestamptz),COALESCE(c.blocked_until,'-infinity'::timestamptz)),c.id LIMIT 1\n),\nsized AS MATERIALIZED (\n    SELECT c.*, (SELECT count(*) FROM (\n        SELECT 1 FROM email_mailbox_command_targets t WHERE t.command_id=c.id\n        LIMIT ($6::bigint+1)\n    ) targets) AS target_count\n    FROM candidate c\n),\npermitted AS MATERIALIZED (\n    SELECT c.*,\n        (c.action_id IS NULL AND c.target_count>$6::bigint) AS legacy_wide,\n        ((c.target_count<=$6::bigint AND c.target_count<=$4::bigint)\n            OR (c.action_id IS NULL AND c.target_count>$6::bigint AND $5::bool)) AS evaluate\n    FROM sized c\n),\nchecked AS MATERIALIZED (\n    SELECT c.*,\n        EXISTS (SELECT 1 FROM email_mailbox_command_targets current\n            CROSS JOIN LATERAL (\n                SELECT earlier.command_id FROM email_mailbox_command_targets earlier\n                CROSS JOIN LATERAL (\n                    SELECT id FROM email_mailbox_commands prior WHERE prior.id=earlier.command_id\n                        AND prior.link_id=c.link_id AND prior.generation=c.generation\n                        AND prior.status IN ('pending','running','confirming')\n                        AND prior.accepted_order<c.accepted_order LIMIT 1\n                ) parent\n                WHERE earlier.message_id=current.message_id\n                    AND earlier.parent_link_id=c.link_id\n                    AND earlier.parent_generation=c.generation\n                    AND earlier.parent_unfinished\n                    AND earlier.parent_accepted_order<c.accepted_order\n                ORDER BY earlier.parent_accepted_order,earlier.command_id LIMIT 1\n            ) earlier\n            WHERE current.command_id=c.id\n        )\n        OR EXISTS (SELECT 1 FROM email_mailbox_command_targets t\n            JOIN email_mailbox_drafts draft ON draft.message_id=t.message_id\n            WHERE t.command_id=c.id AND draft.lease_id IS NOT NULL\n                AND draft.lease_until>now() OFFSET 0)\n        OR (c.intent->>'kind'='category' AND EXISTS (\n            SELECT 1 FROM email_mailbox_settings_work s\n            WHERE s.link_id=c.link_id AND s.kind='create_label'\n                AND s.resource_key=c.intent->'value'->>'name'\n                AND s.completed_revision<s.revision)) AS dependency_blocked\n    FROM permitted c WHERE c.evaluate\n),\nblocked AS (\n    UPDATE email_mailbox_commands c SET blocked_until=now()+interval '60 seconds'\n    FROM checked q WHERE c.id=q.id AND q.dependency_blocked\n    RETURNING c.id\n),\nclaimed AS (\n    UPDATE email_mailbox_commands c\n    SET lease_id=$1,lease_until=now()+interval '3 minutes',status='running',\n        attempts=c.attempts+1,updated_at=now()\n    FROM checked q WHERE c.id=q.id AND NOT q.dependency_blocked\n    RETURNING c.id\n)\nSELECT c.id AS \"id!\",c.link_id AS \"link_id!\",c.generation AS \"generation!\",\n    c.grant_generation AS \"grant_generation!\",c.intent AS \"intent!\",c.attempts+CASE WHEN EXISTS(SELECT 1 FROM claimed) THEN 1 ELSE 0 END AS \"attempts!\",\n    c.target_count AS \"target_count!\",c.legacy_wide AS \"legacy_wide!\",\n    NOT c.evaluate AS \"budget_exhausted!\",\n    EXISTS(SELECT 1 FROM claimed) AS \"leased!\",\n    EXISTS(SELECT 1 FROM blocked) AS \"blocked!\"\nFROM permitted c\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "generation!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_generation!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "intent!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "attempts!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "target_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "legacy_wide!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "budget_exhausted!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "leased!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "blocked!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8",
+        "Bool",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "0716f9f281c5022bbec2516812af55402f4c8812f246d9e6f5f62f2465bab56b"
+}

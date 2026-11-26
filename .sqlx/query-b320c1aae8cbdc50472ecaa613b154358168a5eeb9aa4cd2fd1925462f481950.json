@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_links (\n            id, macro_id, fusionauth_user_id, email_address, provider,\n            is_sync_active, needs_reauth, sync_generation, grant_generation\n        )\n        SELECT\n            id,\n            'macro|catchup-' || n::text || '@example.com',\n            'catchup-owner-' || n::text,\n            'catchup-' || n::text || '@example.com',\n            (CASE WHEN n = 5 THEN 'OUTLOOK' ELSE 'IMAP' END)::email_user_provider_enum,\n            n <> 3,\n            n = 4,\n            CASE WHEN n = 1 THEN 2 ELSE 1 END,\n            1\n        FROM unnest($1::uuid[]) WITH ORDINALITY AS links(id, n)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b320c1aae8cbdc50472ecaa613b154358168a5eeb9aa4cd2fd1925462f481950"
+}

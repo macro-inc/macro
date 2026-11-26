@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_projection_unpark_sweep SET link_after=$1,available_at=now()+interval '5 minutes',last_completed_at=now() WHERE id=true",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "38fe813601e78db5089aef4c82361a2a4a1ce0817cedc176e174ea71b00e0777"
+}

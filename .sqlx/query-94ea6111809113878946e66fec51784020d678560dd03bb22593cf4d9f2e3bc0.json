@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH locked AS MATERIALIZED (\n            SELECT id, completed, lease_id, lease_until\n            FROM email_imap_connection_attempts\n            WHERE id = $1 AND user_id = $2\n            FOR UPDATE\n        )\n        UPDATE email_imap_connection_attempts a\n        SET recovery_at = GREATEST(a.created_at + interval '2 minutes',\n                now() + $4::bigint * interval '1 second'),\n            lease_id = NULL,\n            lease_until = NULL,\n            updated_at = now()\n        FROM locked\n        WHERE a.id = $1 AND a.id = locked.id\n            AND NOT locked.completed\n            AND locked.lease_id = $3\n            AND locked.lease_until > now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "94ea6111809113878946e66fec51784020d678560dd03bb22593cf4d9f2e3bc0"
+}

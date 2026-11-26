@@ -21,9 +21,6 @@ pub const NOTIFIED_MESSAGE_READS_FLAG: &str = "enable-outlook-notified-message-r
 /// The service identity every Outlook sync flag is evaluated for.
 const OUTLOOK_SYNC_CONTEXT: ServiceContext = ServiceContext::new("outlook-mailbox-sync");
 
-/// How often a flag is read.
-const REFRESH: Duration = Duration::from_secs(60);
-
 /// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 
@@ -72,61 +69,17 @@ pub struct OutlookFlag<S> {
 pub async fn run<F, S>(flags: Option<F>, flag: OutlookFlag<S>, cancellation: CancellationToken)
 where
     F: ServiceFeatureFlags,
-    S: Fn(bool) -> bool,
+    S: Fn(bool) -> bool + Send + Sync,
 {
-    let Some(flags) = flags else {
-        tracing::warn!(
-            flag = flag.key,
-            "no PostHog project key; the {} stays off",
-            flag.name
-        );
-        return;
-    };
-    let mut interval = tokio::time::interval(REFRESH);
-    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    let mut failing = false;
-    loop {
-        tokio::select! {
-            biased;
-            _ = cancellation.cancelled() => return,
-            _ = interval.tick() => {},
-        }
-        tokio::select! {
-            biased;
-            _ = cancellation.cancelled() => return,
-            read = refresh(&flags, &flag, failing) => failing = !read,
-        }
-    }
-}
-
-/// One read of the flag; returns whether it succeeded.
-#[tracing::instrument(
-    name = "outlook.feature_flag.refresh",
-    skip_all,
-    fields(feature_flag.key = flag.key, feature_flag.enabled = tracing::field::Empty)
-)]
-async fn refresh<F, S>(flags: &F, flag: &OutlookFlag<S>, failing: bool) -> bool
-where
-    F: ServiceFeatureFlags,
-    S: Fn(bool) -> bool,
-{
-    let (enabled, read) = match flags.load_service(OUTLOOK_SYNC_CONTEXT).await {
-        Ok(snapshot) => (snapshot.is_enabled(flag.key), true),
-        Err(error) => {
-            if !failing {
-                tracing::warn!(
-                    error = ?error,
-                    flag = flag.key,
-                    "could not read the {} flag; it is off",
-                    flag.name
-                );
-            }
-            (false, false)
-        }
-    };
-    tracing::Span::current().record("feature_flag.enabled", enabled);
-    if (flag.set)(enabled) != enabled {
-        tracing::info!(flag = flag.key, enabled, "{} switched", flag.name);
-    }
-    read
+    feature_flags::polling::run(
+        flags,
+        feature_flags::polling::DefaultOffFlag {
+            key: flag.key,
+            name: flag.name,
+            context: OUTLOOK_SYNC_CONTEXT,
+            set: flag.set,
+        },
+        cancellation.cancelled_owned(),
+    )
+    .await;
 }

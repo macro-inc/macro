@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_sync_streams\n        SET provider_retry_at = now() - interval '1 second', next_run_at = now() - interval '1 second'\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a4082a025010c8836c6ee25e32b96a3e369ba4a211e26ace168c3e42e597c6fb"
+}

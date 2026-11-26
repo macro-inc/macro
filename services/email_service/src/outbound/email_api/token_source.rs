@@ -226,12 +226,15 @@ fn token_health_action(
 ///
 /// A failed clear is logged and swallowed: the next acquisition retries it.
 async fn clear_stale_reauth_flag(db: &PgPool, link_id: Uuid) {
-    email_db_client::links::update::clear_link_needs_reauth(db, link_id)
+    let cleared = email_db_client::links::update::clear_link_needs_reauth(db, link_id)
         .await
         .inspect_err(|error| {
             tracing::warn!(error=?error, %link_id, "Failed to clear needs_reauth after successful token fetch");
         })
-        .ok();
+        .is_ok();
+    if cleared {
+        email::outbound::mailbox_pg::parked_work_recovery::resume_link(db, link_id).await;
+    }
 }
 
 /// Token source that returns one preconfigured access token.

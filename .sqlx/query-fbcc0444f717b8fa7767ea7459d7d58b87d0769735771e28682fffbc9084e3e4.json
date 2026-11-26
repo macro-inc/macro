@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE\n                imap_accounts\n            SET\n                state = CASE WHEN folder_preferences_revision = $8\n                    THEN $6::jsonb ELSE $6::jsonb - 'sync_retry_at' END,\n                revision = revision + 1,\n                lease_until = now() + make_interval(secs => $7::double precision),\n                updated_at = now()\n            WHERE\n                link_id = $1\n                AND sync_generation = $2\n                AND grant_generation = $3\n                AND lease_id = $4\n                AND revision = $5\n                AND (NOT $9 OR folder_preferences_revision = $8)\n                AND lease_until > now()\n                AND EXISTS (\n                    SELECT\n                        1\n                    FROM\n                        email_links l\n                    WHERE\n                        l.id = imap_accounts.link_id\n                        AND l.macro_id = imap_accounts.user_id\n                        AND l.provider = 'IMAP'\n                        AND l.is_sync_active\n                        AND NOT l.needs_reauth\n                        AND l.sync_generation = imap_accounts.sync_generation\n                        AND l.grant_generation = imap_accounts.grant_generation)\n            RETURNING\n                revision\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Uuid",
+        "Int8",
+        "Jsonb",
+        "Float8",
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fbcc0444f717b8fa7767ea7459d7d58b87d0769735771e28682fffbc9084e3e4"
+}

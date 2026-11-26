@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)\n        VALUES\n            ($3, $2, 'TO'),\n            ($3, $1, 'TO')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6d8414b948c99c91dbd6caad234e32564591f0d7f85d9caf2a8578bff45443ef"
+}

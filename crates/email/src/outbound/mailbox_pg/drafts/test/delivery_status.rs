@@ -9,6 +9,7 @@ async fn claim(sync: &PgMailboxSync) -> DraftLease {
     )
     .await
     .unwrap()
+    .into_lease()
     .unwrap()
 }
 
@@ -16,7 +17,7 @@ fn actor() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(ACTOR).unwrap()
 }
 
-async fn submitted_send(db: &PgPool) -> (PgMailboxSync, EmailPgRepo, DraftLease, Uuid) {
+pub(super) async fn submitted_send(db: &PgPool) -> (PgMailboxSync, EmailPgRepo, DraftLease, Uuid) {
     let (sync, repo, input, link) = setup(db, true).await;
     sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id,processing) VALUES ($1,$2,now(),$3,true)",link,input.db_id,ACTOR).execute(db).await.unwrap();
     sqlx::query!("INSERT INTO email_send_attempts (user_id,link_id,attempt_id,message_id,thread_id,send_time) VALUES ($1,$2,$3,$4,$5,now())",ACTOR,link,Uuid::now_v7(),input.db_id,input.thread_db_id).execute(db).await.unwrap();
@@ -60,6 +61,114 @@ async fn routine_outlook_confirmation_reads_as_sending_until_delivery_is_unknown
     assert_eq!(
         pending_status(&repo, link).await,
         SendAttemptStatus::DeliveryUnconfirmed
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn definite_pre_data_refusal_reports_failed_and_is_not_claimed_again(db: PgPool) {
+    let (sync, repo, lease, link) = submitted_send(&db).await;
+    let attempt = pending_attempt(&repo, link).await.attempt_id;
+    sync.fail_draft(&lease, DraftFailure::SendRejected)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.read_send_attempt(&actor(), link, attempt, None)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        SendAttemptStatus::Failed,
+    );
+    assert!(
+        sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deliberate_retry_does_not_project_the_previous_send_rejection_reason(db: PgPool) {
+    use crate::domain::models::mailbox_operation::*;
+
+    let (sync, repo, lease, _) = submitted_send(&db).await;
+    let mut checkpoint = checkpoint(&lease, DraftStage::Submitting);
+    checkpoint.send_rejection_reason = Some(SendRejectionReason::ProviderRejected);
+    checkpoint.send_refusal = Some(SubmissionRefusal {
+        phase: SubmissionRefusalPhase::Recipient,
+        recipient_index: Some(0),
+        reply_class: Some(SubmissionRefusalClass::Permanent),
+    });
+    sync.checkpoint_draft(&lease, &checkpoint).await.unwrap();
+    sync.fail_draft(&lease, DraftFailure::SendRejected)
+        .await
+        .unwrap();
+    let facts = repo
+        .message_operation_facts(&[lease.message_id])
+        .await
+        .unwrap()
+        .remove(&lease.message_id)
+        .unwrap();
+    assert_eq!(
+        MessageOperationStatus::from(facts.clone())
+            .send_rejection
+            .and_then(|rejection| rejection.reason),
+        Some(SendRejectionReason::ProviderRejected)
+    );
+    assert_eq!(
+        MessageOperationStatus::from(facts.clone())
+            .send_rejection
+            .and_then(|rejection| rejection.refusal),
+        checkpoint.send_refusal
+    );
+    let retry = plan_resolution(
+        facts.clone(),
+        MessageResolutionRequest {
+            message_id: lease.message_id,
+            revision: facts.revision,
+            remote_version: facts.remote_version,
+            action: MessageResolutionAction::RetrySend,
+            accept_duplicate_risk: false,
+        },
+    )
+    .unwrap();
+    repo.commit_message_resolution(&actor(), retry)
+        .await
+        .unwrap();
+    let status = MessageOperationStatus::from(
+        repo.message_operation_facts(&[lease.message_id])
+            .await
+            .unwrap()
+            .remove(&lease.message_id)
+            .unwrap(),
+    );
+    assert_eq!(status.state, MessageOperationState::Pending);
+    assert_eq!(status.issue, None);
+    assert!(status.send_rejection.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn confirmed_delivery_reports_sent_and_is_not_claimed_again(db: PgPool) {
+    let (sync, repo, lease, link) = submitted_send(&db).await;
+    let attempt = pending_attempt(&repo, link).await.attempt_id;
+    let mut cp = checkpoint(&lease, DraftStage::Confirming);
+    cp.draft.as_mut().unwrap().is_draft = false;
+    sync.confirm_sent(&lease, &cp).await.unwrap();
+    assert_eq!(
+        repo.read_send_attempt(&actor(), link, attempt, None)
+            .await
+            .unwrap()
+            .unwrap()
+            .status,
+        SendAttemptStatus::Sent,
+    );
+    assert!(
+        sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none()
     );
 }
 

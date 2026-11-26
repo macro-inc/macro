@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_imap_host_catchup_deferred (\n                stream_id,\n                available_at,\n                attempts\n            )\n            SELECT\n                id,\n                clock_timestamp() + interval '30 seconds',\n                1\n            FROM\n                unnest($1::uuid[]) AS rows(id)\n            ON CONFLICT\n                (stream_id)\n            DO UPDATE SET\n                attempts = LEAST(email_imap_host_catchup_deferred.attempts + 1, 1000000),\n                available_at = clock_timestamp() + make_interval(secs => LEAST(\n                    30 * power(2, LEAST(email_imap_host_catchup_deferred.attempts, 4)), 300\n                ))\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "620a8c1b89365ba41467edf5b0d4b250ef9dbd3a401963230b7ced658e8c6f32"
+}

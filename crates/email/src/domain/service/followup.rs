@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     followup::{EmailFollowupMailbox, EmailFollowupRepo, FollowupThread, ReminderThreadFilter},
-    models::{EmailErr, UserProvider, label::system_labels},
+    models::{EmailErr, label::system_labels},
     ports::{EmailMessageEnqueuer, EmailRepo},
 };
 use frecency::domain::ports::FrecencyQueryService;
@@ -158,7 +158,7 @@ where
         if messages.is_empty() {
             return Ok(None);
         }
-        let unavailable = if link.provider == UserProvider::Outlook {
+        let unavailable = if link.provider.uses_mailbox_framework() {
             self.email_repo
                 .mailbox_action_messages(link.id, thread_id)
                 .await

@@ -255,7 +255,9 @@ async fn user_inbox_details_maps_enriched_owned_inbox(pool: Pool<Postgres>) -> a
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
-async fn user_inbox_details_reports_the_calendar_grant(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn user_inbox_details_reports_a_disabled_calendar_as_needing_permission(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let scopes = calendar_events::domain::models::GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
     sqlx::query!(
@@ -274,7 +276,7 @@ async fn user_inbox_details_reports_the_calendar_grant(pool: Pool<Postgres>) -> 
         .await?;
 
     let inbox = &details[0];
-    assert!(!inbox.needs_calendar_permission);
+    assert!(inbox.needs_calendar_permission);
     assert!(inbox.calendar_disabled);
     assert!(!inbox.has_calendar_data);
     Ok(())

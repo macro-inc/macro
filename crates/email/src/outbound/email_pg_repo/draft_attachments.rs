@@ -86,6 +86,7 @@ impl DraftAttachmentRepository for EmailPgRepo {
         let provider = match mailbox.provider.as_str() {
             "GMAIL" => UserProvider::Gmail,
             "OUTLOOK" => UserProvider::Outlook,
+            "IMAP" => UserProvider::Imap,
             _ => return Err(AttachmentError::Infrastructure),
         };
         let total=sqlx::query_scalar!(r#"
@@ -242,7 +243,7 @@ impl DraftAttachmentRepository for EmailPgRepo {
         super::draft::snapshot_outlook_draft(&mut tx, draft, link, actor)
             .await
             .map_err(db_error)?;
-        if provider == UserProvider::Outlook {
+        if provider.uses_mailbox_framework() {
             let payload = serde_json::json!({"kind":"organization","thread_id":message.thread_id});
             sqlx::query!("INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,$3,$4)",macro_uuid::generate_uuid_v7(),link,mailbox.sync_generation,payload).execute(&mut *tx).await.map_err(db_error)?;
         }

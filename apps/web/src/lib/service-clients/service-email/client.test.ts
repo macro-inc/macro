@@ -1,4 +1,4 @@
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { expect, it, vi } from 'vitest';
 
 const fetchWithToken = vi.hoisted(() => vi.fn());
@@ -13,12 +13,42 @@ vi.mock('@core/util/fetchWithToken', () => ({ fetchWithToken }));
 
 import { emailClient } from './client';
 
+it.each([
+  ['credentials_unreadable', 'credentials_unreadable'],
+  ['not_found', 'not_found'],
+  ['toString', 'connection_unavailable'],
+])(
+  'surfaces IMAP refusal %s without forwarding the response message',
+  async (code, expected) => {
+    fetchWithToken.mockImplementationOnce(async (_url, init) => {
+      const failure = await init.errorResponseHandler(
+        Response.json(
+          { code, message: 'provider response details' },
+          { status: 503 }
+        )
+      );
+      return err([failure]);
+    });
+
+    const result = await emailClient.imapDiscover(new AbortController().signal);
+
+    expect(result._unsafeUnwrapErr()).toMatchObject([{ code: expected }]);
+    expect(result._unsafeUnwrapErr()[0].message).not.toContain(
+      'provider response details'
+    );
+  }
+);
+
 it('scopes settings polling to the inbox and adds the email host once', async () => {
   fetchWithToken.mockResolvedValue(ok([]));
   await emailClient.settingsOperations('inbox-1');
   expect(fetchWithToken).toHaveBeenCalledWith(
     'https://gateway.example/email/email/settings/operations',
-    { headers: { 'X-Email-Link-Id': 'inbox-1' } }
+    {
+      headers: { 'X-Email-Link-Id': 'inbox-1' },
+      trace: { parentSpan: expect.any(Object) },
+      errorResponseFilter: expect.any(Function),
+    }
   );
 });
 
@@ -70,3 +100,134 @@ it.each([
   const failure = await initFailure(409, body);
   expect(failure.code).toBe('HTTP_ERROR');
 });
+
+it.each([
+  ['attachment', () => emailClient.getAttachmentUrl({ id: 'attachment-1' })],
+  ['source', () => emailClient.getMessageEml({ message_id: 'message-1' })],
+])(
+  'describes unsupported content on the %s path without provider text',
+  async (_, read) => {
+    fetchWithToken.mockImplementationOnce(async (_input, options) =>
+      err([
+        await options.errorResponseFilter(
+          new Response(
+            JSON.stringify({
+              code: 'message_too_large',
+              message: 'untrusted provider detail',
+            }),
+            { status: 413 }
+          )
+        ),
+      ])
+    );
+    const result = await read();
+    expect(result.isErr()).toBe(true);
+    if (result.isErr())
+      expect(result.error[0].message).toBe(
+        'This message is too large to open in Macro (over 25 MB).'
+      );
+  }
+);
+
+it.each([
+  ['message detail', () => emailClient.getMessage({ message_id: 'message-1' })],
+  [
+    'send request',
+    () => emailClient.sendMessage({ message: { subject: 'Synthetic send' } }),
+  ],
+])('leaves a generic 413 on the %s path', async (_, request) => {
+  fetchWithToken.mockImplementationOnce(async (_input, options) => {
+    const failure = await options.errorResponseFilter(
+      new Response(null, { status: 413 })
+    );
+    return err([
+      failure ?? { code: 'HTTP_ERROR', message: 'HTTP error! status: 413' },
+    ]);
+  });
+
+  const result = await request();
+  expect(result._unsafeUnwrapErr()[0].message).toBe('HTTP error! status: 413');
+});
+
+it('retries a busy label action once after the capped retry delay', async () => {
+  vi.useFakeTimers();
+  fetchWithToken.mockClear();
+  const refused = async (
+    _input: string,
+    options: {
+      errorResponseFilter: (
+        response: Response
+      ) => Promise<{ code: string; message: string }>;
+    }
+  ) =>
+    err([
+      await options.errorResponseFilter(
+        new Response('', { status: 429, headers: { 'Retry-After': '99' } })
+      ),
+    ]);
+  fetchWithToken
+    .mockImplementationOnce(refused)
+    .mockImplementationOnce(refused);
+  try {
+    const result = emailClient.updateMessageLabelBatch({
+      message_ids: ['message-1'],
+      label_id: 'UNREAD',
+      value: false,
+    });
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(fetchWithToken).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    const settled = await result;
+    expect(fetchWithToken).toHaveBeenCalledTimes(2);
+    expect(settled.isErr()).toBe(true);
+    if (settled.isErr())
+      expect(settled.error[0].message).toBe('Mailbox is busy, try again.');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('never retries a send when the server responds busy', async () => {
+  fetchWithToken.mockClear();
+  fetchWithToken.mockImplementationOnce(async (_input, options) =>
+    err([
+      await options.errorResponseFilter(
+        new Response('', { status: 429, headers: { 'Retry-After': '0' } })
+      ),
+    ])
+  );
+  const result = await emailClient.sendMessage({
+    message: { subject: 'Synthetic send' },
+  });
+  expect(result.isErr()).toBe(true);
+  expect(fetchWithToken).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  [
+    'retry-send resolution',
+    () =>
+      emailClient.resolveMessageOperation('message-1', {
+        action: 'retry_send',
+        revision: '7',
+        accept_duplicate_risk: true,
+      }),
+  ],
+  ['sync request', () => emailClient.startSync()],
+])(
+  'does not replay an unapproved %s after a busy response',
+  async (_, write) => {
+    fetchWithToken.mockClear();
+    fetchWithToken.mockResolvedValue(ok({}));
+    fetchWithToken.mockImplementationOnce(async (_input, options) =>
+      err([
+        await options.errorResponseFilter(
+          new Response('', { status: 429, headers: { 'Retry-After': '0' } })
+        ),
+      ])
+    );
+    const result = await write();
+    expect(result.isErr()).toBe(true);
+    expect(fetchWithToken).toHaveBeenCalledTimes(1);
+  }
+);

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM\n            email_message_recipients\n        WHERE\n            message_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9ae9ff22f0dfe83fbc298609d37cd38bdf44f62a19b9f8727f40766aed0bdc37"
+}

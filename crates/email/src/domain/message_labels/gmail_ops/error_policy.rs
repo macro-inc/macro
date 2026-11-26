@@ -35,6 +35,7 @@ fn error_policy(error: &EmailApiError) -> ErrorPolicy {
         | EmailApiError::Conflict
         | EmailApiError::OutdatedCursor
         | EmailApiError::SendRejected { .. }
+        | EmailApiError::ContentTooLarge
         | EmailApiError::Permanent { .. } => ErrorPolicy::Permanent,
     }
 }
@@ -103,6 +104,7 @@ fn processing_error(error: EmailApiError, retryable: bool) -> ProcessingError {
         | EmailApiError::NotFound
         | EmailApiError::Conflict
         | EmailApiError::SendRejected { .. }
+        | EmailApiError::ContentTooLarge
         | EmailApiError::Permanent { .. } => FailureReason::GmailApiFailed,
     };
     let detail = DetailedError {

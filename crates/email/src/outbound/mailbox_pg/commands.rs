@@ -1,3 +1,5 @@
+use super::mutation_claims::{MutationAcquirer, MutationStep, MutationWindow};
+use super::quarantine::{QuarantineReason, QuarantinedWork, record_quarantine};
 use super::*;
 use crate::domain::mailbox::commands::*;
 use crate::domain::models::label::LabelsGained;
@@ -38,76 +40,251 @@ impl PgMailboxSync {
 
     async fn update_command_projection(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-        lease: &CommandLease,
+        mailbox: MailboxKey,
         message_id: Uuid,
         labels_gained: Option<LabelsGained>,
     ) -> Result<(), MailboxError> {
-        let row = sqlx::query!(r#"
+        if let Some(thread) = Self::restore_message_flags(tx, mailbox.link_id, message_id).await? {
+            Self::publish_command_projection(tx, mailbox, thread, labels_gained).await?;
+        }
+        Ok(())
+    }
+
+    async fn restore_message_flags(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        link_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<Option<Uuid>, MailboxError> {
+        sqlx::query_scalar!(r#"
             UPDATE email_messages m SET
                 is_read = COALESCE((SELECT (desired #>> '{}')::boolean FROM email_pending_mailbox_state WHERE message_id = m.id AND attribute = 'is_read'),(m.mailbox_state->>'is_read')::boolean,m.is_read),
                 is_starred = COALESCE((SELECT (desired #>> '{}')::boolean FROM email_pending_mailbox_state WHERE message_id = m.id AND attribute = 'is_flagged'),(m.mailbox_state->>'is_flagged')::boolean,m.is_starred)
             WHERE m.id = $1 AND m.link_id = $2 RETURNING m.thread_id
-        "#,message_id,lease.mailbox.link_id).fetch_optional(&mut **tx).await.map_err(db_error)?;
-        if let Some(row) = row {
-            email_db_client::threads::update::recompute_thread_metadata(
-                tx,
-                row.thread_id,
-                lease.mailbox.link_id,
-            )
+        "#,message_id,link_id).fetch_optional(&mut **tx).await.map_err(db_error)
+    }
+
+    async fn publish_command_projection(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        mailbox: MailboxKey,
+        thread: Uuid,
+        labels_gained: Option<LabelsGained>,
+    ) -> Result<(), MailboxError> {
+        email_db_client::threads::update::recompute_thread_metadata(tx, thread, mailbox.link_id)
             .await
             .map_err(db_error)?;
-            let payload = serde_json::json!({"kind":"organization","thread_id":row.thread_id,
-                "labels_gained":labels_gained,"traceparent":crate::trace_context::current()});
-            sqlx::query!("INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,$3,$4)",macro_uuid::generate_uuid_v7(),lease.mailbox.link_id,lease.mailbox.sync_generation,payload).execute(&mut **tx).await.map_err(db_error)?;
-        }
+        let payload = serde_json::json!({"kind":"organization","thread_id":thread,
+            "labels_gained":labels_gained,"traceparent":crate::trace_context::current()});
+        sqlx::query!(
+            "INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,$3,$4)",
+            macro_uuid::generate_uuid_v7(), mailbox.link_id, mailbox.sync_generation, payload
+        ).execute(&mut **tx).await.map_err(db_error)?;
         Ok(())
+    }
+
+    /// Drain one bounded page outside the provider-global claim transaction.
+    /// A failed cleanup saves its next retry time, even when projection fails.
+    pub(super) async fn cleanup_command_quarantine(&self) -> Result<(), MailboxError> {
+        use sqlx::Acquire;
+        use std::time::Duration;
+
+        const PAGE_SIZE: i64 = 32;
+        let mut tx = self.begin().await.map_err(db_error)?;
+        sqlx::query!("SET LOCAL statement_timeout = '100ms'")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        let Some(row) = sqlx::query!(
+            r#"
+            SELECT q.work_id,q.link_id,l.sync_generation,l.grant_generation
+            FROM email_mailbox_work_quarantine q
+            JOIN email_links l ON l.id=q.link_id
+            WHERE q.work='commands' AND q.cleanup_at<=now()
+            ORDER BY q.cleanup_at,q.work_id
+            LIMIT 1 FOR UPDATE OF q SKIP LOCKED
+            "#
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_error)?
+        else {
+            return Ok(());
+        };
+        let mailbox = MailboxKey {
+            link_id: row.link_id,
+            sync_generation: row.sync_generation,
+            grant_generation: row.grant_generation,
+        };
+        let mut cleanup = tx.begin().await.map_err(db_error)?;
+        let page = tokio::time::timeout(Duration::from_millis(300), async {
+            let removed = sqlx::query_scalar!(
+                r#"
+                WITH batch AS MATERIALIZED (
+                    SELECT message_id,attribute FROM email_pending_mailbox_state
+                    WHERE command_id=$1 LIMIT $2
+                )
+                DELETE FROM email_pending_mailbox_state p USING batch b
+                WHERE p.command_id=$1 AND p.message_id=b.message_id AND p.attribute=b.attribute
+                RETURNING p.message_id
+                "#,
+                row.work_id,
+                PAGE_SIZE,
+            )
+            .fetch_all(&mut *cleanup)
+            .await
+            .map_err(db_error)?;
+            let page_full = removed.len() == PAGE_SIZE as usize;
+            let mut threads = std::collections::BTreeSet::new();
+            for message in removed
+                .into_iter()
+                .collect::<std::collections::BTreeSet<_>>()
+            {
+                if let Some(thread) =
+                    Self::restore_message_flags(&mut cleanup, mailbox.link_id, message).await?
+                {
+                    threads.insert(thread);
+                }
+            }
+            for thread in threads {
+                Self::publish_command_projection(&mut cleanup, mailbox, thread, None).await?;
+            }
+            Ok::<_, MailboxError>(page_full)
+        })
+        .await;
+        let (more, failed) = match page {
+            Ok(Ok(more)) => {
+                cleanup.commit().await.map_err(db_error)?;
+                (more, false)
+            }
+            error => {
+                cleanup.rollback().await.map_err(db_error)?;
+                tracing::warn!(work_id = %row.work_id, ?error, "Quarantined mailbox command cleanup deferred");
+                (true, true)
+            }
+        };
+        sqlx::query!(
+            r#"
+            UPDATE email_mailbox_work_quarantine
+            SET cleanup_at=CASE WHEN $2 THEN now()+interval '30 seconds'
+                WHEN $3 THEN now() END
+            WHERE work='commands' AND work_id=$1
+            "#,
+            row.work_id,
+            failed,
+            more,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
+        tx.commit().await.map_err(db_error)
     }
 }
 
-impl MailboxCommandRepository for PgMailboxSync {
-    async fn claim_command(&self, lease_id: Uuid) -> Result<Option<CommandLease>, MailboxError> {
-        let mut tx = self.mutation_claim_transaction().await?;
-        let row = sqlx::query!(r#"
-            WITH candidate AS (
-                SELECT c.id FROM email_mailbox_commands c JOIN email_links l ON l.id = c.link_id
-                WHERE l.is_sync_active AND l.mailbox_unavailable_at IS NULL AND l.provider = 'OUTLOOK' AND c.generation = l.sync_generation
-                    AND c.status IN ('pending','running') AND c.available_at <= now()
-                    AND (c.lease_until IS NULL OR c.lease_until < now())
-                    AND c.intent->>'kind' IN ('read','flagged','archived','trashed','junk','category')
-                    AND (c.intent->>'kind'<>'category' OR NOT EXISTS(SELECT 1 FROM email_mailbox_settings_work s
-                        WHERE s.link_id=c.link_id AND s.kind='create_label' AND s.resource_key=c.intent->'value'->>'name'
-                        AND s.completed_revision<s.revision))
-                    AND NOT EXISTS (SELECT 1 FROM email_mailbox_command_targets target JOIN email_mailbox_drafts draft ON draft.message_id=target.message_id
-                        WHERE target.command_id=c.id AND draft.lease_until>now() AND draft.lease_id IS NOT NULL)
-                    AND NOT EXISTS (SELECT 1 FROM email_mailbox_commands prior
-                        WHERE prior.link_id = c.link_id AND prior.generation = c.generation
-                            AND prior.status IN ('pending','running','confirming')
-                            AND prior.accepted_order < c.accepted_order
-                            AND EXISTS(SELECT 1 FROM email_mailbox_command_targets earlier JOIN email_mailbox_command_targets current
-                                ON current.message_id=earlier.message_id WHERE earlier.command_id=prior.id AND current.command_id=c.id))
-                ORDER BY c.available_at,c.id LIMIT 1 FOR UPDATE OF c SKIP LOCKED
-            )
-            UPDATE email_mailbox_commands c SET lease_id = $1,lease_until = now() + interval '3 minutes',
-                status = 'running',attempts = attempts + 1,updated_at = now()
-            FROM candidate q,email_links l WHERE c.id = q.id AND l.id = c.link_id
-            RETURNING c.id,c.link_id,c.generation,l.grant_generation,c.intent,c.attempts
-        "#,lease_id).fetch_optional(&mut *tx).await.map_err(db_error)?;
-        tx.commit().await.map_err(db_error)?;
-        row.map(|row| {
-            Ok(CommandLease {
+struct CommandClaim {
+    lease_id: Uuid,
+    provider: crate::domain::models::UserProvider,
+}
+
+impl MutationAcquirer for CommandClaim {
+    type Lease = CommandLease;
+    const WORK: &'static str = "commands";
+
+    fn link_id(lease: &CommandLease) -> Uuid {
+        lease.mailbox.link_id
+    }
+
+    async fn window(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<MutationWindow, MailboxError> {
+        let row = sqlx::query_file!(
+            "src/outbound/mailbox_pg/commands/claim/window.sql",
+            self.provider.as_str()
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        Ok(MutationWindow {
+            ids: row.ids,
+            maintained: row.maintained,
+        })
+    }
+
+    async fn acquire(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        id: Uuid,
+        remaining: i64,
+        first: bool,
+    ) -> Result<Option<MutationStep<CommandLease>>, MailboxError> {
+        let max_targets =
+            i64::try_from(crate::domain::models::mailbox_action::MAX_MAILBOX_COMMAND_TARGETS)
+                .map_err(|_| MailboxError::Persistence)?;
+        let row = sqlx::query_file!(
+            "src/outbound/mailbox_pg/commands/claim/acquire.sql",
+            self.lease_id,
+            self.provider.as_str(),
+            id,
+            remaining,
+            first,
+            max_targets
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        let Some(row) = row else { return Ok(None) };
+        let lease = if row.leased {
+            Some(CommandLease {
                 id: row.id,
-                lease_id,
+                lease_id: self.lease_id,
                 mailbox: MailboxKey {
                     link_id: row.link_id,
                     sync_generation: row.generation,
                     grant_generation: row.grant_generation,
                 },
                 action: serde_json::from_value(row.intent)
-                    .map_err(|_| MailboxError::Persistence)?,
+                    .map_err(|_| MailboxError::database(DatabaseFailure::Decode))?,
                 attempts: row.attempts,
             })
+        } else {
+            None
+        };
+        Ok(Some(MutationStep {
+            probes: row.target_count,
+            budget_exhausted: row.budget_exhausted,
+            blocked: row.blocked,
+            legacy_wide: row.legacy_wide,
+            exclusion_overflow: false,
+            exclusion_leases_at_least: 0,
+            lease,
+        }))
+    }
+
+    async fn quarantine(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        id: Uuid,
+        reason: QuarantineReason,
+    ) -> Result<(), MailboxError> {
+        let link_id = sqlx::query_scalar!(
+            r#"UPDATE email_mailbox_commands c
+            SET status='failed', lease_id=NULL, lease_until=NULL, updated_at=now()
+            WHERE c.id=$1 RETURNING c.link_id"#,
+            id
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        record_quarantine(tx, QuarantinedWork::Commands, id, link_id, reason).await
+    }
+}
+
+impl MailboxCommandRepository for PgMailboxSync {
+    async fn claim_command(&self, lease_id: Uuid) -> Result<SyncClaim<CommandLease>, MailboxError> {
+        self.claim_mutation(CommandClaim {
+            lease_id,
+            provider: self.provider,
         })
-        .transpose()
+        .await
     }
 
     async fn renew_command(&self, lease: &CommandLease) -> Result<(), MailboxError> {
@@ -157,9 +334,18 @@ impl MailboxCommandRepository for PgMailboxSync {
     }
 
     async fn defer_for_draft(&self, lease: &CommandLease) -> Result<(), MailboxError> {
-        sqlx::query!("UPDATE email_mailbox_commands SET attempts=0,lease_id=NULL,lease_until=NULL,available_at=now()+interval '5 seconds' WHERE id=$1 AND lease_id=$2 AND lease_until>now() AND status='running'",lease.id,lease.lease_id)
-            .execute(&self.db).await.map_err(db_error)?;
-        Ok(())
+        let mut tx = self.begin().await.map_err(db_error)?;
+        let changed = sqlx::query!("UPDATE email_mailbox_commands SET attempts=0,lease_id=NULL,lease_until=NULL,available_at=now()+interval '5 seconds' WHERE id=$1 AND lease_id=$2 AND lease_until>now() AND status='running'",lease.id,lease.lease_id)
+            .execute(&mut *tx).await.map_err(db_error)?.rows_affected();
+        if changed != 1 {
+            return Err(MailboxError::Stale);
+        }
+        self.commit_mutation_and_wake(
+            tx,
+            lease.mailbox,
+            super::mutation_claims::MutationWake::ReleasedCommand(lease.id),
+        )
+        .await
     }
 
     async fn record_write_version(
@@ -216,7 +402,8 @@ impl MailboxCommandRepository for PgMailboxSync {
             .await
             .map_err(db_error)?;
             sqlx::query!("UPDATE email_mailbox_command_targets SET status='failed' WHERE command_id=$1 AND message_id=$2",lease.id,target.message_id).execute(&mut *tx).await.map_err(db_error)?;
-            Self::update_command_projection(&mut tx, lease, target.message_id, None).await?;
+            Self::update_command_projection(&mut tx, lease.mailbox, target.message_id, None)
+                .await?;
             return tx.commit().await.map_err(db_error);
         };
         // While this command's own category still overlays the message, so only
@@ -301,7 +488,8 @@ impl MailboxCommandRepository for PgMailboxSync {
             gained.into_iter().map(|label| label.label_id).collect(),
             target.message_id,
         );
-        Self::update_command_projection(&mut tx, lease, target.message_id, labels_gained).await?;
+        Self::update_command_projection(&mut tx, lease.mailbox, target.message_id, labels_gained)
+            .await?;
         tx.commit().await.map_err(db_error)
     }
 
@@ -329,7 +517,7 @@ impl MailboxCommandRepository for PgMailboxSync {
         .execute(&mut *tx)
         .await
         .map_err(db_error)?;
-        Self::update_command_projection(&mut tx, lease, target.message_id, None).await?;
+        Self::update_command_projection(&mut tx, lease.mailbox, target.message_id, None).await?;
         tx.commit().await.map_err(db_error)
     }
 
@@ -338,12 +526,21 @@ impl MailboxCommandRepository for PgMailboxSync {
         lease: &CommandLease,
         seconds: u32,
     ) -> Result<(), MailboxError> {
-        sqlx::query!(r#"
+        let mut tx = self.begin().await.map_err(db_error)?;
+        let changed = sqlx::query!(r#"
             UPDATE email_mailbox_commands SET lease_id = NULL,lease_until = NULL,
                 available_at = now() + make_interval(secs => $3::double precision),updated_at = now()
             WHERE id = $1 AND lease_id = $2 AND lease_until > now() AND status = 'running'
-        "#,lease.id,lease.lease_id,f64::from(seconds)).execute(&self.db).await.map_err(db_error)?;
-        Ok(())
+        "#,lease.id,lease.lease_id,f64::from(seconds)).execute(&mut *tx).await.map_err(db_error)?.rows_affected();
+        if changed != 1 {
+            return Err(MailboxError::Stale);
+        }
+        self.commit_mutation_and_wake(
+            tx,
+            lease.mailbox,
+            super::mutation_claims::MutationWake::ReleasedCommand(lease.id),
+        )
+        .await
     }
 
     async fn finish_command(
@@ -361,7 +558,7 @@ impl MailboxCommandRepository for PgMailboxSync {
         .await
         .map_err(db_error)?;
         for message in messages {
-            Self::update_command_projection(&mut tx, lease, message, None).await?;
+            Self::update_command_projection(&mut tx, lease.mailbox, message, None).await?;
         }
         let status = match completion {
             CommandCompletion::Succeeded => "succeeded",
@@ -369,7 +566,12 @@ impl MailboxCommandRepository for PgMailboxSync {
             CommandCompletion::Cancelled => "cancelled",
         };
         sqlx::query!("UPDATE email_mailbox_commands SET status = $2,lease_id = NULL,lease_until = NULL,updated_at = now() WHERE id = $1",lease.id,status).execute(&mut *tx).await.map_err(db_error)?;
-        tx.commit().await.map_err(db_error)
+        self.commit_mutation_and_wake(
+            tx,
+            lease.mailbox,
+            super::mutation_claims::MutationWake::Command(lease.id),
+        )
+        .await
     }
 }
 

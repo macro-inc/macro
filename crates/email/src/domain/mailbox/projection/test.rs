@@ -189,27 +189,26 @@ impl MailboxProjectionRepository for OneEvent {
     async fn renew_projection(&self, _: &ProjectionLease) -> Result<(), MailboxError> {
         Ok(())
     }
-    async fn claim_projection(
-        &self,
-        lease_id: Uuid,
-    ) -> Result<Option<ProjectionLease>, MailboxError> {
+    async fn claim_projection(&self, lease_id: Uuid) -> Result<ProjectionClaim, MailboxError> {
         Ok(self
             .event
             .lock()
             .unwrap()
             .take()
-            .map(|event| ProjectionLease {
-                id: Uuid::now_v7(),
-                lease_id,
-                mailbox: MailboxKey {
-                    link_id: Uuid::nil(),
-                    sync_generation: 1,
-                    grant_generation: 1,
-                },
-                event,
-                from_current_generation: self.current_generation,
-                attempts: 1,
-                unfinished_claims: 0,
+            .map_or(ProjectionClaim::Idle, |event| {
+                ProjectionClaim::Acquired(Box::new(ProjectionLease {
+                    id: Uuid::now_v7(),
+                    lease_id,
+                    mailbox: MailboxKey {
+                        link_id: Uuid::nil(),
+                        sync_generation: 1,
+                        grant_generation: 1,
+                    },
+                    event,
+                    from_current_generation: self.current_generation,
+                    attempts: 1,
+                    unfinished_claims: 0,
+                }))
             }))
     }
     async fn projection_context(
@@ -238,6 +237,13 @@ impl MailboxProjectionEffects for Published {
         Ok(())
     }
     async fn refresh(
+        &self,
+        _: Uuid,
+        _: &HashSet<MacroUserIdStr<'static>>,
+    ) -> Result<(), MailboxError> {
+        Ok(())
+    }
+    async fn import_completed(
         &self,
         _: Uuid,
         _: &HashSet<MacroUserIdStr<'static>>,

@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH keys AS MATERIALIZED (\n                SELECT * FROM unnest($1::uuid[], $2::bigint[], $3::text[])\n                    AS k(link_id, generation, provider_id)\n            ), candidate AS MATERIALIZED (\n                SELECT q.link_id, q.generation, q.provider_id, q.notified_traceparent\n                FROM keys k\n                -- Keep one unique-key probe per locked row. Flattening this\n                -- into a hash join can scan every due message under stale stats.\n                CROSS JOIN LATERAL (\n                    SELECT q.link_id, q.generation, q.provider_id, q.is_import,\n                        q.available_at, q.lease_until, q.notified_traceparent\n                    FROM email_message_reconciliation q\n                    JOIN email_links l ON l.id = q.link_id\n                    WHERE (q.link_id, q.generation, q.provider_id) =\n                          (k.link_id, k.generation, k.provider_id)\n                        AND q.parked_at IS NULL\n                        AND q.provider = $5::text::email_user_provider_enum\n                        AND l.provider = q.provider\n                        AND q.generation = l.sync_generation\n                        AND l.is_sync_active AND NOT l.needs_reauth\n                        AND l.mailbox_unavailable_at IS NULL\n                        AND GREATEST(q.available_at,\n                            COALESCE(q.lease_until, '-infinity'::timestamptz)) <= now()\n                    LIMIT 1\n                ) q\n                ORDER BY q.is_import,\n                    GREATEST(q.available_at,\n                        COALESCE(q.lease_until, '-infinity'::timestamptz)),\n                    q.link_id, q.generation, q.provider_id\n                LIMIT 1\n            )\n            UPDATE email_message_reconciliation q\n            SET lease_id = $4, lease_until = now() + interval '3 minutes',\n                attempts = q.attempts + 1,\n                unfinished_claims = CASE\n                    WHEN q.lease_id IS NULL OR q.revision <> q.claimed_revision THEN 0\n                    ELSE q.unfinished_claims + 1 END,\n                claimed_revision = q.revision, notified_traceparent = NULL\n            FROM candidate c, email_links l\n            WHERE (q.link_id, q.generation, q.provider_id) =\n                  (c.link_id, c.generation, c.provider_id) AND l.id = q.link_id\n            RETURNING q.link_id, q.generation, l.grant_generation,\n                q.provider_id, q.revision, q.is_import, q.attempts,\n                q.unfinished_claims, q.notified_at, c.notified_traceparent,\n                q.from_notification\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_import",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "unfinished_claims",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "notified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "notified_traceparent",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "from_notification",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int8Array",
+        "TextArray",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "2e2f4b5017b7582b1dd1c6fa842494c18652e7ee3c7448915a3e10ba9b0a4102"
+}

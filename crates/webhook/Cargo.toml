@@ -71,6 +71,7 @@ stream = [
 worker = ["dep:tokio", "ports"]
 
 [dependencies]
+egress_guard = { workspace = true }
 messages = { path = "../messages", features = ["broker"] }
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }

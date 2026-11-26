@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use thiserror::Error;
 
+pub use models_email::service::message::SendRejectionReason;
+
 /// A rate-limit decision made before a provider request is attempted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RateLimitRefusal {
@@ -55,16 +57,24 @@ pub enum EmailApiError {
         /// A sanitized diagnostic suitable for logs.
         message: String,
     },
+    /// Full message content exceeds the supported download size.
+    #[error("This message is too large to open in Macro (over 25 MB).")]
+    ContentTooLarge,
     /// A deterministic failure that should not be retried unchanged.
     #[error("permanent email provider failure: {message}")]
     Permanent {
         /// A sanitized diagnostic suitable for logs.
         message: String,
     },
-    /// The provider explicitly rejected message submission without accepting it.
-    /// Unlike a malformed success response, this permits cancelling and editing.
-    #[error("email provider rejected the message: {message}")]
+    /// Submission definitively failed before the provider accepted message data.
+    /// Explicit refusals and typed pre-DATA connection failures permit editing;
+    /// a generic service outage or malformed success cannot establish this fact.
+    #[error("email could not be submitted: {message}")]
     SendRejected {
+        /// Closed non-submission evidence for recovery copy and retry policy.
+        reason: SendRejectionReason,
+        /// Command refusal details, when the provider reported them.
+        refusal: Option<models_email::service::message::SubmissionRefusal>,
         /// A sanitized diagnostic suitable for logs.
         message: String,
     },

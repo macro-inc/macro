@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    s.id\n                FROM\n                    email_sync_streams s\n                WHERE\n                    s.provider = 'IMAP'\n                    AND s.kind IN ('folder_catalog', 'mail_folder')\n                    AND s.id > $1\n                    AND NOT EXISTS (\n                        SELECT\n                            1\n                        FROM\n                            email_imap_host_catchup_deferred d\n                        WHERE\n                            d.stream_id = s.id\n                    )\n                ORDER BY\n                    s.id\n                LIMIT\n                    $2\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "17a9090f5e0a5128f468305e626b339b7b54ef87bf0bad8d1acd7693f56ac58f"
+}

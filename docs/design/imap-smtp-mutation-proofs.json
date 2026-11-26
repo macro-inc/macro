@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "recordedAtUtc": "2026-11-19T09:15:14.085958+00:00",
+  "scope": "Authorized local regression tests against private test infrastructure; shared authentication source was never modified.",
+  "isolation": {
+    "detachedBase": "1273538e2adabd622f8d252ceade900f3836e7ec",
+    "candidatePatchSha256": "8307e35009682f7908184a3dd6714b84504cdb54114286dc07424afb738ac41a",
+    "separateCargoTarget": true,
+    "buildJobs": 1,
+    "sourcesRestoredExactly": true,
+    "sharedSourcesUnmodified": true
+  },
+  "scenario": "imap_connect_receive_isolate_and_send",
+  "baseline": {
+    "result": "passed",
+    "durationSeconds": 55.8,
+    "logSha256": "fe652f47faf2b2b0c92ef70583755876b5e2d06167cbaeff8533df856fd9a485"
+  },
+  "proofs": [
+    {
+      "function": "F-198",
+      "mutation": "Remove the verified actor-address check from connect; connecting another mailbox returns HTTP 200 instead of 403.",
+      "source": "crates/email/src/domain/mailbox/imap_connection.rs",
+      "sourceRestoredSha256": "7484295ea50896ab32fce3e57e9a5207d9ea576fa47bb116603abc3e51e8e21d",
+      "mutantBinarySha256": "bea59fb7381812f1496fbe1d982601b4f6b6f3318ed7247f25b92ccc4c371d78",
+      "journeyLogSha256": "3fac06cb82ea45b55c02f6844d804e2896fe517d30fc5107fdb6a1b6bbe0ff05",
+      "expectedFailure": {
+        "exitCode": 101,
+        "test": "crates/email_e2e/tests/imap.rs",
+        "line": 83,
+        "durationSeconds": 10.66
+      }
+    },
+    {
+      "function": "F-199",
+      "mutation": "Remove settings owner equality; another actor\u2019s GET no longer returns the required 403 or 404.",
+      "source": "crates/email/src/domain/mailbox/imap_settings.rs",
+      "sourceRestoredSha256": "bd58d53ec1d630a3782bbc847cb42298b47325cc3523685508a1ce4386210ff5",
+      "mutantBinarySha256": "469bd522f043355aa9bcea28205d38fd23555ec0a27ea2d5aea42c31181c6bb8",
+      "journeyLogSha256": "7299d8ad83288b93b5e6d26b3cecada153c26a827e3e60215a1f9340d1d24222",
+      "expectedFailure": {
+        "exitCode": 101,
+        "test": "crates/email_e2e/tests/imap.rs",
+        "line": 139,
+        "durationSeconds": 34.2
+      }
+    }
+  ]
+}

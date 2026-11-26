@@ -8,6 +8,10 @@ export const emailKeys = createQueryKeys('email', {
   messageOperation: (messageId: string) => ({ queryKey: [messageId] }),
   labels: null,
   links: (userId: string | undefined) => ({ queryKey: [userId] }),
+  inboxSuggestion: (
+    userId: string | undefined,
+    session: number | undefined
+  ) => ({ queryKey: [userId, session] }),
   userLabels: (userId: string | undefined) => ({ queryKey: [userId] }),
   linksHealthProbe: (userId: string | undefined) => ({ queryKey: [userId] }),
   threads: null,

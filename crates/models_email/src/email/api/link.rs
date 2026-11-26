@@ -64,6 +64,8 @@ pub enum UserProvider {
     Gmail,
     /// Microsoft Outlook and Microsoft 365.
     Outlook,
+    /// An inbox connected through IMAP and SMTP.
+    Imap,
 }
 
 impl UserProvider {
@@ -71,6 +73,7 @@ impl UserProvider {
         match self {
             UserProvider::Gmail => "GMAIL",
             UserProvider::Outlook => "OUTLOOK",
+            UserProvider::Imap => "IMAP",
         }
     }
 }
@@ -86,6 +89,7 @@ impl From<crate::email::service::link::UserProvider> for UserProvider {
         match provider {
             crate::email::service::link::UserProvider::Gmail => UserProvider::Gmail,
             crate::email::service::link::UserProvider::Outlook => UserProvider::Outlook,
+            crate::email::service::link::UserProvider::Imap => UserProvider::Imap,
         }
     }
 }
@@ -103,6 +107,12 @@ pub struct Link {
     pub provider: UserProvider,
     pub is_sync_active: bool,
     pub sync_status: SyncStatus,
+    /// Sync issue independent of rejected credentials.
+    #[serde(default)]
+    pub mailbox_issue: Option<service::link::MailboxIssue>,
+    /// Next automatic retry for a paused mailbox sync.
+    #[serde(default)]
+    pub mailbox_retry_at: Option<DateTime<Utc>>,
     /// Whether the link's Google grant needs to be reconnected. Drives the
     /// per-inbox reconnect prompt independently of the sync-status badge.
     pub needs_reauth: bool,
@@ -147,6 +157,8 @@ impl Link {
             provider: UserProvider::from(source.provider),
             is_sync_active: source.is_sync_active,
             sync_status,
+            mailbox_issue: None,
+            mailbox_retry_at: None,
             needs_reauth: source.needs_reauth,
             needs_calendar_permission,
             calendar_disabled,

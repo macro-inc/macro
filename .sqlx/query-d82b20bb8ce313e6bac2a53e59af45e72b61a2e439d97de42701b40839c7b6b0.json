@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        CREATE TRIGGER fail_first_catchup_row BEFORE UPDATE ON email_sync_streams\n        FOR EACH ROW EXECUTE FUNCTION fail_first_catchup_row()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "d82b20bb8ce313e6bac2a53e59af45e72b61a2e439d97de42701b40839c7b6b0"
+}

@@ -363,7 +363,10 @@ async fn cleanup_retains_active_claims_and_recovery_checkpoints(db: PgPool) {
     )
     .await
     .unwrap();
-    let sync = crate::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
+    let sync = crate::outbound::mailbox_pg::PgMailboxSync::new(
+        db.clone(),
+        crate::domain::models::UserProvider::Outlook,
+    );
     let _lease = sync
         .claim_draft(
             Uuid::now_v7(),
@@ -371,6 +374,7 @@ async fn cleanup_retains_active_claims_and_recovery_checkpoints(db: PgPool) {
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_attachment_change(
         ACTOR,

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,next_run_at,lease_id,lease_until,provider_retry_at,parked_at)\n        SELECT gen_random_uuid(), link_id, generation, kind, scope_id, initial_complete, now() - make_interval(secs => due_seconds_ago), lease_id, lease_until, provider_retry_at, parked_at\n        FROM (VALUES\n            ($1::uuid, 1::bigint, 'mail_folder', 'polled long ago', true, 300.0::float8, NULL::uuid, NULL::timestamptz, now() - interval '75 seconds', NULL::timestamptz),\n            ($1, 1, 'mail_folder', 'polled lately', true, 60.0, NULL, NULL, NULL, NULL),\n            ($1, 1, 'mail_folder', 'not due', true, -60.0, NULL, NULL, NULL, NULL),\n            ($1, 1, 'mail_folder', 'claimed', true, 900.0, $3, now() + interval '1 minute', NULL, NULL),\n            ($1, 1, 'mail_folder', 'retry deferred', true, 900.0, NULL, NULL, now() + interval '1 minute', NULL),\n            ($1, 1, 'mail_folder', 'parked', false, 900.0, NULL, NULL, NULL, now()),\n            ($1, 1, 'mail_folder', 'importing', false, 30.0, NULL, NULL, NULL, NULL),\n            ($1, 0, 'mail_folder', 'older generation', true, 3600.0, NULL, NULL, NULL, NULL),\n            ($1, 1, 'contacts', 'contacts', true, 3600.0, NULL, NULL, NULL, NULL),\n            ($2, 1, 'mail_folder', 'needs reauthorization', false, 3600.0, NULL, NULL, NULL, NULL)\n        ) AS streams(link_id, generation, kind, scope_id, initial_complete, due_seconds_ago, lease_id, lease_until, provider_retry_at, parked_at)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "64502126b3e168ac8c4092e02b755ea1e488e9bc0bd444de7e996e72c153c9b6"
+}

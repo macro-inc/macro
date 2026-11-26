@@ -88,6 +88,16 @@
               }
             }
           },
+          "413": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentTooLargeResponse"
+                }
+              }
+            }
+          },
           "429": {
             "description": "",
             "content": {
@@ -2223,6 +2233,270 @@
         }
       }
     },
+    "/email/links/imap": {
+      "post": {
+        "tags": ["crate::api::imap"],
+        "operationId": "imap_connect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImapConnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                },
+                "description": "Minimum retry delay in seconds"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/links/imap/discover": {
+      "post": {
+        "tags": ["crate::api::imap"],
+        "operationId": "imap_discover",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Discovery"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                },
+                "description": "Minimum retry delay in seconds"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/links/suggestion": {
+      "get": {
+        "tags": ["crate::api::imap"],
+        "operationId": "imap_suggestion",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapSuggestion"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/links/{link_id}": {
       "delete": {
         "tags": ["Links"],
@@ -2360,6 +2634,112 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/links/{link_id}/imap/settings": {
+      "get": {
+        "tags": ["crate::api::imap_settings"],
+        "operationId": "get_imap_mailbox_settings",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountMailSettings"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["crate::api::imap_settings"],
+        "operationId": "update_imap_mailbox_settings",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFolderSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountMailSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImapConnectionErrorResponse"
                 }
               }
             }
@@ -2786,6 +3166,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentTooLargeResponse"
                 }
               }
             }
@@ -3970,6 +4360,52 @@
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
       },
+      "AccountMailSettings": {
+        "type": "object",
+        "description": "Sanitized owner-only mailbox configuration. Endpoint has no password field.",
+        "required": ["imap", "smtp", "revision", "folders"],
+        "properties": {
+          "features": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ServerFeatures",
+                "description": "Last verified server capabilities, when recorded at enrollment or reconnect."
+              }
+            ]
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FolderSetting"
+            },
+            "description": "Recently listed folders, including manually excluded folders."
+          },
+          "helpUrl": {
+            "type": ["string", "null"],
+            "description": "Official instructions supplied by the catalog."
+          },
+          "imap": {
+            "$ref": "#/components/schemas/Endpoint",
+            "description": "Incoming mail server, security mode and username."
+          },
+          "provider": {
+            "type": ["string", "null"],
+            "description": "Catalog name for the provider, when known."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Version for compare-and-swap edits."
+          },
+          "smtp": {
+            "$ref": "#/components/schemas/Endpoint",
+            "description": "Submission server, security mode and username."
+          }
+        }
+      },
       "AddDraftAttachmentRequest": {
         "type": "object",
         "description": "The request passed to send a message",
@@ -4793,6 +5229,28 @@
           "revision": {
             "type": "string"
           },
+          "send_refusal": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubmissionRefusal",
+                "description": "Sanitized pre-body SMTP refusal; recipient index uses To, Cc, then Bcc order."
+              }
+            ]
+          },
+          "send_rejection_reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiSendRejectionReason",
+                "description": "Optional failure detail; older clients can continue using the issue and state."
+              }
+            ]
+          },
           "state": {
             "$ref": "#/components/schemas/ApiMessageOperationState"
           }
@@ -4858,6 +5316,11 @@
             "type": ["string", "null"]
           }
         }
+      },
+      "ApiSendRejectionReason": {
+        "type": "string",
+        "description": "Definite non-submission evidence; absent for legacy and uncertain outcomes.",
+        "enum": ["PROVIDER_REJECTED", "CONNECTION_UNAVAILABLE"]
       },
       "ApiSortMethod": {
         "type": "string",
@@ -5840,6 +6303,23 @@
           }
         ]
       },
+      "ContentTooLargeCode": {
+        "type": "string",
+        "enum": ["message_too_large"]
+      },
+      "ContentTooLargeResponse": {
+        "type": "object",
+        "description": "Closed content-limit response shared by provider-backed message paths.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ContentTooLargeCode"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
       "CopyCalendarEventRequest": {
         "type": "object",
         "description": "Request body adding a shared event to the requester's calendar.",
@@ -5898,6 +6378,63 @@
           }
         }
       },
+      "Discovery": {
+        "type": "object",
+        "description": "Mailbox-independent provider settings returned without accepting a password.",
+        "required": ["hostConfirmationRequired"],
+        "properties": {
+          "helpUrl": {
+            "type": ["string", "null"],
+            "description": "Provider's application-password instructions."
+          },
+          "hostConfirmationRequired": {
+            "type": "boolean",
+            "description": "Explicit endpoint confirmation is required before sending any password."
+          },
+          "imap": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Endpoint",
+                "description": "IMAP endpoint proposal."
+              }
+            ]
+          },
+          "provider": {
+            "type": ["string", "null"],
+            "description": "Known provider identifier."
+          },
+          "smtp": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Endpoint",
+                "description": "SMTP endpoint proposal."
+              }
+            ]
+          },
+          "steer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DiscoverySteer",
+                "description": "Steer to an existing OAuth provider."
+              }
+            ]
+          }
+        }
+      },
+      "DiscoverySteer": {
+        "type": "string",
+        "description": "Closed provider guidance; password connections remain a separate user choice.",
+        "enum": ["gmail", "outlook", "none"]
+      },
       "EmlFile": {
         "type": "string",
         "format": "binary"
@@ -5905,6 +6442,31 @@
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "Endpoint": {
+        "type": "object",
+        "description": "User-confirmed submission or mailbox endpoint.",
+        "required": ["host", "port", "tls", "username"],
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "Fully qualified TLS identity."
+          },
+          "port": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Standard submission or mailbox port.",
+            "minimum": 0
+          },
+          "tls": {
+            "$ref": "#/components/schemas/TlsMode",
+            "description": "Required TLS policy."
+          },
+          "username": {
+            "type": "string",
+            "description": "Raw protocol login: providers may require a local part or account ID\nrather than an email address."
+          }
+        }
       },
       "ErrorResponse": {
         "type": "object",
@@ -6029,6 +6591,64 @@
         "type": "string",
         "description": "Visibility of event details.",
         "enum": ["default", "public", "private", "confidential"]
+      },
+      "FolderRole": {
+        "type": "string",
+        "description": "Physical folder purpose, resolved by the engine.",
+        "enum": ["inbox", "sent", "drafts", "archive", "trash", "junk", "other"]
+      },
+      "FolderSetting": {
+        "type": "object",
+        "description": "Folder name and the actual and configured routing roles, without message data.",
+        "required": [
+          "id",
+          "name",
+          "detectedRole",
+          "effectiveRole",
+          "excluded",
+          "watched"
+        ],
+        "properties": {
+          "detectedRole": {
+            "$ref": "#/components/schemas/FolderRole",
+            "description": "Automatic role before applying the user's override."
+          },
+          "effectiveRole": {
+            "$ref": "#/components/schemas/FolderRole",
+            "description": "Resolved destination used by the engine."
+          },
+          "excluded": {
+            "type": "boolean",
+            "description": "Whether the user has excluded this folder from message sync."
+          },
+          "id": {
+            "type": "string",
+            "description": "Opaque identifier belonging to this account."
+          },
+          "monitored": {
+            "type": "boolean",
+            "description": "Whether this folder was included in the latest synchronization."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name from the most recent listing."
+          },
+          "roleOverride": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FolderRole",
+                "description": "Explicit user choice. An absent value uses the detected role."
+              }
+            ]
+          },
+          "watched": {
+            "type": "boolean",
+            "description": "Whether this folder is selected for a dedicated watch."
+          }
+        }
       },
       "ForwardCalendarEventError": {
         "type": "object",
@@ -6211,6 +6831,102 @@
           "canSeeOtherGuests": {
             "type": "boolean",
             "description": "Whether guests may see the guest list."
+          }
+        }
+      },
+      "ImapConnectRequest": {
+        "type": "object",
+        "description": "Public input never carries an owner identity or a credential binding.",
+        "required": ["requestId", "imap", "smtp", "confirmedHosts"],
+        "properties": {
+          "confirmedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Endpoints the user explicitly approved before credentials leave Macro."
+          },
+          "imap": {
+            "$ref": "#/components/schemas/Login",
+            "description": "IMAP login."
+          },
+          "linkId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Required by a reconnect surface to reject stale settings dialogs."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "One id retained when retrying a connect request after a lost response."
+          },
+          "smtp": {
+            "$ref": "#/components/schemas/Login",
+            "description": "SMTP login."
+          }
+        }
+      },
+      "ImapConnectResponse": {
+        "type": "object",
+        "required": ["linkId"],
+        "properties": {
+          "linkId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ImapConnectionErrorCode": {
+        "type": "string",
+        "description": "Machine-readable reason an IMAP connection or settings request was refused.",
+        "enum": [
+          "disabled",
+          "address_unverified",
+          "provider_conflict",
+          "connection_changed",
+          "payment_required",
+          "connection_unavailable",
+          "invalid",
+          "forbidden",
+          "person_required",
+          "not_found",
+          "conflict",
+          "credentials_rejected",
+          "credentials_unreadable",
+          "credentials_unavailable",
+          "throttled",
+          "dns_unavailable",
+          "tcp_unavailable",
+          "tls_unavailable",
+          "connection_timed_out"
+        ]
+      },
+      "ImapConnectionErrorResponse": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ImapConnectionErrorCode"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ImapConnectionOffer": {
+        "type": "string",
+        "description": "Provider offered using a catalog entry or a domain-only DNS hint.",
+        "enum": ["none", "gmail", "outlook", "imap"]
+      },
+      "ImapSuggestion": {
+        "type": "object",
+        "required": ["email", "offer"],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "offer": {
+            "$ref": "#/components/schemas/ImapConnectionOffer"
           }
         }
       },
@@ -6630,6 +7346,22 @@
           "macro_id": {
             "type": "string"
           },
+          "mailbox_issue": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MailboxIssue",
+                "description": "Sync issue independent of rejected credentials."
+              }
+            ]
+          },
+          "mailbox_retry_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Next automatic retry for a paused mailbox sync."
+          },
           "needs_calendar_permission": {
             "type": "boolean",
             "description": "Whether the link's Google grant is missing the calendar scope. True for\ninboxes connected before the calendar capability existed (and for\ngrants where the user declined it); drives the per-inbox calendar\nupgrade prompt. Re-running the connect flow records the new grant."
@@ -6744,6 +7476,21 @@
           }
         }
       },
+      "Login": {
+        "type": "object",
+        "description": "Credentials for one protocol; Debug never includes the password.",
+        "required": ["endpoint", "password"],
+        "properties": {
+          "endpoint": {
+            "$ref": "#/components/schemas/Endpoint",
+            "description": "Endpoint and account login."
+          },
+          "password": {
+            "$ref": "#/components/schemas/Secret",
+            "description": "Protocol password, kept distinct for providers with separate SMTP credentials."
+          }
+        }
+      },
       "MailboxAction": {
         "oneOf": [
           {
@@ -6847,6 +7594,11 @@
           }
         ],
         "description": "Desired organization state. Categories never stand in for folders or flags."
+      },
+      "MailboxIssue": {
+        "type": "string",
+        "description": "Sanitized mailbox health independent of provider authentication.",
+        "enum": ["snapshot_too_large", "credentials_unreadable", "unknown"]
       },
       "MailboxOperation": {
         "type": "object",
@@ -7429,6 +8181,11 @@
             "type": "string",
             "format": "uuid",
             "description": "Opaque ID of the backfill job or provider sync stream driving the resync.\nthe one already in progress."
+          },
+          "provider_retry_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Provider pacing remains in force even when the owner requests a resync."
           }
         }
       },
@@ -7436,6 +8193,10 @@
         "type": "string",
         "description": "The user-visible delivery state of an unsent scheduled message.",
         "enum": ["pending", "sending", "failed", "unconfirmed"]
+      },
+      "Secret": {
+        "type": "string",
+        "description": "Password held only for one connection or encrypted immediately."
       },
       "SendMessageRequest": {
         "type": "object",
@@ -7459,6 +8220,65 @@
           }
         }
       },
+      "ServerFeatures": {
+        "type": "object",
+        "description": "Negotiated capability flags. Provider banners and EHLO arguments are never retained.",
+        "properties": {
+          "condstore": {
+            "type": "boolean",
+            "description": "Incoming server advertises CONDSTORE.",
+            "default": false
+          },
+          "eightBitMime": {
+            "type": "boolean",
+            "description": "Submission server accepts 8BITMIME payloads.",
+            "default": false
+          },
+          "gmailExtensions": {
+            "type": "boolean",
+            "description": "Incoming server advertises Gmail's IMAP extension.",
+            "default": false
+          },
+          "idle": {
+            "type": "boolean",
+            "description": "Incoming server advertises IDLE.",
+            "default": false
+          },
+          "moveMessages": {
+            "type": "boolean",
+            "description": "Incoming server supports the MOVE command.",
+            "default": false
+          },
+          "objectId": {
+            "type": "boolean",
+            "description": "Incoming server supplies RFC 8474 object identifiers.",
+            "default": false
+          },
+          "sendLimitBytes": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Server-advertised positive SIZE limit in bytes.",
+            "default": null,
+            "minimum": 0
+          },
+          "smtpUtf8": {
+            "type": "boolean",
+            "description": "Submission server accepts SMTPUTF8 envelopes.",
+            "default": false
+          },
+          "uidPlus": {
+            "type": "boolean",
+            "description": "Incoming server supports per-UID copy and expunge receipts.",
+            "default": false
+          },
+          "verifiedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When both authenticated endpoints last answered the capability check.",
+            "default": null
+          }
+        }
+      },
       "Settings": {
         "type": "object",
         "properties": {
@@ -7474,6 +8294,44 @@
             "type": ["boolean", "null"]
           }
         }
+      },
+      "SubmissionRefusal": {
+        "type": "object",
+        "description": "Non-submission evidence without provider text or recipient addresses.",
+        "required": ["phase"],
+        "properties": {
+          "phase": {
+            "$ref": "#/components/schemas/SubmissionRefusalPhase",
+            "description": "Which command was refused."
+          },
+          "recipient_index": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Zero-based position in the frozen To, Cc, then Bcc envelope; recipient refusals only.",
+            "minimum": 0
+          },
+          "reply_class": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubmissionRefusalClass",
+                "description": "Sanitized SMTP reply class; absent for a local capability/size rejection."
+              }
+            ]
+          }
+        }
+      },
+      "SubmissionRefusalClass": {
+        "type": "string",
+        "description": "Closed SMTP refusal class; neither variant authorizes automatic resubmission.",
+        "enum": ["temporary", "permanent"]
+      },
+      "SubmissionRefusalPhase": {
+        "type": "string",
+        "description": "The SMTP command refused before any message body byte was sent.",
+        "enum": ["sender", "recipient", "message"]
       },
       "SyncStatus": {
         "type": "string",
@@ -7670,6 +8528,11 @@
           }
         }
       },
+      "TlsMode": {
+        "type": "string",
+        "description": "Required TLS mode. There is deliberately no plaintext variant.",
+        "enum": ["implicit", "start_tls"]
+      },
       "TransferDraftRequest": {
         "type": "object",
         "description": "Reuse the same operation ID when retrying after a lost response.",
@@ -7763,6 +8626,45 @@
             "minimum": 0
           }
         }
+      },
+      "UpdateFolderSettings": {
+        "type": "object",
+        "description": "Replace all routing overrides atomically. A stale revision returns a conflict.",
+        "required": ["expectedRevision", "roleOverrides", "excludedFolderIds"],
+        "properties": {
+          "excludedFolderIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Empty set re-enables all folders.",
+            "uniqueItems": true
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Version returned by the last settings read."
+          },
+          "roleOverrides": {
+            "type": "object",
+            "description": "Empty map restores automatic folder routing.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FolderRole"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "watchedFolderIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "At most one extra included folder may hold a live IDLE watcher.",
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
       },
       "UpdateLabelBatchRequest": {
         "type": "object",
@@ -7943,7 +8845,7 @@
       },
       "UserProvider": {
         "type": "string",
-        "enum": ["GMAIL", "OUTLOOK"]
+        "enum": ["GMAIL", "OUTLOOK", "IMAP"]
       },
       "Value": {},
       "ViewerCapabilities": {

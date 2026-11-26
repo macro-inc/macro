@@ -49,6 +49,7 @@ async fn claim(repo: &PgMailboxSync) -> StreamLease {
     repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamClaim::LongestDue)
         .await
         .unwrap()
+        .into_lease()
         .unwrap()
 }
 
@@ -89,7 +90,7 @@ async fn a_mailbox_without_a_working_subscription_is_polled_every_two_minutes(db
         ("whose last renewal failed", 1, Some("failing"), 86_400.0, 2),
         ("with no subscription", 1, None, 0.0, 0),
     ];
-    let repo = PgMailboxSync::new(db.clone());
+    let repo = PgMailboxSync::new(db.clone(), crate::domain::models::UserProvider::Outlook);
     for (index, (case, generation, provider_id, expires_in, failures)) in
         cases.into_iter().enumerate()
     {

@@ -3,6 +3,24 @@ use crate::domain::models::mailbox_operation::*;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+/// Definite non-submission evidence; absent for legacy and uncertain outcomes.
+#[derive(Debug, Serialize, ToSchema)]
+#[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ApiSendRejectionReason {
+    ProviderRejected,
+    ConnectionUnavailable,
+}
+
+impl From<SendRejectionReason> for ApiSendRejectionReason {
+    fn from(value: SendRejectionReason) -> Self {
+        match value {
+            SendRejectionReason::ProviderRejected => Self::ProviderRejected,
+            SendRejectionReason::ConnectionUnavailable => Self::ConnectionUnavailable,
+        }
+    }
+}
+
 /// Provider-neutral state exposed to clients.
 #[derive(Debug, Serialize, ToSchema)]
 #[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
@@ -85,6 +103,10 @@ pub struct ApiMessageOperation {
     pub revision: String,
     pub remote_version: Option<String>,
     pub issue: Option<ApiMessageOperationIssue>,
+    /// Optional failure detail; older clients can continue using the issue and state.
+    pub send_rejection_reason: Option<ApiSendRejectionReason>,
+    /// Sanitized pre-body SMTP refusal; recipient index uses To, Cc, then Bcc order.
+    pub send_refusal: Option<models_email::service::message::SubmissionRefusal>,
 }
 impl From<MessageOperationStatus> for ApiMessageOperation {
     fn from(status: MessageOperationStatus) -> Self {
@@ -93,6 +115,13 @@ impl From<MessageOperationStatus> for ApiMessageOperation {
             revision: status.revision.to_string(),
             remote_version: status.remote_version,
             issue: status.issue.map(Into::into),
+            send_rejection_reason: status
+                .send_rejection
+                .and_then(|rejection| rejection.reason)
+                .map(Into::into),
+            send_refusal: status
+                .send_rejection
+                .and_then(|rejection| rejection.refusal),
         }
     }
 }
