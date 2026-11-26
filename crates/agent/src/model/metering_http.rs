@@ -18,7 +18,7 @@ use bytes::Bytes;
 use futures::StreamExt;
 use genai_telemetry::{GenAiSpanExt as _, attr};
 use rig_core::http_client::{
-    self, HttpClientExt, LazyBody, MultipartForm, Request, Response, StreamingResponse,
+    self, HeaderValue, HttpClientExt, LazyBody, MultipartForm, Request, Response, StreamingResponse,
 };
 use serde_json::Value;
 
@@ -43,6 +43,7 @@ pub struct MeteredHttpClient<H = http_client::ReqwestClient> {
     /// Whether the key is Macro's own, so a suspended or out-of-credit
     /// response is a Macro outage worth alerting on.
     macro_account: bool,
+    gemini_4: Option<(HeaderValue, &'static [&'static str])>,
 }
 
 /// Puts the tier and effort the provider actually receives on the model-call
@@ -89,6 +90,7 @@ impl<H> MeteredHttpClient<H> {
             provider: provider.into(),
             protocol,
             macro_account: true,
+            gemini_4: None,
         }
     }
 
@@ -97,6 +99,21 @@ impl<H> MeteredHttpClient<H> {
     pub fn with_agent_api_key(mut self) -> Self {
         self.macro_account = false;
         self
+    }
+
+    /// Restrict this Gemini transport to Neon and Carbon, using header auth.
+    pub(super) fn with_gemini_4_key(
+        mut self,
+        key: &str,
+        models: &'static [&'static str],
+    ) -> Result<Self, crate::AgentError> {
+        let mut key = HeaderValue::from_str(key)
+            .ok()
+            .filter(|key| !key.as_bytes().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("invalid Gemini 4 API key"))?;
+        key.set_sensitive(true);
+        self.gemini_4 = Some((key, models));
+        Ok(self)
     }
 
     /// Log a response that means Macro's account with the provider is
@@ -119,6 +136,10 @@ impl<H> MeteredHttpClient<H> {
         &self,
         mut request: Request<Bytes>,
     ) -> http_client::Result<(Request<Bytes>, Option<Attempt>)> {
+        if let Some((key, models)) = &self.gemini_4 {
+            super::gemini::authorize_gemini_4_request(&mut request, key, models)
+                .ok_or_else(|| http_error(MeteringError::Unsupported))?;
+        }
         let sent = serde_json::from_slice::<Value>(request.body()).ok();
         if let Some(body) = &sent {
             record_request_settings(&tracing::Span::current(), self.protocol, body);
@@ -296,7 +317,7 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
         }
         let client = self.clone();
         async move {
-            if activated {
+            if activated || client.gemini_4.is_some() {
                 return Err(http_error(MeteringError::Unsupported));
             }
             let result = client.inner.send_multipart(request).await;

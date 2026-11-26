@@ -1,7 +1,6 @@
 //! Models the in-memory Macro agent advertises over ACP.
 
-use std::sync::OnceLock;
-
+use agent::{GEMINI_4_CARBON, GEMINI_4_NEON};
 use chat::domain::models::CHAT_MODELS;
 
 /// Picker entry that lets Macro choose the model. Turns run on
@@ -42,33 +41,34 @@ pub const ROUTED_MODELS: &[(&str, &str)] = &[
     ("google/gemini-3.8-flash", "Gemini 3.8 Flash"),
 ];
 
+const GEMINI_4_MODELS: &[(&str, &str)] = &[
+    (GEMINI_4_NEON, "Gemini 4 Neon"),
+    (GEMINI_4_CARBON, "Gemini 4 Carbon"),
+];
+
 /// House name for an advertised id, or the id itself when the catalog has
 /// none (closed chat models keep their frontend names).
 #[must_use]
 pub fn display_name(id: &str) -> &str {
     ROUTED_MODELS
         .iter()
+        .chain(GEMINI_4_MODELS)
         .find_map(|(model, name)| (*model == id).then_some(*name))
         .unwrap_or(id)
 }
 
-/// Auto, then the closed chat models, then the routed extras, in picker order.
+/// Auto, the closed chat catalog, then the provisioned routed models.
 #[must_use]
-pub fn advertised_models() -> &'static [&'static str] {
-    static MODELS: OnceLock<Vec<&'static str>> = OnceLock::new();
-    MODELS
-        .get_or_init(|| {
-            let mut models = Vec::with_capacity(CHAT_MODELS.len() + ROUTED_MODELS.len());
-            models.push(AUTO_MODEL);
-            models.extend_from_slice(CHAT_MODELS);
-            for (model, _) in ROUTED_MODELS {
-                if !models.contains(model) {
-                    models.push(model);
-                }
-            }
-            models
-        })
-        .as_slice()
+pub fn advertised_models(gemini_4_models: &[&'static str]) -> Vec<&'static str> {
+    let mut models = vec![AUTO_MODEL];
+    models.extend_from_slice(CHAT_MODELS);
+    for (model, _) in ROUTED_MODELS {
+        if !models.contains(model) {
+            models.push(model);
+        }
+    }
+    models.extend_from_slice(gemini_4_models);
+    models
 }
 
 /// Image input support for the models in Macro's catalog.
@@ -86,7 +86,9 @@ pub fn supports_images(id: &str) -> Option<bool> {
         return Some(true);
     }
     match id {
-        "fireworks/kimi-k3"
+        GEMINI_4_NEON
+        | GEMINI_4_CARBON
+        | "fireworks/kimi-k3"
         | "fireworks/deepseek-v4p1-flash-1017"
         | "fireworks/muse-glimmer-30b"
         | "fireworks/glm-5p3-flash"
@@ -116,7 +118,7 @@ pub fn context_window(id: &str) -> Option<u64> {
         | "anthropic/claude-opus-5-5"
         | "anthropic/claude-haiku-5-5" => 1_000_000,
         "openai/gpt-6-astra" | "openai/gpt-6.2-sol" | "openai/gpt-6-luna" => 1_050_000,
-        "google/gemini-3.8-flash" => 1_048_576,
+        "google/gemini-3.8-flash" | GEMINI_4_NEON | GEMINI_4_CARBON => 1_048_576,
         "fireworks/kimi-k3"
         | "fireworks/deepseek-v4p1-flash-1017"
         | "fireworks/glm-5p3"

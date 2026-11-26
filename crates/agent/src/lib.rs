@@ -30,6 +30,7 @@ pub use completion::{
 pub use convert::{merge_consecutive_parts, to_rig_messages, to_rig_messages_limited};
 pub use error::AgentError;
 pub use hook::{FinishedUserTool, PendingUserTool, UserToolFinisher};
+pub use model::gemini::{GEMINI_4_CARBON, GEMINI_4_NEON, Gemini4Client, requires_gemini_4_client};
 pub use model::metering::{MeteringContext, MeteringError, ProviderSupport, WireProtocol};
 pub use model::{ModelSpeed, PredefinedModel, ReasoningEffort};
 pub use stream::{

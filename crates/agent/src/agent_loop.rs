@@ -53,8 +53,7 @@ pub struct AgentLoop {
     genai_telemetry: bool,
     /// See [`Self::with_streamed_tool_calls`].
     stream_tool_calls: bool,
-    /// The router this loop's model calls use instead of the shared one, when
-    /// a caller-supplied key pays for them (see [`Self::with_provider_api_key`]).
+    /// A router bound to the agent's own key or the dedicated Gemini 4 client.
     router: Option<ModelRouter<MeteredHttpClient>>,
 }
 
@@ -96,6 +95,23 @@ impl AgentLoop {
     pub fn with_provider_api_key(mut self, api_key: &str) -> Result<Self, AgentError> {
         let provider = Model::try_from(self.model.as_str())?.provider().to_owned();
         let router = ModelRouter::shared()?.with_provider_api_key(&provider, api_key)?;
+        router.route(&self.model)?;
+        self.router = Some(router);
+        Ok(self)
+    }
+
+    /// Run a Gemini 4 model on its separately provisioned Developer API client.
+    /// Call after selecting the model.
+    pub fn with_gemini_4_client(
+        mut self,
+        client: &crate::Gemini4Client,
+    ) -> Result<Self, AgentError> {
+        if !client.models().contains(&self.model.as_str()) {
+            return Err(AgentError::UnknownModel(self.model));
+        }
+        let router = ModelRouter::shared()?
+            .clone()
+            .with_gemini_4_client(client.inner.clone(), client.models());
         router.route(&self.model)?;
         self.router = Some(router);
         Ok(self)
@@ -234,8 +250,8 @@ impl AgentLoop {
         Context: Clone + Send + Sync + 'static,
     {
         // The frontend selects the model by api id; route it to the provider
-        // that serves it (falling back to the default on unknown / unavailable
-        // ids). The router owns provider-specific agent construction.
+        // that serves it. The router decides when fallback is allowed and
+        // owns provider-specific agent construction.
         self.session_with(
             toolset,
             context,
@@ -246,7 +262,9 @@ impl AgentLoop {
                     Some(router) => router,
                     None => ModelRouter::shared().expect("failed to initialize model router"),
                 };
-                let routed = router.route_or_default(&self.model);
+                let Ok(routed) = router.route_or_default(&self.model) else {
+                    return ProviderAgent::Unavailable;
+                };
                 telemetry.set_model(routed.provider(), routed.model_name());
                 routed.into_agent(
                     self.reasoning_effort,
@@ -531,7 +549,9 @@ impl AgentLoop {
             system_prompt,
             usage_ctx,
             |handle, prompt, tool_search, max_turns, max_tokens, telemetry| {
-                let routed = router.route_or_default(&self.model);
+                let Ok(routed) = router.route_or_default(&self.model) else {
+                    return ProviderAgent::Unavailable;
+                };
                 telemetry.set_model(routed.provider(), routed.model_name());
                 ProviderAgent::Test(Box::new(routed.into_agent(
                     self.reasoning_effort,

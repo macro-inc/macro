@@ -2644,6 +2644,12 @@ permissions before inference, including after a plan downgrade. Permission
 lookup failures prevent inference. Paid users retain the full supported catalog.
 Cursor and paired external runtimes keep their own model rules.
 
+The gated dev catalog can add **Gemini 4 Neon** and **Gemini 4 Carbon** under
+Google for paid Macro users. Carbon becomes eligible on December 1, 2026 UTC.
+The candidate supports a first turn and its tool calls. Turns with assistant
+history are unavailable until signature replay is supported. If a saved
+Gemini 4 selection becomes unavailable, choose another model before sending.
+
 To verify, start a Macro conversation as a free user with a previously saved
 paid-model preference: the composer should show Gemini and send that model.
 In a live session, confirm the model options contain only Gemini. Backend tests

@@ -60,7 +60,9 @@ impl CompletionThinking {
     fn params(self, model: &str) -> Option<serde_json::Value> {
         match self {
             Self::Default => None,
-            Self::Low => self.params_for(&ModelRouter::shared().ok()?.route_or_default(model)),
+            Self::Low => {
+                self.params_for(&ModelRouter::shared().ok()?.route_or_default(model).ok()?)
+            }
         }
     }
 

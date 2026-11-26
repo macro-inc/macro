@@ -62,6 +62,8 @@ macro_env_var::maybe_env_vars!(
     /// empty: every call is a 503 `not_configured` and every solver run
     /// `notConfigured`.
     pub struct FireworkApiKey;
+    /// Dedicated Developer API credential for the Gemini 4 catalog.
+    pub struct GoogleGeminiFrontierApiKey;
 );
 
 /// The shortest idle timeout a deployment may set; see
@@ -197,6 +199,11 @@ pub struct Config {
     pub firework_api_key: FireworkApiKey,
     /// CapSolver key for agent teammates' CAPTCHA solves; optional.
     pub capsolver_api_key: CapsolverApiKey,
+    /// Opt-in for the Gemini 4 catalog, pending replay and billing readiness.
+    #[macro_config_default(false)]
+    pub enable_gemini_4_models: bool,
+    /// Key for the catalog's dedicated Google Gemini client.
+    pub google_gemini_frontier_api_key: GoogleGeminiFrontierApiKey,
     /// Run sandboxes on the local Docker daemon instead of Daytona.
     ///
     /// Default off: a deployed harness must keep using Daytona even if this
@@ -290,6 +297,23 @@ pub struct Config {
 }
 
 impl Config {
+    /// Require an explicit opt-in and key in each deployed environment.
+    pub(crate) fn gemini_4_api_key(&self) -> Option<&str> {
+        if matches!(self.environment, Environment::Local) || !self.enable_gemini_4_models {
+            return None;
+        }
+        self.google_gemini_frontier_api_key
+            .value()
+            .filter(|key| !key.trim().is_empty())
+    }
+
+    /// Whether Carbon's seeded rate is in effect, after the Developer API promotion.
+    pub(crate) fn gemini_4_carbon_standard_rate_started(today: chrono::NaiveDate) -> bool {
+        const START: chrono::NaiveDate =
+            chrono::NaiveDate::from_ymd_opt(2026, 12, 1).expect("valid start date");
+        today >= START
+    }
+
     /// The AI pricing every billing component is composed with. Every value
     /// is validated when the configuration loads.
     pub fn ai_pricing(&self) -> ai_billing::AiPricing {

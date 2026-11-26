@@ -981,11 +981,42 @@ async fn run_turn(
     let span = tracing::Span::current();
     span.record("agent.turn.lock_wait_ms", elapsed_ms(started));
     let admission_started = Instant::now();
-    let session_model = state
-        .store
-        .get(&state.session_id)
-        .map(|session| session.model.clone())
-        .unwrap_or_default();
+    let session_model = if let Some(session) = state.store.get(&state.session_id) {
+        if agent::requires_gemini_4_client(&session.model) {
+            if !state
+                .engine
+                .supported_models()
+                .contains(&session.model.as_str())
+            {
+                return Err(AcpError::invalid_params().data("This model is unavailable."));
+            }
+            // Reject incomplete history before admission and compaction.
+            if session
+                .history
+                .iter()
+                .any(|entry| !matches!(entry, HistoryEntry::User { .. }))
+            {
+                return Err(AcpError::invalid_params()
+                    .data("Gemini 4 conversation history cannot be replayed safely yet"));
+            }
+        }
+        session.model.clone()
+    } else {
+        String::new()
+    };
+    let frontier_plan = if agent::requires_gemini_4_client(&session_model) {
+        let access = tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+            result = state.model_access.access(&state.owner) => result.map_err(model_access_error)?,
+        };
+        if !access.allows(&session_model) {
+            return Err(model_access_error(ModelAccessError::Forbidden));
+        }
+        Some(access)
+    } else {
+        None
+    };
     // An agent with its own usable key runs every turn on it, never on the
     // owner's allowance; one without runs on Macro usage.
     let agent_key = tokio::select! {
@@ -1041,14 +1072,16 @@ async fn run_turn(
     } = state.turn_input(&prompt);
     // The turn already holds the key, so its provider decides the models
     // without asking for the key again.
-    let access = tokio::select! {
-        biased;
-        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        result = state.model_access.access(&state.owner) => SessionModels::new(
-            result.map_err(model_access_error)?,
-            agent_key.as_ref().map(|key| key.key.provider()),
-        ),
+    let plan = if let Some(plan) = frontier_plan {
+        plan
+    } else {
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+            result = state.model_access.access(&state.owner) => result.map_err(model_access_error)?,
+        }
     };
+    let access = SessionModels::new(plan, agent_key.as_ref().map(|key| key.key.provider()));
     if !access.allows(&model) {
         return Err(model_access_error(ModelAccessError::Forbidden));
     }

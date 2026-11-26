@@ -54,7 +54,7 @@ fn unroutable_ids_fall_back_to_the_smart_model() {
     for id in unroutable {
         assert!(router.route(id).is_err(), "`{id}` should not route");
 
-        let RoutedModel::Anthropic(fallback) = router.route_or_default(id) else {
+        let Ok(RoutedModel::Anthropic(fallback)) = router.route_or_default(id) else {
             panic!("`{id}` fallback should be native Anthropic");
         };
         let wire_id = fallback.completion().model;
@@ -111,6 +111,43 @@ fn google_provider_routes_to_native_gemini() {
 #[test]
 fn google_provider_without_a_client_is_unroutable() {
     assert!(test_router().route("google/gemini-3.8-flash").is_err());
+}
+
+#[test]
+fn gemini_4_never_falls_back_to_flash_or_anthropic() {
+    let flash = gemini::Client::builder()
+        .api_key("fixture-flash")
+        .build()
+        .unwrap();
+    let router = test_router().with_gemini_client(flash);
+    for id in [crate::GEMINI_4_NEON, crate::GEMINI_4_CARBON] {
+        assert!(matches!(
+            router.route_or_default(id),
+            Err(crate::AgentError::UnknownModel(_))
+        ));
+    }
+    assert!(router.route("google/ignored/../gemini-4-neon").is_err());
+    assert!(router.route("google/gemini-4-%6eeon").is_err());
+    let frontier = gemini::Client::builder()
+        .api_key("fixture-frontier")
+        .build()
+        .unwrap();
+    let neon_only = router
+        .clone()
+        .with_gemini_4_client(frontier.clone(), &[crate::GEMINI_4_NEON]);
+    assert!(neon_only.route_or_default(crate::GEMINI_4_NEON).is_ok());
+    assert!(neon_only.route_or_default(crate::GEMINI_4_CARBON).is_err());
+    let router =
+        router.with_gemini_4_client(frontier, &[crate::GEMINI_4_NEON, crate::GEMINI_4_CARBON]);
+    for (id, slug) in [
+        (crate::GEMINI_4_NEON, "gemini-4-neon"),
+        (crate::GEMINI_4_CARBON, "gemini-4-carbon"),
+        ("google/gemini-3.8-flash", "gemini-3.8-flash"),
+    ] {
+        let routed = router.route_or_default(id).unwrap();
+        assert!(matches!(routed, RoutedModel::Gemini(_)));
+        assert_eq!(routed.model_name(), slug);
+    }
 }
 
 #[test]
@@ -213,7 +250,7 @@ fn brief_structured_answers_lower_only_gemini_thinking() {
         .unwrap();
     let router = test_router().with_gemini_client(gemini);
     let params = |model: &str, thinking: CompletionThinking| {
-        thinking.params_for(&router.route_or_default(model))
+        thinking.params_for(&router.route_or_default(model).unwrap())
     };
     assert_eq!(
         params("google/gemini-3.8-flash", CompletionThinking::Low),
