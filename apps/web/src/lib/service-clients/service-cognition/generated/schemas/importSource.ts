@@ -17,4 +17,5 @@ export const ImportSource = {
   notion: 'notion',
   slack: 'slack',
   hubspot: 'hubspot',
+  salesforce: 'salesforce',
 } as const;

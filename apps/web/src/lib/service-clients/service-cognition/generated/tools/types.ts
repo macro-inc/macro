@@ -1044,7 +1044,13 @@ export type Code =
 /**
  * External systems items can be imported from.
  */
-export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack' | 'hubspot';
+export type ImportSource =
+  | 'linear'
+  | 'jira'
+  | 'notion'
+  | 'slack'
+  | 'hubspot'
+  | 'salesforce';
 /**
  * Status values accepted by [`CreateImportEntity`].
  */
@@ -3750,7 +3756,11 @@ export type ImportKind =
   | 'hubspot_pipeline'
   | 'hubspot_company'
   | 'hubspot_contact'
-  | 'hubspot_deal';
+  | 'hubspot_deal'
+  | 'salesforce_pipeline'
+  | 'salesforce_company'
+  | 'salesforce_contact'
+  | 'salesforce_deal';
 /**
  * The kind and severity of a user-visible change to a saved view.
  */
@@ -3810,7 +3820,8 @@ export type CrmLoss =
   | 'company_owner'
   | 'merged_company'
   | 'merged_contact'
-  | 'contact_without_company';
+  | 'contact_without_company'
+  | 'archived_stage';
 /**
  * Who a Notion workspace import shares what it writes with.
  */
@@ -11423,6 +11434,10 @@ export interface NotionImportReport {
    * A HubSpot plan's counts, owners and losses.
    */
   hubspot?: CrmReport | null;
+  /**
+   * A Salesforce plan's counts, owners and losses.
+   */
+  salesforce?: CrmReport | null;
 }
 /**
  * Details alongside the outcome on a Notion import card.
@@ -11785,6 +11800,22 @@ export interface ImportFromNotionResponse {
   report: NotionImportReport;
   /**
    * What happened and what to do next.
+   */
+  message: string;
+}
+/**
+ * Import a connected Salesforce org into the team's Macro CRM: the opportunity stages become one Sales pipeline, accounts become companies, contacts become CRM contacts, and opportunities become pipeline entries with stage, outcome, amount, close date and owner. Plan reads every account, contact and opportunity through the user's connected Salesforce account; nothing is written to Salesforce. Leads, activities and custom fields are not imported. Records belong to the team, so there is no sharing question. Present the plan immediately with PresentReview kind import, drafts [{source: salesforce}], even while it is running. Do not poll status or recreate records with other tools. Nothing is written until approval. Once the plan is ready, ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. While it is still being planned, do not ask or approve: the user approves it on the card once it is ready. Status reports progress; cancel stops this import and keeps records already written.
+ */
+export interface ImportFromSalesforce {
+  action: NotionImportAction;
+}
+/**
+ * Where a Salesforce import stands and what the agent should do next.
+ */
+export interface SalesforceImportResponse {
+  report: NotionImportReport;
+  /**
+   * Guidance on presenting or approving the current plan.
    */
   message: string;
 }

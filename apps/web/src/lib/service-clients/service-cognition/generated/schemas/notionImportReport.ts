@@ -11,6 +11,7 @@ import type { NotionImportReportError } from './notionImportReportError';
 import type { NotionImportReportErrorKind } from './notionImportReportErrorKind';
 import type { NotionImportReportHubspot } from './notionImportReportHubspot';
 import type { NotionImportReportReviewId } from './notionImportReportReviewId';
+import type { NotionImportReportSalesforce } from './notionImportReportSalesforce';
 import type { NotionImportReportScanned } from './notionImportReportScanned';
 import type { NotionImportReportStatus } from './notionImportReportStatus';
 import type { NotionReportItem } from './notionReportItem';
@@ -107,6 +108,7 @@ writes stays visible only to them. */
   projects?: number;
   /** The review the plan is tied to, once presented. */
   reviewId?: NotionImportReportReviewId;
+  salesforce?: NotionImportReportSalesforce;
   scanned?: NotionImportReportScanned;
   /**
    * Written plan objects shared with the user's team.

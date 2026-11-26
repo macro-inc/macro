@@ -186,7 +186,12 @@ export type CrmLoss =
    *  A contact whose company was left out of the import; it is created
    *  without one.
    */
-  | 'contact_without_company';
+  | 'contact_without_company'
+  /**
+   *  A deal in a stage the source archived or no longer uses; it is
+   *  imported without a stage.
+   */
+  | 'archived_stage';
 
 /**  How many records lost one thing. */
 export type CrmLossCount = {
@@ -373,7 +378,15 @@ export type ImportKind =
   /**  A HubSpot contact. */
   | 'hubspot_contact'
   /**  A HubSpot deal. */
-  | 'hubspot_deal';
+  | 'hubspot_deal'
+  /**  The Salesforce opportunity stages, as one pipeline. */
+  | 'salesforce_pipeline'
+  /**  A Salesforce account. */
+  | 'salesforce_company'
+  /**  A Salesforce contact. */
+  | 'salesforce_contact'
+  /**  A Salesforce opportunity. */
+  | 'salesforce_deal';
 
 /**  Which source's staged plan an import review presents. */
 export type ImportReviewSource =
@@ -384,7 +397,9 @@ export type ImportReviewSource =
   /**  A Jira plan, staged by ImportFromJira. */
   | 'jira'
   /**  A HubSpot plan, staged by ImportFromHubspot. */
-  | 'hubspot';
+  | 'hubspot'
+  /**  A Salesforce plan, staged by ImportFromSalesforce. */
+  | 'salesforce';
 
 /**  Review item state, shared with notification consumers. */
 export type ItemStatus =
@@ -517,6 +532,8 @@ export type NotionImportReport_Deserialize = {
   failureCount?: number;
   /**  A HubSpot plan's counts, owners and losses. */
   hubspot?: CrmReport | null;
+  /**  A Salesforce plan's counts, owners and losses. */
+  salesforce?: CrmReport | null;
 };
 
 /**  Where a Notion workspace import stands. */
@@ -612,6 +629,8 @@ export type NotionImportReport_Serialize = {
   failureCount: number;
   /**  A HubSpot plan's counts, owners and losses. */
   hubspot?: CrmReport | null;
+  /**  A Salesforce plan's counts, owners and losses. */
+  salesforce?: CrmReport | null;
 };
 
 /**  A teammate who already imported some of a plan's objects. */

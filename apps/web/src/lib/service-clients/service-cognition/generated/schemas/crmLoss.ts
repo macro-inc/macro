@@ -25,4 +25,5 @@ export const CrmLoss = {
   merged_company: 'merged_company',
   merged_contact: 'merged_contact',
   contact_without_company: 'contact_without_company',
+  archived_stage: 'archived_stage',
 } as const;

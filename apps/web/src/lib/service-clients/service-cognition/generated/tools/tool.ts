@@ -259,6 +259,10 @@ type ToolParserMap = {
     call: types.ImportFromNotion;
     response: types.ImportFromNotionResponse;
   };
+  ImportFromSalesforce: {
+    call: types.ImportFromSalesforce;
+    response: types.SalesforceImportResponse;
+  };
   ImportNotionPage: {
     call: types.ImportNotionPage;
     response: types.ImportNotionPageResponse;
@@ -850,6 +854,10 @@ const toolParserMap = {
   ImportFromNotion: {
     call: schemas.ImportFromNotion,
     response: schemas.ImportFromNotionResponse,
+  },
+  ImportFromSalesforce: {
+    call: schemas.ImportFromSalesforce,
+    response: schemas.SalesforceImportResponse,
   },
   ImportNotionPage: {
     call: schemas.ImportNotionPage,
@@ -1486,6 +1494,10 @@ type ToolDataMap = {
   ImportFromNotion: {
     call: types.ImportFromNotion;
     response: types.ImportFromNotionResponse;
+  };
+  ImportFromSalesforce: {
+    call: types.ImportFromSalesforce;
+    response: types.SalesforceImportResponse;
   };
   ImportNotionPage: {
     call: types.ImportNotionPage;
