@@ -26,10 +26,6 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: alloy
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/component: metrics-generator
-              app.kubernetes.io/name: tempo
       ports:
         - port: 8080
           protocol: TCP

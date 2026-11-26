@@ -59,6 +59,12 @@ export const buildAppUrl = (path: string): string => {
   return url.toString();
 };
 
+/** The same, as a path on this origin, so a preview site stays on itself. */
+export const buildAppPath = (path: string): string => {
+  const url = new URL(buildAppUrl(path));
+  return `${url.pathname}${url.search}`;
+};
+
 /** Google SSO URL with any captured attribution params appended. */
 export const buildGoogleSsoUrl = (): string => {
   const url = new URL(GOOGLE_SSO_URL);

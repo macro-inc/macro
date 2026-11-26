@@ -38,6 +38,9 @@ function reviewSummary(
   let summary: string;
   if (payload.outcome === 'dismissed') {
     summary = `${actor} dismissed ${count}`;
+  } else if (payload.outcome === 'refused') {
+    // Nothing started; the review is open again, unchanged.
+    return { summary: 'Not started · review still open', failed: true };
   } else if (settled) {
     summary = `Review finished · ${completed} of ${count} completed`;
   } else if (payload.outcome === 'approved') {

@@ -305,7 +305,7 @@ async fn an_unauthorized_answer_is_final_after_one_attempt() {
             ("attempts", "1"),
             ("status", "401"),
             ("outcome", "not_retryable"),
-            ("error_class", "upstream"),
+            ("error_class", "access_lost"),
         ])]
     );
     assert_eq!(
@@ -316,14 +316,17 @@ async fn an_unauthorized_answer_is_final_after_one_attempt() {
             ("attempts", "1"),
             ("status", "401"),
             ("outcome", "not_retryable"),
-            ("error_class", "upstream"),
+            ("error_class", "access_lost"),
         ])]
     );
     assert_eq!(
         captured.errors(),
         vec![(
             Some("notion.request"),
-            fields(&[("error", "Notion could not complete the request (HTTP 401)")])
+            fields(&[(
+                "error",
+                "Notion no longer accepts Macro's connection (it was revoked or expired); reconnect Notion"
+            )])
         )]
     );
 }

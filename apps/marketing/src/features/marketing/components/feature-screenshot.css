@@ -4,7 +4,7 @@
   margin: 0;
   padding: 16px;
   border-radius: 14px;
-  background: rgb(16 16 16 / 50%);
+  background: var(--feature-screenshot-stage, rgb(16 16 16 / 50%));
 }
 
 .feature-screenshot--wallpaper {

@@ -1,3 +1,4 @@
+import { ScreenLinkChips } from '@app/features/agent-screen/screen-chip';
 import {
   decodePane,
   decodePanes,
@@ -97,7 +98,7 @@ function useAgentReplyLinkOpener(
 
 /**
  * Macro app links inside open in the app, in a new split, instead of a browser
- * tab. `openOther` is offered every other link first, such as a link to code,
+ * tab; a link to an agent's screen is drawn as a chip that opens it to watch. `openOther` is offered every other link first, such as a link to code,
  * and `describeOther` names those links in their hover cards.
  */
 export function AgentReplyLinks(
@@ -111,7 +112,8 @@ export function AgentReplyLinks(
       value={useAgentReplyLinkOpener(props.openOther)}
     >
       <AppLinkDescriberContext.Provider value={props.describeOther}>
-        {props.children}
+        {/* A link to an agent's screen reads as its chip. */}
+        <ScreenLinkChips>{props.children}</ScreenLinkChips>
       </AppLinkDescriberContext.Provider>
     </AppLinkOpenerContext.Provider>
   );

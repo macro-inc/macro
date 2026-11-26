@@ -1,6 +1,7 @@
+import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { ThrownResultError } from '@core/util/result';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import type { AnyVariables } from '@urql/core';
 import type { GraphQLError } from 'graphql';
 import {
@@ -35,34 +36,58 @@ async function mutateEntity<Data, Variables extends AnyVariables>(
   return Telemetry.span(`entity.${operation}`, async (span) => {
     span.setAttr('entity.id', entity.id);
     span.setAttr('entity.type', entity.type);
-    const result = await getEntityGraphqlClient()
-      .mutation(document, variables)
-      .toPromise();
-    // A result's effects are its cache patches, resolved after the write
-    // committed: failing to render them does not undo the mutation.
-    const graphQLErrors = result.error?.graphQLErrors ?? [];
-    const effectErrors = graphQLErrors.filter(isEffectsError);
-    if (
-      result.error &&
-      (result.error.networkError || effectErrors.length < graphQLErrors.length)
-    )
-      throw result.error;
-    const results = result.data ? payload(result.data).results : [];
-    const outcome = results[0];
-    if (results.length !== 1 || !outcome)
-      throw new Error(`${operation} returned no unambiguous entity result`);
-    if (outcome.__typename === 'GraphqlMutationError') {
-      throw new ThrownResultError([
-        { code: outcome.errorCode, message: outcome.message },
-      ]);
+    try {
+      return await sendEntityMutation(
+        span,
+        operation,
+        document,
+        variables,
+        payload
+      );
+    } catch (error) {
+      // A fixed message: server errors can echo entity names.
+      span.error(`Entity ${operation} failed`);
+      throw error;
     }
-    if (effectErrors.length > 0) {
-      // The caller's Soup refresh fetches what the patches would have carried.
-      span.setAttr('entity.effects_error', effectErrors[0]?.message ?? '');
-      return { ...outcome, effects: [] };
-    }
-    return outcome;
   });
+}
+
+async function sendEntityMutation<Data, Variables extends AnyVariables>(
+  span: Span,
+  operation: string,
+  document: TypedDocumentNode<Data, Variables>,
+  variables: Variables,
+  payload: (data: Data) => EntityMutationPayloadFieldsFragment
+) {
+  // Its request, queue attempt and cache writes join this span's trace.
+  const result = await getEntityGraphqlClient()
+    .mutation(document, variables, { [TRACE_PARENT_CONTEXT_KEY]: span })
+    .toPromise();
+  // A result's effects are its cache patches, resolved after the write
+  // committed: failing to render them does not undo the mutation.
+  const graphQLErrors = result.error?.graphQLErrors ?? [];
+  const effectErrors = graphQLErrors.filter(isEffectsError);
+  if (
+    result.error &&
+    (result.error.networkError || effectErrors.length < graphQLErrors.length)
+  )
+    throw result.error;
+  const results = result.data ? payload(result.data).results : [];
+  const outcome = results[0];
+  if (results.length !== 1 || !outcome)
+    throw new Error(`${operation} returned no unambiguous entity result`);
+  if (outcome.__typename === 'GraphqlMutationError') {
+    span.setAttr('entity.error_code', outcome.errorCode);
+    throw new ThrownResultError([
+      { code: outcome.errorCode, message: outcome.message },
+    ]);
+  }
+  if (effectErrors.length > 0) {
+    // The caller's Soup refresh fetches what the patches would have carried.
+    span.setAttr('entity.effects_error', effectErrors[0]?.message ?? '');
+    return { ...outcome, effects: [] };
+  }
+  return outcome;
 }
 
 export const moveGraphqlEntity = (input: MoveEntityInput) =>

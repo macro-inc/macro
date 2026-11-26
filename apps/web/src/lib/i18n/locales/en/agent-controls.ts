@@ -8,6 +8,8 @@ export default {
   models: 'Models',
   seeAll: 'See all',
   moreModels: 'More models',
+  builtInAgents: 'Built-in',
+  needsConnection: 'Needs connection',
   createAgent: 'Create agent',
   model: 'Model',
   keepModel: 'Keep {{model}} for {{agent}}',

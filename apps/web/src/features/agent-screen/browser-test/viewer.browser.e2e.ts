@@ -373,3 +373,117 @@ for (const theme of ['light', 'dark'] as const) {
     }
   });
 }
+
+test('a canceled handshake and a decoded frame produce one summary each in the same journey', async ({
+  page,
+}) => {
+  const attempts: URL[] = [];
+  const summaries: Record<string, string | number>[] = [];
+
+  await page.route('**/screen-attempt-otlp', async (route) => {
+    const body: {
+      resourceSpans: {
+        scopeSpans: {
+          spans: {
+            name: string;
+            attributes: {
+              key: string;
+              value: { stringValue?: string; intValue?: string };
+            }[];
+          }[];
+        }[];
+      }[];
+    } = route.request().postDataJSON();
+
+    for (const { scopeSpans } of body.resourceSpans) {
+      for (const { spans } of scopeSpans) {
+        for (const span of spans) {
+          if (span.name !== 'computer.screen.connect') continue;
+          summaries.push(
+            Object.fromEntries(
+              span.attributes.map(({ key, value }) => [
+                key,
+                value.stringValue ?? Number(value.intValue),
+              ])
+            )
+          );
+        }
+      }
+    }
+    await route.fulfill({ json: {} });
+  });
+
+  await page.routeWebSocket('**/screen-attempt-fixture?*', (socket) => {
+    attempts.push(new URL(socket.url()));
+    // Let the first attempt reach the WebSocket, then wait for the retry.
+    if (attempts.length === 1) return;
+
+    socket.send(Buffer.from('RFB 003.008\n'));
+    let step = 0;
+    let requestedFrame = false;
+    socket.onMessage((message) => {
+      if (typeof message === 'string') return;
+      step += 1;
+      if (step === 1) socket.send(Buffer.from([1, 1]));
+      if (step === 2) socket.send(Buffer.alloc(4));
+      if (step === 3) {
+        // ServerInit for a 1x1 desktop, 32bpp true color.
+        socket.send(
+          Buffer.from([
+            0, 1, 0, 1, 32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0,
+            0, 0, 0, 0,
+          ])
+        );
+      }
+      if (message[0] === 3 && !requestedFrame) {
+        requestedFrame = true;
+        socket.send(Buffer.alloc(4)); // Empty update before any pixels.
+      } else if (message[0] === 3) {
+        // One FramebufferUpdate containing a single raw rectangle.
+        socket.send(
+          Buffer.from([
+            0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 255, 0,
+          ])
+        );
+      }
+    });
+  });
+
+  const errors = await open(page, 'state=telemetry');
+  expect(errors).toEqual([]);
+  await expect.poll(() => attempts.length).toBe(1);
+  await page.getByRole('button', { name: 'Restart fixture' }).click();
+
+  await expect.poll(() => summaries.length).toBe(2);
+  const journey = attempts[0].searchParams.get('journey');
+  expect(journey).toBeTruthy();
+  expect(
+    attempts.map((attempt) => attempt.searchParams.get('journey'))
+  ).toEqual([journey, journey]);
+  expect(
+    attempts.map((attempt) => attempt.searchParams.get('attempt'))
+  ).toEqual(['1', '2']);
+  expect(summaries).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        'screen.journey.id': journey,
+        'screen.attempt': 0,
+        'screen.connect_generation': 1,
+        'screen.terminal_stage': 'socket_upgrade',
+        'screen.close_reason': 'canceled',
+      }),
+      expect.objectContaining({
+        'screen.journey.id': journey,
+        'screen.attempt': 0,
+        'screen.connect_generation': 2,
+        'screen.terminal_stage': 'first_frame',
+        'screen.close_reason': 'ready',
+      }),
+    ])
+  );
+  const completed = summaries.find(
+    (summary) => summary['screen.connect_generation'] === 2
+  );
+  expect(completed?.['screen.bytes_received']).toBeGreaterThanOrEqual(66);
+  expect(errors).toEqual([]);
+});

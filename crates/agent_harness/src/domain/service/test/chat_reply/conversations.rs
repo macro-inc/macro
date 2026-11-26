@@ -36,7 +36,6 @@ async fn quota_denial_finishes_queued_conversation_turns_without_stopping_the_ru
         PromptComposerMock::default(),
         KindDefaultPolicies,
         HarnessDefaultCodingAgents,
-        PromptMentionsMock::new(),
         EgressProvisionerMock::new(),
         Some(journal.clone()),
     );
@@ -138,7 +137,6 @@ async fn a_message_whose_conversation_was_deleted_is_acknowledged_instead_of_red
         PromptComposerMock::default(),
         KindDefaultPolicies,
         HarnessDefaultCodingAgents,
-        PromptMentionsMock::new(),
         EgressProvisionerMock::new(),
         Some(journal),
         Some(policy),
@@ -423,7 +421,6 @@ async fn a_completed_conversation_message_never_runs_again_when_the_broker_repla
         PromptComposerMock::default(),
         KindDefaultPolicies,
         HarnessDefaultCodingAgents,
-        PromptMentionsMock::new(),
         EgressProvisionerMock::new(),
         Some(journal.clone()),
     );
@@ -475,7 +472,6 @@ async fn recovered_messages_dispatch_in_durable_order_even_when_delivered_in_rev
         PromptComposerMock::default(),
         KindDefaultPolicies,
         HarnessDefaultCodingAgents,
-        PromptMentionsMock::new(),
         EgressProvisionerMock::new(),
         Some(journal.clone()),
     );
@@ -560,7 +556,6 @@ async fn journaled_conversation(
         PromptComposerMock::default(),
         KindDefaultPolicies,
         HarnessDefaultCodingAgents,
-        PromptMentionsMock::new(),
         EgressProvisionerMock::new(),
         Some(journal),
     );
@@ -954,7 +949,6 @@ async fn two_queued_behind_a_running_turn(
         prompt_composer,
         KindDefaultPolicies,
         HarnessDefaultCodingAgents,
-        PromptMentionsMock::new(),
         EgressProvisionerMock::new(),
         Some(journal),
     );

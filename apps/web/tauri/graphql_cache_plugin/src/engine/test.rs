@@ -4,6 +4,7 @@ use pollster::block_on;
 mod authority;
 mod bench;
 mod calendar;
+mod contention;
 mod people;
 mod soup;
 mod watch;
@@ -147,6 +148,7 @@ fn empty_write_result() -> WriteResultWire {
         affected_ops: Vec::new(),
         reset: false,
         revalidations: Vec::new(),
+        engine: None,
     }
 }
 
@@ -615,6 +617,9 @@ fn optimistic_layer_commits_durably() {
     assert_eq!(optimistic.result.affected_ops, vec!["client:1".to_string()]);
     let serialized = serde_json::to_value(&optimistic).unwrap();
     assert_eq!(serialized["upsertKind"]["kind"], "inserted");
+    // The enqueue reports its engine wait and hold for its queue span.
+    assert!(serialized["engine"]["lockWaitMs"].as_f64().unwrap() >= 0.0);
+    assert!(serialized["engine"]["lockHoldMs"].as_f64().unwrap() >= 0.0);
     assert_eq!(serialized["initialClaim"]["kind"], "claimed");
     assert_eq!(
         serialized["initialClaim"]["mutation"]["transactionId"],
@@ -656,6 +661,9 @@ fn optimistic_layer_commits_durably() {
         soup_data(true),
     ))
     .unwrap();
+    let serialized = serde_json::to_value(&committed).unwrap();
+    assert_eq!(serialized["kind"], "committed");
+    assert!(serialized["engine"]["lockHoldMs"].as_f64().unwrap() >= 0.0);
     let CommitOptimisticWriteResultWire::Committed { result: committed } = committed else {
         panic!("current transaction was reported as superseded")
     };

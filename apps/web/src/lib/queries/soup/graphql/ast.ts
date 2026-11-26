@@ -97,8 +97,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function unsupported(message: string): never {
-  throw new Error(`Unsupported GraphQL Soup AST: ${message}`);
+/**
+ * A Soup request with no GraphQL translation. `reason` is fixed text, never
+ * a filter value or an unrecognized key, so it may go to telemetry; a
+ * rejected value or key appears only in `message`.
+ */
+export class UnsupportedGraphqlSoupError extends Error {
+  constructor(
+    readonly reason: string,
+    rejected: unknown[] = []
+  ) {
+    super(
+      [`Unsupported GraphQL Soup AST: ${reason}`, ...rejected.map(String)].join(
+        ' '
+      )
+    );
+    this.name = 'UnsupportedGraphqlSoupError';
+  }
+}
+
+/** Rejects the request; `rejected` values stay out of `reason`. */
+function unsupported(reason: string, ...rejected: unknown[]): never {
+  throw new UnsupportedGraphqlSoupError(reason, rejected);
 }
 
 function compileExpr<TLiteral>(
@@ -224,7 +244,7 @@ function mapDocumentPredicate(
     association !== 'other' &&
     !types.some((type) => type.app === association)
   )
-    unsupported(`unknown file association ${association}`);
+    unsupported('unknown file association', association);
   // Match item_filters::ast::document::other. The Files Other category adds
   // its own image/document/video exclusions on top of this association.
   const extensions = [
@@ -294,7 +314,7 @@ function mapDocumentSubType(value: unknown): 'TASK' | 'SNIPPET' | 'SKILL' {
   if (subType === 'task') return 'TASK';
   if (subType === 'snippet') return 'SNIPPET';
   if (subType === 'skill') return 'SKILL';
-  unsupported(`unsupported document subType ${subType}`);
+  unsupported('unsupported document subType', subType);
 }
 
 function mapChannelType(
@@ -311,7 +331,7 @@ function mapChannelType(
     case 'team':
       return 'TEAM';
     default:
-      unsupported(`unsupported channelType ${channelType}`);
+      unsupported('unsupported channelType', channelType);
   }
 }
 
@@ -320,7 +340,7 @@ function mapEmailAttachment(value: unknown) {
     .with('pdf', () => 'PDF' as const)
     .with('image', () => 'IMAGE' as const)
     .with('document', () => 'DOCUMENT' as const)
-    .otherwise(() => unsupported(`email attachment kind ${String(value)}`));
+    .otherwise(() => unsupported('email attachment kind', value));
 }
 
 function mapEmailShared(value: unknown): 'EXCLUDE' | 'INCLUDE' | 'ONLY' {
@@ -333,7 +353,7 @@ function mapEmailShared(value: unknown): 'EXCLUDE' | 'INCLUDE' | 'ONLY' {
     case 'only':
       return 'ONLY';
     default:
-      unsupported(`unsupported shared email filter ${shared}`);
+      unsupported('unsupported shared email filter', shared);
   }
 }
 
@@ -361,7 +381,7 @@ function mapCalendarEventLiteral(
     case 'ns':
       return { notificationState: mapNotificationState(value) };
     default:
-      unsupported(`calendar event literal ${field}`);
+      unsupported('calendar event literal with an unknown key', field);
   }
 }
 
@@ -403,7 +423,7 @@ function mapDocumentLiteral(literal: unknown): GraphqlDocumentLiteralInput {
     case 'nc':
       return { nameContains: mapString(value, 'nameContains') };
     default:
-      unsupported(`document literal ${field}`);
+      unsupported('document literal with an unknown key', field);
   }
 }
 
@@ -412,7 +432,7 @@ function mapCrmAssociation(value: unknown): GraphqlCrmAssociation {
   const [field, id] = singleLiteralField(value);
   if (field === 'company') return { company: mapString(id, 'company') };
   if (field === 'contact') return { contact: mapString(id, 'contact') };
-  unsupported(`CRM association ${field}`);
+  unsupported('CRM association with an unknown key', field);
 }
 
 function mapProjectLiteral(literal: unknown): GraphqlProjectLiteralInput {
@@ -433,7 +453,7 @@ function mapProjectLiteral(literal: unknown): GraphqlProjectLiteralInput {
     case 'ua':
       return { updatedAt: mapDateLiteral(value) };
     default:
-      unsupported(`project literal ${field}`);
+      unsupported('project literal with an unknown key', field);
   }
 }
 
@@ -443,7 +463,7 @@ function mapInitiativeLiteral(literal: unknown): GraphqlInitiativeLiteralInput {
   if (field === 'id') return { id: mapString(value, 'id') };
   if (field === 'o') return { owner: mapString(value, 'owner') };
   if (field === 'ns') return { notificationState: mapNotificationState(value) };
-  return unsupported(`initiative literal ${field}`);
+  return unsupported('initiative literal with an unknown key', field);
 }
 
 function mapChatLiteral(literal: unknown): GraphqlChatLiteralInput {
@@ -464,7 +484,7 @@ function mapChatLiteral(literal: unknown): GraphqlChatLiteralInput {
     case 'ua':
       return { updatedAt: mapDateLiteral(value) };
     default:
-      unsupported(`chat literal ${field}`);
+      unsupported('chat literal with an unknown key', field);
   }
 }
 
@@ -473,7 +493,7 @@ function mapNotificationState(value: unknown) {
     .with('unseen', () => 'UNSEEN' as const)
     .with('seen', () => 'SEEN' as const)
     .with('done', () => 'DONE' as const)
-    .otherwise(() => unsupported(`notification state ${String(value)}`));
+    .otherwise(() => unsupported('notification state', value));
 }
 
 function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
@@ -516,7 +536,7 @@ function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
     case 'ua':
       return { updatedAt: mapDateLiteral(value) };
     default:
-      unsupported(`email literal ${field}`);
+      unsupported('email literal with an unknown key', field);
   }
 }
 
@@ -538,7 +558,7 @@ function mapChannelLiteral(literal: unknown): GraphqlChannelLiteralInput {
     case 'NotificationState':
       return { notificationState: mapNotificationState(value) };
     default:
-      unsupported(`channel literal ${field}`);
+      unsupported('channel literal with an unknown key', field);
   }
 }
 
@@ -574,7 +594,7 @@ function mapChannelThreadLiteral(
 ): GraphqlChannelThreadLiteralInput {
   const [field, value] = singleLiteralField(literal);
   if (!isChannelThreadLiteralField(field)) {
-    unsupported(`channel thread literal ${field}`);
+    unsupported('channel thread literal with an unknown key', field);
   }
 
   return match(field)
@@ -606,13 +626,13 @@ function mapCallLiteral(literal: unknown): GraphqlCallLiteralInput {
       return { speaker: mapString(value, 'speaker') };
     case 'Status': {
       const status = mapString(value, 'status');
-      if (!isGraphqlCallStatus(status)) unsupported(`call status ${status}`);
+      if (!isGraphqlCallStatus(status)) unsupported('call status', status);
       return { status };
     }
     case 'Attended':
       return { attended: mapBoolean(value, 'attended') };
     default:
-      unsupported(`call literal ${field}`);
+      unsupported('call literal with an unknown key', field);
   }
 }
 
@@ -624,7 +644,7 @@ function mapCrmCompanyLiteral(literal: unknown): GraphqlCrmCompanyLiteralInput {
     case 'hidden':
       return { hidden: mapBoolean(value, 'hidden') };
     default:
-      unsupported(`crm company literal ${field}`);
+      unsupported('crm company literal with an unknown key', field);
   }
 }
 
@@ -645,7 +665,7 @@ function mapCrmContactLiteral(literal: unknown): GraphqlCrmContactLiteral {
     case 'hidden':
       return { hidden: mapBoolean(value, 'hidden') };
     default:
-      unsupported(`crm contact literal ${field}`);
+      unsupported('crm contact literal with an unknown key', field);
   }
 }
 
@@ -665,7 +685,7 @@ function mapForeignEntityLiteral(
     case 'ns':
       return { notificationState: mapNotificationState(value) };
     default:
-      unsupported(`foreign entity literal ${field}`);
+      unsupported('foreign entity literal with an unknown key', field);
   }
 }
 
@@ -676,7 +696,7 @@ function mapGithubPullRequestState(
   if (state === 'open') return 'OPEN';
   if (state === 'closed') return 'CLOSED';
   if (state === 'merged') return 'MERGED';
-  unsupported(`unsupported pull request status ${state}`);
+  unsupported('unsupported pull request status', state);
 }
 
 function mapGithubPullRequestReviewStatus(
@@ -687,7 +707,7 @@ function mapGithubPullRequestReviewStatus(
   if (status === 'required') return 'REQUIRED';
   if (status === 'approved') return 'APPROVED';
   if (status === 'changes_requested') return 'CHANGES_REQUESTED';
-  unsupported(`unsupported pull request review status ${status}`);
+  unsupported('unsupported pull request review status', status);
 }
 
 function mapGithubPullRequestLiteral(
@@ -721,7 +741,7 @@ function mapGithubPullRequestLiteral(
     case 'rb':
       return { reviewedBy: mapString(value, 'reviewedBy') };
     default:
-      unsupported(`github pull request literal ${field}`);
+      unsupported('github pull request literal with an unknown key', field);
   }
 }
 
@@ -748,7 +768,7 @@ function mapPropertiesLiteral(literal: unknown): GraphqlPropertiesLiteralInput {
       ? undefined
       : propertyEntityTypes.find((type) => type === literal.et);
   if (literal.et !== undefined && !entityType)
-    unsupported(`property entity type ${literal.et}`);
+    unsupported('property entity type', literal.et);
   const property = { propertyDefinitionId, ...(entityType && { entityType }) };
   const value = literal.v;
   if (!isRecord(value)) unsupported('expected property value matcher object');
@@ -829,7 +849,7 @@ function mapEmailView(
     case undefined:
       return undefined;
     default:
-      return unsupported(`email view ${view}`);
+      return unsupported('email view', view);
   }
 }
 
@@ -912,7 +932,7 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
           return { visibility: 'UNLISTED' };
         if (field === 'vis' && value === 'hidden')
           return { visibility: 'HIDDEN' };
-        return unsupported(`agent session literal ${field}`);
+        return unsupported('unsupported agent session literal', field);
       }
     );
   }

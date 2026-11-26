@@ -82,6 +82,7 @@ export const TOKENS = {
       today: 'calendar.period.today',
     },
     search: 'calendar.search',
+    goToDate: 'calendar.goToDate',
   },
 
   // global

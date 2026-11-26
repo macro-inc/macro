@@ -7,7 +7,7 @@ import { QueryClientProvider, QueryObserver } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryClient } from '../../client';
-import { useUpsertToHistoryMutation } from '../history';
+import { recordHistoryView, useUpsertToHistoryMutation } from '../history';
 import { historyKeys } from '../keys';
 
 const mocks = vi.hoisted(() => ({
@@ -163,6 +163,34 @@ describe('a recorded view in cached history', () => {
       ).toEqual([{ id: 'old-canvas' }])
     );
     unsubscribe();
+  });
+
+  it('stamps and rereads the same way when recorded without a component', async () => {
+    mocks.held.add('GraphqlSoupDocument:old-canvas');
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    await recordHistoryView({ itemId: 'old-canvas', itemType: 'document' });
+
+    await waitFor(() => expect(historyRereads(invalidate)).toBe(1));
+    expect(stampedIds()).toEqual(['old-canvas']);
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: historyKeys.list.queryKey,
+    });
+  });
+
+  it('resolves when the server refuses a view recorded without a component', async () => {
+    mocks.upsert.mockResolvedValue(err([{ code: 'NETWORK', message: 'x' }]));
+
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+
+    await recordHistoryView({ itemId: 'shared', itemType: 'document' });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: historyKeys.list.queryKey,
+    });
+    expect(mocks.query).not.toHaveBeenCalled();
+    expect(mocks.writeQuery).not.toHaveBeenCalled();
   });
 
   it('loads and stamps nothing when the server did not record the view', async () => {

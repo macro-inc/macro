@@ -313,15 +313,11 @@ let
     sort = 2;
   };
 
-  # The local stacks' own traces, logs and metrics, from machines whose local
-  # telemetry settings say `services = true` (docs/development/running-locally.md).
-  # Their forwarder tags everything `host.name` = the machine's name and
-  # `deployment.environment` = local.
+  # The local stacks' own traces, from machines whose local telemetry settings
+  # say `services = true` (docs/development/running-locally.md). Their forwarder
+  # tags everything `host.name` = the machine's name and
+  # `deployment.environment` = local; ingest drops their logs.
   localTop = 140;
-  machineFilter = ''host_name=~"$machine"'';
-  serviceLogs = ''{deployment_environment="local", service_name!="local-telemetry"} | ${machineFilter}'';
-  errorLogs = ''${serviceLogs} | severity_text=~"(?i)error|fatal|critical"'';
-  bothLabels = "host_name, macro_local_instance";
 
   recentRuns = {
     id = 13;
@@ -505,7 +501,7 @@ let
   dashboard = {
     uid = "macro-run-local";
     title = "Macro run_local";
-    description = "Where `just run_local` time goes, from the local telemetry events (on by default) in Loki (service_name=local-telemetry, kept 30 days) and each run's trace in Tempo (kept 7 days). Set the range to a day or more for percentiles; the Machine variable narrows every panel. The last row shows the local stacks' own traces and logs from machines that turned on `services = true`.";
+    description = "Where `just run_local` time goes, from the local telemetry events (on by default) in Loki (service_name=local-telemetry, kept 30 days) and each run's trace in Tempo (kept 7 days). Set the range to a day or more for percentiles; the Machine variable narrows every panel. The last row shows the local stacks' own traces from machines that turned on `services = true`.";
     schemaVersion = 39;
     version = 2;
     editable = false;
@@ -587,44 +583,13 @@ let
 
       (row 105 localTop "Failures and local stacks (`services = true`)")
       (lokiTable 6 "failures" (grid 0 (localTop + 1) 12 8))
-      (
-        (lokiTableOf 21 {
-          title = "Stacks sending telemetry, last 24 hours";
-          description = "Each machine's stacks by instance, from their log lines. A stack started before `services = true` was turned on has no instance until its next bring-up.";
-          by = [
-            "host_name"
-            "macro_local_instance"
-          ];
-          sort = "Log lines";
-          columns = [
-            {
-              name = "Services";
-              unit = "short";
-              expr = "count by (${bothLabels}) (sum by (${bothLabels}, service_name) (count_over_time(${serviceLogs} [$RANGE])))";
-            }
-            {
-              name = "Log lines";
-              unit = "short";
-              expr = "sum by (${bothLabels}) (count_over_time(${serviceLogs} [$RANGE]))";
-            }
-            {
-              name = "Errors";
-              unit = "short";
-              expr = "sum by (${bothLabels}) (count_over_time(${errorLogs} [$RANGE]))";
-            }
-          ];
-        } (grid 12 (localTop + 1) 12 8))
-        // {
-          timeFrom = "24h";
-        }
-      )
       {
         id = 22;
         type = "table";
         title = "Recent local traces";
         description = "Sampled on each machine: every trace with an error and a tenth of the rest. Open a trace ID for its waterfall; expand a row for its machine and instance.";
         datasource = tempo;
-        gridPos = grid 0 (localTop + 9) 24 10;
+        gridPos = grid 12 (localTop + 1) 12 8;
         targets = [
           {
             refId = "A";
@@ -637,32 +602,6 @@ let
           }
         ];
         options.showHeader = true;
-      }
-      (lokiSeries 23 (grid 0 (localTop + 19) 24 8) "Local error logs"
-        "Error, fatal and critical log lines from local services, by machine and service."
-        "short"
-        "1m"
-        [
-          {
-            expr = "sum by (host_name, service_name) (count_over_time(${errorLogs} [$__auto]))";
-            legendFormat = "{{host_name}} {{service_name}}";
-          }
-        ]
-        { }
-      )
-      {
-        id = 24;
-        type = "logs";
-        title = "Local service logs";
-        datasource = loki;
-        gridPos = grid 0 (localTop + 27) 24 12;
-        targets = [
-          {
-            refId = "A";
-            datasource = loki;
-            expr = serviceLogs;
-          }
-        ];
       }
     ];
     templating.list = [

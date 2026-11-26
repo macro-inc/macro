@@ -224,12 +224,22 @@ per-entity-type search plus a unified search across them — mounted into
   channel names resolve for the caller inside their lane turn
   (`domain/operator_names.rs`) through the queries tag, inbox and channel
   name search already run, and a name reaching nothing matches nothing.
-  Refused with a 400, and not logged as errors: an `OR` tag group beside
-  another tag (`TagConditionsDontCombine`; the search applies one any-of or
-  all-of list), two `from:` on calls (`SpeakersDontCombine`), operators or
-  minus words leaving no word unless only email is searched
-  (`OperatorsNeedAWord`), more than `MAX_CHANNEL_NAMES` channel names. An
-  unknown name or invalid value stays a word. `search_operators/typed_operators.json` lists typed queries
+  Tags are groups that must each hold, any one option id of a group being
+  enough (`TagFilter`): each `tag:` (with the values `OR` joins, and every
+  tag set a name is in) is a group, beside the request's own
+  `tag_option_ids`, which are one group, or one per id under
+  `tag_filter_mode: all`. Every tag source applies them as groups: the
+  OpenSearch builders through `build_tag_filter` (one nested clause per
+  group) and the Postgres chat name search, one `?|` probe per group.
+  Refused with a 400, and not logged as errors: two `from:` on calls
+  (`SpeakersDontCombine`), operators or minus words leaving no word unless
+  only email is searched (`OperatorsNeedAWord`), more than
+  `MAX_CHANNEL_NAMES` channel names. An unknown name or invalid value stays
+  a word. A `tag:` or `in:#` value needs a letter, a digit or another
+  non-ASCII character such as an emoji (`tag:🔥`); ASCII punctuation alone
+  (`tag:-`) stays a word. Tag and channel names match with their phrase
+  quotes left out (`domain/operator_names.rs` `as_typed`, and
+  `outbound/operator_names.rs` for channels), since a typed term drops them. `search_operators/typed_operators.json` lists typed queries
   and how many operators each holds; change it with the parser.
 - A minus before a word or quoted phrase (`-draft`, `-"team lunch"`) leaves
   out what holds it in every kind the unified search reaches, for every

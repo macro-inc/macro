@@ -119,6 +119,12 @@ jobs:
               - 'apps/web/src/lib/core/user/displayName.ts'
               - 'apps/web/src/components/app/split-layout/**'
               - 'apps/web/src/components/ui/components/Dialog.tsx'
+              - 'apps/web/src/lib/core/component/LexicalMarkdown/component/core/LinkWithPreview.tsx'
+              - 'apps/web/src/lib/core/component/LexicalMarkdown/component/core/app-link-opener.ts'
+              - 'apps/web/src/lib/core/signal/unfurl.ts'
+              - 'apps/web/src/lib/core/component/LexicalMarkdown/component/core/StaticMarkdown.tsx'
+              - 'apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/DocumentMention.tsx'
+              - 'apps/web/src/lib/core/util/macroAppUrl.ts'
       - id: codegen
         name: Detect schema changes
         run: |
@@ -1769,6 +1775,8 @@ jobs:
               - '!apps/web/tauri/**/*.macos.*'
               - '!apps/web/tauri/**/linux_*'
               - '!apps/web/tauri/**/linux_*/**'
+              - '!apps/web/tauri/**/windows/**'
+              - '!apps/web/tauri/**/*.windows.*'
               - '!apps/web/tauri/**/desktop/**'
               - '!apps/web/tauri/**/desktop-*'
               - '!apps/web/tauri/**/desktop-*/**'

@@ -337,6 +337,7 @@ fn initial_property_error(error: PropertiesErr) -> InitiativeError {
         PropertiesErr::Validation(_)
         | PropertiesErr::NotFound
         | PropertiesErr::OptionNotFound
+        | PropertiesErr::OptionInAnotherDefinition
         | PropertiesErr::PermissionDenied
         | PropertiesErr::SystemPropertyNotModifiable
         | PropertiesErr::TeamMembershipRequired

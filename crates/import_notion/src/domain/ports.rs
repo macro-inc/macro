@@ -28,6 +28,16 @@ pub enum NotionError {
     /// The object does not exist or was not shared with the connection.
     #[error("Notion object not found or not shared with the connection")]
     NotFound,
+    /// Notion refused the connection's token (`401 unauthorized`): it was
+    /// revoked or expired.
+    #[error(
+        "Notion no longer accepts Macro's connection (it was revoked or expired); reconnect Notion"
+    )]
+    AccessLost,
+    /// The request never reached Notion: the connection's proxy answered 404
+    /// without Notion's error shape, so it could not use the account.
+    #[error("Macro couldn't use your Notion connection; reconnect Notion")]
+    ConnectionUnavailable,
     /// The connection may not read this.
     #[error("the Notion connection may not read this object")]
     Forbidden,
@@ -78,6 +88,8 @@ impl NotionError {
         match self {
             Self::RateLimited { .. } => NotionErrorClass::RateLimited,
             Self::NotFound => NotionErrorClass::NotFound,
+            Self::AccessLost => NotionErrorClass::AccessLost,
+            Self::ConnectionUnavailable => NotionErrorClass::ConnectionUnavailable,
             Self::Forbidden => NotionErrorClass::Forbidden,
             Self::Upstream { .. } => NotionErrorClass::Upstream,
             Self::Decode(_) => NotionErrorClass::Decode,
@@ -93,6 +105,8 @@ impl NotionError {
             Self::Upstream { status, .. } => Some(*status),
             Self::RateLimited { .. }
             | Self::NotFound
+            | Self::AccessLost
+            | Self::ConnectionUnavailable
             | Self::Forbidden
             | Self::Decode(_)
             | Self::IncompleteViewList
@@ -106,6 +120,8 @@ impl NotionError {
             Self::Transport { class, .. } => Some(*class),
             Self::RateLimited { .. }
             | Self::NotFound
+            | Self::AccessLost
+            | Self::ConnectionUnavailable
             | Self::Forbidden
             | Self::Upstream { .. }
             | Self::Decode(_)
@@ -122,6 +138,10 @@ pub enum NotionErrorClass {
     RateLimited,
     /// [`NotionError::NotFound`].
     NotFound,
+    /// [`NotionError::AccessLost`].
+    AccessLost,
+    /// [`NotionError::ConnectionUnavailable`].
+    ConnectionUnavailable,
     /// [`NotionError::Forbidden`].
     Forbidden,
     /// [`NotionError::Upstream`].

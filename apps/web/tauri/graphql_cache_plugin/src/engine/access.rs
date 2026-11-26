@@ -74,6 +74,7 @@ impl<T> EngineAccess<T> {
                 available: &self.available,
                 quiet: None,
             },
+            held: Held::since(Instant::now()),
         };
         // Checked once the engine is held: a hydrate that starts waiting
         // after this is woken by the guard's release. Dropping the guard here
@@ -115,13 +116,14 @@ impl<T> EngineAccess<T> {
 
     #[tracing::instrument(name = "graphql_cache.native.lock", skip_all, fields(graphql_cache.lock.kind = "foreground", graphql_cache.lock.wait_ms = tracing::field::Empty))]
     pub(super) async fn lock(&self) -> AccessGuard<'_, T> {
-        let _wait = AcquisitionWait::new();
+        let wait = AcquisitionWait::new();
         let _waiting = Counted::new(&self.turn_waiting);
         let turn = self.held(wake_if_dropped(&self.available, self.turn.lock()).await);
         AccessGuard {
             value: self.value.lock().await,
             _turn: Some(turn),
             _release: self.release_notice(),
+            held: Held::since(wait.started),
         }
     }
 
@@ -133,11 +135,12 @@ impl<T> EngineAccess<T> {
         if self.turn_waiting.load(Ordering::SeqCst) > 0 {
             return self.lock().await;
         }
-        let _wait = AcquisitionWait::new();
+        let wait = AcquisitionWait::new();
         AccessGuard {
             value: wake_if_dropped(&self.available, self.value.lock()).await,
             _turn: None,
             _release: self.release_notice(),
+            held: Held::since(wait.started),
         }
     }
 
@@ -150,7 +153,7 @@ impl<T> EngineAccess<T> {
     pub(super) async fn hydrate(&self) -> Result<AccessGuard<'_, T>, String> {
         let epoch = self.write_epoch.load(Ordering::SeqCst);
         let _waiting = Counted::new(&self.hydrates_waiting);
-        let _wait = AcquisitionWait::new();
+        let wait = AcquisitionWait::new();
         // A hydrate that stops waiting, superseded or cancelled, may be the
         // one another found holding the turn: wake the rest.
         let mut gave_up = Wake(Some(&self.available));
@@ -175,6 +178,7 @@ impl<T> EngineAccess<T> {
                         value,
                         _turn: Some(self.held(turn)),
                         _release: self.release_notice(),
+                        held: Held::since(wait.started),
                     };
                     if epoch != self.write_epoch.load(Ordering::SeqCst) {
                         return Err(
@@ -234,9 +238,55 @@ pub(super) struct AccessGuard<'a, T> {
     value: MutexGuard<'a, T>,
     _turn: Option<Turn<'a>>,
     _release: ReleaseNotice<'a>,
+    held: Held,
+}
+
+/// How long a command waited for the engine and has held it since, in
+/// milliseconds. A hydrate's hold includes the reads it let run.
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EngineTiming {
+    pub lock_wait_ms: f64,
+    pub lock_hold_ms: f64,
+}
+
+/// When a guard's wait began and when it took the engine.
+struct Held {
+    waited: Duration,
+    acquired: Instant,
+}
+
+impl Held {
+    fn since(wait_started: Instant) -> Self {
+        let acquired = Instant::now();
+        Self {
+            waited: acquired.duration_since(wait_started),
+            acquired,
+        }
+    }
+
+    fn timing(&self) -> EngineTiming {
+        let ms = |duration: Duration| duration.as_secs_f64() * 1_000.0;
+        EngineTiming {
+            lock_wait_ms: ms(self.waited),
+            lock_hold_ms: ms(self.acquired.elapsed()),
+        }
+    }
+}
+
+#[cfg(test)]
+impl Drop for Held {
+    fn drop(&mut self) {
+        probe::record(self.timing());
+    }
 }
 
 impl<'a, T> AccessGuard<'a, T> {
+    /// This command's engine wait, and its hold so far.
+    pub(super) fn timing(&self) -> EngineTiming {
+        self.held.timing()
+    }
+
     /// Gives the engine to reads while keeping this command's turn, or
     /// `Err(self)` for a read's guard, which holds no turn.
     pub(super) fn yield_to_reads(
@@ -247,12 +297,14 @@ impl<'a, T> AccessGuard<'a, T> {
             value,
             _turn: turn,
             _release,
+            held,
         } = self;
         let Some(turn) = turn else {
             return Err(AccessGuard {
                 value,
                 _turn: None,
                 _release,
+                held,
             });
         };
         drop(value);
@@ -260,6 +312,7 @@ impl<'a, T> AccessGuard<'a, T> {
             access,
             turn,
             _release,
+            held,
         })
     }
 }
@@ -269,6 +322,7 @@ pub(super) struct HeldTurn<'a, T> {
     access: &'a EngineAccess<T>,
     turn: Turn<'a>,
     _release: ReleaseNotice<'a>,
+    held: Held,
 }
 
 impl<'a, T> HeldTurn<'a, T> {
@@ -278,11 +332,13 @@ impl<'a, T> HeldTurn<'a, T> {
             access,
             turn,
             _release,
+            held,
         } = self;
         AccessGuard {
             value: access.value.lock().await,
             _turn: Some(turn),
             _release,
+            held,
         }
     }
 }
@@ -440,6 +496,36 @@ pub(super) fn unwrap_after_idle<T>(
 /// count read before the unwrap; otherwise another handle caused it.
 fn idle_explains_failed_unwrap(ended_before: u64, open: u64, ended_now: u64) -> bool {
     open > 0 || ended_now != ended_before
+}
+
+/// Every guard's wait and hold, labelled with the command the bench running it
+/// named, for `engine/test/bench.rs`.
+#[cfg(test)]
+pub(super) mod probe {
+    use super::EngineTiming;
+    use std::sync::Mutex;
+
+    tokio::task_local! {
+        /// The command a bench task is running.
+        pub(crate) static COMMAND: &'static str;
+    }
+
+    static LOG: Mutex<Vec<(&'static str, EngineTiming)>> = Mutex::new(Vec::new());
+
+    pub(super) fn record(timing: EngineTiming) {
+        if let Ok(command) = COMMAND.try_with(|command| *command)
+            && let Ok(mut log) = LOG.lock()
+        {
+            log.push((command, timing));
+        }
+    }
+
+    /// Takes every guard recorded since the last call.
+    pub(crate) fn take() -> Vec<(&'static str, EngineTiming)> {
+        LOG.lock()
+            .map(|mut log| std::mem::take(&mut *log))
+            .unwrap_or_default()
+    }
 }
 
 #[cfg(test)]

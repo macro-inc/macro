@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  completeSearchOperator,
   type SearchOperatorValues,
   searchOperatorCompletions,
 } from './search-operator-completions';
@@ -52,6 +51,23 @@ describe('searchOperatorCompletions', () => {
     expect(inserts('in:inbox')).toEqual([]);
   });
 
+  it('writes a channel as it can be typed, quotes left out', () => {
+    const values = { ...VALUES, channels: ['Launch "beta"'] };
+    expect(
+      searchOperatorCompletions('in:#launch', values).map((row) => row.insert)
+    ).toEqual(['in:#"Launch beta"']);
+  });
+
+  it('writes a tag as it can be typed: quotes left out, an emoji alone', () => {
+    const values = { ...VALUES, tags: ['Q3 "Plan"', '🔥'] };
+    expect(
+      searchOperatorCompletions('tag:q3', values).map((row) => row.insert)
+    ).toEqual(['tag:"Q3 Plan"']);
+    expect(
+      searchOperatorCompletions('tag:', values).map((row) => row.insert)
+    ).toEqual(['tag:"Q3 Plan"', 'tag:🔥']);
+  });
+
   it('offers the filter a plain word stands for, and the person a name starts', () => {
     expect(inserts('budget tasks')).toEqual(['type:task']);
     expect(inserts('Docs')).toEqual(['type:doc']);
@@ -84,21 +100,5 @@ describe('searchOperatorCompletions', () => {
   it('offers nothing once the operator is whole', () => {
     expect(inserts('type:task')).toEqual([]);
     expect(inserts('assignee:me')).toEqual([]);
-  });
-});
-
-describe('completeSearchOperator', () => {
-  it('writes the row in place of the token being typed', () => {
-    const [row] = searchOperatorCompletions('launch type:ta', VALUES);
-    expect(row && completeSearchOperator('launch type:ta', row)).toBe(
-      'launch type:task'
-    );
-  });
-
-  it('leaves the caret after a name, for its value', () => {
-    const [row] = searchOperatorCompletions('launch ty', VALUES);
-    expect(row && completeSearchOperator('launch ty', row)).toBe(
-      'launch type:'
-    );
   });
 });

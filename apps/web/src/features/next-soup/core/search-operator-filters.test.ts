@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { PROPERTY_OPTION_IDS } from '../../property/identifiers';
 import {
+  bothTargetAsts,
+  compileToAst,
+  NIL_UUID,
+  queryStateFrom,
+} from '../filters/filter-store';
+import {
   NO_SEARCH_OPERATOR_NAMES,
   type SearchOperatorLookup,
   searchFiltersOperatorText,
   searchOperatorFilters,
   searchOperatorQuery,
+  searchOperatorTagAst,
   withSearchOperatorQuery,
 } from './search-operator-filters';
 import {
@@ -14,6 +21,18 @@ import {
   searchQueryParts,
   splitSearchTerms,
 } from './search-operators';
+
+/** Whether an item holding the tag options `held` meets a tag filter AST. */
+function holdsTags(ast: unknown, held: string[]): boolean {
+  const node = ast as {
+    '&'?: unknown[];
+    '|'?: unknown[];
+    l?: { v: { so: string } };
+  };
+  if (node['&']) return node['&'].every((child) => holdsTags(child, held));
+  if (node['|']) return node['|'].some((child) => holdsTags(child, held));
+  return node.l !== undefined && held.includes(node.l.v.so);
+}
 
 const LOOKUP: SearchOperatorLookup = {
   userId: 'macro|Me@Example.com',
@@ -35,6 +54,29 @@ const compile = (query: string, bindings: SearchOperatorBinding[] = []) =>
     readSearchOperators(splitSearchTerms(query), true, bindings),
     LOOKUP
   );
+
+describe('searchOperatorQuery', () => {
+  it('keeps the feed to the types the operators leave, as one type does', () => {
+    // `in:#` alone reads channels and calls: the feed is asked for those
+    // only, so the channel lists rather than a page of other kinds.
+    const targets = compileToAst(
+      queryStateFrom(searchOperatorQuery(compile('in:#launch')))
+    );
+    const open = (target: keyof typeof targets) =>
+      !JSON.stringify(targets[target] ?? {}).includes(NIL_UUID);
+    expect(open('chanf')).toBe(true);
+    expect(open('callf')).toBe(true);
+    for (const target of ['df', 'ef', 'cf', 'pf'] as const)
+      expect(open(target)).toBe(false);
+
+    // Tasks and docs share their target, which stays open.
+    const work = compileToAst(
+      queryStateFrom(searchOperatorQuery(compile('type:task OR type:doc')))
+    );
+    expect(JSON.stringify(work.df ?? {})).not.toContain(NIL_UUID);
+    expect(JSON.stringify(work.chanf ?? {})).toContain(NIL_UUID);
+  });
+});
 
 describe('searchOperatorFilters', () => {
   it('sets the task facets and narrows to tasks', () => {
@@ -76,10 +118,29 @@ describe('searchOperatorFilters', () => {
     const any = compile('tag:finance OR tag:legal');
     expect(any.state.tagMode).toBe('any');
     expect(any.indexes).not.toContain('channels');
+  });
 
-    expect(compile('tag:finance OR tag:legal tag:q3').matchesNothing).toBe(
-      true
+  it('requires every tag group, each by any of its tags', () => {
+    const grouped = compile('tag:finance OR tag:legal tag:q3');
+    expect(grouped.matchesNothing).toBe(false);
+    expect(grouped.state.tagMode).toBe('any');
+    expect(grouped.state.tags.map((tag) => tag.value)).toEqual([
+      'finance-1',
+      'legal-1',
+    ]);
+
+    const feed = bothTargetAsts(
+      compileToAst(queryStateFrom(searchOperatorQuery(grouped))),
+      searchOperatorTagAst(grouped)
     );
+    const listed = (held: string[]) => holdsTags(feed.propf, held);
+    expect(listed(['finance-1', 'q3-1'])).toBe(true);
+    expect(listed(['legal-1', 'q3-1'])).toBe(true);
+    expect(listed(['q3-1'])).toBe(false);
+    expect(listed(['finance-1', 'legal-1'])).toBe(false);
+
+    const oneList = compile('tag:finance tag:legal');
+    expect(searchOperatorTagAst(oneList)).toEqual({});
   });
 
   it('keeps every condition, whichever types are left', () => {

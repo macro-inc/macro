@@ -23,7 +23,7 @@ export type ActivityAction =
       source: 'manual' | 'timer';
     }
   /**
-   * Other records were merged into this one (a CRM company), with the
+   * Other records were merged into this one (a CRM company or person), with the
    * team-visible values of theirs that this one's own replaced.
    */
   | {

@@ -17,7 +17,8 @@ import {
  */
 export function useTimeGridOpeningScroll(
   root: Accessor<HTMLElement | undefined>,
-  api: Accessor<Calendar | undefined>
+  api: Accessor<Calendar | undefined>,
+  restoredScrollTop?: Accessor<number | undefined>
 ) {
   let hasLaidOut = false;
   let frame: number | undefined;
@@ -27,7 +28,8 @@ export function useTimeGridOpeningScroll(
     hasLaidOut = applyTimeGridOpeningScroll(
       root(),
       api(),
-      TIME_GRID_OPENING_SCROLL_TIME
+      TIME_GRID_OPENING_SCROLL_TIME,
+      restoredScrollTop?.()
     );
   };
 
