@@ -2224,7 +2224,11 @@ describe('CacheWorkerCore', () => {
 
   it.each([
     { searchChangedBuckets: [], unchangedViews: [], reset: false },
-    { searchChangedBuckets: ['note'], unchangedViews: ['view-1'], reset: false },
+    {
+      searchChangedBuckets: ['note'],
+      unchangedViews: ['view-1'],
+      reset: false,
+    },
     { searchChangedBuckets: [], unchangedViews: ['view-1'], reset: true },
   ])(
     'scopes ordinary writes but not resets: %j',
