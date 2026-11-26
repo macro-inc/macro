@@ -3,13 +3,13 @@
  * the names it had before the API renamed them. Runtime code is the generated
  * module's; this file only adds type aliases.
  */
-export * from '../../generated/cognition';
+export * from '../../generated/cognition/index.js';
 
 import type {
   CrmLoss,
   CrmLossCount,
   CrmReport,
-} from '../../generated/cognition';
+} from '../../generated/cognition/index.js';
 
 /** @deprecated Renamed `CrmLoss`: one loss type serves every CRM import. */
 export type HubspotLoss = CrmLoss;
