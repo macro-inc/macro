@@ -1,9 +1,11 @@
 import type { TracerProvider } from '@opentelemetry/api';
 import type { Resource } from '@opentelemetry/resources';
+import type { Attributes } from './config';
 import type { TraceSampling } from './sampling';
 
 /** A runtime-specific OpenTelemetry tracer provider. */
 export type TelemetryTracingProvider = TracerProvider & {
+  recordAnonymousSample?(name: string, attributes: Attributes): void;
   forceFlush(): Promise<void>;
   shutdown(): Promise<void>;
 };
