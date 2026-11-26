@@ -76,6 +76,8 @@ const CEREBRAS_BASE_URL: &str = "https://api.cerebras.ai/v1";
 const FIREWORKS_PROVIDER: &str = "fireworks";
 /// Fireworks inference endpoint (OpenAI-compatible Chat Completions API).
 const FIREWORKS_BASE_URL: &str = "https://api.fireworks.ai/inference/v1";
+/// Provider segment a deployment's LiteLLM proxy is registered under.
+const LITELLM_PROVIDER: &str = "litellm";
 /// Provider segment Google Gemini is registered under (native GenerateContent).
 const GOOGLE_PROVIDER: &str = "google";
 /// Output cap for OpenAI-compatible Chat Completions hosts, whose limits
@@ -455,14 +457,27 @@ impl ModelRouter {
                 WireProtocol::Gemini,
             ))
             .build()?;
-        ModelRouter::new(anthropic, openai)
+        let router = ModelRouter::new(anthropic, openai)
             .with_gemini_client(gemini)
             .with_openai_provider(CEREBRAS_PROVIDER, CEREBRAS_BASE_URL, &env.cerebras_api_key)?
             .with_openai_provider(
                 FIREWORKS_PROVIDER,
                 FIREWORKS_BASE_URL,
                 &env.firework_api_key,
-            )
+            )?;
+        // A LiteLLM proxy speaks OpenAI's Chat Completions API. The provider
+        // is optional: without both variables the router is unchanged.
+        match (
+            std::env::var("LITELLM_BASE_URL"),
+            std::env::var("LITELLM_API_KEY"),
+        ) {
+            (Ok(base_url), Ok(api_key))
+                if !base_url.trim().is_empty() && !api_key.trim().is_empty() =>
+            {
+                router.with_openai_provider(LITELLM_PROVIDER, base_url.trim(), api_key.trim())
+            }
+            _ => Ok(router),
+        }
     }
 
     /// The process-wide full router, built from the environment on first use.

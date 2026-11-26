@@ -4,6 +4,21 @@ use std::sync::OnceLock;
 
 use chat::domain::models::CHAT_MODELS;
 
+/// Models a deployment's LiteLLM proxy reported at startup. They are added to
+/// the picker as `litellm/<model>`; the provider itself is registered by the
+/// agent router from the same environment.
+static LITELLM_MODELS: OnceLock<Vec<String>> = OnceLock::new();
+
+/// Remember the models a LiteLLM proxy serves. Called once at process start,
+/// before any session advertises its models.
+pub fn set_litellm_models(models: Vec<String>) {
+    let _ = LITELLM_MODELS.set(models);
+}
+
+fn litellm_models() -> &'static [String] {
+    LITELLM_MODELS.get().map(Vec::as_slice).unwrap_or(&[])
+}
+
 /// Picker entry that lets Macro choose the model. Turns run on
 /// [`AUTO_TARGET`]; [`resolve`] maps it before routing.
 pub const AUTO_MODEL: &str = "auto";
@@ -46,6 +61,9 @@ pub const ROUTED_MODELS: &[(&str, &str)] = &[
 /// none (closed chat models keep their frontend names).
 #[must_use]
 pub fn display_name(id: &str) -> &str {
+    if let Some(name) = id.strip_prefix("litellm/") {
+        return name;
+    }
     ROUTED_MODELS
         .iter()
         .find_map(|(model, name)| (*model == id).then_some(*name))
@@ -64,6 +82,12 @@ pub fn advertised_models() -> &'static [&'static str] {
             for (model, _) in ROUTED_MODELS {
                 if !models.contains(model) {
                     models.push(model);
+                }
+            }
+            for model in litellm_models() {
+                let id: &'static str = Box::leak(format!("litellm/{model}").into_boxed_str());
+                if !models.contains(&id) {
+                    models.push(id);
                 }
             }
             models

@@ -9,6 +9,11 @@ suspends that account or it runs out of credit, every request on that provider
 fails until someone fixes billing. Retrying the same provider does not help;
 falling back to a model on another provider does.
 
+A deployment can also register an optional OpenAI-compatible LiteLLM proxy. It
+is configured with `LITELLM_BASE_URL` and `LITELLM_API_KEY` on
+`agent_harness_service`, and its models appear as `litellm/<model>`. See
+[litellm.md](litellm.md) for discovery, pricing and operational notes.
+
 | What | Search |
 | --- | --- |
 | Refused requests, Rust services | Logs: `"ai provider account unavailable"`, grouped by `@provider` and `@reason` |
