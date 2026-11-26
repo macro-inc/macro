@@ -7,9 +7,10 @@ use agent_session::domain::model::AgentSessionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use super::{ImportEntityDbRow, PgImportRepo, run_status_strings};
+use super::{ImportEntityDbRow, PgImportRepo, decode_error_kind, run_status_strings};
 use crate::domain::models::{ImportEntity, ImportSource, RunStatus, ScanCounts, TeamClaim};
-use crate::domain::ports::{NotionPlanRepo, PlanRow, Result};
+use crate::domain::ports::{NotionPlanRepo, PlanRow, Result, UnreviewableRun};
+use std::str::FromStr;
 
 #[cfg(test)]
 mod test;
@@ -258,13 +259,38 @@ impl NotionPlanRepo for PgImportRepo {
     ) -> Result<u64> {
         let mut transaction = self.pool.begin().await?;
         // First, so a plan being staged right now finishes before the rows
-        // are tied (it holds the run), or stages them with this review.
+        // are tied (it holds the run), or stages them with this review. Only a
+        // planning or ready run can take a review; anything else is refused
+        // so the card never shows a plan nobody can approve.
+        let run = sqlx::query!(
+            r#"
+            SELECT status::text AS "status!", error_kind, review_id
+            FROM import_run
+            WHERE user_id = $1 AND source = $2
+            FOR UPDATE
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+        )
+        .fetch_optional(&mut *transaction)
+        .await?
+        .ok_or(UnreviewableRun::Missing)?;
+        let status = RunStatus::from_str(&run.status)
+            .map_err(|_| anyhow::anyhow!("unknown run status: {}", run.status))?;
+        let error_kind = decode_error_kind(run.error_kind);
+        if let Some(refusal) = UnreviewableRun::of(status, error_kind) {
+            return Err(refusal.into());
+        }
+        // The first review presenting a plan holds it; another would show it
+        // with none of its rows and could never approve it.
+        if run.review_id.is_some_and(|holder| holder != review_id) {
+            return Err(UnreviewableRun::PresentedElsewhere.into());
+        }
         sqlx::query!(
             r#"
             UPDATE import_run
-            SET review_id = CASE WHEN status = 'running' THEN $3 ELSE review_id END,
-                review_session_id = CASE WHEN status = 'running' THEN $4
-                                         ELSE COALESCE(review_session_id, $4) END
+            SET review_id = COALESCE(review_id, $3),
+                review_session_id = COALESCE(review_session_id, $4)
             WHERE user_id = $1 AND source = $2 AND status IN ('running', 'ready')
             "#,
             user.as_ref(),
@@ -291,6 +317,110 @@ impl NotionPlanRepo for PgImportRepo {
         Ok(result.rows_affected())
     }
 
+    #[tracing::instrument(skip(self, user), err)]
+    async fn release_review(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review_id: Uuid,
+    ) -> Result<()> {
+        let mut transaction = self.pool.begin().await?;
+        // The run first, in the same order as attaching, so the two never
+        // deadlock.
+        sqlx::query!(
+            r#"
+            UPDATE import_run
+            SET review_id = NULL, review_session_id = NULL
+            WHERE user_id = $1 AND source = $2 AND review_id = $3
+              AND status IN ('running', 'ready')
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+            review_id,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query!(
+            r#"
+            UPDATE import_entity
+            SET review_id = NULL, updated_at = NOW()
+            WHERE review_id = $3 AND user_id = $1 AND source = $2 AND status = 'staged'
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+            review_id,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn start_reviewed_write(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        review_id: Uuid,
+    ) -> Result<RunStatus> {
+        // `prior` is the row as it was before this statement, which says
+        // whether the write started from a ready plan or a failed write.
+        let started = sqlx::query_scalar!(
+            r#"
+            UPDATE import_run AS run
+            SET status = 'importing', error = NULL, error_kind = NULL, updated_at = NOW(),
+                lease_owner = NULL, lease_expires_at = NULL, adoptions = 0,
+                write_review_id = $3
+            FROM import_run AS prior
+            WHERE prior.user_id = run.user_id AND prior.source = run.source
+              AND run.user_id = $1 AND run.source = $2
+              AND ((run.status = 'ready'
+                    AND (run.review_id = $3
+                         OR (run.review_id IS NULL AND EXISTS (
+                             SELECT 1 FROM import_entity AS entity
+                             WHERE entity.review_id = $3 AND entity.user_id = $1
+                               AND entity.source = $2 AND entity.status = 'staged'
+                         ))))
+                   -- A failed write, retried by the review it admitted, once
+                   -- no earlier writer can still hold the run.
+                   OR (run.status = 'failed' AND run.write_review_id = $3
+                       AND (run.lease_expires_at IS NULL OR run.lease_expires_at < NOW())))
+            RETURNING prior.status::text AS "status!"
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+            review_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        if let Some(from) = started {
+            return RunStatus::from_str(&from)
+                .map_err(|_| anyhow::anyhow!("unknown run status: {from}").into());
+        }
+        // Nothing moved: say why, from the run as it is now.
+        let run = sqlx::query!(
+            r#"SELECT status::text AS "status!", error_kind FROM import_run WHERE user_id = $1 AND source = $2"#,
+            user.as_ref(),
+            source.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(UnreviewableRun::Missing)?;
+        let status = RunStatus::from_str(&run.status)
+            .map_err(|_| anyhow::anyhow!("unknown run status: {}", run.status))?;
+        let error_kind = decode_error_kind(run.error_kind);
+        let refusal = match status {
+            RunStatus::Running => UnreviewableRun::StillPlanning,
+            RunStatus::Ready => UnreviewableRun::PresentedElsewhere,
+            RunStatus::Failed
+            | RunStatus::Importing
+            | RunStatus::Completed
+            | RunStatus::Dismissed => UnreviewableRun::of(status, error_kind)
+                .ok_or_else(|| anyhow::anyhow!("a {} run refused a write", run.status))?,
+        };
+        Err(refusal.into())
+    }
+
     #[tracing::instrument(skip(self, user, error), err)]
     async fn transition_run(
         &self,
@@ -304,7 +434,8 @@ impl NotionPlanRepo for PgImportRepo {
         let result = sqlx::query!(
             r#"
             UPDATE import_run
-            SET status = $3::text::import_run_status, error = $4, updated_at = NOW(),
+            SET status = $3::text::import_run_status, error = $4, error_kind = NULL,
+                updated_at = NOW(),
                 lease_owner = NULL, lease_expires_at = NULL
             WHERE user_id = $1 AND source = $2 AND status::text = ANY($5::text[])
             "#,
@@ -371,6 +502,24 @@ impl NotionPlanRepo for PgImportRepo {
                       -- PG14 leading-key bound: 2,505 -> 11 buffers for two rows.
                       -- Proof log: https://github.com/macro-inc/macro/pull/11172#issuecomment-6967226786
                       AND source = ANY(ARRAY(SELECT 'jira'::text))
+                      AND foreign_id = ANY($2::text[])
+                      AND status IN ('importing', 'imported')
+                      AND user_id <> $1
+                      AND team_id IS NOT NULL
+                      AND team_id = (SELECT team_id FROM team_user WHERE user_id = $1)
+                "#,
+                user.as_ref(), foreign_ids,
+            ).fetch_all(&mut *transaction).await?,
+            ImportSource::Hubspot => sqlx::query_as!(
+                ImportEntityDbRow,
+                r#"
+                    SELECT id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,
+                           initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,
+                           updated_at
+                    FROM import_entity
+                    WHERE source = 'hubspot'
+                      -- Same leading-key bound as Jira, over the HubSpot team index.
+                      AND source = ANY(ARRAY(SELECT 'hubspot'::text))
                       AND foreign_id = ANY($2::text[])
                       AND status IN ('importing', 'imported')
                       AND user_id <> $1

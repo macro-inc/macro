@@ -72,6 +72,26 @@ pub const GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER: Var =
 /// Service account CI acts as on Google Play, a repo *variable*.
 pub const GOOGLE_PLAY_SERVICE_ACCOUNT: Var = Var("GOOGLE_PLAY_SERVICE_ACCOUNT");
 
+/// Azure Artifact Signing for the Windows desktop installer, repo *variables*
+/// (ids, not secrets): CI signs in with its GitHub OIDC token as an Entra app
+/// whose federated credential trusts the `desktop-windows-signing` environment
+/// ([`super::desktop_windows`]). While any is empty, Windows builds stay
+/// unsigned workflow artifacts.
+pub const WINDOWS_SIGNING_AZURE_TENANT_ID: Var = Var("WINDOWS_SIGNING_AZURE_TENANT_ID");
+/// See [`WINDOWS_SIGNING_AZURE_TENANT_ID`]: the Entra app's client id.
+pub const WINDOWS_SIGNING_AZURE_CLIENT_ID: Var = Var("WINDOWS_SIGNING_AZURE_CLIENT_ID");
+/// See [`WINDOWS_SIGNING_AZURE_TENANT_ID`]: the regional endpoint, such as
+/// `https://eus.codesigning.azure.net`.
+pub const WINDOWS_SIGNING_ENDPOINT: Var = Var("WINDOWS_SIGNING_ENDPOINT");
+/// See [`WINDOWS_SIGNING_AZURE_TENANT_ID`]: the Artifact Signing account.
+pub const WINDOWS_SIGNING_ACCOUNT: Var = Var("WINDOWS_SIGNING_ACCOUNT");
+/// See [`WINDOWS_SIGNING_AZURE_TENANT_ID`]: the Public Trust certificate profile.
+pub const WINDOWS_SIGNING_PROFILE: Var = Var("WINDOWS_SIGNING_PROFILE");
+/// `true` lets a signed Windows build reach the release, the update feed and
+/// the download pages, a repo *variable*. Set it once a person has tested a
+/// signed build on Windows 10 and 11.
+pub const WINDOWS_DESKTOP_RELEASE: Var = Var("WINDOWS_DESKTOP_RELEASE");
+
 /// Cloudflare account id. A repo *variable* (not a secret).
 pub const CLOUDFLARE_ACCOUNT_ID: Var = Var("CLOUDFLARE_ACCOUNT_ID");
 
@@ -119,6 +139,12 @@ pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 /// Nix-only PR checks. They read a Nix store back, so they stay off the small
 /// profile's default volume, where other jobs would overwrite that store.
 pub const NIX_CHECKS_CACHE_TAG: &str = "nix-checks";
+
+/// Namespace cache tag and remote sccache for the desktop app check
+/// (`desktop_check.rs`). Its own volume, because it holds the Tauri Linux
+/// libraries no other job needs, and PR jobs write it, so no release build may
+/// share it.
+pub const DESKTOP_CI_CACHE: &str = "desktop-ci";
 
 /// Namespace remote sccache used when the web checks compile Rust API schema
 /// generators. Kept separate from [`CI_SCCACHE_NAME`] because these jobs have

@@ -277,6 +277,62 @@ describe('Notion markdown to Lexical', () => {
     expect(text(link)).toBe('Elsewhere');
   });
 
+  it.each([
+    'https://www.notion.so/Roadmap-3fb607323e2e80629886fc0c028d50a7',
+    'https://notion.so/3fb60732-3e2e-8062-9886-fc0c028d50a7',
+    'https://www.notion.so/?p=3fb607323e2e80629886fc0c028d50a7',
+  ])(
+    'rewrites an ordinary link to an exactly mapped Notion page (%s)',
+    (url) => {
+      const [paragraph] = convert(`[Quarterly plan](${url})`);
+      const [link] = children(paragraph);
+      expect(link.type).toBe('link');
+      expect(link.url).toEqual(expect.any(String));
+      expect(new URL(String(link.url), 'https://macro.com').pathname).toBe(
+        '/app/md/0e5b6a2c-7c39-4a63-9a0c-5c1f2f6c0001'
+      );
+      expect(text(link)).toBe('Quarterly plan');
+    }
+  );
+
+  it.each([
+    'https://www.notion.so/Roadmap-3fb607323e2e80629886fc0c028d50a7#12345678123412341234123456789abc',
+    'https://www.notion.so/Roadmap-3fb607323e2e80629886fc0c028d50a7?p=11111111111141118111111111111111',
+    'https://www.notion.so/Roadmap-3fb607323e2e80629886fc0c028d50a7-extra',
+    'https://www.notion.so.example.test/Roadmap-3fb607323e2e80629886fc0c028d50a7',
+    'https://example.test/?p=3fb607323e2e80629886fc0c028d50a7',
+    'https://www.notion.so/11111111111141118111111111111111',
+  ])('keeps the original URL of an unverified Notion mention (%s)', (url) => {
+    const [paragraph] = convert(
+      `<mention-page url="${url}">Reference</mention-page>`
+    );
+    const [link] = children(paragraph);
+    expect(link).toMatchObject({ type: 'link', url });
+    expect(text(link)).toBe('Reference');
+  });
+
+  it('keeps an unverified database view link when its view ID matches a page mapping', () => {
+    const url =
+      'https://www.notion.so/Work-Board-11111111111141118111111111111111?v=3fb607323e2e80629886fc0c028d50a7';
+    const [paragraph] = convert(
+      `See <mention-database url="${url}">Work Board</mention-database>.`
+    );
+    expect(children(paragraph)[1]).toMatchObject({ type: 'link', url });
+    expect(text(children(paragraph)[1])).toBe('Work Board');
+  });
+
+  it('leaves a mapped Notion link literal inside inline and fenced code', () => {
+    const markdownLink =
+      '[Roadmap](https://www.notion.so/3fb607323e2e80629886fc0c028d50a7)';
+    const [paragraph, codeBlock] = convert(
+      `\`${markdownLink}\`\n\n\`\`\`md\n${markdownLink}\n\`\`\``
+    );
+    const [inlineCode] = children(paragraph);
+    expect(inlineCode).toMatchObject({ type: 'text', text: markdownLink });
+    expect(codeBlock.type).toBe('custom-code');
+    expect(text(codeBlock)).toBe(markdownLink);
+  });
+
   it('turns a matched person into a user mention and anyone else into text', () => {
     const [paragraph] = convert(
       'Ask <mention-user url="user://12345678-1234-1234-1234-123456789abc">Teo Nys</mention-user> or <mention-user url="user://00000000-0000-0000-0000-000000000000">Ghost</mention-user>'

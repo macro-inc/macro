@@ -112,7 +112,7 @@ channel_labels = { path = "../../crates/channel_labels", features = [
   "inbound",
   "postgres",
 ] }
-crm = { path = "../../crates/crm" }
+crm = { path = "../../crates/crm", features = ["merge"] }
 databases_sql = { path = "../../crates/databases_sql", features = ["inbound"] }
 databases = { path = "../../crates/databases", features = [
   "entity_mutation",
@@ -171,6 +171,7 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
 graphql_soup = { path = "../../crates/graphql_soup" }
 graphql_crm = { path = "../../crates/graphql_crm" }
 graphql_initiative = { path = "../../crates/graphql_initiative" }
+graphql_time_tracking = { path = "../../crates/graphql_time_tracking" }
 graphql_databases = { path = "../../crates/graphql_databases" }
 
 graphql_calendar = { path = "../../crates/graphql_calendar" }

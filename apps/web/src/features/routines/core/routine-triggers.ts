@@ -67,6 +67,7 @@ export const routineTriggerSchema = z.discriminatedUnion('kind', [
           'task.priority_changed',
           'task.property_changed',
           'email.message_received',
+          'email.labeled',
           'channel.created',
           'channel.message_posted',
           'channel.mentioned',
@@ -85,6 +86,16 @@ export const routineTriggerSchema = z.discriminatedUnion('kind', [
     match: z.array(payloadTestSchema).optional(),
     /** Only for task property change events. */
     property: propertySelectorSchema.optional(),
+    /**
+     * Only for new or labeled email: the inboxes (email link ids) it watches, among the
+     * owner's own and those shared with them. Absent watches every one.
+     */
+    inboxes: z.array(z.string().uuid()).optional(),
+    /**
+     * Only for `email.labeled`: label ids, one of which a thread must gain.
+     * Any label when absent.
+     */
+    labels: z.array(z.string()).optional(),
     /** Yes/no question the event's content must answer with yes. */
     condition: z.string().optional(),
   }),
@@ -219,6 +230,13 @@ export const routineEvents: {
     group: 'Email',
     description:
       'New mail arrives in your inbox. Excludes spam, trash, drafts and historical imports.',
+  },
+  {
+    value: 'email.labeled',
+    label: 'Email labeled',
+    group: 'Email',
+    description:
+      'An email gets a Gmail label or an Outlook category, as it arrives or later. Choose labels to run only on those.',
   },
   {
     value: 'call.started',
@@ -464,6 +482,7 @@ export function isGlobalEvent(events: readonly RoutineEventName[]) {
     (event) =>
       event.endsWith('.created') ||
       event === 'email.message_received' ||
+      event === 'email.labeled' ||
       event === 'call.started' ||
       event === 'call.ended' ||
       event === 'github'
@@ -574,6 +593,9 @@ export function newScheduleTrigger(
     cron: '0 0 9 * * *',
   };
 }
+/** As many inboxes as one email trigger may pick. */
+export const MAX_INBOXES = 25;
+
 function validateEventTrigger(
   trigger: EventTriggerDraft,
   creating: boolean
@@ -585,6 +607,10 @@ function validateEventTrigger(
     return 'Choose up to 100 items per event trigger.';
   if ((trigger.property?.values.length ?? 0) > 100)
     return 'Choose up to 100 values per event trigger.';
+  if ((trigger.inboxes?.length ?? 0) > MAX_INBOXES)
+    return `Choose up to ${MAX_INBOXES} inboxes per email trigger.`;
+  if ((trigger.labels?.length ?? 0) > 100)
+    return 'Choose up to 100 labels per event trigger.';
   if ([...(trigger.condition?.trim() ?? '')].length > MAX_CONDITION_CHARS)
     return `Keep the condition under ${MAX_CONDITION_CHARS} characters.`;
   return (
@@ -848,15 +874,22 @@ export function triggerKind(trigger: RoutineTriggerDraft): TriggerKind {
     .exhaustive();
 }
 
+/** A compact trigger line; the caller keeps all labels for details and search. */
+export function summarizeTriggerLabels(labels: string[]): string {
+  const [first] = labels;
+  if (!first) return '';
+  return labels.length > 1 ? `${first} +${labels.length - 1}` : first;
+}
+
 export function describeTriggers(triggers: RoutineTriggerDraft[]): string {
-  return triggers
-    .map((trigger) =>
+  return summarizeTriggerLabels(
+    triggers.map((trigger) =>
       trigger.kind === 'event'
         ? eventTriggerLabel(trigger)
         : (triggerFrequencies.find((f) => f.value === trigger.frequency)
             ?.label ?? 'Scheduled')
     )
-    .join(' · ');
+  );
 }
 
 export function hasOnlyScheduledTriggers(

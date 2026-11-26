@@ -238,7 +238,6 @@ describe('stacked panes', () => {
     SearchState.open();
     const view = mountSearch();
     SearchState.setQuery('original search');
-    SearchState.setCategory('email');
     SearchState.searchFullText();
     manager.openWithSplit(settings);
     manager.openWithSplit(documents);
@@ -250,7 +249,6 @@ describe('stacked panes', () => {
     stack.completeGoBack();
     expect(SearchState.isOpen()).toBe(true);
     expect(SearchState.query()).toBe('original search');
-    expect(SearchState.category()).toBe('email');
     expect(SearchState.mode()).toBe('full-text');
   });
 
@@ -261,7 +259,6 @@ describe('stacked panes', () => {
     SearchState.open();
     const view = mountSearch();
     SearchState.setQuery('old query');
-    SearchState.setCategory('email');
     SearchState.searchFullText();
     const pane = router.panes()[0]!;
     const previous = router.entry(pane)!;
@@ -284,7 +281,6 @@ describe('stacked panes', () => {
     const fresh = mountSearch();
     expect(SearchState.isOpen()).toBe(true);
     expect(SearchState.query()).toBe('');
-    expect(SearchState.category()).toBe('all');
     expect(SearchState.mode()).toBe('name');
     history.back();
     fresh.unmount();
@@ -293,7 +289,6 @@ describe('stacked panes', () => {
     const restored = mountSearch();
     manager.getSplit(manager.splits().at(-1)!.id)?.close();
     expect(SearchState.query()).toBe('old query');
-    expect(SearchState.category()).toBe('email');
     expect(SearchState.mode()).toBe('full-text');
     restored.unmount();
   });
@@ -329,7 +324,6 @@ describe('stacked panes', () => {
       SearchState.open();
       const view = mountSearch();
       SearchState.setQuery('teo update');
-      SearchState.setCategory('email');
       SearchState.searchFullText();
       manager.openWithSplit(settings);
       if (stacked) {
@@ -350,7 +344,6 @@ describe('stacked panes', () => {
       expect(shown()).toEqual(['search']);
       expect(SearchState.isOpen()).toBe(true);
       expect(SearchState.query()).toBe('teo update');
-      expect(SearchState.category()).toBe('email');
       expect(SearchState.mode()).toBe('full-text');
     }
   );

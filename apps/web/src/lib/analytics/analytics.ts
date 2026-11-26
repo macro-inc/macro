@@ -3,6 +3,7 @@ import {
   type GoogleConversionAction,
   googleConversionSendTo,
 } from '@app/lib/analytics/googleConversions';
+import { isProductionMetaHost } from '@app/lib/analytics/metaHost';
 import {
   initializeGoogleAnalytics,
   initializeMetaPixel,
@@ -215,6 +216,10 @@ const initializePosthog = (instance: PostHog) => {
       if (cr) {
         cr.properties = redactLinkTokenProperties(cr.properties);
         cr.properties.frontend_instance_id = frontendInstanceId;
+        // `track` adds these; PostHog's own events ($exception, $autocapture,
+        // $web_vitals, ...) skip it, so device filters would miss them.
+        cr.properties[DEVICE_PROPERTY] ??= getDeviceType();
+        cr.properties[ENVIRONMENT_PROPERTY] ??= getEnvironment();
         if (cr.$set) cr.$set = redactLinkTokenProperties(cr.$set);
         if (cr.$set_once) {
           cr.$set_once = redactLinkTokenProperties(cr.$set_once);
@@ -253,7 +258,10 @@ const createAnalytics = () => {
   const disabled = import.meta.env.DEV === true;
   // Meta can submit events through hidden frames. Native navigation handlers
   // can mistake those loads for external links and open the system browser.
-  const metaPixelEnabled = !isTauri();
+  // The production pixel stays off dev, preview, and staging hosts even when
+  // this bundle was built for production.
+  const metaPixelEnabled =
+    !isTauri() && isProductionMetaHost(window.location.hostname);
 
   const initializeProviders = () => {
     if (disabled) return;

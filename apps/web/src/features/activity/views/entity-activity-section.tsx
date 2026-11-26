@@ -26,6 +26,7 @@ import {
   type ActivitySectionEntityType,
   createEntityActivityState,
 } from '../primitives/entity-activity';
+import { propertyValueLabel } from '../queries/property-value';
 import { useEntityActivityFlag } from '../use-entity-activity-flag';
 
 /** Newest entries shown before the section folds behind its toggle. */
@@ -136,14 +137,80 @@ function PanelRow(props: { entry: FeedEntry; rail: RailEnds }) {
     const action = entryAction(props.entry);
     return action.kind === 'property-changed' ? action.property : undefined;
   });
+  const merge = () => {
+    const action = entryAction(props.entry);
+    return action.kind === 'record-merged' && action.dropped.length > 0
+      ? action
+      : undefined;
+  };
   return (
-    <ActivityTimelineRow
-      entry={props.entry}
-      actorName={name()}
-      propertyDefinition={definition()}
-      rail={props.rail}
-      compact
-    />
+    <>
+      <ActivityTimelineRow
+        entry={props.entry}
+        actorName={name()}
+        propertyDefinition={definition()}
+        rail={props.rail}
+        compact
+      />
+      <Show when={merge()}>
+        {(current) => (
+          <MergeDropped merge={current()} railBelow={props.rail.below} />
+        )}
+      </Show>
+    </>
+  );
+}
+
+type RecordMerge = Extract<
+  ReturnType<typeof entryAction>,
+  { kind: 'record-merged' }
+>;
+
+/** The values a merge dropped, under its line, with the rail running past. */
+function MergeDropped(props: { merge: RecordMerge; railBelow: boolean }) {
+  const from = (record: string) =>
+    props.merge.merged.find((merged) => merged.id === record)?.name ??
+    'a merged company';
+  return (
+    <div class="flex items-stretch gap-1.5 text-xs" data-activity-merge-dropped>
+      <span class="flex w-3.5 shrink-0 justify-center">
+        <span
+          aria-hidden
+          class={cn('w-px bg-edge-muted', !props.railBelow && 'invisible')}
+        />
+      </span>
+      <ul class="flex min-w-0 flex-1 flex-col gap-1 px-1 pb-1.5 text-ink-muted">
+        <For each={props.merge.dropped}>
+          {(dropped) => (
+            <DroppedValue
+              property={dropped.property}
+              value={dropped.value}
+              from={from(dropped.record)}
+            />
+          )}
+        </For>
+      </ul>
+    </div>
+  );
+}
+
+function DroppedValue(props: {
+  property: string;
+  value: unknown;
+  from: string;
+}) {
+  const context = useActivityContext();
+  const definition = context.propertyDefinition(() => props.property);
+  const label = () => propertyValueLabel(props.value, definition());
+  return (
+    <li class="min-w-0 truncate">
+      <span class="text-ink">{definition()?.displayName ?? 'A property'}</span>
+      {': '}
+      <Show when={label()} fallback="a value">
+        {(text) => <s>{text()}</s>}
+      </Show>
+      <span class="text-ink-extra-muted"> · dropped from {props.from}</span>
+    </li>
   );
 }
 

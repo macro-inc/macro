@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT task_id\n            FROM time_entry\n            WHERE user_id = ANY($1::text[])\n              AND entry_date BETWEEN $2 AND $3\n            ORDER BY task_id\n            LIMIT $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "task_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Date",
+        "Date",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "010199f58da3276a4617a6ad25a2a3f93b545a3b002f855be7cb41513fd0f408"
+}

@@ -1,5 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { useIsAuthenticated } from '@core/context/user';
+import { useIsAuthenticated, useUserId } from '@core/context/user';
+import { appConnectorKey, connectConnector } from '@queries/connectors';
 import { queryReadyGate } from '@queries/gate';
 import {
   useImportRunsQuery,
@@ -9,6 +10,11 @@ import { type JSX, Show } from 'solid-js';
 import type { ImportJobsContext } from './context/contracts';
 import { ImportJobsProvider } from './context/import-jobs-context';
 import type { WorkspaceSource } from './core/import-job';
+import {
+  onDismissedRunsChange,
+  readDismissedRuns,
+  writeDismissedRuns,
+} from './dismissed-runs';
 import { ImportJobsTrayView } from './views/import-jobs-tray';
 
 function useProductionContext(): ImportJobsContext {
@@ -28,6 +34,23 @@ function useProductionContext(): ImportJobsContext {
     createReport(source: WorkspaceSource) {
       const query = useWorkspaceImportReportQuery(() => source);
       return () => (queryReadyGate(query) ? query.data : undefined);
+    },
+    createDismissals() {
+      const userId = useUserId();
+      return {
+        restore() {
+          const user = userId();
+          return user ? readDismissedRuns(user) : [];
+        },
+        save(keys) {
+          const user = userId();
+          if (user) writeDismissedRuns(user, keys);
+        },
+        subscribe: onDismissedRunsChange,
+      };
+    },
+    reconnect(source) {
+      return connectConnector({ key: appConnectorKey(source) });
     },
     openSession(sessionId) {
       globalSplitManager()?.openWithSplit(

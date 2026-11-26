@@ -21,11 +21,9 @@ import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import {
   $isPullRequestMentionNode,
-  HISTORIC_TAG,
+  BACKGROUND_UPDATE_TAGS,
   isGithubPullRequestUrl,
   type PullRequestMentionDecoratorProps,
-  SKIP_DOM_SELECTION_TAG,
-  SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import { queryReadyGate } from '@queries/gate';
@@ -550,7 +548,7 @@ function PullRequestMentionContent(props: PullRequestMentionDecoratorProps) {
         }
       },
       {
-        tag: [HISTORIC_TAG, SKIP_DOM_SELECTION_TAG, SKIP_SCROLL_INTO_VIEW_TAG],
+        tag: BACKGROUND_UPDATE_TAGS,
         discrete: true,
       }
     );

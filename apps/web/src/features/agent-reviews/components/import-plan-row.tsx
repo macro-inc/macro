@@ -168,7 +168,14 @@ function RowStatus(props: { node: ImportPlanNode; excluded: boolean }) {
         </span>
       }
     >
-      <span class="shrink-0 text-xs text-failure">Failed</span>
+      {(error) => (
+        <span
+          class="shrink-0 text-xs text-failure"
+          aria-label={`Failed: ${error()}`}
+        >
+          Failed
+        </span>
+      )}
     </Show>
   );
 }
@@ -283,6 +290,10 @@ export function ImportPlanRow(props: {
             .with('task', () => 'task' as const)
             .with('project', () => 'initiative' as const)
             .with('page', () => 'md' as const)
+            .with('pipeline', () => 'pipeline' as const)
+            .with('company', () => 'crm_company' as const)
+            .with('contact', () => 'contact' as const)
+            .with('deal', () => 'pipeline' as const)
             .exhaustive()}
           size="xs"
         />
@@ -305,6 +316,14 @@ export function ImportPlanRow(props: {
             <span class="truncate text-xs text-ink-muted mobile:order-last mobile:basis-full mobile:whitespace-normal mobile:wrap-break-word">
               {props.node.reason}
             </span>
+          </Show>
+          {/* Why it failed, readable on touch too (no tooltip there). */}
+          <Show when={props.showStatus && props.node.error}>
+            {(error) => (
+              <span class="min-w-0 text-xs text-ink-muted wrap-break-word">
+                {error()}
+              </span>
+            )}
           </Show>
         </span>
         <span class="contents mobile:order-1 mobile:flex mobile:basis-full mobile:flex-wrap mobile:items-center mobile:justify-end mobile:gap-1.5">

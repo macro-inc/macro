@@ -6,12 +6,15 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
-use firecracker_host_api::{GoldenImage, GoldenKey, GoldenState, GuestImage};
+use firecracker_host_api::{
+    GoldenImage, GoldenKey, GoldenState, GuestImage, StageImage, StagedImage,
+};
 use tokio_util::task::TaskTracker;
 use tracing::Instrument;
 
 use crate::domain::ports::{Disks, GoldenAvailability, Goldens};
 use crate::domain::service::image_name_is_safe;
+use crate::outbound::image_staging::ImageStaging;
 use crate::outbound::jails::{JailError, Jails};
 use crate::outbound::layout::Layout;
 
@@ -37,6 +40,7 @@ pub struct GoldenBuilds<D> {
     builds: Arc<Mutex<HashMap<GoldenKey, GoldenState>>>,
     one_at_a_time: Arc<tokio::sync::Mutex<()>>,
     tasks: TaskTracker,
+    staging: ImageStaging,
 }
 
 #[derive(serde::Deserialize)]
@@ -45,10 +49,17 @@ struct Ready {
 }
 
 impl<D: Disks + Clone> GoldenBuilds<D> {
-    /// Goldens in `layout`, booted by `jails` on `disks`; builds are tracked
-    /// by `tasks`.
-    pub fn new(layout: Layout, jails: Jails, disks: D, tasks: TaskTracker) -> Self {
+    /// Goldens in `layout`, booted by `jails` on `disks`, of images
+    /// `staging` puts in place; builds are tracked by `tasks`.
+    pub fn new(
+        layout: Layout,
+        jails: Jails,
+        disks: D,
+        staging: ImageStaging,
+        tasks: TaskTracker,
+    ) -> Self {
         Self {
+            staging,
             layout,
             jails,
             disks,
@@ -202,6 +213,14 @@ impl<D: Disks + Clone> Goldens for GoldenBuilds<D> {
             .collect();
         images.sort();
         images
+    }
+
+    fn stage_image(&self, request: StageImage) -> StagedImage {
+        self.staging.stage(request)
+    }
+
+    fn staged_images(&self) -> Vec<StagedImage> {
+        self.staging.list()
     }
 }
 

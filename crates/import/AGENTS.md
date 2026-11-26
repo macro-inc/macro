@@ -26,7 +26,42 @@ has the agent submit it with `DecideReview`. `plan` returns after a short wait
 (`PLAN_WAIT`), usually while the run is still `running`, and the agent
 presents the review at once: the harness ties the staged rows and the
 `running` run (`import_run.review_id`) to the review, so rows staged later
-take it too. Planning stages the whole tree as soon as the inventory is read,
+take it too. Only a `running` or `ready` run takes a review: the harness checks
+the report before saving one, and `attach_review` refuses a run that is
+failed, being written, finished, cancelled or missing
+(`ImportError::RunNotReviewable`, a typed `UnreviewableRun` carrying the kind, never the raw error), so a failed plan never shows as an empty
+review. The first review presenting a plan, while it is planned or once it is
+ready, holds it (`import_run.review_id`); any other is refused
+(`PresentedElsewhere`) until the holder is dismissed (`release_review` frees
+the run and its staged rows). Writing starts only through
+`start_reviewed_write`: one statement moves the run from `ready` to
+`importing` while that review holds it (or, for plans presented before the
+run recorded reviews, its staged rows do). It records the review it admitted
+(`import_run.write_review_id`, cleared when a new plan starts), so a write
+that failed may be started again from `failed` by that same review once the
+earlier writer's lease has expired, with its adoptions reset; any other
+review of a failed run must replan. Otherwise it refuses typed
+(`StillPlanning`, `PresentedElsewhere`, `NothingLeft`, failed, finished)
+before anything about the plan changes, and returns the status it started
+from; the owner's sharing choices are written only once it has started. A
+failure before the write is held (or after `reopen_plan` put it back to that
+status) is `ImportError::NotStarted`, safe to
+approve again; once the write is spawned, the returned report is read
+without failing the call. `SETTLED` only
+says which runs a new plan may replace. A failed plan or write records its
+`RunErrorKind` (`import_run.error_kind`, from `failure_kind`; `Interrupted`
+when a run is given up on); the report and runs carry it, and the agent's
+messages (`explain_failure`, `UnreviewableRun::describe`) and the web
+copy are written from the kind. For workspace imports (Notion, Linear and
+Jira runs and their rows), a run's and a row's error text is `failure_text`
+(a sentence from the kind) and the import settlement carries `error_kind`;
+their raw error is only logged, and the report never serializes `error`. The
+single-page `ImportNotionPage` path and tracker inventory warnings still
+carry raw text (bead mac-il0j). A stored kind this build does not know reads as `Internal`.
+The imports tray lists a failed run until it is dismissed or a week has
+passed since it last changed, and one that finished with failures (it needs
+action) until it is dismissed; `/import/state` itself lists every run.
+Planning stages the whole tree as soon as the inventory is read,
 each row without a `decision` yet, then writes each decision-model batch's
 verdicts onto its rows as it lands (`update_plan_rows`); the report counts
 undecided rows as `deciding`, and the write cannot start until the run is
@@ -46,7 +81,9 @@ the decision model also answers `shared` per object), stored on the run so an
 adopted plan keeps it. A user on a team must choose it
 (`ImportError::NotionSharingRequired` tells the agent to ask); a user without
 one plans `personal` without being asked, and the report's `onTeam` says
-which. Each
+which. A failed plan's tool answer (`failure_reason` and `FAILED_NEXT` in
+`inbound/toolset.rs`) explains the run's `error_kind` and tells the agent to
+say it once and not plan again until asked, since a replan fails the same way. Each
 plan item records `shared`, `sharedReason` and `shareable`
 (`notion_workspace/sharing.rs`). The owner can flip items on the review card;
 the draft's `shared`/`personal` lists are written onto the rows before the
@@ -96,7 +133,7 @@ from this import's other databases into it are not linked.
 - `src/domain/service/tracker_workspace.rs` (+ `plan`, `values`): Linear/Jira
   group decisions, frozen source snapshots, task/project writes and relationships.
 - `src/domain/service/notion_workspace.rs` (+ `plan`, `triage`, `sharing`,
-  `object`, `databases`, `reserve`, `start`, `dependency_review`, `write`, `values`, `report`): the Notion workspace import —
+  `object`, `databases`, `links`, `reserve`, `start`, `dependency_review`, `write`, `values`, `report`): the Notion workspace import —
   planning, the decision model, who sees what, writing one object (claim,
   link or write), cancel and the report. Database columns and cells come
   from `import_notion::domain::macro_cells`.
@@ -148,13 +185,16 @@ from this import's other databases into it are not linked.
   import service's `N` type parameter is the Notion connection factory, and
   hosts that never call `.with_notion_connections` report Notion as not
   connected.
-- Notion page bodies are never parsed here: they go to lexical-service
-  (`POST /snapshot/notion`) as Notion markdown with a `NotionLinks` map. The
-  workspace write knows every planned page's document id up front
-  (`write::notion_links`, derived from the ledger row) so pages mention each
-  other; only the import guards
-  (`check_notion_markdown`: tool-result wrappers, database-only pages) stay in
-  Rust.
+- Send Notion bodies to lexical-service (`POST /snapshot/notion`) for
+  conversion with user and database-card mappings. Keep original hyperlinks in
+  the initial workspace write. Once the reviewed writes finish, resolve exact
+  page, database and view references against live, imported ledger destinations
+  in the same personal or team audience. Verify ownership for a personal
+  target because an adopted ledger row can point to a teammate’s copy. This
+  handles earlier imports and forward or cyclic links. Apply only hyperlink changes to page and database-row
+  bodies with `LinkBodyRevision` receipts for that review and a matching sync
+  revision. Keep the original link for an unresolved target or a changed body.
+  Rust keeps the `check_notion_markdown` tool-wrapper and database-only guards.
 - Planning and writing run detached on the host's `TaskTracker`
   (`with_job_shutdown`) and survive their process (`workspace/run.rs`):
   the running process holds a lease on the run row (`lease_owner`,
@@ -483,3 +523,39 @@ Keep `NotionPlanRepo::dependency_ids`' literal Notion/data_source/staged/non-nul
 review predicates aligned with `import_entity_notion_review_sources_idx`.
 Reconcile only the exact owned review; never scan an owner's import history for
 review defaults on each edit.
+
+## HubSpot CRM imports
+
+`ImportFromHubspot` uses the same reviewed lifecycle with no decision model
+(`domain/service/hubspot_workspace.rs` + `plan`). The host registers an
+`import_hubspot::domain::HubspotConnections` reader and a `CrmImportWriter`
+(`ai_tools::HubspotCrmWriter`, over `crm::domain::record_import`) with
+`with_hubspot`; hosts without them answer "not available". A plan needs a team
+whose CRM the user may use (`ImportError::CrmAccessRequired`) and a HubSpot
+connection (`HubspotError::NotConnected`, which the tool turns into a connect
+prompt), both checked before the run starts, so neither leaves a failed import; every row is shared with the team and not shareable, so the card
+offers no sharing choice. Rows are keyed `{portal}:{type}:{id}` (pipeline ids
+are words, record ids numbers), so re-runs and teammates dedupe through the
+ledger and the `import_entity_hubspot_team_object_key` index.
+
+Plans are fully decided when staged: deals with no company or no live pipeline
+are `skip` with a reason; everything Macro CRM cannot hold is a typed
+`HubspotLoss` on the row, counted into the report's `hubspot` section with the
+owner match summary kept on the first row (`hubspotSummary`, not `summary`,
+which the shared report reads as text). Writes go pipelines, companies,
+contacts, deals. Each object is claimed for the team, then reuses a
+`WrittenKind::CrmRecord` marker from a stopped write, then a natural key
+(company domain, the contact's primary address, the deal's HubSpot URL in
+the `Source link` of its company's entries in that pipeline, matched by its
+path since the host follows the portal's region, read once per company and
+pipeline per write), and only then
+creates. Stage labels are shortened to fit a select option, suffix included,
+and told apart without case. A company a teammate links during the write is
+read again before its contacts and deals are refused. A shutdown leaves the
+object it cut short importing for the adopting process, and only a row the
+write marked imported becomes a link target.
+A contact or deal whose company is not imported yet fails and retries;
+only a company the owner left out leaves its contacts without one
+(`ContactWithoutCompany`, counted for this review only). Left open: a crash between creating a name-only company, an
+address-less contact or a pipeline and recording its marker duplicates that
+one record. Deleted CRM copies are not re-imported (their targets read as live).

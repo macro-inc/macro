@@ -1068,6 +1068,77 @@ export type HttpSendChatMessageRequest = {
 };
 
 /**
+ * Something a HubSpot import cannot carry into Macro CRM, counted on the
+ * review card and in the final report.
+ */
+export type HubspotLoss = 'owner_not_member' | 'deal_without_company' | 'deal_without_pipeline' | 'extra_company_links' | 'domain_rejected' | 'unsupported_currency' | 'additional_domains' | 'company_owner' | 'merged_company' | 'merged_contact' | 'contact_without_company';
+
+/**
+ * How many records lost one thing.
+ */
+export type HubspotLossCount = {
+    /**
+     * Records affected.
+     */
+    count: number;
+    /**
+     * What was lost.
+     */
+    loss: HubspotLoss;
+};
+
+/**
+ * What a HubSpot plan holds, for the review card.
+ */
+export type HubspotReport = {
+    /**
+     * Records already in Macro from an earlier import, left as they are.
+     */
+    alreadyImported: number;
+    /**
+     * Companies.
+     */
+    companies: number;
+    /**
+     * Contacts.
+     */
+    contacts: number;
+    /**
+     * Records this import created in the CRM.
+     */
+    created?: number;
+    /**
+     * Portal-defined property names whose values stay in HubSpot.
+     */
+    customProperties: Array<string>;
+    /**
+     * Deals, each becoming an entry in its pipeline.
+     */
+    deals: number;
+    /**
+     * Records this import matched to ones already in the CRM (same domain,
+     * address or deal) or to a teammate's import, instead of creating them.
+     */
+    linked?: number;
+    /**
+     * What cannot be carried over, by kind.
+     */
+    losses: Array<HubspotLossCount>;
+    /**
+     * HubSpot owners named by the planned records.
+     */
+    owners: number;
+    /**
+     * Of those, owners matched to a team member by email.
+     */
+    ownersMatched: number;
+    /**
+     * Deal pipelines, each becoming a Macro pipeline.
+     */
+    pipelines: number;
+};
+
+/**
  * The caller's ledger rows.
  */
 export type ImportEntitiesResponse = {
@@ -1164,7 +1235,7 @@ export type ImportEntity = {
  * kinds; a Notion database and a Notion page, or a Linear project and a
  * Linear issue, are tracked and deduplicated separately.
  */
-export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel';
+export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel' | 'hubspot_pipeline' | 'hubspot_company' | 'hubspot_contact' | 'hubspot_deal';
 
 /**
  * Body for importing one Notion page.
@@ -1203,6 +1274,7 @@ export type ImportRun = {
      * Discovery failure detail, when the run failed.
      */
     error?: string | null;
+    error_kind?: null | RunErrorKind;
     /**
      * The review presenting the run's plan, once one does. A Notion plan is
      * presented while it is still `running`; rows staged after that take it.
@@ -1230,7 +1302,7 @@ export type ImportRun = {
 /**
  * External systems items can be imported from.
  */
-export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack';
+export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack' | 'hubspot';
 
 /**
  * The full import aggregate for a user: discovery runs plus visible ledger
@@ -1512,9 +1584,14 @@ export type NotionImportReport = {
      */
     documents: number;
     /**
-     * Why the run failed, when it did.
+     * Why the run failed or what it could not finish, in text Macro wrote
+     * (a canned reason, a reviewed object's title, or the sentence for its
+     * kind; never a provider's text): the report keeps it only when the run
+     * recorded a kind. The agent's tool answers drop it and read
+     * `error_kind`.
      */
     error?: string | null;
+    errorKind?: null | RunErrorKind;
     /**
      * Total objects that failed, including those outside the sample.
      */
@@ -1531,6 +1608,7 @@ export type NotionImportReport = {
      * Objects that need handling by hand, with reasons.
      */
     handItems?: Array<NotionReportItem>;
+    hubspot?: null | HubspotReport;
     /**
      * Plan objects finished so far, or confirmed new copies once completed.
      */
@@ -2003,6 +2081,13 @@ export type RejectToolCallRequest = {
  * The role of a message participant.
  */
 export type Role = 'user' | 'assistant' | 'system';
+
+/**
+ * Why a run failed, as a closed set readers branch on instead of the error
+ * text. Stored in `import_run.error_kind`; `None` on runs that failed
+ * before it was recorded.
+ */
+export type RunErrorKind = 'not_found' | 'forbidden' | 'access_lost' | 'connection_unavailable' | 'not_connected' | 'rate_limited' | 'unreachable' | 'usage_refused' | 'interrupted' | 'internal';
 
 /**
  * Outcome of accepting/declining staged rows via `POST /import/run`.

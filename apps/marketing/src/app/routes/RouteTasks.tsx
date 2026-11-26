@@ -38,7 +38,7 @@ const tasksFaq = [
     a: (
       <>
         You can import Linear issues or task CSVs. See{' '}
-        <a href="/docs/switch-to-macro">migration options</a>, or{' '}
+        <a href="/docs/switch-to-macro">migration options</a> or{' '}
         <a href={DEMO_BOOKING_URL}>talk to our team</a> about moving your
         company’s work.
       </>
@@ -46,7 +46,7 @@ const tasksFaq = [
   },
   {
     q: 'Where do I see my tasks and the work I’ve assigned?',
-    a: 'My Tasks shows your assignments. Created by me shows tasks you created, and All Tasks shows tasks you can access. Filter by owner, status, or priority.',
+    a: 'My Tasks shows your assignments. Created by me shows tasks you created and All Tasks shows tasks you can access. Filter by owner, status, or priority.',
   },
   {
     q: 'Can an agent work on a task?',
@@ -71,7 +71,7 @@ const tasksFaq = [
   },
   {
     q: 'Who can see a task?',
-    a: 'Tasks follow their sharing settings. In the task composer, choose whether to share with your team or keep access limited to yourself and the people you share it with.',
+    a: 'Tasks follow their sharing settings. Choose in the task composer whether to share with your team or keep access limited to yourself and the people you share it with.',
   },
   {
     q: 'Can I try Macro for free?',
@@ -99,43 +99,43 @@ export function RouteTasks() {
           cta="tasks_hero_get_started"
           tutorial="tasks"
           product="Tasks"
-          title="Tasks for people and agents."
-          description="Create tasks from email and team chat. Assign people or agents, and keep task status in sync with linked pull requests."
+          title="Turn conversations into tasks."
+          description="Create tasks from email and team chat. Assign people or agents and keep task status synced with linked PRs."
         />
         <FeaturePageSection
           id="from-a-message"
           title="Create tasks right from Macro Chat."
-          description="Click Create task on any message and the task is linked to that thread, so the conversation on the task and the conversation in the channel are deep linked together. Or mention @Macro and ask it to create tasks from what was just said; it can create many at once. Hit C then T to create one from anywhere."
+          description="Turn any Macro Chat message into a task with the original thread deep-linked or mention @Macro to spin up multiple tasks from a discussion. Press C then T from anywhere."
           screen={featureScreens['from-a-message']}
         />
         <FeaturePageSection
           id="from-docs-and-email"
           title="Directly linked to customer Macro Mail."
-          description="Create a task from a customer email, or highlight to-do boxes in a document to create many at once. Tasks are linked back to their source bidirectionally: the task remembers where it came from, and the source knows the task exists. Paste a task into a channel and the pill shows its status, assignee, and priority."
+          description="Create tasks from Macro Mail or highlight checklists in Macro Docs to generate them in bulk. Every task links back to its source and pasting one in chat shows live status, assignee, and priority."
           screen={featureScreens['from-docs-and-email']}
         />
         <FeaturePageSection
           id="task-agents"
-          title="Assign tasks to Macro Agents, like teammates."
-          description="Put an agent on a task and it picks it up and gets to work, with the context linked to the task. Open its session to follow along. Through Macro’s MCP server, Claude Code, Codex, and Cursor can find, create, and update your tasks without leaving your editor."
+          title="Assign tasks to Macro Agents like teammates."
+          description="Assign a task to Macro Agents just like a teammate and follow its live session. Claude Code, Codex, and Cursor can search, create, and update your tasks straight from your editor over MCP."
           screen={featureScreens['task-agents']}
         />
         <FeaturePageSection
           id="github"
-          title="Linked to Macro GitHub, both ways."
-          description="As you create, review, and merge pull requests, the linked task moves through In Progress, In Review, and Completed. Click the GitHub pill to open the pull request from the task, or go back to the task from the pull request. Your team can see where the work stands without you having to update two systems."
+          title="Linked to Macro GitHub both ways."
+          description="Opening, reviewing, and merging a Macro GitHub PR moves the linked task through In Progress, In Review, and Completed automatically so you never have to update two systems."
           screen={featureScreens['github']}
         />
         <FeaturePageSection
           id="task-projects"
           title="Projects and tags."
-          description="Group your work into projects. A project has its own page with a description, a discussion, and all of its tasks. Tags are for everything that cuts across projects: use a project when the work has an owner, a goal, and a finish line, and a tag when a task relates to many things at once."
+          description="Group work with an owner and finish line into Projects and use Macro Tags for everything that cuts across teams and customers."
           screen={featureScreens['task-projects']}
         />
         <FeaturePageSection
           id="task-views"
           title="List, board, or timeline."
-          description="Look at your tasks as a list, as a kanban board, or on a timeline, so you can see what’s in flight and what’s coming up next. Filter, sort, and group them, or ask your agent for an update on your team’s tasks."
+          description="Switch between list, kanban board, and timeline views or ask Macro Agents for a live status update across your team’s tasks."
           screen={featureScreens['task-views']}
         />
         <FeaturePhoneScreens screens={phoneScreens['tasks']} product="Tasks" />

@@ -1,6 +1,6 @@
 import { t } from '@app/lib/i18n';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import { Button, cn } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { RoutineSurface } from './routine-editor';
@@ -11,6 +11,7 @@ export type SubRoutineItem = {
   name: string;
   /** What starts it, in a line. */
   when: string;
+  whenDetails?: string;
   state: 'active' | 'paused' | 'running' | 'finished';
 };
 
@@ -46,9 +47,14 @@ function SubRoutineRow(props: {
           >
             {props.item.name}
           </span>
-          <span class="truncate text-[13px] text-ink-muted">
-            {props.item.when}
-          </span>
+          <Tooltip
+            label={props.item.whenDetails ?? props.item.when}
+            class="min-w-0"
+          >
+            <span class="block truncate text-[13px] text-ink-muted">
+              {props.item.when}
+            </span>
+          </Tooltip>
         </span>
         <span class="shrink-0 text-xs text-ink-extra-muted">
           {stateLabel(props.item.state)}

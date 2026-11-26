@@ -287,6 +287,11 @@ const routineEvent = z.discriminatedUnion('event', [
   z.object({ event: z.literal('task_property_changed'), task: taskSnapshot }),
   z.object({ event: z.literal('email_received'), email: emailSnapshot }),
   z.object({
+    event: z.literal('email_labeled'),
+    email: emailSnapshot,
+    labels: z.array(z.string()),
+  }),
+  z.object({
     event: z.literal('channel_created'),
     id: z.string().min(1),
     name: z.string().optional(),

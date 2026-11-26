@@ -7,7 +7,7 @@ use super::models::{
     AllowanceDecision, AllowanceStore, AutoReloadThresholds, BillingPeriod, BillingSettings,
     CreditPurchase, CreditReloadKind, CreditReloadStatus, Entitlement, OpenPeriodStart,
     OverageChargeStatus, PeriodAllowance, PeriodLedger, Result, SeatAllowance, SeatGeneration,
-    SeatUsage, SubscriptionScope, UsageSnapshot,
+    SeatUsage, SubscriptionScope, UsageSnapshot, UserPlan,
 };
 use super::policy::UsageAllocation;
 use ai_usage::domain::financial::{
@@ -56,6 +56,22 @@ pub trait EntitlementSource: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Entitlement>> + Send;
+
+    /// The user's plan tier without loading their team's full billing roster.
+    /// Implementors backed by a team roster should override this to avoid
+    /// reading every teammate's row when only the caller's tier is needed.
+    fn user_plan(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<UserPlan>> + Send {
+        async move {
+            let entitlement = self.entitlement(user).await?;
+            Ok(UserPlan {
+                tier: entitlement.tier,
+                unlimited: entitlement.unlimited,
+            })
+        }
+    }
 
     /// The Stripe customer id on file for a user, if any.
     fn stripe_customer_id(

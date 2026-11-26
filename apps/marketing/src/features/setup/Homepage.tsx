@@ -1,10 +1,15 @@
 import { lazy, Show, Suspense } from 'solid-js';
+import {
+  demoHref,
+  handleDemoClick,
+  handleSignupLinkClick,
+} from '../../app/utils/utilCta';
 import { setPageSeo } from '../../app/utils/utilSeo';
 import { FeatureUiStyles } from '../marketing/components/FeaturePage';
-import { HomepageFeatureLinks } from '../marketing/components/HomepageFeatureLinks';
+import { HomepageFounderLetter } from '../marketing/components/HomepageFounderLetter';
 import { HomepageResources } from '../marketing/components/HomepageResources';
 import { HomepageTrustBadges } from '../marketing/components/HomepageTrustBadges';
-import { MacroHero } from '../marketing/components/homepage/MacroHero';
+import { HomepageTour } from '../marketing/components/homepage/HomepageTour';
 import { SiteHeader } from '../marketing/components/SiteHeader';
 import { wallpapers } from '../marketing/components/TutorialWallpaper';
 import '../marketing/components/homepage/macro-homepage.css';
@@ -16,7 +21,10 @@ const HomepageSections = lazy(() =>
   }))
 );
 
-/** One workspace introduction shared by desktop, phones, and prerendering. */
+/**
+ * The homepage follows the Email page: a centered introduction, a tour of the
+ * product on its wallpapers, then one reading-width section per product.
+ */
 export function Homepage(props: { embedded?: boolean } = {}) {
   setPageSeo({
     title: 'Macro — The unified workspace for your company.',
@@ -35,18 +43,48 @@ export function Homepage(props: { embedded?: boolean } = {}) {
         data-onboarding-scroll
       >
         <div
-          class="page-aura"
+          class="page-aura feature-page"
+          data-product-spacing="true"
           style={{
             '--page-aura-primary': wallpapers.home.colors[1],
             '--page-aura-secondary': wallpapers.home.colors[2],
             '--page-aura-deep': wallpapers.home.colors[3],
           }}
         >
-          <section class="macro-home-hero" aria-labelledby="macro-home-title">
-            <HomepageFeatureLinks />
-            <MacroHero />
-            <HomepageTrustBadges revealOnScroll />
-          </section>
+          <header
+            class="feature-page-hero macro-home-hero"
+            aria-labelledby="macro-home-title"
+          >
+            <h1 id="macro-home-title" data-welcome-heading>
+              A new kind of office suite.
+            </h1>
+            <h2 class="macro-home-tagline">
+              Macro replaces 27+ apps with one connected <br />
+              workspace for humans and agents.
+            </h2>
+            <div class="macro-home-actions">
+              <a
+                class="site-nav-start homepage-hero-cta"
+                target="_self"
+                href="/app/signup"
+                onClick={(event) => handleSignupLinkClick(event, '/app/signup')}
+              >
+                Get Macro
+              </a>
+              <a
+                class="macro-home-demo"
+                href={demoHref()}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => handleDemoClick('hero_book_demo')}
+              >
+                Book a demo
+              </a>
+            </div>
+          </header>
+          <HomepageTour />
+          <HomepageTrustBadges showGithub />
+          <HomepageFounderLetter />
           <Suspense>
             <HomepageSections />
           </Suspense>

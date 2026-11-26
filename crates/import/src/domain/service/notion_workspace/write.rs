@@ -23,8 +23,8 @@ use crate::domain::models::{
     WrittenObject,
 };
 use crate::domain::ports::{
-    ImportVisibility, NotionLinks, NotionPageLink, NotionUserLink, SharedEntity, SourceDates,
-    WorkspaceWriter, WrittenObjects,
+    ImportVisibility, NotionLinks, NotionUserLink, SharedEntity, SourceDates, WorkspaceWriter,
+    WrittenObjects,
 };
 
 use super::values::{task_body, task_properties};
@@ -212,29 +212,8 @@ pub(super) fn folder_for(
     root
 }
 
-/// Where the plan's pages and people resolve in Macro: every page gets the
-/// id of the document it becomes (`imported` when it already exists,
-/// otherwise [`document_id`], known before anything is written), and every
-/// person matched to a teammate their account.
-pub(super) fn notion_links(
-    items: &[WriteItem],
-    imported: &HashMap<NotionId, Uuid>,
-    people: &PeopleMap,
-) -> NotionLinks {
-    let pages = items
-        .iter()
-        .filter(|item| item.kind != ImportKind::DataSource)
-        .map(|item| {
-            let link = NotionPageLink {
-                document_id: imported
-                    .get(&item.notion_id)
-                    .copied()
-                    .unwrap_or_else(|| document_id(item.import_id)),
-                name: item.title.clone(),
-            };
-            (item.notion_id.clone(), link)
-        })
-        .collect();
+/// The initial conversion keeps hyperlinks and resolves only known people.
+pub(super) fn notion_links(people: &PeopleMap) -> NotionLinks {
     let users = people
         .iter()
         .filter_map(|(id, person)| {
@@ -246,9 +225,8 @@ pub(super) fn notion_links(
         })
         .collect();
     NotionLinks {
-        pages,
         users,
-        databases: Vec::new(),
+        ..Default::default()
     }
 }
 
@@ -263,6 +241,7 @@ pub(super) struct Progress<'a, Store> {
     store: &'a Store,
     user: &'a MacroUserIdStr<'static>,
     import_id: Uuid,
+    review_id: Option<Uuid>,
     known: Mutex<HashMap<(WrittenKind, String), Uuid>>,
     warnings: Mutex<Vec<crate::domain::models::FidelityWarning>>,
     losses: Mutex<HashMap<NotionId, HashSet<crate::domain::models::SourceLossFact>>>,
@@ -285,6 +264,7 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
             store,
             user,
             import_id,
+            review_id: None,
             known: Mutex::new(known),
             warnings: Mutex::new(Vec::new()),
             losses: Mutex::new(HashMap::new()),
@@ -515,6 +495,34 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
         let mut objects = self.loss_markers(row)?;
         objects.push(WrittenObject::for_row(self.import_id, kind, row, macro_id));
         self.record_all(objects).await
+    }
+
+    /// Fence deferred document writes to the reviewed generation creating them.
+    pub fn in_review(mut self, review_id: Uuid) -> Self {
+        self.review_id = Some(review_id);
+        self
+    }
+
+    /// Store the body identity and initial revision in one ledger write.
+    pub async fn record_document(
+        &self,
+        kind: WrittenKind,
+        source: &NotionId,
+        document: &crate::domain::ports::CreatedImportDocument,
+    ) -> anyhow::Result<Uuid> {
+        let id: Uuid = document.id.parse()?;
+        let mut objects = self.loss_markers(source)?;
+        objects.push(WrittenObject::for_row(self.import_id, kind, source, id));
+        if let (Some(generation), Some(revision)) = (self.review_id, document.link_revision) {
+            objects.push(WrittenObject {
+                import_id: self.import_id,
+                kind: WrittenKind::LinkBodyRevision,
+                object: format!("{generation}/{id}"),
+                macro_id: revision,
+            });
+        }
+        self.record_all(objects).await?;
+        Ok(id)
     }
 
     /// Record `objects`, which must belong to this row.

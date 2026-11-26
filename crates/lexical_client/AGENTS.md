@@ -19,7 +19,9 @@ to read or render document content.
   `services/lexical-service/src/endpoints/notion-snapshot.ts`. The optional
   database occurrence array uses pathname container ids and per-container
   ordinals, with a resolved database/table/view target or a typed fallback;
-  empty arrays stay omitted for existing callers.
+  empty arrays stay omitted for existing callers. `notion_link_delta` calls
+  `POST /snapshot/notion-links` to inventory exact references or prepare an
+  href-only update. The importer verifies destinations before passing them in.
 
 ## Scope
 

@@ -41,7 +41,7 @@
 }
 
 .downloads-header p {
-  color: #999;
+  color: var(--color-content-3);
   font-size: 15px;
   line-height: 1.6;
 }
@@ -54,8 +54,113 @@
 }
 
 /* Preserve the shared primary button's ink over the legacy anchor reset. */
-.downloads-action .site-nav-start {
+.downloads-installers .site-nav-start {
   color: #000;
+}
+
+.downloads-installers .site-nav-start,
+.downloads-installers .site-nav-demo {
+  width: 220px;
+  min-height: 44px;
+  font-size: 15px;
+}
+
+.downloads-installers {
+  --nav-ink: #fff;
+  --nav-muted: #b8b8bd;
+  --nav-surface: rgb(18 18 20 / 78%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.downloads-installers li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+}
+
+.downloads-installers span,
+.downloads-page .downloads-note {
+  color: var(--color-content-4);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* With the action column's 12px gap, 20px below the installers. */
+.downloads-page .downloads-note {
+  margin-top: 8px;
+}
+
+.downloads-note a {
+  color: var(--color-ink-muted);
+}
+
+.downloads-page .downloads-alternatives {
+  margin-top: 0;
+  color: var(--color-content-4);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.downloads-alternatives a {
+  color: var(--color-ink-muted);
+}
+
+.downloads-alternatives a:hover {
+  color: var(--color-ink);
+}
+
+.downloads-mobile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  margin-top: 72px;
+  padding-top: 56px;
+  border-top: 1px solid color-mix(in srgb, var(--color-ink) 7.8%, transparent);
+  text-align: center;
+}
+
+.downloads-mobile h2 {
+  margin: 0;
+  font:
+    calc(315 + var(--cream-slab-weight-increase, 0)) 24px / 1.2 "Roboto Slab Variable",
+    display,
+    serif;
+  letter-spacing: -0.02em;
+}
+
+.downloads-mobile p {
+  margin: -8px 0 0;
+  color: var(--color-content-3);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.downloads-qr {
+  display: block;
+  width: 160px;
+  height: auto;
+  color: var(--color-ink);
+}
+
+.downloads-store-link {
+  color: var(--color-ink-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.downloads-store-link:hover {
+  color: var(--color-ink);
 }
 
 .downloads-release {
@@ -66,23 +171,16 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #777;
+  color: var(--color-content-4);
   font-size: 12px;
   text-decoration: none;
 }
 .downloads-release a:hover {
-  color: #ccc;
+  color: var(--color-ink-muted);
 }
 .downloads-release svg {
   width: 13px;
   height: 13px;
-}
-
-.downloads-page .downloads-version {
-  margin-top: 8px;
-  color: #777;
-  font-size: 12px;
-  text-align: center;
 }
 
 @media (max-width: 600px) {
@@ -98,5 +196,22 @@
   .downloads-app-icon svg {
     width: 38px;
     height: 38px;
+  }
+}
+
+/* Phones get the mobile apps; computers get the desktop installers. */
+.downloads-page .downloads-phone-only {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .downloads-page .downloads-desktop-only {
+    display: none;
+  }
+  .downloads-page ul.downloads-phone-only {
+    display: flex;
+  }
+  .downloads-page p.downloads-phone-only {
+    display: block;
   }
 }

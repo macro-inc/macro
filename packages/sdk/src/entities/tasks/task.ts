@@ -101,7 +101,9 @@ export class Task extends Document {
       startDate?: Date;
       /**
        * Keeps the time of day of `startDate` and `dueDate`, making each an
-       * exact moment (a 2 to 4 PM block) instead of a whole day.
+       * exact moment (a 2 to 4 PM block) instead of a whole day. A time the
+       * person gives is in their time zone unless they name another: build the
+       * Date with that zone's UTC offset on that date.
        */
       withTimes?: boolean;
       /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */

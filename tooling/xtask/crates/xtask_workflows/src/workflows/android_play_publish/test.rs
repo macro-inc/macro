@@ -230,6 +230,100 @@ gh() {
     }
 }
 
+/// The watcher reads Play through an edit, which would invalidate a publish
+/// run's edit, so it reads nothing for a PR while a run of either publishing
+/// workflow is unfinished, nor when it cannot tell, and goes on to the next
+/// PR either way.
+#[test]
+fn watcher_leaves_play_alone_while_publishing() {
+    let script = concat!(
+        include_str!("../scripts/android_play_statuses.sh"),
+        include_str!("../scripts/android_release_watch.sh")
+    );
+    // `gh run list` filters the fake runs by --status, then applies the
+    // script's own --jq filter.
+    let fakes = r#"
+cd() { :; }
+gh_fetch() { [[ "$1" == merge ]]; }
+gh() {
+  local runs
+  case "$*" in
+    "api repos/example/repo/contents/apps/web/tauri/src-tauri/tauri.android.conf.json?ref=head"*)
+      printf '{"bundle":{"android":{"versionCode":22}}}' | base64 ;;
+    "run list --repo example/repo --workflow android-play-publish.yml "*) runs=$FAKE_AUTOMATIC_RUNS ;;
+    "run list --repo example/repo --workflow publish-android-play.yml "*) runs=$FAKE_MANUAL_RUNS ;;
+    *) echo "unexpected: gh $*" >&2; return 1 ;;
+  esac
+  if [[ -n "${runs+set}" ]]; then
+    [[ "$runs" != error ]] || return 1
+    [[ "$*" =~ --status\ ([a-z_]+) ]] || return 1
+    jq --arg status "${BASH_REMATCH[1]}" '[.[] | select(.status == $status)]' <<<"$runs" | jq "${@: -1}"
+  fi
+}
+bun() {
+  case "$1" in
+    scripts/android-native.mjs) echo "$FAKE_HASH" ;;
+    scripts/android-play-status.mjs) echo "read Google Play"; return 1 ;;
+    *) return 1 ;;
+  esac
+}
+"#;
+    let temp = tempfile::tempdir().expect("runner temp");
+    let runner_temp = temp.path().to_str().expect("runner temp path");
+    let prs =
+        r#"[{"number":5,"sha":"head","merge":"merge"},{"number":6,"sha":"head","merge":"merge"}]"#;
+    let done = r#"[{"status":"completed"},{"status":"completed"}]"#;
+    let cases = [
+        ("no publish run", done, done, true, 2),
+        (
+            "a publish run in progress",
+            r#"[{"status":"in_progress"},{"status":"completed"}]"#,
+            done,
+            true,
+            0,
+        ),
+        (
+            "a publish run queued",
+            r#"[{"status":"completed"},{"status":"queued"}]"#,
+            done,
+            true,
+            0,
+        ),
+        (
+            "a manual publish run in progress",
+            done,
+            r#"[{"status":"in_progress"}]"#,
+            true,
+            0,
+        ),
+        ("publish runs unknown", done, "error", false, 0),
+    ];
+    for (case, automatic, manual, pass, reads) in cases {
+        let (ok, log, _) = run(
+            fakes,
+            script,
+            &[
+                ("PRS", prs),
+                ("RUNNER_TEMP", runner_temp),
+                ("FAKE_HASH", HASH),
+                ("FAKE_AUTOMATIC_RUNS", automatic),
+                ("FAKE_MANUAL_RUNS", manual),
+            ],
+        );
+        assert_eq!(ok, pass, "{case}: {log}");
+        assert_eq!(
+            log.matches("read Google Play").count(),
+            reads,
+            "{case}: {log}"
+        );
+        assert_eq!(
+            log.matches("PR #").count(),
+            2,
+            "{case}: every PR is looked at: {log}"
+        );
+    }
+}
+
 /// Drift reads whether the publisher submitted the stale version code:
 /// success is promoted, pending or failure unknown, nothing not promoted.
 #[test]
@@ -379,8 +473,24 @@ fn only_main_copy_workflows_sign_in_to_play() {
             < at("Upload to internal testing")
     );
     assert!(at("Write the provenance stamp as release notes") < at("Upload to internal testing"));
+    assert!(at("Upload to internal testing") < at("Retry the upload to internal testing"));
+    // The first upload's failure must not fail the job, only start the retry.
+    let publish = &workflow["jobs"]["publish"]["steps"];
+    let step = |id: &str| {
+        publish
+            .as_sequence()
+            .expect("publish steps")
+            .iter()
+            .find(|step| step["id"].as_str() == Some(id))
+            .unwrap_or_else(|| panic!("missing step {id}"))
+    };
+    assert_eq!(step("upload")["continue-on-error"].as_bool(), Some(true));
+    assert_eq!(
+        step("upload_retry")["if"].as_str(),
+        Some("steps.upload.outcome == 'failure'")
+    );
     assert!(
-        at("Upload to internal testing")
+        at("Retry the upload to internal testing")
             < at("Require the native code to be unchanged before promoting")
     );
     assert!(

@@ -1,3 +1,4 @@
+import { DialogClosesOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { internalDrag } from '@core/directive/internalDragState';
 
 false && internalDrag;
@@ -13,6 +14,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import {
   $isImageNode,
+  BACKGROUND_UPDATE_TAGS,
   type ImageDecoratorProps,
 } from '@macro-inc/lexical-core';
 import { calculateEffectiveDimensions } from '@macro-inc/lexical-core/utils/media';
@@ -147,7 +149,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
             () => {
               $upgradeDSSMediaUrl(props.key, url, 'image');
             },
-            { discrete: true, tag: 'historic' }
+            { discrete: true, tag: BACKGROUND_UPDATE_TAGS }
           );
         }
       }),
@@ -267,7 +269,10 @@ export function MarkdownImage(props: ImageDecoratorProps) {
       if (node && $isImageNode(node)) node.setScale(value, false);
     });
   }, 60);
-  createEffect(on(scale, persistScale));
+  // Only a resize saves the scale. Saving on mount would write in every
+  // editor showing the picture, including one that lost focus to another
+  // split, and that write moves focus back into the document.
+  createEffect(on(scale, persistScale, { defer: true }));
   createEffect(() => {
     if (!interactable()) {
       persistScale.clear();
@@ -285,6 +290,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
 
   return (
     <Dialog open={viewerOpen()} onOpenChange={setViewerOpen}>
+      <DialogClosesOnNavigation />
       <div
         ref={containerRef}
         class={cn(

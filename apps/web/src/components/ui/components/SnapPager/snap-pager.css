@@ -1,0 +1,62 @@
+.snap-pager {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  overflow-anchor: none;
+}
+
+.snap-pager::-webkit-scrollbar {
+  display: none;
+}
+
+.snap-pager-locked {
+  overflow-x: hidden;
+}
+
+.snap-pager-rail {
+  position: relative;
+  width: 200100%;
+  height: 100%;
+  overflow-anchor: none;
+}
+
+.snap-pager-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.snap-pager-marker,
+.snap-pager-page {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: calc(100% / 2001);
+  min-width: 0;
+}
+
+.snap-pager-marker {
+  left: calc(var(--snap-marker-position) * 100% / 2001);
+  scroll-snap-align: start;
+}
+
+.snap-pager-page {
+  contain: layout paint style;
+  left: calc((1000 + var(--snap-page-position) - var(--snap-origin)) * 100% / 2001);
+}
+
+@media (pointer: coarse) {
+  .snap-pager {
+    scroll-snap-type: x mandatory;
+  }
+  .snap-pager-marker {
+    scroll-snap-stop: always;
+  }
+}
+
+.snap-pager-page[aria-hidden='true'] {
+  pointer-events: none;
+}

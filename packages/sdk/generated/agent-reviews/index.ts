@@ -230,6 +230,86 @@ export type GuestPolicy = {
 };
 
 /**
+ *  Something a HubSpot import cannot carry into Macro CRM, counted on the
+ *  review card and in the final report.
+ */
+export type HubspotLoss =
+/**  A record's HubSpot owner is not a member of the team; it stays unassigned. */
+"owner_not_member" |
+/**  A deal with no company; Macro pipelines track companies, so it is not imported. */
+"deal_without_company" |
+/**  A deal in a pipeline that is archived or missing; it is not imported. */
+"deal_without_pipeline" |
+/**  A contact or deal linked to more than one company; only its primary is kept. */
+"extra_company_links" |
+/**
+ *  A company domain Macro does not key companies by (a personal email
+ *  provider, or not a domain); the company is created by name only.
+ */
+"domain_rejected" |
+/**
+ *  A deal currency Macro does not support; the amount is left empty rather
+ *  than shown in another currency.
+ */
+"unsupported_currency" |
+/**  A company's further domains; only its primary domain is kept. */
+"additional_domains" |
+/**  A company's HubSpot owner; Macro companies have no owner. */
+"company_owner" |
+/**
+ *  A company sharing its domain with another planned company; both become
+ *  one CRM company.
+ */
+"merged_company" |
+/**
+ *  A contact sharing its primary address with another planned contact;
+ *  both become one CRM contact.
+ */
+"merged_contact" |
+/**
+ *  A contact whose company was left out of the import; it is created
+ *  without one.
+ */
+"contact_without_company";
+
+/**  How many records lost one thing. */
+export type HubspotLossCount = {
+	/**  What was lost. */
+	loss: HubspotLoss,
+	/**  Records affected. */
+	count: number,
+};
+
+/**  What a HubSpot plan holds, for the review card. */
+export type HubspotReport = {
+	/**  Deal pipelines, each becoming a Macro pipeline. */
+	pipelines: number,
+	/**  Companies. */
+	companies: number,
+	/**  Contacts. */
+	contacts: number,
+	/**  Deals, each becoming an entry in its pipeline. */
+	deals: number,
+	/**  HubSpot owners named by the planned records. */
+	owners: number,
+	/**  Of those, owners matched to a team member by email. */
+	ownersMatched: number,
+	/**  Records already in Macro from an earlier import, left as they are. */
+	alreadyImported: number,
+	/**  Records this import created in the CRM. */
+	created?: number,
+	/**
+	 *  Records this import matched to ones already in the CRM (same domain,
+	 *  address or deal) or to a teammate's import, instead of creating them.
+	 */
+	linked?: number,
+	/**  What cannot be carried over, by kind. */
+	losses: HubspotLossCount[],
+	/**  Portal-defined property names whose values stay in HubSpot. */
+	customProperties: string[],
+};
+
+/**
  *  The one draft an import review carries: which source's staged plan it
  *  presents, the plan rows the user took out of it, and the rows whose
  *  sharing they changed: `shared` to share with their team, `personal` to
@@ -302,7 +382,15 @@ export type ImportKind =
 /**  A Jira epic grouping. */
 "jira_epic" |
 /**  A Slack channel. */
-"channel";
+"channel" |
+/**  A HubSpot deal pipeline. */
+"hubspot_pipeline" |
+/**  A HubSpot company. */
+"hubspot_company" |
+/**  A HubSpot contact. */
+"hubspot_contact" |
+/**  A HubSpot deal. */
+"hubspot_deal";
 
 /**  Which source's staged plan an import review presents. */
 export type ImportReviewSource =
@@ -311,7 +399,9 @@ export type ImportReviewSource =
 /**  A Linear plan, staged by ImportFromLinear. */
 "linear" |
 /**  A Jira plan, staged by ImportFromJira. */
-"jira";
+"jira" |
+/**  A HubSpot plan, staged by ImportFromHubspot. */
+"hubspot";
 
 /**  Review item state, shared with notification consumers. */
 export type ItemStatus =
@@ -367,8 +457,19 @@ export type NotionImportReport_Deserialize = {
 	 *  `dismissed` when cancelled. Absent before the first run.
 	 */
 	status?: RunStatus | null,
-	/**  Why the run failed, when it did. */
+	/**
+	 *  Why the run failed or what it could not finish, in text Macro wrote
+	 *  (a canned reason, a reviewed object's title, or the sentence for its
+	 *  kind; never a provider's text): the report keeps it only when the run
+	 *  recorded a kind. The agent's tool answers drop it and read
+	 *  `error_kind`.
+	 */
 	error?: string | null,
+	/**
+	 *  The kind of failure, when the run failed and it was recorded. Show
+	 *  the user copy for this, not `error`.
+	 */
+	errorKind?: RunErrorKind | null,
 	/**  What planning has found in Notion so far, while it is `running`. */
 	scanned?: ScanCounts | null,
 	/**  Pages in the plan. */
@@ -429,6 +530,8 @@ export type NotionImportReport_Deserialize = {
 	failures?: NotionReportItem_Deserialize[],
 	/**  Total objects that failed, including those outside the sample. */
 	failureCount?: number,
+	/**  A HubSpot plan's counts, owners and losses. */
+	hubspot?: HubspotReport | null,
 };
 
 /**  Where a Notion workspace import stands. */
@@ -449,8 +552,19 @@ export type NotionImportReport_Serialize = {
 	 *  `dismissed` when cancelled. Absent before the first run.
 	 */
 	status?: RunStatus | null,
-	/**  Why the run failed, when it did. */
+	/**
+	 *  Why the run failed or what it could not finish, in text Macro wrote
+	 *  (a canned reason, a reviewed object's title, or the sentence for its
+	 *  kind; never a provider's text): the report keeps it only when the run
+	 *  recorded a kind. The agent's tool answers drop it and read
+	 *  `error_kind`.
+	 */
 	error?: string | null,
+	/**
+	 *  The kind of failure, when the run failed and it was recorded. Show
+	 *  the user copy for this, not `error`.
+	 */
+	errorKind?: RunErrorKind | null,
 	/**  What planning has found in Notion so far, while it is `running`. */
 	scanned?: ScanCounts | null,
 	/**  Pages in the plan. */
@@ -511,6 +625,8 @@ export type NotionImportReport_Serialize = {
 	failures: NotionReportItem_Serialize[],
 	/**  Total objects that failed, including those outside the sample. */
 	failureCount: number,
+	/**  A HubSpot plan's counts, owners and losses. */
+	hubspot?: HubspotReport | null,
 };
 
 /**  A teammate who already imported some of a plan's objects. */
@@ -927,6 +1043,42 @@ export type ReviewRecord_Serialize = {
 
 /**  A review stack label: not blank, at most 256 characters. */
 export type ReviewTitle = string;
+
+/**
+ *  Why a run failed, as a closed set readers branch on instead of the error
+ *  text. Stored in `import_run.error_kind`; `None` on runs that failed
+ *  before it was recorded.
+ */
+export type RunErrorKind =
+/**
+ *  The source said an object was missing or not shared with the
+ *  connection.
+ */
+"not_found" |
+/**  The connection may not read what the import asked for. */
+"forbidden" |
+/**  The source refused the connection itself: revoked or expired. */
+"access_lost" |
+/**  The connection's proxy could not use the account at all. */
+"connection_unavailable" |
+/**  The source is not connected, or the connection is turned off. */
+"not_connected" |
+/**  The source kept rate limiting the import. */
+"rate_limited" |
+/**  The source could not be reached or answered with an error. */
+"unreachable" |
+/**  The AI work planning needs was refused (usage or billing). */
+"usage_refused" |
+/**
+ *  The run stopped before it finished (its process went away too
+ *  often); starting it again picks up what is left.
+ */
+"interrupted" |
+/**
+ *  Anything else, on Macro's side. A kind this build does not know (a
+ *  newer writer's) reads as this one.
+ */
+"internal";
 
 /**  Lifecycle of a discovery run (one per user × source). */
 export type RunStatus =

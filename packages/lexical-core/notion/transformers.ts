@@ -59,6 +59,7 @@ import {
 } from '../nodes/UserMentionNode';
 import { ALL_TRANSFORMERS } from '../transformers';
 import {
+  findNotionChildPage,
   findNotionPage,
   findNotionUser,
   type NotionLinks,
@@ -115,7 +116,9 @@ function $replaceWithPageReference(
   label: string
 ): TextNode | undefined {
   const reference = attrs.url ?? '';
-  const page = findNotionPage(links, reference);
+  const isChild = attrs.alt === 'child_page';
+  const child = isChild ? findNotionChildPage(links, reference) : undefined;
+  const page = isChild ? child?.page : findNotionPage(links, reference);
   if (page) {
     node.replace(
       $createDocumentMentionNode({
@@ -127,7 +130,11 @@ function $replaceWithPageReference(
     return undefined;
   }
   const title = withoutTags(label) || attrs.title?.trim() || 'Notion page';
-  return $replaceWithLink(node, reference, title);
+  return $replaceWithLink(
+    node,
+    child ? `https://www.notion.so/${child.id}` : reference,
+    title
+  );
 }
 
 /** Noon UTC for a bare date, so it lands on the same day in every time zone. */
@@ -357,7 +364,10 @@ function inlineTransformers(links: NotionLinks): TextMatchTransformer[] {
       [DocumentMentionNode],
       (node, [, attrs]) => {
         const parsed = attributes(attrs);
-        if (findNotionPage(links, parsed.url ?? '')) {
+        if (
+          parsed.alt === 'child_page' ||
+          findNotionPage(links, parsed.url ?? '')
+        ) {
           return $replaceWithPageReference(
             node,
             links,

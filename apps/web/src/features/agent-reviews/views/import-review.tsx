@@ -1,8 +1,12 @@
+import { dismissImportRun } from '@app/features/import-jobs/dismissed-runs';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import { appConnectorKey, connectConnector } from '@queries/connectors';
 import { queryReadyGate } from '@queries/gate';
 import {
   useCancelWorkspaceImportMutation,
@@ -10,8 +14,10 @@ import {
   useWorkspaceImportReportQuery,
 } from '@queries/import';
 import { ResultAsync } from 'neverthrow';
+import { createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import { ImportPlanCard } from '../components/import-plan-card';
-import type { ImportedCopy } from '../core/import-plan';
+import { type ImportedCopy, sourceLabel } from '../core/import-plan';
 import type { Review, ReviewActions } from '../core/review';
 import { createImportReview } from '../primitives/import-review';
 import {
@@ -55,7 +61,55 @@ export function ImportReview(props: {
         }))
       ).isOk(),
   });
+  // Reconnecting runs the app's own connect flow for the source again; the
+  // owner then asks the agent to plan again.
+  const [reconnecting, setReconnecting] = createSignal(false);
+  const [reconnected, setReconnected] = createSignal<
+    'connected' | 'failed' | null
+  >(null);
+  async function reconnect() {
+    if (reconnecting()) return;
+    setReconnecting(true);
+    setReconnected(null);
+    const outcome = await ResultAsync.fromPromise(
+      connectConnector({ key: appConnectorKey(source()) }),
+      () => ({ kind: 'connect-failed' as const })
+    );
+    const result = outcome.isErr()
+      ? 'failed'
+      : match(outcome.value)
+          .with('connected', () => 'connected' as const)
+          // Closed without finishing: nothing changed, nothing to say.
+          .with('closed', () => null)
+          .exhaustive();
+    if (result === 'connected')
+      toast.success(`${sourceLabel(source())} is reconnected`, {
+        subtext: 'Ask the agent to plan the import again.',
+      });
+    setReconnected(result);
+    setReconnecting(false);
+  }
+  // Dismissing a failed review also dismisses its run in the imports tray.
+  const userId = useUserId();
+  async function dismiss() {
+    const dismissed = await review.dismiss();
+    const user = userId();
+    const run = queryReadyGate(state)
+      ? state.data.runs.find(
+          (run) => run.source === source() && run.status === 'failed'
+        )
+      : undefined;
+    if (dismissed && user && run) dismissImportRun(user, run);
+  }
   const alert = () =>
+    match(reconnected())
+      .with('connected', () => undefined)
+      .with(
+        'failed',
+        () => `${sourceLabel(source())} could not be reconnected. Try again.`
+      )
+      .with(null, () => undefined)
+      .exhaustive() ??
     review.error() ??
     review.validation() ??
     (review.stopFailed()
@@ -100,6 +154,7 @@ export function ImportReview(props: {
         isShared={review.isShared}
         canAct={props.canAct}
         editable={review.editable()}
+        dismissable={review.dismissable()}
         startedByAgent={props.review.decision?.via === 'chat'}
         working={review.working()}
         stopping={review.stopping()}
@@ -116,8 +171,14 @@ export function ImportReview(props: {
         onIncludedChange={review.setIncluded}
         onSharedChange={review.setShared}
         onApprove={() => fireAndForget(review.approve(), 'agent-reviews')}
-        onDismiss={() => fireAndForget(review.dismiss(), 'agent-reviews')}
+        onDismiss={() => fireAndForget(dismiss(), 'agent-reviews')}
         onStop={() => fireAndForget(review.stop(), 'agent-reviews')}
+        onReconnect={
+          props.canAct
+            ? () => fireAndForget(reconnect(), 'agent-reviews')
+            : undefined
+        }
+        reconnecting={reconnecting()}
       />
     </section>
   );

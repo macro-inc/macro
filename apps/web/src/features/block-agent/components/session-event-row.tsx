@@ -38,6 +38,9 @@ function reviewSummary(
   let summary: string;
   if (payload.outcome === 'dismissed') {
     summary = `${actor} dismissed ${count}`;
+  } else if (payload.outcome === 'refused') {
+    // Nothing started; the review is open again, unchanged.
+    return { summary: 'Not started · review still open', failed: true };
   } else if (settled) {
     summary = `Review finished · ${completed} of ${count} completed`;
   } else if (payload.outcome === 'approved') {
@@ -60,6 +63,7 @@ function importLabel(source: ImportWorkspace = 'notion') {
     .with('notion', () => 'Import')
     .with('linear', () => 'Linear import')
     .with('jira', () => 'Jira import')
+    .with('hubspot', () => 'HubSpot import')
     .exhaustive();
 }
 
@@ -78,6 +82,7 @@ function importPlanSummary(plan: ImportPlan) {
         ...(plan.copy ? [countLabel(plan.copy, 'project', 'projects')] : []),
       ].join(' · ')
     )
+    .with('hubspot', () => countLabel(plan.copy, 'record', 'records'))
     .exhaustive();
   let summary = `${importLabel(plan.source)} plan ready · ${counts}`;
   if (plan.byHand)

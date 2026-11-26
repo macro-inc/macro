@@ -5,7 +5,7 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::models::{
     FidelityWarning, ImportSource, Initiator, NotionAlreadyImported, NotionPlanItem,
-    NotionReviewOmissionKind, NotionViewChangeKind, ScanCounts, ViewWarning,
+    NotionReviewOmissionKind, NotionViewChangeKind, RunErrorKind, ScanCounts, ViewWarning,
 };
 
 #[test]
@@ -36,6 +36,7 @@ fn completed_reports_only_hide_the_summary_when_failures_are_itemized() {
         scanned: None,
         review_id: None,
         review_session_id: None,
+        error_kind: None,
     };
     let rows = std::slice::from_ref(&failed);
     assert_eq!(report(Some(&run), rows).failure_count, 1);
@@ -48,8 +49,32 @@ fn completed_reports_only_hide_the_summary_when_failures_are_itemized() {
     run.error = Some(partial_write_error(1));
     assert_eq!(report(Some(&run), rows).error, None);
 
+    // Text the run kept without a kind may predate Macro writing it
+    // (a provider's text), so the report leaves it out.
     run.error = Some("Notion stopped responding".into());
+    assert_eq!(report(Some(&run), rows).error, None);
+    run.error_kind = Some(RunErrorKind::Unreachable);
     assert_eq!(report(Some(&run), rows).error, run.error);
+}
+
+#[test]
+fn a_legacy_run_error_without_a_kind_is_never_reported() {
+    let run = ImportRun {
+        source: ImportSource::Notion,
+        status: RunStatus::Failed,
+        error: Some("Notion could not complete the request: provider-secret-body".into()),
+        updated_at: Utc::now(),
+        scanned: None,
+        review_id: None,
+        review_session_id: None,
+        error_kind: None,
+    };
+    let report = report(Some(&run), &[]);
+    assert_eq!(report.status, Some(RunStatus::Failed));
+    assert_eq!(report.error, None);
+    assert_eq!(report.error_kind, None);
+    let json = serde_json::to_string(&report).unwrap();
+    assert!(!json.contains("provider-secret-body"), "{json}");
 }
 
 #[test]
@@ -66,7 +91,7 @@ fn workspace_notion_failures_use_safe_copy_for_direct_and_wrapped_provider_error
         ImportError::Other(anyhow::Error::new(rejected()).context("could not fetch content")),
     ] {
         assert_eq!(
-            super::super::failure_text(&error),
+            super::super::failure_text(&error, ImportSource::Notion),
             "Notion couldn’t return this item’s content."
         );
     }
@@ -477,6 +502,7 @@ fn the_report_counts_the_current_plan_and_lists_what_needs_attention() {
         source: ImportSource::Notion,
         status: RunStatus::Importing,
         error: None,
+        error_kind: None,
         updated_at: Utc.with_ymd_and_hms(2026, 10, 19, 12, 0, 0).unwrap(),
         scanned: None,
         review_id: None,
@@ -529,6 +555,7 @@ fn while_planning_the_report_carries_what_notion_has_shown_so_far() {
         source: ImportSource::Notion,
         status: RunStatus::Running,
         error: None,
+        error_kind: None,
         updated_at: Utc.with_ymd_and_hms(2026, 10, 19, 12, 0, 0).unwrap(),
         scanned: Some(ScanCounts {
             pages: 40,
@@ -652,6 +679,7 @@ fn a_plan_presented_while_it_is_decided_counts_what_is_undecided_under_the_runs_
         source: ImportSource::Notion,
         status: RunStatus::Running,
         error: None,
+        error_kind: None,
         updated_at: Utc.with_ymd_and_hms(2026, 10, 19, 12, 0, 0).unwrap(),
         scanned: None,
         review_id: Some(review),

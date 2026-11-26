@@ -1,3 +1,4 @@
+import { formatLocalDate } from '@core/util/local-date';
 import CorvuCalendar, {
   type RootSingleProps as CorvuCalendarRootSingleProps,
 } from '@corvu/calendar';
@@ -8,8 +9,10 @@ import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import {
+  type Component,
   createMemo,
   createSignal,
+  For,
   Index,
   onCleanup,
   onMount,
@@ -20,27 +23,6 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
 import { Dropdown } from './Dropdown';
-
-const formatWeekdayLong = new Intl.DateTimeFormat(undefined, {
-  weekday: 'long',
-}).format;
-const formatWeekdayNarrow = new Intl.DateTimeFormat(undefined, {
-  weekday: 'narrow',
-}).format;
-
-type HighlightedRange = { start: Date; end: Date };
-
-const isDateInRange = (date: Date, range: HighlightedRange | undefined) =>
-  range !== undefined && date >= range.start && date < range.end;
-
-const offsetDate = (date: Date, days: number) =>
-  new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
-
-const isRangeStart = (date: Date, range: HighlightedRange | undefined) =>
-  isDateInRange(date, range) && !isDateInRange(offsetDate(date, -1), range);
-
-const isRangeEnd = (date: Date, range: HighlightedRange | undefined) =>
-  isDateInRange(date, range) && !isDateInRange(offsetDate(date, 1), range);
 
 export interface CalendarMonthSelectorProps {
   /** Month currently displayed by the calendar. */
@@ -56,14 +38,24 @@ export type CalendarProps = Omit<
   /** Additional classes applied to the calendar container. */
   class?: string;
   /** Optional end-exclusive date range to highlight. */
-  highlightedRange?: HighlightedRange;
+  highlightedRange?: CalendarHighlightedRange;
+  /** Event colors keyed by local YYYY-MM-DD day; omit for an unmarked calendar. */
+  markersByDay?: ReadonlyMap<string, readonly string[]>;
+  /** Optional month header control; the default remains the shared month menu. */
+  monthControl?: Component<CalendarMonthSelectorProps>;
 };
 
-/** An accessible, single-date calendar styled with the app's semantic tokens. */
+/**
+ * An accessible, single-date calendar styled with the app's semantic tokens.
+ * @do Pass local-day event colors as markersByDay when a host has occurrence data.
+ * @dont Put interactive content inside a day trigger; markers are decorative.
+ */
 export function Calendar(props: CalendarProps) {
   const [local, calendarProps] = splitProps(props, [
     'class',
     'highlightedRange',
+    'markersByDay',
+    'monthControl',
   ]);
   const initialFallbackDate = calendarProps.value ?? new Date();
 
@@ -75,13 +67,30 @@ export function Calendar(props: CalendarProps) {
       initialFocusedDay={calendarProps.initialFocusedDay ?? initialFallbackDate}
     >
       {(calendar) => (
-        <div class={cn('w-full min-w-0 text-ink', local.class)}>
+        <div
+          class={cn('flex w-full min-w-0 flex-col gap-2 text-ink', local.class)}
+        >
           <div class="flex items-center gap-2">
             <CorvuCalendar.Label class="min-w-0 flex-1">
-              <CalendarMonthDropdown
-                month={calendar.month}
-                onChange={calendar.setMonth}
-              />
+              <Show
+                when={local.monthControl}
+                fallback={
+                  <CalendarMonthDropdown
+                    month={calendar.month}
+                    onChange={calendar.setMonth}
+                  />
+                }
+              >
+                {(Control) => {
+                  const MonthControl = Control();
+                  return (
+                    <MonthControl
+                      month={calendar.month}
+                      onChange={calendar.setMonth}
+                    />
+                  );
+                }}
+              </Show>
             </CorvuCalendar.Label>
             <div class="ml-auto flex shrink-0 items-center gap-0.5">
               <CorvuCalendar.Nav
@@ -105,65 +114,10 @@ export function Calendar(props: CalendarProps) {
             </div>
           </div>
 
-          <CorvuCalendar.Table class="mt-2 w-full table-fixed border-collapse">
-            <thead>
-              <tr>
-                <Index each={calendar.weekdays}>
-                  {(weekday) => (
-                    <CorvuCalendar.HeadCell
-                      abbr={formatWeekdayLong(weekday())}
-                      class="h-7 text-center text-[10px] font-medium text-ink-extra-muted"
-                    >
-                      {formatWeekdayNarrow(weekday())}
-                    </CorvuCalendar.HeadCell>
-                  )}
-                </Index>
-              </tr>
-            </thead>
-            <tbody>
-              <Index each={calendar.weeks}>
-                {(week) => (
-                  <tr>
-                    <Index each={week()}>
-                      {(day) => (
-                        <CorvuCalendar.Cell
-                          class="p-0 text-center data-highlighted-range:bg-active data-highlighted-range-start:rounded-l-md data-highlighted-range-end:rounded-r-md"
-                          data-highlighted-range={
-                            isDateInRange(day(), local.highlightedRange)
-                              ? ''
-                              : undefined
-                          }
-                          data-highlighted-range-end={
-                            isRangeEnd(day(), local.highlightedRange)
-                              ? ''
-                              : undefined
-                          }
-                          data-highlighted-range-start={
-                            isRangeStart(day(), local.highlightedRange)
-                              ? ''
-                              : undefined
-                          }
-                        >
-                          <CorvuCalendar.CellTrigger
-                            day={day()}
-                            month={calendar.month}
-                            data-highlighted-range={
-                              isDateInRange(day(), local.highlightedRange)
-                                ? ''
-                                : undefined
-                            }
-                            class="mx-auto flex size-7 items-center justify-center rounded-md text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-30 data-today:border data-today:border-accent data-today:font-semibold data-highlighted-range:text-ink data-selected:bg-accent! data-selected:text-surface!"
-                          >
-                            {day().getDate()}
-                          </CorvuCalendar.CellTrigger>
-                        </CorvuCalendar.Cell>
-                      )}
-                    </Index>
-                  </tr>
-                )}
-              </Index>
-            </tbody>
-          </CorvuCalendar.Table>
+          <CalendarTable
+            highlightedRange={local.highlightedRange}
+            markersByDay={local.markersByDay}
+          />
         </div>
       )}
     </CorvuCalendar>
@@ -501,5 +455,131 @@ export function CalendarMonthMenu(props: CalendarMonthMenuProps) {
         </div>
       </Show>
     </div>
+  );
+}
+
+/** Decorative day highlights use an end-exclusive range, unlike selected range values. */
+interface CalendarHighlightedRange {
+  start: Date;
+  end: Date;
+}
+const isInRange = (date: Date, range: CalendarHighlightedRange | undefined) =>
+  range !== undefined && date >= range.start && date < range.end;
+const offsetDate = (date: Date, days: number) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+
+/** Shared grid presentation under a single-date or range Corvu root. */
+function CalendarTable(props: {
+  highlightedRange?: CalendarHighlightedRange;
+  markersByDay?: ReadonlyMap<string, readonly string[]>;
+}) {
+  const calendar = CorvuCalendar.useContext();
+  const longWeekday = () =>
+    new Intl.DateTimeFormat(undefined, { weekday: 'long' });
+  const narrowWeekday = () =>
+    new Intl.DateTimeFormat(undefined, { weekday: 'narrow' });
+  return (
+    <CorvuCalendar.Table class="w-full table-fixed border-collapse">
+      <thead>
+        <tr>
+          <Index each={calendar.weekdays()}>
+            {(weekday) => (
+              <CorvuCalendar.HeadCell
+                abbr={longWeekday().format(weekday())}
+                class="h-7 text-center text-xxs font-medium text-ink-extra-muted"
+              >
+                {narrowWeekday().format(weekday())}
+              </CorvuCalendar.HeadCell>
+            )}
+          </Index>
+        </tr>
+      </thead>
+      <tbody>
+        <Index each={calendar.weeks()}>
+          {(week) => (
+            <tr>
+              <Index each={week()}>
+                {(day) => (
+                  <CorvuCalendar.Cell
+                    class="p-0 text-center data-highlighted-range:bg-selected data-highlighted-range-start:rounded-l-md data-highlighted-range-end:rounded-r-md"
+                    data-highlighted-range={
+                      isInRange(day(), props.highlightedRange) ? '' : undefined
+                    }
+                    data-highlighted-range-start={
+                      isInRange(day(), props.highlightedRange) &&
+                      !isInRange(offsetDate(day(), -1), props.highlightedRange)
+                        ? ''
+                        : undefined
+                    }
+                    data-highlighted-range-end={
+                      isInRange(day(), props.highlightedRange) &&
+                      !isInRange(offsetDate(day(), 1), props.highlightedRange)
+                        ? ''
+                        : undefined
+                    }
+                  >
+                    <CorvuCalendar.CellTrigger
+                      day={day()}
+                      month={calendar.month()}
+                      data-highlighted-range={
+                        isInRange(day(), props.highlightedRange)
+                          ? ''
+                          : undefined
+                      }
+                      class={cn(
+                        'relative mx-auto flex size-7 items-center justify-center rounded-md text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-30 data-today:border data-today:border-accent data-today:font-semibold data-highlighted-range:text-ink',
+                        'data-selected:bg-accent! data-selected:text-surface!'
+                      )}
+                    >
+                      {day().getDate()}
+                      <Show
+                        when={props.markersByDay?.get(formatLocalDate(day()))}
+                      >
+                        {(colors) => <CalendarDayMarkers colors={colors()} />}
+                      </Show>
+                    </CorvuCalendar.CellTrigger>
+                  </CorvuCalendar.Cell>
+                )}
+              </Index>
+            </tr>
+          )}
+        </Index>
+      </tbody>
+    </CorvuCalendar.Table>
+  );
+}
+
+/** Decorative event colors inside a calendar day trigger. */
+function CalendarDayMarkers(props: { colors: readonly string[] }) {
+  return (
+    <span
+      aria-hidden="true"
+      class="pointer-events-none absolute inset-x-0 bottom-0 flex h-1 items-center justify-center gap-0.5"
+    >
+      <Show
+        when={props.colors.length >= 4}
+        fallback={
+          <For each={props.colors}>
+            {(color) => (
+              <span
+                class="size-1 rounded-full"
+                style={{ 'background-color': color }}
+              />
+            )}
+          </For>
+        }
+      >
+        <span class="flex h-1 w-5 overflow-hidden rounded-full">
+          <For each={props.colors.slice(0, 4)}>
+            {(color) => (
+              <span
+                class="h-full flex-1"
+                style={{ 'background-color': color }}
+              />
+            )}
+          </For>
+        </span>
+      </Show>
+    </span>
   );
 }

@@ -144,6 +144,30 @@ export const tutorialVideoUrl = (id: TutorialVideoId) =>
 export const tutorialPosterUrl = (id: TutorialVideoId) =>
   `/video/tutorials/${id}-poster.jpg`;
 
+/**
+ * Tutorials whose overview frame also exists for the light palette, captured
+ * by scripts/capture-light-screens.mjs. The rest show their dark frame on
+ * either palette; add an id here together with its `-preview-light.jpg`.
+ */
+const LIGHT_PREVIEWS: ReadonlySet<TutorialVideoId> = new Set([
+  'agents',
+  'calendar',
+  'calls',
+  'chat',
+  'crm',
+  'docs',
+  'drive',
+  'github',
+  'home',
+  'mail',
+  'scheduling',
+  'tasks',
+  'teams-admin',
+]);
+
+export const hasLightTutorialPreview = (id: TutorialVideoId) =>
+  LIGHT_PREVIEWS.has(id);
+
 /** Overview frame used by the website's shared desktop-window preview. */
 export const tutorialPreviewUrl = (id: TutorialVideoId, light = false) =>
-  `/video/tutorials/${id}-preview${light ? '-light' : ''}.jpg`;
+  `/video/tutorials/${id}-preview${light && hasLightTutorialPreview(id) ? '-light' : ''}.jpg`;

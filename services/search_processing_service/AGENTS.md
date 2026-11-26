@@ -90,6 +90,21 @@ OpenSearch, and exposes backfill HTTP routes for each.
   formatters drop `<m-paste>` (long pastes; in agent sessions also quoted
   replies) with every tag they do not know, so a new message index writes its
   pastes the same way.
+- A channel message also writes its web links (`parsers::message_links`):
+  every `<m-link>` URL, which its text replaces with the label, and every
+  `http(s)://` or `www.` URL in its text and pastes, each once, up to its
+  query, without a fragment that is not an app route (`#/board`), and at
+  most 2 KB (the `pattern` analyzer would fail the
+  document on a token over Lucene's term limit). A message
+  indexed before the `links` mapping gains them only when it is reindexed
+  (`POST /internal/backfill/channels`) or edited.
+- A thread reindex deletes, and a message upsert skips, every message its
+  mailbox facts put in Trash or Junk or mark gone at the provider
+  (`ParsedSearchMessage::excluded_from_search`, read from
+  `email_message_mailbox_facts`). Never decide that from labels: Outlook
+  messages have no system labels, so a label check keeps Outlook trash, junk
+  and provider deletes searchable, whether the change came from Macro (an
+  organization command) or from Outlook.
 - Email documents are keyed `{thread_id}:{message_id}`, so a message that
   changes threads gets a new document and keeps the old one. An
   `email.message_sent` from a Macro send (`origin: UserAction`) deletes the

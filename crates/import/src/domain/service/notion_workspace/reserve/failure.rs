@@ -91,18 +91,19 @@ pub(super) fn named(item: &write::WriteItem, error: ImportError) -> ImportError 
     } else {
         &item.title
     };
+    // Typed, so the run's report keeps this Macro-written text instead of
+    // a sentence from the failure's kind.
     let punctuation = if reason.ends_with(['.', '!', '?']) {
         ""
     } else {
         "."
     };
-    if unexpected {
-        ImportError::Other(anyhow::anyhow!(
-            "An unexpected error stopped {title}. {reason}{punctuation}"
-        ))
+    let text = if unexpected {
+        format!("An unexpected error stopped {title}. {reason}{punctuation}")
     } else {
-        ImportError::Other(anyhow::anyhow!("Database “{title}”: {reason}{punctuation}"))
-    }
+        format!("Database “{title}”: {reason}{punctuation}")
+    };
+    ImportError::Other(super::super::NamedRunFailure(text).into())
 }
 
 pub(super) fn classify(error: &anyhow::Error) -> Failure {
@@ -183,8 +184,11 @@ fn notion(error: &NotionError) -> Failure {
             SourceStopReason::DatabaseRejected,
             NotionDatabaseFallback::Unresolved,
         ),
-        NotionError::Upstream { status: 401, .. } => Failure::RunWide(
+        NotionError::AccessLost | NotionError::Upstream { status: 401, .. } => Failure::RunWide(
             "Notion authentication is unavailable. Reconnect Notion and retry this import",
+        ),
+        NotionError::ConnectionUnavailable => Failure::RunWide(
+            "Macro couldn't use the Notion connection. Reconnect Notion and retry this import",
         ),
         NotionError::RateLimited { .. } | NotionError::Upstream { status: 429, .. } => {
             Failure::RunWide("Notion rate limited the request; retry this import")

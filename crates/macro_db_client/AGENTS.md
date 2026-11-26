@@ -56,6 +56,10 @@ with their `email_links` row; `user_id` and `list_key` on them repeat the link's
 owner and provider on purpose, so reads never join `email_links`. List rows have no
 foreign key: the contacts worker removes them on account deletion.
 
+`agent_runtime_update` stores leased dev operator requests for one
+Firecracker teammate. Unfinished rows hold the computer and keep the
+presigned download URL, which is cleared when an outcome is written.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
@@ -100,6 +104,10 @@ Task-template rows cascade with personal users or teams; nullable creator attrib
 `password_import_activity` stores only per-batch source format and counts; its
 team foreign key cascades, and the passwords repository includes it in retained
 data checks and explicit vault purge. It does not depend on a successful item.
+
+`import_run.error_kind` (migration `20261122042907`) is nullable TEXT checked
+against the import crate's `RunErrorKind`; NULL while a run has not failed and
+on runs that failed before it existed. Older binaries ignore it.
 
 `import_run.personal_root_folder_id` and `personal_folder_ids` are nullable,
 additive state owned by the import repository. Preserve both when a later run
@@ -197,6 +205,15 @@ owner-only Notion mirror. No existing folders or import rows are backfilled.
   build replacement indexes before dropping old constraints, and validate large
   table checks in a later transaction. See the Outlook rollout notes in
   `docs/design/outlook-email-support.md` for failure recovery and deployment order.
+- `macro_user_links_link_primary_idx` `(link_id, primary_macro_id)` (migration
+  `20261119030403`) replaced `macro_user_links_link_idx` (dropped by
+  `20261119030951`): it serves every lookup by `link_id`, the `email_links`
+  delete cascade included, and probes one delegation by link and account.
+  Apply both with a short session `lock_timeout` (for SQLx CLI,
+  `PGOPTIONS='-c lock_timeout=5s'`). If the build is interrupted, drop the
+  invalid index (`DROP INDEX CONCURRENTLY macro_user_links_link_primary_idx`)
+  before retrying: the migration has no `IF NOT EXISTS`, so the old index is
+  never dropped while the new one is unusable.
 - Quote and alias camelCase columns to Rust field names
   (`SELECT "userId" AS user_id`); don't guess spelling — check `migrations/`.
 - Saved-view sharing uses current team membership and chronological owner/team indexes.
@@ -242,7 +259,8 @@ foreign keys; the broker deletes expired rows.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
 Hosted runtime enrollment generations are additive counters owned by
-`hosted_runtimes`.
+`hosted_runtimes`. So are `image_upgrade` and `image_upgrade_computer`
+(operator image upgrades); their rows go with their computer.
 
 `password_item_entities`, `password_folders`, `password_activity`,
 `password_write_intents`, `password_totp_enrollments`, `password_team_lifecycle`,

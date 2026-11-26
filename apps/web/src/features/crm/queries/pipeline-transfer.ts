@@ -1,5 +1,6 @@
 import type { CellWrite, DatabaseOp } from '@core/database-sql/generated/types';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import { v7 as uuidv7 } from 'uuid';
 import { missingOptionLabels } from '../../database/core/cell-ops';
@@ -14,6 +15,7 @@ import { runConcurrently } from '../core/run-concurrently';
 import type { CrmRecordDependencies } from './dependencies';
 import { fetchCrmExportCompanies } from './export';
 import { crmKeys } from './keys';
+import { listCanIncludeCrm } from './list-refresh';
 import { pipelineCell, pipelineViewColumn } from './pipeline-data';
 
 const CONCURRENCY = 4;
@@ -27,7 +29,7 @@ export function createPipelineTransfer(
 ): PipelineTransfer {
   const { storage } = deps;
   const companies = (signal: AbortSignal) =>
-    fetchCrmExportCompanies(storage, signal, () => {});
+    fetchCrmExportCompanies(signal, () => {});
   /**
    * The company for a domain, created when the team lacks it. Contacts at one
    * new domain share a single creation rather than racing to a conflict.
@@ -221,6 +223,8 @@ export function createPipelineTransfer(
     async refresh() {
       await Promise.all([
         deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+        // Imported records come back as no Soup rows for the GraphQL cache.
+        refreshActiveGraphqlSoupQueries({ where: listCanIncludeCrm }),
         deps.client.invalidateQueries({
           queryKey: crmKeys.pipelineTable(pipeline.id).queryKey,
         }),

@@ -95,6 +95,7 @@ impl WrittenObjects for FakeStore {
         _: &MacroUserIdStr<'static>,
         _: &NotionId,
         _: Uuid,
+        _: Option<&NotionId>,
     ) -> crate::domain::ports::Result<Option<crate::domain::ports::RecordedDatabaseMapping>> {
         Ok(None)
     }

@@ -25,6 +25,7 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_REMINDERS?: string;
   readonly VITE_ENABLE_TASK_TEMPLATES?: string;
   readonly VITE_ENABLE_TASK_START_DATE?: string;
+  readonly VITE_ENABLE_TIME_TRACKING?: string;
   readonly VITE_ENABLE_ENTITY_APPEARANCE?: string;
   readonly VITE_ENABLE_AGENT_NOTIFICATIONS?: string;
   readonly VITE_ENABLE_ROUTINE_SHARING?: string;

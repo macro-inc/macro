@@ -241,6 +241,8 @@ function GuestEditorAction(props: {
   icon: JSX.Element;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  showLabel?: boolean;
+  disabled?: boolean;
   children: JSX.Element;
 }) {
   return (
@@ -266,10 +268,12 @@ function GuestEditorAction(props: {
             tooltip={props.label}
             as={Button}
             variant="ghost"
-            size="icon-sm"
+            size={props.showLabel ? 'sm' : 'icon-sm'}
+            disabled={props.disabled}
             class="text-ink-muted"
           >
             {props.icon}
+            <Show when={props.showLabel}>{props.label}</Show>
           </Popover.Trigger>
           <EventComposerPopoverPortal>
             <Layer depth={3}>
@@ -286,11 +290,13 @@ function GuestEditorAction(props: {
         aria-label={props.label}
         tooltip={props.label}
         variant="ghost"
-        size="icon-sm"
+        size={props.showLabel ? 'sm' : 'icon-sm'}
+        disabled={props.disabled}
         class="text-ink-muted"
         onClick={() => props.onOpenChange(true)}
       >
         {props.icon}
+        <Show when={props.showLabel}>{props.label}</Show>
       </Button>
       <Dialog open={props.open} onOpenChange={props.onOpenChange}>
         <Dialog.Title class="px-4 pb-2 text-base font-semibold text-ink">
@@ -330,6 +336,8 @@ function EventInviteGuestsAction(props: {
 export function EventForwardInvitationAction(props: {
   event: CalendarEvent;
   invites: GuestInviteController;
+  showLabel?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <GuestEditorAction
@@ -337,6 +345,8 @@ export function EventForwardInvitationAction(props: {
       icon={<PaperPlaneTiltIcon class="size-4 shrink-0" />}
       open={props.invites.forwardEditorOpen()}
       onOpenChange={props.invites.setForwardEditorOpen}
+      showLabel={props.showLabel}
+      disabled={props.disabled}
     >
       <ForwardInvitationForm
         event={props.event}

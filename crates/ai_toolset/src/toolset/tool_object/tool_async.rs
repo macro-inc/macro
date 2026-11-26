@@ -55,14 +55,15 @@ where
     T: AsyncTool<ToolContext> + Send + Sync,
     T::Output: Serialize,
 {
-    #[tracing::instrument(err, skip_all)]
+    #[tracing::instrument(skip_all)]
     async fn call(
         &self,
         context: ToolSetContext,
         request_context: RequestContext,
     ) -> ToolResult<serde_json::Value> {
         let tool_context = ToolContext::from_ref(&context);
-        self.tool
+        let result = self
+            .tool
             .call(ServiceContext(tool_context), request_context)
             .await
             .and_then(|out| {
@@ -70,7 +71,9 @@ where
                     description: "An internal error occurred".to_string(),
                     internal_error: anyhow::Error::from(err),
                 })
-            })
+            });
+        log_failure(&result, "the tool reported an error");
+        result
     }
 }
 
@@ -97,14 +100,16 @@ where
     ParentContext: Send + Sync,
     SubContext: FromRef<ParentContext> + Send + Sync,
 {
-    #[tracing::instrument(err, skip_all)]
+    #[tracing::instrument(skip_all)]
     async fn call(
         &self,
         context: ParentContext,
         request_context: RequestContext,
     ) -> ToolResult<serde_json::Value> {
         let sub_context = SubContext::from_ref(&context);
-        self.callable.call(sub_context, request_context).await
+        let result = self.callable.call(sub_context, request_context).await;
+        log_failure(&result, "the tool reported an error");
+        result
     }
 }
 
@@ -126,13 +131,29 @@ impl<ToolSetContext> ToolObject<AsyncDeserializer<ToolSetContext>> {
     ///
     /// `data` is the model's arguments: content, recorded on the tool span
     /// under the content policy rather than as a field here.
-    #[tracing::instrument(err, skip_all)]
+    #[tracing::instrument(skip_all)]
     pub fn try_deserialize(
         &self,
         data: &serde_json::Value,
     ) -> Result<AsyncToolTraitObject<ToolSetContext>, serde_json::Error> {
         let deserializer = &self.deserializer;
-        deserializer(data)
+        let result = deserializer(data);
+        log_failure(&result, "the arguments did not match the tool's schema");
+        result
+    }
+}
+
+/// The event `#[tracing::instrument(err)]` emits, at its level and in its
+/// span, except inside `genai_telemetry::withhold_content`: a tool's error
+/// and serde's message can quote the call's content, and the event lands on
+/// the trace too, so there it says only what kind of failure it was.
+fn log_failure<T, E: std::fmt::Display>(result: &Result<T, E>, kind: &'static str) {
+    if let Err(error) = result {
+        if genai_telemetry::content_withheld() {
+            tracing::error!(error = kind);
+        } else {
+            tracing::error!(error = %error);
+        }
     }
 }
 

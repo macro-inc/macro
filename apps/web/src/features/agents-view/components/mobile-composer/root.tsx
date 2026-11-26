@@ -9,6 +9,8 @@ type MobileComposerRootProps = ParentProps<{
   height?: number;
   dictating: boolean;
   canAttach: boolean;
+  onSurfaceRef: (element: HTMLDivElement) => void;
+  isItemDraggedOver: boolean;
   onContentRef: (element: HTMLDivElement) => void;
   onLayoutRef: (element: HTMLDivElement) => void;
   onDragChange: (dragging: boolean) => void;
@@ -24,6 +26,8 @@ export function MobileComposerRoot(props: MobileComposerRootProps) {
       value={{ collapsed: () => props.collapsed, setAttachmentHeight }}
     >
       <ComposerSurface
+        ref={props.onSurfaceRef}
+        classList={{ 'outline-2 outline-accent': props.isItemDraggedOver }}
         as="div"
         data-agent-composer="chat"
         data-composer-expanded={!props.collapsed || undefined}

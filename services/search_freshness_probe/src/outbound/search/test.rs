@@ -81,6 +81,7 @@ async fn answering(results: Vec<UnifiedSearchResponseItem>) -> (MockServer, Unif
     let body = serde_json::to_value(UnifiedSearchResponse {
         results,
         next_cursor: None,
+        query_filters: None,
     })
     .expect("a response");
     Mock::given(method("POST"))

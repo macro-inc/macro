@@ -54,7 +54,7 @@ const pageRecorder: CacheTelemetryRecorderLike = {
   },
   flush() {},
 };
-const workerChannel = new BroadcastChannel('macro:graphql-cache-telemetry:v1');
+const workerChannel = new BroadcastChannel('macro:graphql-cache-telemetry:v2');
 workerChannel.onmessage = (event: MessageEvent<CacheTelemetryObservation>) => {
   observations.push({ ...event.data, at: performance.now(), side: 'worker' });
 };

@@ -317,8 +317,8 @@ type MobileDockRowProps = {
 /**
  * The bottom-most chrome row. By default it is the navigation dock (see
  * MobileNavigationDockRow); pressing its Search button opens a search session,
- * which swaps in the search bar; category pills sit at the top of the
- * results (see MobileViewsRow). Pressing the
+ * which swaps in the search bar; operator starters sit at the top of the
+ * results (see MobileSearchStarters). Pressing the
  * input's X ends the session and restores the navigation dock.
  */
 export function MobileDockRow(props: MobileDockRowProps) {

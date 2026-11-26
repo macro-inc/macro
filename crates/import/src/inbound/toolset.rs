@@ -5,7 +5,9 @@
 //! `FinalizeImport`. The user comes from the request context, so the model
 //! can never stage on another user's behalf.
 
-use crate::domain::models::{ImportEntity, ImportSource, ImportStatus, Initiator, metadata_label};
+use crate::domain::models::{
+    ImportEntity, ImportSource, ImportStatus, Initiator, RunErrorKind, metadata_label,
+};
 use crate::domain::ports::{ImportError, ImportedDocumentProperties, ImportedDocumentProperty};
 use crate::domain::service::{
     DiscardOutcome, ImportFinalizer, ImportNotionPageOutcome, ImportStager, NotionPageImporter,
@@ -21,8 +23,21 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod import_from_hubspot;
+
+/// What the agent does after a workspace plan failed: tell the user once,
+/// instead of planning again, which fails the same way.
+const FAILED_NEXT: &str = "Tell the user in one sentence why it failed and what they can do about it. Do not plan again, check its status, or present a review until the user asks you to try again.";
+
+/// Why a workspace plan failed, for the agent, from its typed kind (never the
+/// raw error, which can carry provider detail).
+fn failure_reason(source: ImportSource, kind: Option<RunErrorKind>) -> String {
+    crate::domain::models::explain_failure(kind, source)
+}
+
 mod import_from_notion;
 mod import_from_tracker;
+pub use import_from_hubspot::{HubspotImportResponse, ImportFromHubspot};
 pub use import_from_tracker::{ImportFromJira, ImportFromLinear, TrackerImportResponse};
 
 pub use import_from_notion::{ImportFromNotion, ImportFromNotionResponse, NotionImportAction};
@@ -80,6 +95,7 @@ pub fn import_toolset<T: ImportStager + NotionPageImporter + WorkspaceImporter>(
         .add_tool::<ImportFromNotion, ImportToolContext<T>>()
         .add_tool::<ImportFromLinear, ImportToolContext<T>>()
         .add_tool::<ImportFromJira, ImportToolContext<T>>()
+        .add_tool::<ImportFromHubspot, ImportToolContext<T>>()
         .add_tool::<DeleteImportEntity, ImportToolContext<T>>()
         .add_tool::<ListImportEntities, ImportToolContext<T>>()
 }

@@ -66,7 +66,105 @@ struct NotionSnapshotResponse {
     markdown: String,
 }
 
+/// An exact Notion source, and its selected view when present.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotionLinkReference {
+    /// Normalized page or container id.
+    pub id: String,
+    /// Normalized view id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view_id: Option<String>,
+}
+
+/// A verified Macro destination.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum NotionLinkDestination {
+    /// A confirmed imported page.
+    Page {
+        /// Document identity.
+        document_id: String,
+    },
+    /// A confirmed imported database.
+    Database {
+        /// Database identity.
+        database_id: String,
+        /// Starter table identity.
+        table_id: String,
+        /// Saved view at the requested tab.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        view_id: Option<String>,
+    },
+}
+
+/// A replacement of one exact reference.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct NotionLinkReplacement {
+    /// The exact Notion reference.
+    #[serde(flatten)]
+    pub source: NotionLinkReference,
+    /// The confirmed Macro target.
+    pub destination: NotionLinkDestination,
+}
+
+/// A snapshot's reference inventory and optional link-only update.
+#[derive(Debug, serde::Deserialize)]
+pub struct NotionLinkDelta {
+    /// Base64 revision from the snapshot's version vector.
+    pub revision: String,
+    /// Exact Notion references in supported link nodes.
+    pub references: Vec<NotionLinkReference>,
+    /// Count of changed link nodes.
+    pub rewritten: usize,
+    /// Base64 of the update.
+    pub update: Option<String>,
+}
+
+impl NotionLinkDelta {
+    /// Decode the snapshot's expected revision.
+    pub fn revision_bytes(&self) -> Result<Vec<u8>> {
+        Ok(base64::engine::general_purpose::STANDARD.decode(&self.revision)?)
+    }
+
+    /// Decode the link delta when at least one hyperlink changed.
+    pub fn update_bytes(&self) -> Result<Option<Vec<u8>>> {
+        self.update
+            .as_ref()
+            .map(|update| Ok(base64::engine::general_purpose::STANDARD.decode(update)?))
+            .transpose()
+    }
+}
+
 impl LexicalClient {
+    /// Inspect a bounded snapshot and optionally prepare an href-only Loro delta.
+    #[tracing::instrument(skip_all, fields(snapshot_bytes = snapshot.len(), replacements = replacements.len()), err)]
+    pub async fn notion_link_delta(
+        &self,
+        snapshot: &[u8],
+        replacements: &[NotionLinkReplacement],
+    ) -> Result<NotionLinkDelta> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = self
+            .client
+            .post(format!("{}/snapshot/notion-links", self.url))
+            .headers(headers)
+            .json(&serde_json::json!({
+                "snapshot": base64::engine::general_purpose::STANDARD.encode(snapshot),
+                "replacements": replacements,
+            }))
+            .timeout(std::time::Duration::from_secs(15))
+            .send()
+            .await?
+            .error_for_status()?;
+        Ok(response.json().await?)
+    }
+
     /// Convert a Notion page to a new document's Loro snapshot.
     #[tracing::instrument(
         skip(self, request),

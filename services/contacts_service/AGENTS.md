@@ -12,8 +12,9 @@ outbox worker that notifies `connection_gateway`.
   `contacts::inbound::http::contacts_router`, and the SQS/outbox workers — the
   actual logic lives in `crates/contacts`, not here. The router reads through
   `FlaggedContactReads`, so `GET /contacts` and `GET /contacts/search` follow
-  each caller's `contacts-list-reads` flag; the workers write through the
-  domain service directly.
+  each caller's `contacts-list-reads` flag, while
+  `GET /contacts/lists/{list}/members` reads the list-aware tables for every
+  caller; the workers write through the domain service directly.
 - `src/config.rs`: optional `POSTHOG_API_KEY`/`POSTHOG_HOST` (Doppler
   `contacts-service` dev and prd). Unset or blank, every caller reads the
   legacy graph; a flag load waits at most 300 ms.

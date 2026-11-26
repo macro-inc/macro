@@ -232,6 +232,22 @@ function Fixture() {
   const [readOnlyTeam, setReadOnlyTeam] = createSignal(false);
   const capabilities: SchedulingCapabilities = {
     userId: () => 'macro|alex@example.com',
+    bookingAccounts: () => [
+      {
+        emailLinkId: 'fixture-personal-inbox',
+        emailAddress: 'alex@example.com',
+        primary: true,
+        needsReconnect: false,
+        videoMeetings: true,
+      },
+      {
+        emailLinkId: 'fixture-work-inbox',
+        emailAddress: 'alex@work.example',
+        primary: false,
+        needsReconnect: false,
+        videoMeetings: true,
+      },
+    ],
     scopes: () => [
       { id: 'me', name: 'Personal', canEdit: true, canManageBookings: true },
       {

@@ -35,6 +35,7 @@ where
         .await
         .map_err(harness_authorization_rejection)?;
 
+    super::record_verified_harness(&harness);
     Ok(Some(harness))
 }
 

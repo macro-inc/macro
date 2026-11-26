@@ -24,8 +24,13 @@ the server says its connection can be imported from (`importAvailable`),
   view with an unsent prompt. Notion, Linear and Jira open workspace importers
   (`ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`) with “Import my
   <Provider> workspace into Macro.” They read only, ask who should see the import
-  when needed, and present a review before creating anything. Other connectors
-  list candidates and ask which ones to create. No importer writes to its source.
+  when needed, and present a review before creating anything. HubSpot opens
+  the CRM importer (`ImportFromHubspot`) with “Import my HubSpot CRM into
+  Macro.”: its review lists deal pipelines, companies, contacts and deals, with
+  owners matched to teammates and counted losses (deals without a company,
+  unsupported currencies, personal-provider domains) in the totals, and no
+  sharing choice, since CRM records belong to the team. Other connectors list
+  candidates and ask which ones to create. No importer writes to its source.
 - The shared review identifies its source, shows task/project totals for issue
   trackers, and lets the owner exclude objects and change sharing. On phones,
   **Open full review** uses the existing full-height sheet. Approve on the card,
@@ -58,6 +63,12 @@ folder stays as it is. A later shared plan uses a separate shared folder when
 reusing the old folder would expose personal contents, and the report explains
 that separation.
 
+In a Notion workspace import, links between imported pages and databases open
+the matching Macro copy once both writes have finished. Links to pages left
+out of the import, inaccessible targets, and unresolved block anchors keep
+their original URLs. Imported pages keep their Notion creation and
+last-edited dates.
+
 - Files also offers **Upload files** and **Upload a folder** (Drive's own
   uploads), and Customers offers **Upload a CSV** (the existing CSV import).
   Each closes the dialog first.
@@ -69,15 +80,22 @@ handoff paths without a backend.
 
 On desktop, signed in, every Notion, Linear, Jira and Slack import run also
 shows in the bottom-right corner, above upload progress (`src/features/import-jobs`,
-mounted in `ToastRegion`). A pill (`2 imports`, with an overall progress ring)
-toggles the list (**Hide imports** / **Show imports**); each row names the
+mounted in `ToastRegion`). A pill (`2 imports`, with an overall progress ring
+while something is moving) toggles the list (**Hide imports** / **Show imports**); each row names the
 source and its phase: `Scanning 120 pages` (Linear and Jira: `Reading N
 issues`, Slack: `Finding channels`), `Deciding on N items`, `Waiting for your
 approval`, `Importing 31 of 124` with a percentage, then `Imported`, `Import
-failed` or `Import cancelled`. **Open the <Source> import** opens the agent
+failed` (or a short reason from the run's failure kind, such as `Failed:
+Notion access lost`) or `Import cancelled`. **Open the <Source> import** opens the agent
 session presenting the review, once one does; Slack rows have no session.
-Runs that stopped moving stay for an hour after their last change, and
-**Dismiss the <Source> import** hides them until they change again. Phones
+A failed row offers **Reconnect <Source>** when the connection was revoked,
+expired or unusable, and **View details** (its review) otherwise; a partly
+failed import reads `Imported with some failures`. A finished or cancelled
+run leaves after about five seconds; a failed one stays until **Dismiss the
+<Source> import** or a week; a partly failed one stays until dismissed; a
+plan waiting for approval stays for an hour after its last change.
+Dismissals are kept per user on the device, and dismissing a failed review in
+the thread dismisses its run's tray entry too. Phones
 never show the tray. It reads `/import/state` (polling only while something
 is running, otherwise on `import_updated` pushes) and each listed workspace
 run's `/import/workspaces/{source}` report. `src/features/import-jobs/browser-test/`
@@ -128,11 +146,17 @@ card sits above **Settings**, outside the scrolling list.
 ## Suggested routines
 
 With `enable-routine-suggestions` on, the
-Email, Calendar, Tasks, Drive, Customers, Chat, Calls, Reviews and Agents
+Email, Calendar, Tasks, Drive, Customers, Chat, Calls and Reviews
 sidebars start with a suggestions card while the scheduler has suggestions for
-that area; it never shows on touch devices. The card shows up to three
-different routine icons overlapping (each routine's other area besides the
-sidebar's, Agents aside, else Calendar for a scheduled one), **N routines for
+that area; it never shows on touch devices. The Agents surface has
+suggestions, but the desktop Agents sidebar (`DesktopAgentsSidebar`) doesn't
+mount the card; only the touch one does, where it stays hidden. In every
+sidebar it sits 1rem (`--sidebar-content-inset`) under New and 1.5rem
+(`--sidebar-section-gap`) above what follows, as the first child of a default
+`ViewSidebar.Content` places it; a sidebar laid out otherwise (Calendar, Chat)
+pads the card (padding, which its collapse animates, not margin) to match.
+The card shows up to three different routine icons overlapping (each
+routine's other area besides the sidebar's, Agents aside, else Calendar for a scheduled one), **N routines for
 you**, the suggestions' names, and a caret, framed like the Email sidebar's
 **Accounts** card. Clicking it opens **Routines for <area>**: a two-column
 grid of cards, with **For you** and **Templates** tabs (each with a count)

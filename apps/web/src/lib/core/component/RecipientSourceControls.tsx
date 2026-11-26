@@ -27,7 +27,13 @@ export function RecipientSourceControls(props: {
       focused === undefined ||
       !state.collection().getItem(focused)
     ) {
-      state.selectionManager().setFocusedKey(state.collection().getFirstKey());
+      const manager = state.selectionManager();
+      let first = state.collection().getFirstKey();
+      // Disabled rows, such as recipients already added, can't be picked.
+      while (first !== undefined && manager.isDisabled(first)) {
+        first = state.collection().getKeyAfter(first);
+      }
+      manager.setFocusedKey(first);
     }
     if (reset) props.resetScroll();
   });

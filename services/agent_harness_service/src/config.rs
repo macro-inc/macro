@@ -54,6 +54,14 @@ macro_env_var::maybe_env_vars!(
     pub struct CodexOauthKmsKeyId;
     /// Rollout gate for sessions owned by a bot.
     pub struct EnableNonUserOwners;
+    /// CapSolver account key `/brain/captcha` solves with. Unset or empty:
+    /// CAPTCHA solving is off and every solve answers `notConfigured`.
+    pub struct CapsolverApiKey;
+    /// Fireworks key `/brain/fireworks` forwards agent teammates' Kimi K3
+    /// calls with (Doppler `shared_ai`); never leaves the gateway. Unset or
+    /// empty: every call is a 503 `not_configured` and every solver run
+    /// `notConfigured`.
+    pub struct FireworkApiKey;
 );
 
 /// The shortest idle timeout a deployment may set; see
@@ -125,6 +133,9 @@ pub struct Config {
     /// In-plan AI allowance per Premium seat per period, in cents at provider
     /// cost. Mandatory; set in Doppler.
     pub ai_usage_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// In-plan AI allowance per Business seat per period, in cents at provider
+    /// cost. Mandatory; set in Doppler.
+    pub ai_usage_business_included_allowance_cents: ai_billing::IncludedAllowanceCents,
     /// In-plan AI allowance per Max seat per period, in cents at provider
     /// cost. Mandatory; set in Doppler.
     pub ai_usage_max_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -182,6 +193,10 @@ pub struct Config {
     pub livekit_api_key: LivekitApiKey,
     /// LiveKit project secret for agent call speech.
     pub livekit_api_secret: LivekitApiSecret,
+    /// Fireworks key for agent teammates' CAPTCHA model calls; optional.
+    pub firework_api_key: FireworkApiKey,
+    /// CapSolver key for agent teammates' CAPTCHA solves; optional.
+    pub capsolver_api_key: CapsolverApiKey,
     /// Run sandboxes on the local Docker daemon instead of Daytona.
     ///
     /// Default off: a deployed harness must keep using Daytona even if this
@@ -282,6 +297,7 @@ impl Config {
             ai_billing::PlanAllowances {
                 free: self.ai_usage_free_included_allowance_cents,
                 premium: self.ai_usage_included_allowance_cents,
+                business: self.ai_usage_business_included_allowance_cents,
                 max: self.ai_usage_max_included_allowance_cents,
             },
             self.ai_usage_overage_markup_percent,

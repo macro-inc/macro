@@ -1,3 +1,4 @@
+import { DialogClosesOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import VideoIcon from '@icon/system/regular/file-video.svg';
@@ -7,6 +8,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import {
   $isVideoNode,
+  BACKGROUND_UPDATE_TAGS,
   type VideoDecoratorProps,
 } from '@macro-inc/lexical-core';
 import { debounce } from '@solid-primitives/scheduled';
@@ -123,7 +125,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
             () => {
               $upgradeDSSMediaUrl(props.key, url, 'video');
             },
-            { discrete: true, tag: 'historic' }
+            { discrete: true, tag: BACKGROUND_UPDATE_TAGS }
           );
         }
       }),
@@ -243,7 +245,10 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
       if (node && $isVideoNode(node)) node.setScale(value, false);
     });
   }, 60);
-  createEffect(on(scale, persistScale));
+  // Only a resize saves the scale. Saving on mount would write in every
+  // editor showing the picture, including one that lost focus to another
+  // split, and that write moves focus back into the document.
+  createEffect(on(scale, persistScale, { defer: true }));
   createEffect(() => {
     if (!interactable()) {
       persistScale.clear();
@@ -261,6 +266,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
 
   return (
     <Dialog open={viewerOpen()} onOpenChange={setViewerOpen}>
+      <DialogClosesOnNavigation />
       <div
         ref={containerRef}
         class={cn(

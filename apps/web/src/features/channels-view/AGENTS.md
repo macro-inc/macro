@@ -16,6 +16,7 @@ Chat's desktop sidebar, mobile conversation lists, section membership, and route
 - Resolve whole-membership actions (built-in section mute, snooze and read, section ids, scope checks) through `directory.readComplete(signal)`, aborted when the surface goes or the viewer signs in again, or wait for `directory.complete()`: a filling directory holds only some channels.
 - Bound each seeded section to the normal first-page size and preserve membership and sorting; recreate the query graph and reference batches on account-session changes, including same-viewer reauthentication, without rebuilding for sort, cache, or tab changes.
 - Keep Soup's bounded unread projection and live updates authoritative; do not replace them with a full-list fetch.
+- Filter Unread only and collapsed sections by `unreadOrMentionedChannelIds`, so every channel that lights Chat's dot in the app rail stays listed; the row's unread dot and section counts stay on `unreadChannelIds`.
 - Hydrate only referenced channels missing from the loaded sources.
 - Render favorite metadata without extra skeleton rows; an unread filter can legitimately leave no rows after enrichment.
 - Keep failed referenced lookups retryable and omit successfully unavailable channel favorites from the rail without deleting saved favorites.

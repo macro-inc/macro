@@ -1,5 +1,6 @@
 import type { NotionImportReport } from '@queries/import';
 import type { ImportDraft as SavedImportDraft } from '@service-agent-reviews/generated/types';
+import type { RunErrorKind } from '@service-cognition/import';
 import { match } from 'ts-pattern';
 import type { Review, ReviewItem } from './review';
 
@@ -22,7 +23,15 @@ export type ImportPlanEntry = {
   inlineOn?: string[];
   id: string;
   parentId: string | null;
-  kind: 'page' | 'database' | 'task' | 'project';
+  kind:
+    | 'page'
+    | 'database'
+    | 'task'
+    | 'project'
+    | 'pipeline'
+    | 'company'
+    | 'contact'
+    | 'deal';
   title: string;
   /** `null` while planning has not decided it yet. */
   decision: ImportPlanDecision | null;
@@ -131,6 +140,9 @@ export type ImportProgress = {
     | 'failed'
     | 'dismissed'
     | null;
+  /** Why the run failed, when it did and the server recorded the kind. */
+  errorKind: RunErrorKind | null;
+  /** The run's report text, written by Macro (never a provider's text). */
   error: string | null;
   /** What planning has found in Notion so far, while it reads it. */
   scanned: { pages: number; databases: number } | null;
@@ -142,18 +154,51 @@ export type ImportProgress = {
   writing: number;
   failures: ImportReportItem[];
   failureCount?: number;
+  /** A HubSpot plan's owners and what it cannot carry over. */
+  hubspot: HubspotPlanReport | null;
+};
+
+/** What CRM cannot hold of a HubSpot portal, by kind. */
+export type HubspotLoss =
+  | 'owner_not_member'
+  | 'deal_without_company'
+  | 'deal_without_pipeline'
+  | 'extra_company_links'
+  | 'domain_rejected'
+  | 'unsupported_currency'
+  | 'additional_domains'
+  | 'company_owner'
+  | 'merged_company'
+  | 'merged_contact'
+  | 'contact_without_company';
+
+/** A HubSpot plan's owner matching and losses. */
+export type HubspotPlanReport = {
+  owners: number;
+  ownersMatched: number;
+  /** Records the write created, and records it matched to ones already there. */
+  created: number;
+  linked: number;
+  losses: { loss: HubspotLoss; count: number }[];
 };
 
 export type ImportReviewPhase =
   | { kind: 'preparing' }
   | { kind: 'planning' }
   | { kind: 'plan' }
+  /** Planning failed before the plan was approved; nothing can be approved. */
+  | { kind: 'planFailed'; errorKind: RunErrorKind | null }
   | { kind: 'starting' }
   | { kind: 'importing' }
   | { kind: 'completed' }
   | { kind: 'stopped' }
-  | { kind: 'failed'; error: string }
-  | { kind: 'dismissed' }
+  /** An approved import's write failed; `errorKind` says why. */
+  | { kind: 'failed'; errorKind: RunErrorKind | null }
+  /** `planFailure` when the plan had failed before it was dismissed. */
+  | {
+      kind: 'dismissed';
+      planFailure: { errorKind: RunErrorKind | null } | null;
+    }
   | { kind: 'unknown'; error: string | null };
 
 /**
@@ -298,9 +343,25 @@ export function visiblePlanNodes(
 
 /** Nodes with children below the top level start collapsed. */
 export function initiallyCollapsed(nodes: ImportPlanNode[]): Set<string> {
+  // A failed object is never hidden under a collapsed parent.
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const aboveFailures = new Set<string>();
+  for (const node of nodes) {
+    if (!node.error) continue;
+    let parent = node.parentId;
+    while (parent !== null && !aboveFailures.has(parent)) {
+      aboveFailures.add(parent);
+      parent = byId.get(parent)?.parentId ?? null;
+    }
+  }
   return new Set(
     nodes
-      .filter((node) => node.depth > 0 && node.childIds.length > 0)
+      .filter(
+        (node) =>
+          node.depth > 0 &&
+          node.childIds.length > 0 &&
+          !aboveFailures.has(node.id)
+      )
       .map((node) => node.id)
   );
 }
@@ -437,6 +498,11 @@ export function importCount(
 /** What approving the plan writes, in real numbers: every row is counted. */
 export type ImportVolume = {
   projects: number;
+  /** HubSpot deal pipelines, companies, contacts and deals. */
+  pipelines: number;
+  companies: number;
+  contacts: number;
+  deals: number;
   documents: number;
   databases: number;
   rows: number;
@@ -451,6 +517,10 @@ export function importVolume(
 ): ImportVolume {
   const volume: ImportVolume = {
     projects: 0,
+    pipelines: 0,
+    companies: 0,
+    contacts: 0,
+    deals: 0,
     documents: 0,
     databases: 0,
     rows: 0,
@@ -468,6 +538,14 @@ export function importVolume(
           volume.tasks += 1;
         } else if (entry.kind === 'project') {
           volume.projects += 1;
+        } else if (entry.kind === 'pipeline') {
+          volume.pipelines += 1;
+        } else if (entry.kind === 'company') {
+          volume.companies += 1;
+        } else if (entry.kind === 'contact') {
+          volume.contacts += 1;
+        } else if (entry.kind === 'deal') {
+          volume.deals += 1;
         } else {
           volume.documents += 1;
         }
@@ -499,6 +577,16 @@ export function planTotals(
     volume.projects > 0
       ? { label: 'Projects', value: `${volume.projects}` }
       : null,
+    volume.pipelines > 0
+      ? { label: 'Pipelines', value: `${volume.pipelines}` }
+      : null,
+    volume.companies > 0
+      ? { label: 'Companies', value: `${volume.companies}` }
+      : null,
+    volume.contacts > 0
+      ? { label: 'Contacts', value: `${volume.contacts}` }
+      : null,
+    volume.deals > 0 ? { label: 'Deals', value: `${volume.deals}` } : null,
     volume.tasks > 0 && volume.taskLists === 0
       ? { label: 'Tasks', value: `${volume.tasks}` }
       : null,
@@ -522,6 +610,50 @@ export function planTotals(
   ].filter((total): total is ImportTotal => total !== null);
 }
 
+/** How each HubSpot loss reads in the plan's totals. */
+function hubspotLossLabel(loss: HubspotLoss): string {
+  return match(loss)
+    .with('owner_not_member', () => 'Owners not on your team')
+    .with('deal_without_company', () => 'Deals without a company')
+    .with('deal_without_pipeline', () => 'Deals in archived pipelines')
+    .with('extra_company_links', () => 'Extra company links')
+    .with('domain_rejected', () => 'Companies without a usable domain')
+    .with('unsupported_currency', () => 'Unsupported currencies')
+    .with('additional_domains', () => 'Extra company domains')
+    .with('company_owner', () => 'Company owners')
+    .with('merged_company', () => 'Companies merged by domain')
+    .with('merged_contact', () => 'Contacts merged by email')
+    .with('contact_without_company', () => 'Contacts without their company')
+    .exhaustive();
+}
+
+/** A HubSpot plan's owner matching and what it leaves behind. */
+export function hubspotTotals(
+  report: HubspotPlanReport | null | undefined
+): ImportTotal[] {
+  if (!report) return [];
+  return [
+    ...(report.owners > 0
+      ? [
+          {
+            label: 'Owners matched',
+            value: `${report.ownersMatched} of ${report.owners}`,
+          },
+        ]
+      : []),
+    ...(report.created > 0
+      ? [{ label: 'Created', value: `${report.created}` }]
+      : []),
+    ...(report.linked > 0
+      ? [{ label: 'Matched existing', value: `${report.linked}` }]
+      : []),
+    ...report.losses.map((loss) => ({
+      label: hubspotLossLabel(loss.loss),
+      value: `${loss.count}`,
+    })),
+  ];
+}
+
 /**
  * What planning is doing: reading Notion until the plan is staged, then
  * deciding each object, e.g. "Deciding what to import: 40 of 84 decided".
@@ -534,7 +666,7 @@ export function planningStatus(
   if (entries.length === 0) {
     const scanned = progress?.scanned;
     return scanned
-      ? `Reading ${sourceLabel(source)}: ${plural(scanned.pages, source === 'notion' ? 'page' : 'issue', source === 'notion' ? 'pages' : 'issues')}, ${plural(scanned.databases, source === 'notion' ? 'database' : 'project', source === 'notion' ? 'databases' : 'projects')}`
+      ? `Reading ${sourceLabel(source)}: ${plural(scanned.pages, ...scanUnits(source).items)}, ${plural(scanned.databases, ...scanUnits(source).groups)}`
       : `Reading ${sourceLabel(source)}…`;
   }
   const decided = entries.filter((entry) => entry.decision !== null).length;
@@ -550,6 +682,14 @@ export function volumeLabel(volume: ImportVolume): string {
       : '',
     volume.tasks > 0 ? plural(volume.tasks, 'task', 'tasks') : '',
     volume.projects > 0 ? plural(volume.projects, 'project', 'projects') : '',
+    volume.pipelines > 0
+      ? plural(volume.pipelines, 'pipeline', 'pipelines')
+      : '',
+    volume.companies > 0
+      ? plural(volume.companies, 'company', 'companies')
+      : '',
+    volume.contacts > 0 ? plural(volume.contacts, 'contact', 'contacts') : '',
+    volume.deals > 0 ? plural(volume.deals, 'deal', 'deals') : '',
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(', ') : 'nothing';
 }
@@ -565,7 +705,11 @@ export function planCounts(entries: ImportPlanEntry[]): ImportPlanCounts {
     deciding: 0,
   };
   for (const entry of entries) {
-    if (entry.kind === 'database' || entry.kind === 'project')
+    if (
+      entry.kind === 'database' ||
+      entry.kind === 'project' ||
+      entry.kind === 'pipeline'
+    )
       counts.databases += 1;
     else counts.pages += 1;
     counts[entry.decision ?? 'deciding'] += 1;
@@ -587,19 +731,9 @@ export function planSummary(
   source: ImportDraft['source'] = 'notion'
 ): string {
   const shared = [
-    counts.pages > 0
-      ? plural(
-          counts.pages,
-          source === 'notion' ? 'page' : 'issue',
-          source === 'notion' ? 'pages' : 'issues'
-        )
-      : '',
+    counts.pages > 0 ? plural(counts.pages, ...scanUnits(source).items) : '',
     counts.databases > 0
-      ? plural(
-          counts.databases,
-          source === 'notion' ? 'database' : 'project',
-          source === 'notion' ? 'databases' : 'projects'
-        )
+      ? plural(counts.databases, ...scanUnits(source).groups)
       : '',
   ]
     .filter(Boolean)
@@ -634,6 +768,7 @@ export function progressFromEntries(
   return {
     reviewId,
     status: null,
+    errorKind: null,
     error: null,
     scanned: null,
     onTeam: true,
@@ -648,6 +783,7 @@ export function progressFromEntries(
         title: entry.title,
         reason: entry.error ?? '',
       })),
+    hubspot: null,
   };
 }
 
@@ -664,10 +800,26 @@ export function importReviewPhase(
   return match(item.status)
     .returnType<ImportReviewPhase>()
     .with('pending', () =>
-      progress?.status === 'running' ? { kind: 'planning' } : { kind: 'plan' }
+      match(progress?.status ?? null)
+        .returnType<ImportReviewPhase>()
+        .with('running', () => ({ kind: 'planning' }))
+        .with('failed', () => ({
+          kind: 'planFailed',
+          errorKind: progress?.errorKind ?? null,
+        }))
+        .with('ready', 'importing', 'completed', 'dismissed', null, () => ({
+          kind: 'plan',
+        }))
+        .exhaustive()
     )
     .with('submitting', () => ({ kind: 'starting' }))
-    .with('dismissed', () => ({ kind: 'dismissed' }))
+    .with('dismissed', () => ({
+      kind: 'dismissed',
+      planFailure:
+        progress?.status === 'failed'
+          ? { errorKind: progress.errorKind ?? null }
+          : null,
+    }))
     .with('unknown', () => ({ kind: 'unknown', error: item.error ?? null }))
     .with('completed', () =>
       match(progress?.status ?? null)
@@ -676,7 +828,7 @@ export function importReviewPhase(
         .with('dismissed', () => ({ kind: 'stopped' }))
         .with('failed', () => ({
           kind: 'failed',
-          error: progress?.error ?? 'The import failed.',
+          errorKind: progress?.errorKind ?? null,
         }))
         .with('importing', 'running', 'ready', () => ({ kind: 'importing' }))
         // Progress without a run status was counted from the rows because a
@@ -695,5 +847,95 @@ export function sourceLabel(source: ImportDraft['source']): string {
     .with('notion', () => 'Notion')
     .with('linear', () => 'Linear')
     .with('jira', () => 'Jira')
+    .with('hubspot', () => 'HubSpot')
     .exhaustive();
+}
+
+/** What a source's scan counts, singular and plural: Notion pages and
+ * databases, tracker issues and projects, HubSpot records and pipelines. */
+function scanUnits(source: ImportDraft['source']): {
+  items: [string, string];
+  groups: [string, string];
+} {
+  return match(source)
+    .with('notion', () => ({
+      items: ['page', 'pages'] as [string, string],
+      groups: ['database', 'databases'] as [string, string],
+    }))
+    .with('linear', 'jira', () => ({
+      items: ['issue', 'issues'] as [string, string],
+      groups: ['project', 'projects'] as [string, string],
+    }))
+    .with('hubspot', () => ({
+      items: ['record', 'records'] as [string, string],
+      groups: ['pipeline', 'pipelines'] as [string, string],
+    }))
+    .exhaustive();
+}
+
+/** What a failed import's card says: a plain first line, then what happened. */
+export type FailureCopy = {
+  headline: string;
+  /** `null` when the server recorded no kind (an older host). */
+  detail: string | null;
+  /** Reconnecting the source is the way out. */
+  reconnect: boolean;
+};
+
+/** Copy for a plan or a write that failed with `errorKind`; never the raw error. */
+export function failureCopy(
+  stage: 'plan' | 'write',
+  source: ImportDraft['source'],
+  errorKind: RunErrorKind | null
+): FailureCopy {
+  const name = sourceLabel(source);
+  const detail = match(errorKind)
+    .returnType<string | null>()
+    .with(
+      'not_found',
+      () =>
+        `${name} said something in the plan is missing or isn’t shared with Macro.`
+    )
+    .with('forbidden', () => `${name} doesn’t let Macro read part of it.`)
+    .with(
+      'access_lost',
+      () =>
+        `${name} no longer accepts Macro’s connection. Reconnect ${name}, then plan the import again.`
+    )
+    .with(
+      'connection_unavailable',
+      () =>
+        `Macro couldn’t use your ${name} connection. Reconnect ${name}, then plan the import again.`
+    )
+    .with(
+      'not_connected',
+      () => `${name} isn’t connected. Connect it, then plan the import again.`
+    )
+    .with(
+      'rate_limited',
+      () =>
+        `${name} is limiting requests right now. Try again in a few minutes.`
+    )
+    .with('unreachable', () => `${name} couldn’t be reached. Try again later.`)
+    .with(
+      'usage_refused',
+      () => 'The AI work to plan it was refused. Check your plan’s usage.'
+    )
+    .with(
+      'interrupted',
+      () =>
+        'It stopped before it finished. Start it again to pick up what is left.'
+    )
+    .with('internal', () => 'Something went wrong on Macro’s side. Try again.')
+    .with(null, () => null)
+    .exhaustive();
+  return {
+    headline:
+      stage === 'plan'
+        ? "Couldn't plan this import."
+        : "Couldn't finish this import.",
+    detail,
+    reconnect:
+      errorKind === 'access_lost' || errorKind === 'connection_unavailable',
+  };
 }

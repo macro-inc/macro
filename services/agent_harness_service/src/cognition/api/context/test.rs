@@ -446,6 +446,19 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         macro_event_broker.clone(),
     );
 
+    let time_tracking_tool_context = ai_tools::build_time_tracking_tool_context(
+        pool.clone(),
+        entity_access_service.clone(),
+        macro_event_broker.clone(),
+        connection_gateway_client::ConnectionGatewayClient::new(
+            "testing".to_string(),
+            "http://localhost".to_string(),
+        ),
+        TaskTracker::new(),
+        macro_env::Environment::Local,
+        None,
+    );
+
     let databases_tool_context = ai_tools::build_databases_tool_context(
         pool.clone(),
         entity_access_service.clone(),
@@ -471,6 +484,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         pool.clone(),
         &databases_tool_context,
         &crm_tool_context,
+    );
+    let merge_tool_context = ai_tools::build_merge_tool_context(
+        pool.clone(),
+        &databases_tool_context,
+        None,
+        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        None,
     );
     let crm_transfer_tool_context = ai_tools::build_crm_transfer_tool_context(
         &pipeline_tool_context,
@@ -581,9 +601,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             entity_access_service.clone(),
         ),
         initiative_tool_context,
+        time_tracking_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context,
         pipeline_tool_context,
+        merge_tool_context,
         crm_transfer_tool_context,
         skill_tool_context: ai_tools::build_skill_tool_context(
             search_service_client.clone(),
@@ -606,6 +628,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let (import_service, onboarding_service) = {
         let connections = Arc::new(composed.connectors.clone());
         let creator = ai_tools::ToolEntityCreator {
+            notion_link_editor: None,
             document_creator: document_tool_context.creator.clone(),
             entity_access_service: entity_access_service.clone(),
             channel_service: tool_service_context.channel_tool_context.service.clone(),

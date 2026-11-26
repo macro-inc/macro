@@ -109,3 +109,30 @@ async fn retry_after_profiles_are_gone_still_deletes_the_account() {
         .unwrap();
     assert_eq!(*gateway.calls.lock().unwrap(), ["customer:", "account:"]);
 }
+
+#[tokio::test]
+async fn profiles_sharing_a_canonical_id_are_deleted_once() {
+    let gateway = FakeGateway::default();
+    let user = MacroUserIdStr::try_from("macro|E@example.com".to_owned()).unwrap();
+    let same_user = MacroUserIdStr::try_from("macro|e@example.com".to_owned()).unwrap();
+
+    delete_user_data(&gateway, &Uuid::now_v7(), &[user, same_user])
+        .await
+        .unwrap();
+
+    let calls = gateway.calls.lock().unwrap();
+    assert_eq!(
+        *calls,
+        [
+            "actions:macro|e@example.com",
+            "sessions:macro|e@example.com",
+            "teams:macro|e@example.com",
+            "items:macro|e@example.com",
+            "onboarding:macro|e@example.com",
+            "contacts:macro|e@example.com",
+            "profile:macro|e@example.com",
+            "customer:",
+            "account:",
+        ]
+    );
+}

@@ -2,7 +2,13 @@
  * @vitest-environment jsdom
  */
 
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { createMemo, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -26,12 +32,15 @@ vi.mock('@core/component/LexicalMarkdown/component/menu/SnippetsMenu', () => ({
   SnippetsMenu: () => null,
 }));
 
+import { createCalendarComposer } from '../../primitives/create-calendar-composer';
 import { createCalendarEventFormController } from './create-calendar-event-form-controller';
 import { EventForm } from './EventForm';
 import type {
   EventEditorCalendarOption,
   EventEditorDisabledFields,
 } from './event-form-model';
+import { ComposerDescription } from './parts/ComposerDescription';
+import { ComposerRoot } from './parts/ComposerRoot';
 
 class ObserverStub {
   observe() {}
@@ -182,4 +191,64 @@ it('lets an Escape no menu takes leave the description, as it leaves the title',
   } finally {
     document.removeEventListener('keydown', listen);
   }
+});
+
+it('scrolls a capped desktop description without replacing its editor or draft', async () => {
+  const user = userEvent.setup();
+  let controller!: ReturnType<typeof createCalendarEventFormController>;
+  const { container } = render(() => {
+    controller = createCalendarEventFormController({
+      initialValue: {
+        title: 'Planning',
+        allDay: false,
+        start: '2030-01-01T12:00',
+        end: '2030-01-01T13:00',
+        recurrenceLines: [],
+        guests: '',
+        location: '',
+        description: 'Notes',
+        conference: 'none',
+        calendarId: CALENDAR.id,
+      },
+      calendarOptions: () => [CALENDAR],
+      guestOptions: () => [],
+    });
+    const model = createCalendarComposer({
+      controller,
+      pending: false,
+      onSubmit: vi.fn(),
+    });
+    return (
+      <ComposerRoot model={model}>
+        <ComposerDescription plain />
+      </ComposerRoot>
+    );
+  });
+  const description = await screen.findByLabelText('Description');
+  await user.click(description);
+  await user.keyboard(' and details');
+  await waitFor(() =>
+    expect(controller.state().description).toContain('details')
+  );
+  const viewport = container.querySelector(
+    '[data-composer-description-scroll]'
+  );
+  if (!(viewport instanceof HTMLDivElement))
+    throw new Error('missing description viewport');
+  Object.defineProperties(viewport, {
+    clientHeight: { configurable: true, value: 120 },
+    scrollHeight: { configurable: true, value: 360 },
+    clientWidth: { configurable: true, value: 240 },
+    scrollWidth: { configurable: true, value: 240 },
+  });
+  fireEvent.scroll(viewport);
+  const scrollbar = await screen.findByRole('scrollbar', {
+    name: 'Scroll vertically',
+  });
+  scrollbar.focus();
+  await user.keyboard('{End}');
+  expect(viewport.scrollTop).toBe(240);
+  expect(scrollbar.getAttribute('aria-valuenow')).toBe('240');
+  expect(screen.getByLabelText('Description')).toBe(description);
+  expect(controller.state().description).toContain('details');
 });

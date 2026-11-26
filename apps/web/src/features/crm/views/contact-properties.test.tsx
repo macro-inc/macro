@@ -49,6 +49,7 @@ function contact(company?: CrmContact['company']): CrmContact {
 it('names the company from the contact detail without reading it', () => {
   render(() => (
     <ContactCompanyField
+      surface="header"
       contact={contact({ id: 'company-1', name: 'Acme', hidden: false })}
     />
   ));
@@ -59,6 +60,7 @@ it('names the company from the contact detail without reading it', () => {
 it('names an unnamed company by its domain', () => {
   render(() => (
     <ContactCompanyField
+      surface="header"
       contact={contact({
         id: 'company-1',
         name: null,
@@ -72,7 +74,7 @@ it('names an unnamed company by its domain', () => {
 });
 
 it('reads the company for a detail without a summary', () => {
-  render(() => <ContactCompanyField contact={contact()} />);
+  render(() => <ContactCompanyField surface="header" contact={contact()} />);
   expect(screen.getByText('Read company')).toBeTruthy();
   expect(state.companyReads).toContain('company-1');
 });

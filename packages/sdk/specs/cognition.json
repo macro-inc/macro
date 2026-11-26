@@ -5399,6 +5399,125 @@
           }
         }
       },
+      "HubspotLoss": {
+        "type": "string",
+        "description": "Something a HubSpot import cannot carry into Macro CRM, counted on the\nreview card and in the final report.",
+        "enum": [
+          "owner_not_member",
+          "deal_without_company",
+          "deal_without_pipeline",
+          "extra_company_links",
+          "domain_rejected",
+          "unsupported_currency",
+          "additional_domains",
+          "company_owner",
+          "merged_company",
+          "merged_contact",
+          "contact_without_company"
+        ]
+      },
+      "HubspotLossCount": {
+        "type": "object",
+        "description": "How many records lost one thing.",
+        "required": ["loss", "count"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records affected.",
+            "minimum": 0
+          },
+          "loss": {
+            "$ref": "#/components/schemas/HubspotLoss",
+            "description": "What was lost."
+          }
+        }
+      },
+      "HubspotReport": {
+        "type": "object",
+        "description": "What a HubSpot plan holds, for the review card.",
+        "required": [
+          "pipelines",
+          "companies",
+          "contacts",
+          "deals",
+          "owners",
+          "ownersMatched",
+          "alreadyImported",
+          "losses",
+          "customProperties"
+        ],
+        "properties": {
+          "alreadyImported": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records already in Macro from an earlier import, left as they are.",
+            "minimum": 0
+          },
+          "companies": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Companies.",
+            "minimum": 0
+          },
+          "contacts": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Contacts.",
+            "minimum": 0
+          },
+          "created": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records this import created in the CRM.",
+            "minimum": 0
+          },
+          "customProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Portal-defined property names whose values stay in HubSpot."
+          },
+          "deals": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Deals, each becoming an entry in its pipeline.",
+            "minimum": 0
+          },
+          "linked": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records this import matched to ones already in the CRM (same domain,\naddress or deal) or to a teammate's import, instead of creating them.",
+            "minimum": 0
+          },
+          "losses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubspotLossCount"
+            },
+            "description": "What cannot be carried over, by kind."
+          },
+          "owners": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HubSpot owners named by the planned records.",
+            "minimum": 0
+          },
+          "ownersMatched": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Of those, owners matched to a team member by email.",
+            "minimum": 0
+          },
+          "pipelines": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Deal pipelines, each becoming a Macro pipeline.",
+            "minimum": 0
+          }
+        }
+      },
       "ImportEntitiesResponse": {
         "type": "object",
         "description": "The caller's ledger rows.",
@@ -5519,7 +5638,11 @@
           "jira_issue",
           "jira_project",
           "jira_epic",
-          "channel"
+          "channel",
+          "hubspot_pipeline",
+          "hubspot_company",
+          "hubspot_contact",
+          "hubspot_deal"
         ]
       },
       "ImportNotionPageRequest": {
@@ -5568,6 +5691,17 @@
             "type": ["string", "null"],
             "description": "Discovery failure detail, when the run failed."
           },
+          "error_kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunErrorKind",
+                "description": "Why the run failed, when it did and the kind was recorded."
+              }
+            ]
+          },
           "review_id": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -5607,7 +5741,7 @@
       "ImportSource": {
         "type": "string",
         "description": "External systems items can be imported from.",
-        "enum": ["linear", "jira", "notion", "slack"]
+        "enum": ["linear", "jira", "notion", "slack", "hubspot"]
       },
       "ImportState": {
         "type": "object",
@@ -6052,7 +6186,18 @@
           },
           "error": {
             "type": ["string", "null"],
-            "description": "Why the run failed, when it did."
+            "description": "Why the run failed or what it could not finish, in text Macro wrote\n(a canned reason, a reviewed object's title, or the sentence for its\nkind; never a provider's text): the report keeps it only when the run\nrecorded a kind. The agent's tool answers drop it and read\n`error_kind`."
+          },
+          "errorKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunErrorKind",
+                "description": "The kind of failure, when the run failed and it was recorded. Show\nthe user copy for this, not `error`."
+              }
+            ]
           },
           "failureCount": {
             "type": "integer",
@@ -6079,6 +6224,17 @@
               "$ref": "#/components/schemas/NotionReportItem"
             },
             "description": "Objects that need handling by hand, with reasons."
+          },
+          "hubspot": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HubspotReport",
+                "description": "A HubSpot plan's counts, owners and losses."
+              }
+            ]
           },
           "imported": {
             "type": "integer",
@@ -6712,6 +6868,22 @@
         "type": "string",
         "description": "The role of a message participant.",
         "enum": ["user", "assistant", "system"]
+      },
+      "RunErrorKind": {
+        "type": "string",
+        "description": "Why a run failed, as a closed set readers branch on instead of the error\ntext. Stored in `import_run.error_kind`; `None` on runs that failed\nbefore it was recorded.",
+        "enum": [
+          "not_found",
+          "forbidden",
+          "access_lost",
+          "connection_unavailable",
+          "not_connected",
+          "rate_limited",
+          "unreachable",
+          "usage_refused",
+          "interrupted",
+          "internal"
+        ]
       },
       "RunImportOutcome": {
         "type": "object",

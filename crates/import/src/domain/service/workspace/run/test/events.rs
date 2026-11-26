@@ -199,6 +199,65 @@ async fn approving_a_skipped_page_as_copy_writes_it_but_keeps_other_skips(pool: 
     );
 }
 
+/// Saving the reviewed Copy choices happens after the fence and before the
+/// run is held, so a failure there leaves the plan ready to approve again,
+/// with nothing claimed and no held write.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_copy_override_save_leaves_the_plan_approvable(pool: PgPool) {
+    let owner = user("copy-override-fails");
+    let tracker = TaskTracker::new();
+    let service = service(
+        &pool,
+        Writer::default(),
+        tokio_util::sync::CancellationToken::new(),
+        tracker.clone(),
+    );
+    let repo = service.repo.clone();
+    let mut template = page('a', "Template");
+    template.metadata["plan"]["decision"] = serde_json::json!("skip");
+    template.metadata["plan"]["reason"] = serde_json::json!("Setup page");
+    let (review, ids) = approved(&pool, &owner, &[template]).await;
+    repo.finish_run(&owner, ImportSource::Notion, RunStatus::Ready, None)
+        .await
+        .unwrap();
+    // The save of the Copy choice fails in the database.
+    sqlx::query(
+        "CREATE FUNCTION refuse_copy_override() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'save refused'; END $$",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "CREATE TRIGGER refuse_copy_override BEFORE UPDATE ON import_entity FOR EACH ROW WHEN (NEW.metadata->'plan'->>'decision' = 'copy') EXECUTE FUNCTION refuse_copy_override()",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let refused = service
+        .start_notion_write(
+            &owner,
+            review,
+            NotionWriteChoices {
+                copy_skipped: vec![ids[0]],
+                ..NotionWriteChoices::default()
+            },
+        )
+        .await;
+    tracker.close();
+    tracker.wait().await;
+
+    assert!(
+        matches!(refused, Err(ImportError::NotStarted(_))),
+        "{refused:?}"
+    );
+    let runs = repo.list_runs(&owner).await.unwrap();
+    assert_eq!(runs[0].status, RunStatus::Ready);
+    let row = repo.get(&owner, ids[0]).await.unwrap().unwrap();
+    assert_eq!(row.status, ImportStatus::Staged);
+    assert_eq!(row.metadata["plan"]["decision"], "skip");
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn approval_keeps_discarded_by_hand_dependencies_in_the_settlement(pool: PgPool) {
     use crate::domain::models::NotionReviewOmissionKind;
@@ -284,13 +343,13 @@ async fn a_plan_presented_while_planning_tells_its_session_once_it_is_ready(pool
 
     assert!(
         service
-            .end_plan(&owner, RunStatus::Ready, None)
+            .end_plan(&owner, RunStatus::Ready, None, None)
             .await
             .unwrap()
     );
     assert!(
         !service
-            .end_plan(&owner, RunStatus::Ready, None)
+            .end_plan(&owner, RunStatus::Ready, None, None)
             .await
             .unwrap(),
         "a plan is ready once"
@@ -342,7 +401,7 @@ async fn a_linear_plan_tells_its_session_it_came_from_linear(pool: PgPool) {
 
     assert!(
         service
-            .end_plan(&owner, RunStatus::Ready, None)
+            .end_plan(&owner, RunStatus::Ready, None, None)
             .await
             .unwrap()
     );
@@ -371,7 +430,12 @@ async fn a_plan_that_fails_tells_no_session_it_is_ready(pool: PgPool) {
 
     assert!(
         service
-            .end_plan(&owner, RunStatus::Failed, Some("Notion was unreachable"))
+            .end_plan(
+                &owner,
+                RunStatus::Failed,
+                Some("Notion was unreachable"),
+                Some(RunErrorKind::Unreachable)
+            )
             .await
             .unwrap()
     );
@@ -447,7 +511,7 @@ async fn cancellation_preserves_partial_rows_and_marks_sampled_settlement(pool: 
     assert_eq!(confirmed.partial_database_rows, 2);
     assert!(
         service
-            .end_write(&owner, RunStatus::Dismissed, None)
+            .end_write(&owner, RunStatus::Dismissed, None, None)
             .await
             .unwrap()
     );
@@ -635,7 +699,62 @@ async fn a_write_given_up_on_tells_its_session_it_failed(pool: PgPool) {
     assert_eq!(produced[0].session_id, session);
     let settled = settled_import(&produced[0]);
     assert_eq!(settled.outcome, ImportOutcome::Failed);
-    assert_eq!(settled.error.as_deref(), Some(IMPORT_STOPPED));
+    assert_eq!(settled.error_kind, Some(RunErrorKind::Interrupted));
+    assert_eq!(
+        settled.error.as_deref(),
+        Some("it stopped before it finished; starting it again picks up what is left")
+    );
     assert_eq!(settled.imported, 0);
     assert_eq!(settled.not_written, 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_write_tells_its_session_why_without_the_providers_text(pool: PgPool) {
+    let owner = user("write-upstream");
+    let (review, _, _) = presented_while_planning(&pool, &owner).await;
+    let sessions = Arc::new(Sessions::default());
+    let repo = notifying_repo(&pool, &sessions);
+    assert!(
+        repo.transition_run(
+            &owner,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Ready,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    let tracker = TaskTracker::new();
+    let service = ImportServiceImpl::new(
+        repo,
+        no_connections(),
+        Arc::new(Writer::default()),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(Upstream))
+    .with_job_shutdown(tokio_util::sync::CancellationToken::new(), tracker.clone());
+
+    service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+
+    let produced = sessions.0.lock().unwrap();
+    let settled = produced
+        .iter()
+        .find(|notification| {
+            matches!(
+                notification.notification.event,
+                NotificationEvent::ReviewSettled(_)
+            )
+        })
+        .expect("the write settled");
+    let payload = serde_json::to_string(&settled.notification).unwrap();
+    assert!(!payload.contains("provider-secret-body"), "{payload}");
+    let import = settled_import(settled);
+    assert_eq!(import.error_kind, Some(RunErrorKind::Unreachable));
+    assert_eq!(import.error.as_deref(), Some("Notion couldn't be reached"));
 }

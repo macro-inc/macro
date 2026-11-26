@@ -44,6 +44,8 @@ pub(super) struct State {
     pub link: Option<Link>,
     pub message: Option<service::message::SimpleMessage>,
     pub labels: Vec<db::label::Label>,
+    /// Labels a label or message write reports the thread gained.
+    pub gained_labels: Vec<Uuid>,
     pub pending: VecDeque<Vec<String>>,
     pub provider: Result<Option<Vec<String>>, email_api_client::domain::models::EmailApiError>,
     pub sender: Option<db::contact::Contact>,
@@ -75,6 +77,7 @@ impl Fake {
             link: Some(link()),
             message: Some(message()),
             labels: vec![label("INBOX")],
+            gained_labels: vec![],
             pending: VecDeque::new(),
             provider: Ok(Some(vec!["INBOX".into(), "UNREAD".into()])),
             sender: Some(contact(Some("sender@example.com"))),
@@ -326,9 +329,16 @@ impl InboxSyncDeleteTransaction for Fake {
 }
 
 impl InboxSyncLabelTransaction for Fake {
-    async fn add_labels(&mut self, link: Uuid, id: Uuid, labels: &[String]) -> Result<(), Failure> {
-        assert_eq!((link, id), (LINK, MESSAGE));
-        self.step("add", Call::Add(labels.to_vec()))
+    async fn add_labels(
+        &mut self,
+        link: Uuid,
+        id: Uuid,
+        thread: Uuid,
+        labels: &[String],
+    ) -> Result<Vec<Uuid>, Failure> {
+        assert_eq!((link, id, thread), (LINK, MESSAGE, THREAD));
+        self.step("add", Call::Add(labels.to_vec()))?;
+        Ok(self.0.lock().unwrap().gained_labels.clone())
     }
     async fn remove_labels(
         &mut self,
@@ -363,6 +373,23 @@ impl InboxSyncGmail for Fake {
             self.step("provider", Call::Provider).unwrap();
             self.0.lock().unwrap().provider.clone()
         })
+    }
+}
+
+impl ThreadReindexQueue for Fake {
+    type ReindexError = Failure;
+    async fn enqueue_thread_reindex(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        threads: Vec<Uuid>,
+    ) -> Result<(), Failure> {
+        self.step(
+            "reindex_queue",
+            Call::Import(
+                "reindex_queue",
+                serde_json::to_value((owner.as_ref(), threads)).unwrap(),
+            ),
+        )
     }
 }
 

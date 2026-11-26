@@ -115,6 +115,8 @@ pub enum WrittenKind {
     Folder,
     /// The document a page became; minted before it is written.
     Document,
+    /// Fingerprint of the import-produced body revision, keyed by destination document id.
+    LinkBodyRevision,
     /// The database a data source became.
     Database,
     /// A saved view, keyed by the original view id.
@@ -155,6 +157,9 @@ pub enum WrittenKind {
     Relation,
     /// A relation column whose rows are all linked, by property name.
     RelationLinked,
+    /// The CRM company, contact, pipeline or pipeline entry a HubSpot object
+    /// became; recorded as soon as CRM returns its id.
+    CrmRecord,
 }
 
 /// One durable identity or planning fact: `kind` for ledger row `import_id` (and, for

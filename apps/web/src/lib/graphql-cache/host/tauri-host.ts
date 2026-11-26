@@ -461,7 +461,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       if (event.payload.reset) {
         authorityObserver.reset();
         liveQueries.clear();
-        for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
+        for (const cb of generationChangeSubscribers)
+          cb({ storage: 'reset', queue: 'reset' });
       }
       for (const cb of cacheChangeSubscribers) {
         if (
@@ -548,6 +549,22 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const ready = initialize();
+  let opened = false;
+  let disposed = false;
+  let stop = () => {};
+  const stopped = new Promise<void>((resolve) => {
+    stop = resolve;
+  });
+  // Settles either way (a failed native init never opens), or on dispose.
+  const settled = Promise.race([
+    ready.then(
+      () => {
+        opened = !disposed;
+      },
+      () => undefined
+    ),
+    stopped,
+  ]);
   fireAndForget(
     (async () => {
       try {
@@ -587,6 +604,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
   return {
     clientId,
+    isReady: () => opened && !disposed,
+    whenReady: () => settled,
     authority: {
       current: async () => {
         const context = Telemetry.captureContext();
@@ -1167,12 +1186,15 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       keys: string[],
       authorityGeneration?: string
     ): Promise<AffectedOperationsResult> {
+      const context = Telemetry.captureContext();
       authorityGeneration ??=
         authorityObserver.snapshot()?.generation ?? UNKNOWN_CACHE_GENERATION;
       await ready;
-      const result = await request<AffectedOperationsResult>(
-        'graphql_cache_delete_records',
-        { keys, generation: authorityGeneration }
+      const result = await context.run(() =>
+        request<AffectedOperationsResult>('graphql_cache_delete_records', {
+          keys,
+          generation: authorityGeneration,
+        })
       );
       return { ...result, revision: parseCacheRevision(result.revision) };
     },
@@ -1221,6 +1243,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     dispose() {
+      disposed = true;
+      stop();
       clearTimeout(affectedTimer);
       pendingAffected.clear();
       pendingReads.clear();

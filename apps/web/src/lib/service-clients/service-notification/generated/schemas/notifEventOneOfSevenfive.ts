@@ -4,17 +4,16 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { ComputerSetupMetadata } from './computerSetupMetadata';
 import type { NotifEventOneOfSevenfiveTag } from './notifEventOneOfSevenfiveTag';
-import type { PingMetadata } from './pingMetadata';
 
 /**
- * Someone, usually agent code through the SDK, sent the user a
-notification they wrote.
+ * A Macro computer the user bought finished first-time setup, or
+could not be set up.
  */
 export type NotifEventOneOfSevenfive = {
-  /** Someone, usually agent code through the SDK, sent the user a
-notification they wrote. */
-  content: PingMetadata;
+  /** A Macro computer the user bought finished first-time setup, or
+could not be set up. */
+  content: ComputerSetupMetadata;
   tag: NotifEventOneOfSevenfiveTag;
 };
