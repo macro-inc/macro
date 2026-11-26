@@ -45,7 +45,11 @@ import {
   type CacheQueueState,
   cacheDatabaseIdentity,
 } from './coordinator-protocol';
-import { lastTeardownOf, runnableIndexes } from './operation-order';
+import {
+  lastTeardownOf,
+  operationsOf,
+  runnableIndexes,
+} from './operation-order';
 import {
   type CacheEngine,
   type CacheEngineHydrationResult,
@@ -92,6 +96,8 @@ type QueuedEngineRequest = {
   request: CacheRequest;
   priority: number;
   readSignature?: string;
+  /** The operations it is about (`operationsOf`), which teardowns order. */
+  ops: readonly string[];
   waiters: RequestWaiter[];
   /** When the first of its waiters arrived, on the core's monotonic clock. */
   enqueuedAt: number;
@@ -547,6 +553,7 @@ export class CacheWorkerCore {
         request,
         priority,
         readSignature: signature,
+        ops: operationsOf(request),
         waiters: [{ resolve, reject }],
         enqueuedAt: this.now(),
       });
@@ -570,9 +577,8 @@ export class CacheWorkerCore {
     const firstAuthoritativeWrite = this.queue
       .slice(0, segmentEnd)
       .findIndex((queued) => isAuthoritativeWrite(queued.request));
-    const priorities = this.runnablePriorities(segmentEnd);
-    const priorityOf = (i: number) =>
-      priorities.get(i) ?? this.queue[i]?.priority ?? Number.NEGATIVE_INFINITY;
+    const priorityAt = this.runnablePriority(segmentEnd, false);
+    const priorityOf = (i: number) => priorityAt(i) ?? Number.NEGATIVE_INFINITY;
     let index = 0;
     for (let i = 1; i < segmentEnd; i += 1) {
       const candidate = this.queue[i];
@@ -581,7 +587,7 @@ export class CacheWorkerCore {
         !isAuthoritativeWrite(candidate.request) ||
         i === firstAuthoritativeWrite;
       if (
-        priorities.has(i) &&
+        priorityAt(i) !== undefined &&
         preservesWriteOrder &&
         priorityOf(i) > priorityOf(index)
       ) {
@@ -729,17 +735,65 @@ export class CacheWorkerCore {
    * The priority each of the first `segmentEnd` queued requests runs at, for
    * those an operation's teardown does not hold back: its own, or that of a
    * request queued behind it that waits for it. A held-back request has none.
+   *
+   * Authoritative writes run in queue order, so one behind the first lends
+   * nothing (it can't run yet), and a request waiting on such a write lends
+   * to the first one instead. With `writesHeld`, every write waits on work
+   * outside the queue (a hydrate's commit), so nothing lends to one.
    */
-  private runnablePriorities(segmentEnd: number): Map<number, number> {
-    const priorities = new Map<number, number>();
-    runnableIndexes(this.queue, segmentEnd).forEach((runnable, i) => {
-      const priority = this.queue[i]?.priority ?? Number.NEGATIVE_INFINITY;
-      priorities.set(
-        runnable,
-        Math.max(priorities.get(runnable) ?? Number.NEGATIVE_INFINITY, priority)
+  private runnablePriority(
+    segmentEnd: number,
+    writesHeld: boolean
+  ): (index: number) => number | undefined {
+    // Without a teardown nothing waits for anything but the write order.
+    if (
+      !this.queue
+        .slice(0, segmentEnd)
+        .some((queued) => queued.request.kind === 'teardown')
+    )
+      return (i) => this.queue[i]?.priority;
+
+    const priorities = this.queue
+      .slice(0, segmentEnd)
+      .map<number | undefined>((queued) => queued.priority);
+
+    let firstWrite = -1;
+    if (!writesHeld) {
+      for (let i = 0; i < segmentEnd && firstWrite === -1; i += 1) {
+        const queued = this.queue[i];
+        if (queued && isAuthoritativeWrite(queued.request)) firstWrite = i;
+      }
+    }
+    const waitsOnWriteOrder = (i: number) => {
+      const request = this.queue[i]?.request;
+      return (
+        request !== undefined &&
+        isAuthoritativeWrite(request) &&
+        i !== firstWrite
       );
+    };
+    const runnable = runnableIndexes(this.queue, segmentEnd);
+    const lend = (target: number, priority: number | undefined) => {
+      const current = priorities[target];
+      if (
+        priority !== undefined &&
+        (current === undefined || priority > current)
+      )
+        priorities[target] = priority;
+    };
+    runnable.forEach((target, i) => {
+      if (target === i) return;
+      const priority = priorities[i];
+      priorities[i] = undefined;
+      if (waitsOnWriteOrder(i)) return;
+      if (!waitsOnWriteOrder(target)) {
+        lend(target, priority);
+        return;
+      }
+      const head = runnable[firstWrite];
+      if (head !== undefined) lend(head, priority);
     });
-    return priorities;
+    return (i) => priorities[i];
   }
 
   /**
@@ -787,12 +841,12 @@ export class CacheWorkerCore {
       isOrderingBarrier(queued.request)
     );
     if (segmentEnd === -1) segmentEnd = this.queue.length;
-    const priorities = this.runnablePriorities(segmentEnd);
+    const priorityAt = this.runnablePriority(segmentEnd, true);
     let index = -1;
     let priority = BACKGROUND_HYDRATION_PRIORITY;
     for (let i = 0; i < segmentEnd; i += 1) {
       const candidate = this.queue[i];
-      const candidatePriority = priorities.get(i);
+      const candidatePriority = priorityAt(i);
       if (
         candidate &&
         candidatePriority !== undefined &&

@@ -4064,6 +4064,41 @@ describe('CacheWorkerCore', () => {
       ]);
     });
 
+    it("runs reads queued past another operation's teardown, which a write behind it does not hurry", async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          id: 3,
+          kind: 'teardown',
+          opId: 'client:gone',
+        }),
+        // It waits for the hydrate's write, so it lends the teardown nothing.
+        core.handleRequest(port, {
+          generation: TEST_AUTHORITY_GENERATION,
+          id: 4,
+          kind: 'write',
+          query: 'query Gone { gone }',
+          data: { gone: true },
+          registration: { opId: 'client:gone' },
+        }),
+        core.handleRequest(port, read(5, 'client:other'))
+      );
+      release();
+      await Promise.all(sent);
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:other',
+        'commit',
+        'teardown',
+        'write',
+      ]);
+    });
+
     it('stamps the hydrate notice with its authority after a read between fails', async () => {
       const order: string[] = [];
       const { engine, prepareStarted, release } = splitEngine(order);
