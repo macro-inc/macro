@@ -5,6 +5,12 @@ const ALERT = /^Alert: insight 'GraphQL soup/;
 
 const WIDTHS = [
   { name: 'desktop', viewport: { width: 1200, height: 900 }, touch: false },
+  // A narrow split pane on desktop: no touch, and the sm: breakpoint unmet.
+  {
+    name: 'narrow desktop',
+    viewport: { width: 560, height: 900 },
+    touch: false,
+  },
   { name: 'phone', viewport: { width: 390, height: 844 }, touch: true },
 ];
 
@@ -18,10 +24,19 @@ async function across(locator: Locator): Promise<Box> {
   });
 }
 
-/** Whether a name is cut short, ending in an ellipsis. */
-function isCut(locator: Locator) {
+/** Whether a name is wider than its box shows. */
+function isClipped(locator: Locator) {
   return locator.evaluate(
     (element) => element.scrollWidth > element.clientWidth
+  );
+}
+
+/** Whether a name is cut short and ends in an ellipsis. */
+function endsInEllipsis(locator: Locator) {
+  return locator.evaluate(
+    (element) =>
+      element.scrollWidth > element.clientWidth &&
+      getComputedStyle(element).textOverflow === 'ellipsis'
   );
 }
 
@@ -37,6 +52,29 @@ async function knobBoxes(card: Locator) {
       };
     })
   );
+}
+
+/** How many lines a sentence's items sit on, and the most on any one line. */
+async function itemLines(sentence: Locator) {
+  return sentence.locator('[aria-label]').evaluateAll((items) => {
+    const middles = items
+      .map((item) => {
+        const { top, bottom } = item.getBoundingClientRect();
+        return (top + bottom) / 2;
+      })
+      .sort((a, b) => a - b);
+    const lines: number[][] = [];
+    for (const middle of middles) {
+      const line = lines.at(-1);
+      // Items on one line share their middle to within a few pixels.
+      if (line && middle - line[0] < 8) line.push(middle);
+      else lines.push([middle]);
+    }
+    return {
+      lines: lines.length,
+      most: Math.max(...lines.map((line) => line.length)),
+    };
+  });
 }
 
 async function open(page: Page) {
@@ -65,6 +103,8 @@ for (const width of WIDTHS) {
       await expect(cards).toHaveCount(3);
       for (const card of await cards.all()) {
         const edges = await across(card);
+        // The card itself keeps to the page, rather than growing with its items.
+        expect(edges.right).toBeLessThanOrEqual(width.viewport.width);
         const values = await knobBoxes(card);
         expect(values.length).toBeGreaterThan(0);
         for (const value of values) {
@@ -72,6 +112,13 @@ for (const width of WIDTHS) {
           expect(value.right, value.label).toBeLessThanOrEqual(edges.right);
         }
       }
+      // Nothing scrolls sideways.
+      const pane = page.locator('#root > div');
+      expect(
+        await pane.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth
+        )
+      ).toBe(true);
       expect(errors).toEqual([]);
     });
 
@@ -82,20 +129,14 @@ for (const width of WIDTHS) {
       const edges = await across(card);
       const text = await across(sentence);
       expect(text.right).toBeLessThanOrEqual(edges.right);
-      // Short items sit side by side on lines, not one to a line.
-      const lines = await sentence.evaluate((element) => {
-        const range = document.createRange();
-        range.selectNodeContents(element);
-        return new Set(
-          [...range.getClientRects()].map((rect) => Math.round(rect.top))
-        ).size;
-      });
+      // On several lines, with short items side by side rather than one to a line.
+      const { lines, most } = await itemLines(sentence);
       expect(lines).toBeGreaterThan(1);
-      expect(lines).toBeLessThan(12);
+      expect(most).toBeGreaterThanOrEqual(2);
       // Short names show whole.
-      expect(await isCut(sentence.getByText('product-launch').first())).toBe(
-        false
-      );
+      expect(
+        await isClipped(sentence.getByText('product-launch').first())
+      ).toBe(false);
     });
 
     test('a long item ends in an ellipsis inside the card', async ({
@@ -108,7 +149,7 @@ for (const width of WIDTHS) {
         const edges = await across(card);
         expect((await across(subject)).right).toBeLessThanOrEqual(edges.right);
         // Cut short, not wrapped onto more lines.
-        expect(await isCut(subject)).toBe(true);
+        expect(await endsInEllipsis(subject)).toBe(true);
       }
       // The comma after it stays on its line, not alone at the next one's start.
       const long = page
@@ -146,17 +187,24 @@ for (const width of WIDTHS) {
       const value = card.locator('dd').getByText(ALERT);
       const edges = await across(card);
       expect((await across(value)).right).toBeLessThanOrEqual(edges.right);
+      expect(await endsInEllipsis(value)).toBe(true);
       // The label reads on one line beside its value.
-      expect(
-        await label.evaluate(
-          (element) => element.scrollWidth <= element.clientWidth
-        )
-      ).toBe(true);
+      expect(await isClipped(label)).toBe(false);
       expect((await label.boundingBox())!.height).toBeLessThan(30);
       // A short value beside it shows whole.
-      expect(await isCut(card.locator('dd').getByText('Shared assets'))).toBe(
-        false
-      );
+      expect(
+        await isClipped(card.locator('dd').getByText('Shared assets'))
+      ).toBe(false);
+    });
+
+    test('a link under Settings wraps inside its card', async ({ page }) => {
+      await open(page);
+      const card = page.getByRole('group', { name: 'Post a digest' });
+      const link = card.locator('dd').getByText(/^https:/);
+      const edges = await across(card);
+      const box = await across(link);
+      expect(box.left).toBeGreaterThanOrEqual(edges.left);
+      expect(box.right).toBeLessThanOrEqual(edges.right);
     });
 
     test('a suggestion card keeps a long item inside', async ({ page }) => {
@@ -164,9 +212,10 @@ for (const width of WIDTHS) {
       const card = page.getByRole('listitem').filter({
         has: page.getByRole('button', { name: /Summarize alert threads/ }),
       });
-      const value = card.locator('p').getByText(ALERT);
+      const trigger = card.locator('p [aria-label]');
       const edges = await across(card);
-      expect((await across(value)).right).toBeLessThanOrEqual(edges.right);
+      expect((await across(trigger)).right).toBeLessThanOrEqual(edges.right);
+      expect(await endsInEllipsis(trigger.getByText(ALERT))).toBe(true);
     });
   });
 }

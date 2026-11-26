@@ -30,8 +30,9 @@ const ALERT = entity('alert', 'Alert thread', 'email_thread', 'thread-alert');
 /**
  * The routine page's steps with every kind of item a knob can name: one step
  * whose sentence lists them all, one whose sentence holds a single long
- * subject, and one that lists that subject and a short item under Settings. A suggestion card
- * puts the same subject in its smaller sentence.
+ * subject, and one that lists that subject, a short item and a link with no
+ * spaces under Settings. A suggestion card puts the same subject in its
+ * smaller sentence.
  */
 const STEPS: StepDraft[] = [
   {
@@ -77,6 +78,12 @@ const STEPS: StepDraft[] = [
       entity('channel', 'Channel', 'channel', 'channel-launch'),
       ALERT,
       entity('folder', 'Folder', 'project', 'folder-assets'),
+      {
+        type: 'text',
+        name: 'hook',
+        label: 'Webhook',
+        value: 'https://example.com/hooks/launch-digest',
+      },
     ],
   },
 ];
