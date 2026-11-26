@@ -17386,7 +17386,7 @@ export type PasswordMoveFolderBody = {
 };
 
 /**
- * A metadata-only change never reads or writes a secret value.
+ * A display-field change. Card kind transitions fence earlier protected writes.
  */
 export type PasswordPatchItem = {
     /**
