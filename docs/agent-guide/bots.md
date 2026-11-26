@@ -51,4 +51,20 @@ after saving. Changes reset when the route is reopened or reloaded. Optional
 card guidance is local fixture text. The vault shows read-only agent access
 counts. Management belongs to the separate Brain Access integration.
 
+## Billing
+
+Open Billing at `/billing` to see the sample team's estimated started-hour
+work through Nov 25 UTC in the Nov 1–30 cycle. Daily values expands the chart
+data. The usage ledger totals 124 estimated hours and $1,860 unbilled. The
+$300 recurring subscription preview and the pending modeled AI spend have
+their own sections.
+
+In fixture mode, append `?billing-fixture=pending`, `?billing-fixture=denied`,
+`?billing-fixture=empty`, or `?billing-fixture=zero` to exercise those states.
+The default build shows Billing unavailable. Live integration requires
+viewer-authorized team reads for started-hour usage, posted agent charges,
+recurring invoice previews, and modeled spend. The SDK's computer usage read
+reports CPU and memory, and its subscription status read is scoped to the
+caller's seat. Billing is read-only.
+
 See the [Bots app guide](../../apps/bots/AGENTS.md) for preview commands.
