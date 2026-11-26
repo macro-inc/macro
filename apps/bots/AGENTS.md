@@ -5,12 +5,15 @@
 The standalone Vite entry for the public Character Creator and the Fleet shell.
 The auth seam uses checked-in SDK auth response types. Its current adapter is
 offline and exposes a disabled sign-in flow with a same-tab, expiring draft
-handoff. It cannot create bots.
+handoff. It cannot create bots. The Tower Passwords route uses in-memory
+fixtures and a storage seam typed from the generated SDK storage schemas.
 
 ## Start here
 
 - `src/main.tsx` registers routes and renders the shell.
 - `src/return-intent.ts`, `src/draft.ts`, and `src/session.ts` own the handoff.
+- `src/passwords/` owns the Tower vault, local role and setup fixtures, and
+  storage projections. The default build excludes this fixture route module.
 - `scripts/verify-bots-boundary.ts` and `scripts/botsBoundary.ts` enforce isolation.
   Keep imports inside this app or an explicitly allowed workspace package.
 
