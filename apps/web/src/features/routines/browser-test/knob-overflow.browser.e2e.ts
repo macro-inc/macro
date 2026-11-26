@@ -31,13 +31,28 @@ function isClipped(locator: Locator) {
   );
 }
 
-/** Whether a name is cut short and ends in an ellipsis. */
+/** Whether a name is cut short, hiding the rest, and ends in an ellipsis. */
 function endsInEllipsis(locator: Locator) {
-  return locator.evaluate(
-    (element) =>
+  return locator.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return (
       element.scrollWidth > element.clientWidth &&
-      getComputedStyle(element).textOverflow === 'ellipsis'
-  );
+      style.overflowX !== 'visible' &&
+      style.textOverflow === 'ellipsis'
+    );
+  });
+}
+
+/** How many lines a piece of text takes. */
+function textLines(locator: Locator) {
+  return locator.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const tops = [...range.getClientRects()].map((rect) =>
+      Math.round(rect.top)
+    );
+    return new Set(tops).size;
+  });
 }
 
 /** Every value a step's sentence or settings show, with what it reads. */
@@ -197,14 +212,18 @@ for (const width of WIDTHS) {
       ).toBe(false);
     });
 
-    test('a link under Settings wraps inside its card', async ({ page }) => {
+    test('a link under Settings breaks to fit its column', async ({ page }) => {
       await open(page);
       const card = page.getByRole('group', { name: 'Post a digest' });
-      const link = card.locator('dd').getByText(/^https:/);
-      const edges = await across(card);
+      const column = card.locator('dd').filter({ hasText: /^https:/ });
+      const link = column.getByText(/^https:/);
+      const edges = await across(column);
       const box = await across(link);
       expect(box.left).toBeGreaterThanOrEqual(edges.left);
       expect(box.right).toBeLessThanOrEqual(edges.right);
+      // At phone width the link, which has nowhere to break, is wider than
+      // its column, so it breaks onto a second line rather than running out.
+      if (width.touch) expect(await textLines(link)).toBeGreaterThan(1);
     });
 
     test('a suggestion card keeps a long item inside', async ({ page }) => {
