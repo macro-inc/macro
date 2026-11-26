@@ -2092,12 +2092,12 @@ describe('CacheWorkerCore', () => {
   });
 
   it.each([
-    { searchChangedBuckets: [], reset: false },
-    { searchChangedBuckets: ['note'], reset: false },
-    { searchChangedBuckets: [], reset: true },
+    { searchChangedBuckets: [], unchangedViews: [], reset: false },
+    { searchChangedBuckets: ['note'], unchangedViews: ['view-1'], reset: false },
+    { searchChangedBuckets: [], unchangedViews: ['view-1'], reset: true },
   ])(
     'scopes ordinary writes but not resets: %j',
-    async ({ searchChangedBuckets, reset }) => {
+    async ({ searchChangedBuckets, unchangedViews, reset }) => {
       loadCacheWasmMock.mockResolvedValue({
         openCache: vi.fn().mockResolvedValue({
           writeQuery: vi.fn().mockResolvedValue({
@@ -2107,6 +2107,7 @@ describe('CacheWorkerCore', () => {
             affectedOps: [],
             reset,
             searchChangedBuckets,
+            unchangedViews,
           }),
         }),
       });
@@ -2128,7 +2129,7 @@ describe('CacheWorkerCore', () => {
       expect(messages).toContainEqual({
         kind: 'cache-changed',
         revision: INITIAL_CACHE_REVISION,
-        ...(reset ? { reset: true } : { searchChangedBuckets }),
+        ...(reset ? { reset: true } : { searchChangedBuckets, unchangedViews }),
       });
     }
   );

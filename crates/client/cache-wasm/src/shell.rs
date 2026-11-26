@@ -2336,8 +2336,17 @@ impl CacheEngine {
                 }
             };
             let result = state.engine_result(result)?;
-
-            to_js(&js_write_result(result, &ops.borrow()))
+            let mut written = js_write_result(result, &ops.borrow());
+            // The live views this write left as they were, which a hydrate
+            // already reports, so their readers skip a read. Optional: a
+            // failed proof leaves every view to read again.
+            if written.revision_advanced
+                && !written.reset
+                && let Ok(engine) = state.engine_mut()
+            {
+                written.unchanged_views = engine.unchanged_observed_windows().await.ok();
+            }
+            to_js(&written)
         })
     }
 

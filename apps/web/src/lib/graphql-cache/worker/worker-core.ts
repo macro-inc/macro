@@ -1728,6 +1728,9 @@ export class CacheWorkerCore {
         ...(!result.reset && result.searchChangedBuckets !== undefined
           ? { searchChangedBuckets: result.searchChangedBuckets }
           : {}),
+        ...(!result.reset && result.unchangedViews !== undefined
+          ? { unchangedViews: result.unchangedViews }
+          : {}),
         ...(result.reset ? { reset: true } : {}),
       });
     }
