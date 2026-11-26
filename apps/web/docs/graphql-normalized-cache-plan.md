@@ -1489,9 +1489,10 @@ work, so a late persistence acknowledgement cannot regain network authority.
 Predicate snapshots publish revision progress independently of stable row/order
 identities; the Soup adapter memoizes those inputs before materializing rows.
 
-Hydration still emits notifications, but a shared cache-core owner may attach
-`unchangedViews`: immutable observation tokens whose displayed windows are proven
-unchanged through that notification's revision. Each accepted maintained-view
+Hydration and foreground writes still emit notifications, but a shared
+cache-core owner may attach `unchangedViews`: immutable observation tokens whose
+displayed windows are proven unchanged through that notification's revision. A
+write reply carries them only when its revision advanced and it was not a reset. Each accepted maintained-view
 read or Mail page advertises its own token. Fragment reads bind recursive record
 dependencies; the Mail compiler also binds the readable-account catalog's
 `emailLinks` field, so unrelated fields on that parent do not wake Mail.
@@ -1500,8 +1501,8 @@ The owner uses the complete record/projection journal, validated predicate,
 selected and baseline keys, and a proven full-window sort cutoff. A matching
 entrant, selected dependency change, uncertain facts, optimistic composition,
 journal barrier/gap, or evicted token prevents a proof. Observations are bounded
-to 64 snapshots. Proof failure preserves the committed hydration and broadcasts
-broadly. Older native engines omit tokens and continue conservative refreshes;
+to 64 snapshots. Proof failure preserves the committed hydration or write and
+broadcasts broadly. Older native engines omit tokens and continue conservative refreshes;
 no new request arguments are sent across that deployed boundary.
 
 Mail cutoffs additionally require a known matching lookahead row, tracked as a
