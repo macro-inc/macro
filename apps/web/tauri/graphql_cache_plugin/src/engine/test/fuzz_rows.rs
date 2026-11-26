@@ -4,8 +4,9 @@
 //! sometimes from a stale revision so a retained view resets, and must always
 //! show what a newly registered view reads.
 //!
-//! The deltas themselves are the wire contract. `CACHE_FUZZ_TRACE=<file>`
-//! writes every one, without its random ids, so two builds can be compared
+//! Each delta must also be exactly the one the page contract asks for, given
+//! what the reader showed and what a new view reads. `CACHE_FUZZ_TRACE=<file>`
+//! writes every delta, without its random ids, so two builds can be compared
 //! byte for byte on the same seeds.
 use super::*;
 use serde_json::{Value, json};
@@ -55,6 +56,7 @@ struct Channel {
     message: Option<(u64, u64, Vec<u64>, bool)>,
     /// Notification ids; their states live in `Fuzz::states`, shared by id.
     notifications: Vec<u64>,
+    private: bool,
 }
 
 fn time(n: u64) -> String {
@@ -66,7 +68,8 @@ fn item(n: u16, channel: &Channel, states: &BTreeMap<u64, u64>) -> Value {
     json!({
         "__typename": "GraphqlSoupChannel", "id": channel_id, "cacheProjection": null,
         "isFavorited": false, "displayName": format!("channel {}", channel.name),
-        "name": format!("channel {}", channel.name), "channelType": "team", "ownerId": VIEWER,
+        "name": format!("channel {}", channel.name), "channelType": if channel.private { "private" } else { "team" }, "ownerId": VIEWER,
+        "teamId": null, "organizationId": null, "isParticipant": true,
         "createdAt": time(u64::from(n)), "updatedAt": time(channel.updated),
         "participants": channel.participants.iter().map(|p| { let role = ROLES[p.role as usize % 3]; json!({
             "channelId": channel_id, "userId": format!("macro|user-{}@example.com", p.user),
@@ -112,6 +115,8 @@ fn members(ids: &[u16]) -> Value {
 struct View {
     id: String,
     members: Vec<u16>,
+    /// Only team channels: a channel made private leaves the window.
+    team_only: bool,
     revision: Option<String>,
     /// Revisions this view has accepted, to read from a stale one.
     seen: Vec<String>,
@@ -129,14 +134,18 @@ impl View {
                 "chatFilter": {"literal": {"chatId": nil}},
                 "emailFilter": {"tree": {"literal": {"threadId": nil}}},
                 "calendarEventFilter": {"literal": {"id": nil}},
-                "channelFilter": members(&self.members),
+                "channelFilter": if self.team_only {
+                    json!({"and": {"left": members(&self.members), "right": {"literal": {"channelType": "TEAM"}}}})
+                } else {
+                    members(&self.members)
+                },
                 "channelThreadFilter": {"literal": {"threadId": nil}},
                 "callFilter": {"literal": {"callId": nil}},
                 "crmCompanyFilter": {"literal": {"id": nil}},
                 "foreignEntityFilter": {"literal": {"id": nil}},
             },
             "sortMethod": "CREATED_AT", "sortDirection": "DESC", "limit": self.members.len(),
-            "baseline": self.members.iter().map(|n| json!({
+            "baseline": self.members.iter().filter(|_| !self.team_only).map(|n| json!({
                 "key": format!("GraphqlSoupChannel:{}", id_of(*n)), "sortTimestamp": time(u64::from(*n)),
             })).collect::<Vec<_>>(),
             "liveQuery": {"id": id, "document": FRAGMENT, "fragmentName": "Item", "since": since},
@@ -196,11 +205,86 @@ impl View {
         update
     }
 
-    fn shown(&self) -> Vec<(String, Value)> {
+    fn shown(&self) -> Vec<(String, Option<Value>)> {
         self.keys
             .iter()
-            .map(|key| (key.clone(), self.rows[key].clone()))
+            .map(|key| (key.clone(), self.rows.get(key).cloned()))
             .collect()
+    }
+}
+
+/// What a delta sends, in its own order, with removals as a set: the page
+/// removes them before it applies anything else.
+fn delta(update: &Value) -> Value {
+    let mut removed: Vec<_> = update["removed"].as_array().unwrap().clone();
+    removed.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
+    json!({
+        "upserts": update["upserts"].as_array().unwrap().iter()
+            .map(|row| json!([row["recordKey"], row["record"]])).collect::<Vec<_>>(),
+        "patches": update["patches"].as_array().unwrap().iter()
+            .map(|patch| json!([patch["recordKey"], patch["fields"]])).collect::<Vec<_>>(),
+        "removed": removed,
+    })
+}
+
+/// The delta the page contract asks for, from the rows the reader showed and
+/// the rows a new view reads: a reset sends every row; otherwise new rows go
+/// whole, changed rows as patches of the fields that changed, in key order.
+fn expected(before: &BTreeMap<String, Value>, reset: bool, now: &BTreeMap<String, Value>) -> Value {
+    if reset {
+        return json!({
+            "upserts": now.iter().map(|(key, row)| json!([key, row])).collect::<Vec<_>>(),
+            "patches": [], "removed": [],
+        });
+    }
+    let mut upserts = Vec::new();
+    let mut patches = Vec::new();
+    for (key, row) in now {
+        match before.get(key) {
+            None => upserts.push(json!([key, row])),
+            Some(shown) if shown != row => {
+                let mut fields = Vec::new();
+                changed_fields(shown, row, &mut Vec::new(), &mut fields);
+                patches.push(json!([key, fields]));
+            }
+            Some(_) => {}
+        }
+    }
+    let removed: Vec<_> = before
+        .keys()
+        .filter(|key| !now.contains_key(*key))
+        .collect();
+    json!({"upserts": upserts, "patches": patches, "removed": removed})
+}
+
+/// The smallest replacements that turn `before` into `after`: fields of an
+/// object that keeps its keys, and entries of a list whose ids stay in place.
+fn changed_fields(before: &Value, after: &Value, path: &mut Vec<Value>, out: &mut Vec<Value>) {
+    if before == after {
+        return;
+    }
+    match (before, after) {
+        (Value::Object(was), Value::Object(now)) if was.keys().all(|key| now.contains_key(key)) => {
+            for (key, value) in now {
+                path.push(json!(key));
+                match was.get(key) {
+                    Some(previous) => changed_fields(previous, value, path, out),
+                    None => out.push(json!({"path": path.clone(), "value": value})),
+                }
+                path.pop();
+            }
+        }
+        (Value::Array(was), Value::Array(now))
+            if was.len() == now.len()
+                && was.iter().zip(now).all(|(a, b)| a.get("id") == b.get("id")) =>
+        {
+            for (index, (a, b)) in was.iter().zip(now).enumerate() {
+                path.push(json!(index));
+                changed_fields(a, b, path, out);
+                path.pop();
+            }
+        }
+        _ => out.push(json!({"path": path.clone(), "value": after})),
     }
 }
 
@@ -229,7 +313,7 @@ impl Fuzz {
     }
 
     fn mutate(&mut self, n: usize) {
-        let kind = self.rng.below(12);
+        let kind = self.rng.below(13);
         let rng = &mut self.rng;
         let channel = &mut self.channels[n];
         match kind {
@@ -286,6 +370,7 @@ impl Fuzz {
                 let notification = channel.notifications[at];
                 *self.states.get_mut(&notification).unwrap() = rng.below(3);
             }
+            12 => channel.private = !channel.private,
             11 if !channel.notifications.is_empty() => {
                 // Another channel lists the same notification record.
                 let notification = channel.notifications[0];
@@ -306,7 +391,7 @@ impl Fuzz {
     }
 }
 
-fn run(seed: u64, trace: &mut String) -> (usize, usize) {
+fn run(seed: u64, trace: &mut String) -> (usize, usize, usize) {
     let mut fuzz = Fuzz {
         rng: Rng(seed),
         channels: Vec::new(),
@@ -321,6 +406,7 @@ fn run(seed: u64, trace: &mut String) -> (usize, usize) {
             participants,
             message: None,
             notifications: Vec::new(),
+            private: false,
         });
     }
     let handle = spawn_handle();
@@ -338,6 +424,7 @@ fn run(seed: u64, trace: &mut String) -> (usize, usize) {
             View {
                 id: format!("fuzz-{view}"),
                 members,
+                team_only: view % 2 == 1,
                 revision: None,
                 seen: Vec::new(),
                 keys: Vec::new(),
@@ -345,7 +432,7 @@ fn run(seed: u64, trace: &mut String) -> (usize, usize) {
             }
         })
         .collect();
-    let (mut patches, mut resets) = (0, 0);
+    let (mut patches, mut resets, mut removed) = (0, 0, 0);
     for step in 0..STEPS {
         let changed: Vec<usize> = (0..1 + fuzz.rng.below(3))
             .map(|_| 1 + fuzz.rng.below(u64::from(CHANNELS)) as usize)
@@ -363,6 +450,7 @@ fn run(seed: u64, trace: &mut String) -> (usize, usize) {
                 }
                 _ => view.revision.clone(),
             };
+            let before = view.rows.clone();
             let update = view.read(&handle, since);
             patches += update["patches"].as_array().unwrap().len();
             resets += usize::from(update["reset"] == true);
@@ -370,6 +458,7 @@ fn run(seed: u64, trace: &mut String) -> (usize, usize) {
             let mut fresh = View {
                 id: format!("fresh-{}-{step}", view.id),
                 members: view.members.clone(),
+                team_only: view.team_only,
                 revision: None,
                 seen: Vec::new(),
                 keys: Vec::new(),
@@ -385,6 +474,13 @@ fn run(seed: u64, trace: &mut String) -> (usize, usize) {
             }))
             .unwrap();
             assert_eq!(
+                delta(&update),
+                expected(&before, update["reset"] == true, &fresh.rows),
+                "seed {seed} step {step}: {} sent another delta",
+                view.id
+            );
+            removed += update["removed"].as_array().unwrap().len();
+            assert_eq!(
                 view.shown(),
                 fresh.shown(),
                 "seed {seed} step {step}: {} differs from a new read",
@@ -392,27 +488,29 @@ fn run(seed: u64, trace: &mut String) -> (usize, usize) {
             );
         }
     }
-    (patches, resets)
+    (patches, resets, removed)
 }
 
 #[test]
 fn applied_live_deltas_over_nested_rows_show_what_a_new_read_shows() {
     let mut trace = String::new();
-    let (mut patches, mut resets) = (0, 0);
+    let (mut patches, mut resets, mut removed) = (0, 0, 0);
     for seed in 1..=4u64 {
-        let (p, r) = run(seed.wrapping_mul(0x5851_F42D_4C95_7F2D), &mut trace);
+        let (p, r, m) = run(seed.wrapping_mul(0x5851_F42D_4C95_7F2D), &mut trace);
         patches += p;
         resets += r;
+        removed += m;
     }
     // Patches and resets of retained views must both happen, or the fuzz
     // proves nothing about them.
     assert!(patches > 500, "{patches} row patches");
     assert!(resets > 100, "{resets} resets");
+    assert!(removed > 20, "{removed} removed rows");
     if let Some(path) = std::env::var_os("CACHE_FUZZ_TRACE") {
         std::fs::write(path, &trace).unwrap();
     }
     eprintln!(
-        "{patches} row patches, {resets} resets, trace {} lines",
+        "{patches} row patches, {resets} resets, {removed} removed rows, trace {} lines",
         trace.lines().count()
     );
 }

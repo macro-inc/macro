@@ -12,6 +12,9 @@ query NativeChannels {
           name
           channelType
           ownerId
+          teamId
+          organizationId
+          isParticipant
           createdAt
           updatedAt
           participants { channelId userId role joinedAt leftAt }
